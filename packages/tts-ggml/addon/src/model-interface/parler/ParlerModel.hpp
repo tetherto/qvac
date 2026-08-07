@@ -11,11 +11,17 @@
 
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "model-interface/BackendUtils.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
 
 namespace tts_cpp::parler {
 class Engine;
 }
+
+namespace tts_cpp::lavasr {
+class Enhancer;
+class Denoiser;
+} // namespace tts_cpp::lavasr
 
 namespace qvac::ttsggml::parler {
 
@@ -90,6 +96,14 @@ private:
   mutable std::mutex engineMu_;
   std::shared_ptr<tts_cpp::parler::Engine> engine_;
 
+  // LavaSR enhancer: loaded alongside the engine when cfg_.enhancerGgufPath is
+  // set; null disables enhancement. Held by shared_ptr so an in-flight
+  // synthesize() keeps its instance alive across a concurrent reload().
+  std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
+  // LavaSR denoiser (runs before the enhancer, rate-preserving): loaded when
+  // cfg_.denoiserGgufPath is set; null disables denoising.
+  std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser_;
+
   std::atomic_bool jobInProgress_{false};
 
   // Mirrors SupertonicModel::cancelRequested_ (see that header).
@@ -101,12 +115,17 @@ private:
   double realTimeFactor_ = 0.0;
   double tokensPerSecond_ = 0.0;
   size_t textLength_ = 0;
-  int sampleRate_ = 44100;
+  int sampleRate_ = kParlerNativeSampleRate;
 
   int backendDevice_ = 0;
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+
+  // LavaSR enhancer backend, surfaced in runtimeStats so a host / GPU smoke
+  // test can tell which device actually ran the enhancement.
+  int enhancerBackendDevice_ = kBackendDeviceNone;
+  int enhancerBackendId_ = kBackendIdNone;
 };
 
 } // namespace qvac::ttsggml::parler

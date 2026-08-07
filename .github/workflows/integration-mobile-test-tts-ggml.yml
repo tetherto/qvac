@@ -70,7 +70,9 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    # Functional shards can spend up to 120 minutes in Device Farm plus queue
+    # time; retain enough budget for build, scheduling, and log collection.
+    timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 180 || 150 }}
     continue-on-error: true
     permissions:
       contents: read
@@ -85,14 +87,24 @@ jobs:
       # Android / Metal on iOS via the benchmark's resolveBackend(). New rows are
       # q4-only to keep the Device Farm run count bounded; chatterbox keeps its
       # q4+q8 CPU coverage. The LavaSR rows (enhancer CPU+GPU, denoiser CPU on
-      # supertonic + chatterbox) use the fp16 enhancer + denoiser, which both
-      # platforms now pre-stage on the Device Farm host (see the manifest /
-      # prestage steps below): Android adb-pushes into /data/local/tmp, iOS pushes
-      # into Documents/models via pymobiledevice3. The default (non-benchmark)
-      # matrix is unchanged.
+      # supertonic + chatterbox) use the fp16 enhancer + denoiser. On the
+      # run_rtf_benchmarks matrix both platforms now pre-stage on the Device
+      # Farm host (see the manifest / prestage steps below): Android
+      # adb-pushes into /data/local/tmp, iOS pushes into Documents/models via
+      # pymobiledevice3. Functional multi-spec runs (the default, non-benchmark
+      # matrix) stay Android-only for pre-staging — iOS fetches from the
+      # registry on-device there — and build once per platform, then upload
+      # one Device Farm spec per model-family shard.
       matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit Device Farm, object-store, GitHub, npm, and mobile build egress
+          # before promoting this mixed hosted/self-hosted workflow to block mode.
+          egress-policy: audit
+
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -121,22 +133,26 @@ jobs:
           addon-npm-name: '@qvac/tts-ggml'
           prebuild-artifact-prefix: 'tts-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # workflow_call uses prebuild_package; workflow_dispatch exposes the
+          # equivalent package_spec input. Keep both paths pinned explicitly so
+          # manual validation cannot silently ignore the requested native build.
+          package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
+          force-npm-prebuild: ${{ (inputs.prebuild_package != '' || inputs.package_spec != '') && 'true' || 'false' }}
 
-      # Both platforms pre-stage on their Device Farm host now (Android via adb,
-      # iOS via pymobiledevice3), so the presigned manifest is generated for both.
+      # The release environment authorizes GitHub OIDC to assume the scoped AWS
+      # role used for model-manifest signing; no long-lived AWS keys are stored.
+      # Needed on Android always (functional multi-spec default matrix +
+      # benchmark matrix both pre-stage there) and on iOS only for the
+      # benchmark matrix, where it now also pre-stages via pymobiledevice3.
       - name: Configure AWS credentials via OIDC
-        if: ${{ inputs.run_rtf_benchmarks }}
+        if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      # Benchmark runs pre-sign q4/q8 model URLs and store a local manifest
-      # consumed by generate-prestage-block.js below.
       - name: Generate TTS-GGML mobile model manifest
-        if: ${{ inputs.run_rtf_benchmarks }}
+        if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         shell: bash
         env:
@@ -202,18 +218,17 @@ jobs:
           cat test/mobile/integration-runtime.cjs >> test/mobile/inject-env.cjs
           mv test/mobile/inject-env.cjs test/mobile/integration-runtime.cjs
 
-      # Android mirrors Parakeet's pre-stage flow: choose q4/q8 URLs from the
-      # generated manifest and emit Device Farm host commands that download each
-      # model then adb-push it to /data/local/tmp/qvac-tts-ggml/models.
       - name: Generate model pre-stage commands (Android)
         id: prestage
-        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'Android' }}
+        if: ${{ matrix.platform == 'Android' }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         env:
           TTS_GGML_MOBILE_BENCHMARK_VARIANT: ${{ matrix.variant }}
+          TTS_GGML_MOBILE_BENCHMARK_ENGINE: ${{ matrix.engine || 'chatterbox' }}
           TTS_GGML_MOBILE_BENCHMARK_ENHANCER: ${{ matrix.enhancer || 'none' }}
           TTS_GGML_MOBILE_BENCHMARK_DENOISER: ${{ matrix.denoiser || 'none' }}
           TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'true'
+          TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -254,6 +269,9 @@ jobs:
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+          # Chatterbox MTL takes up to 36.8 minutes on thermally throttled Pixel
+          # devices, beyond the generated Android test harness's 20-minute wait.
+          android-per-test-timeout-minutes: '45'
 
       # Benchmark runs (run_rtf_benchmarks=true): the benchmark runners are
       # intentionally NOT in test-groups.json, so they never run on normal PRs.
@@ -286,11 +304,10 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
-          # Empty on normal runs => action auto-detects test-groups.json
-          # (functional tests). Set on benchmark runs => only the benchmarks.
           test-groups: ${{ steps.perf_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
-          mocha-timeout-ms: '2700000'
+          # Keep Mocha's per-test ceiling above the 45-minute Android wait.
+          mocha-timeout-ms: '3300000'
           wdio-waitfor-timeout-ms: '600000'
           # Host pre-stages this row's models so the phone never downloads them.
           # iOS pushes into Documents/models via pymobiledevice3; Android adb-pushes
@@ -307,6 +324,8 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: dual-flagship
+          multi-spec-dual-flagship: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
@@ -315,6 +334,9 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # Functional multi-spec runs need headroom beyond Device Farm's
+          # 120-minute execution ceiling for normal queue variance.
+          max-wait-time-seconds: ${{ !inputs.run_rtf_benchmarks && '9000' || '7200' }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'

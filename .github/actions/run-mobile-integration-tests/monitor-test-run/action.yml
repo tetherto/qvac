@@ -61,6 +61,8 @@ runs:
         MAX_WAIT_TIME_SECONDS: ${{ inputs.max-wait-time-seconds }}
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
       run: |
+        set -euo pipefail
+
         # ── helpers ──────────────────────────────────────────────────
         # Bash 3.2 compat: no mapfile, no declare -A.
         aws_retry() {
@@ -99,14 +101,23 @@ runs:
         if [ -n "$TEST_SPECS_JSON" ] && [ "$TEST_SPECS_JSON" != "[]" ]; then
           SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
         fi
+        spec_index_for_run() {
+          local run_index="$1"
+          if [ "$RUN_COUNT" -eq $((SPEC_COUNT * 2)) ]; then
+            echo $((run_index / 2))
+          else
+            echo "$run_index"
+          fi
+        }
         if [ "$SPEC_COUNT" -gt 0 ]; then
           echo "::group::Run → tests mapping"
-          for ((i=0; i<SPEC_COUNT && i<RUN_COUNT; i++)); do
-            _name=$(echo "$TEST_SPECS_JSON" | jq -r ".[$i].name // \"?\"")
+          for ((i=0; i<RUN_COUNT; i++)); do
+            _spec_index=$(spec_index_for_run "$i")
+            _name=$(echo "$TEST_SPECS_JSON" | jq -r ".[$_spec_index].name // \"?\"")
             # QVAC-19368: prefer the `tests` field (covers default single-spec
             # mode where grep is empty) and fall back to `grep` for older
             # callers that don't emit `tests`.
-            _list=$(echo "$TEST_SPECS_JSON" | jq -r ".[$i].tests // .[$i].grep // \"\"")
+            _list=$(echo "$TEST_SPECS_JSON" | jq -r ".[$_spec_index].tests // .[$_spec_index].grep // \"\"")
             _tests=$(echo "$_list" | tr '|' ', ')
             echo "  Run $((i+1)): $_name → $_tests"
           done
@@ -315,9 +326,10 @@ runs:
           if [ "$RUN_COUNT" -ge 2 ]; then
             _idx=$((RUN_INDEX - 1))
             _spec_tests=""
-            if [ "$SPEC_COUNT" -gt 0 ] && [ "$_idx" -lt "$SPEC_COUNT" ]; then
+            _spec_index=$(spec_index_for_run "$_idx")
+            if [ "$SPEC_COUNT" -gt 0 ] && [ "$_spec_index" -lt "$SPEC_COUNT" ]; then
               # QVAC-19368: prefer `tests` (default-mode list), fall back to grep.
-              _spec_tests=$(echo "$TEST_SPECS_JSON" | jq -r ".[$_idx].tests // .[$_idx].grep // \"\"" | tr '|' ', ')
+              _spec_tests=$(echo "$TEST_SPECS_JSON" | jq -r ".[$_spec_index].tests // .[$_spec_index].grep // \"\"" | tr '|' ', ')
             fi
             if [ -n "$_spec_tests" ]; then
               echo "--- Run $RUN_INDEX: $RUN_NAME_LABEL (Result: $RESULT) [tests: $_spec_tests] ---"
@@ -380,7 +392,7 @@ runs:
         echo "  ❌ Failed: $USER_FAILED"
         echo ""
 
-        if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+        if [ "$USER_FAILED" -gt 0 ]; then
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "❌ FAILED TESTS"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -427,7 +439,7 @@ runs:
           echo "| Test cases failed | $TOTAL_FAILED |"
           echo "| Test cases skipped | $TOTAL_SKIPPED |"
           echo ""
-          if [ ${#FAILED_TEST_DETAILS[@]} -gt 0 ]; then
+          if [ "$USER_FAILED" -gt 0 ]; then
             echo "<details><summary>Failed devices</summary>"
             echo ""
             for failed_info in "${FAILED_TEST_DETAILS[@]}"; do

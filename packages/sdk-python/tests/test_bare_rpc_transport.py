@@ -17,7 +17,7 @@ import pytest
 import pytest_asyncio
 from _worker_env import BARE_BIN, WORKER_AVAILABLE
 
-from tetherto.qvac_sdk.bare_rpc_transport import BARE_RPC_AVAILABLE, BareRpcTransport
+from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 from tetherto.qvac_sdk.methods import (
     bci_transcribe_stream,
     completion_stream,
@@ -53,11 +53,6 @@ NEURAL_FIXTURE = f"{SDK_DIR}/e2e/assets/neural/neural-not-too-controversial.bin"
 
 pytestmark = [
     pytest.mark.asyncio,
-    pytest.mark.skipif(
-        not BARE_RPC_AVAILABLE,
-        reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-        "(`pip install -e '.[bare-rpc]'`) to run these tests",
-    ),
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
         reason=f"no built SDK worker + Bare runtime found (worker={WORKER_PATH!r}, bare={BARE_BIN!r}) -- run scripts/build_worker.py, or set QVAC_POC_SDK_DIR",

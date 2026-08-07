@@ -1,0 +1,287 @@
+---
+title: JS/TS SDK
+description: Install and use the JavaScript/TypeScript client for QVAC.
+ogImage: /og-sdk-installation.png
+schemaType: HowTo
+---
+
+import { TrackCopy } from '@/components/track-copy'
+
+## Overview
+
+The JS/TS SDK (`@qvac/sdk` on npm) is the JavaScript/TypeScript client for QVAC.
+It runs the worker in-process (there is no separate transport), and drives every
+QVAC capability through a unified, type-safe API.
+
+## Requirements
+
+- Node.js `>= v22.17`
+- npm `>= v10.9`
+- [Bare](https://bare.pears.com) `>= v1.24` (if targeting Bare)
+- [Expo](https://expo.dev) `>= v54` (if targeting mobile)
+
+For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/system-requirements).
+
+## Install
+
+<TrackCopy name="npm_install">
+```bash
+npm i @qvac/sdk
+```
+</TrackCopy>
+
+### Expo
+
+<Steps>
+<Step>
+Install peer dependencies:
+
+```bash
+npm i 'react-native-bare-kit@^0.11.5'
+npm i -D 'bare-pack@^1.5.1'
+npx expo install expo-file-system expo-build-properties expo-device
+```
+
+<Callout type="success">
+**Tip:** use `npx expo install` for all `expo-*` packages to ensure compatibility with your project's Expo SDK version.
+</Callout>
+
+</Step>
+
+<Step>
+Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugins` array in your `app.json`:
+
+```json title="app.json"
+{
+  "expo": {
+    "plugins": [
+      ["expo-build-properties", { // [!code ++]
+        "android": { "minSdkVersion": 29 } // [!code ++]
+      }], // [!code ++]
+      "@qvac/sdk/expo-plugin" // [!code ++]
+    ]
+  }
+}
+```
+
+</Step>
+
+<Step>
+Prebuild your project to generate the native files:
+
+```bash
+npx expo prebuild
+```
+</Step>
+
+<Step>
+Build and run it on a **physical device**:
+
+```bash
+npx expo run:ios --device
+# or
+npx expo run:android --device
+```
+</Step>
+</Steps>
+
+<Callout type="info">
+  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
+  You **must** use a physical device.
+</Callout>
+
+## Quickstart
+
+Run your first example using the JS/TS SDK.
+
+<Steps>
+
+<Step>
+Create the examples workspace:
+```bash
+mkdir qvac-examples
+cd qvac-examples
+npm init -y && npm pkg set type=module
+```
+</Step>
+
+<Step>
+Install the SDK:
+<TrackCopy name="npm_install">
+```bash
+npm i @qvac/sdk
+```
+</TrackCopy>
+</Step>
+
+<Step>
+Save this config in your workspace to enable client and server logs during the run:
+
+```json file=<rootDir>/packages/sdk/examples/config/default/default.config.json title="qvac.config.json"
+```
+</Step>
+
+<Step>
+Create the quickstart script:
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/quickstart.js title="quickstart.js" lineNumbers
+```
+</WrapCode>
+</Step>
+
+<Step>
+Run the quickstart script:
+
+```bash
+QVAC_CONFIG_PATH=./qvac.config.json node quickstart.js
+```
+
+Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a little setup — a `process` global and plugin registration — so see [Running on Bare](#running-on-bare) below.
+</Step>
+
+</Steps>
+
+## Running examples
+
+Follow these instructions to run any example in this documentation:
+- All examples are self-contained, runnable JavaScript scripts. Use the `qvac-examples` workspace created in this quickstart to store and run them as you explore this documentation.
+- Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo). The examples are written in Node style and run on Node.js or Bun directly; to run them on Bare, see [Running on Bare](#running-on-bare).
+- More examples can be found in the [SDK examples directory](https://github.com/tetherto/qvac/tree/main/packages/sdk/examples).
+- Some examples need companion files — sample audio, an image, or a config — that aren't part of the embedded code. These can be found in the same examples directory.
+- Some examples also provide a TypeScript version. If you want to run TS directly, install the required dev dependencies:
+  ```bash
+  npm i -D tsx typescript
+  ```
+
+## Configuration
+
+The SDK reads `qvac.config.*` from the project root, or from the path in `QVAC_CONFIG_PATH`:
+
+```bash
+QVAC_CONFIG_PATH=./qvac.config.json node app.js
+```
+
+See [Configuration](/configuration) for options and schema.
+
+### File formats
+
+The `qvac.config.*` format you can use depends on the JS environment where QVAC runs:
+
+| Format | Node.js | Bare | Expo |
+| --- | --- | --- | --- |
+| `qvac.config.json` | ✅ | ✅ | ✅ |
+| `qvac.config.js` | ✅ | ✅ | ❌ |
+| `qvac.config.ts` | ✅ | ❌ | ❌ |
+
+<Callout type="info">
+`qvac.config.ts` requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
+</Callout>
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<Callout type="warn">
+Supported on Node.js and Bare. Not supported in Expo — use JSON instead.
+</Callout>
+<WrapCode>
+```js title="qvac.config.js" lineNumbers
+module.exports = {
+  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  loggerConsoleOutput: true,
+  loggerLevel: "info",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+  registryDownloadMaxRetries: 3,
+  registryStreamTimeoutMs: 60000,
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+  bareRuntimeVersion: "<x.y.z>",
+  serve: {
+    models: {
+      "<model_alias>": {
+        model: "<SDK_MODEL_CONSTANT>",
+        default: true,
+        preload: true,
+        config: {},
+      },
+    },
+  },
+};
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<Callout type="info">
+Supported on Node.js only, and requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
+</Callout>
+<WrapCode>
+```ts title="qvac.config.ts" lineNumbers
+import type { QvacConfig } from "@qvac/sdk";
+
+const config: QvacConfig = {
+  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
+  loggerConsoleOutput: true,
+  loggerLevel: "info",
+  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
+  cacheDirectory: "</absolute/path/to/.qvac/models>",
+  httpDownloadConcurrency: 3,
+  httpConnectionTimeoutMs: 10000,
+  registryDownloadMaxRetries: 3,
+  registryStreamTimeoutMs: 60000,
+  deviceDefaults: [
+    {
+      name: "Samsung Galaxy force CPU",
+      match: { platform: "android", deviceBrand: "samsung" },
+      defaults: { llm: { device: "cpu" } },
+    },
+  ],
+  bareRuntimeVersion: "<x.y.z>",
+  serve: {
+    models: {
+      "<model_alias>": {
+        model: "<SDK_MODEL_CONSTANT>",
+        default: true,
+        preload: true,
+        config: {},
+      },
+    },
+  },
+};
+
+export default config;
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+## Running on Bare
+
+To run an example on Bare:
+
+1. Provide a `process` global. Install `bare-process` and set it before using the SDK:
+   ```js
+   import process from "bare-process";
+   globalThis.process = process;
+   ```
+2. Register the plugins the example uses — Bare runs in-process and nothing auto-registers. See [Runtime registration on Bare](/configuration/plugins#runtime-registration-on-bare).
+
+Here is the quickstart adapted for Bare:
+
+```ts file=<rootDir>/packages/sdk/examples/quickstart.bare.ts title="quickstart.bare.ts" lineNumbers
+```
+
+For running QVAC on Bare in production, we recommend **[@qvac/bare-sdk](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk)** — a slim, Bare-only assembly where you select addons and register plugins explicitly. It also sets up the bare module shims that examples using `fs` and similar modules rely on.
+
+## API reference
+
+<Card href="/reference/api" title="API reference">
+  `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+</Card>

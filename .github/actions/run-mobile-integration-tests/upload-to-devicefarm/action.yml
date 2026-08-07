@@ -496,6 +496,9 @@ runs:
           echo "  grep: $GROUP_GREP"
 
           export GROUP_GREP_OUT="$GROUP_GREP"
+          # Pass the shard identity to Device Farm as data instead of making
+          # consumer pre_test hooks parse the generated WDIO JavaScript.
+          export GROUP_GREP_B64=$(printf '%s' "$GROUP_GREP" | base64 | tr -d '\n')
 
           # Per-shard perf gating: skip perf extraction on non-perf shards
           # to avoid the poll loop (~13 min on Android) running uselessly

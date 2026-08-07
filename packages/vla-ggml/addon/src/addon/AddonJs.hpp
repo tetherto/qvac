@@ -337,18 +337,18 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   }
   bool accepted = false;
   try {
-    // Straight to addonCpp (what the framework's instance.runJob does under its
-    // js::Boolean wrapper) so acceptance is a plain bool rather than a JS value
-    // that would have to be read back to decide whether to release the count.
-    accepted = JsInterface::getInstance(env, instanceHandle)
-                   .addonCpp->runJob(std::move(input));
+    // Straight to addonCpp so the optional job id can be inspected before
+    // deciding whether to release the dispatch count.
+    const auto jobId = JsInterface::getInstance(env, instanceHandle)
+                           .addonCpp->runJob(std::move(input));
+    accepted = jobId.has_value();
   } catch (...) {
     if (vla != nullptr) {
       vla->noteJobSettled();
     }
     throw;
   }
-  // runJob returns false when a previous job is still in flight — that job was
+  // runJob returns nullopt when a previous job is still in flight. That job was
   // never queued, so process() will never clear its count.
   if (vla != nullptr && !accepted) {
     vla->noteJobSettled();
