@@ -249,33 +249,26 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # RTF/throughput benchmark leg — only bci-whispercpp declares
-      # runRtfBenchmarks/benchmarkMatrixJson in its options.ci today. Add the
-      # matching QVAC_<PKG>_BENCHMARK_* env vars here when another package's
-      # own scripts/run-rtf-benchmark-matrix.js needs this leg.
-      - name: Run RTF benchmark (Unix)
-        if: always() && !cancelled() && matrix.platform != 'win32' && matrix.runRtfBenchmarks
-        continue-on-error: true
-        working-directory: ${{ matrix.workdir }}
-        shell: bash
-        run: node scripts/run-rtf-benchmark-matrix.js
+      # RTF benchmark leg: expand the package's compact options.ci.rtfBenchmark
+      # combos into its runner's own matrix env var, then run the runner unchanged.
+      - name: Expand RTF benchmark matrix
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        run: node scripts/rtf/expand-matrix.js
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
-          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
-          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ toJson(matrix.benchmarkMatrixJson) }}
+          QVAC_RTF_COMBO_GROUPS_JSON: ${{ toJson(matrix.rtfBenchmark.comboGroups) }}
+          QVAC_RTF_NO_GPU: ${{ matrix.noGpu && 'true' || 'false' }}
+          QVAC_RTF_GPU_BACKEND: ${{ matrix.platform == 'darwin' && 'metal' || 'vulkan' }}
+          QVAC_RTF_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_RTF_RUNNER: ${{ matrix.runner || matrix.os }}
+          QVAC_RTF_TARGET_ENV: ${{ matrix.rtfBenchmark.matrixEnvVar }}
 
-      - name: Run RTF benchmark (Windows)
-        if: always() && !cancelled() && matrix.platform == 'win32' && matrix.runRtfBenchmarks
+      - name: Run RTF benchmark
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
         continue-on-error: true
         working-directory: ${{ matrix.workdir }}
-        shell: powershell
-        run: node scripts/run-rtf-benchmark-matrix.js
+        run: ${{ matrix.rtfBenchmark.command }}
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-          QVAC_BCI_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
-          QVAC_BCI_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
-          QVAC_BCI_BENCHMARK_MATRIX_JSON: ${{ toJson(matrix.benchmarkMatrixJson) }}
 
       - name: Upload RTF benchmark results
         if: always() && !cancelled() && matrix.runRtfBenchmarks
