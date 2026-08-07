@@ -47,7 +47,10 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm run test:integration",
-        "cwd": "packages/asr-ggml"
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "carveOut": true
+        }
       }
     },
     "test:integration-mobile": {
