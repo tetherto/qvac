@@ -43,6 +43,8 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
+  void* (*ggml_backend_reg_get_proc_address)(
+      ggml_backend_reg_t reg, const char* name);
   llamaLogCallbackF llamaLogCallback;
 };
 
@@ -82,8 +84,16 @@ std::pair<BackendType, std::string> chooseBackend(
 /// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief Whether any available GPU backend can provide split buffers, which
-/// row-split (LLAMA_SPLIT_MODE_ROW) requires.
-// Callers should degrade row -> layer when this return false.
+/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
+/// True only when at least one GPU device is present AND every available
+/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
+/// requires split buffers from each device it distributes over and throws on
+/// the first one that lacks them. Callers should degrade row -> layer when this
+/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
+/// this is false in every shipped configuration.
+bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
+
+/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
+/// registry.
 bool gpuBackendSupportsRowSplit();
 } // namespace backend_selection

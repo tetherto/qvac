@@ -16,7 +16,6 @@
 
 #include "addon/AddonCpp.hpp"
 #include "addon/BertErrors.hpp"
-#include "model-interface/BackendSelection.hpp"
 #include "model-interface/BertModel.hpp"
 #include "model-interface/logging.hpp"
 #include "test_common.hpp"
@@ -980,9 +979,15 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRow) {
   double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
   if (backendDevice == 0.0) {
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
-  } else if (backend_selection::gpuBackendSupportsRowSplit()) {
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
   } else {
+    // Row-split requires split buffers from every GPU device the model is
+    // distributed over, and as of qvac-fabric v10069 only the SYCL backend
+    // provides them (CUDA moved tensor parallelism to LLAMA_SPLIT_MODE_TENSOR).
+    // None of the backends this addon ships qualify, so a requested 'row' is
+    // always degraded to 'layer'. Asserted unconditionally on purpose: this is
+    // the pin on the degrade itself, so it fails if the degrade stops working.
+    // If a split-buffer-capable backend is ever shipped, that failure is the
+    // intended signal to revisit this expectation.
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
   }
 }
