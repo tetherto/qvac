@@ -21,6 +21,83 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
+class AudioGenStreamRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    caption: Annotated[str, Field(min_length=1)]
+    lyrics: str | None = None
+    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
+    vocal_language: Annotated[
+        str | None, Field(alias="vocalLanguage", min_length=1)
+    ] = None
+    bpm: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    keyscale: Annotated[str | None, Field(min_length=1)] = None
+    timesignature: Annotated[str | None, Field(min_length=1)] = None
+    duration: Annotated[
+        float | None,
+        Field(
+            description="Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+            gt=0.0,
+        ),
+    ] = None
+    type: Literal["audioGenStream"] = "audioGenStream"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class AudioGenStreamResponseProgress(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    stage: str
+    step: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class AudioGenStreamResponseStopReason(Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class AudioGenStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
+    total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+
+
+class AudioGenStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["audioGenStream"] = "audioGenStream"
+    progress: Annotated[
+        AudioGenStreamResponseProgress | None,
+        Field(title="AudioGenStreamResponseProgress"),
+    ] = None
+    data: Annotated[str | None, Field(min_length=1)] = None
+    sample_rate: Annotated[
+        int | None, Field(alias="sampleRate", gt=0, le=9007199254740991)
+    ] = None
+    channels: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    bits_per_sample: Annotated[
+        int | None, Field(alias="bitsPerSample", gt=0, le=9007199254740991)
+    ] = None
+    done: bool
+    stop_reason: Annotated[
+        AudioGenStreamResponseStopReason | None,
+        Field(alias="stopReason", title="AudioGenStreamResponseStopReason"),
+    ] = None
+    stats: Annotated[
+        AudioGenStreamResponseStats | None, Field(title="AudioGenStreamResponseStats")
+    ] = None
+
+
 class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     GeneratedBaseModel
 ):
@@ -88,7 +165,7 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
     remove_thinking_from_context: Annotated[
         bool | None,
         Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
 
@@ -281,6 +358,7 @@ class BatchCompletionStreamRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class BatchCompletionStreamRequest(GeneratedBaseModel):
@@ -452,6 +530,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice
@@ -580,6 +659,7 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseStatsBackendDevice | None,
@@ -852,6 +932,7 @@ class CancelRequestBroadKind(Enum):
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     tts = "tts"
     ocr = "ocr"
     vla = "vla"
@@ -1043,7 +1124,7 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     remove_thinking_from_context: Annotated[
         bool | None,
         Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
 
@@ -1055,6 +1136,7 @@ class CompletionOrchestrateRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class CompletionOrchestrateRequestResponseFormatText(GeneratedBaseModel):
@@ -1319,6 +1401,7 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
     backend_device: Annotated[
         CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice | None,
@@ -1576,7 +1659,7 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     remove_thinking_from_context: Annotated[
         bool | None,
         Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
 
@@ -1588,6 +1671,7 @@ class CompletionStreamRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class CompletionStreamRequestResponseFormatText(GeneratedBaseModel):
@@ -1841,6 +1925,7 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
+    emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
     backend_device: Annotated[
         CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None,
@@ -1956,6 +2041,7 @@ class ModelType(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
 
@@ -1969,6 +2055,7 @@ class PluginId(Enum):
     tts = "@qvac/sdk/tts-ggml/plugin"
     ocr = "@qvac/sdk/ggml-ocr/plugin"
     diffusion = "@qvac/sdk/sdcpp-generation/plugin"
+    audiogen = "@qvac/sdk/audiogen-ggml/plugin"
     vla = "@qvac/sdk/ggml-vla/plugin"
     classification = "@qvac/sdk/ggml-classification/plugin"
 
@@ -2783,6 +2870,7 @@ class LocalLoadedModelInfoToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class LocalLoadedModelInfo(GeneratedBaseModel):
@@ -2853,6 +2941,7 @@ class GetModelInfoResponseModelInfoAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -3059,6 +3148,3146 @@ class GetModelInfoResponse(GeneratedBaseModel):
     ]
 
 
+class GetSystemResourcesRequest(GeneratedBaseModel):
+    sample: bool | None = None
+    type: Literal["getSystemResources"] = "getSystemResources"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: str
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: str
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: (
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueNameFailed
+    )
+    vendor: (
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueVendorFailed
+    )
+    architecture: (
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueArchitectureFailed
+    )
+    physical_cores: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValuePhysicalCoresFailed,
+        Field(alias="physicalCores"),
+    ]
+    logical_cores: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueLogicalCoresFailed,
+        Field(alias="logicalCores"),
+    ]
+    performance_cores: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValuePerformanceCoresFailed,
+        Field(alias="performanceCores"),
+    ]
+    efficiency_cores: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueEfficiencyCoresFailed,
+        Field(alias="efficiencyCores"),
+    ]
+    frequency_hz: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueFrequencyHzFailed,
+        Field(alias="frequencyHz"),
+    ]
+    cache_line_bytes: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesSupported
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuSupportedValueCacheLineBytesFailed,
+        Field(alias="cacheLineBytes"),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedProvenanceScope(Enum):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupportedProvenance(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedProvenanceScope | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesCpuSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuSupported(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedValue,
+        Field(title="GetSystemResourcesResponseCapabilitiesCpuSupportedValue"),
+    ]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesCpuSupportedProvenance,
+        Field(title="GetSystemResourcesResponseCapabilitiesCpuSupportedProvenance"),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesCpuUnavailable(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuUnverified(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesCpuFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesMemoryTotalBytesFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesMemory(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total_bytes: Annotated[
+        GetSystemResourcesResponseCapabilitiesMemoryTotalBytesSupported
+        | GetSystemResourcesResponseCapabilitiesMemoryTotalBytesUnavailable
+        | GetSystemResourcesResponseCapabilitiesMemoryTotalBytesUnverified
+        | GetSystemResourcesResponseCapabilitiesMemoryTotalBytesFailed,
+        Field(alias="totalBytes"),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: str
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: str
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[int, Field(ge=0, le=9007199254740991)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: str
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: str
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Supported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11SupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Unavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Unverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Failed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Supported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12SupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Unavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Unverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Failed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDrivers(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    vulkan: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversVulkanFailed
+    )
+    opencl: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenclFailed
+    )
+    opengl: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversOpenglFailed
+    )
+    webgpu: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversWebgpuFailed
+    )
+    metal: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversMetalFailed
+    )
+    direct3d11: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Supported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Unavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Unverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d11Failed
+    )
+    direct3d12: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Supported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Unavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Unverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversDirect3d12Failed
+    )
+    cuda: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversCudaFailed
+    )
+    level_zero: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversLevelZeroFailed,
+        Field(alias="levelZero"),
+    ]
+    rocm: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriversRocmFailed
+    )
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: bool
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: str
+    name: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameFailed
+    )
+    vendor: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemVendorFailed
+    )
+    type: (
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemTypeFailed
+    )
+    driver_name: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverNameFailed,
+        Field(alias="driverName"),
+    ]
+    driver_version: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDriverVersionFailed,
+        Field(alias="driverVersion"),
+    ]
+    drivers: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDrivers,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDrivers"
+        ),
+    ]
+    unified_memory: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemorySupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemoryFailed,
+        Field(alias="unifiedMemory"),
+    ]
+    memory_total_bytes: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesFailed,
+        Field(alias="memoryTotalBytes"),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedProvenanceScope(Enum):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedProvenance(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedProvenanceScope | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupported(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: list[GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedProvenance,
+        Field(title="GetSystemResourcesResponseCapabilitiesGpusSupportedProvenance"),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusUnavailable(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusUnverified(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilities(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    cpu: (
+        GetSystemResourcesResponseCapabilitiesCpuSupported
+        | GetSystemResourcesResponseCapabilitiesCpuUnavailable
+        | GetSystemResourcesResponseCapabilitiesCpuUnverified
+        | GetSystemResourcesResponseCapabilitiesCpuFailed
+    )
+    memory: Annotated[
+        GetSystemResourcesResponseCapabilitiesMemory,
+        Field(title="GetSystemResourcesResponseCapabilitiesMemory"),
+    ]
+    gpus: (
+        GetSystemResourcesResponseCapabilitiesGpusSupported
+        | GetSystemResourcesResponseCapabilitiesGpusUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusFailed
+    )
+
+
+class GetSystemResourcesResponseSampleCpuSupportedProvenanceScope(Enum):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleCpuSupportedProvenance(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleCpuSupportedProvenanceScope | None,
+        Field(title="GetSystemResourcesResponseSampleCpuSupportedProvenanceScope"),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleCpuSupported(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0, le=1.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleCpuSupportedProvenance,
+        Field(title="GetSystemResourcesResponseSampleCpuSupportedProvenance"),
+    ]
+
+
+class GetSystemResourcesResponseSampleCpuUnavailable(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleCpuUnverified(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleCpuFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenanceScope(Enum):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenanceScope | None,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleMemoryUsedBytesSupported(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryUsedBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleMemoryUsedBytesUnavailable(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryUsedBytesUnverified(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryUsedBytesFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenanceScope(Enum):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenanceScope | None,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleMemoryTotalBytesSupported(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleMemoryTotalBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleMemoryTotalBytesUnavailable(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryTotalBytesUnverified(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemoryTotalBytesFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleMemory(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    used_bytes: Annotated[
+        GetSystemResourcesResponseSampleMemoryUsedBytesSupported
+        | GetSystemResourcesResponseSampleMemoryUsedBytesUnavailable
+        | GetSystemResourcesResponseSampleMemoryUsedBytesUnverified
+        | GetSystemResourcesResponseSampleMemoryUsedBytesFailed,
+        Field(alias="usedBytes"),
+    ]
+    total_bytes: Annotated[
+        GetSystemResourcesResponseSampleMemoryTotalBytesSupported
+        | GetSystemResourcesResponseSampleMemoryTotalBytesUnavailable
+        | GetSystemResourcesResponseSampleMemoryTotalBytesUnverified
+        | GetSystemResourcesResponseSampleMemoryTotalBytesFailed,
+        Field(alias="totalBytes"),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0, le=1.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemComputeFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0, le=1.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0, le=1.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: float
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: str
+    compute: (
+        GetSystemResourcesResponseSampleGpusSupportedValueItemComputeSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemComputeUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemComputeUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemComputeFailed
+    )
+    encode: (
+        GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemEncodeFailed
+    )
+    decode: (
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDecodeFailed
+    )
+    memory_used_bytes: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytesFailed,
+        Field(alias="memoryUsedBytes"),
+    ]
+    memory_total_bytes: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFailed,
+        Field(alias="memoryTotalBytes"),
+    ]
+    power_watts: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsFailed,
+        Field(alias="powerWatts"),
+    ]
+    temperature_celsius: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsiusFailed,
+        Field(alias="temperatureCelsius"),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedProvenanceScope(Enum):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedProvenance(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedProvenanceScope | None,
+        Field(title="GetSystemResourcesResponseSampleGpusSupportedProvenanceScope"),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupported(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: list[GetSystemResourcesResponseSampleGpusSupportedValueItem]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedProvenance,
+        Field(title="GetSystemResourcesResponseSampleGpusSupportedProvenance"),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusUnavailable(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusUnverified(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusFailed(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSample(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    sampled_at: Annotated[float, Field(alias="sampledAt", ge=0.0)]
+    cpu: (
+        GetSystemResourcesResponseSampleCpuSupported
+        | GetSystemResourcesResponseSampleCpuUnavailable
+        | GetSystemResourcesResponseSampleCpuUnverified
+        | GetSystemResourcesResponseSampleCpuFailed
+    )
+    memory: Annotated[
+        GetSystemResourcesResponseSampleMemory,
+        Field(title="GetSystemResourcesResponseSampleMemory"),
+    ]
+    gpus: (
+        GetSystemResourcesResponseSampleGpusSupported
+        | GetSystemResourcesResponseSampleGpusUnavailable
+        | GetSystemResourcesResponseSampleGpusUnverified
+        | GetSystemResourcesResponseSampleGpusFailed
+    )
+
+
+class GetSystemResourcesResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    capabilities: Annotated[
+        GetSystemResourcesResponseCapabilities,
+        Field(title="GetSystemResourcesResponseCapabilities"),
+    ]
+    sample: Annotated[
+        GetSystemResourcesResponseSample | None,
+        Field(title="GetSystemResourcesResponseSample"),
+    ] = None
+    type: Literal["getSystemResources"] = "getSystemResources"
+
+
 class HeartbeatRequestDelegate(GeneratedBaseModel):
     provider_public_key: Annotated[
         str,
@@ -3182,6 +6411,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -3193,6 +6423,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -3401,6 +6632,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -3412,6 +6644,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -3659,6 +6892,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -3670,6 +6904,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4252,6 +7487,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4263,6 +7499,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4298,6 +7535,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4309,6 +7547,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4350,6 +7589,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4361,6 +7601,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4398,6 +7639,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4409,6 +7651,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4446,6 +7689,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4457,6 +7701,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4757,6 +8002,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4768,6 +8014,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4801,6 +8048,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4812,6 +8060,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4847,6 +8096,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4858,6 +8108,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4891,6 +8142,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4902,6 +8154,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4935,6 +8188,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4946,6 +8200,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -4981,6 +8236,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -4992,6 +8248,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5146,6 +8403,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5157,6 +8415,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5192,6 +8451,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5203,6 +8463,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5291,6 +8552,72 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     tts_voice_style_src: Annotated[Any | None, Field(alias="ttsVoiceStyleSrc")] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
+    command = "command"
+    anger = "anger"
+    narration = "narration"
+    conversation = "conversation"
+    disgust = "disgust"
+    fear = "fear"
+    happy = "happy"
+    neutral = "neutral"
+    proper_noun = "proper noun"
+    news = "news"
+    sad = "sad"
+    surprise = "surprise"
+
+
+class MaxFrames(RootModel[int]):
+    root: Annotated[int, Field(ge=10, le=2147483647)]
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[Literal["parler"], Field(alias="ttsEngine")] = "parler"
+    description: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None, Field(alias="voiceDescription", min_length=1)
+    ] = None
+    voice: Annotated[str | None, Field(min_length=1)] = None
+    emotion: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"),
+    ] = None
+    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[str | None, Field(min_length=1)] = None
+    noise: Annotated[str | None, Field(min_length=1)] = None
+    reverb: Annotated[str | None, Field(min_length=1)] = None
+    quality: Annotated[str | None, Field(min_length=1)] = None
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    stream_chunk_tokens: Annotated[
+        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
+    ] = None
+    stream_first_chunk_tokens: Annotated[
+        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    temperature: Annotated[float | None, Field(ge=0.0)] = None
+    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
+    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
+    max_frames: Annotated[Literal[0] | MaxFrames | None, Field(alias="maxFrames")] = (
+        None
+    )
+    min_new_tokens: Annotated[
+        int | None, Field(alias="minNewTokens", ge=-1, le=2147483647)
+    ] = None
+    normalize_numbers: Annotated[bool | None, Field(alias="normalizeNumbers")] = None
+
+
 class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -5315,7 +8642,8 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_type: Annotated[Literal["tts-ggml"], Field(alias="modelType")] = "tts-ggml"
     model_config_: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
-        | LoadModelSrcRequestTtsGgmlModelConfigSupertonic,
+        | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
+        | LoadModelSrcRequestTtsGgmlModelConfigParler,
         Field(alias="modelConfig"),
     ]
 
@@ -5383,6 +8711,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5394,6 +8723,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5602,6 +8932,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5613,6 +8944,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5646,6 +8978,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5657,6 +8990,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5690,6 +9024,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5701,6 +9036,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5734,6 +9070,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5745,6 +9082,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5778,6 +9116,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5789,6 +9128,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5824,6 +9164,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5835,6 +9176,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5870,6 +9212,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5881,6 +9224,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5914,6 +9258,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5925,6 +9270,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -5960,6 +9306,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -5971,6 +9318,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6006,6 +9354,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -6017,6 +9366,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6052,6 +9402,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -6063,6 +9414,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6254,7 +9606,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         | None,
         Field(
             alias="highNoiseDiffusionModelSrc",
-            description="High-noise diffusion expert — required for Wan 2.2 mixture-of-experts video models",
+            description="High-noise diffusion expert — required for Wan 2.2 A14B mixture-of-experts video models, and the only thing that enables the high_noise_* / moe_boundary request fields. Omit for single-expert models such as Wan 2.1 and Wan 2.2 TI2V-5B.",
         ),
     ] = None
     uncond_model_src: Annotated[
@@ -6326,6 +9678,292 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
             alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
         ),
     ] = None
+
+
+class LoadModelSrcRequestAudiogenGgmlDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    inference_steps: Annotated[
+        int | None, Field(alias="inferenceSteps", ge=0, le=9007199254740991)
+    ] = None
+    shift: Annotated[float | None, Field(ge=0.0)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=0, le=9007199254740991)
+    ] = None
+    threads: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
+    backends_dir: Annotated[str | None, Field(alias="backendsDir", min_length=1)] = None
+    text_enc_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc,
+        Field(alias="textEncModelSrc"),
+    ]
+    lm_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc,
+        Field(alias="lmModelSrc"),
+    ]
+    dit_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc,
+        Field(alias="ditModelSrc"),
+    ]
+    vae_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc,
+        Field(alias="vaeModelSrc"),
+    ]
+
+
+class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    delegate: Annotated[
+        LoadModelSrcRequestAudiogenGgmlDelegate | None,
+        Field(title="LoadModelSrcRequestAudiogenGgmlDelegate"),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["audiogen-ggml"], Field(alias="modelType")] = (
+        "audiogen-ggml"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestAudiogenGgmlModelConfig,
+        Field(alias="modelConfig", title="LoadModelSrcRequestAudiogenGgmlModelConfig"),
+    ]
 
 
 class LoadModelSrcRequestGgmlVlaDelegate(GeneratedBaseModel):
@@ -6582,6 +10220,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
         | LoadModelSrcRequestSdcppGeneration
+        | LoadModelSrcRequestAudiogenGgml
         | LoadModelSrcRequestGgmlVla
         | LoadModelSrcRequestGgmlClassification
         | LoadModelCustomPluginRequest
@@ -6597,6 +10236,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
         | LoadModelSrcRequestSdcppGeneration
+        | LoadModelSrcRequestAudiogenGgml
         | LoadModelSrcRequestGgmlVla
         | LoadModelSrcRequestGgmlClassification
         | LoadModelCustomPluginRequest,
@@ -6650,6 +10290,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -6661,6 +10302,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6879,6 +10521,7 @@ class ModelRegistryGetModelResponseModelAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -6895,6 +10538,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     onnx_vad = "onnx-vad"
@@ -7015,6 +10659,7 @@ class ModelRegistryListResponseModelsItemAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -7031,6 +10676,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     onnx_vad = "onnx-vad"
@@ -7144,6 +10790,7 @@ class ModelRegistrySearchRequestAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -7171,6 +10818,7 @@ class ModelRegistrySearchResponseModelsItemAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -7187,6 +10835,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     onnx_vad = "onnx-vad"
@@ -7819,6 +11468,21 @@ class SuspendResponse(GeneratedBaseModel):
     type: Literal["suspend"] = "suspend"
 
 
+class TextToSpeechRequestEmotion(Enum):
+    command = "command"
+    anger = "anger"
+    narration = "narration"
+    conversation = "conversation"
+    disgust = "disgust"
+    fear = "fear"
+    happy = "happy"
+    neutral = "neutral"
+    proper_noun = "proper noun"
+    news = "news"
+    sad = "sad"
+    surprise = "surprise"
+
+
 class TextToSpeechRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -7831,6 +11495,20 @@ class TextToSpeechRequest(GeneratedBaseModel):
     sentence_stream_max_chunk_scalars: Annotated[
         float | None, Field(alias="sentenceStreamMaxChunkScalars", gt=0.0)
     ] = None
+    description: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None, Field(alias="voiceDescription", min_length=1)
+    ] = None
+    voice: Annotated[str | None, Field(min_length=1)] = None
+    emotion: Annotated[
+        TextToSpeechRequestEmotion | None, Field(title="TextToSpeechRequestEmotion")
+    ] = None
+    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[str | None, Field(min_length=1)] = None
+    noise: Annotated[str | None, Field(min_length=1)] = None
+    reverb: Annotated[str | None, Field(min_length=1)] = None
+    quality: Annotated[str | None, Field(min_length=1)] = None
     type: Literal["textToSpeech"] = "textToSpeech"
 
 
@@ -7870,6 +11548,21 @@ class TextToSpeechStreamRequestSentenceDelimiterPreset(Enum):
     multilingual = "multilingual"
 
 
+class TextToSpeechStreamRequestEmotion(Enum):
+    command = "command"
+    anger = "anger"
+    narration = "narration"
+    conversation = "conversation"
+    disgust = "disgust"
+    fear = "fear"
+    happy = "happy"
+    neutral = "neutral"
+    proper_noun = "proper noun"
+    news = "news"
+    sad = "sad"
+    surprise = "surprise"
+
+
 class TextToSpeechStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -7887,6 +11580,21 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         float | None, Field(alias="maxBufferScalars", gt=0.0)
     ] = None
     flush_after_ms: Annotated[float | None, Field(alias="flushAfterMs", gt=0.0)] = None
+    description: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None, Field(alias="voiceDescription", min_length=1)
+    ] = None
+    voice: Annotated[str | None, Field(min_length=1)] = None
+    emotion: Annotated[
+        TextToSpeechStreamRequestEmotion | None,
+        Field(title="TextToSpeechStreamRequestEmotion"),
+    ] = None
+    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[str | None, Field(min_length=1)] = None
+    noise: Annotated[str | None, Field(min_length=1)] = None
+    reverb: Annotated[str | None, Field(min_length=1)] = None
+    quality: Annotated[str | None, Field(min_length=1)] = None
     type: Literal["textToSpeechStream"] = "textToSpeechStream"
 
 
@@ -8623,7 +12331,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     width: Annotated[
         int | None,
         Field(
-            description="Video width in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+            description="Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
             gt=0,
             le=9007199254740991,
             multiple_of=16,
@@ -8632,7 +12340,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     height: Annotated[
         int | None,
         Field(
-            description="Video height in pixels (must be a multiple of 16). LTX-2 additionally requires a multiple of 32, validated against the loaded model before generation.",
+            description="Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
             gt=0,
             le=9007199254740991,
             multiple_of=16,
@@ -8694,7 +12402,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_steps: Annotated[
         int | None,
         Field(
-            description="Wan 2.2 high-noise expert step count.",
+            description="Wan 2.2 A14B high-noise expert step count. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise. Omit to let native routing derive the split from moe_boundary.",
             gt=0,
             le=9007199254740991,
         ),
@@ -8702,28 +12410,35 @@ class VideoStreamRequest(GeneratedBaseModel):
     high_noise_sampler: Annotated[
         VideoStreamRequestHighNoiseSampler | None,
         Field(
-            description="Wan 2.2 high-noise expert sampler.",
+            description="Wan 2.2 A14B high-noise expert sampler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             title="VideoStreamRequestHighNoiseSampler",
         ),
     ] = None
     high_noise_scheduler: Annotated[
         VideoStreamRequestHighNoiseScheduler | None,
         Field(
-            description="Wan 2.2 high-noise expert scheduler.",
+            description="Wan 2.2 A14B high-noise expert scheduler. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
             title="VideoStreamRequestHighNoiseScheduler",
         ),
     ] = None
     high_noise_cfg_scale: Annotated[
-        float | None, Field(description="Wan 2.2 high-noise expert CFG scale.")
+        float | None,
+        Field(
+            description="Wan 2.2 A14B high-noise expert CFG scale. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise."
+        ),
     ] = None
     high_noise_flow_shift: Annotated[
         float | None,
-        Field(description="Wan 2.2 high-noise expert flow shift override."),
+        Field(
+            description="Wan 2.2 A14B high-noise expert flow shift override. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise."
+        ),
     ] = None
     moe_boundary: Annotated[
         float | None,
         Field(
-            description="Wan 2.2 mixture-of-experts boundary in [0, 1].", ge=0.0, le=1.0
+            description="Wan 2.2 A14B mixture-of-experts boundary in [0, 1]. Requires a model loaded with modelConfig.highNoiseDiffusionModelSrc; rejected otherwise.",
+            ge=0.0,
+            le=1.0,
         ),
     ] = None
     vace_strength: Annotated[
@@ -9036,7 +12751,8 @@ class Response_1(
 
 class Response(
     RootModel[
-        BatchCompletionStreamResponse
+        AudioGenStreamResponse
+        | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
         | CancelResponse
@@ -9052,6 +12768,7 @@ class Response(
         | FinetuneProgressResponse
         | GetLoadedModelInfoResponse
         | GetModelInfoResponse
+        | GetSystemResourcesResponse
         | HeartbeatResponse
         | LoadModelResponse
         | LoggingStreamResponse
@@ -9080,7 +12797,8 @@ class Response(
     ]
 ):
     root: Annotated[
-        BatchCompletionStreamResponse
+        AudioGenStreamResponse
+        | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
         | CancelResponse
@@ -9096,6 +12814,7 @@ class Response(
         | FinetuneProgressResponse
         | GetLoadedModelInfoResponse
         | GetModelInfoResponse
+        | GetSystemResourcesResponse
         | HeartbeatResponse
         | LoadModelResponse
         | LoggingStreamResponse
@@ -9136,7 +12855,8 @@ class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
 
 class Request(
     RootModel[
-        BatchCompletionStreamRequest
+        AudioGenStreamRequest
+        | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
         | Request_1
@@ -9150,6 +12870,7 @@ class Request(
         | Request_3
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
+        | GetSystemResourcesRequest
         | HeartbeatRequest
         | Request_4
         | LoggingStreamRequest
@@ -9176,7 +12897,8 @@ class Request(
     ]
 ):
     root: Annotated[
-        BatchCompletionStreamRequest
+        AudioGenStreamRequest
+        | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
         | Request_1
@@ -9190,6 +12912,7 @@ class Request(
         | Request_3
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
+        | GetSystemResourcesRequest
         | HeartbeatRequest
         | Request_4
         | LoggingStreamRequest

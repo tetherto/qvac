@@ -43,9 +43,13 @@ export interface CoverageSummary {
   unknownBreakdown?: UnknownLabelCount[]
 }
 
+export type CoverageSpecSourceMode = 'file' | 'live' | 'live-validated-cache' | 'offline-cache'
+
 export interface CoverageReport {
   fetchedAt: string
   specSource: string
+  specSourceMode: CoverageSpecSourceMode
+  specSha256: string
   routerSource: string
   implementedCount: number
   /** qvac-only endpoints implemented beyond the OpenAI spec (e.g. Open WebUI compatibility). */

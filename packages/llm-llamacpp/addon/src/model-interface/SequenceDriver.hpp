@@ -35,6 +35,19 @@ static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
 static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
 static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
 
+[[nodiscard]] constexpr bool
+isKnownReasoningTruncation(GenerationStopReason reason) {
+  return reason == GenerationStopReason::PredictionLimit ||
+         reason == GenerationStopReason::SequenceLimit ||
+         reason == GenerationStopReason::ContextOverflow;
+}
+
+[[nodiscard]] constexpr GenerationStopReason
+stopReasonAfterRequestRollback(GenerationStopReason reason) {
+  return isKnownReasoningTruncation(reason) ? reason
+                                            : GenerationStopReason::None;
+}
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
@@ -146,6 +159,18 @@ public:
   [[nodiscard]] virtual int32_t getNSlides() const = 0;
 
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
+
+  /// Why this sequence's generation stopped, once the scheduler has finalized
+  /// the driver (`None` before that, for a prefill-only slot, or on a
+  /// cancel/decode-error leg, which skips `onGenerationFinished`). Per
+  /// sequence, so unlike the shared per-context vision counters it can be
+  /// reported for one request without misattribution. Declared on both bases
+  /// with the same signature as `LlmContext::getGenerationStopReason`, like
+  /// `getNPast`/`getNSlides` — the concrete contexts' single `override`
+  /// satisfies both.
+  [[nodiscard]] virtual GenerationStopReason getGenerationStopReason() const {
+    return GenerationStopReason::None;
+  }
 
   // Apply the per-request `remove_thinking_from_context` toggle to the
   // driver. The single-prompt path goes through `applyGenerationParams`

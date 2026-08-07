@@ -65,30 +65,6 @@ permissions:
   id-token: write
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          # Dispatch-only workflow: label-gate treats workflow_dispatch as a
-          # trusted event and authorises without any API call, so the default
-          # GITHUB_TOKEN suffices — no PAT needed.
-          github-token: ${{ github.token }}
-
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -111,8 +87,7 @@ jobs:
   verify-shards:
     needs:
       - context
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    if: inputs.run_mobile && !inputs.summarize_only
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -141,8 +116,7 @@ jobs:
   stamp-version:
     needs:
       - context
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && !inputs.summarize_only
+    if: ${{ !inputs.summarize_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -173,13 +147,12 @@ jobs:
   prebuild:
     needs:
       - context
-      - label-gate
       - verify-shards
     # verify-shards is a gate so a shard drift fails before this expensive build.
     # It is skipped on a desktop-only run (run_mobile false), so !cancelled() +
     # the explicit result check let that case through rather than a skipped gate
     # skipping the build.
-    if: needs.label-gate.outputs.authorised == 'true' && (inputs.run_desktop || inputs.run_mobile) && !inputs.summarize_only && !cancelled() && needs.verify-shards.result != 'failure'
+    if: (inputs.run_desktop || inputs.run_mobile) && !inputs.summarize_only && !cancelled() && needs.verify-shards.result != 'failure'
     permissions:
       contents: write
       packages: write
@@ -187,7 +160,7 @@ jobs:
       id-token: write
     uses: ./.github/workflows/prebuilds-embed-llamacpp.yml
     # Bounded: prebuild needs the GPR/signing secrets; no repository input, and the
-    # release environment + label-gate keep this to trusted in-repo refs.
+    # release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -196,12 +169,11 @@ jobs:
   desktop-benchmark:
     needs:
       - context
-      - label-gate
       - prebuild
     # !cancelled() + the explicit prebuild-success check so the skip of the
     # mobile-only verify-shards job (on a desktop-only run) does not propagate
     # through prebuild and skip this job.
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_desktop && !inputs.summarize_only && !cancelled() && needs.prebuild.result == 'success'
+    if: inputs.run_desktop && !inputs.summarize_only && !cancelled() && needs.prebuild.result == 'success'
     name: Desktop Parameter Sweep
     runs-on: qvac-ubuntu2204-x64-gpu
     timeout-minutes: 360
@@ -315,9 +287,8 @@ jobs:
     needs:
       - context
       - prebuild
-      - label-gate
       - verify-shards
-    if: needs.label-gate.outputs.authorised == 'true' && inputs.run_mobile && !inputs.summarize_only
+    if: inputs.run_mobile && !inputs.summarize_only
     permissions:
       contents: read
       packages: read
@@ -346,7 +317,7 @@ jobs:
             groups: '[{"name":"BenchmarkPerfEmbeddinggemmaQ80Bs2048Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ80Bs2048FaonTest"},{"name":"BenchmarkPerfEmbeddinggemmaQ40Bs2048Faon","grep":"runBenchmarkPerfEmbeddinggemmaQ40Bs2048FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bQ80Bs2048Faon","grep":"runBenchmarkPerfQwen3Embedding06bQ80Bs2048FaonTest"},{"name":"BenchmarkPerfQwen3Embedding06bF16Bs2048Faon","grep":"runBenchmarkPerfQwen3Embedding06bF16Bs2048FaonTest"}]'
     uses: ./.github/workflows/integration-mobile-test-embed-llamacpp.yml
     # Bounded: Device Farm needs the AWS/Apple/pool secrets; no repository input, and
-    # the release environment + label-gate keep this to trusted in-repo refs.
+    # the release environment + fork-approval keep this to trusted in-repo refs.
     secrets: inherit
     with:
       repository: ${{ github.repository }}
@@ -361,11 +332,10 @@ jobs:
   summarize:
     needs:
       - context
-      - label-gate
       - stamp-version
       - desktop-benchmark
       - mobile-benchmark
-    if: needs.label-gate.outputs.authorised == 'true' && always() && needs.context.result == 'success'
+    if: always() && needs.context.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

@@ -20,6 +20,12 @@ export interface AudioGenConfigurationParams {
   useGPU?: boolean
   nGpuLayers?: number
   threads?: number
+  /**
+   * Prebuilds root the native side scans (after appending the per-target
+   * BACKENDS_SUBDIR) for dlopen'd ggml backend modules. Required on arm64, where
+   * the CPU backend ships as per-microarch MODULE .so files.
+   */
+  backendsDir?: string
 }
 
 /** One generation job handed to the native `runJob`. */

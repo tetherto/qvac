@@ -6,12 +6,12 @@ schemaType: HowTo
 
 ## Overview
 
-Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). The cancel surface differs by operation — see the coverage callout below for which path applies to which call.
+Every long-running SDK operation that goes through the request registry can be cancelled at any point during execution. Coverage spans inference (`completion()`, `batchCompletion()`, `embed()`, `transcribe()`, `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, `upscale()`, `audioGen()`), workspace operations (`rag*()`), and resource-acquisition calls (`loadModel()`, `downloadAsset()`). The cancel surface differs by operation — see the coverage callout below for which path applies to which call.
 
 The mental model is: **the primary path is `requestId`** — pass the run's `requestId` to `cancel()` to stop that exact call. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, admin sweeps, or for ops whose addons cannot interrupt mid-decode (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`).
 
 <Callout title="Coverage" type="info">
-**Targeted cancel by `requestId`** works for: `completion()`, `batchCompletion()`, `loadModel()`, `embed()`, `transcribe()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+**Targeted cancel by `requestId`** works for: `completion()`, `batchCompletion()`, `audioGen()`, `loadModel()`, `embed()`, `transcribe()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
 
 **Broad cancel by `modelId`** additionally covers `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
 
@@ -22,7 +22,7 @@ The mental model is: **the primary path is `requestId`** — pass the run's `req
 
 ## Functions
 
-1. [`completion()`](/reference/api#completion) and [`batchCompletion()`](/ai-capabilities/batch-processing) — return a run object that exposes a synchronous `requestId` field.
+1. [`completion()`](/reference/api#completion), [`batchCompletion()`](/ai-capabilities/batch-processing), and [`audioGen()`](/ai-capabilities/music-generation) — return a run object that exposes a synchronous `requestId` field.
 2. [`loadModel()`](/reference/api#loadmodel), [`downloadAsset()`](/reference/api#downloadasset), [`embed()`](/reference/api#embed), [`transcribe()`](/reference/api#transcribe), and the [`rag*()`](/ai-capabilities/rag) workspace operations (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`) — return a decorated promise (`Promise<T> & { requestId: string }`) that exposes a synchronous `requestId` field before the first await resolves.
 3. [`cancel()`](/reference/api#cancel) — cancel by `requestId` (targeted) or by `modelId` (broad, optionally narrowed by `kind`).
 
@@ -32,13 +32,16 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 Two shapes show up across the SDK surface:
 
-- **`completion()`** — returns a `CompletionRun` with `run.requestId` (UUIDv4 generated client-side, available synchronously on the returned run).
+- **`completion()` and `audioGen()`** — return run objects with `run.requestId` (UUIDv4 generated client-side, available synchronously on the returned run).
 - **`loadModel()`, `downloadAsset()`, `embed()`, `transcribe()`, `ragIngest()`, `ragSaveEmbeddings()`, `ragReindex()`** — return `Promise<T> & { requestId: string }`. The await result is unchanged (`await loadModel(...)` still resolves to the model id, `await embed(...)` still resolves to the embedding vector, etc.), but `op.requestId` is available synchronously *before* `await` resolves so a stop button can be wired immediately.
 
 ```ts
 // Pattern 1 — completion: requestId is on the returned run
 const run = completion({ modelId, history, stream: true });
 await cancel({ requestId: run.requestId });
+
+const audioRun = audioGen({ modelId: audioModelId, caption: "Ambient music" });
+await cancel({ requestId: audioRun.requestId });
 
 // Pattern 2 — decorated promise: op.requestId is synchronously available
 const op = loadModel({ modelSrc: "..." });
@@ -63,11 +66,12 @@ await cancel({ requestId: run.requestId });
 await cancel({ operation: "request", requestId: run.requestId });
 ```
 
-Outcome on the consumer side (using `completion()` as the reference):
+Outcome on the consumer side:
 
 - The `events` async iterable closes cleanly.
 - The terminal `completionDone` event carries `stopReason: "cancelled"`.
 - The `final` promise rejects with [`InferenceCancelledError`](/reference/api#errors) (code `52419`).
+- For `audioGen()`, the progress stream closes, the terminal frame carries `stopReason: "cancelled"`, and both `audio` and `stats` reject with `InferenceCancelledError`.
 
 Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `embed`, `transcribe`, `rag*`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
 
@@ -87,6 +91,7 @@ await cancel({ modelId, kind: "batchCompletion" });
 await cancel({ modelId, kind: "embeddings" });
 await cancel({ modelId, kind: "transcribe" });
 await cancel({ modelId, kind: "translate" });
+await cancel({ modelId, kind: "audiogen" });
 
 // Legacy per-kind sugars — still supported via the client wrapper.
 await cancel({ operation: "inference", modelId });
@@ -96,6 +101,8 @@ await cancel({ operation: "embeddings", modelId });
 Broad cancel terminates **every** in-flight request matching the target on the model simultaneously. Prefer the targeted `{ requestId }` form when you do have a `requestId` — it scopes the cancellation precisely and avoids killing unrelated work that happens to share the model.
 
 For ops whose addon does not support mid-decode abort (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`), broad cancel by `modelId` is the only cancel path, and it is **soft** — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, but the underlying C++ work runs to completion in the background. The client's promise still rejects with `InferenceCancelledError`; just don't expect the model to stop computing immediately.
+
+AudioGen is different: targeted or broad cancellation is **hard**. The plugin calls the ACE-Step model's cancel operation, interrupting active generation rather than only suppressing subsequent stream frames.
 
 <Callout type="info">
 `loadModel` is per-`requestId` only: the registry slot for an in-progress load is keyed by `requestId` (the model id isn't known until the config hash is computed inside the handler), so `cancel({ modelId })` is a no-op against an in-progress load.
@@ -156,10 +163,18 @@ The following script loads a model, starts a streaming `completion()`, cancels i
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/cancel.py title="cancel.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
 </Callout>
 
 ## Errors

@@ -30,6 +30,7 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  getSystemResources,
   loggingStream,
   subscribeServerLogs,
   type ServerLogHandler,
@@ -54,6 +55,7 @@ export {
   vlaPreprocessImage,
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
+  audioGen,
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
@@ -97,6 +99,10 @@ export {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,
+  type TtsClientParamsInput,
+  type TtsParlerEmotion,
+  type TtsParlerLoadConfig,
+  type TtsParlerRuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
@@ -118,6 +124,23 @@ export {
   type GetModelInfoParams,
   type GetLoadedModelInfoParams,
   type LoadedModelInfo,
+  type GetSystemResourcesInput,
+  type ResourceScope,
+  type ResourceProvenance,
+  type ResourceMetric,
+  type GraphicsDriver,
+  type GraphicsDriverCapabilities,
+  type BackendProbeResult,
+  type BackendDevice,
+  type BackendDriver,
+  type BackendFallback,
+  type InferenceBackendDiagnostics,
+  type CPUResourceCapabilities,
+  type GPUResourceCapabilities,
+  type SystemResourceCapabilities,
+  type GPUResourceSample,
+  type SystemResourceSample,
+  type SystemResources,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
@@ -133,6 +156,14 @@ export {
   type DiffusionClientParams,
   type DiffusionStreamResponse,
   type DiffusionStats,
+  type AudioGenClientParams,
+  type AudioGenConfig,
+  type AudioGenRuntimeConfig,
+  type AudioGenProgress,
+  type AudioGenAudio,
+  type AudioGenStats,
+  type AudioGenResult,
+  type AudioGenStreamResponse,
   type VideoClientParams,
   type VideoStreamResponse,
   type VideoStats,
@@ -160,6 +191,7 @@ export {
   PLUGIN_TTS,
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
+  PLUGIN_AUDIOGEN,
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION,
   SDK_DEFAULT_PLUGINS,
@@ -234,5 +266,11 @@ export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler } from './profiling'
-export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'
+export { profiler, attachBackendDiagnostics } from './profiling'
+export type {
+  ProfilerRuntimeOptions,
+  ProfilerExport,
+  ProfilingEvent,
+  ProfilerGPUResourceGauge,
+  ProfilerResourceGauge
+} from './profiling'

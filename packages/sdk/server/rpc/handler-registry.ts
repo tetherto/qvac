@@ -25,6 +25,7 @@ import { handleTextToSpeech } from '@/server/rpc/handlers/text-to-speech'
 import { handleTextToSpeechStream } from '@/server/rpc/handlers/text-to-speech-stream'
 import { handleGetModelInfo } from '@/server/rpc/handlers/get-model-info'
 import { handleGetLoadedModelInfo } from '@/server/rpc/handlers/get-loaded-model-info'
+import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
 import { handleOCRStream } from '@/server/rpc/handlers/ocr-stream'
 import { handleHeartbeat } from '@/server/rpc/handlers/heartbeat'
 import { handleFinetune } from '@/server/rpc/handlers/finetune'
@@ -34,6 +35,7 @@ import { handleDiffusionStream } from '@/server/rpc/handlers/diffusion-stream'
 import { handleVideoStream } from '@/server/rpc/handlers/video-stream'
 import { handleUpscaleStream } from '@/server/rpc/handlers/upscale-stream'
 import { handleClassify } from '@/server/rpc/handlers/classify'
+import { handleAudioGenStream } from '@/server/rpc/handlers/audio-gen-stream'
 import { handlePluginInvoke, handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
 import {
   handleModelRegistryList,
@@ -115,6 +117,7 @@ export const registry: Record<string, HandlerEntry> = {
   deleteCache: { type: 'reply', handler: handleDeleteCache },
   getModelInfo: { type: 'reply', handler: handleGetModelInfo },
   getLoadedModelInfo: { type: 'reply', handler: handleGetLoadedModelInfo },
+  getSystemResources: { type: 'reply', handler: handleGetSystemResources },
   pluginInvoke: { type: 'reply', handler: handlePluginInvoke },
   modelRegistryList: { type: 'reply', handler: handleModelRegistryList },
   modelRegistrySearch: { type: 'reply', handler: handleModelRegistrySearch },
@@ -127,6 +130,7 @@ export const registry: Record<string, HandlerEntry> = {
   state: { type: 'reply', handler: handleState },
 
   // Simple Stream handlers
+  audioGenStream: { type: 'stream', handler: handleAudioGenStream },
   transcribe: { type: 'stream', handler: handleTranscribe },
   transcribeStream: { type: 'duplex', handler: handleTranscribeStream },
   bciTranscribe: { type: 'stream', handler: handleBciTranscribe },

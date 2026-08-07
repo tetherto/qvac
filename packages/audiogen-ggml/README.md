@@ -27,8 +27,8 @@ You get the audio as **interleaved Int16 PCM** through an output callback
 (a single PCM payload once generation completes; progress ticks stream during
 the run), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
-opens them. GPU (Metal / Vulkan) is used when you ask for it, with a CPU
-fallback.
+opens them. GPU (Metal / Vulkan, including Vulkan on Android Mali devices) is
+used when you ask for it, with a CPU fallback.
 
 ## Install & build
 
@@ -41,6 +41,10 @@ You also need the model GGUFs on disk (see [Models](#models)); point the addon
 at the folder that holds them.
 
 ## Usage
+
+> Building with `@qvac/sdk`? Use the SDK's
+> [`audioGen()` music generation guide](../../docs/website/content/docs/ai-capabilities/music-generation.mdx)
+> for registry-hosted models, progress streaming, and targeted cancellation.
 
 ### 1. Simplest case — an instrumental
 
@@ -66,13 +70,18 @@ for await (const item of response.iterate()) {
     // these chunks as they stream in.
   }
 }
-const stats = await response.await() // { audioDurationMs, totalTimeMs, realTimeFactor }
+const stats = await response.await()
+// { audioDurationMs, totalTimeMs, realTimeFactor, backendDevice, backendId }
+// backendDevice: 0 = CPU, 1 = GPU
+// backendId:     0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other
 
 await gen.destroy()
 ```
 
 > The audio arrives as PCM chunks over the `QvacResponse` stream; `await()`
-> resolves with the run stats once generation completes.
+> resolves with the run stats once generation completes. `backendDevice` /
+> `backendId` report the backend the engine *resolved to*, not the one requested,
+> so a `useGPU: true` run that fell back to the CPU is detectable.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm
@@ -173,10 +182,11 @@ runnable end-to-end script (`npm run example`).
 
 | Option | Meaning |
 |--------|---------|
-| `useGPU` | Run on GPU (Metal / Vulkan); falls back to CPU. |
+| `useGPU` | Run on GPU (Metal / Vulkan, including Android Mali); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
+| `backendsDir` | Advanced; override the prebuilds root scanned for dlopen'd ggml backend modules. Defaults to `<addon>/prebuilds` (correct for the shipped package). Needed on arm64, where the CPU backend is a set of per-microarch module `.so`s. |
 
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.

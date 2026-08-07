@@ -15,6 +15,8 @@ from collections.abc import AsyncIterable, AsyncIterator
 
 from .._transport import Transport
 from . import (
+    AudioGenStreamRequest,
+    AudioGenStreamResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -44,6 +46,8 @@ from . import (
     GetLoadedModelInfoResponse,
     GetModelInfoRequest,
     GetModelInfoResponse,
+    GetSystemResourcesRequest,
+    GetSystemResourcesResponse,
     HeartbeatRequest,
     HeartbeatResponse,
     LoadModelRequest,
@@ -93,6 +97,14 @@ from . import (
     VideoStreamRequest,
     VideoStreamResponse,
 )
+
+
+async def audio_gen_stream(
+    transport: Transport, params: AudioGenStreamRequest
+) -> AsyncIterator[AudioGenStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioGenStreamResponse.model_validate(chunk)
 
 
 async def batch_completion_stream(
@@ -226,6 +238,13 @@ async def get_model_info(
 ) -> GetModelInfoResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return GetModelInfoResponse.model_validate(await transport.call(payload))
+
+
+async def get_system_resources(
+    transport: Transport, params: GetSystemResourcesRequest
+) -> GetSystemResourcesResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return GetSystemResourcesResponse.model_validate(await transport.call(payload))
 
 
 async def heartbeat(
@@ -424,6 +443,7 @@ async def video_stream(
 
 
 __all__ = [
+    "audio_gen_stream",
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
@@ -440,6 +460,7 @@ __all__ = [
     "finetune_with_progress",
     "get_loaded_model_info",
     "get_model_info",
+    "get_system_resources",
     "heartbeat",
     "load_model",
     "load_model_with_progress",

@@ -92,6 +92,12 @@ public:
       });
     }
     std::vector<JobId> snapshot = addonCpp->liveJobIds();
+    if (snapshot.empty()) {
+      // Preserve the asynchronous Promise API without retaining AddonCpp
+      // through a no-op cancellation. This matters for unload: AddonCpp can
+      // own a multi-gigabyte model even when no jobs are live.
+      return js::JsAsyncTask::run(env_, [] {});
+    }
     return js::JsAsyncTask::run(
         env_, [addonCppRef = addonCpp, snapshot = std::move(snapshot)]() {
           addonCppRef->cancelJobs(snapshot);

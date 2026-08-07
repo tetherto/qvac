@@ -3,8 +3,9 @@
 Text-to-speech Bare addon backed by the [`qvac-tts.cpp`][qvac-tts-cpp]
 GGML library.  Wraps multiple engines under one package: **Chatterbox**
 (Turbo English + multilingual), **Supertonic** (v1 English, v2, and
-v3 31-language), and **Parler** (mini/large English + indic 21-language,
-description-conditioned with voice/emotion templates), plus optional
+v3 31-language), **Parler** (mini/large English + indic 21-language,
+description-conditioned with voice/emotion templates), and **CosyVoice3**
+(Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
@@ -14,8 +15,8 @@ loaded once and reused across every synthesis call.  GPU acceleration
 is **opt-in** via `config: { useGPU: true }`; the default is CPU.  On
 Android `useGPU` flows through to `tts-cpp`, which picks the GPU
 backend per its own per-vendor allowlist (Adreno → OpenCL,
-Xclipse/Mali → Vulkan) for Chatterbox and Supertonic (Parler's
-validated GPU path is Apple/Metal only) (see
+Xclipse/Mali → Vulkan). Parler supports Apple/Metal and the validated
+Android paths, including Vulkan on ARM Mali (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)).
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
@@ -55,7 +56,8 @@ platform has no prebuild the package falls back to a local build via
 
 ## Model files
 
-Two engines are wrapped, each with its own GGUF layout under `models/`:
+Four engine families are wrapped (Chatterbox, Supertonic, Parler,
+CosyVoice3), each with its own GGUF layout under `models/`:
 
 ```
 # Chatterbox turbo (English)
@@ -81,6 +83,16 @@ supertonic3-f16.gguf       (also -q8_0 / -q4_0 / -f32)
 parler-mini-v1-q8_0.gguf   (~1.2 GB; also -q6_k)
 parler-large-v1-q8_0.gguf  (~2.8 GB; also -q6_k)
 parler-indic-q8_0.gguf     (~1.3 GB; also -f16 / -f32; 21 Indic languages)
+
+# CosyVoice3 (FunAudioLLM/CosyVoice; Qwen2 speech LM + DiT flow + CausalHiFT;
+# 24 kHz, CPU) — a model DIRECTORY (default models/cosyvoice3/), auto-detected
+# from the cosyvoice3-llm-*.gguf file
+cosyvoice3/
+  cosyvoice3-llm-*.gguf    (~973 MB q8_0 — Qwen2.5 speech LM)
+  cosyvoice3-flow-*.gguf   (~1.3 GB f32 — DiT conditional-flow-matching)
+  cosyvoice3-hift-*.gguf   (~83 MB f32 — CausalHiFT vocoder)
+  voice.gguf               (baked default voice: timbre + prompt tensors)
+  vocab.json  merges.txt   (Qwen2 BPE tokenizer)
 ```
 
 The package converts these from upstream Resemble Chatterbox / Supertone
@@ -100,7 +112,9 @@ npm run convert-models
 Point the addon at a custom location via `files.modelDir` (engine
 auto-detected from the gguf filenames present), or pass explicit
 `files.t3Model` + `files.s3genModel` (Chatterbox) /
-`files.supertonicModel` (Supertonic) / `files.parlerModel` (Parler).
+`files.supertonicModel` (Supertonic) / `files.parlerModel` (Parler) /
+`files.cosyvoiceModelDir` (CosyVoice3 — a directory, see
+[CosyVoice3 instruct](#cosyvoice3-instruct)).
 
 ## Quick start
 
@@ -250,16 +264,42 @@ python scripts/convert-lavasr-enhancer-to-gguf.py \
 
 Notes:
 
-- Works for Supertonic and Chatterbox, on the batch path, sentence-level
-  streaming, **and** Chatterbox native chunk streaming (`streamChunkTokens > 0`).
+- Works for all four engines — Chatterbox, Supertonic, Parler and CosyVoice3 —
+  on the batch path, sentence-level streaming, **and** the native chunk
+  streaming of Chatterbox, Parler and CosyVoice3 (`streamChunkTokens > 0`).
 - For native chunk streaming the enhancer runs over a sliding window with
   look-ahead + crossfade so each emitted chunk is bandwidth-extended seam-free.
   This adds **~0.34 s of look-ahead latency** (inherent to the enhancer's
   receptive field), so first-audio-out arrives a little later than un-enhanced
   streaming.
+- That window re-runs the enhancer over a fixed left context + look-ahead around
+  every chunk, so streamed enhancement costs a constant factor above a single
+  batch pass: **~1.7×** for ~1 s chunks, ~2.7× for ~0.4 s, ~4.4× for ~0.2 s. How
+  many tokens that is depends on the engine's speech-token rate (Chatterbox's S3
+  tokens run at a fixed 25 Hz, so `streamChunkTokens: 25` ≈ 1 s). The factor is
+  flat in utterance length, and the enhancer is only a small share of synthesis,
+  so ~1 s chunks cost roughly 2% of total synthesis time.
+- That extra enhancer CPU buys a real latency win on **Chatterbox**, so prefer
+  larger chunks there only if enhancer CPU matters more to you than first-audio
+  latency. On **CosyVoice3** it currently buys nothing: the tts-cpp engine
+  computes the whole utterance and only then slices it, so chunks arrive
+  progressively but first-audio latency is not yet reduced (true token2wav
+  streaming is reserved upstream). Until that lands, prefer **batch** synthesis
+  when enhancing CosyVoice3 — streaming there pays the reprocess cost and yields
+  a seam-free result that is not bit-identical to the batch pass, with no
+  latency benefit in return.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
   different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
+- Parler is natively 44.1 kHz, so enhancement there buys spectral detail rather
+  than raw bandwidth. It also lifts a streaming restriction: Parler normally
+  rejects `config.outputSampleRate` together with `streamChunkTokens` (the engine
+  has no seam-free per-chunk resampler), but with the enhancer active the
+  requested rate is applied inside the enhancer's overlap windows and is
+  accepted.
+- CosyVoice3 native chunk streaming otherwise emits only at its native 24 kHz;
+  enabling the enhancer is what makes a different `config.outputSampleRate`
+  valid there, since the resample happens inside the seam-free window.
 - With `opts.stats`, `response.stats.enhancerBackendDevice` (`-1` none / `0` CPU
   / `1` GPU) and `enhancerBackendId` report where the enhancer actually ran.
 
@@ -269,7 +309,7 @@ LavaSR's first stage — the UL-UNAS **denoiser**, which cleans the signal befor
 the enhancer bandwidth-extends it — is wired through the addon. It is enabled the
 same way as the enhancer, via `files.lavasrDenoiser` (or a
 `denoiser: { type: 'lavasr', denoiserPath }` block), and runs before the
-enhancer (rate-preserving) on the batch path for both engines:
+enhancer (rate-preserving) on the batch path for all four engines:
 
 ```js
 const model = new TTSGgml({
@@ -299,9 +339,9 @@ Notes:
 - The UL-UNAS forward runs at 16 kHz internally (resampled in/out), so the
   denoiser is **rate-preserving**: the emitted audio keeps the engine's sample
   rate. With no denoiser path the output is unchanged (full backward compat).
-- Denoiser + Chatterbox native chunk streaming (`streamChunkTokens > 0`) is
-  rejected up front — a stateful streaming denoiser is the follow-up. Use batch
-  synthesis, or drop the denoiser for streaming.
+- Denoiser + native chunk streaming (`streamChunkTokens > 0`) is rejected up
+  front for every engine — a stateful streaming denoiser is the follow-up. Use
+  batch synthesis, or drop the denoiser for streaming.
 - The tts-cpp UL-UNAS forward is implemented in
   [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
@@ -325,6 +365,10 @@ host's policy:
 > Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
 > `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined
 > Mali for the Chatterbox / S3Gen graph and fell back to CPU there.)
+>
+> Parler also opts into ARM Mali Vulkan on Android. Its GPU smoke test is
+> strict on Apple and Android; desktop Vulkan remains outside that test until
+> dedicated Linux and Windows validation is available.
 
 ### Android: dynamic backend loading
 
@@ -380,9 +424,33 @@ Hindi/Gujarati and the English mini/large models — emotion conditioning
 exists but is best-effort.  Per-call fields ride on `run()` input and the
 `runStream`/`runStreaming` options (one description is pinned per
 streaming response, keeping the native T5 cross-attention cache hot).
-Parler supports Metal GPU offload on Apple (`useGPU: true` / `nGpuLayers`,
-~2.25× vs CPU on indic q8_0); other backends fall back to CPU.  It emits
-native 44.1 kHz.
+Parler supports Metal GPU offload on Apple and the vendor-selected Android GPU
+backend (`useGPU: true` / `nGpuLayers`), including Vulkan on ARM Mali. Unsupported
+or unavailable backends fall back to CPU. It emits native 44.1 kHz.
+
+## CosyVoice3 instruct
+
+CosyVoice3 is **instruct-conditioned**: an optional natural-language
+instruction steers dialect / emotion / speed / volume / style on top of a
+baked default voice.  Point the addon at the model directory (auto-detected
+from `cosyvoice3-llm-*.gguf`) and set `instruct` — either a raw instruction
+string, or a structured object with up to one control, resolved by precedence
+`dialect > emotion > speed > volume > style`:
+
+```js
+const model = new TTSGgml({
+  files: { cosyvoiceModelDir: './models/cosyvoice3' },
+  instruct: { emotion: 'happy' } // or { dialect: ... } / { speed: ... } / a raw string
+})
+await model.load()
+await model.run({ input: 'Hello from an on-device C++ pipeline.' })
+```
+
+An unknown `instruct` key or an invalid value throws at construction, listing
+the valid set; with no `instruct` the model runs zero-shot on the baked voice.
+Other CosyVoice3-only options: `promptText` (reference transcript for the baked
+voice) and `streamLeftContextTokens` (native chunk-streaming left context).
+CosyVoice3 runs on **CPU** and emits native **24 kHz**.
 
 ## API overview
 
@@ -390,14 +458,16 @@ native 44.1 kHz.
 
 | Option                    | Type       | Default    | Notes |
 |---------------------------|------------|------------|-------|
-| `files.modelDir`          | string     | —          | Dir containing the two GGUFs |
+| `files.modelDir`          | string     | —          | Dir containing the engine GGUFs (engine auto-detected from the filenames present) |
 | `files.t3Model`           | string     | —          | Overrides `modelDir` for T3 |
 | `files.s3genModel`        | string     | —          | Overrides `modelDir` for S3Gen |
 | `files.supertonicModel`   | string     | —          | Supertonic GGUF (overrides `modelDir`) |
 | `files.parlerModel`       | string     | —          | Parler GGUF — mini/large/indic variant (overrides `modelDir`) |
+| `files.cosyvoiceModelDir` | string     | —          | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + `vocab.json` + `merges.txt`); routes to CosyVoice3 |
+| `files.cosyvoiceLlmModelPath` / `cosyvoiceFlowModelPath` / `cosyvoiceHiftModelPath` | string | — | Per-component overrides for the CosyVoice3 model dir |
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
 | `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
-| `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'` or `'parler'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_PARLER`); auto-detected from the GGUFs present otherwise |
+| `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'parler'` or `'cosyvoice3'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_PARLER` / `ENGINE_COSYVOICE3`); auto-detected from the GGUFs present otherwise |
 | `referenceAudio`          | string     | —          | Mono wav ≥ 5 s for voice cloning |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
@@ -418,14 +488,17 @@ native 44.1 kHz.
 | `maxFrames`               | number     | GGUF max (~30 s) | Parler-only generation cap in decoder steps (~86/s of audio); `0` = model default, 1–9 rejected |
 | `minNewTokens`            | number     | GGUF default | Parler-only minimum tokens before EOS (`-1` = model default) |
 | `normalizeNumbers`        | boolean    | `true`     | Parler-only: expand digits before tokenization (English words; script-native digits on indic) — parler voices raw digits badly |
+| `instruct`                | object \| string | —    | CosyVoice3-only: instruction controls (`dialect` / `emotion` / `speed` / `volume` / `style`, resolved by precedence in that order) or a raw instruction string; an unknown key or invalid value throws (see [CosyVoice3 instruct](#cosyvoice3-instruct)) |
+| `promptText`              | string     | —          | CosyVoice3-only: reference transcript for the baked voice |
+| `streamLeftContextTokens` | number     | —          | CosyVoice3 / Chatterbox: native chunk-streaming left-context tokens |
 | `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
 | `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available.  Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler's validated GPU backend is Apple/Metal (other backends fall back to CPU).  See [Backends & GPU acceleration](#backends--gpu-acceleration) |
-| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, enhancer 48 kHz) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic/Parler 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
@@ -500,6 +573,9 @@ Runnable demos under `examples/`:
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
+| `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
+| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz, CPU). `bare examples/cosyvoice-tts.js "Hello"` |
+| `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
@@ -517,7 +593,7 @@ npm run test               # both
 
 Integration tests scan a few candidate `models/` directories for the
 required GGUFs (see `test/utils/downloadModel.js`) and skip cleanly when
-files are absent.  They cover, across both engines:
+files are absent.  They cover, across the engines:
 
 * batch synthesis with full RuntimeStats,
 * sentence-level streaming (`runStream` / `run({ streamOutput: true })`

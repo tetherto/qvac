@@ -7,9 +7,6 @@ on:
     paths:
       - "packages/tts-ggml/**"
       - ".github/workflows/*tts-ggml*.yml"
-      - ".github/actions/cache-models/**"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
 
   workflow_dispatch:
     inputs:
@@ -52,27 +49,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
     permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -99,15 +79,23 @@ jobs:
         uses: ./.github/actions/ci-router
 
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -115,7 +103,7 @@ jobs:
           github-token: ${{ github.token }}
 
   context:
-    needs: authorize
+    needs: [authorize, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     name: Resolve Context
     runs-on: ubuntu-latest
@@ -170,12 +158,12 @@ jobs:
           echo "  run_verify=$run_verify"
 
   sanity-checks:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - context
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -193,10 +181,10 @@ jobs:
 
   cpp-lint:
     needs:
+      - fork-approval
       - context
       - ci-router
-      - label-gate
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' 
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
@@ -217,10 +205,10 @@ jobs:
       id-token: write
       actions: read
     needs:
+      - fork-approval
       - context
       - ci-router
-      - label-gate
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.label-gate.outputs.authorised == 'true'
+    if: needs.ci-router.outputs.run_cpp_tests == 'true' 
     uses: ./.github/workflows/cpp-test-coverage-tts-ggml.yml
     secrets: inherit
     with:
@@ -228,11 +216,11 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   detect-native-changes:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -252,11 +240,11 @@ jobs:
           workdir: packages/tts-ggml
 
   prebuild-artifact-reuse:
-    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    if: needs.detect-native-changes.outputs.native_changed == 'false'
     needs:
+      - fork-approval
       - detect-native-changes
       - context
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -287,16 +275,15 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - context
       - ci-router
       - detect-native-changes
       - prebuild-artifact-reuse
-      - label-gate
     if: |
       always() &&
       !cancelled() &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
-      needs.label-gate.outputs.authorised == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-tts-ggml.yml
     secrets: inherit
@@ -305,11 +292,11 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   prebuild-artifact-save:
-    if: always() && !cancelled() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && !cancelled() && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -333,12 +320,12 @@ jobs:
       packages: read
       id-token: write
     needs:
+      - fork-approval
       - context
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-test-tts-ggml.yml
     secrets: inherit
     with:
@@ -352,12 +339,12 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - context
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
     secrets: inherit
     with:
@@ -370,12 +357,12 @@ jobs:
       packages: read
       actions: read
     needs:
+      - fork-approval
       - context
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/coload-smoke.yml
     secrets: inherit
     with:
@@ -391,12 +378,12 @@ jobs:
       pull-requests: write
       packages: read
     needs:
+      - fork-approval
       - context
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-      - label-gate
-    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.label-gate.outputs.authorised == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/coload-smoke-mobile.yml
     secrets: inherit
     with:

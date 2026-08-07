@@ -81,9 +81,15 @@ import {
 import { suspendRequestSchema, suspendResponseSchema } from './suspend'
 import { resumeRequestSchema, resumeResponseSchema } from './resume'
 import { stateRequestSchema, stateResponseSchema } from './state'
+import {
+  getSystemResourcesRequestSchema,
+  getSystemResourcesResponseSchema
+} from './system-resources'
 import { classifyRequestSchema, classifyResponseSchema } from './classification'
+import { audioGenStreamRequestSchema, audioGenStreamResponseSchema } from '@/schemas/audio-gen'
 
 export const requestSchema = z.union([
+  audioGenStreamRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -120,10 +126,12 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
+  getSystemResourcesRequestSchema,
   classifyRequestSchema
 ])
 
 export const responseSchema = z.discriminatedUnion('type', [
+  audioGenStreamResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
@@ -164,6 +172,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
+  getSystemResourcesResponseSchema,
   classifyResponseSchema
 ])
 

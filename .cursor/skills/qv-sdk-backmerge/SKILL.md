@@ -30,7 +30,7 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 
 ## Branch / remote preference
 
-Same policy as `qv-sdk-pr-create`: prefer pushing the backmerge head to the **org** remote (`tetherto/qvac`) and opening a same-repo PR. Personal-fork heads are a fallback and count as external for CI (`verified` is fork-only / per-commit / merge-release-applied).
+Same policy as `qv-sdk-pr-create`: prefer pushing the backmerge head to the **org** remote (`tetherto/qvac`) and opening a same-repo PR. Personal-fork heads are a fallback and count as external for CI (`fork-ci` environment approval required per run on the current head SHA).
 
 In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — substitute the resolved remote names from Step 1. Do not run those tokens literally.
 
@@ -70,8 +70,9 @@ The first command prints the tree SHA produced by simulating the cherry-pick. Th
 1. STOP. Do not create a branch, do not push, do not open a PR.
 2. Find the commit that landed the release content directly on `main` so you can cite it:
    ```bash
-   git log ORG_REMOTE/main --oneline -1 -- packages/<pkg>/changelog/<x.y.z>/
+   git log ORG_REMOTE/main --oneline -1 -- <pkg-dir>/changelog/<x.y.z>/
    ```
+   Resolve `<pkg-dir>` via `node -p "require('./scripts/sdk/package-paths.cjs').getPackageDir('<pkg>')"` (plugins use `plugins/…`, not `packages/…`).
 3. Report to the user, e.g.:
    ```
    No backmerge PR needed — main is already aligned with release-<pkg>-<x.y.z>.
@@ -100,17 +101,19 @@ For a true merge commit (not squashed), add `-m 1`.
 
 ### Step 6: Conflict triage
 
+Resolve `<pkg-dir>` with `scripts/sdk/package-paths.cjs` (`getPackageDir('<pkg>')`).
+
 **Auto-resolvable** (resolve, `git add`, then `git cherry-pick --continue`):
 
-- `packages/<pkg>/package.json` — version field conflict: take release-side.
+- `<pkg-dir>/package.json` — version field conflict: take release-side.
   ```bash
-  git checkout --theirs packages/<pkg>/package.json
-  git add packages/<pkg>/package.json
+  git checkout --theirs <pkg-dir>/package.json
+  git add <pkg-dir>/package.json
   ```
-- `packages/<pkg>/CHANGELOG.md` (top-level aggregated): regenerate deterministically from the version folders, which were just cherry-picked in.
+- `<pkg-dir>/CHANGELOG.md` (top-level aggregated): regenerate from the version folders just cherry-picked in.
   ```bash
   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<pkg>
-  git add packages/<pkg>/CHANGELOG.md
+  git add <pkg-dir>/CHANGELOG.md
   ```
 
 **Anything else → STOP. Hand control back to the user.** Do not force-resolve, skip, or abort the cherry-pick on the user's behalf.
@@ -175,10 +178,10 @@ Lands the release metadata for `<pkg>@<x.y.z>` on `main`, per [gitflow.md](../do
 
 ## Files
 
-- `packages/<pkg>/package.json` — version `<prev>` → `<x.y.z>`
-- `packages/<pkg>/changelog/<x.y.z>/` — generated changelog files
-- `packages/<pkg>/CHANGELOG.md` — aggregated changelog
-- `packages/<pkg>/NOTICE` — updated dependency attributions (if present)
+- `<pkg-dir>/package.json` — version `<prev>` → `<x.y.z>`
+- `<pkg-dir>/changelog/<x.y.z>/` — generated changelog files
+- `<pkg-dir>/CHANGELOG.md` — aggregated changelog
+- `<pkg-dir>/NOTICE` — updated dependency attributions (if present)
 - (any other release-metadata files included in the cherry-pick)
 ~~~
 
@@ -202,7 +205,7 @@ gh pr create \
   --body "<body>"
 ```
 
-Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`, the parent prints both URLs side by side. If the fork fallback was used, note that merge/release must apply `verified` for privileged CI on that head.
+Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`, the parent prints both URLs side by side. If the fork fallback was used, note that merge/release must approve the `fork-ci` environment for privileged CI on that head.
 
 ## Quality Checklist
 
@@ -223,4 +226,4 @@ Before completing:
 - `.cursor/rules/sdk/commit-and-pr-format.mdc` — title format and `[skiplog]` semantics
 - `.cursor/rules/sdk/sdk-pod-packages.mdc` — packages this skill applies to
 - `docs/gitflow.md` — release flow and "Keep main aligned" rules (still documents fork-first contribution; prefer org-branch heads per this skill until DevOps updates gitflow)
-- Fork CI trust model: `.github/actions/label-gate/README.md` (on default branch / after #3382)
+- Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)

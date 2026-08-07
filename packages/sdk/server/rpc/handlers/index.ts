@@ -20,6 +20,7 @@ import { handleTextToSpeech } from './text-to-speech'
 import { handleTextToSpeechStream } from './text-to-speech-stream'
 import { handleGetModelInfo } from './get-model-info'
 import { handleGetLoadedModelInfo } from './get-loaded-model-info'
+import { handleGetSystemResources } from './get-system-resources'
 import { handleFinetune } from './finetune'
 import { handleOCRStream } from './ocr-stream'
 import { handleHeartbeat } from './heartbeat'
@@ -35,8 +36,10 @@ import {
 import { handleSuspend } from './suspend'
 import { handleResume } from './resume'
 import { handleState } from './state'
+import { handleAudioGenStream } from '@/server/rpc/handlers/audio-gen-stream'
 
 export const handlers = {
+  audioGenStream: handleAudioGenStream,
   heartbeat: handleHeartbeat,
   batchCompletionStream: handleBatchCompletionStream,
   completionStream: handleCompletionStream,
@@ -60,6 +63,7 @@ export const handlers = {
   textToSpeechStream: handleTextToSpeechStream,
   getModelInfo: handleGetModelInfo,
   getLoadedModelInfo: handleGetLoadedModelInfo,
+  getSystemResources: handleGetSystemResources,
   finetune: handleFinetune,
   ocrStream: handleOCRStream,
   diffusionStream: handleDiffusionStream,

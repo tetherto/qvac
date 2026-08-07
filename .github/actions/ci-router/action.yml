@@ -1,19 +1,14 @@
 name: 'CI Router (label detection)'
 description: >
-  Shared label -> CI-stage routing for the label-gated addon PR workflows.
-  `verified` is the trust gate for EXTERNAL FORK PRs (authorise-only); internal
-  same-repo PRs are authorised without it (write access is required to push a
-  branch to the base repo). The granular labels run-cpp-addon-tests /
-  run-desktop-addon-tests / run-mobile-addon-tests / run-coload-tests /
-  prebuilds each select a stage, and only take effect once the run is
-  authorised. Trusted events (push / workflow_dispatch / workflow_call /
-  schedule) enable every stage. This is addon-agnostic: it emits all six flags
-  and each addon wires only the stages it has. Single source of truth — do NOT
-  inline this logic per workflow.
+  Shared label -> CI-stage routing for addon PR workflows. Internal same-repo
+  PRs and ready external-fork PRs are authorised for baseline routing; secret-
+  bearing fork jobs are gated by the fork-ci environment (fork-approval job).
+  Granular labels select heavy stages once authorised. Trusted events (push /
+  workflow_dispatch / workflow_call / schedule) enable every stage.
 
 outputs:
   run_verified_checks:
-    description: 'Baseline authorised checks (internal ready PR / verified fork / trusted event)'
+    description: 'Baseline authorised checks (internal ready PR / ready fork / trusted event)'
     value: ${{ steps.route.outputs.run_verified_checks }}
   run_prebuilds:
     description: 'Build prebuilds (prebuilds/desktop/mobile label, or trusted event)'
@@ -41,7 +36,6 @@ runs:
         EVENT_NAME: ${{ github.event_name }}
         PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        BASE_REPO: ${{ github.repository }}
         IS_DRAFT: ${{ github.event.pull_request.draft }}
       run: |
         if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
@@ -54,8 +48,6 @@ runs:
           done
           exit 0
         fi
-        # First pass: detect which labels are present (order-independent).
-        HAS_VERIFIED=false
         HAS_PREBUILDS=false
         HAS_CPP=false
         HAS_DESKTOP=false
@@ -64,7 +56,6 @@ runs:
         if [ -n "$PR_LABELS_JSON" ] && [ "$PR_LABELS_JSON" != "null" ]; then
           for label in $(echo "$PR_LABELS_JSON" | jq -r '.[]' 2>/dev/null); do
             case "$label" in
-              verified)                 HAS_VERIFIED=true ;;
               prebuilds)                HAS_PREBUILDS=true ;;
               run-cpp-addon-tests)      HAS_CPP=true ;;
               run-desktop-addon-tests)  HAS_DESKTOP=true ;;
@@ -81,34 +72,23 @@ runs:
         MOBILE=false
         COLOAD=false
 
-        # Internal same-repo PRs are inherently trusted (pushing a branch to the
-        # base repo requires write access), so they are authorised WITHOUT the
-        # `verified` label. External fork PRs still require `verified`.
-        # Draft PRs on the internal fast lane run nothing until marked
-        # ready-for-review (the workflow re-triggers on ready_for_review).
-        IS_INTERNAL=false
-        shopt -s nocasematch
-        if [[ -n "$HEAD_REPO" && "$HEAD_REPO" == "$BASE_REPO" && "$IS_DRAFT" != "true" ]]; then
-          IS_INTERNAL=true
+        # Routing is deliberately NOT a trust decision — it only selects which
+        # stages a PR is eligible for. Fork and same-repo PRs route identically
+        # because every secret-bearing job additionally declares
+        # `needs: fork-approval`, which gates external forks on the fork-ci
+        # environment. A job gated on these outputs ALONE would be fail-open for
+        # forks; ci-trust-policy.test.mjs enforces the fork-approval dependency.
+        # An unset HEAD_REPO fails closed; drafts route nothing.
+        IS_AUTHORIZED=false
+        if [ -n "$HEAD_REPO" ] && [ "$IS_DRAFT" != "true" ]; then
+          IS_AUTHORIZED=true
         fi
-        shopt -u nocasematch
 
-        # Authorisation (verified label on forks, or an internal same-repo PR)
-        # selects no stage on its own. Each heavy stage runs only when its
-        # granular label is present AND the run is authorised — so a granular
-        # label on an unauthorised external fork triggers nothing (security
-        # invariant). cpp-tests builds the addon itself (no prebuilds); desktop +
-        # mobile DO need prebuilds.
-        if [ "$HAS_VERIFIED" = "true" ] || [ "$IS_INTERNAL" = "true" ]; then
+        if [ "$IS_AUTHORIZED" = "true" ]; then
           VERIFIED=true
           [ "$HAS_CPP" = "true" ]      && CPP_TESTS=true
           [ "$HAS_DESKTOP" = "true" ]  && { DESKTOP=true; PREBUILDS=true; }
           [ "$HAS_MOBILE" = "true" ]   && { MOBILE=true; PREBUILDS=true; }
-          # Co-load overlays THIS PR's freshly-built addon onto the baseline, so
-          # it needs the prebuild too. The reusable co-load workflow keys its
-          # Device Farm leg off run_mobile, so run-coload-tests alone is the
-          # cheap desktop co-load; add run-mobile-addon-tests for the on-device
-          # co-load.
           [ "$HAS_COLOAD" = "true" ]   && { COLOAD=true; PREBUILDS=true; }
           [ "$HAS_PREBUILDS" = "true" ] && PREBUILDS=true
         fi

@@ -1,0 +1,189 @@
+export interface FitConfig {
+    /**
+     * Path to the GGUF weights file.
+     *
+     * Must be absolute; a relative path throws. It would otherwise resolve
+     * against the process working directory, which nothing in a worklet
+     * controls, so the same call could name a different file — or no file — from
+     * one launch to the next.
+     */
+    modelPath: string;
+    /**
+     * Directory holding the packaged ggml backends. Required wherever backends
+     * ship as separate shared libraries — without it the fitter sees no devices
+     * and reports ERROR. Omit for a statically linked build.
+     *
+     * Must be an absolute path that resolves to an existing directory; anything
+     * else throws.
+     *
+     * SECURITY: every backend library found here is `dlopen`ed into the calling
+     * process. Pass an application-controlled location only — never a value
+     * derived from remote or user input.
+     */
+    backendsDir?: string;
+    /**
+     * Desired context size. 0 (default) lets the fitter choose down to nCtxMin;
+     * any other value is a hard constraint and is returned unchanged.
+     *
+     * Throws if it exceeds the context length the model declares. This addon
+     * exposes no RoPE scaling knobs, so the model's own declared length is the
+     * most any caller can legitimately ask for.
+     */
+    nCtx?: number;
+    /**
+     * Lower bound when shrinking the context. 0 (default) means 4096, clamped
+     * down to the model's declared context length when that is smaller.
+     *
+     * An explicit value throws if it exceeds the declared context length, for
+     * the same reason `nCtx` does — the `nCtxMin <= nCtx` relationship check
+     * does not apply when `nCtx` is 0.
+     */
+    nCtxMin?: number;
+    /** Logical batch size. 0 = llama default. */
+    nBatch?: number;
+    /** Physical batch size. 0 = llama default. */
+    nUbatch?: number;
+    /**
+     * Pin the GPU offload layer count; omit to let the fitter choose. Per
+     * llama.h a negative value means "all layers", so negatives are valid.
+     *
+     * Only a *non-default* value pins: the fitter rewrites any field still
+     * holding its llama default, and -1 is the default for this one. Passing -1
+     * is therefore equivalent to omitting it. Use 0 or a positive count (or any
+     * negative other than -1) to make offload a hard constraint.
+     */
+    nGpuLayers?: number;
+    /** Free headroom to leave on every device, in MiB (default 1024). */
+    marginMiB?: number;
+    /**
+     * The fields below state the load you intend to perform. `common_fit_params`
+     * rewrites only parameters still holding their llama default, so setting one
+     * makes it a hard constraint the projection fits *around*, and omitting one
+     * leaves the fitter free to choose it and report the choice back on the plan.
+     *
+     * Pass them whenever the real load has already decided them — a projection
+     * measured against llama's defaults does not describe a load that uses
+     * something else.
+     *
+     * `enum llama_split_mode`: how the model splits across multiple GPUs.
+     */
+    splitMode?: number;
+    /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    mainGpu?: number;
+    /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
+    typeK?: number;
+    /** `ggml_type` of the V cache. Same reasoning as `typeK`. */
+    typeV?: number;
+    /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
+    flashAttnType?: number;
+}
+/** A tensor buffer-type override the fitter selected. */
+export interface FitBuftOverride {
+    /** Tensor-name pattern the override applies to. */
+    pattern: string;
+    /** ggml buffer type the matching tensors were placed in. */
+    bufferType: string;
+}
+/** What the fitter measured against. Present on every outcome. */
+export interface FitDeviceInventory {
+    /**
+     * Upper bound on addressable devices (llama_max_devices()). A build-time
+     * constant, not a detection result — never read it as "a device was found".
+     */
+    maxDevices: number;
+    /** Devices actually registered (ggml_backend_dev_count()). 0 yields ERROR. */
+    nDevices: number;
+    /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
+    nGpuDevices: number;
+}
+/** The fitted load plan. Only meaningful on a SUCCESS. */
+export interface FitPlan {
+    /**
+     * Fitted number of layers to offload to GPU. Negative means "all layers"
+     * (the llama default), which is what comes back when the fitter had no
+     * offload decision to make — e.g. on a host with no accelerator. Check
+     * `nGpuDevices` before reading this as a plan.
+     */
+    nGpuLayers: number;
+    /** Fitted context size. Always concrete, never 0. */
+    nCtx: number;
+    /** Fitted logical batch size. */
+    nBatch: number;
+    /** Fitted physical batch size. */
+    nUbatch: number;
+    /** Offload proportions, one entry per device. */
+    tensorSplit: number[];
+    /**
+     * Placement the fitter chose. Empty when it needed none. A plan carrying
+     * overrides is only reproducible if the real load applies them too.
+     */
+    buftOverrides: FitBuftOverride[];
+    /**
+     * `enum llama_split_mode` — how the model is split across multiple GPUs.
+     *
+     * This and the four fields below go into the fitter at their llama defaults,
+     * which is the exact condition under which it may rewrite them ("only
+     * parameters that have the same value as in llama_default_model_params are
+     * modified"). They are part of the plan for that reason: loading with your
+     * own defaults instead of these can produce different placement than the one
+     * projected to fit.
+     */
+    splitMode: number;
+    /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    mainGpu: number;
+    /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
+    typeK: number;
+    /** `enum ggml_type` for the V cache. Changes KV memory, so it changes the fit. */
+    typeV: number;
+    /** `enum llama_flash_attn_type` — alters KV/compute memory, so it is load-bearing. */
+    flashAttnType: number;
+}
+/**
+ * Outcome of a fit, discriminated on `status`.
+ *
+ * Narrowing on `status` (or `fits`) tells the compiler which fields carry
+ * meaning: the plan is only valid on SUCCESS, and every non-success branch
+ * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
+ * apart from "could not read the model" or "no backend registered".
+ */
+export type FitResult = ({
+    status: 0;
+    fits: true;
+    reason: 'fits';
+} & FitPlan & FitDeviceInventory) | ({
+    status: 1;
+    fits: false;
+    reason: 'does-not-fit';
+} & Partial<FitPlan> & FitDeviceInventory) | ({
+    status: 2;
+    fits: false;
+    reason: 'model-unreadable' | 'no-backend-device';
+} & Partial<FitPlan> & FitDeviceInventory);
+/** Stable, machine-readable explanation of a fit outcome. */
+export type FitReason = FitResult['reason'];
+/** Mirrors `enum common_params_fit_status` in llama.cpp's common/fit.h. */
+export declare const FIT_STATUS: Readonly<{
+    readonly SUCCESS: 0;
+    readonly FAILURE: 1;
+    readonly ERROR: 2;
+}>;
+/**
+ * Memory-fit preflight for a llama.cpp GGUF model. Runs `common_fit_params`,
+ * which simulates allocations (no weights are loaded) to project whether the
+ * model fits available device memory and, if so, with which offload plan.
+ *
+ * This is a synchronous, blocking native call. It is designed to run in its own
+ * short-lived worklet so that any backend/driver instability during probing
+ * stays isolated from the inference worker.
+ *
+ * Calls are serialised process-wide: `common_fit_params` mutates global llama
+ * logger state and is not thread safe, so concurrent callers block instead of
+ * running together.
+ *
+ * Backends must be registered before the fitter can see any device, so pass
+ * `backendsDir` wherever the packaged ggml backends ship as separate shared
+ * libraries; omit it for a statically linked build, which self-registers.
+ * Every backend library in that directory is `dlopen`ed into this process, so
+ * it must be an application-controlled location — never remote or user input.
+ */
+export declare function fitParams(config: FitConfig): FitResult;

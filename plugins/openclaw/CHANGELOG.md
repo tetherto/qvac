@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.2]
+
+Release Date: 2026-07-27
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/openclaw-plugin/v/0.1.2
+
+This patch keeps OpenClaw's existing tools when QVAC setup runs, and moves the plugin onto `@qvac/ai-sdk-provider` 0.4 and `@qvac/cli` 0.9 so local serves pick up the latest SDK and CLI fixes.
+
+### Fixed
+
+- **Preserve tools during QVAC setup.** Enabling the QVAC provider no longer clears tools already configured in OpenClaw.
+
+### Requirements
+
+- [`@qvac/ai-sdk-provider@^0.4.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for the shared model catalog.
+- [`@qvac/cli@^0.9.0`](https://www.npmjs.com/package/@qvac/cli) so the local service can run `qvac serve` (SDK 0.16 runtime).
+- Node.js 22 or newer.
+- [`openclaw@>=2026.6.0`](https://www.npmjs.com/package/openclaw) as the host (optional peer).
+
 ## [0.1.1]
 
 Release Date: 2026-07-07

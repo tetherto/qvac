@@ -1,5 +1,172 @@
 # Changelog
 
+## [0.40.0] - 2026-08-06
+
+One model instance can now serve several requests at once. Every `run()` call is
+admitted as its own job by a native multi-job scheduler and decodes alongside
+whatever else is in flight, so concurrent callers share the batch engine instead
+of queueing behind each other. Terminal stats become per-job, cancellation
+becomes per-job, and a new admission policy lets a caller choose between failing
+fast and being queued.
+
+### Added
+
+- Concurrent top-level `run()` calls on one instance at `parallel >= 2`. Each
+  call streams to its own response, routed by the job id minted at admission; a
+  batch `run([...])` is admitted as one job whose prompts occupy up to N slots.
+- `rejectWhenBusy`, the admission policy, as `opts.rejectWhenBusy` per instance
+  and `runOptions.rejectWhenBusy` per call. A refusal throws an `Error` carrying
+  `code === 'RUN_BUSY'`, so callers branch on the code rather than matching the
+  message. The default follows `parallel`: `true` at `1`, preserving the
+  sequential fail-fast behaviour, `false` at `>= 2`. A batch derives ONE group
+  policy from its items — items that disagree are refused with a `TypeError`.
+- `activeSlots()` on the addon surface, reporting the requests occupying or
+  waiting for a continuous-batching slot. Slots, not jobs, are the currency
+  admission is measured in: one batch job of N prompts consumes up to N of them,
+  so a job count alone under-reports a full pool.
+- Per-job terminal stats. A job's `JobEnded` now overrides `TTFT`, `TPS`,
+  `generatedTokens` and `promptTokens` with that job's own observed figures,
+  while `ppTPS`, `CacheTokens`, `contextSlides`, `thinkingBlockDiscards`,
+  `avgConcurrentSeq` and `backendDevice` stay model-level.
+- `stopReason` for a single prompt that runs through the batch engine, which
+  previously omitted the key that the sequential path always reported.
+- Targeted cancellation: `response.cancel()` stops only that call's job or
+  group and leaves concurrent jobs decoding. A cancel that arrives while the
+  group's prompts are still queued settles it immediately instead of waiting for
+  an unrelated job to free a slot.
+
+### Changed
+
+- `parallel` now accepts `1..256` instead of `1..1024`. 256 is the engine's own
+  `LLAMA_MAX_SEQ`; a larger value used to spawn the whole eager thread pool and
+  only then fail the model load, where llama.cpp swallows the real reason into a
+  log line.
+- `parallel` also sizes the scheduler's worker pool one-to-one, and those OS
+  threads are created eagerly at load and held for the model's lifetime. A large
+  `parallel` is a standing resource commitment even while idle.
+- A `parallel` too large for `ctx_size` to leave room per slot — or a
+  `batch_size` smaller than `parallel` — is now refused as an `InvalidArgument`
+  naming the knobs involved, instead of escaping the load as an unmapped
+  `std::invalid_argument`.
+- A prefill-only request without `saveCacheToDisk` and a `cacheKey` is rejected
+  with `InvalidArgument` on a parallel model: its warmed state lives in a
+  context concurrent jobs cannot reach. Load with `parallel: 1` for live-only
+  cache warming.
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.4` -> `1.3.3` for
+  the multi-job scheduler.
+
+### Pull Requests
+
+- [#3445](https://github.com/tetherto/qvac/pull/3445) - Multi-job queue at
+  addon-cpp and LLM (Needed for LLM Continuous Batching Optimizations)
+
+## [0.39.4] - 2026-08-04
+
+Internal refactor of how JS configuration is parsed into C++. Generation,
+finetune, and load config now use a shared, declarative handler-registry pattern
+(the same approach diffusion-cpp uses). No change to accepted config keys,
+spellings, or defaults, apart from the edge cases below.
+
+### Changed
+
+- Sending both the hyphen and underscore spelling of `image-max-tokens` or
+  `image-min-tokens` in the same load config is now accepted (the underscore
+  spelling wins) instead of failing the load. Previously the second spelling was
+  forwarded to llama.cpp and rejected.
+- In rare multi-error cases, the specific `InvalidArgument` message that surfaces
+  first may differ from before: a generation request that sets conflicting
+  `grammar`/`json_schema` alongside another invalid field, or a finetune request
+  that omits a required field and also sends a malformed optional. Accept/reject
+  behavior is unchanged in these cases.
+
+### Pull Requests
+
+- [#3491](https://github.com/tetherto/qvac/pull/3491) - chore[api]: adopt
+  handler-registry pattern for config parsing
+
+## [0.39.3] - 2026-08-04
+
+This release makes DeepSeek V4 cache recovery safe when requests are cancelled
+or generation ends before a reasoning block closes. It also adds a supported
+string-based `no_mmap` configuration and makes thinking-block compaction
+default-on only for the Qwen3 reasoning family.
+
+### Fixed
+
+- DeepSeek V4 text inference now uses full-state checkpoints for request
+  cancellation, optional thinking-block compaction, and interrupted terminal
+  stops. When `remove_thinking_from_context` is enabled, it restores the
+  checkpoint instead of attempting unsafe compressed-cache edits.
+- Multimodal continuous-batch drivers now honor the per-request
+  `remove_thinking_from_context` override and keep their compactor state in
+  sync.
+- `no_mmap: 'true'` now disables memory-mapped model loading by setting the
+  native model parameter directly, rather than forwarding an unsupported
+  command-line argument.
+
+### Changed
+
+- Thinking-block compaction now defaults to `false` for non-Qwen models.
+  Qwen3, Qwen3.5, Qwen3.6, and their MoE variants retain the default-on
+  behavior; callers can override the setting for any model per request.
+
+### Pull Requests
+
+- [#3634](https://github.com/tetherto/qvac/pull/3634) - fix: recover DeepSeek
+  V4 checkpoints
+
+## [0.39.2] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+- Qwen3.5-VL cache-stress coverage now creates deterministic cache pressure
+  with measured, bounded prefill chunks while preserving normal EOS behavior.
+
+## [0.39.1] - 2026-07-29
+
+Extends LoRA finetuning to the b9840 model families: Qwen3.5/3.6 and Gemma-4, dense and
+mixture-of-experts. These architectures were previously rejected outright — `finetune()` threw
+`Finetuning is not supported for architecture: <arch>`. MoE models additionally need their expert FFN
+tensors targeted, so four expert LoRA target modules are now accepted. Complements the fabric-side
+training fixes already pinned via `qvac-fabric` 9840.0.1.
+
+### Added
+
+- Qwen3.5/3.6 dense (`qwen35`), Qwen3.x MoE (`qwen35moe`) and Gemma-4 (`gemma4`) are now supported
+  finetuning architectures — the allowlist grows from `gemma3`, `qwen3`, `bitnet` to six entries.
+- Four MoE expert LoRA target modules accepted in `loraModules`: `ffn_gate_exps`, `ffn_up_exps`,
+  `ffn_down_exps`, `ffn_gate_up_exps`. Required to train MoE experts at all — targeting only the dense
+  FFN names leaves expert weights untouched.
+- Integration coverage: `finetuning-archs` finetunes Qwen3.5-0.8B (desktop + mobile) and Gemma-4-E2B
+  (desktop), plus a pause/resume cycle on the new dense architecture; `finetuning-moe` covers
+  Qwen3.6-35B-A3B and Gemma-4-26B-A4B, opt-in behind `QVAC_RUN_MOE_FINETUNE=true` because those models
+  are ~20–27 GB. C++ unit tests lock backend selection for the new architectures and the expert-target
+  bit mapping.
+- `QVAC_QWEN35_MTMD_SIZE` (`0.8b` | `2b`) selects the model size for the Qwen3.5 multimodal
+  cache-stress test.
+
+### Changed
+
+- `docs/finetuning.md` model-format requirements now list the real architecture allowlist and document
+  the MoE expert LoRA targets.
+
+### Pull Requests
+
+- [#3509](https://github.com/tetherto/qvac/pull/3509) - b9840 finetuning (Qwen3.5/3.6 + Gemma-4, dense + MoE)
+
+## [0.39.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1`. This fixes MoE/GDN LoRA
+  finetuning: weight repacking is disabled for training loads (backward ops cannot
+  read repacked layouts), the Metal `acc`/`set` threadgroup dispatch now covers rows
+  wider than one threadgroup, and training on MoE / hybrid / recurrent architectures
+  seeds the backward pass from a down-scaled loss so gradients stay within fp32
+  range (persisted with the optimizer state). No API change for this package.
+
 ## [0.38.2] - 2026-07-23
 
 Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.

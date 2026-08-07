@@ -8,6 +8,7 @@
  * diverges from it fails to compile.
  */
 export const methodShapes = {
+  audioGenStream: 'stream',
   batchCompletionStream: 'stream',
   bciTranscribe: 'stream',
   bciTranscribeStream: 'duplex',
@@ -22,6 +23,7 @@ export const methodShapes = {
   finetune: 'reply',
   getLoadedModelInfo: 'reply',
   getModelInfo: 'reply',
+  getSystemResources: 'reply',
   heartbeat: 'reply',
   loadModel: 'reply',
   loggingStream: 'stream',

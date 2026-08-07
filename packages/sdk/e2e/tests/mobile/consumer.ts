@@ -19,6 +19,8 @@ import {
   MARIAN_HI_EN_INDIC_200M_Q4_0,
   TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
+  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -63,6 +65,7 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { MobileDownloadResilienceExecutor } from './executors/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/delegated-inference-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
+import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -265,6 +268,33 @@ resources.define('tts-chatterbox', {
     cfmSteps: 1,
     referenceAudioSrc: await resolveBundledAudioUri('transcription-short-wav.wav')
   })
+})
+
+resources.define('tts-parler', {
+  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    streamChunkTokens: 43,
+    streamFirstChunkTokens: 20
+  }
+})
+
+resources.define('tts-parler-indic', {
+  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'parler',
+    useGPU: true,
+    seed: 42,
+    topK: 1,
+    maxFrames: 430,
+    normalizeNumbers: true
+  }
 })
 
 resources.define('tts-supertonic', {
@@ -498,6 +528,10 @@ export const executor = createExecutor({
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
     ),
     new SkipExecutor(
+      /^audio-gen-/,
+      'ACE-Step AudioGen uses four large GGUFs and is covered by desktop e2e'
+    ),
+    new SkipExecutor(
       /^vla-pi05-/,
       'π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05'
     ),
@@ -509,6 +543,10 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
+    ),
+    new SkipExecutor(
+      /^(ocr-doctr-|model-load-ocr-doctr$)/,
+      'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile'
     ),
     ...(Platform.OS === 'android'
       ? [
@@ -576,6 +614,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
+    new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
     new PluginExecutor(resources)
