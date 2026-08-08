@@ -399,6 +399,7 @@ void MtmdLlmContext::tokenizeChat(
 
   mtmd_input_text text;
   text.text = formattedChat.c_str();
+  text.text_len = formattedChat.size();
   text.add_special = addSpecial;
   text.parse_special = true;
 
@@ -426,6 +427,7 @@ void MtmdLlmContext::tokenizeChat(
     if (!promptNoTools.empty()) {
       mtmd_input_text textNoTools;
       textNoTools.text = promptNoTools.c_str();
+      textNoTools.text_len = promptNoTools.size();
       textNoTools.add_special = addSpecial;
       textNoTools.parse_special = true;
 
