@@ -193,7 +193,7 @@ function _findGguf (dir, needle) {
   return hit ? path.join(dir, hit) : undefined
 }
 
-function _makeGen (modelDir) {
+function _makeGen (modelDir, useGPU = false) {
   return new AudioGen({
     files: {
       modelDir,
@@ -202,7 +202,7 @@ function _makeGen (modelDir) {
     config: {
       inferenceSteps: TURBO_STEPS,
       shift: TURBO_SHIFT,
-      useGPU: false
+      useGPU
     }
   })
 }
@@ -220,11 +220,11 @@ function _clearStages (dir) {
 // ("failed to load VAE GGUF" / "DiT load failed"). On such a failure we wipe the
 // models and re-download once more before giving up, so a flaky transfer doesn't
 // fail the run. Returns the loaded generator + its model dir.
-async function _loadGenWithRetry (maxAttempts = 3) {
+async function _loadGenWithRetry (maxAttempts = 3, useGPU = false) {
   let lastErr
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const modelDir = await _ensureModels()
-    const gen = _makeGen(modelDir)
+    const gen = _makeGen(modelDir, useGPU)
     try {
       await gen.load()
       return { gen, modelDir }
@@ -299,10 +299,27 @@ async function testLoadModels () {
   }
 }
 
+function _pcmEnergy (pcm) {
+  if (pcm.length % 2 !== 0) {
+    throw new Error('PCM buffer length must be a multiple of 2 bytes (Int16), got ' + pcm.length)
+  }
+  let peak = 0
+  let sumSquares = 0
+  const samples = pcm.length / 2
+  for (let offset = 0; offset < pcm.length; offset += 2) {
+    const value = pcm.readInt16LE(offset) / 32768
+    const abs = Math.abs(value)
+    if (abs > peak) peak = abs
+    sumSquares += value * value
+  }
+  return { peak, rms: samples > 0 ? Math.sqrt(sumSquares / samples) : 0 }
+}
+
 // End-to-end generation of a short turbo clip. Returns interleaved Int16 PCM so
-// the runner can play it back on device.
-async function testGenerateMusic () {
-  const { gen, modelDir } = await _loadGenWithRetry()
+// the runner can play it back on device. The Android GPU variant additionally
+// requires the resolved backend to be Vulkan and rejects silent output.
+async function _testGenerateMusic (useGPU) {
+  const { gen, modelDir } = await _loadGenWithRetry(3, useGPU)
 
   const chunks = []
   let sampleRate = 48000
@@ -320,7 +337,7 @@ async function testGenerateMusic () {
       item.outputArray.byteOffset,
       item.outputArray.byteOffset + item.outputArray.byteLength)))
   }
-  await response.await()
+  const stats = await response.await()
   const elapsedMs = Date.now() - t0
 
   await gen.destroy()
@@ -328,8 +345,27 @@ async function testGenerateMusic () {
   const pcm = Buffer.concat(chunks)
   const totalSamples = pcm.length / 2
   const durationS = totalSamples / channels / sampleRate
+  const energy = _pcmEnergy(pcm)
 
   if (totalSamples <= 0) throw new Error('generation produced no audio samples')
+  if (sampleRate !== 48000) throw new Error('expected 48 kHz output, got ' + sampleRate)
+  if (channels !== 2) throw new Error('expected stereo output, got ' + channels + ' channels')
+  if (energy.peak <= 0.1 || energy.rms <= 0.005) {
+    throw new Error(
+      'generation produced silent or invalid audio (peak=' + energy.peak.toFixed(4) +
+      ', rms=' + energy.rms.toFixed(5) + ')')
+  }
+  if (useGPU) {
+    const backendDevice = stats && stats.backendDevice
+    const backendId = stats && stats.backendId
+    console.log('[audiogen/GPU] backendDevice=' + backendDevice +
+      ' backendId=' + backendId + (backendId === 3 ? ' (Vulkan)' : ''))
+    if (backendDevice !== 1 || backendId !== 3) {
+      throw new Error(
+        'useGPU:true must run on Vulkan (backendDevice=1, backendId=3); got ' +
+        backendDevice + '/' + backendId)
+    }
+  }
 
   // The runner's playAudio() expects a base64 WAV string, which it writes to a
   // temp .wav and plays through the device speaker. Also persist a copy so we
@@ -344,9 +380,19 @@ async function testGenerateMusic () {
     sampleRate,
     channels,
     fullText:
-      'generated ' + durationS.toFixed(1) + 's (' + totalSamples + ' samples @ ' +
-      sampleRate + ' Hz x' + channels + ') in ' + (elapsedMs / 1000).toFixed(1) + 's'
+      (useGPU ? 'Vulkan GPU' : 'CPU') + ' generated ' + durationS.toFixed(1) +
+      's (' + totalSamples + ' samples @ ' + sampleRate + ' Hz x' + channels +
+      ', peak=' + energy.peak.toFixed(4) + ', rms=' + energy.rms.toFixed(5) +
+      ') in ' + (elapsedMs / 1000).toFixed(1) + 's'
   }
 }
 
-module.exports = { testLoadModels, testGenerateMusic }
+async function testGenerateMusic () {
+  return _testGenerateMusic(false)
+}
+
+async function testGenerateMusicOnGpu () {
+  return _testGenerateMusic(true)
+}
+
+module.exports = { testLoadModels, testGenerateMusic, testGenerateMusicOnGpu }
