@@ -194,7 +194,7 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.16.2"
+    "@qvac/vla-ggml": "^0.17.0"
   },
   "peerDependenciesMeta": {
     "@qvac/asr-ggml": {
@@ -250,7 +250,7 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.16.2",
+    "@qvac/vla-ggml": "^0.17.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
