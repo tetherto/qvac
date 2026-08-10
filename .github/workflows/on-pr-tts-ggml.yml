@@ -407,6 +407,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PREBUILD_RESULT: ${{ needs.prebuild.result }}
           REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # Binds the status to THIS on-pr run so Merge Guard can reject a status
+          # from a superseded (e.g. pre-label) run whose timestamp still looks fresh.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           if [ -z "$HEAD_SHA" ]; then
@@ -421,6 +424,7 @@ jobs:
           gh api -X POST "repos/${REPO}/statuses/${HEAD_SHA}" \
             -f state="$state" \
             -f context="qvac/prebuild-tts-ggml" \
+            -f target_url="$RUN_URL" \
             -f description="prebuild ${state}" >/dev/null
           echo "Posted qvac/prebuild-tts-ggml = $state on $HEAD_SHA"
 

@@ -1029,6 +1029,60 @@ test('merge guard cancels superseded in-flight runs', () => {
   )
 })
 
+test('verify-prebuilds binds a prebuild status to its producing on-pr run', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  const verify = jobBlock(source, 'verify-prebuilds')
+
+  // Needs actions:read to fetch the producing run, reads target_url from the
+  // status, and only trusts a run triggered at/after this PR event. Timestamp
+  // alone is insufficient: a superseded pre-label run can post a fresh-looking
+  // skipped success, so the status must be bound to the run that produced it.
+  assert.match(verify, /actions:\s*read/, 'verify-prebuilds can read workflow runs')
+  assert.match(
+    verify,
+    /\.target_url/,
+    'verify-prebuilds reads the producing run from the status target_url',
+  )
+  assert.match(
+    verify,
+    /actions\/runs\/\$\{run_id\}/,
+    'verify-prebuilds fetches the producing run by id',
+  )
+  assert.match(
+    verify,
+    /on-pr-\$\{pkg\}\.yml/,
+    'verify-prebuilds checks the producing run is the on-pr-<pkg> workflow',
+  )
+  assert.match(
+    verify,
+    /run_created.*<.*PR_UPDATED_AT/,
+    'verify-prebuilds rejects a producing run triggered before this PR event',
+  )
+})
+
+test('publish-prebuild-status stamps its run URL into target_url', () => {
+  const workflowDirectory = join(root, '.github/workflows')
+  const offenders = readdirSync(workflowDirectory)
+    .filter((name) => /^on-pr-.*\.yml$/.test(name))
+    .filter((name) => {
+      const text = readFileSync(join(workflowDirectory, name), 'utf8')
+      if (!text.includes('publish-prebuild-status')) return false
+      // A publish job must both define RUN_URL from github.run_id and pass it as
+      // the status target_url, so Merge Guard can bind the status to this run.
+      const hasRunUrl =
+        /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
+          text,
+        )
+      const passesTargetUrl = /-f target_url="\$RUN_URL"/.test(text)
+      return !(hasRunUrl && passesTargetUrl)
+    })
+  assert.deepEqual(
+    offenders,
+    [],
+    'every on-pr publish-prebuild-status must stamp target_url with its run URL',
+  )
+})
+
 test('infer-base publish jobs are gated on generated-artifact validation', () => {
   const source = read('.github/workflows/trigger-reusable-infer-base.yml')
 

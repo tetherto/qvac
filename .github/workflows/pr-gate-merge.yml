@@ -170,13 +170,15 @@ jobs:
           workdir: ${{ matrix.path }}
 
   # Verifies prebuilds without triggering them. Each prebuild-bearing
-  # on-pr-<pkg>.yml posts a qvac/prebuild-<pkg> commit status on the PR head SHA.
-  # A status is trusted only when it was (re)posted at/after this PR event's own
-  # timestamp (github.event.pull_request.updated_at), so a stale "skipped =
-  # success" from an earlier no-label run on the same SHA cannot pass the gate
-  # before a later labeled build on the same SHA finishes. This threshold is a
-  # server-side timestamp available immediately in this run's context, so the
-  # check never depends on the Actions API having listed the new on-pr run yet.
+  # on-pr-<pkg>.yml posts a qvac/prebuild-<pkg> commit status on the PR head SHA
+  # and stamps its own run URL into the status target_url. A status is trusted
+  # only when the run that produced it is the on-pr-<pkg> workflow AND was
+  # triggered at/after this PR event (run.created_at >= pull_request.updated_at).
+  # That binds the status to a run from the current-or-newer event, so a
+  # superseded pre-label run's "skipped = success" cannot pass the gate just
+  # because its timestamp happens to post-date the label. The producing run is
+  # read by the id embedded in the status, so this never depends on the Actions
+  # API having listed the newest run for the SHA (no listing-lag window).
   verify-prebuilds:
     needs: [authorize, changes, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
@@ -185,6 +187,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      actions: read
     steps:
       - name: Verify addon prebuild statuses on the PR head
         env:
@@ -192,11 +195,10 @@ jobs:
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
-          # Freshness threshold: the moment this PR event fired. A prebuild status
-          # older than this belongs to a superseded run and is not trusted. This
-          # is a static per-run value; an older run whose threshold predates a
-          # later label event is cancelled by concurrency.cancel-in-progress, so
-          # only the newest run (with the newest threshold) gates the PR.
+          # Freshness threshold: the moment this PR event fired. The run that
+          # produced a trusted prebuild status must have been triggered at/after
+          # this (run.created_at >= PR_UPDATED_AT), which rejects statuses from
+          # runs of an earlier event (e.g. the pre-label opened/synchronize run).
           PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
         run: |
           set -euo pipefail
@@ -225,14 +227,29 @@ jobs:
             failed=""
             for pkg in $(echo "$expected" | jq -r '.[]'); do
               ctx="qvac/prebuild-${pkg}"
-              # Only trust the newest status for this context that was posted by our
-              # CI bot (creator.login). Statuses on the base repo require base write,
-              # so a fork PR cannot forge one, but this is cheap defense-in-depth.
-              state=$(echo "$statuses" | jq -r --arg c "$ctx" 'map(select(.context == $c and .creator.login == "github-actions[bot]")) | .[0].state // ""')
-              updated=$(echo "$statuses" | jq -r --arg c "$ctx" 'map(select(.context == $c and .creator.login == "github-actions[bot]")) | .[0].updated_at // ""')
-              # Trust the status only if it post-dates this PR event (ISO timestamps
-              # compare lexicographically). Otherwise it is stale/absent -> wait.
-              if [ -z "$updated" ] || [[ "$updated" < "$PR_UPDATED_AT" ]]; then
+              # Newest status for this context posted by our CI bot (creator.login).
+              # Base-repo statuses require base write, so a fork cannot forge one;
+              # the creator filter is cheap defense-in-depth on top of that.
+              status=$(echo "$statuses" | jq -c --arg c "$ctx" 'map(select(.context == $c and .creator.login == "github-actions[bot]")) | .[0] // {}')
+              state=$(echo "$status" | jq -r '.state // ""')
+              turl=$(echo "$status" | jq -r '.target_url // ""')
+              run_id="${turl##*/}"
+              # No trusted status yet, or it lacks a parseable producing-run id.
+              case "$run_id" in
+                '' | *[!0-9]*)
+                  pending="${pending} ${ctx}"
+                  continue
+                  ;;
+              esac
+              # Bind the status to its producing run: trust it only if that run is
+              # the on-pr-<pkg> workflow AND was triggered at/after this PR event
+              # (created_at >= PR_UPDATED_AT, ISO timestamps compare lexically).
+              # This rejects a superseded pre-label run whose skipped success only
+              # post-dates the label, without ever listing "the newest run".
+              run_json=$(gh api "repos/${REPO}/actions/runs/${run_id}" 2>/dev/null || echo '{}')
+              run_path=$(echo "$run_json" | jq -r '.path // ""')
+              run_created=$(echo "$run_json" | jq -r '.created_at // ""')
+              if [ "$run_path" != ".github/workflows/on-pr-${pkg}.yml" ] || [ -z "$run_created" ] || [[ "$run_created" < "$PR_UPDATED_AT" ]]; then
                 pending="${pending} ${ctx}"
                 continue
               fi
