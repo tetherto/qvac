@@ -146,16 +146,28 @@ function cosyvoiceInstructValue(
 function renderCosyvoiceInstruct(
   instruct: string | CosyvoiceInstruct | undefined,
 ): string {
-  if (instruct == null) return "";
+  // Only `undefined` means "omitted" (zero-shot). An explicit `null` is a
+  // malformed value, not an omission, so it is rejected below like any other
+  // non-object.
+  if (instruct === undefined) return "";
   if (typeof instruct === "string") return instruct.trim();
-  // A JS caller can pass a number, array, or other non-object where the type
-  // says CosyvoiceInstruct. Those would slip past the presence checks below and
-  // silently degrade to zero-shot, so reject anything that is not a plain
-  // (non-array) object.
-  if (typeof instruct !== "object" || Array.isArray(instruct)) {
+  // A JS caller can pass values the type forbids (null, a number, an array, a
+  // Date, a class instance). Check defensively as `unknown`: require an ordinary
+  // object literal so exotic objects can't slip past the presence checks below
+  // and degrade to zero-shot, and so control fields are read from the object's
+  // own properties rather than an inherited prototype.
+  const control = instruct as unknown;
+  if (control === null || typeof control !== "object" || Array.isArray(control)) {
     throw new Error(
-      "Invalid CosyVoice instruct: expected a string or a control object " +
-        "(e.g. { dialect: 'cantonese' }).",
+      "Invalid CosyVoice instruct: expected a string or a plain control " +
+        "object such as { dialect: 'cantonese' }.",
+    );
+  }
+  const proto = Object.getPrototypeOf(control) as object | null;
+  if (proto !== Object.prototype && proto !== null) {
+    throw new Error(
+      "Invalid CosyVoice instruct: expected a plain control object such as " +
+        "{ dialect: 'cantonese' }, not an instance of another type.",
     );
   }
   // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)

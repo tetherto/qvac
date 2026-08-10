@@ -64,9 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GPU path recompiled its kernels on every process instead of reusing the
   persistent cache. It now reaches `EngineOptions::opencl_cache_dir`.
 - **CosyVoice3 `instruct` accepted malformed values.** A set-but-empty or null
-  control (`{ dialect: '' }`, `{ dialect: null }`), an array, or a non-object
-  silently degraded to zero-shot synthesis. These now throw, and controls are
-  validated by property presence rather than truthiness.
+  control (`{ dialect: '' }`, `{ dialect: null }`), an explicit `null`, an array,
+  a non-object, or a non-plain object (e.g. a `Date`) silently degraded to
+  zero-shot synthesis. These now throw: only `undefined` counts as omitted, the
+  value must be a plain object, and controls are validated by own-property
+  presence rather than truthiness.
 
 ### Changed
 
