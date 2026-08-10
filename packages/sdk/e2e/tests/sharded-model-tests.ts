@@ -1,5 +1,7 @@
 import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
+// ---- embedding plugin ----
+
 export const shardedModelLoad: TestDefinition = {
   testId: 'sharded-model-load',
   params: {},
@@ -111,6 +113,59 @@ export const shardedModelLongTextInference: TestDefinition = {
   }
 }
 
+// ---- LLM plugin ----
+
+export const shardedModelLlmLoad: TestDefinition = {
+  testId: 'sharded-model-llm-load',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: {
+    category: 'sharded-model',
+    dependency: 'sharded-llm',
+    estimatedDurationMs: 180000
+  }
+}
+
+export const shardedModelLlmCompletion: TestDefinition = {
+  testId: 'sharded-model-llm-completion',
+  params: {
+    history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
+    generationParams: { temp: 0, seed: 42 }
+  },
+  expectation: { validation: 'contains-all', contains: ['4'] },
+  metadata: {
+    category: 'sharded-model',
+    dependency: 'sharded-llm',
+    estimatedDurationMs: 60000
+  }
+}
+
+export const shardedModelLlmReload: TestDefinition = {
+  testId: 'sharded-model-llm-reload',
+  params: {
+    history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
+    generationParams: { temp: 0, seed: 42 }
+  },
+  expectation: { validation: 'contains-all', contains: ['4'] },
+  metadata: {
+    category: 'sharded-model',
+    dependency: 'sharded-llm',
+    estimatedDurationMs: 120000
+  }
+}
+
+export const shardedModelLlmMissingShards: TestDefinition = {
+  testId: 'sharded-model-llm-missing-shards',
+  params: { modelPath: '/invalid/path/sharded-model-00001-of-00005.gguf' },
+  expectation: { validation: 'throws-error', errorContains: 'Missing shards or' },
+  metadata: {
+    category: 'sharded-model',
+    dependency: 'none',
+    estimatedDurationMs: 5000
+  }
+}
+
 export const shardedModelTests = [
   shardedModelLoad,
   shardedModelDetection,
@@ -121,5 +176,9 @@ export const shardedModelTests = [
   shardedModelCancellation,
   shardedModelInference,
   shardedModelBatchInference,
-  shardedModelLongTextInference
+  shardedModelLongTextInference,
+  shardedModelLlmLoad,
+  shardedModelLlmCompletion,
+  shardedModelLlmReload,
+  shardedModelLlmMissingShards
 ]
