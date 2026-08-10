@@ -343,8 +343,6 @@ jobs:
     if: always()
 
     steps:
-      # Checkout before the artifact download: actions/checkout cleans the
-      # workspace and would wipe an already-downloaded results/ directory.
       - name: Checkout summary renderer
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -365,11 +363,6 @@ jobs:
           echo "No ocr-ggml-benchmark-results artifact found; skipping summary."
           exit 0
 
-      # Renders the per-task comparison sections plus the final unified
-      # per-model x device stats table (QVAC-23259), matching the
-      # consolidated-report format of the other benchmark workflows.
-      # Inputs are passed via env (not interpolated into code) to keep
-      # workflow inputs out of the interpreter's source text.
       - name: Generate results summary
         env:
           PIPELINE: ${{ inputs.pipeline }}

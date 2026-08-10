@@ -1,25 +1,5 @@
 #!/usr/bin/env python3
-"""Render the OCR GGML benchmark step summary (QVAC-23259).
-
-Reads the aggregate.json files produced by evaluate.py (one per
-backend x task) and prints a GitHub-flavoured markdown report:
-
-1. Per-task QVAC-vs-Python comparison sections (winner tables).
-2. A final unified summary table — one row per model x backend x
-   device, stats as columns, covering every supported model — matching
-   the consolidated report format used by the other benchmark
-   workflows (LLM parameter sweep, perf aggregators).
-
-The device column reads the optional "device" key from aggregate.json
-and falls back to "CPU": every lane of this workflow currently runs on
-CPU (the addon defaults to the cpu ggml backend and the Python
-reference backends run with --no-gpu). When a GPU lane lands, stamping
-"device" in the aggregates is enough for it to show up as its own row.
-
-Usage:
-    python3 render_summary.py --results <dir> \
-        [--pipeline both] [--tasks fullpage,spotting] [--limit 0]
-"""
+"""Render the OCR GGML benchmark step summary."""
 
 import argparse
 import json
@@ -30,7 +10,6 @@ SPOTTING_TASK = "text spotting en"
 FULL_PAGE_DIR = "full-page-ocr"
 SPOTTING_DIR = "text-spotting"
 
-# Display metadata for every supported model, in row order.
 BACKENDS = [
     ("qvac-easyocr", "EasyOCR (CRAFT + latin_g2)", "QVAC GGML"),
     ("easyocr", "EasyOCR (CRAFT + latin_g2)", "Python reference"),
@@ -169,7 +148,6 @@ def comparison_sections(results_dir, pipeline):
 
 
 def summary_table(results_dir):
-    """One row per model x backend x device, stats as columns."""
     rows = {}
     for backend, model, backend_label in BACKENDS:
         fp = load_aggregate(results_dir, FULL_PAGE_DIR, backend, FULL_PAGE_TASK)
