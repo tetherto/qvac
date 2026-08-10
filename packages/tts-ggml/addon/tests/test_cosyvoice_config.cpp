@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -58,10 +59,22 @@ CosyvoiceConfig configWithExistingDir() {
 }
 
 // Placeholder LavaSR GGUFs are staged outside the model dir so the latter keeps
-// matching the "holds no weights" contract above.
+// matching the "holds no weights" contract above. The directory name is unique
+// per process because persistent CI runners share /tmp between concurrent jobs
+// running as different users: a fixed name is owned by whoever created it
+// first, so staging a file into it fails, or a sibling run deletes it mid-test.
+const std::filesystem::path& lavasrStageDirName() {
+  static const std::filesystem::path dir =
+      std::filesystem::temp_directory_path() /
+      ("qvac-tts-ggml-cosyvoice-tests-lavasr-" +
+       std::to_string(std::random_device{}()));
+  return dir;
+}
+
+// Re-created per staging: the directory is removed again once the last
+// placeholder under it is gone.
 std::filesystem::path lavasrStageDir() {
-  auto dir = std::filesystem::temp_directory_path() /
-             "qvac-tts-ggml-cosyvoice-tests-lavasr";
+  const auto& dir = lavasrStageDirName();
   std::filesystem::create_directories(dir);
   return dir;
 }
@@ -71,11 +84,18 @@ std::filesystem::path lavasrStageDir() {
 class TempGguf {
 public:
   explicit TempGguf(const char* name) : path_(lavasrStageDir() / name) {
-    std::ofstream(path_) << "not-a-real-gguf";
+    std::ofstream out(path_);
+    out << "not-a-real-gguf";
+    out.close();
+    if (!out)
+      throw std::runtime_error(
+          "failed to stage the placeholder GGUF: " + path_.string());
   }
   ~TempGguf() {
     std::error_code ec;
     std::filesystem::remove(path_, ec);
+    // Succeeds only once the last staged file is gone.
+    std::filesystem::remove(path_.parent_path(), ec);
   }
   TempGguf(const TempGguf&) = delete;
   TempGguf& operator=(const TempGguf&) = delete;
@@ -163,6 +183,14 @@ TEST(CosyvoiceValidate, StreamingNonNativeOutputRateRejected) {
 
 // The LavaSR enhancer resamples inside its overlap-reprocess window, so it
 // lifts the streaming native-rate restriction above.
+// The accept-path tests below are only meaningful if the placeholder really
+// reaches the disk; a silently failed write used to surface three tests later
+// as a "GGUF not found" rejection.
+TEST(CosyvoiceLavasrFixture, StagesAReadableFile) {
+  const TempGguf gguf("lavasr-fixture-probe.gguf");
+  EXPECT_TRUE(std::filesystem::exists(gguf.path()));
+}
+
 TEST(CosyvoiceValidate, StreamingNonNativeOutputRateAcceptedWithEnhancer) {
   const TempGguf enhancer("lavasr-enhancer.gguf");
   auto cfg = configWithExistingDir();
