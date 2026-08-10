@@ -80,6 +80,7 @@ export {
   type BatchCompletionRun,
   type BatchPrompt,
   type EmbedStats,
+  type TranscribeStats,
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
