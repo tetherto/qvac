@@ -38,7 +38,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://localhost:11434/v1', // match your HTTP server
-  apiKey: process.env.QVAC_API_KEY       // must match qvac serve --api-key when enabled
+  apiKey: process.env.QVAC_API_KEY      // must match qvac serve --api-key when enabled
 })
 
 const { textStream } = streamText({

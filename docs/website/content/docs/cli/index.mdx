@@ -105,13 +105,13 @@ Use `--api-key` whenever `--host` is not a loopback address. The CLI logs a secu
 
 `--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback.
 
-Scripts that previously relied on wildcard CORS must retain `--cors` only as validation and name every trusted browser origin:
+Scripts that previously relied on wildcard CORS must name every trusted browser origin. They may keep `--cors` as a validation guard or drop it:
 
 ```bash
 # Before: allowed every browser origin
 qvac serve openai --cors
 
-# After: retain validation and repeat once per trusted origin
+# After: optionally retain validation and repeat once per trusted origin
 qvac serve openai --cors \
   --cors-origin https://app.example.com \
   --cors-origin http://localhost:3000
