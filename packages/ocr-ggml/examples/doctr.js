@@ -88,8 +88,9 @@ async function main () {
       }
     })
 
-    const stats = await response.await()
-    if (stats) {
+    await response.await() // resolves with the output rows
+    const stats = response.stats // RuntimeStats (opts.stats: true)
+    if (stats && 'totalTime' in stats) {
       console.log('[doctr] stats =', stats)
     }
   } finally {

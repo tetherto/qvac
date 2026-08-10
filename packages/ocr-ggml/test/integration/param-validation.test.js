@@ -1,9 +1,10 @@
 'use strict'
 
+const fs = require('bare-fs')
 const { OcrGgml } = require('../..')
 const { QvacErrorAddonOcrGgml, ERR_CODES } = require('../..')
 const test = require('brittle')
-const { isMobile } = require('./utils')
+const { isMobile, ensureModelPath } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 30 * 1000
@@ -32,14 +33,26 @@ test('load() rejects when langList is missing', { timeout: TEST_TIMEOUT }, async
   }
 })
 
+// Language validation is deferred to the native pipeline (which knows the
+// full language registry and the loaded recognizer's character set), so an
+// all-unsupported list is rejected by the native model load with its own
+// error message — not by a JS-side UNSUPPORTED_LANGUAGE gate. Needs real
+// model files because the native pipeline validates during model creation.
 test(
-  'load() rejects when langList is empty array after filtering',
+  'load() rejects unsupported languages via native validation',
   { timeout: TEST_TIMEOUT },
   async function (t) {
+    const pathDetector = await ensureModelPath('detector_craft')
+    const pathRecognizer = await ensureModelPath('recognizer_latin')
+    if (!fs.existsSync(pathDetector) || !fs.existsSync(pathRecognizer)) {
+      t.pass('Models not available - skipping native language validation test')
+      return
+    }
+
     const ocrGgml = new OcrGgml({
       params: {
-        pathDetector: 'models/craft_mlt_25k.gguf',
-        pathRecognizer: 'models/latin_g2.gguf',
+        pathDetector,
+        pathRecognizer,
         langList: ['klingon', 'elvish', 'dothraki']
       }
     })
@@ -48,9 +61,14 @@ test(
       await ocrGgml.load()
       t.fail('Should have thrown for all-unsupported languages')
     } catch (err) {
-      t.ok(err instanceof QvacErrorAddonOcrGgml, 'Should throw QvacErrorAddonOcrGgml')
-      t.is(err.code, ERR_CODES.UNSUPPORTED_LANGUAGE, 'Error code should be UNSUPPORTED_LANGUAGE')
-      t.pass('Correctly rejected all-unsupported language list')
+      const message = String(err && err.message)
+      t.ok(
+        /unsupported languages/i.test(message),
+        `Native error reports the unsupported languages, got: ${message}`
+      )
+      t.ok(message.includes('klingon'), 'Error names the offending language')
+    } finally {
+      await ocrGgml.unload()
     }
   }
 )

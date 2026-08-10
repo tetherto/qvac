@@ -49,6 +49,10 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `bare-fs` and `bare-path` moved from `devDependencies` to `dependencies`:
   both are required at import time by the published entrypoints, so consumer
   installs previously depended on hoisting luck.
+- `examples/quickstart.js` and the README usage snippet treated the value
+  resolved by `response.await()` as the stats object; it resolves with the
+  output rows — `RuntimeStats` is exposed via `response.stats` (or the
+  `'stats'` event). All examples now read `response.stats`.
 
 ## [0.14.0] - 2026-08-06
 

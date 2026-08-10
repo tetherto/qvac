@@ -92,8 +92,8 @@ response.onUpdate(rows => {
   }
 })
 
-const stats = await response.await()
-console.log(stats)
+await response.await() // resolves with the full output rows
+console.log(response.stats) // RuntimeStats (populated when opts.stats: true)
 
 await ocr.unload()
 ```
