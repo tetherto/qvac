@@ -48,15 +48,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Unified emotion and pace across engines.** `emotion` and `pace` now mean the
-  same thing on every engine that supports them, and work in the same three
-  places on all of them: the constructor, `reload()`, and per call. The
-  vocabulary is owned by tts-cpp and each engine declares the subset it
-  supports, so an unsupported value throws naming that engine's set instead of
-  being silently ignored. Parler keeps all 12 emotions and its existing
-  behaviour is unchanged; CosyVoice3 gains `emotion` (anger, happy, neutral,
-  sad), `pace`, and the per-call / `reload()` channels it did not have before;
-  Supertonic gains `pace` (mapped onto its duration multiplier, relative to the
-  model's own default, so `moderate` is a no-op).
+  same thing on every engine that supports them, and are set the same way: the
+  constructor and `reload()` on all of them, plus per call on Parler and
+  CosyVoice3. The vocabulary is owned by tts-cpp and each engine declares the
+  subset it supports, so an unsupported value throws naming that engine's set
+  instead of being silently ignored. Parler keeps all 12 emotions and its
+  existing behaviour is unchanged; CosyVoice3 gains `emotion` (anger, happy,
+  neutral, sad), `pace`, and the per-call / `reload()` channels it did not have
+  before; Supertonic gains `pace` (mapped onto its duration multiplier, relative
+  to the model's own default, so `moderate` is a no-op). Supertonic conditions
+  its engine at construction, so its `pace` belongs in the constructor or
+  `reload({ pace })` and a per-call one throws instead of being dropped.
+
+  `reload()` is atomic: a rejected configuration leaves the instance exactly as
+  it was, so a later partial reload is never validated against values the
+  caller never accepted.
 
   Breaking for CosyVoice3 callers: `instruct: { emotion }` and
   `instruct: { speed }` are removed in favour of the top-level `emotion` /

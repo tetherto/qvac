@@ -451,17 +451,18 @@ unchanged.
 ## Emotion & pace (cross-engine)
 
 `emotion` and `pace` mean the same thing on every engine that supports them,
-and they work in the same three places: the constructor, `reload()`, and per
-call.  The vocabulary is owned by tts-cpp (`include/tts-cpp/voice_controls.h`)
-and mirrored here; each engine declares the subset it supports, and an
-unsupported value throws naming that engine's set.
+and they are set the same way: the constructor and `reload()` everywhere, plus
+per call on the engines that can change them per call.  The vocabulary is owned
+by tts-cpp (`include/tts-cpp/voice_controls.h`) and mirrored here; each engine
+declares the subset it supports, and an unsupported value throws naming that
+engine's set.
 
-| engine | `emotion` | `pace` | exact rate knob |
-|---|---|---|---|
-| Parler | all 12 | slow / moderate / fast | — |
-| CosyVoice3 | anger, happy, neutral, sad | slow / moderate / fast | — |
-| Supertonic | not supported | slow / moderate / fast | `speed` |
-| Chatterbox | not supported | not supported | `speed` |
+| engine | `emotion` | `pace` | per call | exact rate knob |
+|---|---|---|---|---|
+| Parler | all 12 | slow / moderate / fast | yes | — |
+| CosyVoice3 | anger, happy, neutral, sad | slow / moderate / fast | yes | — |
+| Supertonic | not supported | slow / moderate / fast | no | `speed` |
+| Chatterbox | not supported | not supported | — | `speed` |
 
 The 12 canonical emotions (case-insensitive): `command`, `anger`, `narration`,
 `conversation`, `disgust`, `fear`, `happy`, `neutral`, `proper noun`, `news`,
@@ -490,7 +491,9 @@ Two per-engine properties worth knowing:
   instruction and conflicts with `slow` / `fast`.
 - **Supertonic** maps the step onto its duration multiplier relative to the
   GGUF's own `default_speed`, so `pace: 'moderate'` is bit-identical to setting
-  nothing.
+  nothing.  It conditions the engine when the engine is built, so its `pace`
+  belongs in the constructor or `reload({ pace })`; passing one to `run()` /
+  `runStream()` throws rather than being silently ignored.
 
 ## Parler descriptions
 

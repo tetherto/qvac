@@ -166,9 +166,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
-  if (auto* st = dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
+  if (dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
     SupertonicModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    // Supertonic conditions the engine at construction, so per-call emotion /
+    // pace on the job object is rejected rather than silently dropped here.
+    JSAdapter adapter;
+    adapter.assertNoPerCallSupertonicControls(
+        args.getJsObject(1, "inputObj"), env);
     return instance.runJob(std::any(std::move(modelInput)));
   }
 

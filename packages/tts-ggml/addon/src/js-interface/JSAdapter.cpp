@@ -4,6 +4,7 @@
 #include <string>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
 
@@ -188,6 +189,13 @@ JSAdapter::readVoiceControls(js::Object obj, js_env_t* env) {
   controls.pace = readOptionalString(obj, env, "pace");
   controls.instruct_text = readOptionalString(obj, env, "instruct");
   return controls;
+}
+
+void JSAdapter::assertNoPerCallSupertonicControls(
+    js::Object obj, js_env_t* env) {
+  supertonic::detail::validateNoPerCallControls(
+      readOptionalString(obj, env, "emotion"),
+      readOptionalString(obj, env, "pace"));
 }
 
 parler::ParlerConfig
