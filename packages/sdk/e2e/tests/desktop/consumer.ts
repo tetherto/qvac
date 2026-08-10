@@ -2,6 +2,7 @@ import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qva
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
+  LLAMA_3_2_1B_INST_Q4_0_SHARD,
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
@@ -31,6 +32,7 @@ import {
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
   GROOT_Q5_VF16,
+  GROOT_MULTI_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -220,6 +222,15 @@ resources.define('vla-groot', {
   config: { backend: 'cpu' }
 })
 
+// Multi-embodiment GR00T (all 17 trained rows, default libero_sim), q5
+// profile. Desktop-only for the same reasons as vla-groot; drives the
+// selected-embodiment hparams and vlaSetEmbodiment switching tests.
+resources.define('vla-groot-multi', {
+  constant: GROOT_MULTI_Q5_VF16,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define('classification', {
@@ -235,6 +246,13 @@ resources.define('echo', {
 resources.define('sharded-embeddings', {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: 'llamacpp-embedding',
+  skipPreDownload: true
+})
+
+resources.define('sharded-llm', {
+  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
   skipPreDownload: true
 })
 
