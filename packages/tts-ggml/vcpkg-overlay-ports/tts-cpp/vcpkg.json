@@ -1,7 +1,7 @@
 {
   "name": "tts-cpp",
-  "version-date": "2026-08-08",
-  "description": "Text-to-speech in pure C++/ggml: Resemble Chatterbox (Turbo + Multilingual), Supertonic, Fun-CosyVoice3, Parler-TTS (CPU + Metal / Vulkan / OpenCL GPU), and LavaSR speech enhancement. Sourced from tetherto/qvac-ext-lib-whisper.cpp (engines/tts). This republish advances the pin to master 5e57a692, the single source archive shared with whisper-cpp, parakeet-cpp and audiogen-cpp, and raises the ggml-speech floor to 2026-08-07 for the Vulkan matmul src0 binding fix and the OpenCL im2col rewrite; engines/tts itself is unchanged.",
+  "version-date": "2026-08-11",
+  "description": "Text-to-speech in pure C++/ggml: Resemble Chatterbox (Turbo + Multilingual), Supertonic, Fun-CosyVoice3, Parler-TTS, Audio8 (CPU + Metal / Vulkan / OpenCL GPU; Audio8 CPU-only), and LavaSR speech enhancement. Sourced from tetherto/qvac-ext-lib-whisper.cpp (engines/tts). This republish advances the pin to master 52b9abc, the single source archive shared with whisper-cpp, parakeet-cpp and audiogen-cpp. One canonical emotion / pace vocabulary now spans the engines (PR #134): tts-cpp/voice_controls.h owns the names, each engine declares the subset it supports and rejects the rest, CosyVoice3 gains per-call VoiceControls and Supertonic gains pace as a factor on its checkpoint's own default_speed. cosyvoice::EngineOptions::instruct_text is replaced by default_controls.instruct_text, so a consumer setting it must migrate. Also adds the gradchecked Supertonic vocoder backward (PR #60), test-only targets. The ggml-speech floor stays at 2026-08-07.",
   "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/engines/tts",
   "license": "MIT",
   "dependencies": [

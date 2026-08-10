@@ -1,12 +1,12 @@
-# tts-cpp: Resemble Chatterbox + Supertonic + CosyVoice3 + Parler-TTS in pure
-# C++/ggml, from the engines/tts subfolder of qvac-ext-lib-whisper.cpp;
+# tts-cpp: Resemble Chatterbox + Supertonic + CosyVoice3 + Parler-TTS + Audio8
+# in pure C++/ggml, from the engines/tts subfolder of qvac-ext-lib-whisper.cpp;
 # consumes the ggml-speech port.
 #
-# Pinned at master 5e57a692, shared with the whisper-cpp / parakeet-cpp /
+# Pinned at master 52b9abc, shared with the whisper-cpp / parakeet-cpp /
 # audiogen-cpp ports so all four resolve one source archive against one
-# ggml-speech. engines/tts is unchanged from the previous pin; the ggml-speech
-# floor moves to 2026-08-07 for the Vulkan matmul src0 binding fix and the
-# OpenCL im2col rewrite (qvac-ext-ggml PRs #52, #53).
+# ggml-speech. This pin unifies the emotion / pace vocabulary across the engines
+# (PR #134) and adds the gradchecked Supertonic vocoder backward (PR #60). The
+# ggml-speech floor stays at 2026-08-07.
 
 set(VCPKG_POLICY_MISMATCHED_NUMBER_OF_BINARIES enabled)
 set(VCPKG_BUILD_TYPE release)
@@ -14,8 +14,8 @@ set(VCPKG_BUILD_TYPE release)
 vcpkg_from_github(
     OUT_SOURCE_PATH WHISPER_CPP_SRC
     REPO tetherto/qvac-ext-lib-whisper.cpp
-    REF 6d545559195f8fe54ca0bbf5d4be7144c5f068a7
-    SHA512 43ee8166eb2f7b0ad135cd7518c657e7cc2211c4789ca60ae657be13273c417dda395c35006d282a6120cace260969a5917c1f697c5d4ad962681170c1015446
+    REF 52b9abcc7a0ffb129e33cba80f7a657c757fb6ed
+    SHA512 77b43132f2b4c97356868b4c01476eb8bb2578c70541a6e151f3b098270b71e375b0b7fc09086977970dd71ab65193938147fc3a22388c80b690b5a19422e90b
     HEAD_REF master
 )
 
