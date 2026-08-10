@@ -683,15 +683,19 @@ class TTSGgml {
         // is reported ahead of the engine-agnostic streaming constraints.
         this._assertParlerOptionConsistency();
         this._assertCosyvoiceOptionConsistency();
-        if (this._denoiserGgufPath &&
-            (this._streamChunkTokens != null ||
-                this._streamFirstChunkTokens != null)) {
+        if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
             throw new Error("tts-ggml: the LavaSR denoiser is not yet supported with " +
-                "native chunk streaming (streamChunkTokens / " +
-                "streamFirstChunkTokens). Use batch synthesis, or drop the " +
-                "denoiser for streaming. Streaming denoise is a planned " +
-                "follow-up (needs a stateful streaming denoiser).");
+                "native chunk streaming (streamChunkTokens > 0). Use batch " +
+                "synthesis, or drop the denoiser for streaming. Streaming " +
+                "denoise is a planned follow-up (needs a stateful streaming " +
+                "denoiser).");
         }
+    }
+    // Every streaming engine starts native chunk streaming on
+    // streamChunkTokens > 0 alone: a count of 0 means batch, and
+    // streamFirstChunkTokens only sizes the first chunk once streaming is on.
+    _requestsChunkStreaming() {
+        return (this._streamChunkTokens ?? 0) > 0;
     }
     _assertParlerOptionConsistency() {
         if (this._engineType === ENGINE_PARLER) {
@@ -737,15 +741,8 @@ class TTSGgml {
         }
     }
     _assertCosyvoiceOptionConsistency() {
-        if (this._engineType === ENGINE_COSYVOICE3) {
-            // CosyVoice3 outputs no LavaSR-supported signal; reject the enhancer/
-            // denoiser at construction (mirrors the parler rejection).
-            if (this._enhancerGgufPath || this._denoiserGgufPath) {
-                throw new Error("tts-ggml: CosyVoice3 does not support LavaSR enhancement/denoising. " +
-                    "Drop lavasrEnhancer / lavasrDenoiser.");
-            }
+        if (this._engineType === ENGINE_COSYVOICE3)
             return;
-        }
         const cosyvoiceOnly = [];
         const cosyvoiceOnlyFields = {
             instruct: this._instruct,

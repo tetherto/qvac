@@ -96,9 +96,14 @@ If you want to build the addon from source instead of using pre-built packages, 
    ```
 
    This command runs the complete build pipeline:
+   - `tsc -p tsconfig.build.json` - Compiles the TypeScript wrapper in `src/` to the
+     JavaScript and declaration files at the package root
    - `bare-make generate` - Generates build files
    - `bare-make build` - Compiles the native addon
    - `bare-make install` - Installs the built addon
+
+   Use `npm run build:native` for the native steps alone, or `npm run build:ts` for
+   the wrapper alone.
 
 ## Advanced Build Options
 

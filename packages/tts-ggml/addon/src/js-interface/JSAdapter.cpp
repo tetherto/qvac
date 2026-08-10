@@ -283,6 +283,10 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.streamLeftContextTokens =
       readOptionalInt(configurationParams, env, "streamLeftContextTokens");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
 }
