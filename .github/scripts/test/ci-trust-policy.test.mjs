@@ -1009,6 +1009,26 @@ test('merge guard fails closed when the PR was not authorized', () => {
   }
 })
 
+test('merge guard cancels superseded in-flight runs', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  // verify-prebuilds uses a static per-run freshness threshold, so an older
+  // run started before a prebuild label must be cancelled rather than allowed
+  // to trust a pre-label skipped=success. That relies on concurrency
+  // cancel-in-progress; assert it stays enabled.
+  const concurrency = source
+    .split('\n')
+    .slice(
+      source.split('\n').findIndex((l) => l.startsWith('concurrency:')),
+    )
+    .slice(0, 12)
+    .join('\n')
+  assert.match(
+    concurrency,
+    /cancel-in-progress:\s*true/,
+    'Merge Guard must cancel superseded in-flight runs (verify-only gate)',
+  )
+})
+
 test('infer-base publish jobs are gated on generated-artifact validation', () => {
   const source = read('.github/workflows/trigger-reusable-infer-base.yml')
 

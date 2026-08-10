@@ -18,8 +18,15 @@ permissions:
   packages: read
 
 concurrency:
+  # Cancel a superseded in-flight run when a newer event (e.g. a prebuild
+  # label) arrives for the same PR. This gate only READS prebuild statuses (it
+  # no longer builds anything), so cancelling an older run is free and closes a
+  # race: a run started before the label uses a static freshness threshold and
+  # could otherwise trust a pre-label "skipped = success" while the newer
+  # labeled build is still running. Killing the older run leaves only the newer
+  # run, which waits for the real build.
   group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   fork-approval:
@@ -186,7 +193,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
           # Freshness threshold: the moment this PR event fired. A prebuild status
-          # older than this belongs to a superseded run and is not trusted.
+          # older than this belongs to a superseded run and is not trusted. This
+          # is a static per-run value; an older run whose threshold predates a
+          # later label event is cancelled by concurrency.cancel-in-progress, so
+          # only the newest run (with the newest threshold) gates the PR.
           PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
         run: |
           set -euo pipefail
