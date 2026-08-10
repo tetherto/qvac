@@ -159,7 +159,6 @@ interface QvacManagedOptions {
   serveBinPath?: string                  // default: resolve @qvac/cli
   reuse?: boolean                        // share a matching serve; default: true (false if servePort is pinned)
   serveIdleTimeout?: number              // ms a shared serve lingers after its last consumer; default: 300000
-  apiKey?: string
   headers?: Record<string, string>
   fetch?: typeof fetch
 }

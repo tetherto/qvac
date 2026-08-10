@@ -245,7 +245,10 @@ If you are not using the plugin, configure `opencode.json` with a full `qvac` pr
     "qvac": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "QVAC (local)",
-      "options": { "baseURL": "http://localhost:11434/v1" },
+      "options": {
+        "baseURL": "http://localhost:11434/v1",
+        "apiKey": "the-value-you-passed-to-qvac-serve"
+      },
       "models": {
         "qwen3-8b-chat": {
           "name": "Qwen3 8B (chat)",
@@ -259,6 +262,8 @@ If you are not using the plugin, configure `opencode.json` with a full `qvac` pr
   "model": "qvac/qwen3-8b-chat"
 }
 ```
+
+Drop `options.apiKey` only if you started the server without authentication. `opencode.json` is a plaintext file that is commonly committed, so prefer starting the server with `--api-key-file` and keeping the key somewhere you are willing to have on disk in the clear.
 
 For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker.
 
