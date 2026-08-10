@@ -103,8 +103,7 @@ function buildWhisperStageFunction() {
 // warns (whisper models are small enough to fetch on-device), while the AFC
 // failure-token regex + pinned pymobiledevice3 keep the guard from silently
 // swallowing a real error. See buildIosScript for the pin/quirk rationale.
-function buildIosWhisperStageBlock(models) {
-  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+function buildIosWhisperStageFunction() {
   return `stage() {
   NAME="$1"; URL="$2"
   [ "$PRESTAGE_READY" = "1" ] || { echo "[prestage] WARN: iOS pre-stage unavailable for $NAME; device will use network fallback"; return 0; }
@@ -135,7 +134,12 @@ function buildIosWhisperStageBlock(models) {
   fi
   echo "[prestage] pushed $NAME -> Documents/$NAME"
   rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+}`
 }
+
+function buildIosWhisperStageBlock(models) {
+  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+  return `${buildIosWhisperStageFunction()}
 ${stageCalls}`
 }
 
@@ -275,18 +279,32 @@ adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
 }
 
+// iOS mirrors the Android buildScript contract exactly — same explicit shard
+// grep (/tmp/qvacShardGrep.txt) and the same selectPrestageModels() split that
+// shard-selects Parakeet (fail-hard) and Whisper (graceful) — only the push
+// transport differs: pymobiledevice3 apps push into the app Documents/ container
+// instead of adb. The push guard fails closed via a non-zero exit or the AFC
+// failure-token regex, and pymobiledevice3 is pinned to ==10.3.1 (an unpinned
+// --upgrade can otherwise resolve an older CLI that logs AFC errors but exits 0).
 function buildIosScript(manifestB64) {
+  const whisperManifestB64 = Buffer.from(JSON.stringify(buildWhisperManifest()), 'utf8').toString(
+    'base64'
+  )
+  const selectionCodeB64 = Buffer.from(buildSelectionCode(), 'utf8').toString('base64')
   return `set -e
 export PATH="$HOME/.local/bin:$PATH"
 unset SUDO_UID SUDO_GID
 BID=${IOS_BUNDLE_ID}
+TMP_ROOT="\${QVAC_PRESTAGE_TMP_DIR:-/tmp}"
 PRESTAGE_READY=1
 mkdir -p /tmp/prestage
-echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
+echo "${manifestB64}" | base64 -d > "$TMP_ROOT/model-manifest.json"
+echo "${whisperManifestB64}" | base64 -d > "$TMP_ROOT/whisper-manifest.json"
+echo "${selectionCodeB64}" | base64 -d > "$TMP_ROOT/select-prestage-models.js"
+GREP=$(cat "$TMP_ROOT/qvacShardGrep.txt")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
-node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):Object.keys(man);const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
+[ -n "$GREP" ] || { echo "[prestage] FATAL: shard grep is required"; exit 1; }
 if ! (python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1); then
   echo "[prestage] WARN: pymobiledevice3 install failed; whisper will use network fallback"
   PRESTAGE_READY=0
@@ -295,13 +313,14 @@ if [ "$PRESTAGE_READY" = "1" ] && ! pymobiledevice3 version >/dev/null 2>&1; the
   echo "[prestage] WARN: pymobiledevice3 not runnable; whisper will use network fallback"
   PRESTAGE_READY=0
 fi
-if [ "$PRESTAGE_READY" != "1" ] && [ -s /tmp/prestage-list.tsv ]; then
+node "$TMP_ROOT/select-prestage-models.js"
+if [ "$PRESTAGE_READY" != "1" ] && [ -s "$TMP_ROOT/parakeet-prestage-list.tsv" ]; then
   echo "[prestage] FATAL: pymobiledevice3 unavailable for parakeet pre-stage"; exit 1
 fi
 if [ "$PRESTAGE_READY" = "1" ]; then
   while IFS=$(printf '\\t') read -r NAME URL; do
     [ -z "$NAME" ] && continue
-    echo "[prestage] staging $NAME"
+    echo "[prestage] staging required parakeet model $NAME"
     curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
     if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
     printf '%s\\n' "$PUSH_OUT"
@@ -310,9 +329,13 @@ if [ "$PRESTAGE_READY" = "1" ]; then
     fi
     echo "[prestage] pushed $NAME -> Documents/$NAME"
     rm -f "/tmp/prestage/$NAME"
-  done < /tmp/prestage-list.tsv
+  done < "$TMP_ROOT/parakeet-prestage-list.tsv"
 fi
-${buildWhisperStageBlock(WHISPER_MODELS, 'ios')}
+${buildIosWhisperStageFunction()}
+while IFS=$(printf '\\t') read -r NAME URL; do
+  [ -z "$NAME" ] && continue
+  stage "$NAME" "$URL"
+done < "$TMP_ROOT/whisper-prestage-list.tsv"
 echo "[prestage] done"`
 }
 

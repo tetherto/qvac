@@ -256,10 +256,16 @@ test('buildScript selects Parakeet and Whisper models from the explicit shard gr
   assert.equal(syntax.status, 0, syntax.stderr)
 })
 
-test('buildScript ios backend pushes parakeet into Documents and keeps whisper graceful', () => {
+test('buildScript ios backend mirrors the Android shard selection with a pymobiledevice3 push', () => {
   const script = buildScript('QkFTRTY0', 'ios')
-  // Parakeet (fail-hard, manifest-driven).
-  assert.match(script, /base64 -d > \/tmp\/model-manifest\.json/)
+  // Same explicit-shard-grep selection contract as Android.
+  assert.match(script, /base64 -d > "\$TMP_ROOT\/model-manifest\.json"/)
+  assert.match(script, /base64 -d > "\$TMP_ROOT\/whisper-manifest\.json"/)
+  assert.match(script, /cat "\$TMP_ROOT\/qvacShardGrep\.txt"/)
+  assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
+  assert.match(script, /parakeet-prestage-list\.tsv/)
+  assert.match(script, /whisper-prestage-list\.tsv/)
+  // Parakeet (fail-hard) pushed into Documents via pymobiledevice3.
   assert.match(script, /pymobiledevice3 apps push/)
   assert.match(script, /Documents\/\$NAME/)
   assert.match(script, /FATAL: push of \$NAME failed/)
@@ -269,9 +275,10 @@ test('buildScript ios backend pushes parakeet into Documents and keeps whisper g
   assert.match(script, /pymobiledevice3==10\.3\.1/)
   assert.doesNotMatch(script, /adb push/)
   assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
-  // Whisper (graceful).
-  assert.match(script, /stage "ggml-tiny\.bin"/)
-  assert.match(script, /stage "ggml-silero-v5\.1\.2\.bin"/)
+  // Whisper (graceful) staged shard-selected from whisper-prestage-list.tsv, not
+  // baked-in — the stage() helper is fed by the same loop Android uses.
+  assert.match(script, /stage "\$NAME" "\$URL"/)
+  assert.doesNotMatch(script, /stage "ggml-tiny\.bin"/)
   assert.match(script, /Documents\/\$NAME\.size/)
   assert.match(script, /device will use network fallback/)
   assert.match(script, /\[prestage\] done/)
