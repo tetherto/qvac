@@ -879,9 +879,24 @@ test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording'
 
 test('audit-called-out privileged checkouts are pinned to event head SHA', () => {
   const mergeGuard = read('.github/workflows/pr-gate-merge.yml')
+  // Merge Guard verifies prebuilds, it does not trigger them: it must not call a
+  // prebuild workflow, and must not privileged-checkout the PR head repo for
+  // prebuild verification. Its verify-prebuilds job only READS commit statuses on
+  // the immutable event head SHA (never a mutable ref).
+  assert.doesNotMatch(
+    mergeGuard,
+    /uses:\s+\.\/\.github\/workflows\/prebuilds-/,
+    'Merge Guard must not call a prebuild workflow (verify, do not trigger)',
+  )
+  assert.doesNotMatch(
+    mergeGuard,
+    /head\.repo\.full_name/,
+    'Merge Guard must not privileged-checkout the PR head repo',
+  )
   assert.match(
     mergeGuard,
-    /repository:\s+\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}\n\s+ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+    /HEAD_SHA:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+    'verify-prebuilds reads statuses from the immutable event head SHA',
   )
 
   const sanityChecks = read('.github/actions/sanity-checks/action.yaml')

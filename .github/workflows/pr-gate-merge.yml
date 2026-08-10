@@ -162,8 +162,11 @@ jobs:
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ matrix.path }}
 
-  # Verifies prebuilds without triggering them: reads the qvac/prebuild-<pkg>
-  # commit status each prebuild-bearing on-pr-<pkg>.yml posts on the PR head SHA.
+  # Verifies prebuilds without triggering them. Each prebuild-bearing
+  # on-pr-<pkg>.yml posts a qvac/prebuild-<pkg> commit status on the PR head SHA.
+  # A status is trusted only when it is fresher than the latest on-pr-<pkg> run
+  # for this SHA, so a stale "skipped = success" from an earlier no-label run
+  # cannot pass the gate before a later labeled build on the same SHA finishes.
   verify-prebuilds:
     needs: [authorize, changes, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
@@ -172,6 +175,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      actions: read
     steps:
       - name: Verify addon prebuild statuses on the PR head
         env:
@@ -185,8 +189,8 @@ jobs:
           PREBUILD_KEYS='["asr-ggml","bci-whispercpp","classification-ggml","diffusion-cpp","embed-llamacpp","fabric","llm-llamacpp","model-fit","ocr-ggml","onnx","translation-nmtcpp","tts-ggml","vla"]'
           expected=$(jq -cn --argjson a "$CHANGED_PACKAGES" --argjson b "$PREBUILD_KEYS" '[ $a[] | select( . as $x | $b | index($x) ) ]')
           count=$(echo "$expected" | jq 'length')
-          echo "Head SHA:          $HEAD_SHA"
-          echo "Changed packages:  $CHANGED_PACKAGES"
+          echo "Head SHA:           $HEAD_SHA"
+          echo "Changed packages:   $CHANGED_PACKAGES"
           echo "Prebuilds to check: $expected"
           if [ "$count" -eq 0 ]; then
             echo "No prebuild-bearing package changed - build not applicable, passing."
@@ -199,7 +203,21 @@ jobs:
             failed=""
             for pkg in $(echo "$expected" | jq -r '.[]'); do
               ctx="qvac/prebuild-${pkg}"
+              # Start time of the newest on-pr-<pkg> run for THIS head SHA. Order by
+              # created_at (always present, even before a run starts) and read its
+              # run_started_at: while the newest run is still queued this is empty,
+              # so the gate keeps waiting instead of trusting a superseded status.
+              run_started=$(gh api \
+                "repos/${REPO}/actions/workflows/on-pr-${pkg}.yml/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=50" \
+                --jq '[.workflow_runs[]] | sort_by(.created_at) | last | .run_started_at // ""')
               state=$(echo "$statuses" | jq -r --arg c "$ctx" 'map(select(.context == $c)) | .[0].state // ""')
+              updated=$(echo "$statuses" | jq -r --arg c "$ctx" 'map(select(.context == $c)) | .[0].updated_at // ""')
+              # Trust the status only if it post-dates the newest run's start (ISO
+              # timestamps compare lexicographically). Otherwise it is stale/absent.
+              if [ -z "$run_started" ] || [ -z "$updated" ] || [[ "$updated" < "$run_started" ]]; then
+                pending="${pending} ${ctx}"
+                continue
+              fi
               case "$state" in
                 success) ;;
                 failure | error) failed="${failed} ${ctx}" ;;
@@ -211,11 +229,11 @@ jobs:
               exit 1
             fi
             if [ -z "$pending" ]; then
-              echo "All required prebuild statuses succeeded."
+              echo "All required prebuild statuses succeeded (fresh vs the latest on-pr run)."
               exit 0
             fi
             if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "::error title=Prebuild verification timed out::No terminal prebuild status after timeout for:${pending}"
+              echo "::error title=Prebuild verification timed out::No fresh terminal prebuild status after timeout for:${pending}"
               exit 1
             fi
             echo "Waiting on prebuild status(es):${pending} - re-checking in 30s"
