@@ -5,6 +5,7 @@ import * as os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import {
   runExampleIsolated,
+  parseIsolationResult,
   siblingModules,
   checkPythonExamples,
   pythonAvailable,
@@ -13,6 +14,34 @@ import {
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEBSITE_DIR = path.resolve(TESTS_DIR, '..')
 const MONOREPO_ROOT = path.resolve(WEBSITE_DIR, '../..')
+
+// ---------------------------------------------------------------------------
+// The stdout contract between run_isolated_example.py and this side
+// ---------------------------------------------------------------------------
+
+describe('parseIsolationResult', () => {
+  it('accepts the kinds the python runner emits', () => {
+    expect(parseIsolationResult('{"ok": true}')).toEqual({ ok: true })
+    expect(
+      parseIsolationResult('{"ok": false, "kind": "missing-module", "module": "_common"}'),
+    ).toMatchObject({ ok: false, kind: 'missing-module', module: '_common' })
+    expect(parseIsolationResult('{"ok": false, "kind": "syntax-error"}')).toMatchObject({
+      kind: 'syntax-error',
+    })
+  })
+
+  it('rejects a kind the two sides disagree on', () => {
+    // Guards the rename that would otherwise pass through silently.
+    const result = parseIsolationResult('{"ok": false, "kind": "missing-import"}')
+    expect(result.kind).toBe('exec-error')
+    expect(result.detail).toContain('out of sync')
+  })
+
+  it('rejects non-JSON and malformed payloads', () => {
+    expect(parseIsolationResult('Traceback...').kind).toBe('exec-error')
+    expect(parseIsolationResult('{"kind": "missing-module"}').kind).toBe('exec-error')
+  })
+})
 
 // ---------------------------------------------------------------------------
 // The isolation runner, exercised against synthetic examples
@@ -107,6 +136,37 @@ describe.runIf(pythonAvailable())('runExampleIsolated', () => {
         const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
         expect(result.kind).toBe('missing-module')
         expect(result.module).toBe('helpers')
+      },
+    )
+  })
+
+  it('catches a sibling import deferred into a function body', async () => {
+    // Never executes, since main() is not run — so the module-level run alone
+    // would pass this. Caught from the compiled code instead.
+    await withExamples(
+      {
+        '_common.py': 'def print_progress(p):\n    pass\n',
+        'bad.py':
+          'import sys\n\n' +
+          'async def main():\n    from _common import print_progress\n    return 0\n',
+      },
+      async (dir, siblings) => {
+        const result = await runExampleIsolated(path.join(dir, 'bad.py'), siblings)
+        expect(result.ok).toBe(false)
+        expect(result.kind).toBe('missing-module')
+        expect(result.module).toBe('_common')
+      },
+    )
+  })
+
+  it('allows a deferred import of an installed package', async () => {
+    // vla.py defers `import numpy` into main(); that must stay legal.
+    await withExamples(
+      {
+        'ok.py': 'import sys\n\n' + 'async def main():\n    import numpy as np\n    return 0\n',
+      },
+      async (dir, siblings) => {
+        expect(await runExampleIsolated(path.join(dir, 'ok.py'), siblings)).toEqual({ ok: true })
       },
     )
   })

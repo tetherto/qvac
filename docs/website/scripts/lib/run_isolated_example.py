@@ -20,6 +20,7 @@ Output: {"ok": true} or {"ok": false, "kind": ..., "module": ..., "detail": ...}
 
 from __future__ import annotations
 
+import dis
 import importlib.abc
 import importlib.machinery
 import importlib.util
@@ -74,6 +75,30 @@ class _StubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         return None
 
 
+def _imported_names(code: types.CodeType) -> set[str]:
+    """Every module name the compiled file imports, at any nesting depth.
+
+    Running the module only exercises top-level imports. An import inside a
+    function body never executes here, because the `__main__` entry point is
+    deliberately not run — so `def main(): from _common import x` would
+    otherwise pass. This reads the operands the compiler emitted, so nesting
+    and control flow do not hide anything.
+    """
+    names: set[str] = set()
+    pending = [code]
+
+    while pending:
+        current = pending.pop()
+        for instr in dis.get_instructions(current):
+            if instr.opname == "IMPORT_NAME" and instr.argval:
+                names.add(str(instr.argval).split(".")[0])
+        for const in current.co_consts:
+            if isinstance(const, types.CodeType):
+                pending.append(const)
+
+    return names
+
+
 def main() -> int:
     target, never_stub_json = sys.argv[1], sys.argv[2]
     never_stub = set(json.loads(never_stub_json))
@@ -113,6 +138,26 @@ def main() -> int:
                 "kind": "exec-error",
                 "module": "",
                 "detail": f"{type(err).__name__}: {err}",
+            },
+            sys.stdout,
+        )
+        return 0
+
+    # The module loaded, so its top-level imports are clean. Deferred ones
+    # never ran; catch those from the compiled code.
+    with open(target, encoding="utf-8") as handle:
+        code = compile(handle.read(), target, "exec")
+
+    own_name = target.rsplit("/", 1)[-1][: -len(".py")]
+    deferred = sorted((_imported_names(code) & never_stub) - {own_name})
+
+    if deferred:
+        json.dump(
+            {
+                "ok": False,
+                "kind": "missing-module",
+                "module": deferred[0],
+                "detail": f"deferred import of {deferred[0]!r}",
             },
             sys.stdout,
         )

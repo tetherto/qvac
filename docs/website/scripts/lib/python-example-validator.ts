@@ -32,11 +32,54 @@ const ISOLATION_RUNNER = path.join(LIB_DIR, 'run_isolated_example.py')
 /** Example directories the docs draw Python from, relative to the repo root. */
 export const PYTHON_EXAMPLE_DIRS = ['packages/sdk-python/examples']
 
+/**
+ * Failure kinds. `missing-module` and `syntax-error` are produced only by
+ * `run_isolated_example.py` and arrive over the child's stdout; `exec-error`
+ * is the one this side raises, when the child itself could not be run.
+ * Kept in sync by `parseIsolationResult`, which rejects anything else.
+ */
+export const ISOLATION_KINDS = ['missing-module', 'syntax-error', 'exec-error'] as const
+
+export type IsolationKind = (typeof ISOLATION_KINDS)[number]
+
 export interface IsolationResult {
   ok: boolean
-  kind?: 'missing-module' | 'syntax-error' | 'exec-error'
+  kind?: IsolationKind
   module?: string
   detail?: string
+}
+
+/**
+ * Validate the child's stdout instead of casting it.
+ *
+ * The pass/fail contract lives in two languages; an unchecked cast would let a
+ * renamed kind flow through as a valid-looking result and quietly degrade the
+ * failure message rather than failing.
+ */
+export function parseIsolationResult(raw: string): IsolationResult {
+  let payload: unknown
+  try {
+    payload = JSON.parse(raw)
+  } catch {
+    return { ok: false, kind: 'exec-error', detail: `isolation runner emitted non-JSON: ${raw.slice(0, 200)}` }
+  }
+
+  if (typeof payload !== 'object' || payload === null || typeof (payload as IsolationResult).ok !== 'boolean') {
+    return { ok: false, kind: 'exec-error', detail: `isolation runner emitted an unexpected payload: ${raw.slice(0, 200)}` }
+  }
+
+  const result = payload as IsolationResult
+  if (result.ok) return { ok: true }
+
+  if (!result.kind || !ISOLATION_KINDS.includes(result.kind)) {
+    return {
+      ok: false,
+      kind: 'exec-error',
+      detail: `isolation runner reported unknown kind ${JSON.stringify(result.kind)} — python and TypeScript are out of sync`,
+    }
+  }
+
+  return result
 }
 
 export interface PythonExampleFinding {
@@ -119,7 +162,7 @@ export async function runExampleIsolated(
       { cwd: dir, stdio: 'pipe', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
     ).toString()
 
-    return JSON.parse(raw) as IsolationResult
+    return parseIsolationResult(raw)
   } catch (err: unknown) {
     const e = err as { stderr?: Buffer; message?: string }
     const detail = e.stderr?.toString().trim() || e.message || 'unknown error'
