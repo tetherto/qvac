@@ -171,6 +171,48 @@ test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
   )
 })
 
+test('CosyVoice3: malformed instruct values rejected instead of silent zero-shot', (t) => {
+  // Presence, not truthiness: a set-but-empty or null control is malformed and
+  // must throw rather than degrade to zero-shot synthesis.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: '' } } }),
+    /Invalid CosyVoice instruct/,
+    'empty dialect string throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: null } } }),
+    /Invalid CosyVoice instruct/,
+    'null dialect throws'
+  )
+  // Non-object structured values would slip past the presence checks.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: ['cantonese'] } }),
+    /expected a string or a control object/,
+    'array instruct throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: 42 } }),
+    /expected a string or a control object/,
+    'numeric instruct throws'
+  )
+})
+
+test('CosyVoice3: undefined control fields are skipped, not malformed', (t) => {
+  // A field explicitly set to undefined means "not selected", so it is skipped
+  // and the next control by precedence takes effect (zero-shot when none do).
+  const skipped = createMockedCosyvoiceModel({
+    extra: { instruct: { dialect: undefined, emotion: 'happy' } }
+  })
+  t.is(
+    skipped._buildTtsParams().instruct,
+    '请非常开心地说一句话。',
+    'undefined dialect falls through to emotion'
+  )
+
+  const empty = createMockedCosyvoiceModel({ extra: { instruct: { dialect: undefined } } })
+  t.absent(empty._buildTtsParams().instruct, 'all-undefined instruct -> zero-shot, field absent')
+})
+
 test('CosyVoice3: LavaSR enhancer/denoiser accepted and forwarded to the addon', (t) => {
   const model = createMockedCosyvoiceModel({
     files: {

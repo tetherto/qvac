@@ -257,7 +257,12 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
      * latency.
      */
     streamFirstChunkTokens?: number;
-    /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
+    /**
+     * CosyVoice3-only: left-context speech tokens intended to be carried into each
+     * streaming chunk. Reserved / not yet effective — the pinned tts-cpp engine
+     * accepts the value but does not read it (true low-latency token2wav streaming
+     * is still reserved), so setting it currently has no effect.
+     */
     streamLeftContextTokens?: number;
     /**
      * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet

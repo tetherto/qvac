@@ -148,6 +148,16 @@ function renderCosyvoiceInstruct(
 ): string {
   if (instruct == null) return "";
   if (typeof instruct === "string") return instruct.trim();
+  // A JS caller can pass a number, array, or other non-object where the type
+  // says CosyvoiceInstruct. Those would slip past the presence checks below and
+  // silently degrade to zero-shot, so reject anything that is not a plain
+  // (non-array) object.
+  if (typeof instruct !== "object" || Array.isArray(instruct)) {
+    throw new Error(
+      "Invalid CosyVoice instruct: expected a string or a control object " +
+        "(e.g. { dialect: 'cantonese' }).",
+    );
+  }
   // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)
   // before the precedence chain, which would otherwise fall through to "".
   const supportedControls = ["dialect", "emotion", "speed", "volume", "style"];
@@ -160,23 +170,28 @@ function renderCosyvoiceInstruct(
         "Valid keys: dialect, emotion, speed, volume, style.",
     );
   }
-  if (instruct.dialect) {
+  // Presence, not truthiness: a control that is set to a malformed value
+  // (`{ dialect: '' }`, `{ dialect: null }`) must raise via
+  // cosyvoiceInstructValue rather than fall through to zero-shot. `undefined`
+  // means the field was not set, so it is skipped. Precedence: dialect >
+  // emotion > speed > volume > style.
+  if (instruct.dialect !== undefined) {
     return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
   }
-  if (instruct.emotion) {
+  if (instruct.emotion !== undefined) {
     return cosyvoiceInstructValue(
       COSYVOICE_EMOTIONS,
       instruct.emotion,
       "emotion",
     );
   }
-  if (instruct.speed) {
+  if (instruct.speed !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
   }
-  if (instruct.volume) {
+  if (instruct.volume !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
   }
-  if (instruct.style) {
+  if (instruct.style !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_STYLES, instruct.style, "style");
   }
   return "";
@@ -417,7 +432,12 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
    * latency.
    */
   streamFirstChunkTokens?: number;
-  /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
+  /**
+   * CosyVoice3-only: left-context speech tokens intended to be carried into each
+   * streaming chunk. Reserved / not yet effective — the pinned tts-cpp engine
+   * accepts the value but does not read it (true low-latency token2wav streaming
+   * is still reserved), so setting it currently has no effect.
+   */
   streamLeftContextTokens?: number;
   /**
    * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet
