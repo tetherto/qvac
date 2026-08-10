@@ -162,22 +162,12 @@ jobs:
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ matrix.path }}
 
-  # Merge Guard VERIFIES that prebuilds passed - it must NOT trigger them
-  # (Gianfranco's requirement). Building is owned by the label-gated
-  # on-pr-<pkg>.yml flow, which keeps the native-change detection + artifact-reuse
-  # optimisations. Each prebuild-bearing on-pr-<pkg>.yml publishes a
-  # `qvac/prebuild-<pkg>` commit status on the PR head SHA (success when the
-  # prebuild passed OR was legitimately skipped/reused; failure only on a real
-  # prebuild failure). This job reads those statuses for the changed packages and
-  # mirrors them into build-status. It compiles nothing and inherits no secrets.
-  #
-  # PREBUILD_KEYS must list every package whose on-pr-<pkg>.yml carries the
-  # publish-prebuild-status job (i.e. every prebuild-bearing addon in `changes`).
+  # Verifies prebuilds without triggering them: reads the qvac/prebuild-<pkg>
+  # commit status each prebuild-bearing on-pr-<pkg>.yml posts on the PR head SHA.
   verify-prebuilds:
     needs: [authorize, changes, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
-    # Generous: the gate stays pending until the on-pr prebuild it mirrors finishes.
     timeout-minutes: 180
     permissions:
       contents: read

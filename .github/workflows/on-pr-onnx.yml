@@ -288,12 +288,7 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   publish-prebuild-status:
-    # Publishes the qvac/prebuild-onnx commit status that Merge Guard
-    # (pr-gate-merge.yml) reads to VERIFY prebuilds without triggering them.
-    # Mirrors this flow's own build-status: success when the prebuild passed OR was
-    # legitimately skipped (no prebuild label) OR reused an artifact; failure only
-    # on a real prebuild failure. Keep the context name in sync with PREBUILD_KEYS
-    # in pr-gate-merge.yml.
+    # Posts qvac/prebuild-onnx for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
     needs: [prebuild, prebuild-artifact-reuse]
     if: always() && !cancelled() && github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
