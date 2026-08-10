@@ -64,6 +64,11 @@ public:
   // Cross-engine conditioning, legal on both the config and the job object.
   tts_cpp::cosyvoice::VoiceControls readVoiceControls(
       qvac_lib_inference_addon_cpp::js::Object obj, js_env_t* env);
+
+  // Supertonic takes its conditioning at construction only; reject a job
+  // object that carries some, rather than dropping it on the way to the engine.
+  void assertNoPerCallSupertonicControls(
+      qvac_lib_inference_addon_cpp::js::Object obj, js_env_t* env);
 };
 
 }

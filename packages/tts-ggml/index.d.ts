@@ -197,15 +197,19 @@ interface LavaSRDenoiserOptions {
     denoiserPath?: string;
 }
 /**
- * Cross-engine conditioning. Accepted identically at construction, on
- * `reload()`, and per call, on every engine that supports them. A value outside
- * the canonical vocabulary, or outside the engine's supported subset, throws
- * naming that engine's set -- nothing is silently degraded.
+ * Cross-engine conditioning. Accepted at construction and on `reload()` by
+ * every engine that supports them, and per call by Parler and CosyVoice3. A
+ * value outside the canonical vocabulary, outside the engine's supported
+ * subset, or on a channel the engine cannot change per call, throws naming the
+ * alternative -- nothing is silently degraded.
  */
 interface TTSConditioningFields {
     /** Speaking style. Parler: all 12. CosyVoice3: anger|happy|neutral|sad. */
     emotion?: Emotion;
-    /** Speaking rate. Parler / CosyVoice3 / Supertonic. */
+    /**
+     * Speaking rate. Parler / CosyVoice3 / Supertonic. Supertonic conditions its
+     * engine at construction, so its pace only moves there or via `reload()`.
+     */
     pace?: Pace;
 }
 /**
@@ -663,6 +667,18 @@ declare class TTSGgml {
     private _handleAddonStats;
     cancel(): Promise<void>;
     private _failAndClearActiveResponse;
+    /** Everything reload() may overwrite, so a rejected reload can undo itself. */
+    private _captureReloadableState;
+    private _restoreReloadableState;
+    private _applyReloadableRuntimeConfig;
+    private _applyReloadableConditioning;
+    private _applyReloadableParlerConfig;
+    /**
+     * Apply the new configuration and build the native parameters from it. A
+     * rejected value leaves the instance exactly as it was, so a later partial
+     * reload is not validated against state the caller never accepted.
+     */
+    private _applyReloadableConfig;
     reload(newConfig?: Record<string, unknown>): Promise<void>;
     /**
      * The voice a reload lands on. Same rule as _mergeAudio8Voice and
