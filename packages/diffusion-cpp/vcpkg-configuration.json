@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "d1b2497b1707baf7bd1f352eb08097c7f9d5cfd9",
+    "reference": "feature/ltx-lora-registry-pins",
+    "baseline": "acb148eb19c41570bf78a6099503779c9496dd1c",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
