@@ -12,6 +12,12 @@ const error_1 = require("./lib/error");
 Object.defineProperty(exports, "QvacErrorAddonOcrGgml", { enumerable: true, get: function () { return error_1.QvacErrorAddonOcrGgml; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
 /**
+ * Placeholder forwarded to the native addon when the language-agnostic DocTR
+ * pipeline is used without an explicit `langList` (the native configuration
+ * parser requires the property to be present, but DocTR never reads it).
+ */
+const DOCTR_INTERNAL_LANG_LIST = ["en"];
+/**
  * GGML-backed OCR implementation.
  *
  * Public surface matches `@qvac/ocr-onnx` so a downstream caller can switch
@@ -97,24 +103,30 @@ class OcrGgml {
                 adds: "pathRecognizer",
             });
         }
-        if (!Array.isArray(this.params.langList) || this.params.langList.length === 0) {
+        // DocTR is language-agnostic and ignores `langList`, so the parameter is
+        // optional for that pipeline; the native addon still requires the property
+        // to be present, so forward an internal placeholder when it is omitted.
+        // For EasyOCR the list is required here, but which languages are actually
+        // supported is validated by the native pipeline (against its language
+        // registry and the loaded recognizer's character set), not in JS.
+        const isDoctr = this.params.pipelineType === "doctr";
+        if (this.params.langList === undefined && !isDoctr) {
             throw new error_1.QvacErrorAddonOcrGgml({
                 code: error_1.ERR_CODES.MISSING_REQUIRED_PARAMETER,
                 adds: "langList (non-empty array)",
             });
         }
-        const SUPPORTED_LANGUAGES = new Set(["en"]);
-        const hasSupported = this.params.langList.some((l) => SUPPORTED_LANGUAGES.has(l));
-        if (!hasSupported) {
+        if (this.params.langList !== undefined &&
+            (!Array.isArray(this.params.langList) || this.params.langList.length === 0)) {
             throw new error_1.QvacErrorAddonOcrGgml({
-                code: error_1.ERR_CODES.UNSUPPORTED_LANGUAGE,
-                adds: `none of the requested languages are supported: ${this.params.langList.join(", ")}`,
+                code: error_1.ERR_CODES.MISSING_REQUIRED_PARAMETER,
+                adds: "langList (non-empty array)",
             });
         }
         const configurationParams = {
             pathDetector: this.params.pathDetector,
             pathRecognizer: this.params.pathRecognizer,
-            langList: this.params.langList,
+            langList: this.params.langList ?? DOCTR_INTERNAL_LANG_LIST,
         };
         // Forward optional config knobs only when explicitly set so the C++
         // defaults (in OcrConfig) win otherwise.
@@ -141,7 +153,21 @@ class OcrGgml {
                 : path.join(__dirname, "prebuilds");
         this.logger.info("Creating ocr-ggml addon");
         this.addon = this._createAddon(configurationParams);
-        await this.addon.activate();
+        try {
+            await this.addon.activate();
+        }
+        catch (err) {
+            // A failed activation must not leak the native instance or keep the
+            // global C++ -> JS logger bridge registered; destroy() releases both.
+            try {
+                await this.addon.destroy();
+            }
+            catch (cleanupErr) {
+                this.logger.warn("ocr-ggml: cleanup after failed activation failed: " + (0, error_1.errorMessage)(cleanupErr));
+            }
+            this.addon = null;
+            throw err;
+        }
         this.state.configLoaded = true;
         this.state.weightsLoaded = true;
         // Capture the backend device the C++ pipeline actually resolved (Vulkan vs

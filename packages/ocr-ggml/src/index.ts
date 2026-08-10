@@ -30,6 +30,13 @@ import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
  */
 export type OcrGgmlPipelineType = "easyocr" | "doctr";
 
+/**
+ * Placeholder forwarded to the native addon when the language-agnostic DocTR
+ * pipeline is used without an explicit `langList` (the native configuration
+ * parser requires the property to be present, but DocTR never reads it).
+ */
+const DOCTR_INTERNAL_LANG_LIST = ["en"];
+
 export interface OcrGgmlParams {
   /**
    * Path to the detector GGUF file.
@@ -43,8 +50,13 @@ export interface OcrGgmlParams {
    *   - doctr:   doctr recognition model (e.g. `crnn_mobilenet_v3_small.gguf`)
    */
   pathRecognizer: string;
-  /** Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`). */
-  langList: string[];
+  /**
+   * Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`).
+   * Required for `easyocr` (validated by the native pipeline against the
+   * loaded recognizer's character set); optional for `doctr`, which is
+   * language-agnostic and ignores it.
+   */
+  langList?: string[];
 
   /** Pipeline backing the addon. Default: `'easyocr'`. */
   pipelineType?: OcrGgmlPipelineType;
@@ -152,7 +164,8 @@ export interface RuntimeStats {
   /** Number of detected boxes (aligned + unaligned). */
   numBoxes: number;
   /**
-   * Whether inference ran on a GPU (Vulkan) device (`1`) or the CPU (`0`).
+   * Whether inference ran on a GPU device (`1`) — Vulkan, Metal, or OpenCL —
+   * or on the CPU (`0`).
    * `RuntimeStats` values are numeric only, so this flag is the in-stats signal
    * for the selected backend; richer string detail (name, fallback reason) is
    * available via {@link OcrGgml.getBackendInfo}.
@@ -267,26 +280,33 @@ export class OcrGgml {
         adds: "pathRecognizer",
       });
     }
-    if (!Array.isArray(this.params.langList) || this.params.langList.length === 0) {
+    // DocTR is language-agnostic and ignores `langList`, so the parameter is
+    // optional for that pipeline; the native addon still requires the property
+    // to be present, so forward an internal placeholder when it is omitted.
+    // For EasyOCR the list is required here, but which languages are actually
+    // supported is validated by the native pipeline (against its language
+    // registry and the loaded recognizer's character set), not in JS.
+    const isDoctr = this.params.pipelineType === "doctr";
+    if (this.params.langList === undefined && !isDoctr) {
+      throw new QvacErrorAddonOcrGgml({
+        code: ERR_CODES.MISSING_REQUIRED_PARAMETER,
+        adds: "langList (non-empty array)",
+      });
+    }
+    if (
+      this.params.langList !== undefined &&
+      (!Array.isArray(this.params.langList) || this.params.langList.length === 0)
+    ) {
       throw new QvacErrorAddonOcrGgml({
         code: ERR_CODES.MISSING_REQUIRED_PARAMETER,
         adds: "langList (non-empty array)",
       });
     }
 
-    const SUPPORTED_LANGUAGES = new Set(["en"]);
-    const hasSupported = this.params.langList.some((l) => SUPPORTED_LANGUAGES.has(l));
-    if (!hasSupported) {
-      throw new QvacErrorAddonOcrGgml({
-        code: ERR_CODES.UNSUPPORTED_LANGUAGE,
-        adds: `none of the requested languages are supported: ${this.params.langList.join(", ")}`,
-      });
-    }
-
     const configurationParams: OcrGgmlConfigurationParams = {
       pathDetector: this.params.pathDetector,
       pathRecognizer: this.params.pathRecognizer,
-      langList: this.params.langList,
+      langList: this.params.langList ?? DOCTR_INTERNAL_LANG_LIST,
     };
 
     // Forward optional config knobs only when explicitly set so the C++
@@ -316,7 +336,21 @@ export class OcrGgml {
 
     this.logger.info("Creating ocr-ggml addon");
     this.addon = this._createAddon(configurationParams);
-    await this.addon.activate();
+    try {
+      await this.addon.activate();
+    } catch (err) {
+      // A failed activation must not leak the native instance or keep the
+      // global C++ -> JS logger bridge registered; destroy() releases both.
+      try {
+        await this.addon.destroy();
+      } catch (cleanupErr) {
+        this.logger.warn(
+          "ocr-ggml: cleanup after failed activation failed: " + errorMessage(cleanupErr),
+        );
+      }
+      this.addon = null;
+      throw err;
+    }
     this.state.configLoaded = true;
     this.state.weightsLoaded = true;
 
