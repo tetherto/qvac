@@ -121,7 +121,7 @@ jobs:
       # Package dir names mostly match the filter/job key (packages/<key>),
       # except vla (packages/vla-ggml) - mapped explicitly here so
       # sanity-checks' workdir is always correct. Two outputs: a flat name
-      # list (for prebuilds-caller's `contains(...)` checks) and a
+      # list (intersected with PREBUILD_KEYS in verify-prebuilds) and a
       # name+path list (for the sanity-checks matrix's workdir).
       - name: Build package lists
         id: pkglist
@@ -162,20 +162,75 @@ jobs:
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ matrix.path }}
 
-  prebuilds-caller:
+  # Merge Guard VERIFIES that prebuilds passed - it must NOT trigger them
+  # (Gianfranco's requirement). Building is owned by the label-gated
+  # on-pr-<pkg>.yml flow, which keeps the native-change detection + artifact-reuse
+  # optimisations. Each prebuild-bearing on-pr-<pkg>.yml publishes a
+  # `qvac/prebuild-<pkg>` commit status on the PR head SHA (success when the
+  # prebuild passed OR was legitimately skipped/reused; failure only on a real
+  # prebuild failure). This job reads those statuses for the changed packages and
+  # mirrors them into build-status. It compiles nothing and inherits no secrets.
+  #
+  # PREBUILD_KEYS must list every package whose on-pr-<pkg>.yml carries the
+  # publish-prebuild-status job (i.e. every prebuild-bearing addon in `changes`).
+  verify-prebuilds:
     needs: [authorize, changes, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    # Generous: the gate stays pending until the on-pr prebuild it mirrors finishes.
+    timeout-minutes: 180
     permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/prebuilds-caller.yml
-    secrets: inherit
-    with:
-      changed-packages: ${{ needs.changes.outputs.packages || '[]' }}
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+      contents: read
+      statuses: read
+    steps:
+      - name: Verify addon prebuild statuses on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
+        run: |
+          set -euo pipefail
+          # Packages whose on-pr-<pkg>.yml publishes a qvac/prebuild-<pkg> status.
+          PREBUILD_KEYS='["asr-ggml","bci-whispercpp","classification-ggml","diffusion-cpp","embed-llamacpp","fabric","llm-llamacpp","model-fit","ocr-ggml","onnx","translation-nmtcpp","tts-ggml","vla"]'
+          expected=$(jq -cn --argjson a "$CHANGED_PACKAGES" --argjson b "$PREBUILD_KEYS" '[ $a[] | select( . as $x | $b | index($x) ) ]')
+          count=$(echo "$expected" | jq 'length')
+          echo "Head SHA:          $HEAD_SHA"
+          echo "Changed packages:  $CHANGED_PACKAGES"
+          echo "Prebuilds to check: $expected"
+          if [ "$count" -eq 0 ]; then
+            echo "No prebuild-bearing package changed - build not applicable, passing."
+            exit 0
+          fi
+          deadline=$(( $(date +%s) + 180 * 60 ))
+          while :; do
+            statuses=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" --paginate)
+            pending=""
+            failed=""
+            for pkg in $(echo "$expected" | jq -r '.[]'); do
+              ctx="qvac/prebuild-${pkg}"
+              state=$(echo "$statuses" | jq -r --arg c "$ctx" 'map(select(.context == $c)) | .[0].state // ""')
+              case "$state" in
+                success) ;;
+                failure | error) failed="${failed} ${ctx}" ;;
+                *) pending="${pending} ${ctx}" ;;
+              esac
+            done
+            if [ -n "$failed" ]; then
+              echo "::error title=Prebuild has not returned success::Failing prebuild status(es):${failed}"
+              exit 1
+            fi
+            if [ -z "$pending" ]; then
+              echo "All required prebuild statuses succeeded."
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error title=Prebuild verification timed out::No terminal prebuild status after timeout for:${pending}"
+              exit 1
+            fi
+            echo "Waiting on prebuild status(es):${pending} - re-checking in 30s"
+            sleep 30
+          done
 
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
@@ -189,7 +244,7 @@ jobs:
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
   qvac-merge-guard:
-    needs: [authorize, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
+    needs: [authorize, changes, sanity-checks, verify-prebuilds, sdk-pod-checks]
     if: |
       always() && !cancelled() &&
       (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -199,5 +254,5 @@ jobs:
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-      build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
+      build-status: ${{ needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped' }}
       general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}

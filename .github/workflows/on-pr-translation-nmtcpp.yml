@@ -337,6 +337,44 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
+  publish-prebuild-status:
+    # Publishes the qvac/prebuild-translation-nmtcpp commit status that Merge Guard
+    # (pr-gate-merge.yml) reads to VERIFY prebuilds without triggering them.
+    # Mirrors this flow's own build-status: success when the prebuild passed OR was
+    # legitimately skipped (no prebuild label) OR reused an artifact; failure only
+    # on a real prebuild failure. Keep the context name in sync with PREBUILD_KEYS
+    # in pr-gate-merge.yml.
+    needs: [prebuild, prebuild-artifact-reuse]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREBUILD_RESULT: ${{ needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HEAD_SHA" ]; then
+            echo "No PR head SHA in context; nothing to publish."
+            exit 0
+          fi
+          if [ "$PREBUILD_RESULT" = "success" ] || [ "$PREBUILD_RESULT" = "skipped" ] || [ "$REUSE_HIT" = "true" ]; then
+            state=success
+          else
+            state=failure
+          fi
+          gh api -X POST "repos/${REPO}/statuses/${HEAD_SHA}" \
+            -f state="$state" \
+            -f context="qvac/prebuild-translation-nmtcpp" \
+            -f description="prebuild ${state}" >/dev/null
+          echo "Posted qvac/prebuild-translation-nmtcpp = $state on $HEAD_SHA"
+
   merge-guard:
     needs: [authorize, changes, ci-router, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
     if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')

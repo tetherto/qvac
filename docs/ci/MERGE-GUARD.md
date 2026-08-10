@@ -30,9 +30,9 @@ flowchart LR
     AUTH[authorize] --> QMG
     AUTH --> CHANGES[changes<br/>dorny/paths-filter, per-package]
     CHANGES --> SC[sanity-checks<br/>matrix]
-    CHANGES --> PC[prebuilds-caller<br/>per-package caller]
+    CHANGES --> VP[verify-prebuilds<br/>reads on-pr prebuild statuses]
     SC --> QMG
-    PC --> QMG
+    VP --> QMG
     SDK[sdk-pod-checks<br/>self-detecting] --> QMG
     QMG -->|uses| PP[public-pr.yml<br/>job: validate-pr]
     PP -->|check name| CHK["qvac-merge-guard / validate-pr"]
@@ -42,7 +42,7 @@ The final job in `pr-gate-merge.yml`:
 
 ```yaml
 qvac-merge-guard:
-  needs: [authorize, fork-approval, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
+  needs: [authorize, fork-approval, changes, sanity-checks, verify-prebuilds, sdk-pod-checks]
   if: |
     always() && !cancelled() &&
     (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -52,9 +52,15 @@ qvac-merge-guard:
   uses: ./.github/workflows/public-pr.yml
   with:
     sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-    build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
+    build-status: ${{ needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped' }}
     general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}
 ```
+
+### `verify-prebuilds`: Merge Guard checks prebuilds, it does not trigger them
+
+`build-status` comes from `verify-prebuilds`, which **reads** rather than **runs** prebuilds. Building is owned by the label-gated `on-pr-<pkg>.yml` flows (so their native-change detection + artifact-reuse optimisations are preserved and prebuilds don't run on every PR). Each prebuild-bearing `on-pr-<pkg>.yml` has a `publish-prebuild-status` job that posts a `qvac/prebuild-<pkg>` commit status on the PR head SHA — `success` when the prebuild passed *or* was legitimately skipped (no prebuild label) *or* reused an artifact, `failure` only on a real prebuild failure. `verify-prebuilds` intersects the changed packages with its `PREBUILD_KEYS` allowlist and, for each, waits for and mirrors that commit status (fail-closed on timeout). It compiles nothing and inherits no secrets. When you add a new prebuild-bearing addon, add its key to `PREBUILD_KEYS` and give its `on-pr-<pkg>.yml` a `publish-prebuild-status` job.
+
+> **Historical note:** an earlier design had Merge Guard call a `prebuilds-caller.yml` reusable workflow that built every changed package itself. That file was removed — it double-ran prebuilds (once here, once in the label-gated `on-pr` flow) and bypassed the reuse optimisations. The caller-workflow *pattern* described below is still a valid general shape; `prebuilds-caller.yml` is just no longer a live instance of it.
 
 `public-pr.yml`'s single job (`validate-pr`) fails the check if any of the boolean inputs it receives is `false` (sanity checks, builds, integration tests, etc.). External fork secret-bearing jobs are gated upstream by the `fork-ci` environment (`fork-approval` job); see [`LABELS.md`](LABELS.md). Its check name — `qvac-merge-guard / validate-pr` — is the *only* thing the ruleset requires. It also already accepts two boolean inputs `pr-gate-merge.yml` doesn't use yet: `integration-tests-status` and `build-with-model-status` — see the caller-workflow pattern below for how to use the spare `integration-tests-status` slot instead of inventing a new one.
 
