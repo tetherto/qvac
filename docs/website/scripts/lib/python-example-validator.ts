@@ -1,23 +1,15 @@
 /**
- * Prove every Python example runs on its own.
+ * Report whether the Python examples the docs embed still run standalone.
  *
- * The docs embed these files verbatim and present each one as something a
- * reader can copy into an empty directory and run. This checks that by doing
- * it: each example is copied alone into a temp directory and executed there,
- * so the examples directory is off `sys.path` and a sibling helper cannot
- * resolve.
+ * This is a convenience view for `test:examples`, not the enforcing check. The
+ * guard lives with the files it protects, in
+ * `packages/sdk-python/tests/test_examples_standalone.py`, because
+ * `docs-website-pr-checks.yml` only triggers on `docs/website/**` and would
+ * miss a PR that touches nothing but the examples.
  *
- * That is the bug this guards against. `from _common import print_progress`
- * resolves in-repo, where the script's own directory is on `sys.path`, and
- * raises ModuleNotFoundError for everyone who copies the block out.
- *
- * Installed packages are stubbed inside the child process, so the run needs no
- * SDK, no worker and no model download, and a missing third-party package
- * cannot mask a repo-local import further down the file.
- *
- * Every `.py` in the directory is checked, not just the ones a page embeds
- * today — the contract belongs to the directory, and a file embedded tomorrow
- * is already covered.
+ * Both call the same runner, so there is one implementation of the isolation
+ * logic: each example is copied alone into a temp directory and executed there,
+ * with the examples directory off `sys.path`.
  */
 
 import * as fs from 'fs/promises'
@@ -27,17 +19,14 @@ import { execFileSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
 const LIB_DIR = path.dirname(fileURLToPath(import.meta.url))
-const ISOLATION_RUNNER = path.join(LIB_DIR, 'run_isolated_example.py')
+const MONOREPO_ROOT_FROM_LIB = path.resolve(LIB_DIR, '..', '..', '..', '..')
+
+/** Canonical isolation runner, owned by the Python package. */
+export const RUNNER_REL_PATH = 'packages/sdk-python/scripts/run_isolated_example.py'
 
 /** Example directories the docs draw Python from, relative to the repo root. */
 export const PYTHON_EXAMPLE_DIRS = ['packages/sdk-python/examples']
 
-/**
- * Failure kinds. `missing-module` and `syntax-error` are produced only by
- * `run_isolated_example.py` and arrive over the child's stdout; `exec-error`
- * is the one this side raises, when the child itself could not be run.
- * Kept in sync by `parseIsolationResult`, which rejects anything else.
- */
 export const ISOLATION_KINDS = ['missing-module', 'syntax-error', 'exec-error'] as const
 
 export type IsolationKind = (typeof ISOLATION_KINDS)[number]
@@ -49,8 +38,15 @@ export interface IsolationResult {
   detail?: string
 }
 
+export interface PythonExampleFinding {
+  /** Path relative to the monorepo root. */
+  file: string
+  kind: IsolationKind
+  detail: string
+}
+
 /**
- * Validate the child's stdout instead of casting it.
+ * Validate the runner's stdout instead of casting it.
  *
  * The pass/fail contract lives in two languages; an unchecked cast would let a
  * renamed kind flow through as a valid-looking result and quietly degrade the
@@ -61,11 +57,23 @@ export function parseIsolationResult(raw: string): IsolationResult {
   try {
     payload = JSON.parse(raw)
   } catch {
-    return { ok: false, kind: 'exec-error', detail: `isolation runner emitted non-JSON: ${raw.slice(0, 200)}` }
+    return {
+      ok: false,
+      kind: 'exec-error',
+      detail: `isolation runner emitted non-JSON: ${raw.slice(0, 200)}`,
+    }
   }
 
-  if (typeof payload !== 'object' || payload === null || typeof (payload as IsolationResult).ok !== 'boolean') {
-    return { ok: false, kind: 'exec-error', detail: `isolation runner emitted an unexpected payload: ${raw.slice(0, 200)}` }
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    typeof (payload as IsolationResult).ok !== 'boolean'
+  ) {
+    return {
+      ok: false,
+      kind: 'exec-error',
+      detail: `isolation runner emitted an unexpected payload: ${raw.slice(0, 200)}`,
+    }
   }
 
   const result = payload as IsolationResult
@@ -80,35 +88,6 @@ export function parseIsolationResult(raw: string): IsolationResult {
   }
 
   return result
-}
-
-export interface PythonExampleFinding {
-  /** Path relative to the monorepo root. */
-  file: string
-  kind: 'missing-module' | 'syntax-error' | 'exec-error'
-  detail: string
-}
-
-/** Importable module names sitting in `dir` — what must NOT be stubbed. */
-export async function siblingModules(dir: string): Promise<Set<string>> {
-  const names = new Set<string>()
-
-  let entries
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true })
-  } catch {
-    return names
-  }
-
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith('.py')) {
-      names.add(entry.name.slice(0, -3))
-    } else if (entry.isDirectory()) {
-      names.add(entry.name)
-    }
-  }
-
-  return names
 }
 
 /** Every `.py` file directly inside `dir`, sorted. */
@@ -136,16 +115,10 @@ export function pythonAvailable(python = 'python3'): boolean {
   }
 }
 
-/**
- * Copy `absExample` alone into a fresh directory and execute it there.
- *
- * `neverStub` are the module names that must be allowed to fail — the example's
- * own siblings in the repo. Everything else is fabricated inside the child, so
- * the only reachable import failure is a repo-local one.
- */
+/** Copy `absExample` alone into a fresh directory and execute it there. */
 export async function runExampleIsolated(
   absExample: string,
-  neverStub: Set<string>,
+  monorepoRoot = MONOREPO_ROOT_FROM_LIB,
   python = 'python3',
 ): Promise<IsolationResult> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'docs-example-'))
@@ -156,11 +129,12 @@ export async function runExampleIsolated(
 
     // cwd is the temp dir and the script sits beside nothing, so neither the
     // real examples directory nor the repo is reachable via sys.path.
-    const raw = execFileSync(
-      python,
-      [ISOLATION_RUNNER, copied, JSON.stringify([...neverStub])],
-      { cwd: dir, stdio: 'pipe', timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
-    ).toString()
+    const raw = execFileSync(python, [path.join(monorepoRoot, RUNNER_REL_PATH), copied], {
+      cwd: dir,
+      stdio: 'pipe',
+      timeout: 60_000,
+      maxBuffer: 8 * 1024 * 1024,
+    }).toString()
 
     return parseIsolationResult(raw)
   } catch (err: unknown) {
@@ -184,8 +158,8 @@ export function describeFinding(
       file,
       kind: 'missing-module',
       detail:
-        `imports "${result.module}", which exists only beside it in the repo — ` +
-        `a reader copying this example gets ModuleNotFoundError`,
+        `imports "${result.module}", which a reader copying this file out of ` +
+        `the repo would not have — ${result.detail ?? 'ModuleNotFoundError'}`,
     }
   }
 
@@ -207,7 +181,6 @@ export async function checkPythonExamples(
 
   for (const dir of dirs) {
     const absDir = path.join(monorepoRoot, dir)
-    const siblings = await siblingModules(absDir)
 
     for (const name of await listExamples(absDir)) {
       const file = `${dir}/${name}`
@@ -215,7 +188,7 @@ export async function checkPythonExamples(
 
       const finding = describeFinding(
         file,
-        await runExampleIsolated(path.join(absDir, name), siblings, python),
+        await runExampleIsolated(path.join(absDir, name), monorepoRoot, python),
       )
       if (finding) findings.push(finding)
     }
