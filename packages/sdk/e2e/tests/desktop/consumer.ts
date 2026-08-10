@@ -31,6 +31,7 @@ import {
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
   GROOT_Q5_VF16,
+  GROOT_MULTI_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -216,6 +217,15 @@ resources.define('vla-pi05', {
 // does not define this resource, so the mobile suite skips the groot tests.
 resources.define('vla-groot', {
   constant: GROOT_Q5_VF16,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
+// Multi-embodiment GR00T (all 17 trained rows, default libero_sim), q5
+// profile. Desktop-only for the same reasons as vla-groot; drives the
+// selected-embodiment hparams and vlaSetEmbodiment switching tests.
+resources.define('vla-groot-multi', {
+  constant: GROOT_MULTI_Q5_VF16,
   type: 'ggml-vla',
   config: { backend: 'cpu' }
 })
