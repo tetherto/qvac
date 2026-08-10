@@ -6,11 +6,13 @@
 export type QvacOpencodePluginErrorCode =
   | 'INVALID_OPTION'
   | 'INCOMPATIBLE_PROVIDER'
+  | 'UNTRUSTED_UPSTREAM'
   | 'HOST_SPAWN_FAILED'
   | 'HOST_EXITED'
   | 'HOST_LISTEN_TIMEOUT'
   | 'HOST_INVALID_HANDSHAKE'
   | 'HOST_HANDSHAKE_CHANNEL_UNAVAILABLE'
+  | 'HOST_UNAVAILABLE'
 
 export class QvacOpencodePluginError extends Error {
   readonly code: QvacOpencodePluginErrorCode
@@ -46,6 +48,32 @@ export class IncompatibleProviderError extends QvacOpencodePluginError {
     )
     this.name = 'IncompatibleProviderError'
     this.field = field
+  }
+}
+
+// The proxy swaps the caller's token for the managed serve key on every upstream
+// hop, so the upstream it was handed decides where that credential travels. Only
+// a loopback serve is ever a legitimate destination.
+export class UntrustedUpstreamError extends QvacOpencodePluginError {
+  readonly hostname: string
+
+  constructor(hostname: string) {
+    super(
+      'UNTRUSTED_UPSTREAM',
+      `The managed provider reported a non-loopback serve at "${hostname}". ` +
+        'Refusing to forward the managed serve key off-host.'
+    )
+    this.name = 'UntrustedUpstreamError'
+    this.hostname = hostname
+  }
+}
+
+// Raised at the waiting end when managed serve will never arrive, so queued
+// requests fail with the reason instead of hanging until the host dies.
+export class HostUnavailableError extends QvacOpencodePluginError {
+  constructor(reason: string) {
+    super('HOST_UNAVAILABLE', `qvac serve is not available: ${reason}`)
+    this.name = 'HostUnavailableError'
   }
 }
 

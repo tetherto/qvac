@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingHttpHeaders,
+  type IncomingMessage,
+  type ServerResponse
+} from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -17,6 +23,7 @@ interface ServeStub {
   readonly baseURL: string
   readonly port: number
   readonly authorizations: string[]
+  readonly received: IncomingHttpHeaders[]
   close: () => Promise<void>
 }
 
@@ -42,8 +49,10 @@ function hostConfig(overrides: Partial<ManagedServeHostConfig> = {}): ManagedSer
 
 function startServeStub(): Promise<ServeStub> {
   const authorizations: string[] = []
+  const received: IncomingHttpHeaders[] = []
   const handler = (req: IncomingMessage, res: ServerResponse): void => {
     authorizations.push(req.headers.authorization ?? '')
+    received.push(req.headers)
     req.resume()
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ object: 'list', data: [] }))
@@ -57,6 +66,7 @@ function startServeStub(): Promise<ServeStub> {
         baseURL: `http://127.0.0.1:${addr.port}/v1`,
         port: addr.port,
         authorizations,
+        received,
         close: () =>
           new Promise<void>((res, rej) => {
             server.close((err) => {
@@ -236,21 +246,15 @@ test('host fails startup when the managed provider exposes no apiKey', async () 
     })
     assert.equal(closed, 1, 'the incompatible managed serve must be released')
 
-    // The proxy never starts borrowing a credential it does not have, so no
-    // request is answered from a half-configured upstream.
+    // The proxy never borrows a credential it does not have, and a caller that
+    // already has the handshake learns why instead of waiting on a serve that
+    // is never coming.
     const listening = handshakes[0]
     assert.ok(listening)
-    let settled = false
-    void getModels(listening.baseURL, listening.proxyToken).then(
-      () => {
-        settled = true
-      },
-      () => {
-        settled = true
-      }
-    )
-    await delay(200)
-    assert.equal(settled, false)
+    const res = await getModels(listening.baseURL, listening.proxyToken)
+    assert.equal(res.status, 503)
+    assert.match(res.body, /@qvac\/ai-sdk-provider/)
+    assert.doesNotMatch(res.body, new RegExp(SERVE_KEY))
     assert.deepEqual(upstream.authorizations, [])
   } finally {
     await host.stop('test')
@@ -359,5 +363,146 @@ test('host debug and log output never contain the proxy token or the serve key',
     await host.stop('test')
     await upstream.close()
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('host refuses a managed serve reported on a non-loopback host', async () => {
+  const upstream = await startServeStub()
+  let closed = 0
+  const handshakes: HostListening[] = []
+  const host = await startManagedServeHost({
+    config: hostConfig(),
+    logger: quietLogger(),
+    emitHandshake: (payload) => handshakes.push(payload),
+    // The proxy swaps in the serve key on every hop, so a provider that reports
+    // an off-host serve would exfiltrate that credential.
+    startManagedServe: () =>
+      Promise.resolve({
+        apiKey: SERVE_KEY,
+        baseURL: 'http://203.0.113.7:8080/v1',
+        port: 8080,
+        pid: process.pid,
+        close: () => {
+          closed += 1
+          return Promise.resolve()
+        }
+      })
+  })
+  try {
+    await assert.rejects(host.whenManaged, (err: unknown) => {
+      assert.ok(err instanceof Error)
+      assert.equal(err.name, 'UntrustedUpstreamError')
+      assert.match(err.message, /203\.0\.113\.7/)
+      return true
+    })
+    assert.equal(closed, 1, 'the untrusted managed serve must be released')
+
+    const listening = handshakes[0]
+    assert.ok(listening)
+    const res = await getModels(listening.baseURL, listening.proxyToken)
+    assert.equal(res.status, 503)
+    assert.doesNotMatch(res.body, new RegExp(SERVE_KEY))
+    assert.deepEqual(upstream.authorizations, [])
+  } finally {
+    await host.stop('test')
+    await upstream.close()
+  }
+})
+
+test('stopping the host releases requests queued on managed startup', async () => {
+  const upstream = await startServeStub()
+  const handshakes: HostListening[] = []
+  const host = await startManagedServeHost({
+    config: hostConfig(),
+    logger: quietLogger(),
+    emitHandshake: (payload) => handshakes.push(payload),
+    // A serve that never becomes healthy: without a release on shutdown the
+    // queued request would hang until the host process died.
+    startManagedServe: () => new Promise<never>(() => {})
+  })
+  const listening = handshakes[0]
+  assert.ok(listening)
+  try {
+    const pending = getModels(listening.baseURL, listening.proxyToken)
+    await delay(100)
+    await host.stop('test')
+
+    const res = await pending
+    assert.equal(res.status, 503)
+    assert.match(res.body, /shutting down/)
+    assert.deepEqual(upstream.authorizations, [])
+  } finally {
+    await upstream.close()
+  }
+})
+
+test('hop-by-hop headers are not relayed to serve', async () => {
+  const upstream = await startServeStub()
+  const handshakes: HostListening[] = []
+  const host = await startManagedServeHost({
+    config: hostConfig(),
+    logger: quietLogger(),
+    emitHandshake: (payload) => handshakes.push(payload),
+    startManagedServe: () =>
+      Promise.resolve({
+        apiKey: SERVE_KEY,
+        baseURL: upstream.baseURL,
+        port: upstream.port,
+        pid: process.pid,
+        close: () => Promise.resolve()
+      })
+  })
+  const listening = handshakes[0]
+  assert.ok(listening)
+  try {
+    await host.whenManaged
+    const target = new URL(`${listening.baseURL}/chat/completions`)
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: target.hostname,
+          port: target.port,
+          path: target.pathname,
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${listening.proxyToken}`,
+            'content-type': 'application/json',
+            // Node decodes this hop before we ever see the body; relaying it
+            // would hand serve two disagreeing framings of one request.
+            'transfer-encoding': 'chunked',
+            connection: 'keep-alive',
+            te: 'trailers',
+            upgrade: 'h2c',
+            'proxy-connection': 'keep-alive',
+            'proxy-authorization': 'Basic c2hvdWxkLW5vdC1yZWxheQ=='
+          }
+        },
+        (res) => {
+          res.resume()
+          res.on('end', () => resolve(res.statusCode ?? 0))
+        }
+      )
+      req.on('error', reject)
+      req.end(JSON.stringify({ model: 'qwen3.5-0.8b', messages: [] }))
+    })
+    assert.equal(status, 200)
+
+    const forwarded = upstream.received[0]
+    assert.ok(forwarded)
+    // `connection` is excluded: Node regenerates one for its own hop, so its
+    // presence upstream says nothing about what we relayed.
+    for (const header of [
+      'transfer-encoding',
+      'te',
+      'upgrade',
+      'proxy-connection',
+      'proxy-authorization'
+    ]) {
+      assert.equal(forwarded[header], undefined, `${header} must not be relayed`)
+    }
+    assert.ok(forwarded['content-length'], 'the forwarded body must state its length')
+  } finally {
+    await host.stop('test')
+    await upstream.close()
   }
 })

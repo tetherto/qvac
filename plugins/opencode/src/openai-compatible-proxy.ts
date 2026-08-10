@@ -47,6 +47,33 @@ export function originOf(baseURL: string): Upstream {
   return { hostname: u.hostname, port: u.port }
 }
 
+export function isLoopbackUpstream(upstream: Upstream): boolean {
+  const host = upstream.hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1')
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true
+
+  const octets = host.split('.')
+  return (
+    octets.length === 4 &&
+    octets[0] === '127' &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  )
+}
+
+// Per RFC 9110 these govern a single hop and must not be relayed. `transfer-encoding`
+// matters most: Node hands us an already-decoded body, so relaying it alongside the
+// recomputed `content-length` would give serve two disagreeing framings of one request.
+const HOP_BY_HOP_HEADERS = new Set([
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade'
+])
+
 function buildForwardHeaders(
   req: IncomingMessage,
   bodyLength: number,
@@ -54,13 +81,14 @@ function buildForwardHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = {}
   for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue
+    if (value === undefined || HOP_BY_HOP_HEADERS.has(key)) continue
     headers[key] = Array.isArray(value) ? value.join(', ') : value
   }
   delete headers['host']
   delete headers['accept-encoding']
-  delete headers['content-length']
-  if (bodyLength > 0) headers['content-length'] = String(bodyLength)
+  // Always stated, never inherited: the transforms below can resize the body, and
+  // an explicit length is the only framing the upstream request should carry.
+  headers['content-length'] = String(bodyLength)
   // The caller's proxy token never reaches serve; serve only sees its own key.
   headers['authorization'] = `Bearer ${apiKey}`
   return headers
@@ -298,7 +326,14 @@ async function handleRequest(
     }
   }
 
-  await options.whenUpstream
+  try {
+    await options.whenUpstream
+  } catch (err) {
+    // Managed startup failed or the host is stopping. The reason is a structured
+    // plugin error, never anything carrying a credential.
+    writeProxyError(res, 503, err instanceof Error ? err.message : 'qvac serve is not available')
+    return
+  }
   const upstream = options.getUpstream()
   const apiKey = options.getApiKey()
   if (upstream === undefined || apiKey === undefined) {

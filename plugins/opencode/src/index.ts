@@ -25,6 +25,20 @@ import { createManagedProviderConfig, type HostListening } from './managed-serve
 import { resolveOptions, type RawOptions, type ResolvedOptions } from './options.js'
 import { spawnManagedServeHost } from './spawn-host.js'
 
+// The handshake lands as soon as the proxy listens, so the host can still fail
+// afterwards — an incompatible provider, a serve that never becomes healthy.
+// Without this the injected `qvac` provider would just start refusing
+// connections with nothing tying that back to the host's own error.
+function watchHostExit(child: ChildProcess): void {
+  child.once('exit', (code, signal) => {
+    if (code === 0 || signal === 'SIGTERM') return
+    process.stderr.write(
+      `[qvac] managed serve host exited (${code ?? signal ?? 'unknown'}); the qvac provider is no longer available. ` +
+        'Restart opencode after resolving the error above.\n'
+    )
+  })
+}
+
 function registerTeardown(child: ChildProcess): void {
   const stop = (): void => {
     try {
@@ -74,6 +88,7 @@ export const QvacManagedServe: Plugin = async (input, options) => {
     projectDir: input.directory
   })
   registerTeardown(child)
+  watchHostExit(child)
 
   const hooks: Hooks = {
     // lunte-disable-next-line require-await

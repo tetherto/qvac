@@ -1,8 +1,17 @@
-import { IncompatibleProviderError } from './errors.js'
+import {
+  HostUnavailableError,
+  IncompatibleProviderError,
+  UntrustedUpstreamError
+} from './errors.js'
 import type { HostLogger } from './host-logger.js'
 import type { ManagedServeHostConfig } from './managed-serve-config.js'
 import { generateProxyToken, type HostListening } from './managed-serve-handshake.js'
-import { originOf, startOpenAICompatibleProxy, type Upstream } from './openai-compatible-proxy.js'
+import {
+  isLoopbackUpstream,
+  originOf,
+  startOpenAICompatibleProxy,
+  type Upstream
+} from './openai-compatible-proxy.js'
 
 // The subset of `ManagedQvacProvider` the host needs. `apiKey` and `baseURL` are
 // live getters on the real provider, so they are read per request rather than
@@ -15,11 +24,24 @@ export interface ManagedServeHandle {
   close: () => Promise<void>
 }
 
+// What the resolved `@qvac/ai-sdk-provider` may actually hand back. `apiKey` is
+// deliberately untyped here because an install can predate
+// `ManagedQvacProvider.apiKey`; `assertCompatibleHandle` is the single gate that
+// narrows this to `ManagedServeHandle`. Requiring the key at compile time would
+// only move that failure to whichever machine installed the older provider.
+export interface PossiblyIncompatibleHandle {
+  readonly apiKey?: unknown
+  readonly baseURL: string
+  readonly port: number
+  readonly pid: number
+  close: () => Promise<void>
+}
+
 export interface HostRuntimeDeps {
   readonly config: ManagedServeHostConfig
   readonly logger: HostLogger
   readonly emitHandshake: (listening: HostListening) => void
-  readonly startManagedServe: () => Promise<ManagedServeHandle>
+  readonly startManagedServe: () => Promise<PossiblyIncompatibleHandle>
 }
 
 export interface RunningManagedServeHost {
@@ -31,22 +53,36 @@ export interface RunningManagedServeHost {
 interface Deferred {
   readonly promise: Promise<void>
   resolve: () => void
+  reject: (err: unknown) => void
 }
 
 function deferred(): Deferred {
   let resolve!: () => void
-  const promise = new Promise<void>((res) => {
-    resolve = res
+  let reject!: (err: unknown) => void
+  let settled = false
+  const promise = new Promise<void>((res, rej) => {
+    resolve = () => {
+      if (settled) return
+      settled = true
+      res()
+    }
+    reject = (err: unknown) => {
+      if (settled) return
+      settled = true
+      rej(err)
+    }
   })
-  return { promise, resolve }
+  // Waiters attach lazily, so keep an owner on the rejection path at all times.
+  promise.catch(() => {})
+  return { promise, resolve, reject }
 }
 
-// `ManagedServeHandle` is the compile-time contract; at runtime the handle comes
-// from whichever @qvac/ai-sdk-provider the install resolved, which may predate
-// `ManagedQvacProvider.apiKey`. Detect that before the proxy can start serving
-// 503s, and never put the credential itself in the failure.
-function assertCompatibleHandle(handle: ManagedServeHandle): void {
-  const apiKey: unknown = (handle as { apiKey?: unknown }).apiKey
+// The runtime gate for a provider that may predate `ManagedQvacProvider.apiKey`.
+// Never put the credential itself in the failure.
+function assertCompatibleHandle(
+  handle: PossiblyIncompatibleHandle
+): asserts handle is ManagedServeHandle {
+  const apiKey: unknown = handle.apiKey
   if (typeof apiKey !== 'string') {
     throw new IncompatibleProviderError(
       'apiKey',
@@ -56,13 +92,17 @@ function assertCompatibleHandle(handle: ManagedServeHandle): void {
   if (apiKey.trim().length === 0) {
     throw new IncompatibleProviderError('apiKey', 'is empty')
   }
+  let upstream: Upstream
   try {
-    originOf(handle.baseURL)
+    upstream = originOf(handle.baseURL)
   } catch {
     throw new IncompatibleProviderError(
       'baseURL',
       `is not a usable URL ("${String(handle.baseURL)}")`
     )
+  }
+  if (!isLoopbackUpstream(upstream)) {
+    throw new UntrustedUpstreamError(upstream.hostname)
   }
 }
 
@@ -78,10 +118,13 @@ export async function startManagedServeHost(
   const live: { managed: ManagedServeHandle | undefined } = { managed: undefined }
   const upstreamReady = deferred()
 
+  // `baseURL` is a live getter: a crash-recovery respawn can move the serve, so
+  // re-check the destination on every read rather than trusting the startup one.
   function currentUpstream(): Upstream | undefined {
     if (live.managed === undefined) return undefined
     try {
-      return originOf(live.managed.baseURL)
+      const upstream = originOf(live.managed.baseURL)
+      return isLoopbackUpstream(upstream) ? upstream : undefined
     } catch {
       return undefined
     }
@@ -111,11 +154,18 @@ export async function startManagedServeHost(
   logger.log('first run downloads the model - this can take a while.')
 
   const whenManaged = (async () => {
-    const managed = await deps.startManagedServe()
+    let managed: PossiblyIncompatibleHandle
+    try {
+      managed = await deps.startManagedServe()
+    } catch (err) {
+      upstreamReady.reject(err)
+      throw err
+    }
     try {
       assertCompatibleHandle(managed)
     } catch (err) {
       await managed.close().catch(() => {})
+      upstreamReady.reject(err)
       throw err
     }
     live.managed = managed
@@ -131,6 +181,9 @@ export async function startManagedServeHost(
     if (stopping) return
     stopping = true
     logger.trace(`shutting down: ${reason}`)
+    // Release anything still queued on startup before the sockets go away, so a
+    // shutdown mid-download answers those requests instead of dropping them.
+    upstreamReady.reject(new HostUnavailableError(`host is shutting down (${reason})`))
     await live.managed?.close().catch(() => {})
     await proxy.close().catch(() => {})
   }

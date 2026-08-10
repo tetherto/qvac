@@ -1,6 +1,6 @@
 import { createQvac } from '@qvac/ai-sdk-provider'
 
-import { startManagedServeHost, type ManagedServeHandle } from './host-runtime.js'
+import { startManagedServeHost, type PossiblyIncompatibleHandle } from './host-runtime.js'
 import { createHostLogger, formatUnknownError } from './host-logger.js'
 import {
   resolveManagedServeHostConfig,
@@ -8,7 +8,7 @@ import {
 } from './managed-serve-config.js'
 import { writeHostListening } from './managed-serve-handshake.js'
 
-function createManagedServe(config: ManagedServeHostConfig): Promise<ManagedServeHandle> {
+function createManagedServe(config: ManagedServeHostConfig): Promise<PossiblyIncompatibleHandle> {
   return createQvac({
     mode: 'managed',
     reuse: true,
