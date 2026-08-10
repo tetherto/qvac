@@ -343,6 +343,7 @@ jobs:
       contents: read
       packages: read
       id-token: write
+      pull-requests: write
     uses: ./.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml
     secrets: inherit
     with:
