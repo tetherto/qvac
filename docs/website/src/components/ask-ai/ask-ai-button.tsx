@@ -1,21 +1,43 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { useAskAI } from './ask-ai-provider';
 
 /**
- * The `⌘ I` chip rendered next to the desktop header trigger.
- * Mirrors Fumadocs's Search shortcut layout exactly: a wrapper span
- * with two separate `<kbd>` boxes (one for `⌘`, one for `I`), so the
- * Ask AI shortcut reads as a visual sibling to Search's `⌘ K`. We
- * always render the `⌘` glyph regardless of host OS — Fumadocs does
- * the same for `⌘ K`, treating the symbol as a universal "modifier"
- * sigil rather than a platform-specific instruction. The actual key
- * binding (`Ctrl/Cmd + I`) is wired in `AskAIProvider`.
+ * Modifier glyph for the shortcut chip: `⌘` on macOS, `Ctrl` elsewhere.
+ *
+ * Fumadocs renders Search's own chip through an internal `MetaOrControl`
+ * that is not exported, so the detection is duplicated here rather than
+ * imported. Keep the test (`/Windows|Linux/i` against the user agent) and
+ * the `⌘` initial value identical to it: any divergence lets the Search
+ * and Ask AI chips disagree on the same machine. Starting at `⌘` and
+ * correcting in an effect is also what makes this safe under
+ * `output: 'export'` — the prerendered HTML has no user agent to inspect,
+ * so both chips ship the same glyph and flip together on hydration.
+ */
+function useModifierKeyLabel() {
+  const [label, setLabel] = useState('⌘');
+
+  useEffect(() => {
+    if (/Windows|Linux/i.test(window.navigator.userAgent)) setLabel('Ctrl');
+  }, []);
+
+  return label;
+}
+
+/**
+ * The `⌘ I` / `Ctrl I` chip rendered next to the desktop header trigger
+ * and inside the closed Ask AI bar. Mirrors Fumadocs's Search shortcut
+ * layout exactly: a wrapper span with two separate `<kbd>` boxes, so the
+ * Ask AI shortcut reads as a visual sibling to Search's own chip. The
+ * actual key binding (`Ctrl/Cmd + I`) is wired in `AskAIProvider`.
  */
 export function AskAIShortcutHint({ className }: { className?: string }) {
+  const modifier = useModifierKeyLabel();
+
   return (
     <span
       aria-hidden="true"
@@ -25,7 +47,7 @@ export function AskAIShortcutHint({ className }: { className?: string }) {
       )}
     >
       <kbd className="rounded-md border bg-fd-background px-1.5 text-[11px] leading-5">
-        ⌘
+        {modifier}
       </kbd>
       <kbd className="rounded-md border bg-fd-background px-1.5 text-[11px] leading-5">
         I

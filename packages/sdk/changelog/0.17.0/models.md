@@ -1,0 +1,29 @@
+# 📦 Model Changes v0.17.0
+
+## Added Models
+
+```
+ABOT_WORLD_0_5B_LF_VAE
+ABOT_WORLD_0_5B_LF_VAE_F16
+ABOT_WORLD_0_5B_Q8_0
+AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0
+AUDIOGEN_ACESTEP_V15_SFT_Q8_0
+AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M
+AUDIOGEN_ACESTEP_V15_TURBO_Q8_0
+AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0
+AUDIOGEN_VAE_BF16
+DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD
+GROOT_Q5_VF16_1
+GROOT_Q8_VF16_1
+MOE_35B_INST_IQ2_XXS
+MOE_35B_INST_Q4_K_M
+MOE_35B_INST_Q8_0
+UMT5_XXL_ENC_Q8_0
+```
+
+---
+
+### Related PRs
+
+- [#3506](https://github.com/tetherto/qvac/pull/3506) - Add AudioGen support to SDK
+- [#3683](https://github.com/tetherto/qvac/pull/3683) - Refresh registry model list (+10 models)

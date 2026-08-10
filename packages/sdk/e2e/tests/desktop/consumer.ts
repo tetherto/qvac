@@ -2,6 +2,7 @@ import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qva
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
+  LLAMA_3_2_1B_INST_Q4_0_SHARD,
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
@@ -31,6 +32,7 @@ import {
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
   GROOT_Q5_VF16,
+  GROOT_MULTI_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -39,8 +41,13 @@ import {
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  BCI_WINDOWED
+  BCI_WINDOWED,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_VAE_BF16
 } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -77,6 +84,7 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-inference-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
+import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
@@ -110,6 +118,12 @@ resources.define('tools-batch', {
 
 resources.define('finetune-llm', {
   constant: QWEN3_1_7B_INST_Q4,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('finetune-llm-qwen35', {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
 })
@@ -208,6 +222,15 @@ resources.define('vla-groot', {
   config: { backend: 'cpu' }
 })
 
+// Multi-embodiment GR00T (all 17 trained rows, default libero_sim), q5
+// profile. Desktop-only for the same reasons as vla-groot; drives the
+// selected-embodiment hparams and vlaSetEmbodiment switching tests.
+resources.define('vla-groot-multi', {
+  constant: GROOT_MULTI_Q5_VF16,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define('classification', {
@@ -223,6 +246,13 @@ resources.define('echo', {
 resources.define('sharded-embeddings', {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: 'llamacpp-embedding',
+  skipPreDownload: true
+})
+
+resources.define('sharded-llm', {
+  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
   skipPreDownload: true
 })
 
@@ -442,6 +472,18 @@ resources.define('diffusion', {
   }
 })
 
+resources.define('audiogen-turbo', {
+  type: 'audiogen-ggml',
+  config: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    useGPU: true,
+    inferenceSteps: 8
+  }
+})
+
 resources.define('diffusion-fa', {
   constant: FLUX_2_KLEIN_4B_Q4_0,
   type: 'sdcpp-generation',
@@ -522,9 +564,16 @@ function ensureDesktopE2EConfig() {
     ...fixtureConfig,
     ...existingConfig
   }
+  const configuredPlugins = Array.isArray(mergedConfig['plugins'])
+    ? mergedConfig['plugins'].filter((plugin): plugin is string => typeof plugin === 'string')
+    : []
+  const desktopConfig = {
+    ...mergedConfig,
+    plugins: Array.from(new Set([...configuredPlugins, '@qvac/sdk/audiogen-ggml/plugin']))
+  }
   const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
 
-  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
+  fs.writeFileSync(generatedPath, `${JSON.stringify(desktopConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
 
   if (existingPath) {
@@ -594,6 +643,7 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
+    new AudioGenExecutor(resources),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),

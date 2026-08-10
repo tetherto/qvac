@@ -343,7 +343,7 @@ Promote job pauses for docs-production environment approval
 Workflow fast-forwards docs-production to the commit (--ff-only)
     │
     ▼
-Push to docs-production (GitHub Actions app / GITHUB_TOKEN)
+Push to docs-production (as the GitHub App — ruleset bypass identity)
     │
     ▼
 Hosting provider detects new commit on docs-production
@@ -428,29 +428,16 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
 | `commit` | Yes | The commit to promote. Any revision already merged to `main` (a full SHA is recommended; the resolved SHA is echoed in the log). |
 
 **What it does:**
-
-`preflight` (ungated, read-only checkout):
-- Resolves `commit` and verifies it is contained in `origin/main`
-- Rejects a commit behind `docs-production`, and divergence that makes the fast-forward impossible
-- Writes the resolved SHA and the list of commits being promoted to the run summary
-- Skips the promotion entirely (no approval requested) when `docs-production` is already at the requested commit
-
-`promote` (gated on the `docs-production` environment, `qvac-internal-release` required reviewers):
-- Checks out `docs-production` (full history) using `GITHUB_TOKEN` — the GitHub Actions app is the sole bypass identity on the `docs-production` ruleset
-- Re-asserts the checks against the current branch state, since the approval wait is unbounded
-- Runs `git merge --ff-only <commit>` and pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
-
-**Fails when:**
-- `commit` is not a commit this repository knows
-- `commit` is not contained in `main` — production only ever receives reviewed, already-merged code
-- `commit` is behind `docs-production` — the workflow only moves the branch forward; a rollback is a deliberate operation performed outside it
-- `docs-production` has diverged from `main` (the `--ff-only` merge is rejected)
+- Pauses for approval on the `docs-production` environment (`qvac-internal-release` required reviewers)
+- Mints a short-lived **GitHub App token** (`actions/create-github-app-token`) and checks out `docs-production` (full history) with it — the App is the only bypass identity on the `docs-production` ruleset (the default `GITHUB_TOKEN` / GitHub Actions integration cannot be a ruleset bypass actor)
+- Fetches `origin/main` and runs `git merge --ff-only origin/main`
+- Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
 
 Divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`. Promoting the commit `docs-production` already points at is a no-op that exits cleanly.
 
 **Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
 
-> `docs-production` is branch-protected (restrict updates, no PR merges, no deletions, no force pushes). Only the promote workflow — running as the GitHub Actions app after environment approval — can advance the branch.
+> `docs-production` is branch-protected (Restrict updates, Restrict deletions, Block force pushes, no PR merges). The promotion workflow — running as the GitHub App after environment approval — is the only identity allowed to advance it.
 
 ### 3. SDK release docs (local, skill-driven)
 

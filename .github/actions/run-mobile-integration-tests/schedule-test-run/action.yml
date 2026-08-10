@@ -2,9 +2,9 @@ name: Mobile Test — Schedule Device Farm Run
 description: |
   Phase 4 of the mobile integration test pipeline.
 
-  Three scheduling modes (selected automatically):
+  Four scheduling modes (selected automatically):
 
-  1. Sharded (test-specs has >1 entry):
+  1. Sharded (test-specs has >1 entry without the multi-spec dual opt-in):
        Schedule one Device Farm run per spec, all against the addon's own
        device pool (android-device-pool-arn / ios-device-pool-arn). Used by
        LLM (12 iOS + 7 Android shards) and OCR (perf + regular).
@@ -13,9 +13,9 @@ description: |
        Schedule one Device Farm run against the addon's pool. Used by Embed
        to match its main behaviour (single-run on a chosen pool).
 
-  3. Dual-flagship (test-specs has 1 entry AND scheduling-mode=dual-flagship,
-     the default):
-       Schedule two parallel runs targeting flagship devices via filter:
+  3. Dual-flagship (test-specs has 1 entry by default, or any number of entries
+     when scheduling-mode=dual-flagship and multi-spec-dual-flagship=true):
+       Schedule two parallel runs per spec targeting flagship devices via filter:
        Samsung S25 Ultra + Pixel 9 (Android), or ios-device-pool-arn pool +
        iPhone 17 (iOS). Used by Whisper, NMT, TTS, Diffusion, Parakeet,
        Decoder.
@@ -55,12 +55,17 @@ inputs:
   test-specs:
     description: |
       JSON array from upload-to-devicefarm: [{ "name", "grep", "arn" }].
-      Length 1 => default mode (single spec), length >1 => sharded mode.
+      Length 1 => default mode. Length >1 => sharded mode unless
+      multi-spec dual-flagship is explicitly enabled.
     required: true
   scheduling-mode:
-    description: "dual-flagship | single-pool | single-device (only honored when test-specs has 1 entry)"
+    description: "dual-flagship | single-pool | single-device"
     required: false
     default: "dual-flagship"
+  multi-spec-dual-flagship:
+    description: "Set true with scheduling-mode=dual-flagship to schedule two flagship runs per spec. Default false preserves sharded-pool behavior for existing multi-spec callers."
+    required: false
+    default: "false"
   device-model:
     description: "single-device mode: MODEL filter value, e.g. 'Pixel 9', 'iPhone 17 Pro' (matched per device-model-operator)"
     required: false
@@ -101,16 +106,101 @@ runs:
         TEST_PACKAGE_ARN: ${{ inputs.test-package-upload-arn }}
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
         SCHEDULING_MODE: ${{ inputs.scheduling-mode }}
+        MULTI_SPEC_DUAL_FLAGSHIP: ${{ inputs.multi-spec-dual-flagship }}
         DEVICE_MODEL: ${{ inputs.device-model }}
         DEVICE_MODEL_OPERATOR: ${{ inputs.device-model-operator }}
         DEVICE_MANUFACTURER: ${{ inputs.device-manufacturer }}
         JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
       run: |
+        set -euo pipefail
+
+        # The run-id/attempt suffix makes the name UNIQUE to this workflow attempt.
+        # That is what lets the rollback below safely stop runs by name: a re-run of
+        # the same PR gets a different base, so the sweep can never touch another
+        # attempt's runs. Names are display-only elsewhere (monitor / log collection
+        # read run.name purely for labels), so the longer form is safe.
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           RUN_NAME_BASE="Manual-${{ github.run_number }}-${PLATFORM}"
         else
           RUN_NAME_BASE="PR-${{ github.event.pull_request.number || github.run_number }}-${PLATFORM}"
         fi
+        APP_UPLOAD_ID="${APP_ARN##*/}"
+        if [ -z "$APP_UPLOAD_ID" ]; then
+          echo "ERROR: app-upload-arn must end with an upload identifier" >&2
+          exit 1
+        fi
+        RUN_NAME_BASE="${RUN_NAME_BASE}-${{ github.run_id }}.${{ github.run_attempt }}-${APP_UPLOAD_ID}"
+
+        # Partial-scheduling rollback.
+        #
+        # run_arns is only published to $GITHUB_OUTPUT after ALL runs are created,
+        # so if scheduling stops part way — a failed schedule-run (sharded group 2+,
+        # or the second dual-flagship target) OR the workflow being cancelled
+        # mid-loop, which these workflows do routinely via cancel-in-progress — the
+        # caller sees no ARNs and cannot cancel the runs that DID get created. They
+        # keep executing on real devices, billing until their own jobTimeoutMinutes.
+        #
+        # Trapped on ERR *and* the signals GitHub uses to cancel, *and* EXIT: an ERR
+        # trap alone never fires on cancellation. The trap is disarmed only once the
+        # outputs are published, after which the caller owns cleanup; that ordering
+        # is what makes the EXIT trap safe on the success path.
+        #
+        # LIMITATION: SIGKILL cannot be trapped, so a hard kill (GitHub escalates to
+        # it after a grace period) can still orphan runs. Closing that needs an
+        # out-of-band sweep of runs whose names match the run-name base with no live
+        # workflow — deliberately out of scope here.
+        CREATED_RUN_ARNS=""
+        SCHEDULING_STARTED=0
+
+        # Second pass, by NAME. record_created_run only runs once schedule-run has
+        # RETURNED an ARN, so a run created remotely whose response we never saw
+        # (CLI interrupted by cancellation, or a network failure) is invisible to the
+        # ARN list above. Sweeping by the unique run-name base catches those.
+        # Best-effort: list-runs is paginated/most-recent-first, so this is a safety
+        # net rather than a guarantee.
+        sweep_runs_by_name() {
+          [ -z "$PROJECT_ARN" ] && return 0
+          local listed
+          listed=$(aws devicefarm list-runs --arn "$PROJECT_ARN" \
+            --query "runs[?starts_with(name, '${RUN_NAME_BASE}')].[arn,status]" \
+            --output text 2>/dev/null) || return 0
+          [ -z "$listed" ] && return 0
+          local arn status
+          while IFS=$'\t' read -r arn status; do
+            [ -z "$arn" ] && continue
+            # COMPLETED is terminal; STOPPING is already being torn down.
+            case "$status" in COMPLETED|STOPPING) continue ;; esac
+            # Skip anything the ARN pass already handled.
+            case " $CREATED_RUN_ARNS " in *" $arn "*) continue ;; esac
+            if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
+              echo "  stopped (matched by name, ARN never returned) $arn"
+            else
+              echo "  ::warning::could not stop $arn"
+            fi
+          done <<< "$listed"
+        }
+
+        rollback_created_runs() {
+          local status=$?
+          trap - ERR INT TERM EXIT
+          if [ "$SCHEDULING_STARTED" = "1" ]; then
+            echo "::warning::Scheduling stopped part way (status $status) — stopping the runs already created to avoid billing them."
+            for arn in $CREATED_RUN_ARNS; do
+              if aws devicefarm stop-run --arn "$arn" >/dev/null 2>&1; then
+                echo "  stopped $arn"
+              else
+                echo "  ::warning::could not stop $arn (it may have already finished)"
+              fi
+            done
+            sweep_runs_by_name
+          fi
+          exit "$status"
+        }
+        trap rollback_created_runs ERR INT TERM EXIT
+
+        record_created_run() {
+          CREATED_RUN_ARNS="$CREATED_RUN_ARNS $1"
+        }
 
         schedule_run_with_pool() {
           local pool_arn="$1"
@@ -140,13 +230,29 @@ runs:
             --query 'run.arn' --output text
         }
 
+        if ! echo "$TEST_SPECS_JSON" | jq -e '
+          type == "array" and
+          length > 0 and
+          all(.[];
+            (.name | type == "string" and length > 0) and
+            (.arn | type == "string" and length > 0)
+          )
+        ' >/dev/null; then
+          echo "ERROR: test-specs must be a non-empty array of entries with non-empty name and arn strings" >&2
+          exit 1
+        fi
         SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
         echo "Test spec count: $SPEC_COUNT"
-        echo "Scheduling mode hint (used only for single-spec runs): $SCHEDULING_MODE"
+        echo "Scheduling mode hint: ${SCHEDULING_MODE:-automatic}"
 
         RUN_ARNS_JSON='[]'
 
-        if [ "$SPEC_COUNT" -gt 1 ]; then
+        # From here on a run may exist remotely, so the rollback (including the
+        # by-name sweep) becomes relevant. Before this point there is nothing to
+        # clean up and no reason to spend an API call.
+        SCHEDULING_STARTED=1
+
+        if [ "$SPEC_COUNT" -gt 1 ] && { [ "$SCHEDULING_MODE" != "dual-flagship" ] || [ "$MULTI_SPEC_DUAL_FLAGSHIP" != "true" ]; }; then
           # Sharded mode: each group runs against the addon's pool.
           if [ "$PLATFORM" = "Android" ]; then
             POOL_ARN="$ANDROID_POOL_ARN"
@@ -163,6 +269,7 @@ runs:
             SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].arn")
             RUN_NAME="${RUN_NAME_BASE}-${GROUP_NAME}"
             RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME" "$SPEC_ARN")
+            record_created_run "$RUN_ARN"
             echo "  $RUN_NAME -> $RUN_ARN"
             RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
           done
@@ -179,6 +286,7 @@ runs:
           fi
           SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
           RUN_ARN=$(schedule_run_with_pool "$POOL_ARN" "$RUN_NAME_BASE" "$SPEC_ARN")
+          record_created_run "$RUN_ARN"
           echo "  $RUN_NAME_BASE -> $RUN_ARN"
           RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
         elif [ "$SCHEDULING_MODE" = "single-device" ]; then
@@ -208,28 +316,49 @@ runs:
           }')
           SAFE_MODEL=$(printf '%s' "$DEVICE_MODEL" | tr -c '[:alnum:]' '_')
           RUN_ARN=$(schedule_run_with_filter "${RUN_NAME_BASE}-${SAFE_MODEL}" "$FILTER" "$SPEC_ARN")
+          record_created_run "$RUN_ARN"
           echo "  ${RUN_NAME_BASE}-${SAFE_MODEL} -> $RUN_ARN"
           RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
         else
-          # Default dual-flagship: same spec, two device targets.
-          SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
           if [ "$PLATFORM" = "Android" ]; then
             SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
             PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
-            RUN_ARN_1=$(schedule_run_with_filter "${RUN_NAME_BASE}-Samsung" "$SAMSUNG_FILTER" "$SPEC_ARN")
-            RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-Pixel"   "$PIXEL_FILTER"   "$SPEC_ARN")
           else
             if [ -z "$IOS_POOL_ARN" ]; then
               echo "ERROR: dual-flagship iOS requires ios-device-pool-arn" >&2
               exit 1
             fi
             IPHONE17_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}],"maxDevices":1}'
-            RUN_ARN_1=$(schedule_run_with_pool   "$IOS_POOL_ARN"     "$RUN_NAME_BASE"           "$SPEC_ARN")
-            RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-iPhone17" "$IPHONE17_FILTER" "$SPEC_ARN")
           fi
-          echo "  Run 1: $RUN_ARN_1"
-          echo "  Run 2: $RUN_ARN_2"
-          RUN_ARNS_JSON=$(jq -n --arg a "$RUN_ARN_1" --arg b "$RUN_ARN_2" '[$a,$b]')
+
+          for IDX in $(seq 0 $((SPEC_COUNT - 1))); do
+            GROUP_NAME=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].name")
+            SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].arn")
+            RUN_NAME_PREFIX="$RUN_NAME_BASE"
+            if [ "$SPEC_COUNT" -gt 1 ]; then
+              RUN_NAME_PREFIX="${RUN_NAME_BASE}-${GROUP_NAME}"
+            fi
+
+            if [ "$PLATFORM" = "Android" ]; then
+              RUN_NAME_1="${RUN_NAME_PREFIX}-Samsung"
+              RUN_NAME_2="${RUN_NAME_PREFIX}-Pixel"
+              RUN_ARN_1=$(schedule_run_with_filter "$RUN_NAME_1" "$SAMSUNG_FILTER" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_1"
+              RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME_2" "$PIXEL_FILTER" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_2"
+            else
+              RUN_NAME_1="$RUN_NAME_PREFIX"
+              RUN_NAME_2="${RUN_NAME_PREFIX}-iPhone17"
+              RUN_ARN_1=$(schedule_run_with_pool "$IOS_POOL_ARN" "$RUN_NAME_1" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_1"
+              RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME_2" "$IPHONE17_FILTER" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_2"
+            fi
+
+            echo "  $RUN_NAME_1 -> $RUN_ARN_1"
+            echo "  $RUN_NAME_2 -> $RUN_ARN_2"
+            RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg a "$RUN_ARN_1" --arg b "$RUN_ARN_2" '. + [$a,$b]')
+          done
         fi
 
         RUN_COUNT=$(echo "$RUN_ARNS_JSON" | jq 'length')
@@ -239,3 +368,8 @@ runs:
 
         echo "run_arns=$(echo "$RUN_ARNS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
         echo "run_count=$RUN_COUNT" >> "$GITHUB_OUTPUT"
+
+        # Outputs are published: the caller now has the ARNs and owns cleanup (its
+        # cancel step covers cancellation and failure from here). Disarm so the EXIT
+        # trap does not roll back a successfully scheduled run.
+        trap - ERR INT TERM EXIT

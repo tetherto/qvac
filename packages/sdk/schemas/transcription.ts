@@ -200,6 +200,7 @@ export type TranscribeStreamClientParams = {
 }
 
 export interface TranscribeStreamSession {
+  stats: Promise<TranscribeStats | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -207,6 +208,7 @@ export interface TranscribeStreamSession {
 }
 
 export interface TranscribeStreamMetadataSession {
+  stats: Promise<TranscribeStats | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -225,6 +227,7 @@ export type TranscribeStreamEvent =
   | ({ type: 'endOfTurn' } & EndOfTurnEvent)
 
 export interface TranscribeStreamConversationSession {
+  stats: Promise<TranscribeStats | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void

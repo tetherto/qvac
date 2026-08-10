@@ -9,8 +9,8 @@ All custom repo skills live under `.cursor/skills/` and use the `qv-` prefix. In
 
 **Not listed here (by design):**
 
-- [`setup`](../setup/SKILL.md) — repo-wide bootstrap (`/setup`); copies shared config from `packages/ocr-onnx/.agent/` into `.claude/` and `.cursor/`.
-- `packages/ocr-onnx/.agent/skills/` — framework skills (`orchestrate`, `release`, `ci-validate`, `commit-trace`, `review`); installed by `/setup`, not `qv-*` prefixed.
+- [`setup`](../setup/SKILL.md) — repo-wide bootstrap (`/setup`); copies shared config from `packages/ocr-ggml/.agent/` into `.claude/` and `.cursor/`.
+- `packages/ocr-ggml/.agent/skills/` — framework skills (`orchestrate`, `release`, `ci-validate`, `commit-trace`, `review`); installed by `/setup`, not `qv-*` prefixed.
 
 ## How to invoke
 

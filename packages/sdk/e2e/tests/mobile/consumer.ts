@@ -4,6 +4,7 @@ import type { TestDefinition } from '@tetherto/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
+  LLAMA_3_2_1B_INST_Q4_0_SHARD,
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
@@ -180,6 +181,13 @@ resources.define('echo', {
 resources.define('sharded-embeddings', {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: 'llamacpp-embedding',
+  skipPreDownload: true
+})
+
+resources.define('sharded-llm', {
+  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
   skipPreDownload: true
 })
 
@@ -526,6 +534,10 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^(diffusion-|addon-logging-diffusion$)/,
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
+    ),
+    new SkipExecutor(
+      /^audio-gen-/,
+      'ACE-Step AudioGen uses four large GGUFs and is covered by desktop e2e'
     ),
     new SkipExecutor(
       /^vla-pi05-/,

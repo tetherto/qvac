@@ -39,3 +39,43 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
 
   return normalized
 }
+
+/**
+ * Attach the count of non-empty pieces the addon streamed without
+ * overwriting `generatedTokens` (`llama_perf` `n_eval`). Length / KV-cache
+ * decisions keep the decode count; usage reporting prefers `emittedTokens`.
+ * Zero is attached explicitly so inflated `n_eval` cannot be used as usage
+ * when nothing was streamed.
+ */
+export function withEmittedTokens(
+  stats: CompletionStats | undefined,
+  emittedPieces: number
+): CompletionStats | undefined {
+  const emittedTokens = emittedPieces
+  if (!stats && emittedTokens === 0) return undefined
+  return {
+    ...(stats ?? {}),
+    emittedTokens
+  }
+}
+
+export function stoppedByLength({
+  cancelled,
+  effectivePredict,
+  generatedTokens,
+  stoppedAtContextBoundary
+}: {
+  cancelled: boolean
+  effectivePredict: number | undefined
+  generatedTokens: number | undefined
+  stoppedAtContextBoundary: boolean
+}): boolean {
+  if (cancelled) return false
+  if (stoppedAtContextBoundary) return true
+  return (
+    effectivePredict !== undefined &&
+    effectivePredict > 0 &&
+    generatedTokens !== undefined &&
+    generatedTokens >= effectivePredict
+  )
+}

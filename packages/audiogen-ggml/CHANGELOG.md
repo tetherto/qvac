@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
+  `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
+  produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
+  Pixel 9a instead of silently accepting a CPU fallback.
+- Expose ACE-Step LM sampling controls, Haar DCW parameters, and optional frozen
+  semantic codes through the JavaScript API for reproducible quality comparisons.
+
+### Changed
+
+- Bump `audiogen-cpp` to `2026-08-10`, enabling official sampler-side Haar DCW
+  by default and using the validated LM decoding policy on Metal and Vulkan.
+
+## [0.2.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
+## [0.1.1] - 2026-08-03
+
+### Changed
+- Update `ggml-speech` dependency version to align with other packages that also depend on it.
+
+## [0.1.0] - 2026-07-30
+
+### Added
+
 - Initial `@qvac/audiogen-ggml`: text-to-music generation addon (ggml backend)
   wrapping the ACE-Step engine from `audiogen-cpp`. Text prompt in, stereo
   48 kHz audio out.

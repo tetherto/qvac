@@ -99,17 +99,17 @@ export const completionMultiTurn = createCompletionTest(
   'completion-multi-turn',
   {
     history: [
-      { role: 'user', content: 'Remember this number: 42.' },
-      { role: 'assistant', content: "I'll remember that the number is 42." },
+      { role: 'user', content: 'Name a tropical fruit using one lowercase word.' },
+      { role: 'assistant', content: 'papaya' },
       {
         role: 'user',
-        content: 'What number did I tell you to remember? Answer with just the number.'
+        content: 'Repeat your previous answer exactly. Output only that lowercase word.'
       }
     ],
     stream: false,
     generationParams: DETERMINISTIC
   },
-  { validation: 'contains-all', contains: ['42'] },
+  { validation: 'contains-all', contains: ['papaya'] },
   { suites: ['smoke'] }
 )
 
@@ -246,11 +246,16 @@ export const completionFrequencyPenalty10 = createCompletionTest(
 export const completionPresencePenalty = createCompletionTest(
   'completion-presence-penalty',
   {
-    history: [{ role: 'user', content: 'What is 14+14? Answer with just the number.' }],
+    history: [
+      {
+        role: 'user',
+        content: 'What is frozen water called? Answer with one word.'
+      }
+    ],
     stream: false,
     generationParams: { ...DETERMINISTIC, presence_penalty: 1.0 }
   },
-  { validation: 'contains-all', contains: ['28'] },
+  { validation: 'contains-all', contains: ['ice'] },
   { estimatedDurationMs: 8000 }
 )
 

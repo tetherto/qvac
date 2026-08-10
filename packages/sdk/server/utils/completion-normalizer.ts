@@ -15,6 +15,8 @@ type FrameSpec = {
   close: string
 }
 
+export const MAX_TOOL_FRAME_CHARS = 1_048_576
+
 // Always-stripped protocol markers emitted by the model's chat template.
 // The capture-gated `<think>` convention lives separately (BUILTIN_THINKING).
 type DialectSpec = {
@@ -33,6 +35,11 @@ type DialectSpec = {
 }
 
 type Dialect = NonNullable<NormalizerConfig['toolDialect']>
+
+const DSML_INVOKE_FRAMES: readonly FrameSpec[] = [' ', '\n', '\t', '\r'].map((sep) => ({
+  open: `<｜DSML｜invoke${sep}`,
+  close: '</｜DSML｜invoke>'
+}))
 
 const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
   hermes: {
@@ -76,6 +83,13 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
   gemma4: {
     toolFrames: [{ open: '<|tool_call>', close: '<tool_call|>' }],
     thinkingFrames: [{ open: '<|channel>thought', close: '<channel|>' }]
+  },
+  dsml: {
+    toolFrames: [
+      { open: '<｜DSML｜tool_calls>', close: '</｜DSML｜tool_calls>' },
+      { open: '<｜DSML｜function_calls>', close: '</｜DSML｜function_calls>' },
+      ...DSML_INVOKE_FRAMES
+    ]
   }
 }
 
@@ -271,6 +285,24 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     }
   }
 
+  function abandonToolFrame(events: CompletionEvent[]) {
+    const raw = toolCallBuffer + toolFramingTail
+    toolCallBuffer = ''
+    toolFramingTail = ''
+    activeToolFrame = null
+    state = 'content'
+
+    events.push({
+      type: 'toolError',
+      seq: nextSeq(),
+      error: {
+        code: 'PARSE_ERROR',
+        message: `Tool call frame exceeded ${MAX_TOOL_FRAME_CHARS} characters without a close marker`
+      }
+    })
+    emitContent(events, raw)
+  }
+
   function getStateTail() {
     switch (state) {
       case 'content':
@@ -314,6 +346,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         toolCallBuffer += buf.slice(0, safeLen)
         toolFramingTail = buf.slice(safeLen)
         buf = ''
+        if (toolCallBuffer.length > MAX_TOOL_FRAME_CHARS) abandonToolFrame(events)
         continue
       }
 

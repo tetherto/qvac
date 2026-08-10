@@ -51,7 +51,7 @@ Combine as needed: `/qv-sdk-update-models --cascade`, `/qv-sdk-update-models --c
 - `packages/sdk` dependencies installed (`bun install` in that package if needed).
 - Optional: `QVAC_REGISTRY_CORE_KEY` to target a non-default registry core.
 - For `--with-python` / `--cascade`: `packages/sdk-python/.venv` with gen extras
-  (`python3 -m venv .venv && .venv/bin/pip install -e ".[gen,dev,bare-rpc]"`).
+  (`python3 -m venv .venv && .venv/bin/pip install -e ".[gen,dev]"`).
 - `gh` CLI for PR creation (same expectations as `qv-sdk-pr-create`).
 
 **Secrets:** this skill only needs registry network access. It does not read
@@ -301,13 +301,13 @@ Before reporting done:
 - Does not sync `bare-sdk` deps (only relevant if `package.json` deps change —
   not part of a pure model regen).
 - Does not modify naming / companion / shard codegen.
-- Does not auto-apply `verified` on fork PRs.
+- Does not approve the `fork-ci` environment on fork PRs.
 
 ## References
 
 - Script entry: `packages/sdk/package.json` → `update-models` / `check-models`
 - Implementation: `packages/sdk/models/update-models/`
-- Knowledge: `packages/ocr-onnx/.agent/knowledge/registry-models.md` (Step 4)
+- Knowledge: `packages/ocr-ggml/.agent/knowledge/registry-models.md` (Step 4)
 - Model constants docs: `.cursor/rules/sdk/docs/model-constants-and-sources.mdc`
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - PR create: `.cursor/skills/qv-sdk-pr-create/SKILL.md`

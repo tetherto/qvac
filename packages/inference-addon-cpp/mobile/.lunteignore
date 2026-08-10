@@ -1,0 +1,11 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+**/*.auto.cjs
+# Generated — see .prettierignore.
+test/integration
+generated
+*.d.ts
