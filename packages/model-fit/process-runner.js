@@ -13,7 +13,7 @@ function exitAfterWriteError(error) {
     });
 }
 function writeOutcome(outcome) {
-    process.stdout.write((0, process_internal_1.encodeFitProcessResponse)(outcome.response), (error) => {
+    process.stdout.write(outcome.responseLine, (error) => {
         if (error !== null) {
             exitAfterWriteError(error);
             return;

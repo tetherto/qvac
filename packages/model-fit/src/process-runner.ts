@@ -4,7 +4,6 @@ import processModule = require('bare-process')
 
 import { fitParams } from './index'
 import {
-  encodeFitProcessResponse,
   runFitProcessLine,
   type FitProcessOutcome
 } from './process-internal'
@@ -38,7 +37,7 @@ function exitAfterWriteError (error: Error): void {
 }
 
 function writeOutcome (outcome: FitProcessOutcome): void {
-  process.stdout.write(encodeFitProcessResponse(outcome.response), (error: Error | null) => {
+  process.stdout.write(outcome.responseLine, (error: Error | null) => {
     if (error !== null) {
       exitAfterWriteError(error)
       return

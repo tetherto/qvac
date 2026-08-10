@@ -9,6 +9,8 @@ import {
 
 export interface FitProcessOutcome {
   response: FitProcessResponse
+  /** The response already encoded, so a caller never re-serialises it to write it. */
+  responseLine: string
   exitCode: 0 | 1 | 2
 }
 
@@ -59,36 +61,35 @@ function invocationError (error: unknown): FitProcessResponse {
   }
 }
 
-function boundedInvocationError (error: unknown): FitProcessResponse {
+function boundedInvocationError (error: unknown, exitCode: 1 | 2): FitProcessOutcome {
   const response = invocationError(error)
   try {
-    encodeFitProcessResponse(response)
-    return response
+    return { response, responseLine: encodeFitProcessResponse(response), exitCode }
   } catch {
-    return invocationError(new RangeError('Fit process response exceeds 1 MiB'))
+    const bounded = invocationError(new RangeError('Fit process response exceeds 1 MiB'))
+    return { response: bounded, responseLine: encodeFitProcessResponse(bounded), exitCode }
   }
 }
 
 export function runFitProcessLine (line: string, fit: FitProcessFit): FitProcessOutcome {
-  if (Buffer.byteLength(line, 'utf8') > FIT_PROCESS_MAX_REQUEST_BYTES) {
-    return {
-      response: boundedInvocationError(new RangeError('Fit process request exceeds 64 KiB')),
-      exitCode: 2
-    }
+  // The sender spends a byte of its budget on the newline delimiter, so charge
+  // the request for it here too rather than bounding a different quantity.
+  if (Buffer.byteLength(line, 'utf8') + 1 > FIT_PROCESS_MAX_REQUEST_BYTES) {
+    return boundedInvocationError(new RangeError('Fit process request exceeds 64 KiB'), 2)
   }
 
   let parsed: unknown
   try {
     parsed = JSON.parse(line)
   } catch (error) {
-    return { response: boundedInvocationError(error), exitCode: 2 }
+    return boundedInvocationError(error, 2)
   }
 
   let request: FitProcessRequest
   try {
     request = parseFitProcessRequest(parsed)
   } catch (error) {
-    return { response: boundedInvocationError(error), exitCode: 2 }
+    return boundedInvocationError(error, 2)
   }
 
   try {
@@ -97,9 +98,8 @@ export function runFitProcessLine (line: string, fit: FitProcessFit): FitProcess
       status: 'completed',
       result: fit(request.config)
     }
-    encodeFitProcessResponse(response)
-    return { response, exitCode: 0 }
+    return { response, responseLine: encodeFitProcessResponse(response), exitCode: 0 }
   } catch (error) {
-    return { response: boundedInvocationError(error), exitCode: 1 }
+    return boundedInvocationError(error, 1)
   }
 }

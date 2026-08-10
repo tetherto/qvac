@@ -43,36 +43,35 @@ function invocationError(error) {
         }
     };
 }
-function boundedInvocationError(error) {
+function boundedInvocationError(error, exitCode) {
     const response = invocationError(error);
     try {
-        encodeFitProcessResponse(response);
-        return response;
+        return { response, responseLine: encodeFitProcessResponse(response), exitCode };
     }
     catch {
-        return invocationError(new RangeError('Fit process response exceeds 1 MiB'));
+        const bounded = invocationError(new RangeError('Fit process response exceeds 1 MiB'));
+        return { response: bounded, responseLine: encodeFitProcessResponse(bounded), exitCode };
     }
 }
 function runFitProcessLine(line, fit) {
-    if (Buffer.byteLength(line, 'utf8') > process_1.FIT_PROCESS_MAX_REQUEST_BYTES) {
-        return {
-            response: boundedInvocationError(new RangeError('Fit process request exceeds 64 KiB')),
-            exitCode: 2
-        };
+    // The sender spends a byte of its budget on the newline delimiter, so charge
+    // the request for it here too rather than bounding a different quantity.
+    if (Buffer.byteLength(line, 'utf8') + 1 > process_1.FIT_PROCESS_MAX_REQUEST_BYTES) {
+        return boundedInvocationError(new RangeError('Fit process request exceeds 64 KiB'), 2);
     }
     let parsed;
     try {
         parsed = JSON.parse(line);
     }
     catch (error) {
-        return { response: boundedInvocationError(error), exitCode: 2 };
+        return boundedInvocationError(error, 2);
     }
     let request;
     try {
         request = parseFitProcessRequest(parsed);
     }
     catch (error) {
-        return { response: boundedInvocationError(error), exitCode: 2 };
+        return boundedInvocationError(error, 2);
     }
     try {
         const response = {
@@ -80,10 +79,9 @@ function runFitProcessLine(line, fit) {
             status: 'completed',
             result: fit(request.config)
         };
-        encodeFitProcessResponse(response);
-        return { response, exitCode: 0 };
+        return { response, responseLine: encodeFitProcessResponse(response), exitCode: 0 };
     }
     catch (error) {
-        return { response: boundedInvocationError(error), exitCode: 1 };
+        return boundedInvocationError(error, 1);
     }
 }

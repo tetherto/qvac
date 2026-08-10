@@ -253,12 +253,16 @@ test('fit process public boundary excludes runner internals', (t) => {
   ])
 })
 
-test('native integration runs the desktop process suite after prebuild tests', (t) => {
-  t.ok(
-    packageJson.scripts['test:integration'].endsWith(
-      'bare test/integration/all.js --exit && npm run test:process'
-    )
-  )
+test('the runner smoke is reachable from both test lanes', (t) => {
+  // Only the prebuild-backed integration job un-skips the real-runner test, and
+  // it must be wired from here: reusable workflows resolve from the base branch,
+  // so a workflow edit would not take effect on its own PR.
+  t.ok(packageJson.scripts['test:integration'].includes('npm run test:process'))
+  // That job appends `<platform>-<arch>`, and npm appends run args to the end.
+  t.ok(packageJson.scripts['test:integration'].endsWith('bare test/integration/all.js --exit'))
+  // The no-prebuild lane CI invokes via `--if-present`.
+  t.ok(packageJson.scripts['test:unit'].includes('npm run test:process'))
+
   t.is(
     packageJson.scripts['test:integration:generate'],
     'brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate'
@@ -323,19 +327,51 @@ test('fit process core passes a completed FitResult through unchanged', (t) => {
   })
   t.is(outcome.response.result, result)
   t.alike(outcome.response.result, result)
+
+  // The outcome carries the encoded line so the runner writes it without a
+  // second pass over a response that may approach 1 MiB.
+  t.is(outcome.responseLine, encodeFitProcessResponse(outcome.response))
 })
 
 test('fit process core rejects requests above the 64 KiB limit', (t) => {
   let invoked = false
-  const outcome = runFitProcessLine('x'.repeat(FIT_PROCESS_MAX_REQUEST_BYTES + 1), () => {
+  const overBudget = runFitProcessLine('x'.repeat(FIT_PROCESS_MAX_REQUEST_BYTES), () => {
     invoked = true
     throw new Error('unreachable')
   })
 
-  t.is(outcome.exitCode, 2)
-  t.is(outcome.response.status, 'invocation-error')
-  t.ok(outcome.response.error.message.includes('64 KiB'))
+  t.is(overBudget.exitCode, 2)
+  t.is(overBudget.response.status, 'invocation-error')
+  t.ok(overBudget.response.error.message.includes('64 KiB'))
   t.is(invoked, false)
+
+  // One byte less leaves room for the newline the sender pays for, so the
+  // failure moves from the size guard to JSON parsing.
+  const withinBudget = runFitProcessLine('x'.repeat(FIT_PROCESS_MAX_REQUEST_BYTES - 1), () => {
+    throw new Error('unreachable')
+  })
+
+  t.is(withinBudget.response.error.name, 'SyntaxError')
+})
+
+test('every request the encoder produces fits the runner budget', (t) => {
+  const probe = encodeFitProcessRequest({ modelPath: '/model.gguf', backendsDir: '/' })
+  const padding = FIT_PROCESS_MAX_REQUEST_BYTES - Buffer.byteLength(probe, 'utf8')
+  const line = encodeFitProcessRequest({
+    modelPath: '/model.gguf',
+    backendsDir: `/${'x'.repeat(padding)}`
+  })
+
+  t.is(Buffer.byteLength(line, 'utf8'), FIT_PROCESS_MAX_REQUEST_BYTES)
+
+  let invoked = false
+  const outcome = runFitProcessLine(line.slice(0, -1), () => {
+    invoked = true
+    return completedFitResult()
+  })
+
+  t.is(outcome.exitCode, 0)
+  t.is(invoked, true)
 })
 
 test('fit process core maps oversized responses to invocation errors', (t) => {
@@ -350,7 +386,7 @@ test('fit process core maps oversized responses to invocation errors', (t) => {
   t.is(outcome.exitCode, 1)
   t.is(outcome.response.status, 'invocation-error')
   t.ok(outcome.response.error.message.includes('1 MiB'))
-  t.ok(Buffer.byteLength(encodeFitProcessResponse(outcome.response), 'utf8') <= FIT_PROCESS_MAX_RESPONSE_BYTES)
+  t.ok(Buffer.byteLength(outcome.responseLine, 'utf8') <= FIT_PROCESS_MAX_RESPONSE_BYTES)
 })
 
 test('fit process runner writes one flushed JSON response', { skip: !HAS_NATIVE_PREBUILD }, async (t) => {
