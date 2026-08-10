@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { configuredServer, runCli } from '../helpers/cli.js'
 import { MODELLESS_CONFIG } from '../helpers/config.js'
 
@@ -98,9 +101,58 @@ describe('serve flags: --docs', () => {
   })
 })
 
-describe('serve startup security warning', () => {
-  it('warns when binding beyond loopback without an API key', async (t) => {
-    const server = await configuredServer(t, MODELLESS_CONFIG, ['--host', '0.0.0.0'])
+describe('serve startup network exposure', () => {
+  it('refuses to bind beyond loopback without an API key', async () => {
+    const result = await runCli(['serve', 'openai', '--host', '0.0.0.0'], { timeoutMs: 5_000 })
+    assert.equal(result.code, 1)
+    assert.match(result.output, /non-loopback/i)
+    assert.match(result.output, /--api-key|--api-key-file/)
+    assert.match(result.output, /--allow-unauthenticated/)
+  })
+
+  it('warns but starts once the operator opts in', async (t) => {
+    const server = await configuredServer(t, MODELLESS_CONFIG, [
+      '--host',
+      '0.0.0.0',
+      '--allow-unauthenticated'
+    ])
     assert.match(server.output(), /non-loopback|api key|--api-key/i)
+  })
+})
+
+describe('serve flags: --api-key-file', () => {
+  it('authenticates with a key read from a file instead of argv', async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'qvac-cli-key-'))
+    t.after(() => rm(dir, { recursive: true, force: true }))
+    const keyFile = join(dir, 'api-key')
+    await writeFile(keyFile, 'file-sourced-key-123\n', { mode: 0o600 })
+
+    const srv = await configuredServer(t, MODELLESS_CONFIG, ['--api-key-file', keyFile])
+
+    assert.equal((await fetch(`${srv.baseUrl}/v1/models`)).status, 401)
+    const authed = await fetch(`${srv.baseUrl}/v1/models`, {
+      headers: { authorization: 'Bearer file-sourced-key-123' }
+    })
+    assert.equal(authed.status, 200)
+  })
+
+  it('refuses a key file that is missing or not a regular file', async () => {
+    const missing = await runCli(
+      ['serve', 'openai', '--api-key-file', join(tmpdir(), 'qvac-absent')],
+      {
+        timeoutMs: 5_000
+      }
+    )
+    assert.equal(missing.code, 1)
+    assert.match(missing.output, /cannot read the API key file/)
+
+    const dir = await mkdtemp(join(tmpdir(), 'qvac-cli-key-'))
+    try {
+      const asDir = await runCli(['serve', 'openai', '--api-key-file', dir], { timeoutMs: 5_000 })
+      assert.equal(asDir.code, 1)
+      assert.match(asDir.output, /must be a regular file/)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
