@@ -24,12 +24,7 @@ import {
 } from '@/utils/transcribe-metadata'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
-import {
-  isEndOfTurnEvent,
-  isVadEvent,
-  toEndOfTurnEvent,
-  toVadStateEvent
-} from '@/utils/asr-events'
+import { isEndOfTurnEvent, isVadEvent, toEndOfTurnEvent, toVadStateEvent } from '@/utils/asr-events'
 import { buildWhisperReloadConfig } from '@/plugins/builtin/asr-ggml/config'
 
 export { assertMetadataSupported, toTranscribeSegment, type WhisperAddonSegment }

@@ -2567,6 +2567,42 @@ GPT_OSS_20B_INST_Q4_K_M = ModelConstant(
     params="20B",
 )
 
+GROOT_MULTI_Q5_VF16 = ModelConstant(
+    name="GROOT_MULTI_Q5_VF16",
+    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    registry_source="s3",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=4529949,
+    blob_block_length=46466,
+    blob_byte_offset=296867803651,
+    model_id="groot-q5_vf16.gguf",
+    expected_size=3045175648,
+    sha256_checksum="d51e6466b63b70db39bdacc8555b85ad8b38db0dc57b7414b0daa001776165f0",
+    addon="vla",
+    engine="ggml-vla",
+    quantization="q5_vf16",
+    params="groot-n1.7-3b-multi",
+)
+
+GROOT_MULTI_Q8_VF16 = ModelConstant(
+    name="GROOT_MULTI_Q8_VF16",
+    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    registry_source="s3",
+    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    blob_block_offset=4467918,
+    blob_block_length=62031,
+    blob_byte_offset=292802576547,
+    model_id="groot-q8_vf16.gguf",
+    expected_size=4065227104,
+    sha256_checksum="2f15b9cf9dc6eeb539821b563725857c46efdf7514f25b16130700ffe9f77010",
+    addon="vla",
+    engine="ggml-vla",
+    quantization="q8_vf16",
+    params="groot-n1.7-3b-multi",
+)
+
 GROOT_Q5_VF16 = ModelConstant(
     name="GROOT_Q5_VF16",
     src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
@@ -2585,24 +2621,6 @@ GROOT_Q5_VF16 = ModelConstant(
     params="groot-n1.7-3b-libero",
 )
 
-GROOT_Q5_VF16_1 = ModelConstant(
-    name="GROOT_Q5_VF16_1",
-    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
-    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
-    registry_source="s3",
-    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blob_block_offset=4529949,
-    blob_block_length=46466,
-    blob_byte_offset=296867803651,
-    model_id="groot-q5_vf16.gguf",
-    expected_size=3045175648,
-    sha256_checksum="d51e6466b63b70db39bdacc8555b85ad8b38db0dc57b7414b0daa001776165f0",
-    addon="vla",
-    engine="ggml-vla",
-    quantization="q5_vf16",
-    params="groot-n1.7-3b-multi",
-)
-
 GROOT_Q8_VF16 = ModelConstant(
     name="GROOT_Q8_VF16",
     src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
@@ -2619,24 +2637,6 @@ GROOT_Q8_VF16 = ModelConstant(
     engine="ggml-vla",
     quantization="q8_vf16",
     params="groot-n1.7-3b-libero",
-)
-
-GROOT_Q8_VF16_1 = ModelConstant(
-    name="GROOT_Q8_VF16_1",
-    src="registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
-    registry_path="qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
-    registry_source="s3",
-    blob_core_key="d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blob_block_offset=4467918,
-    blob_block_length=62031,
-    blob_byte_offset=292802576547,
-    model_id="groot-q8_vf16.gguf",
-    expected_size=4065227104,
-    sha256_checksum="2f15b9cf9dc6eeb539821b563725857c46efdf7514f25b16130700ffe9f77010",
-    addon="vla",
-    engine="ggml-vla",
-    quantization="q8_vf16",
-    params="groot-n1.7-3b-multi",
 )
 
 GTE_LARGE_335M_FP16_SHARD = ModelConstant(
@@ -7066,10 +7066,10 @@ __all__ = [
     "GPT_OSS_120B_INST_Q4_K_M_SHARD",
     "GPT_OSS_120B_INST_Q4_K_M_TENSORS",
     "GPT_OSS_20B_INST_Q4_K_M",
+    "GROOT_MULTI_Q5_VF16",
+    "GROOT_MULTI_Q8_VF16",
     "GROOT_Q5_VF16",
-    "GROOT_Q5_VF16_1",
     "GROOT_Q8_VF16",
-    "GROOT_Q8_VF16_1",
     "GTE_LARGE_335M_FP16_SHARD",
     "GTE_LARGE_335M_FP16_TENSORS",
     "GTE_LARGE_FP16",
