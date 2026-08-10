@@ -31,6 +31,10 @@ function wrapWhisperBlock(block) {
   return `set -e\nPRESTAGE_DIR=/data/local/tmp/prestaged-models\nHOST_PRESTAGE_DIR=/tmp/prestage\nmkdir -p "$HOST_PRESTAGE_DIR"\n${block}\n`
 }
 
+function wrapIosWhisperBlock(block) {
+  return `set -e\nBID=io.tether.test.qvac\nPRESTAGE_READY=1\nmkdir -p /tmp/prestage\n${block}\n`
+}
+
 function runWithStubs(script, { adbExit = 0, curlExit = 0 }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'asr-prestage-shell-'))
   const binDir = path.join(dir, 'bin')
@@ -181,6 +185,7 @@ test('buildWhisperStageBlock stages every model with a .size sidecar and degrade
   assert.match(block, /stage "a\.bin" "https:\/\/example\.com\/a\.bin"/)
   assert.match(block, /stage "b\.bin" "https:\/\/example\.com\/b\.bin"/)
   assert.match(block, /adb push/)
+  assert.doesNotMatch(block, /pymobiledevice3/)
   assert.match(block, /wc -c/)
   assert.match(block, /\.size/)
   assert.match(block, /device will use network fallback/)
@@ -194,6 +199,34 @@ test('buildWhisperStageBlock stages every model with a .size sidecar and degrade
   const failedDownload = runWithStubs(script, { curlExit: 22 })
   assert.equal(failedDownload.status, 0, failedDownload.stderr)
   assert.match(failedDownload.stdout, /device will use network fallback/)
+})
+
+test('buildWhisperStageBlock ios backend pushes sidecars into Documents and degrades gracefully', () => {
+  const block = buildWhisperStageBlock(
+    [
+      { name: 'a.bin', url: 'https://example.com/a.bin' },
+      { name: 'b.bin', url: 'https://example.com/b.bin' }
+    ],
+    'ios'
+  )
+  assert.match(block, /stage "a\.bin" "https:\/\/example\.com\/a\.bin"/)
+  assert.match(block, /stage "b\.bin" "https:\/\/example\.com\/b\.bin"/)
+  assert.match(block, /pymobiledevice3 apps push/)
+  assert.match(block, /Documents\/\$NAME/)
+  assert.match(block, /Documents\/\$NAME\.size/)
+  assert.match(block, /wc -c/)
+  assert.match(block, /\.size/)
+  assert.match(block, /device will use network fallback/)
+  assert.doesNotMatch(block, /adb push/)
+  assert.doesNotMatch(block, /FATAL/)
+
+  const script = wrapIosWhisperBlock(block)
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildWhisperStageBlock rejects unknown platforms', () => {
+  assert.throws(() => buildWhisperStageBlock([], 'windows'), /unknown platform/)
 })
 
 test('buildScript selects Parakeet and Whisper models from the explicit shard grep', () => {
@@ -213,6 +246,7 @@ test('buildScript selects Parakeet and Whisper models from the explicit shard gr
   assert.match(script, /whisper-prestage-list\.tsv/)
   assert.match(script, /adb shell test -s/)
   assert.match(script, /FATAL/)
+  assert.doesNotMatch(script, /pymobiledevice3/)
   // Whisper (graceful).
   assert.match(script, /stage "\$NAME" "\$URL"/)
   assert.match(script, /device will use network fallback/)
@@ -220,6 +254,41 @@ test('buildScript selects Parakeet and Whisper models from the explicit shard gr
 
   const syntax = childProcess.spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' })
   assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildScript ios backend mirrors the Android shard selection with a pymobiledevice3 push', () => {
+  const script = buildScript('QkFTRTY0', 'ios')
+  // Same explicit-shard-grep selection contract as Android.
+  assert.match(script, /base64 -d > "\$TMP_ROOT\/model-manifest\.json"/)
+  assert.match(script, /base64 -d > "\$TMP_ROOT\/whisper-manifest\.json"/)
+  assert.match(script, /cat "\$TMP_ROOT\/qvacShardGrep\.txt"/)
+  assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
+  assert.match(script, /parakeet-prestage-list\.tsv/)
+  assert.match(script, /whisper-prestage-list\.tsv/)
+  // Parakeet (fail-hard) pushed into Documents via pymobiledevice3.
+  assert.match(script, /pymobiledevice3 apps push/)
+  assert.match(script, /Documents\/\$NAME/)
+  assert.match(script, /FATAL: push of \$NAME failed/)
+  assert.match(script, /FATAL: pymobiledevice3 unavailable for parakeet pre-stage/)
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /not found during afc operation\|failed to perform afc operation/)
+  assert.match(script, /pymobiledevice3==10\.3\.1/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
+  // Whisper (graceful) staged shard-selected from whisper-prestage-list.tsv, not
+  // baked-in — the stage() helper is fed by the same loop Android uses.
+  assert.match(script, /stage "\$NAME" "\$URL"/)
+  assert.doesNotMatch(script, /stage "ggml-tiny\.bin"/)
+  assert.match(script, /Documents\/\$NAME\.size/)
+  assert.match(script, /device will use network fallback/)
+  assert.match(script, /\[prestage\] done/)
+
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildScript rejects unknown platforms', () => {
+  assert.throws(() => buildScript('QkFTRTY0', 'windows'), /unknown platform/)
 })
 
 test('complete prestage script deduplicates selected Parakeet models', () => {

@@ -27,7 +27,8 @@ import {
   extractProfilingMeta,
   stripProfilingMeta,
   recordFailure,
-  generateId
+  generateId,
+  createDelegatedProfilingMeta
 } from '@/profiling/index'
 import { withTimeout, withTimeoutStream } from '@/utils/withTimeout'
 import { getEngineLogger } from '@/logging/index'
@@ -132,7 +133,6 @@ async function sendProfiled<T extends Request>(
   profilingMeta?: ProfilingRequestMeta
 ): Promise<ResponseWithDelegation> {
   const profileId = profilingMeta?.id ?? generateId()
-  const includeServerBreakdown = profilingMeta?.includeServer ?? false
   const timings: DelegationTimings = createDelegationTimings(profileId, request.type)
 
   try {
@@ -151,13 +151,9 @@ async function sendProfiled<T extends Request>(
     })
 
     const stringifyStart = nowMs()
-    const profilingEnvelope: Record<string, unknown> = { id: profileId }
-    if (includeServerBreakdown) {
-      profilingEnvelope['includeServer'] = true
-    }
     const requestWithProfiling = {
       ...parsedRequest,
-      [PROFILING_KEY]: profilingEnvelope
+      [PROFILING_KEY]: createDelegatedProfilingMeta(profileId, profilingMeta)
     }
     const payload = JSON.stringify(requestWithProfiling)
     timings.requestStringifyMs = nowMs() - stringifyStart
@@ -294,7 +290,7 @@ async function* streamProfiled<T extends Request>(
     const stringifyStart = nowMs()
     const requestWithProfiling = {
       ...parsedRequest,
-      [PROFILING_KEY]: { id: profileId }
+      [PROFILING_KEY]: createDelegatedProfilingMeta(profileId, profilingMeta)
     }
     const payload = JSON.stringify(requestWithProfiling)
     timings.requestStringifyMs = nowMs() - stringifyStart
