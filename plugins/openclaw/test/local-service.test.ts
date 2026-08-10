@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import {
   buildQvacServeArgs,
   createLocalServiceServeConfig,
+  formatLauncherError,
   formatSpawnError,
   loadApiKey,
   parseLocalServiceArgs,
@@ -77,6 +78,16 @@ test('local service launcher rejects a missing or ambiguous API key file', () =>
     () => parseLocalServiceArgs(['--api-key-file', '--model', 'qwen3.5-9b']),
     /--api-key-file requires a value/
   )
+  assert.throws(
+    () =>
+      parseLocalServiceArgs([
+        '--api-key-file',
+        '/tmp/qvac-openclaw/api-key',
+        '--api-key-file',
+        '/tmp/qvac-openclaw/other-key'
+      ]),
+    /--api-key-file cannot be specified more than once/
+  )
 })
 
 test('local service launcher resolves GPT-OSS friendly id to SDK constant', () => {
@@ -132,6 +143,35 @@ test('spawn errors are formatted without args or secret-bearing properties', () 
     formatted,
     'Failed to start QVAC service: code=ENOENT syscall=spawn qvac command=/usr/local/bin/qvac'
   )
+  assert.doesNotMatch(formatted, /abcdefghijklmnopqrstuvwxyzABCDE_|spawnargs/)
+})
+
+test('launcher validation errors retain sanitized diagnostics without raw properties', () => {
+  const validationError = Object.assign(
+    new TypeError('--api-key-file requires a value\nretry setup'),
+    {
+      spawnargs: ['--api-key', 'abcdefghijklmnopqrstuvwxyzABCDE_']
+    }
+  )
+  assert.equal(
+    formatLauncherError(validationError),
+    'QVAC local service launcher failed: --api-key-file requires a value retry setup'
+  )
+
+  const configError = Object.assign(new Error('ENOENT: key file not found\ncheck setup'), {
+    code: 'ENOENT',
+    spawnargs: ['--api-key', 'abcdefghijklmnopqrstuvwxyzABCDE_']
+  })
+  assert.equal(
+    formatLauncherError(configError),
+    'QVAC local service launcher failed: ENOENT: key file not found check setup'
+  )
+
+  const unknownError = Object.assign(new Error('secret=abcdefghijklmnopqrstuvwxyzABCDE_'), {
+    spawnargs: ['--api-key', 'abcdefghijklmnopqrstuvwxyzABCDE_']
+  })
+  const formatted = formatLauncherError(unknownError)
+  assert.equal(formatted, 'QVAC local service launcher failed')
   assert.doesNotMatch(formatted, /abcdefghijklmnopqrstuvwxyzABCDE_|spawnargs/)
 })
 

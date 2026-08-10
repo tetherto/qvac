@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -53,6 +61,11 @@ interface RegisteredProvider {
 
 interface RegistrationApi {
   readonly pluginConfig?: Record<string, unknown>
+  readonly runtime?: {
+    readonly state: {
+      resolveStateDir(): string
+    }
+  }
   registerProvider(provider: RegisteredProvider): void
   registerModelCatalogProvider?(provider: RegisteredModelCatalogProvider): void
 }
@@ -71,7 +84,6 @@ test('resolveOptions returns OpenClaw-safe defaults', () => {
   assert.equal(options.ctxSize, 32768)
   assert.equal(options.tools, true)
   assert.equal(options.qvacCommand, 'qvac')
-  assert.equal(options.apiKey, undefined)
   assert.equal(options.serviceRuntime, process.execPath)
   assert.match(options.serviceEntrypoint, /local-service\.js$/)
 })
@@ -123,7 +135,7 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   assert.equal(provider.baseUrl, 'http://127.0.0.1:11500/v1')
   assert.deepEqual(provider.apiKey, {
     source: 'file',
-    provider: 'qvac',
+    provider: 'qvac_key_file',
     id: 'value'
   })
   assert.equal(provider.api, 'openai-completions')
@@ -236,7 +248,7 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
   assert.equal(result.configPatch.models.mode, 'merge')
   assert.deepEqual(result.configPatch.secrets, {
     providers: {
-      qvac: {
+      qvac_key_file: {
         source: 'file',
         path: keyFile,
         mode: 'singleValue'
@@ -256,7 +268,11 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
   )
   const qvacProvider = result.configPatch.models.providers['qvac'] as OpenClawProvider
   const generatedKey = readFileSync(keyFile, 'utf8')
-  assert.deepEqual(qvacProvider.apiKey, { source: 'file', provider: 'qvac', id: 'value' })
+  assert.deepEqual(qvacProvider.apiKey, {
+    source: 'file',
+    provider: 'qvac_key_file',
+    id: 'value'
+  })
   const qvacSecretProvider = result.configPatch.secrets.providers[qvacProvider.apiKey.provider]
   assert.equal(qvacSecretProvider?.source, 'file')
   if (qvacSecretProvider?.source !== 'file') assert.fail('QVAC file secret provider is missing')
@@ -273,7 +289,7 @@ test('createQvacSetupResult materializes provider config without pasted JSON', (
   rmSync(stateDir, { recursive: true })
 })
 
-test('applyQvacSetupConfig preserves existing OpenClaw experimental settings', () => {
+test('applyQvacSetupConfig preserves existing OpenClaw settings', () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
   const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
   const config = applyQvacSetupConfig(
@@ -284,6 +300,24 @@ test('applyQvacSetupConfig preserves existing OpenClaw experimental settings', (
             localModelLean: true,
             futureOpenClawFlag: 'preserve-me'
           }
+        }
+      },
+      secrets: {
+        providers: {
+          qvac: {
+            source: 'env',
+            allowlist: ['UNRELATED_QVAC_KEY']
+          }
+        },
+        defaults: {
+          env: 'default',
+          file: 'existing_file_provider'
+        },
+        resolution: {
+          maxProviderConcurrency: 2
+        },
+        futureSecretSetting: {
+          preserve: true
         }
       }
     },
@@ -301,9 +335,23 @@ test('applyQvacSetupConfig preserves existing OpenClaw experimental settings', (
     createOpenClawProvider(resolveOptions({ model: 'qwen3.5-4b', apiKeyFile: keyFile }))
   )
   assert.deepEqual(config.secrets?.providers?.['qvac'], {
+    source: 'env',
+    allowlist: ['UNRELATED_QVAC_KEY']
+  })
+  assert.deepEqual(config.secrets?.providers?.['qvac_key_file'], {
     source: 'file',
     path: keyFile,
     mode: 'singleValue'
+  })
+  assert.deepEqual(config.secrets?.defaults, {
+    env: 'default',
+    file: 'existing_file_provider'
+  })
+  assert.deepEqual(config.secrets?.resolution, {
+    maxProviderConcurrency: 2
+  })
+  assert.deepEqual(config.secrets?.['futureSecretSetting'], {
+    preserve: true
   })
   rmSync(stateDir, { recursive: true })
 })
@@ -359,13 +407,16 @@ test('registerQvacProvider registers a catalog provider for OpenClaw', async () 
   assert.ok(catalog)
   const expectedOptions = resolveOptions({ apiKeyFile: keyFile })
   assert.deepEqual(catalog, { provider: createOpenClawProvider(expectedOptions) })
+  assert.equal(existsSync(keyFile), false)
 
   const staticCatalog = await registered[0]?.staticCatalog.run()
   assert.ok(staticCatalog)
   assert.deepEqual(staticCatalog, { provider: createOpenClawProvider(expectedOptions) })
+  assert.equal(existsSync(keyFile), false)
 
   const setup = await registered[0]?.auth[0]?.run({ config: {} })
   assert.ok(setup)
+  assert.equal(existsSync(keyFile), true)
   assert.deepEqual(
     setup.configPatch.models.providers['qvac'],
     createOpenClawProvider(expectedOptions)
@@ -399,11 +450,41 @@ test('registerQvacProvider reads OpenClaw pluginConfig when present', async () =
     keyFile
   ])
   assert.equal(args.includes(TEST_KEY), false)
-  assert.equal(readFileSync(keyFile, 'utf8'), TEST_KEY)
+  assert.equal(existsSync(keyFile), false)
   assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), [
     '--model',
     'qwen3.5-4b'
   ])
+  const setup = await registered[0]?.auth[0]?.run({ config: {} })
+  assert.ok(setup)
+  assert.equal(readFileSync(keyFile, 'utf8'), TEST_KEY)
+  rmSync(stateDir, { recursive: true })
+})
+
+test('registerQvacProvider derives the key path from the OpenClaw runtime state', async () => {
+  const registered: RegisteredProvider[] = []
+  const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-runtime-state-test-'))
+  const expectedKeyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
+
+  registerQvacProvider({
+    runtime: {
+      state: {
+        resolveStateDir() {
+          return stateDir
+        }
+      }
+    },
+    registerProvider(provider: RegisteredProvider) {
+      registered.push(provider)
+    }
+  })
+
+  const catalog = await registered[0]?.catalog.run()
+  assert.ok(catalog)
+  const provider = catalog.provider as OpenClawProvider
+  const keyFileIndex = provider.localService.args.indexOf('--api-key-file')
+  assert.equal(provider.localService.args[keyFileIndex + 1], expectedKeyFile)
+  assert.equal(existsSync(expectedKeyFile), false)
   rmSync(stateDir, { recursive: true })
 })
 

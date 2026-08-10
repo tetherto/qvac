@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import {
   chmodSync,
   closeSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -9,7 +10,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -25,7 +26,6 @@ export interface ResolvedOptions {
   readonly host: string
   readonly port: number
   readonly baseUrl: string
-  readonly apiKey: string | undefined
   readonly apiKeyFile: string
   readonly qvacCommand: string
   readonly serviceRuntime: string
@@ -39,7 +39,7 @@ export interface ResolvedOptions {
   readonly timeoutSeconds: number
 }
 
-export type RawOptions = Partial<Record<keyof ResolvedOptions, unknown>>
+export type RawOptions = Partial<Record<keyof ResolvedOptions | 'apiKey', unknown>>
 
 export interface OpenClawCost {
   readonly input: number
@@ -92,6 +92,17 @@ export interface OpenClawConfigLike {
   }
   readonly secrets?: {
     readonly providers?: Record<string, SecretProviderConfig>
+    readonly defaults?: {
+      readonly env?: string
+      readonly file?: string
+      readonly exec?: string
+    }
+    readonly resolution?: {
+      readonly maxProviderConcurrency?: number
+      readonly maxRefsPerProvider?: number
+      readonly maxBatchBytes?: number
+    }
+    readonly [key: string]: unknown
   }
 }
 
@@ -138,14 +149,8 @@ export interface QvacServeModel {
 
 export interface QvacApiKeyRef {
   readonly source: 'file'
-  readonly provider: 'qvac'
+  readonly provider: 'qvac_key_file'
   readonly id: 'value'
-}
-
-export interface QvacSecretProviderConfig {
-  readonly source: 'file'
-  readonly path: string
-  readonly mode: 'singleValue'
 }
 
 export interface QvacProviderRegistration {
@@ -201,18 +206,35 @@ export interface QvacProviderRegistration {
   }): void
 }
 
+const QVAC_SECRET_PROVIDER_ID = 'qvac_key_file'
+
+export function resolveQvacApiKeyFile(stateDir: string): string {
+  return join(stateDir, 'plugins', 'qvac', 'api-key')
+}
+
+function resolveFallbackOpenClawStateDir(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir()
+): string {
+  const override = env['OPENCLAW_STATE_DIR']?.trim()
+  if (override) {
+    if (override === '~') return home
+    if (override.startsWith('~/')) return join(home, override.slice(2))
+    return resolve(override)
+  }
+
+  const current = join(home, '.openclaw')
+  if (existsSync(current)) return current
+  const legacy = join(home, '.clawdbot')
+  return existsSync(legacy) ? legacy : current
+}
+
 export const DEFAULT_OPTIONS: ResolvedOptions = {
   model: 'qwen3.5-9b',
   host: '127.0.0.1',
   port: 11434,
   baseUrl: 'http://127.0.0.1:11434/v1',
-  apiKey: undefined,
-  apiKeyFile: join(
-    process.env['OPENCLAW_STATE_DIR']?.trim() || join(homedir(), '.openclaw'),
-    'plugins',
-    'qvac',
-    'api-key'
-  ),
+  apiKeyFile: resolveQvacApiKeyFile(resolveFallbackOpenClawStateDir()),
   qvacCommand: 'qvac',
   serviceRuntime: process.execPath,
   serviceEntrypoint: join(dirname(fileURLToPath(import.meta.url)), 'local-service.js'),
@@ -380,60 +402,68 @@ function coerceBoolean(option: string, value: unknown): boolean {
   throw new TypeError(`${option} must be a boolean`)
 }
 
-export function resolveOptions(raw: RawOptions = {}): ResolvedOptions {
+function resolveOptionsWithApiKey(raw: RawOptions): {
+  options: ResolvedOptions
+  configuredApiKey: string | undefined
+} {
   const host = raw.host === undefined ? DEFAULT_OPTIONS.host : coerceString('host', raw.host)
   const port = raw.port === undefined ? DEFAULT_OPTIONS.port : coerceNumber('port', raw.port)
   const baseUrl =
     raw.baseUrl === undefined ? `http://${host}:${port}/v1` : coerceString('baseUrl', raw.baseUrl)
   return {
-    model: raw.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', raw.model),
-    host,
-    port,
-    baseUrl,
-    apiKey:
-      raw.apiKey === undefined ? DEFAULT_OPTIONS.apiKey : normalizeApiKey(raw.apiKey, 'apiKey'),
-    apiKeyFile:
-      raw.apiKeyFile === undefined
-        ? DEFAULT_OPTIONS.apiKeyFile
-        : coerceString('apiKeyFile', raw.apiKeyFile),
-    qvacCommand:
-      raw.qvacCommand === undefined
-        ? DEFAULT_OPTIONS.qvacCommand
-        : coerceString('qvacCommand', raw.qvacCommand),
-    serviceRuntime:
-      raw.serviceRuntime === undefined
-        ? DEFAULT_OPTIONS.serviceRuntime
-        : coerceString('serviceRuntime', raw.serviceRuntime),
-    serviceEntrypoint:
-      raw.serviceEntrypoint === undefined
-        ? DEFAULT_OPTIONS.serviceEntrypoint
-        : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
-    cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
-    ctxSize:
-      raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
-    reasoningBudget:
-      raw.reasoningBudget === undefined
-        ? DEFAULT_OPTIONS.reasoningBudget
-        : coerceNumber('reasoningBudget', raw.reasoningBudget),
-    tools: raw.tools === undefined ? DEFAULT_OPTIONS.tools : coerceBoolean('tools', raw.tools),
-    readyTimeoutMs:
-      raw.readyTimeoutMs === undefined
-        ? DEFAULT_OPTIONS.readyTimeoutMs
-        : coerceNumber('readyTimeoutMs', raw.readyTimeoutMs),
-    idleStopMs:
-      raw.idleStopMs === undefined
-        ? DEFAULT_OPTIONS.idleStopMs
-        : coerceNumber('idleStopMs', raw.idleStopMs),
-    timeoutSeconds:
-      raw.timeoutSeconds === undefined
-        ? DEFAULT_OPTIONS.timeoutSeconds
-        : coerceNumber('timeoutSeconds', raw.timeoutSeconds)
+    configuredApiKey: raw.apiKey === undefined ? undefined : normalizeApiKey(raw.apiKey, 'apiKey'),
+    options: {
+      model: raw.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', raw.model),
+      host,
+      port,
+      baseUrl,
+      apiKeyFile:
+        raw.apiKeyFile === undefined
+          ? DEFAULT_OPTIONS.apiKeyFile
+          : coerceString('apiKeyFile', raw.apiKeyFile),
+      qvacCommand:
+        raw.qvacCommand === undefined
+          ? DEFAULT_OPTIONS.qvacCommand
+          : coerceString('qvacCommand', raw.qvacCommand),
+      serviceRuntime:
+        raw.serviceRuntime === undefined
+          ? DEFAULT_OPTIONS.serviceRuntime
+          : coerceString('serviceRuntime', raw.serviceRuntime),
+      serviceEntrypoint:
+        raw.serviceEntrypoint === undefined
+          ? DEFAULT_OPTIONS.serviceEntrypoint
+          : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
+      cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
+      ctxSize:
+        raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
+      reasoningBudget:
+        raw.reasoningBudget === undefined
+          ? DEFAULT_OPTIONS.reasoningBudget
+          : coerceNumber('reasoningBudget', raw.reasoningBudget),
+      tools: raw.tools === undefined ? DEFAULT_OPTIONS.tools : coerceBoolean('tools', raw.tools),
+      readyTimeoutMs:
+        raw.readyTimeoutMs === undefined
+          ? DEFAULT_OPTIONS.readyTimeoutMs
+          : coerceNumber('readyTimeoutMs', raw.readyTimeoutMs),
+      idleStopMs:
+        raw.idleStopMs === undefined
+          ? DEFAULT_OPTIONS.idleStopMs
+          : coerceNumber('idleStopMs', raw.idleStopMs),
+      timeoutSeconds:
+        raw.timeoutSeconds === undefined
+          ? DEFAULT_OPTIONS.timeoutSeconds
+          : coerceNumber('timeoutSeconds', raw.timeoutSeconds)
+    }
   }
 }
 
+export function resolveOptions(raw: RawOptions = {}): ResolvedOptions {
+  return resolveOptionsWithApiKey(raw).options
+}
+
 function prepareOptions(raw: RawOptions): ResolvedOptions {
-  const options = resolveOptions(raw)
-  ensureApiKeyFile(options.apiKeyFile, options.apiKey)
+  const { options, configuredApiKey } = resolveOptionsWithApiKey(raw)
+  ensureApiKeyFile(options.apiKeyFile, configuredApiKey)
   return options
 }
 
@@ -459,7 +489,7 @@ export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvid
     baseUrl: options.baseUrl,
     apiKey: {
       source: 'file',
-      provider: 'qvac',
+      provider: QVAC_SECRET_PROVIDER_ID,
       id: 'value'
     },
     api: 'openai-completions',
@@ -521,7 +551,7 @@ export function createQvacSetupResult(
       secrets: {
         providers: {
           ...config.secrets?.providers,
-          qvac: {
+          [QVAC_SECRET_PROVIDER_ID]: {
             source: 'file',
             path: options.apiKeyFile,
             mode: 'singleValue'
@@ -553,7 +583,10 @@ export function applyQvacSetupConfig(
       mode: setup.models.mode,
       providers: setup.models.providers
     },
-    secrets: setup.secrets
+    secrets: {
+      ...config.secrets,
+      providers: setup.secrets.providers
+    }
   }
 }
 
@@ -562,12 +595,8 @@ export function registerQvacProvider(
   rawOptions: RawOptions = {}
 ): void {
   const pluginConfig = api.pluginConfig ?? {}
-  const apiKeyFile = join(
-    api.runtime?.state.resolveStateDir() ?? dirname(dirname(dirname(DEFAULT_OPTIONS.apiKeyFile))),
-    'plugins',
-    'qvac',
-    'api-key'
-  )
+  const stateDir = api.runtime?.state.resolveStateDir() ?? resolveFallbackOpenClawStateDir()
+  const apiKeyFile = resolveQvacApiKeyFile(stateDir)
   const mergedOptions = () => ({ apiKeyFile, ...pluginConfig, ...rawOptions })
   api.registerModelCatalogProvider?.({
     provider: 'qvac',
@@ -575,7 +604,7 @@ export function registerQvacProvider(
     staticCatalog: () => openClawCatalogRows
   })
 
-  const providerConfig = () => createOpenClawProvider(prepareOptions(mergedOptions()))
+  const providerConfig = () => createOpenClawProvider(resolveOptions(mergedOptions()))
 
   api.registerProvider({
     id: 'qvac',

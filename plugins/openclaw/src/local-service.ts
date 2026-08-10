@@ -152,6 +152,30 @@ export function formatSpawnError(error: unknown, command: string): string {
   return `Failed to start QVAC service: code=${code} syscall=${syscall} command=${command}`
 }
 
+const CONFIG_ERROR_CODES = new Set(['EACCES', 'EISDIR', 'ENOENT', 'ENOTDIR', 'EPERM'])
+
+function sanitizeErrorMessage(message: string): string {
+  return message
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function formatLauncherError(error: unknown): string {
+  const code =
+    error instanceof Error && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : undefined
+  if (
+    error instanceof TypeError ||
+    (error instanceof Error && code && CONFIG_ERROR_CODES.has(code))
+  ) {
+    const message = sanitizeErrorMessage(error.message)
+    if (message) return `QVAC local service launcher failed: ${message}`
+  }
+  return 'QVAC local service launcher failed'
+}
+
 export function resolveLocalServiceExitCode(
   code: number | null,
   signal: NodeJS.Signals | null,
@@ -216,8 +240,8 @@ async function main(): Promise<void> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  void main().catch(() => {
-    console.error('QVAC local service launcher failed')
+  void main().catch((error: unknown) => {
+    console.error(formatLauncherError(error))
     process.exit(1)
   })
 }

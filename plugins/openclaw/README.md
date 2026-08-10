@@ -12,10 +12,25 @@ npm install -g openclaw @qvac/openclaw-plugin @qvac/cli @qvac/sdk
 openclaw plugins install @qvac/openclaw-plugin
 openclaw plugins enable qvac
 openclaw config set plugins.allow '["qvac"]' --strict-json
+openclaw onboard --auth-choice qvac
 ```
 
 `@qvac/sdk` must be available next to the `qvac` command so serve can resolve
-model constants from the catalog.
+model constants from the catalog. Installing and enabling the plugin alone does
+not materialize the QVAC provider credential or private key; onboarding is
+required.
+
+For non-interactive setup:
+
+```bash
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --mode local \
+  --auth-choice qvac \
+  --skip-search \
+  --skip-health
+```
 
 ## Manual Local Testing
 
@@ -126,9 +141,9 @@ Expected result:
 - The execution trace uses `provider: "qvac"` and `model: "qwen3.5-9b"`.
 - `fallbackUsed` is `false`.
 
-The managed `qvac serve` requires bearer authentication. OpenClaw resolves the
-same private key file for client requests and readiness probes, so no additional
-auth setup is needed for this smoke test.
+The managed `qvac serve` requires bearer authentication. After the onboarding
+step above, OpenClaw resolves the same private key file for client requests and
+readiness probes.
 
 ## Configure
 
@@ -143,6 +158,8 @@ OpenClaw's provider config uses a file SecretRef, and the local-service argument
 contain only the key-file path. The launcher reads that file and passes the key
 to `qvac serve openai --api-key`. A missing, invalid, or unsafe key prevents the
 server from starting. The generated QVAC serve config does not contain the key.
+The SecretRef provider id is namespaced as `qvac_key_file` so setup does not
+replace an unrelated `secrets.providers.qvac` entry.
 
 Plugin config can override the local service launcher:
 

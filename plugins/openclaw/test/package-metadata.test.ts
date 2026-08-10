@@ -43,6 +43,19 @@ test('package.json declares the OpenClaw runtime extension entrypoint', () => {
   assert.deepEqual(packageJson.openclaw?.extensions, ['./dist/index.js'])
 })
 
+test('README install instructions materialize QVAC credentials through onboarding', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+  const installSection = readme.slice(
+    readme.indexOf('## Install'),
+    readme.indexOf('## Manual Local Testing')
+  )
+
+  assert.match(installSection, /openclaw onboard[\s\S]*--auth-choice qvac/)
+  assert.match(installSection, /--non-interactive/)
+  assert.match(installSection, /enabling[\s\S]*does\s+not[\s\S]*credentials?/i)
+  assert.doesNotMatch(readme, /no additional auth setup is needed/i)
+})
+
 test('package entrypoint exports the plugin and serve config helpers', () => {
   assert.equal(typeof pluginEntry, 'object')
   assert.deepEqual(createQvacServeModels(resolveOptions())['qwen3.5-9b'], {
