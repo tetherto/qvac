@@ -33,7 +33,6 @@
   "devDependencies": {
     "@types/brittle": "^3.5.0",
     "brittle": "^3.10.1",
-    "husky": "^9.1.7",
     "lunte": "^1.8.3",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
