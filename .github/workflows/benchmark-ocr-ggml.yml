@@ -343,6 +343,15 @@ jobs:
     if: always()
 
     steps:
+      # Checkout before the artifact download: actions/checkout cleans the
+      # workspace and would wipe an already-downloaded results/ directory.
+      - name: Checkout summary renderer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            packages/ocr-ggml/benchmarks/quality_eval/render_summary.py
+          sparse-checkout-cone-mode: false
+
       - name: Download results
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         continue-on-error: true
@@ -356,134 +365,22 @@ jobs:
           echo "No ocr-ggml-benchmark-results artifact found; skipping summary."
           exit 0
 
+      # Renders the per-task comparison sections plus the final unified
+      # per-model x device stats table (QVAC-23259), matching the
+      # consolidated-report format of the other benchmark workflows.
+      # Inputs are passed via env (not interpolated into code) to keep
+      # workflow inputs out of the interpreter's source text.
       - name: Generate results summary
+        env:
+          PIPELINE: ${{ inputs.pipeline }}
+          TASKS: ${{ inputs.tasks }}
+          LIMIT: ${{ inputs.limit }}
         run: |
-          python3 << 'PYTHON_SCRIPT' >> $GITHUB_STEP_SUMMARY
-          import json
-          from pathlib import Path
-
-          def load_aggregate(results_dir, backend, task_type):
-              task_dir = task_type.replace(" ", "_")
-              path = Path(results_dir) / backend / task_dir / "aggregate.json"
-              if path.exists():
-                  with open(path) as f:
-                      return json.load(f)
-              return None
-
-          def pick_winner(val_a, val_b, name_a, name_b, lower_is_better=True):
-              if val_a is None or val_b is None:
-                  return "N/A", "N/A", "-"
-              if lower_is_better:
-                  a_wins = val_a < val_b
-              else:
-                  a_wins = val_a > val_b
-              a_str = f"**{val_a:.4f}**" if a_wins else f"{val_a:.4f}"
-              b_str = f"**{val_b:.4f}**" if not a_wins else f"{val_b:.4f}"
-              winner = name_a if a_wins else name_b
-              return a_str, b_str, winner
-
-          print("# OCR GGML Benchmark Results\n")
-          print("**Configuration:**")
-          print("- Pipeline: `${{ inputs.pipeline }}`")
-          print("- Tasks: `${{ inputs.tasks }}`")
-          print("- Sample Limit: `${{ inputs.limit }}`\n")
-
-          pipeline = "${{ inputs.pipeline }}"
-          run_easyocr = pipeline in ("easyocr", "both")
-          run_doctr = pipeline in ("doctr", "both")
-
-          # Full-page OCR (HierText)
-          print("## Full-page OCR (HierText)\n")
-          for task_type in ["full-page OCR en"]:
-              if run_easyocr:
-                  qvac_e = load_aggregate("results/full-page-ocr", "qvac-easyocr", task_type)
-                  easyocr = load_aggregate("results/full-page-ocr", "easyocr", task_type)
-                  if qvac_e and easyocr:
-                      print("### EasyOCR pipeline vs Python EasyOCR\n")
-                      print("| Metric | QVAC EasyOCR | EasyOCR Python | Winner |")
-                      print("|--------|-------------|----------------|--------|")
-                      for label, key, lib in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
-                          qv = qvac_e["metrics"].get(key, {}).get("mean")
-                          ev = easyocr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, ev, "QVAC EasyOCR", "EasyOCR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      if qvac_e.get("speed") and easyocr.get("speed"):
-                          qs = qvac_e["speed"]["mean_time_per_image"]
-                          es = easyocr["speed"]["mean_time_per_image"]
-                          speedup = es / qs if qs > 0 else 0
-                          winner = f"QVAC ({speedup:.1f}x)" if qs < es else f"EasyOCR ({1/speedup:.1f}x)"
-                          q_s = f"**{qs:.1f}s**" if qs < es else f"{qs:.1f}s"
-                          e_s = f"**{es:.1f}s**" if es < qs else f"{es:.1f}s"
-                          print(f"| Speed | {q_s}/img | {e_s}/img | {winner} |")
-                      print(f"\n*Samples: {qvac_e['total_samples']}*\n")
-
-              if run_doctr:
-                  qvac_d = load_aggregate("results/full-page-ocr", "qvac-doctr", task_type)
-                  doctr = load_aggregate("results/full-page-ocr", "doctr", task_type)
-                  if qvac_d and doctr:
-                      print("### DocTR pipeline vs python-doctr\n")
-                      print("| Metric | QVAC DocTR | DocTR Python | Winner |")
-                      print("|--------|-----------|--------------|--------|")
-                      for label, key, lib in [("CER ↓", "cer", True), ("WER ↓", "wer", True), ("ANLS ↑", "anls", False)]:
-                          qv = qvac_d["metrics"].get(key, {}).get("mean")
-                          dv = doctr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, dv, "QVAC DocTR", "DocTR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      if qvac_d.get("speed") and doctr.get("speed"):
-                          qs = qvac_d["speed"]["mean_time_per_image"]
-                          ds = doctr["speed"]["mean_time_per_image"]
-                          speedup = ds / qs if qs > 0 else 0
-                          winner = f"QVAC ({speedup:.1f}x)" if qs < ds else f"DocTR ({1/speedup:.1f}x)"
-                          q_s = f"**{qs:.1f}s**" if qs < ds else f"{qs:.1f}s"
-                          d_s = f"**{ds:.1f}s**" if ds < qs else f"{ds:.1f}s"
-                          print(f"| Speed | {q_s}/img | {d_s}/img | {winner} |")
-                      print(f"\n*Samples: {qvac_d['total_samples']}*\n")
-
-          # Text Spotting (IC15)
-          print("## Text Spotting (IC15)\n")
-          for task_type in ["text spotting en"]:
-              if run_easyocr:
-                  qvac_e = load_aggregate("results/text-spotting", "qvac-easyocr", task_type)
-                  easyocr = load_aggregate("results/text-spotting", "easyocr", task_type)
-                  if qvac_e and easyocr:
-                      print("### EasyOCR pipeline vs Python EasyOCR\n")
-                      print("| Metric | QVAC EasyOCR | EasyOCR Python | Winner |")
-                      print("|--------|-------------|----------------|--------|")
-                      for label, key, lib in [
-                          ("E2E F1 ↑", "e2e_f1", False),
-                          ("E2E Precision ↑", "e2e_precision", False),
-                          ("E2E Recall ↑", "e2e_recall", False),
-                          ("Detection F1 ↑", "det_f1", False),
-                          ("Avg CER ↓", "avg_cer", True),
-                          ("Avg ANLS ↑", "avg_anls", False),
-                      ]:
-                          qv = qvac_e["metrics"].get(key, {}).get("mean")
-                          ev = easyocr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, ev, "QVAC EasyOCR", "EasyOCR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      print(f"\n*Samples: {qvac_e['total_samples']}*\n")
-
-              if run_doctr:
-                  qvac_d = load_aggregate("results/text-spotting", "qvac-doctr", task_type)
-                  doctr = load_aggregate("results/text-spotting", "doctr", task_type)
-                  if qvac_d and doctr:
-                      print("### DocTR pipeline vs python-doctr\n")
-                      print("| Metric | QVAC DocTR | DocTR Python | Winner |")
-                      print("|--------|-----------|--------------|--------|")
-                      for label, key, lib in [
-                          ("E2E F1 ↑", "e2e_f1", False),
-                          ("E2E Precision ↑", "e2e_precision", False),
-                          ("E2E Recall ↑", "e2e_recall", False),
-                          ("Detection F1 ↑", "det_f1", False),
-                          ("Avg CER ↓", "avg_cer", True),
-                          ("Avg ANLS ↑", "avg_anls", False),
-                      ]:
-                          qv = qvac_d["metrics"].get(key, {}).get("mean")
-                          dv = doctr["metrics"].get(key, {}).get("mean")
-                          a, b, w = pick_winner(qv, dv, "QVAC DocTR", "DocTR Python", lib)
-                          print(f"| {label} | {a} | {b} | {w} |")
-                      print(f"\n*Samples: {qvac_d['total_samples']}*\n")
-          PYTHON_SCRIPT
+          python3 packages/ocr-ggml/benchmarks/quality_eval/render_summary.py \
+            --results results \
+            --pipeline "$PIPELINE" \
+            --tasks "$TASKS" \
+            --limit "$LIMIT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated results
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
