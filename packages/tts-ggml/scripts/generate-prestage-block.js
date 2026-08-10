@@ -19,6 +19,7 @@ const FUNCTIONAL_MODEL_TARGETS = {
     'supertonic3-q4_0.gguf'
   ],
   lavasrEnhancer: ['lavasr/lavasr-enhancer.gguf'],
+  lavasrDenoiser: ['lavasr/lavasr-denoiser.gguf'],
   cosyvoice3: [
     'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
     'cosyvoice3/cosyvoice3-flow-f32.gguf',
@@ -152,6 +153,11 @@ function functionalModelsByTest(manifest) {
     FUNCTIONAL_MODEL_TARGETS.lavasrEnhancer,
     'LavaSR'
   )
+  const lavasrDenoiser = requiredEntriesByTarget(
+    lavasr,
+    FUNCTIONAL_MODEL_TARGETS.lavasrDenoiser,
+    'LavaSR denoiser'
+  )
   const cosyvoice3 = requiredEntriesByTarget(
     cosyvoice,
     FUNCTIONAL_MODEL_TARGETS.cosyvoice3,
@@ -163,6 +169,7 @@ function functionalModelsByTest(manifest) {
     runChatterboxKvCacheGpuTest: combineTargets(chatterbox, chatterboxMtl),
     runChatterboxMtlTest: chatterboxMtl,
     runChatterboxSpeedTest: chatterbox,
+    runCosyvoice3LavasrTest: combineTargets(cosyvoice3, lavasrEnhancer, lavasrDenoiser),
     runCosyvoice3Test: cosyvoice3,
     runGpuSmokeTest: q4,
     runLavasrEnhancerTest: combineTargets(chatterbox, supertonic, lavasrEnhancer),
