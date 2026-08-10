@@ -1,0 +1,132 @@
+'use strict'
+
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+
+const {
+  parsePairFromArtifactDir,
+  parseResultFile,
+  collectResults,
+  buildRows,
+  renderMarkdown
+} = require('../summarize-nmt-quality')
+
+test('parsePairFromArtifactDir extracts the leading language pair', () => {
+  assert.equal(
+    parsePairFromArtifactDir('results-en-it-qvac_bergamot-chrfpp,comet-fast'),
+    'en-it')
+  assert.equal(
+    parsePairFromArtifactDir('results-de-en-qvac_bergamot-chrfpp-fast-pivot'),
+    'de-en')
+  assert.equal(parsePairFromArtifactDir('results-'), null)
+})
+
+test('parseResultFile accepts stat files and rejects hypothesis files', () => {
+  assert.deepEqual(
+    parseResultFile('flores-devtest.qvac_bergamot.it.chrfpp'),
+    { dataset: 'flores-devtest', translator: 'qvac_bergamot', lang: 'it', ext: 'chrfpp' })
+  assert.deepEqual(
+    parseResultFile('conversational-phrases.bergamot.de.perf'),
+    { dataset: 'conversational-phrases', translator: 'bergamot', lang: 'de', ext: 'perf' })
+  assert.equal(parseResultFile('flores-devtest.qvac_bergamot.it'), null)
+  assert.equal(parseResultFile('flores-devtest.qvac_bergamot.it.log'), null)
+})
+
+test('collectResults walks results-* dirs and reads stat values', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nmt-summary-'))
+  const artifactDir = path.join(dir, 'results-en-it-qvac_bergamot-chrfpp,comet-fast')
+  fs.mkdirSync(artifactDir, { recursive: true })
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.chrfpp'), '55.3\n')
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.comet'), '84.2\n')
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.time'), '42.17\n')
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.perf'), '512.4\n')
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it'), 'ciao mondo\n')
+
+  const records = collectResults(dir)
+  assert.equal(records.length, 4)
+  const chrfpp = records.find(r => r.ext === 'chrfpp')
+  assert.deepEqual(chrfpp, {
+    pair: 'en-it',
+    dataset: 'flores-devtest',
+    translator: 'qvac_bergamot',
+    ext: 'chrfpp',
+    value: 55.3,
+    device: null
+  })
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('collectResults tags records under a device subdirectory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nmt-summary-'))
+  const artifactDir = path.join(dir, 'results-en-it-qvac_bergamot-chrfpp-fast')
+  const gpuDir = path.join(artifactDir, 'gpu')
+  fs.mkdirSync(gpuDir, { recursive: true })
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.chrfpp'), '55.3\n')
+  fs.writeFileSync(path.join(gpuDir, 'flores-devtest.qvac_bergamot.it.chrfpp'), '56.1\n')
+
+  const records = collectResults(dir)
+  assert.equal(records.length, 2)
+  assert.equal(records.find(r => r.value === 55.3).device, null)
+  assert.equal(records.find(r => r.value === 56.1).device, 'gpu')
+
+  const rows = buildRows(records, { device: 'cpu' })
+  assert.equal(rows.length, 2)
+  const cpuRow = rows.find(r => r.device === 'cpu')
+  const gpuRow = rows.find(r => r.device === 'gpu')
+  assert.equal(cpuRow.stats.chrfpp, 55.3)
+  assert.equal(gpuRow.stats.chrfpp, 56.1)
+
+  const md = renderMarkdown(rows, { metrics: ['chrfpp'] })
+  assert.match(md, /\| en-it \| qvac_bergamot \| CPU \| flores-devtest \| 55\.3 \|/)
+  assert.match(md, /\| en-it \| qvac_bergamot \| GPU \| flores-devtest \| 56\.1 \|/)
+  assert.ok(!md.includes('GPU rows: none'))
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('buildRows seeds N/A rows for expected combos without data', () => {
+  const records = [
+    { pair: 'en-it', dataset: 'flores-devtest', translator: 'qvac_bergamot', ext: 'chrfpp', value: 55.3 }
+  ]
+  const rows = buildRows(records, {
+    device: 'cpu',
+    pairs: ['en-it', 'en-de'],
+    translators: ['qvac_bergamot'],
+    datasets: ['flores-devtest']
+  })
+  assert.equal(rows.length, 2)
+  const enDe = rows.find(r => r.pair === 'en-de')
+  assert.deepEqual(enDe.stats, {})
+  const enIt = rows.find(r => r.pair === 'en-it')
+  assert.equal(enIt.stats.chrfpp, 55.3)
+  assert.equal(enIt.device, 'cpu')
+})
+
+test('renderMarkdown emits one row per model x device with stat columns', () => {
+  const rows = buildRows([
+    { pair: 'en-it', dataset: 'flores-devtest', translator: 'qvac_bergamot', ext: 'chrfpp', value: 55.3 },
+    { pair: 'en-it', dataset: 'flores-devtest', translator: 'qvac_bergamot', ext: 'comet', value: 84.2 },
+    { pair: 'en-it', dataset: 'flores-devtest', translator: 'qvac_bergamot', ext: 'time', value: 42.17 },
+    { pair: 'en-it', dataset: 'flores-devtest', translator: 'qvac_bergamot', ext: 'perf', value: 512.4 }
+  ], {
+    device: 'cpu',
+    pairs: ['en-it', 'en-de'],
+    translators: ['qvac_bergamot'],
+    datasets: ['flores-devtest']
+  })
+  const md = renderMarkdown(rows, { metrics: ['chrfpp', 'comet'] })
+
+  assert.match(md, /## Benchmark Summary — All Models/)
+  assert.match(md, /\| Model \| Translator \| Device \| Dataset \| chrF\+\+ \| COMET \| Wall Time \(s\) \| Speed \(tok\/s\) \|/)
+  assert.match(md, /\| en-it \| qvac_bergamot \| CPU \| flores-devtest \| 55\.3 \| 84\.2 \| 42\.17 \| 512\.4 \|/)
+  assert.match(md, /\| en-de \| qvac_bergamot \| CPU \| flores-devtest \| N\/A \| N\/A \| N\/A \| N\/A \|/)
+  assert.ok(!md.includes('BLEU'))
+  assert.match(md, /GPU rows: none/)
+})
+
+test('renderMarkdown reports when no rows exist at all', () => {
+  const md = renderMarkdown([], { metrics: ['chrfpp'] })
+  assert.match(md, /No evaluation results found/)
+})
