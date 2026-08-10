@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.3]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/openclaw-plugin/v/0.1.3
+
+This patch moves the OpenClaw plugin onto `@qvac/ai-sdk-provider` 0.5 and `@qvac/cli` 0.10 so local serves pick up the CLI 0.10 / SDK 0.17 runtime.
+
+## Dependency Alignment
+
+Installs now resolve:
+
+- `@qvac/ai-sdk-provider@^0.5.0` for the shared model catalog
+- `@qvac/cli@^0.10.0` for `qvac serve` (SDK 0.17 runtime)
+
+Plugin behavior is unchanged.
+
 ## [0.1.2]
 
 Release Date: 2026-07-27
@@ -8,16 +23,18 @@ Release Date: 2026-07-27
 
 This patch keeps OpenClaw's existing tools when QVAC setup runs, and moves the plugin onto `@qvac/ai-sdk-provider` 0.4 and `@qvac/cli` 0.9 so local serves pick up the latest SDK and CLI fixes.
 
-### Fixed
+## Preserve Tools During QVAC Setup
 
-- **Preserve tools during QVAC setup.** Enabling the QVAC provider no longer clears tools already configured in OpenClaw.
+Enabling the QVAC provider no longer clears tools already configured in OpenClaw. Setup still registers the local QVAC provider and model catalog, but leaves the agent's tool configuration intact.
 
-### Requirements
+## Dependency Alignment
 
-- [`@qvac/ai-sdk-provider@^0.4.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for the shared model catalog.
-- [`@qvac/cli@^0.9.0`](https://www.npmjs.com/package/@qvac/cli) so the local service can run `qvac serve` (SDK 0.16 runtime).
-- Node.js 22 or newer.
-- [`openclaw@>=2026.6.0`](https://www.npmjs.com/package/openclaw) as the host (optional peer).
+Installs now resolve:
+
+- `@qvac/ai-sdk-provider@^0.4.0` for the shared model catalog (AI SDK 7 line)
+- `@qvac/cli@^0.9.0` for `qvac serve` (SDK 0.16 runtime)
+
+Node.js 22 or newer is required.
 
 ## [0.1.1]
 
@@ -27,18 +44,17 @@ Release Date: 2026-07-07
 
 The first public npm release of `@qvac/openclaw-plugin` — an [OpenClaw](https://openclaw.ai) provider plugin that runs a local, fully managed QVAC serve so OpenClaw works against on-device models with no separate server to start.
 
-### Added
+## Local QVAC Provider for OpenClaw
 
-- **Local QVAC provider for OpenClaw.** Registers a `qvac` provider that OpenClaw drives through its `localService` launcher: the plugin starts `qvac serve` on a loopback port, exposes an OpenAI-compatible endpoint, waits for it to become healthy, and tears it down on OpenClaw's idle/exit lifecycle.
-- **Friendly model catalog.** Ships a static model catalog and OpenClaw wizard/model-picker entries using models.dev-style ids (e.g., `qwen3.5-9b`), with the friendly-id → QVAC constant mapping resolved through [`@qvac/ai-sdk-provider`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)'s shared catalog. Defaults to `qwen3.5-9b`.
-- **Larger agent models.** The catalog includes the larger agent-oriented families in addition to the Qwen3.5 line: `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b`, each mapped to its `@qvac/sdk` model constant.
-- **Layered configuration.** A `configSchema` resolves options from plugin config and defaults: `model`, `host`, `port`, `baseUrl`, `apiKey`, `qvacCommand`, `cwd`, `ctxSize`, `reasoningBudget`, `tools`, `readyTimeoutMs`, `idleStopMs`, and `timeoutSeconds`.
+The plugin registers a `qvac` provider that OpenClaw drives through its `localService` launcher. On use it starts `qvac serve` on a loopback port, exposes an OpenAI-compatible endpoint, waits for it to become healthy, and reaps it on OpenClaw's idle/exit lifecycle. It also contributes OpenClaw wizard and model-picker entries so QVAC can be selected like any other provider.
 
-### Requirements
+## Model Catalog With Larger Agent Models
 
-- [`@qvac/ai-sdk-provider@^0.3.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for the shared model catalog and managed serve.
-- [`@qvac/cli@^0.8.0`](https://www.npmjs.com/package/@qvac/cli) so the local service can run `qvac serve` (SDK 0.14.x runtime).
-- [`openclaw@>=2026.6.0`](https://www.npmjs.com/package/openclaw) as the host (optional peer).
+The plugin ships a static model catalog using models.dev-style ids, resolving each friendly id to its `@qvac/sdk` model constant through `@qvac/ai-sdk-provider`'s shared catalog. Alongside the Qwen3.5 line it exposes the larger agent-oriented families — `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b` — which resolve to model constants shipped in `@qvac/sdk` 0.14.x. The default model is `qwen3.5-9b`.
+
+## Requirements
+
+This release targets the current agent stack: `@qvac/ai-sdk-provider` `^0.3.0` (shared catalog and managed serve), `@qvac/cli` `^0.8.0` (runs `qvac serve` on the SDK 0.14.x runtime), and `openclaw` `>=2026.6.0` as the optional host peer.
 
 ## [0.1.0]
 
@@ -48,15 +64,14 @@ Release Date: 2026-07-03
 
 The first public release of `@qvac/openclaw-plugin` — an [OpenClaw](https://openclaw.ai) provider plugin that runs a local, fully managed QVAC serve so OpenClaw works against on-device models with no separate server to start.
 
-### Added
+## Local QVAC Provider for OpenClaw
 
-- **Local QVAC provider for OpenClaw.** Registers a `qvac` provider that OpenClaw drives through its `localService` launcher: the plugin starts `qvac serve` on a loopback port, exposes an OpenAI-compatible endpoint, waits for it to become healthy, and tears it down on OpenClaw's idle/exit lifecycle.
-- **Friendly model catalog.** Ships a static model catalog and OpenClaw wizard/model-picker entries using models.dev-style ids (e.g. `qwen3.5-9b`), with the friendly-id → QVAC constant mapping resolved through [`@qvac/ai-sdk-provider`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)'s shared catalog. Defaults to `qwen3.5-9b`.
-- **Larger agent models.** The catalog includes the larger agent-oriented families in addition to the Qwen3.5 line: `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b`, each mapped to its `@qvac/sdk` model constant.
-- **Layered configuration.** A `configSchema` resolves options from plugin config and defaults: `model`, `host`, `port`, `baseUrl`, `apiKey`, `qvacCommand`, `cwd`, `ctxSize`, `reasoningBudget`, `tools`, `readyTimeoutMs`, `idleStopMs`, and `timeoutSeconds`.
+The plugin registers a `qvac` provider that OpenClaw drives through its `localService` launcher. On use it starts `qvac serve` on a loopback port, exposes an OpenAI-compatible endpoint, waits for it to become healthy, and reaps it on OpenClaw's idle/exit lifecycle. It also contributes OpenClaw wizard and model-picker entries so QVAC can be selected like any other provider.
 
-### Requirements
+## Model Catalog With Larger Agent Models
 
-- [`@qvac/ai-sdk-provider@^0.3.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider) for the shared model catalog and managed serve.
-- [`@qvac/cli@^0.8.0`](https://www.npmjs.com/package/@qvac/cli) so the local service can run `qvac serve` (SDK 0.14.x runtime).
-- [`openclaw@>=2026.6.0`](https://www.npmjs.com/package/openclaw) as the host (optional peer).
+The plugin ships a static model catalog using models.dev-style ids, resolving each friendly id to its `@qvac/sdk` model constant through `@qvac/ai-sdk-provider`'s shared catalog. Alongside the Qwen3.5 line it exposes the larger agent-oriented families — `qwen3.6-27b`, `qwen3.6-35b-a3b`, `gpt-oss-20b`, and `gemma4-31b` — which resolve to model constants shipped in `@qvac/sdk` 0.14.x. The default model is `qwen3.5-9b`.
+
+## Requirements
+
+This release targets the current agent stack: `@qvac/ai-sdk-provider` `^0.3.0` (shared catalog and managed serve), `@qvac/cli` `^0.8.0` (runs `qvac serve` on the SDK 0.14.x runtime), and `openclaw` `>=2026.6.0` as the optional host peer.

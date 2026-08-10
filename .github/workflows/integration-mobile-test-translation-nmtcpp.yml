@@ -129,15 +129,27 @@ jobs:
 
       # Runs after provisioning (which wrote indictrans-model-urls.json) so we bake
       # the presigned URL into a host script that downloads the ~127MB IndicTrans
-      # model and adb-pushes it to /data/local/tmp; the phone copies it instead of
-      # fetching from the flaky presigned-S3 source. Bergamot (public Firefox CDN)
-      # is intentionally not staged; see the generator script header.
+      # model and pushes it to a platform-local staging dir; the phone copies it
+      # instead of fetching from the flaky presigned-S3 source. Bergamot (public
+      # Firefox CDN) is intentionally not staged; see the generator script header.
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/${{ inputs.workdir || 'packages/translation-nmtcpp' }}
         run: |
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: matrix.platform == 'iOS'
+        working-directory: addon/${{ inputs.workdir || 'packages/translation-nmtcpp' }}
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
@@ -156,8 +168,8 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP }}
           enables-perf: 'true'
-          # Android host pre-stages the IndicTrans model; empty on iOS.
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          # Host pre-stages the IndicTrans model before device tests.
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test run
         id: schedule
