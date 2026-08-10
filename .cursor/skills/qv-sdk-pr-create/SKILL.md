@@ -28,9 +28,35 @@ Resolve remotes from `git remote -v`:
 
 In command examples below, `ORG_REMOTE` / `FORK_REMOTE` / `BRANCH` are placeholders — substitute the resolved remote and branch names. Do not run those tokens literally.
 
+## Release PR branch naming (org-branch path)
+
+`publish-sdk.yml` (and sibling publish workflows) run **Release Merge Guard** on
+`push` to any `release-*` ref. The guard validates `github.ref_name` — the branch
+that was **pushed** — not the PR base. It requires
+`release-<pkg>-x.y.z` (three-part semver).
+
+Consequences for release changelog / metadata PRs:
+
+1. **Base (target)** must be exactly `release-<pkg>-<x.y.z>` (e.g. `release-sdk-0.17.0`).
+   Short cuts like `release-sdk-0.17` fail the guard on merge/publish. If the cut
+   is short-named, STOP and ask a repo admin to rename it to the three-part form
+   before relying on publish (protected-branch rename needs admin).
+2. **Head (working branch)** must **not** start with `release-` when pushed to the
+   org remote. Prefer `chore/<pkg>-<x.y.z>-changelog`
+   (e.g. `chore/sdk-0.17.0-changelog`). Names like `release-sdk-0.17.0-changelog`
+   trip Release Merge Guard on the helper push and can leave a failing check on
+   that commit SHA.
+3. GitHub cannot retarget a PR's **head**. To rename a bad head: push the same
+   commits under the new name, open a new PR, close the old one, delete the old
+   remote head. If the new PR still shows a stale Release Merge Guard fail on the
+   same SHA, push an empty `[skiplog]` commit so checks reattach to a fresh SHA.
+
+`backmerge/release-<pkg>-<x.y.z>` heads are fine — they do not match the
+`release-*` push trigger.
+
 ## Workflow
 
-1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch
+1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch. For release PRs, apply **Release PR branch naming** above (base three-part; head not `release-*`)
 2. Resolve the head remote (prefer org remote; see above). Collect commits/diff from `<base>...<head-remote>/<branch>` (or local `HEAD` if not yet pushed)
 3. Infer ticket, prefix, and tags from changes (see Inference Strategy)
 4. Only ask user for input when inference confidence is low
@@ -185,6 +211,11 @@ the release PR alongside the changelog.
 
 When triggered, automatically chain into the `sdk-backmerge` skill so a follow-up PR is also opened against `main` with the same version-bump + changelog metadata. This applies the gitflow.md "Keep main aligned" rule at PR-creation time so nobody has to remember a follow-up step after the release PR merges.
 
+**Preflight before opening the release PR:** confirm base matches
+`^release-<pkg>-\d+\.\d+\.\d+$` and the org head is **not** `release-*`
+(see **Release PR branch naming**). Do not open / chain the dual-PR flow against
+a short-named cut if publish is expected on merge.
+
 ### Steps (after Step 5 of gh CLI Integration above)
 
 1. Capture context for the backmerge:
@@ -221,6 +252,7 @@ Before outputting the PR description, verify:
 - [ ] If diff touches `packages/sdk/package.json` deps/version, `qv-sdk-lockstep-sync` ran (or `--no-sync` was set with a reminder emitted), and bare-sdk + sdk-python checks pass
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
+- [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
 - [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
 - [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 

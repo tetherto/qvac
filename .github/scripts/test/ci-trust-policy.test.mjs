@@ -1301,6 +1301,26 @@ test('tts-ggml Android per-test wait remains below its Mocha ceiling', () => {
   )
 })
 
+test('asr-ggml per-test wait remains below its Mocha ceiling', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+
+  function integerValue(key) {
+    const match = workflow.match(new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, 'm'))
+    assert.ok(match, `${key} must be a literal integer`)
+    return Number(match[1])
+  }
+
+  const perTestWaitMs =
+    integerValue('per-test-timeout-minutes') * MILLISECONDS_PER_MINUTE
+  const mochaTimeoutMs = integerValue('mocha-timeout-ms')
+
+  assert.ok(
+    perTestWaitMs < mochaTimeoutMs,
+    `ASR per-test wait (${perTestWaitMs} ms) must remain below ` +
+      `Mocha timeout (${mochaTimeoutMs} ms)`,
+  )
+})
+
 test('mobile scheduler preserves automatic sharding and supports explicit multi-spec dual flagship', () => {
   const action = read(
     '.github/actions/run-mobile-integration-tests/schedule-test-run/action.yml',
@@ -1431,6 +1451,73 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
   assert.match(
     workflow,
     /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
+  )
+  assert.match(
+    workflow,
+    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
+  )
+})
+
+test('asr-ggml functional mobile workflow opts into dual flagship per engine shard', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+  const matrices = workflow.match(
+    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+  )
+
+  assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
+  const benchmarkMatrix = JSON.parse(matrices[1])
+  const functionalMatrix = JSON.parse(matrices[2])
+  assert.equal(benchmarkMatrix.include.length, 16)
+  assert.deepEqual(
+    functionalMatrix.include.map((entry) => entry.platform),
+    ['Android', 'iOS'],
+  )
+  assert.match(
+    workflow,
+    /concurrency:\s*\n\s+group:[\s\S]*?\n\s+cancel-in-progress:\s*true/,
+  )
+  assert.match(
+    workflow,
+    /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
+  )
+  assert.match(
+    workflow,
+    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
+  )
+  assert.match(workflow, /egress-policy:\s*audit/)
+  assert.match(
+    workflow,
+    /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,
+  )
+  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  assert.match(
+    workflow,
+    /PACKAGE_SPEC:\s*\$\{\{ github\.event\.inputs\.package_spec \}\}[\s\S]*?if \[\[ ! "\$PACKAGE_SPEC"/,
+  )
+  assert.doesNotMatch(
+    workflow,
+    /if \[\[ ! "\$\{\{ github\.event\.inputs\.package_spec \}\}"/,
+  )
+  assert.match(
+    workflow,
+    /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/,
+  )
+  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  assert.match(
+    workflow,
+    /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
+  )
+  assert.match(
+    workflow,
+    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 210 \|\| 180 \}\}/,
   )
   assert.match(
     workflow,

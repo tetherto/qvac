@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`.
+
+- **`split-mode: 'row'` is no longer effective on any shipped backend.** Row
+  split needs a backend exposing `ggml_backend_split_buffer_type`, and at
+  qvac-fabric v10069 only SYCL still does — CUDA dropped it and moved tensor
+  parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR` this package does not
+  expose. Vulkan, Metal and OpenCL never provided it. qvac-fabric also stopped
+  treating `row` as `layer` on those backends and now **fails the model load**
+  with `device <name> does not support split buffers`, so the addon degrades
+  `row` -> `layer` itself before loading and logs a `WARNING`. Models keep
+  loading and `row` keeps behaving like `layer` as it did on Vulkan/Metal
+  before, but the fallback is now explicit rather than implicit in qvac-fabric.
+  Callers who set `split-mode: 'row'` for real tensor parallelism no longer get
+  it. See `docs/architecture.md`.
+
 ## [0.31.0] - 2026-08-06
 
 ### Changed
