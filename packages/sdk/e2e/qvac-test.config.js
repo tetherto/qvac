@@ -16,7 +16,7 @@ export default {
     password: { env: 'MQTT_PASSWORD' },
 
     // Preserve QoS 1 state across reconnects while expiring abandoned CI sessions
-    sessionExpiryInterval: 2 * 60 * 60,
+    sessionExpiryInterval: process.env.GITHUB_ACTIONS === 'true' ? 2 * 60 * 60 : undefined,
 
     // Disable certificate validation for self-signed certs (testing only)
     rejectUnauthorized: true
