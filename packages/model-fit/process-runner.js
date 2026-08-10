@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const processModule = require("bare-process");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const index_1 = require("./index");
+const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
 function exitAfterWriteError(error) {
@@ -12,7 +13,7 @@ function exitAfterWriteError(error) {
     });
 }
 function writeOutcome(outcome) {
-    process.stdout.write((0, process_1.encodeFitProcessResponse)(outcome.response), (error) => {
+    process.stdout.write((0, process_internal_1.encodeFitProcessResponse)(outcome.response), (error) => {
         if (error !== null) {
             exitAfterWriteError(error);
             return;
@@ -21,7 +22,7 @@ function writeOutcome(outcome) {
     });
 }
 function finish(line) {
-    writeOutcome((0, process_1.runFitProcessLine)(line, index_1.fitParams));
+    writeOutcome((0, process_internal_1.runFitProcessLine)(line, index_1.fitParams));
 }
 let input = '';
 let finished = false;

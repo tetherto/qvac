@@ -5,10 +5,10 @@ import processModule = require('bare-process')
 import { fitParams } from './index'
 import {
   encodeFitProcessResponse,
-  FIT_PROCESS_MAX_REQUEST_BYTES,
   runFitProcessLine,
   type FitProcessOutcome
-} from './process'
+} from './process-internal'
+import { FIT_PROCESS_MAX_REQUEST_BYTES } from './process'
 
 interface RunnerInput {
   setEncoding(encoding: 'utf8'): void

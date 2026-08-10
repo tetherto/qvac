@@ -18,14 +18,6 @@ export type FitProcessResponse = {
         message: string;
     };
 };
-export interface FitProcessOutcome {
-    response: FitProcessResponse;
-    exitCode: 0 | 1 | 2;
-}
-export type FitProcessFit = (config: FitConfig) => FitResult;
 export declare function encodeFitProcessRequest(config: FitConfig): string;
-export declare function parseFitProcessRequest(value: unknown): FitProcessRequest;
 export declare function parseFitProcessResponse(value: unknown): FitProcessResponse;
-export declare function encodeFitProcessResponse(response: FitProcessResponse): string;
-export declare function runFitProcessLine(line: string, fit: FitProcessFit): FitProcessOutcome;
 export declare function resolveFitProcessRunnerPath(): string;

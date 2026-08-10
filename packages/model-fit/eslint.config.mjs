@@ -11,6 +11,8 @@ export default [
       'index.d.ts',
       'process.js',
       'process.d.ts',
+      'process-internal.js',
+      'process-internal.d.ts',
       'process-runner.js',
       'process-runner.d.ts',
       'binding.js',

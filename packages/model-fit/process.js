@@ -2,10 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FIT_PROCESS_MAX_RESPONSE_BYTES = exports.FIT_PROCESS_MAX_REQUEST_BYTES = exports.FIT_PROCESS_PROTOCOL_VERSION = void 0;
 exports.encodeFitProcessRequest = encodeFitProcessRequest;
-exports.parseFitProcessRequest = parseFitProcessRequest;
 exports.parseFitProcessResponse = parseFitProcessResponse;
-exports.encodeFitProcessResponse = encodeFitProcessResponse;
-exports.runFitProcessLine = runFitProcessLine;
 exports.resolveFitProcessRunnerPath = resolveFitProcessRunnerPath;
 exports.FIT_PROCESS_PROTOCOL_VERSION = 1;
 exports.FIT_PROCESS_MAX_REQUEST_BYTES = 64 * 1024;
@@ -118,25 +115,6 @@ function encodeFitProcessRequest(config) {
     }
     return encoded;
 }
-function parseFitProcessRequest(value) {
-    if (!isRecord(value)) {
-        throw new TypeError('Fit process request must be an object');
-    }
-    if (value['version'] !== exports.FIT_PROCESS_PROTOCOL_VERSION) {
-        throw new TypeError(`Unsupported fit process protocol version: ${String(value['version'])}`);
-    }
-    const config = value['config'];
-    if (!isRecord(config)) {
-        throw new TypeError('Fit process request config must be an object');
-    }
-    if (typeof config['modelPath'] !== 'string') {
-        throw new TypeError('Fit process request config modelPath must be a string');
-    }
-    return {
-        version: exports.FIT_PROCESS_PROTOCOL_VERSION,
-        config: config
-    };
-}
 function parseFitProcessResponse(value) {
     if (!isRecord(value)) {
         throw new TypeError('Fit process response must be an object');
@@ -174,67 +152,6 @@ function parseFitProcessResponse(value) {
         }
         default:
             throw new TypeError(`Fit process response status is invalid: ${String(value['status'])}`);
-    }
-}
-function encodeFitProcessResponse(response) {
-    const encoded = `${JSON.stringify(response)}\n`;
-    if (Buffer.byteLength(encoded, 'utf8') > exports.FIT_PROCESS_MAX_RESPONSE_BYTES) {
-        throw new RangeError('Fit process response exceeds 1 MiB');
-    }
-    return encoded;
-}
-function invocationError(error) {
-    return {
-        version: exports.FIT_PROCESS_PROTOCOL_VERSION,
-        status: 'invocation-error',
-        error: {
-            name: error instanceof Error ? error.name : 'Error',
-            message: error instanceof Error ? error.message : String(error)
-        }
-    };
-}
-function boundedInvocationError(error) {
-    const response = invocationError(error);
-    try {
-        encodeFitProcessResponse(response);
-        return response;
-    }
-    catch {
-        return invocationError(new RangeError('Fit process response exceeds 1 MiB'));
-    }
-}
-function runFitProcessLine(line, fit) {
-    if (Buffer.byteLength(line, 'utf8') > exports.FIT_PROCESS_MAX_REQUEST_BYTES) {
-        return {
-            response: boundedInvocationError(new RangeError('Fit process request exceeds 64 KiB')),
-            exitCode: 2
-        };
-    }
-    let parsed;
-    try {
-        parsed = JSON.parse(line);
-    }
-    catch (error) {
-        return { response: boundedInvocationError(error), exitCode: 2 };
-    }
-    let request;
-    try {
-        request = parseFitProcessRequest(parsed);
-    }
-    catch (error) {
-        return { response: boundedInvocationError(error), exitCode: 2 };
-    }
-    try {
-        const response = {
-            version: exports.FIT_PROCESS_PROTOCOL_VERSION,
-            status: 'completed',
-            result: fit(request.config)
-        };
-        encodeFitProcessResponse(response);
-        return { response, exitCode: 0 };
-    }
-    catch (error) {
-        return { response: boundedInvocationError(error), exitCode: 1 };
     }
 }
 // Resolved on demand so hosts without subprocess support can import the

@@ -5,17 +5,20 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
 const { spawn } = require('bare-subprocess')
+const publicProcess = require('../../process')
 const {
   FIT_PROCESS_PROTOCOL_VERSION,
   FIT_PROCESS_MAX_REQUEST_BYTES,
   FIT_PROCESS_MAX_RESPONSE_BYTES,
   encodeFitProcessRequest,
-  parseFitProcessRequest,
   parseFitProcessResponse,
+  resolveFitProcessRunnerPath
+} = publicProcess
+const {
   encodeFitProcessResponse,
-  resolveFitProcessRunnerPath,
+  parseFitProcessRequest,
   runFitProcessLine
-} = require('../../process')
+} = require('../../process-internal')
 const packageJson = require('../../package.json')
 
 const PREBUILDS_DIR = path.join(__dirname, '../../prebuilds')
@@ -233,7 +236,33 @@ test('fit process response parsing validates canonical FitResults', async (t) =>
 test('fit process runner remains packaged but is not publicly exported', (t) => {
   t.ok(packageJson.files.includes('process-runner.js'))
   t.ok(packageJson.files.includes('process-runner.d.ts'))
+  t.ok(packageJson.files.includes('process-internal.js'))
+  t.ok(packageJson.files.includes('process-internal.d.ts'))
   t.absent(packageJson.exports['./process-runner'])
+  t.absent(packageJson.exports['./process-internal'])
+})
+
+test('fit process public boundary excludes runner internals', (t) => {
+  t.alike(Object.keys(publicProcess).sort(), [
+    'FIT_PROCESS_MAX_REQUEST_BYTES',
+    'FIT_PROCESS_MAX_RESPONSE_BYTES',
+    'FIT_PROCESS_PROTOCOL_VERSION',
+    'encodeFitProcessRequest',
+    'parseFitProcessResponse',
+    'resolveFitProcessRunnerPath'
+  ])
+})
+
+test('native integration runs the desktop process suite after prebuild tests', (t) => {
+  t.ok(
+    packageJson.scripts['test:integration'].endsWith(
+      'bare test/integration/all.js --exit && npm run test:process'
+    )
+  )
+  t.is(
+    packageJson.scripts['test:integration:generate'],
+    'brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate'
+  )
 })
 
 test('fit process runner path resolves to the published entrypoint', (t) => {
