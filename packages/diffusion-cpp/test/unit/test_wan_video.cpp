@@ -209,14 +209,29 @@ TEST_F(SdWanValidationTest, RejectsMoEControlsWithoutHighNoiseExpert) {
 
 TEST_F(SdWanValidationTest, DirectCallerRequiresExactlyOneReferenceSheet) {
   SdModel::GenerationJob job;
-  job.paramsJson = R"({ "mode": "txt2vid", "prompt": "test" })";
+  job.paramsJson = R"({
+    "mode": "txt2vid",
+    "prompt": "test",
+    "lora": "/tmp/ltx-ic-lora.safetensors"
+  })";
   job.referenceImagesBytes = {{0x01}, {0x02}};
   expectThrowContains(std::move(job), "exactly one composite reference sheet");
 }
 
+TEST_F(SdWanValidationTest, DirectCallerRequiresLoraForReferenceImages) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({ "mode": "txt2vid", "prompt": "test" })";
+  job.referenceImagesBytes = {{0x01}};
+  expectThrowContains(std::move(job), "reference_images requires params.lora.");
+}
+
 TEST_F(SdWanValidationTest, DirectCallerRejectsReferenceImg2VidCombination) {
   SdModel::GenerationJob job;
-  job.paramsJson = R"({ "mode": "img2vid", "prompt": "test" })";
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "test",
+    "lora": "/tmp/ltx-ic-lora.safetensors"
+  })";
   job.initImageBytes = {0x01};
   job.referenceImagesBytes = {{0x02}};
   expectThrowContains(std::move(job), "cannot be combined with img2vid");
@@ -224,7 +239,11 @@ TEST_F(SdWanValidationTest, DirectCallerRejectsReferenceImg2VidCombination) {
 
 TEST_F(SdWanValidationTest, DirectCallerRejectsReferenceWithVaeDecodeOnly) {
   SdModel::GenerationJob job;
-  job.paramsJson = R"({ "mode": "txt2vid", "prompt": "test" })";
+  job.paramsJson = R"({
+    "mode": "txt2vid",
+    "prompt": "test",
+    "lora": "/tmp/ltx-ic-lora.safetensors"
+  })";
   job.referenceImagesBytes = {{0x01}};
   expectThrowContainsOn(
       *decodeOnlyModel, std::move(job), "requires VAE encoder weights");

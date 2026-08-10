@@ -1,14 +1,14 @@
 {
   "name": "stable-diffusion-cpp",
   "version-date": "2026-07-03",
-  "port-version": 15,
+  "port-version": 16,
   "description": "Diffusion model inference with the LTX Ingredients IC-LoRA development API",
   "homepage": "https://github.com/tetherto/qvac-ext-stable-diffusion.cpp",
   "license": "MIT",
   "dependencies": [
     {
       "name": "ggml",
-      "version>=": "2026-07-03#6"
+      "version>=": "2026-07-03#8"
     },
     {
       "name": "vcpkg-cmake",

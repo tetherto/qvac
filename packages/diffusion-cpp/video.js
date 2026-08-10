@@ -334,6 +334,9 @@ class VideoStableDiffusion {
         if (hasReferenceConditioning && !isLtx) {
             throw new Error('LTX IC-LoRA reference conditioning is only supported by LTX video models.');
         }
+        if (params.reference_images != null && params.lora == null) {
+            throw new Error('reference_images requires params.lora.');
+        }
         if (params.reference_images != null && mode === 'img2vid') {
             throw new Error('LTX IC-LoRA reference conditioning cannot be combined with img2vid/init_image.');
         }

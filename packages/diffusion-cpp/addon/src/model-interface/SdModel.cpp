@@ -964,6 +964,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       paramsObject.find("reference_attention_strength") != paramsObject.end() ||
       paramsObject.find("reference_downscale_factor") != paramsObject.end();
   const bool hasReferenceImages = !job.referenceImagesBytes.empty();
+  if (hasReferenceImages && vid.loraPath.empty())
+    throw StatusError(
+        general_error::InvalidArgument,
+        "reference_images requires params.lora.");
   if (hasReferenceImages && job.referenceImagesBytes.size() != 1)
     throw StatusError(
         general_error::InvalidArgument,
