@@ -10,12 +10,13 @@ and building the worst-case compute graph to size the model, KV/context and
 compute buffers, then iteratively reduces context and moves tensors off the GPU
 until the projection fits within a per-device free-memory margin.
 
-## Why a separate addon / worklet
+## Why a separate addon / process runner
 
 Probing device memory instantiates the GPU backend (Vulkan/Metal/CUDA), which
-can wedge driver state on some mobile GPUs. Running the preflight in its own
-short-lived worklet keeps any instability away from the inference worker. The
-call is a **single shot**: run it, read the plan, tear the worklet down.
+can wedge driver state on some GPUs. The root `fitParams()` API runs in-process
+for callers that accept that risk. The intended SDK integration invokes the
+same addon through a disposable Bare subprocess: run it once, read the plan,
+then tear the process down.
 
 ## API
 
@@ -81,11 +82,10 @@ outcome (that is a valid `FAILURE` result) or for a missing model file (`ERROR`)
 it throws only on invalid arguments.
 
 Calls are **serialised process-wide**. `common/fit.h` documents `common_fit_params` as
-not thread safe because it mutates global llama logger state, and this addon's
-C++ statics are shared across every worklet in a process, so concurrent callers
-block rather than corrupt each other. Serialising also guarantees two backend
-registrations never overlap, which is why the backend setup above needs no
-reference counting.
+not thread safe because it mutates global llama logger state, so concurrent
+callers block rather than corrupt each other. Serialising also guarantees two
+backend registrations never overlap, which is why the backend setup above
+needs no reference counting.
 
 ### Fit semantics (from `common/fit.h`)
 
@@ -124,10 +124,10 @@ reference counting.
 ### Argument validation
 
 `modelPath` must be **absolute**, as `backendsDir` must. A relative path
-resolves against the process working directory, which nothing in a worklet
-controls — the same call would then name a different file, or no file, from one
-launch to the next. It is not required to exist: a missing model is the
-documented `ERROR` / `model-unreadable` outcome rather than a thrown error.
+resolves against the process working directory, so the same call could name a
+different file, or no file, from one launch to the next. It is not required to
+exist: a missing model is the documented `ERROR` / `model-unreadable` outcome
+rather than a thrown error.
 
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
@@ -177,12 +177,26 @@ The useful question is rarely "can this run at all" but "can this run *well
 enough*" — which means asking about offload, context, or both, and reading the
 plan rather than the flag.
 
+## Process isolation
+
+`@qvac/model-fit/process` provides the versioned request/response codec and
+resolves the package's private one-shot runner. The runner accepts one JSON
+request on stdin and writes one JSON response on stdout. It is intended for
+disposable Bare subprocesses because native backend discovery may abort the
+hosting process on some platforms.
+
+Applications should normally use the SDK supervisor instead of spawning the
+runner directly. The runner is not a mobile isolation mechanism: iOS and
+Android callers must treat fit admission as unknown unless the platform
+provides a proven process boundary.
+
 ## SDK usage (intended)
 
 The SDK runs this preflight before handing a model to `@qvac/llm-llamacpp`:
 
 1. sample device resources,
-2. `fitParams(...)` in an isolated worklet → load plan + fit projection,
+2. run `fitParams(...)` in a disposable Bare subprocess → load plan + fit
+   projection,
 3. **admit/deny** — only deny when it can *prove* the model won't fit; on
    `ERROR`/unknown, proceed as today (advisory-only until the projection and
    device identity are proven reliable).
@@ -290,7 +304,7 @@ is the failure this section exists to prevent.
 
 `common_fit_params` can terminate the process on inputs this addon accepts. These
 are aborts inside the fitter, not exceptions, so they cannot be caught and
-turned into a status — the calling worklet dies with the process.
+turned into a status — the calling process terminates.
 
 - **A large `nCtx` aborts.** `ggml_abort()` fires in
   `ggml_backend_sched_backend_id_from_cur` — "pre-allocated tensor (cache_k_l0)

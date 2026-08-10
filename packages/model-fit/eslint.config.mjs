@@ -9,6 +9,10 @@ export default [
     ignores: [
       'index.js',
       'index.d.ts',
+      'process.js',
+      'process.d.ts',
+      'process-runner.js',
+      'process-runner.d.ts',
       'binding.js',
       'build/**',
       'prebuilds/**',

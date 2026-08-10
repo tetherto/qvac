@@ -1,0 +1,86 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+import processModule = require('bare-process')
+/* eslint-enable @typescript-eslint/no-require-imports */
+
+import { fitParams } from './index'
+import {
+  encodeFitProcessResponse,
+  FIT_PROCESS_MAX_REQUEST_BYTES,
+  runFitProcessLine,
+  type FitProcessOutcome
+} from './process'
+
+interface RunnerInput {
+  setEncoding(encoding: 'utf8'): void
+  on(event: 'data', listener: (chunk: string) => void): void
+  on(event: 'end', listener: () => void): void
+  on(event: 'error', listener: (error: Error) => void): void
+  resume(): void
+}
+
+interface RunnerOutput {
+  write(chunk: string, callback: (error: Error | null) => void): boolean
+}
+
+interface RunnerProcess {
+  stdin: RunnerInput
+  stdout: RunnerOutput
+  stderr: RunnerOutput
+  exit(code: number): never
+}
+
+const process = processModule as unknown as RunnerProcess
+
+function exitAfterWriteError (error: Error): void {
+  process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
+    process.exit(2)
+  })
+}
+
+function writeOutcome (outcome: FitProcessOutcome): void {
+  process.stdout.write(encodeFitProcessResponse(outcome.response), (error: Error | null) => {
+    if (error !== null) {
+      exitAfterWriteError(error)
+      return
+    }
+    process.exit(outcome.exitCode)
+  })
+}
+
+function finish (line: string): void {
+  writeOutcome(runFitProcessLine(line, fitParams))
+}
+
+let input = ''
+let finished = false
+
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (chunk: string) => {
+  if (finished) return
+  input += chunk
+  if (Buffer.byteLength(input, 'utf8') > FIT_PROCESS_MAX_REQUEST_BYTES) {
+    finished = true
+    finish(input)
+    return
+  }
+
+  const newline = input.indexOf('\n')
+  if (newline === -1) return
+  finished = true
+  finish(input.slice(0, newline))
+})
+process.stdin.on('end', () => {
+  if (finished) return
+  finished = true
+  finish(input)
+})
+// A parent that dies mid-request breaks the pipe; diagnose and exit here so the
+// failure stays inside the disposable child instead of crashing it unexplained.
+process.stdin.on('error', (error: Error) => {
+  if (finished) return
+  finished = true
+  process.stderr.write(`model-fit process runner failed to read its request: ${error.message}\n`, () => {
+    process.exit(2)
+  })
+})
+process.stdin.resume()
