@@ -19,6 +19,36 @@ BACKENDS = [
 
 DEVICE_ORDER = {"CPU": 0, "GPU": 1}
 
+DEFAULT_PLATFORM = "linux-x64"
+PLATFORM_ARTIFACT_PREFIX = "ocr-ggml-benchmark-results-"
+
+
+def has_task_dirs(root):
+    return (root / FULL_PAGE_DIR).is_dir() or (root / SPOTTING_DIR).is_dir()
+
+
+def discover_platforms(results_dir):
+    root = Path(results_dir)
+    if has_task_dirs(root):
+        return [(DEFAULT_PLATFORM, root)]
+    platforms = []
+    if root.is_dir():
+        for child in sorted(root.iterdir()):
+            if not child.is_dir() or not has_task_dirs(child):
+                continue
+            name = child.name
+            if name.startswith(PLATFORM_ARTIFACT_PREFIX):
+                name = name[len(PLATFORM_ARTIFACT_PREFIX):]
+            platforms.append((name or DEFAULT_PLATFORM, child))
+    return platforms
+
+
+def comparison_root(platforms):
+    for name, root in platforms:
+        if name == DEFAULT_PLATFORM:
+            return root
+    return platforms[0][1] if platforms else None
+
 
 def discover_aggregates(results_dir, task_dir, backend, task_type):
     base = Path(results_dir) / task_dir / backend
@@ -161,18 +191,19 @@ def comparison_sections(results_dir, pipeline):
     return lines
 
 
-def summary_table(results_dir):
+def summary_table(platforms):
     rows = {}
-    for backend, model, backend_label in BACKENDS:
-        for task_dir, task_type, slot in [
-            (FULL_PAGE_DIR, FULL_PAGE_TASK, "fp"),
-            (SPOTTING_DIR, SPOTTING_TASK, "ts"),
-        ]:
-            for device, agg in discover_aggregates(results_dir, task_dir, backend, task_type):
-                key = (backend, device)
-                if key not in rows:
-                    rows[key] = {"model": model, "backend_label": backend_label, "fp": None, "ts": None}
-                rows[key][slot] = agg
+    for platform, root in platforms:
+        for backend, model, backend_label in BACKENDS:
+            for task_dir, task_type, slot in [
+                (FULL_PAGE_DIR, FULL_PAGE_TASK, "fp"),
+                (SPOTTING_DIR, SPOTTING_TASK, "ts"),
+            ]:
+                for device, agg in discover_aggregates(root, task_dir, backend, task_type):
+                    key = (backend, platform, device)
+                    if key not in rows:
+                        rows[key] = {"model": model, "backend_label": backend_label, "fp": None, "ts": None}
+                    rows[key][slot] = agg
 
     if not rows:
         return ["_No results found — nothing to summarize._"]
@@ -182,22 +213,24 @@ def summary_table(results_dir):
         "## Summary — All Models",
         "",
         "> Full-page OCR (HierText) + Text Spotting (IC15) stats per model, "
-        "backend and device. _`-` = not run in this configuration._",
+        "backend, platform and device. _`-` = not run in this configuration._",
         "",
-        "| Model | Backend | Device | Samples (FP/TS) | CER ↓ | WER ↓ | ANLS ↑ "
+        "| Model | Backend | Platform | Device | Samples (FP/TS) | CER ↓ | WER ↓ | ANLS ↑ "
         "| FP Speed (s/img) | E2E F1 ↑ | Det F1 ↑ | Avg CER ↓ | Avg ANLS ↑ "
         "| TS Speed (s/img) |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
         "| ---: | ---: | ---: |",
     ]
-    for backend, device in sorted(
-        rows, key=lambda k: (order.get(k[0], len(order)), DEVICE_ORDER.get(k[1], 2), k[1])
+    for backend, platform, device in sorted(
+        rows,
+        key=lambda k: (order.get(k[0], len(order)), k[1], DEVICE_ORDER.get(k[2], 2), k[2]),
     ):
-        row = rows[(backend, device)]
+        row = rows[(backend, platform, device)]
         fp, ts = row["fp"], row["ts"]
         cells = [
             row["model"],
             row["backend_label"],
+            platform,
             device,
             fmt_samples(fp, ts),
             fmt_metric(fp, "cer"),
@@ -232,8 +265,11 @@ def main():
         f"- Sample Limit: `{args.limit}`",
         "",
     ]
-    lines.extend(comparison_sections(args.results, args.pipeline))
-    lines.extend(summary_table(args.results))
+    platforms = discover_platforms(args.results)
+    reference_root = comparison_root(platforms)
+    if reference_root is not None:
+        lines.extend(comparison_sections(reference_root, args.pipeline))
+    lines.extend(summary_table(platforms))
     print("\n".join(lines))
 
 
