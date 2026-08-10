@@ -274,6 +274,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       .ggml_backend_dev_description = ggml_backend_dev_description,
       .ggml_backend_dev_name = ggml_backend_dev_name,
       .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_reg_get_proc_address = ggml_backend_reg_get_proc_address,
       .llamaLogCallback = llamaLogcallback};
   return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
 }
@@ -293,4 +294,47 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
     }
   }
   return gpuCount > 0 ? gpuCount : igpuCount;
+}
+
+bool backend_selection::gpuBackendSupportsRowSplit(
+    const BackendInterface& bckI) {
+  // Mirror what qvac-fabric actually checks: llama_model::load_tensors() calls
+  // make_gpu_buft_list() for EVERY device it was given and throws "device %s
+  // does not support split buffers" on the first one whose backend registry
+  // lacks `ggml_backend_split_buffer_type`. Split mode omits `--device`, so
+  // that set is every GPU device across every registered backend — a single
+  // unsupported backend in the process is enough to fail the load. So require
+  // all of them, not any one, and treat "no GPU devices at all" as unsupported.
+  size_t gpuDevices = 0;
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    ++gpuDevices;
+    ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+    if (reg == nullptr ||
+        bckI.ggml_backend_reg_get_proc_address(
+            reg, "ggml_backend_split_buffer_type") == nullptr) {
+      return false;
+    }
+  }
+  return gpuDevices > 0;
+}
+
+bool backend_selection::gpuBackendSupportsRowSplit() {
+  BackendInterface bckI{
+      .ggml_backend_dev_count = ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ggml_backend_dev_get,
+      .ggml_backend_reg_name = ggml_backend_reg_name,
+      .ggml_backend_dev_description = ggml_backend_dev_description,
+      .ggml_backend_dev_name = ggml_backend_dev_name,
+      .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_reg_get_proc_address = ggml_backend_reg_get_proc_address,
+      .llamaLogCallback = nullptr};
+  return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }

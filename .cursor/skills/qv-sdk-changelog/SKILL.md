@@ -30,6 +30,13 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
+**Working branch (when cutting from a release line):** use
+`chore/<pkg>-<x.y.z>-changelog` (e.g. `chore/sdk-0.17.0-changelog`). Do **not**
+name the head `release-*` — org pushes to `release-*` run Release Merge Guard
+against the pushed ref (not the PR base). The release cut itself must be
+three-part `release-<pkg>-x.y.z`. Full rules live in
+`qv-sdk-pr-create` → "Release PR branch naming".
+
 ### Step 2: Fetch Tags and Resolve Base
 
 Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
@@ -328,6 +335,7 @@ Examples:
 Before completing:
 
 - [ ] Correct package identified
+- [ ] Working head (if branched for the release PR) is `chore/<pkg>-<x.y.z>-changelog`, not `release-*`
 - [ ] Base reference resolved (tag or `--base-commit`)
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
@@ -351,3 +359,4 @@ Before completing:
 - NOTICE generation: `.cursor/skills/qv-notice-generate/SKILL.md`
 - sdk lockstep clients: `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md`
 - Docs site pipeline (Step 8): `docs/website/docs-workflow.md`
+- Release PR branch naming (org `release-*` push / Merge Guard): `.cursor/skills/qv-sdk-pr-create/SKILL.md`

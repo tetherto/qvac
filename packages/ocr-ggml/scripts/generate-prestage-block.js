@@ -13,6 +13,7 @@ const fs = require('fs')
 const path = require('path')
 
 const DEFAULT_ASSETS_DIR = path.resolve(__dirname, '../test/mobile/testAssets')
+const IOS_BUNDLE_ID = 'io.tether.test.qvac'
 
 // filename on device  <->  key in ocr-ggml-model-urls.json
 const MODEL_KEYS = [
@@ -43,7 +44,7 @@ function readModels(assetsDir = DEFAULT_ASSETS_DIR) {
   return models
 }
 
-function buildScript(models) {
+function buildAndroidScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
@@ -91,6 +92,67 @@ adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
 }
 
+function buildIosScript(models) {
+  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+  return `set -e
+export PATH="$HOME/.local/bin:$PATH"
+unset SUDO_UID SUDO_GID
+BID=${IOS_BUNDLE_ID}
+PRESTAGE_READY=1
+if ! (python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1); then
+  echo "[prestage] WARN: pymobiledevice3 install failed; device will use network fallback"
+  PRESTAGE_READY=0
+fi
+if [ "$PRESTAGE_READY" = "1" ] && ! pymobiledevice3 version >/dev/null 2>&1; then
+  echo "[prestage] WARN: pymobiledevice3 not runnable; device will use network fallback"
+  PRESTAGE_READY=0
+fi
+if ! mkdir -p /tmp/prestage; then
+  echo "[prestage] WARN: host temp setup failed; device will use network fallback"
+  PRESTAGE_READY=0
+fi
+stage() {
+  NAME="$1"; URL="$2"
+  [ "$PRESTAGE_READY" = "1" ] || return 0
+  echo "[prestage] staging $NAME"
+  if ! curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then
+    echo "[prestage] WARN: host download failed for $NAME; device will use network fallback"
+    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    return 0
+  fi
+  if ! wc -c < "/tmp/prestage/$NAME" > "/tmp/prestage/$NAME.size"; then
+    echo "[prestage] WARN: could not measure $NAME; device will use network fallback"
+    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    return 0
+  fi
+  if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
+  printf '%s\\n' "$PUSH_OUT"
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
+    echo "[prestage] WARN: push of $NAME failed (rc=$PUSH_RC); device will use network fallback"
+    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    return 0
+  fi
+  if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME.size" "Documents/$NAME.size" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
+  printf '%s\\n' "$PUSH_OUT"
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
+    echo "[prestage] WARN: size metadata push failed for $NAME (rc=$PUSH_RC); device will use network fallback"
+    rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+    return 0
+  fi
+  echo "[prestage] pushed $NAME -> Documents/$NAME"
+  rm -f "/tmp/prestage/$NAME" "/tmp/prestage/$NAME.size"
+}
+${stageCalls}
+echo "[prestage] done"`
+}
+
+function buildScript(models, platform = 'android') {
+  const p = String(platform).toLowerCase()
+  if (p === 'ios') return buildIosScript(models)
+  if (p === 'android') return buildAndroidScript(models)
+  throw new Error(`[prestage] unknown platform "${platform}" (expected 'android' or 'ios')`)
+}
+
 function formatYamlBlock(script) {
   const body = script
     .split('\n')
@@ -100,6 +162,7 @@ function formatYamlBlock(script) {
 }
 
 function main() {
+  const platform = process.argv[2] || 'android'
   const models = readModels()
   if (models.length === 0) {
     console.error('[prestage] no ocr-ggml-model-urls.json found — skipping pre-stage')
@@ -110,9 +173,9 @@ function main() {
   )
   // generate-testspec.sh treats a lone "|" line as a YAML literal block whose
   // body lines are indented by 2 spaces.
-  process.stdout.write(formatYamlBlock(buildScript(models)))
+  process.stdout.write(formatYamlBlock(buildScript(models, platform)))
 }
 
 if (require.main === module) main()
 
-module.exports = { MODEL_KEYS, readModels, buildScript, formatYamlBlock }
+module.exports = { MODEL_KEYS, readModels, buildScript, formatYamlBlock, IOS_BUNDLE_ID }

@@ -224,7 +224,7 @@
     "@qvac/registry-client": "^0.6.1",
     "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.16.2",
+    "@qvac/vla-ggml": "^0.17.0",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.0",

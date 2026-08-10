@@ -299,15 +299,28 @@ jobs:
 
       # Runs after the presigned URLs were bundled ({smolvla,groot}-urls.json), so
       # we bake them into a per-shard manifest; the host script reads each shard's
-      # grep and adb-pushes only that shard's multi-GB GGUF to /data/local/tmp.
-      # The phone copies it instead of pulling from the flaky presigned-S3 link.
+      # grep and pushes only that shard's multi-GB GGUF to a platform-local
+      # staging dir. The phone copies it instead of pulling from the flaky
+      # presigned-S3 link.
       # pi05 is deferred on mobile and stages nothing.
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/packages/vla-ggml
         run: |
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: matrix.platform == 'iOS'
+        working-directory: addon/packages/vla-ggml
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
@@ -333,8 +346,8 @@ jobs:
           # 70-minute WDIO/Mocha session ceiling so the runner outlives
           # the per-test 60-minute ceiling enforced above.
           mocha-timeout-ms: '4200000'
-          # Android host pre-stages the running shard's GGUF; empty on iOS.
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          # Host pre-stages the running shard's GGUF before device tests.
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
