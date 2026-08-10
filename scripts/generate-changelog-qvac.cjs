@@ -333,7 +333,7 @@ function parseArgs(argv) {
  * @param {string} baseRef
  */
 function assertChangelogHistoryReady(baseRef) {
-  let isShallow = "false";
+  let isShallow;
   try {
     isShallow = git("rev-parse --is-shallow-repository");
   } catch (error) {
