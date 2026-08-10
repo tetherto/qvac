@@ -18,7 +18,7 @@ int16_t f32ToI16(float x) {
   float v = x * 32767.0F;
   if (v > 32767.0F) v = 32767.0F;
   if (v < -32768.0F) v = -32768.0F;
-  return static_cast<int16_t>(v);
+  return static_cast<int16_t>(std::lrint(v));
 }
 
 constexpr int64_t BACKEND_DEVICE_CPU = 0;
@@ -162,6 +162,15 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // Pass duration straight through: >0 caps the track to that many seconds,
   // 0 (the default) lets LM Phase-1 decide the full song length.
   params.duration = in.duration;
+  params.lm_temperature = in.lmTemperature;
+  params.lm_top_p = in.lmTopP;
+  params.lm_top_k = in.lmTopK;
+  params.lm_cfg_scale = in.lmCfgScale;
+  params.lm_phase1 = in.lmPhase1;
+  params.dcw_enabled = in.dcwEnabled;
+  params.dcw_scaler = in.dcwScaler;
+  params.dcw_high_scaler = in.dcwHighScaler;
+  params.audio_codes = in.audioCodes;
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
