@@ -92,9 +92,15 @@
 
 # Section rename: /sdk/getting-started/* → top-level guides
 /sdk/getting-started/                /introduction/    301
-/sdk/getting-started/quickstart/     /quickstart/      301
-/sdk/getting-started/installation/   /installation/    301
+/sdk/getting-started/quickstart/     /js-ts-sdk/       301
+/sdk/getting-started/installation/   /js-ts-sdk/       301
 /sdk/getting-started/configuration/  /configuration/   301
+
+# Section merge: /installation and /quickstart → /js-ts-sdk (JS/TS install and
+# quickstart are now sections of the unified JS/TS SDK client page; the Python
+# client lives at /python-sdk).
+/installation/                       /js-ts-sdk/       301
+/quickstart/                         /js-ts-sdk/       301
 
 # Section rename: /sdk/examples/ai-tasks/* → /ai-capabilities/*
 /sdk/examples/ai-tasks/completion/         /ai-capabilities/text-generation/    301

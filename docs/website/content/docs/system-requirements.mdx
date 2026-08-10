@@ -1,18 +1,113 @@
 ---
 title: System requirements
-description: Host requirements for running QVAC SDK and CLI, validated by `qvac doctor`.
+description: Host requirements for running the SDK and CLI, validated by `qvac doctor`.
 schemaType: TechArticle
 ---
 
 ## Overview
 
-Minimum host requirements for running `@qvac/sdk` and `@qvac/cli`. You can validate your environment against this list with:
+Minimum host requirements for running the SDK and CLI. These are worker-level — all SDK clients (JS/TS and Python) drive the same worker, so the requirements below apply regardless of which client you use.
+
+You can validate your environment against the machine-checkable subset with:
 
 ```bash
 qvac doctor
 ```
 
 Use `--json` for machine-readable output and `--quiet` to set the exit code only (`0` when all required checks pass, `1` otherwise).
+
+## Supported environments
+
+| Platform | Min Version | Architecture | GPU API/Backend | Notes |
+|----------|-------------|-----|-----|-------|
+| macOS | 14.0+ | arm64 | Metal | Arch x64 supports CPU inference only; Intel iGPU acceleration not supported |
+| iOS | 17.0+ | arm64 | Metal | Requires Expo |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4` | Vulkan is required for GPU inference. If not available, it falls back to CPU. |
+| Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | Requires Expo |
+| Windows | 10+ | x64 | Vulkan `>= 1.4` | Vulkan is required even for CPU-only inference |
+
+## Environment setup
+
+Host-level toolchain and driver setup that the QVAC worker relies on. Client install commands (`npm i @qvac/sdk`, `pip install tetherto-qvac-sdk`, Expo plugin wiring, …) live on each client page — see [JS/TS SDK](/js-ts-sdk) and [Python SDK](/python-sdk).
+
+### Linux
+
+Requirements:
+
+- Ubuntu 22 requires [g++](https://github.com/gcc-mirror/gcc) `>= 13`.
+- Vulkan runtime `>= 1.4`: Vulkan loader + a GPU driver with Vulkan support.
+
+On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
+
+<Callout type="info">
+On PCs, the Vulkan runtime is usually installed along with the GPU drivers. In other words, _if you've installed the correct driver for your GPU (with Vulkan support), you typically don't need to install anything else._
+</Callout>
+
+To verify it, install Vulkan tools and run `vulkaninfo`:
+
+<Tabs>
+<Tab value="debian" label="Debian/Ubuntu" default>
+
+```bash
+sudo apt update
+sudo apt install -y vulkan-tools
+vulkaninfo --summary
+```
+</Tab>
+<Tab value="fedora" label="Fedora/RHEL">
+
+```bash
+sudo dnf install -y vulkan-tools vulkan-devel
+vulkaninfo --summary
+```
+</Tab>
+</Tabs>
+
+In minimalist/headless installations (e.g., Ubuntu Server), you may need to manually install the Vulkan loader, and ensure a Vulkan-capable GPU driver (ICD) is installed. The exact packages vary by distro and GPU vendor. For example:
+
+<Tabs>
+<Tab value="debian" label="Debian/Ubuntu (Intel/AMD via Mesa)" default>
+
+```bash
+sudo apt update
+sudo apt install -y libvulkan1 mesa-vulkan-drivers
+vulkaninfo --summary
+```
+</Tab>
+<Tab value="fedora" label="Fedora">
+
+```bash
+sudo dnf install -y vulkan-loader mesa-vulkan-drivers
+vulkaninfo --summary
+```
+</Tab>
+</Tabs>
+
+Ensure QVAC can detect the GPU Vulkan driver by adding your user to the `render` and `video` groups:
+
+```bash
+sudo usermod -aG render,video $USER
+```
+
+### Windows
+
+Requirement:
+- Vulkan runtime `>= 1.4`: Vulkan loader + a GPU driver with Vulkan support.
+
+This requirement is typically satisfied out of the box after installing the correct GPU vendor drivers. To verify it, [install Vulkan SDK](https://vulkan.lunarg.com) and run:
+
+```powershell
+vulkaninfo --summary
+```
+
+### Mobile (iOS / Android)
+
+Mobile is supported by the JS/TS SDK via Expo. See [JS/TS SDK — Expo setup](/js-ts-sdk#expo) for the full flow.
+
+<Callout type="info">
+  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
+  You **must** use a physical device.
+</Callout>
 
 ## Scope
 
@@ -46,6 +141,10 @@ These checks are informational. They never cause `qvac doctor` to exit non-zero,
 
 ## Optional tools
 
+<Callout type="info">
+  This section applies to the JS/TS client — the tools listed here are checked by `qvac doctor`, which today only covers the JS/TS stack. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
+
 Only required if you use the corresponding feature. The checker warns when they are missing but does not fail.
 
 | Tool | Required for |
@@ -55,6 +154,10 @@ Only required if you use the corresponding feature. The checker warns when they 
 | [Bun](https://bun.sh) | Building the SDK from source or running the monorepo development workflow. |
 
 ## Project
+
+<Callout type="info">
+  This section applies to the JS/TS client — the check below runs against `@qvac/sdk` in a Node.js/Bun project layout. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
 
 | Check | Notes |
 | --- | --- |
