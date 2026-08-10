@@ -20,18 +20,32 @@ BACKENDS = [
 DEVICE_ORDER = {"CPU": 0, "GPU": 1}
 
 
-def load_aggregate(results_dir, task_dir, backend, task_type):
-    path = (
-        Path(results_dir)
-        / task_dir
-        / backend
-        / task_type.replace(" ", "_")
-        / "aggregate.json"
-    )
-    if path.exists():
+def discover_aggregates(results_dir, task_dir, backend, task_type):
+    base = Path(results_dir) / task_dir / backend
+    task_leaf = task_type.replace(" ", "_")
+    found = []
+    if not base.is_dir():
+        return found
+    for path in sorted(base.rglob("aggregate.json")):
+        rel = path.relative_to(base).parts
+        if len(rel) == 2 and rel[0] == task_leaf:
+            device = None
+        elif len(rel) == 3 and rel[1] == task_leaf:
+            device = rel[0].upper()
+        else:
+            continue
         with open(path) as f:
-            return json.load(f)
-    return None
+            agg = json.load(f)
+        found.append((device or str(agg.get("device", "CPU")).upper(), agg))
+    return found
+
+
+def load_aggregate(results_dir, task_dir, backend, task_type):
+    aggs = discover_aggregates(results_dir, task_dir, backend, task_type)
+    for device, agg in aggs:
+        if device == "CPU":
+            return agg
+    return aggs[0][1] if aggs else None
 
 
 def metric_mean(agg, key):
@@ -150,16 +164,15 @@ def comparison_sections(results_dir, pipeline):
 def summary_table(results_dir):
     rows = {}
     for backend, model, backend_label in BACKENDS:
-        fp = load_aggregate(results_dir, FULL_PAGE_DIR, backend, FULL_PAGE_TASK)
-        ts = load_aggregate(results_dir, SPOTTING_DIR, backend, SPOTTING_TASK)
-        for agg, slot in [(fp, "fp"), (ts, "ts")]:
-            if not agg:
-                continue
-            device = agg.get("device", "CPU")
-            key = (backend, device)
-            if key not in rows:
-                rows[key] = {"model": model, "backend_label": backend_label, "fp": None, "ts": None}
-            rows[key][slot] = agg
+        for task_dir, task_type, slot in [
+            (FULL_PAGE_DIR, FULL_PAGE_TASK, "fp"),
+            (SPOTTING_DIR, SPOTTING_TASK, "ts"),
+        ]:
+            for device, agg in discover_aggregates(results_dir, task_dir, backend, task_type):
+                key = (backend, device)
+                if key not in rows:
+                    rows[key] = {"model": model, "backend_label": backend_label, "fp": None, "ts": None}
+                rows[key][slot] = agg
 
     if not rows:
         return ["_No results found — nothing to summarize._"]
