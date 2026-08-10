@@ -186,6 +186,7 @@ jobs:
   # Flag-gated per-package jobs, driven by the on-pr fold map. sanity runs for
   # every affected package; the rest run over their pre-filtered sublist.
   sanity-checks:
+    name: sanity-checks (${{ matrix.package }})
     needs: [authorize, ci-router, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.any == 'true'
     strategy:
@@ -207,6 +208,7 @@ jobs:
           workdir: ${{ matrix.workdir }}
 
   cpp-lint:
+    name: cpp-lint (${{ matrix.package }})
     needs: [authorize, ci-router, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.cpplint != '[]'
     strategy:
@@ -222,6 +224,7 @@ jobs:
       include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
 
   ts-checks:
+    name: ts-checks (${{ matrix.package }})
     needs: [authorize, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
     strategy:
@@ -253,6 +256,7 @@ jobs:
           workdir: ${{ matrix.workdir }}
 
   fabric-lockstep:
+    name: fabric-lockstep (${{ matrix.package }})
     needs: [authorize, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.fabric != '[]'
     strategy:
@@ -267,6 +271,7 @@ jobs:
         uses: ./.github/actions/verify-qvac-fabric-lockstep
 
   coload-smoke:
+    name: coload-smoke (${{ matrix.package }})
     needs: [authorize, ci-router, matrix, prebuild]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
     permissions:
@@ -285,6 +290,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
   coload-smoke-mobile:
+    name: coload-smoke-mobile (${{ matrix.package }})
     needs: [authorize, ci-router, matrix, prebuild]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
     permissions:
@@ -309,6 +315,7 @@ jobs:
   # (asr) via its own aggregator. llm perf-report is pending (needs the
   # composite extra-args extension for --addon-type vision).
   perf-report:
+    name: perf-report (${{ matrix.package }})
     needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]'
     permissions:
@@ -341,6 +348,7 @@ jobs:
           extra-args: ${{ matrix.perfReportExtraArgs }}
 
   perf-report-rtf:
+    name: perf-report-rtf (${{ matrix.package }})
     needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]'
     permissions:
