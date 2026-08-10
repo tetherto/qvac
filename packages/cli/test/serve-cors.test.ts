@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
+import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
+import { resolveServeApiKey } from '../src/serve/api-key.js'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '../src/serve/cors.js'
 import { parseServeConfig } from '../src/serve/config.js'
 import { buildServer } from '../src/serve/index.js'
 import {
-  networkExposureWarning,
+  checkNetworkExposure,
   ServeOptionsError,
   validateServeStartup
 } from '../src/serve/startup.js'
@@ -154,17 +157,43 @@ describe('serve startup validation', () => {
   })
 })
 
-describe('network exposure warning', () => {
-  it('warns only for a non-loopback bind without an API key', () => {
-    assert.match(
-      networkExposureWarning({ host: '0.0.0.0' }) ?? '',
-      /Security warning.*0\.0\.0\.0.*--api-key/s
+describe('network exposure', () => {
+  it('refuses an unauthenticated non-loopback bind', () => {
+    assert.throws(
+      () => checkNetworkExposure({ host: '0.0.0.0' }),
+      (error: unknown) => {
+        assert.ok(error instanceof ServeOptionsError)
+        assert.equal(error.option, '--host')
+        assert.match(error.message, /--api-key|--api-key-file/)
+        assert.match(error.message, /--allow-unauthenticated/)
+        return true
+      }
     )
-    assert.equal(networkExposureWarning({ host: '0.0.0.0', apiKey: 'secret' }), undefined)
-    assert.equal(networkExposureWarning({ host: '127.0.0.1' }), undefined)
   })
 
-  it('is emitted while options are resolved, before preload or listen', async () => {
+  it('permits a non-loopback bind that is authenticated or explicitly opted in', () => {
+    assert.equal(checkNetworkExposure({ host: '0.0.0.0', apiKey: 'secret' }), undefined)
+    assert.equal(checkNetworkExposure({ host: '127.0.0.1' }), undefined)
+    assert.match(
+      checkNetworkExposure({ host: '0.0.0.0', allowUnauthenticated: true }) ?? '',
+      /Security warning.*0\.0\.0\.0/s
+    )
+  })
+
+  it('refuses before preload or listen', async () => {
+    // buildServer runs before startServer's preload/listen, so failing here
+    // necessarily precedes the socket accepting connections.
+    await assert.rejects(
+      buildServer({ projectRoot: tmpdir(), port: 0, host: '0.0.0.0' }),
+      (error: unknown) => {
+        assert.ok(error instanceof ServeOptionsError)
+        assert.equal(error.option, '--host')
+        return true
+      }
+    )
+  })
+
+  it('warns rather than refuses once the operator opts in', async () => {
     const warnings: string[] = []
     const originalWarn = console.warn
     console.warn = (...args: unknown[]) => {
@@ -172,9 +201,12 @@ describe('network exposure warning', () => {
     }
     let app
     try {
-      // buildServer runs before startServer's preload/listen, so a warning
-      // observed here necessarily precedes the socket accepting connections.
-      app = await buildServer({ projectRoot: tmpdir(), port: 0, host: '0.0.0.0' })
+      app = await buildServer({
+        projectRoot: tmpdir(),
+        port: 0,
+        host: '0.0.0.0',
+        allowUnauthenticated: true
+      })
     } finally {
       console.warn = originalWarn
     }
@@ -186,5 +218,83 @@ describe('network exposure warning', () => {
     } finally {
       await app.close()
     }
+  })
+})
+
+describe('resolveServeApiKey', () => {
+  function withKeyFile(contents: string, mode: number): string {
+    const dir = mkdtempSync(join(tmpdir(), 'qvac-serve-key-'))
+    const path = join(dir, 'api-key')
+    writeFileSync(path, contents, { mode })
+    return path
+  }
+
+  it('reads the key from a file so it never reaches argv', () => {
+    const path = withKeyFile('  file-sourced-key\n', 0o600)
+    assert.deepEqual(resolveServeApiKey({ apiKeyFile: path }), {
+      apiKey: 'file-sourced-key',
+      warning: undefined
+    })
+  })
+
+  it('passes through an inline key and the absent case unchanged', () => {
+    assert.deepEqual(resolveServeApiKey({ apiKey: 'inline' }), {
+      apiKey: 'inline',
+      warning: undefined
+    })
+    assert.deepEqual(resolveServeApiKey({}), { apiKey: undefined, warning: undefined })
+  })
+
+  it('refuses both key sources at once', () => {
+    const path = withKeyFile('k', 0o600)
+    assert.throws(
+      () => resolveServeApiKey({ apiKey: 'inline', apiKeyFile: path }),
+      (error: unknown) => {
+        assert.ok(error instanceof ServeOptionsError)
+        assert.match(error.message, /mutually exclusive/)
+        return true
+      }
+    )
+  })
+
+  it('refuses a missing or empty key file', () => {
+    assert.throws(
+      () => resolveServeApiKey({ apiKeyFile: join(tmpdir(), 'qvac-absent-key-file') }),
+      /cannot read the API key file/
+    )
+    assert.throws(() => resolveServeApiKey({ apiKeyFile: withKeyFile('  \n', 0o600) }), /is empty/)
+  })
+
+  it('refuses a key path that is not a regular file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'qvac-serve-key-'))
+    assert.throws(() => resolveServeApiKey({ apiKeyFile: dir }), /must be a regular file/)
+
+    const target = withKeyFile('linked', 0o600)
+    const link = join(dir, 'link-to-key')
+    symlinkSync(target, link)
+    assert.throws(() => resolveServeApiKey({ apiKeyFile: link }), /must be a regular file/)
+  })
+
+  it('warns when the key file is readable beyond its owner', function (t) {
+    if (process.platform === 'win32') {
+      t.skip('POSIX mode bits')
+      return
+    }
+    const resolved = resolveServeApiKey({ apiKeyFile: withKeyFile('loose', 0o644) })
+    assert.equal(resolved.apiKey, 'loose')
+    assert.match(resolved.warning ?? '', /readable beyond its owner/)
+  })
+})
+
+describe('trailing-dot origins', () => {
+  it('rejects a root-label hostname that no browser would ever send', () => {
+    assert.throws(() => normalizeCorsOrigin('https://example.com./'), /trailing dot/)
+    // The matcher swallows unparseable inbound origins rather than allowing them.
+    const match = createCorsOriginMatcher(['https://example.com'])
+    let allowed: boolean | undefined
+    match('https://example.com.', (_err, result) => {
+      allowed = result
+    })
+    assert.equal(allowed, false)
   })
 })

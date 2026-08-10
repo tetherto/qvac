@@ -39,12 +39,23 @@ export function validateServeStartup(
   }
 }
 
-// Returned rather than logged so callers can emit it during option resolution,
-// before the port is open and before a multi-minute model preload.
-export function networkExposureWarning(options: {
+export interface NetworkExposureOptions {
   readonly host: string
   readonly apiKey?: string | undefined
-}): string | undefined {
+  readonly allowUnauthenticated?: boolean | undefined
+}
+
+// Throws for an unauthenticated non-loopback bind unless the operator opted in,
+// in which case the returned warning is theirs to see. Checked during option
+// resolution so it lands before the port opens and before a multi-minute preload.
+export function checkNetworkExposure(options: NetworkExposureOptions): string | undefined {
   if (isLoopbackHost(options.host) || options.apiKey) return undefined
-  return `Security warning: binding to non-loopback host "${options.host}" without --api-key exposes the API to the network.`
+  if (options.allowUnauthenticated === true) {
+    return `Security warning: binding to non-loopback host "${options.host}" without an API key. Anyone who can reach this address can use this server.`
+  }
+  throw new ServeOptionsError(
+    '--host',
+    `binding to non-loopback host "${options.host}" would expose an unauthenticated API to the network. ` +
+      'Pass --api-key <key> or --api-key-file <path> to require authentication, or --allow-unauthenticated to accept the risk.'
+  )
 }

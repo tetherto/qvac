@@ -251,6 +251,11 @@ function setupCli(): void {
       []
     )
     .option('--api-key <key>', 'Require Bearer token authentication')
+    .option(
+      '--api-key-file <path>',
+      'Read the Bearer token from a file instead of argv (keeps it out of the process list)'
+    )
+    .option('--allow-unauthenticated', 'Permit binding to a non-loopback host without an API key')
     .option('--cors', 'Validate that explicit trusted CORS origins are configured')
     .option('--cors-origin <origin>', 'Trusted CORS origin (repeatable)', collect, [])
     .option(
@@ -269,6 +274,8 @@ function setupCli(): void {
         host: string
         model: string[]
         apiKey?: string
+        apiKeyFile?: string
+        allowUnauthenticated?: boolean
         cors?: boolean
         corsOrigin: string[]
         publicBaseUrl?: string
@@ -284,6 +291,8 @@ function setupCli(): void {
             host: options.host,
             model: options.model.length > 0 ? options.model : undefined,
             apiKey: options.apiKey,
+            apiKeyFile: options.apiKeyFile,
+            allowUnauthenticated: options.allowUnauthenticated,
             cors: options.cors,
             corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
             publicBaseUrl: options.publicBaseUrl,

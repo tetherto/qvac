@@ -1,18 +1,28 @@
+export class CorsOriginError extends Error {
+  readonly origin: string
+
+  constructor(origin: string, message: string) {
+    super(message)
+    this.name = 'CorsOriginError'
+    this.origin = origin
+  }
+}
+
 export function normalizeCorsOrigin(origin: string): string {
   const value = origin.trim()
   if (value === '*') {
-    throw new Error('CORS wildcard origin is not allowed')
+    throw new CorsOriginError(value, 'CORS wildcard origin is not allowed')
   }
 
   let url: URL
   try {
     url = new URL(value)
   } catch {
-    throw new Error(`CORS origin must be a valid HTTP(S) origin (got "${value}")`)
+    throw new CorsOriginError(value, `CORS origin must be a valid HTTP(S) origin (got "${value}")`)
   }
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(`CORS origin must use http:// or https:// (got "${value}")`)
+    throw new CorsOriginError(value, `CORS origin must use http:// or https:// (got "${value}")`)
   }
   if (
     url.username ||
@@ -22,8 +32,17 @@ export function normalizeCorsOrigin(origin: string): string {
     url.hash ||
     url.origin === 'null'
   ) {
-    throw new Error(
+    throw new CorsOriginError(
+      value,
       `CORS origin must not include credentials, a path, query, or fragment (got "${value}")`
+    )
+  }
+  // Browsers send the fully-qualified name without the root label, so an entry
+  // carrying one is a silently dead allowlist entry rather than a stricter match.
+  if (url.hostname.endsWith('.')) {
+    throw new CorsOriginError(
+      value,
+      `CORS origin must not end in a trailing dot; browsers never send one (got "${value}")`
     )
   }
 

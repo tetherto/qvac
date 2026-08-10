@@ -20,7 +20,8 @@ import type { Logger } from '../logger.js'
 import { findConfigFile, loadConfig } from '../config.js'
 import { parseServeConfig } from './config.js'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from './cors.js'
-import { networkExposureWarning, validateServeStartup } from './startup.js'
+import { resolveServeApiKey } from './api-key.js'
+import { checkNetworkExposure, validateServeStartup } from './startup.js'
 import { createModelRegistry } from './core/model-registry.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
@@ -46,6 +47,9 @@ export interface StartServerOptions {
   host: string
   model?: string[] | undefined
   apiKey?: string | undefined
+  /** Path to a file holding the bearer key, so it stays out of the process argv. */
+  apiKeyFile?: string | undefined
+  allowUnauthenticated?: boolean | undefined
   cors?: boolean | undefined
   corsOrigins?: string[] | undefined
   publicBaseUrl?: string | undefined
@@ -64,9 +68,11 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
   const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
   const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
   validateServeStartup(serveConfig.cors.origins, options)
+  const { apiKey, warning: apiKeyWarning } = resolveServeApiKey(options)
+  if (apiKeyWarning !== undefined) logger.warn(apiKeyWarning)
   // Emitted here, while options resolve, so an operator sees it before the
   // socket opens rather than after a preload that can run for minutes.
-  const exposureWarning = networkExposureWarning(options)
+  const exposureWarning = checkNetworkExposure({ ...options, apiKey })
   if (exposureWarning !== undefined) logger.warn(exposureWarning)
   const registry = createModelRegistry()
 
@@ -137,7 +143,7 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
           bearerAuth: { type: 'http', scheme: 'bearer' }
         }
       },
-      ...(options.apiKey ? { security: [{ bearerAuth: [] }] } : {})
+      ...(apiKey ? { security: [{ bearerAuth: [] }] } : {})
     },
     transform: jsonSchemaTransform
   })
@@ -174,8 +180,8 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
 
   await app.register(cancelBridgePlugin)
 
-  if (options.apiKey) {
-    await app.register(authPlugin, { apiKey: options.apiKey })
+  if (apiKey) {
+    await app.register(authPlugin, { apiKey })
   }
 
   // lunte-disable-next-line require-await
