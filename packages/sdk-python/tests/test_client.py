@@ -80,6 +80,28 @@ def test_resolve_command_sdk_dir_env_var(monkeypatch) -> None:
     assert Path(worker) == Path("/env-sdk/dist/server/worker.js")
 
 
+def test_resolve_command_uses_bundled_wheel(monkeypatch, tmp_path) -> None:
+    # The self-contained bundled wheel resolves ahead of sdk_dir / managed /
+    # global, with no env or checkout: stage a fake _bundle next to a patched
+    # client __file__ and assert it wins even when an sdk_dir is also passed.
+    monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
+    monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
+    bundled_worker = tmp_path / "_bundle" / "worker" / "dist" / "server" / "worker.js"
+    bundled_bare = tmp_path / "_bundle" / "runtime" / "bare"
+    bundled_worker.parent.mkdir(parents=True)
+    bundled_worker.write_text("")
+    bundled_bare.parent.mkdir(parents=True)
+    bundled_bare.write_text("")
+    # _resolve_command derives the bundle from Path(__file__).parent of the
+    # client module; point that at tmp_path so the staged _bundle is found.
+    monkeypatch.setattr(
+        "tetherto.qvac_sdk.client.__file__", str(tmp_path / "client.py")
+    )
+    bare, worker = _resolve_command(None, None, "/sdk")
+    assert Path(worker) == bundled_worker
+    assert Path(bare) == bundled_bare
+
+
 def test_resolve_command_raises_with_no_inputs(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)

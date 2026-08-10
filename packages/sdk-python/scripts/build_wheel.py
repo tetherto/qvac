@@ -4,18 +4,23 @@ Bare runtime binary and the built SDK worker bundled under tetherto/qvac_sdk/_bu
 `pip install` needs no separately-provisioned worker.
 
 Usage:
-  python3 scripts/build_wheel.py [--sdk-dir ../sdk] [--out dist/]
+  python3 scripts/build_wheel.py [--sdk-dir ../sdk] [--out dist/] [--plat-name <tag>]
 
 Requires `bun run build` to have produced ../sdk/dist and the platform's
-bare-runtime package under ../sdk/node_modules. The wheel is tagged for the
-current platform only (py3-none-<platform>); models are never bundled.
-Publishing is release automation's job (cibuildwheel-style per-OS runners) --
-this script only builds and verifies locally.
+bare-runtime package under ../sdk/node_modules. The wheel is tagged
+`py3-none-<platform>` for the current platform only (via hatch_build.py, driven
+by the QVAC_WHEEL_PLAT this script exports); models are never bundled. Only the
+current platform's native prebuilds are staged -- the addon npm packages ship
+every platform's `prebuilds/<platform>-<arch>/`, so the foreign ones are pruned
+here to keep each wheel to one platform's binaries. Publishing is release
+automation's job (per-OS runners; see build-sdk-python-fat-wheels.yml) -- this
+script only builds and verifies locally.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import shutil
 import subprocess
@@ -41,6 +46,39 @@ def bare_runtime_package() -> str:
     if package is None:
         raise SystemExit(f"unsupported platform for a bundled wheel: {key}")
     return package
+
+
+def _prebuild_host() -> str:
+    """The `<platform>-<arch>` prebuild directory for this host (e.g.
+    `darwin-arm64`) -- the one Bare's `require.addon()` loads. Same suffix as the
+    bare-runtime package name."""
+    return bare_runtime_package().removeprefix("bare-runtime-")
+
+
+def _stage_ignore(prebuild_host: str):
+    """copytree ignore that drops the usual noise AND every addon `prebuilds/`
+    subdir except this host's. The addon npm packages bundle all platforms'
+    prebuilds in one package (~0.5 GB each, ~4.5 GB total); keeping only the
+    target host's keeps each wheel to one platform's binaries and under GitHub's
+    2 GB asset limit."""
+    base = shutil.ignore_patterns(".git", "node_modules", "example*")
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        ignored = set(base(directory, names))
+        if os.path.basename(directory) == "prebuilds":
+            for name in names:
+                if name in ignored:
+                    continue
+                full = os.path.join(directory, name)
+                # Keep `<host>` and same-host variants (`<host>-vulkan`, ...);
+                # drop other platforms (linux-arm64, android-*, ios-*, ...).
+                if os.path.isdir(full) and not (
+                    name == prebuild_host or name.startswith(f"{prebuild_host}-")
+                ):
+                    ignored.add(name)
+        return ignored
+
+    return ignore
 
 
 def stage_bundle(sdk_dir: Path) -> None:
@@ -72,7 +110,7 @@ def stage_bundle(sdk_dir: Path) -> None:
     # they must live at worker/node_modules exactly. Only the production
     # dependency closure ships (dev deps like electron would balloon the
     # wheel by gigabytes); native prebuilds ride inside each package's
-    # prebuilds/ dir.
+    # prebuilds/ dir, pruned to this host by _stage_ignore.
     listing = subprocess.run(
         ["npm", "ls", "--omit=dev", "--parseable", "--all"],
         cwd=sdk_dir,
@@ -80,6 +118,7 @@ def stage_bundle(sdk_dir: Path) -> None:
         text=True,
         check=False,  # npm ls exits non-zero on peer quirks; paths still print
     )
+    ignore = _stage_ignore(_prebuild_host())
     node_modules = sdk_dir / "node_modules"
     dest_root = BUNDLE_DIR / "worker" / "node_modules"
     for line in sorted(set(listing.stdout.splitlines())):
@@ -95,15 +134,21 @@ def stage_bundle(sdk_dir: Path) -> None:
         shutil.copytree(
             path,
             destination,
-            ignore=shutil.ignore_patterns(".git", "node_modules", "example*"),
+            ignore=ignore,
             symlinks=False,
         )
     (BUNDLE_DIR / "__init__.py").write_text("")
 
 
-def platform_tag() -> str:
-    # e.g. macosx_15_0_arm64 / manylinux-ish local tag; good enough for a
-    # locally-verified per-platform wheel (release runners refine tags).
+def _default_plat_name() -> str:
+    """Portable-ish default wheel platform tag. No native Python C-extension is
+    built (the platform code is the bundled Bare binary + node prebuilds), so the
+    tag is a pure install gate: lower the macOS floor well below the build host
+    so older macOS still installs. Linux/Windows fall back to the host tag; CI
+    passes an explicit --plat-name (e.g. manylinux_2_35_x86_64) for release."""
+    if platform.system() == "Darwin":
+        arch = "arm64" if platform.machine() == "arm64" else "x86_64"
+        return f"macosx_11_0_{arch}"
     return sysconfig.get_platform().replace("-", "_").replace(".", "_")
 
 
@@ -111,10 +156,19 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sdk-dir", default=str(PACKAGE_ROOT.parent / "sdk"))
     parser.add_argument("--out", default=str(PACKAGE_ROOT / "dist"))
+    parser.add_argument(
+        "--plat-name",
+        default=None,
+        help="wheel platform tag (default: derived; CI passes e.g. "
+        "manylinux_2_35_x86_64 / macosx_11_0_arm64 / win_amd64)",
+    )
     args = parser.parse_args()
 
+    plat_name = args.plat_name or _default_plat_name()
     stage_bundle(Path(args.sdk_dir).resolve())
     try:
+        # hatch_build.py reads QVAC_WHEEL_PLAT and stamps `py3-none-<plat>`.
+        env = {**os.environ, "QVAC_WHEEL_PLAT": plat_name}
         subprocess.run(
             [
                 sys.executable,
@@ -123,14 +177,14 @@ def main() -> int:
                 "--wheel",
                 "--outdir",
                 args.out,
-                f"--config-setting=--build-option=--plat-name={platform_tag()}",
                 str(PACKAGE_ROOT),
             ],
             check=True,
+            env=env,
         )
     finally:
         shutil.rmtree(BUNDLE_DIR, ignore_errors=True)
-    print(f"wheel written to {args.out}")
+    print(f"wheel written to {args.out} (tagged py3-none-{plat_name})")
     return 0
 
 
