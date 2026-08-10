@@ -203,7 +203,9 @@ test(
     const scenePath = path.join(dir, SCENE_NAME)
     const taehvPath = path.join(dir, TAEHV_NAME)
     if (!fs.existsSync(scenePath) || !fs.existsSync(taehvPath)) {
-      t.pass(
+      // t.comment, NOT t.pass: an absent model must read as "not exercised",
+      // never as a passing assertion someone could mistake for coverage.
+      t.comment(
         'walk lane skipped: scene pack / taehv not provisioned yet ' +
           `(need ${SCENE_NAME} + ${TAEHV_NAME} in ${dir})`
       )
@@ -276,7 +278,9 @@ async function provisionWorldGeneration(t) {
   const taehvPath = path.join(dir, TAEHV_NAME)
   const vaePath = path.join(dir, VAE_NAME)
   if (!fs.existsSync(taehvPath) || !fs.existsSync(vaePath)) {
-    t.pass(
+    // t.comment, NOT t.pass: see the walk lane - a skip must never register
+    // as a passing assertion.
+    t.comment(
       'world-generation lane skipped: taew2_2 / Wan2.2 VAE not provisioned ' +
         `(need ${TAEHV_NAME} + ${VAE_NAME} in ${dir})`
     )
@@ -412,6 +416,58 @@ test(
     t.ok(
       idleLast.length !== chordLast.length || !idleLast.every((v, i) => v === chordLast[i]),
       'chord block produces different frames than idling'
+    )
+
+    // 3. unload() with a block still streaming: the in-flight response must
+    //    SETTLE (unload cancels, then fails any admitted-but-unstarted job),
+    //    and the instance must be reloadable and walkable afterwards -
+    //    regression guard for the released busy-lock teardown.
+    const abandoned = await world.step({ W: true })
+    const abandonedOutcome = abandoned
+      .onUpdate(() => {})
+      .await()
+      .then(
+        () => 'resolved',
+        (err) => `rejected (${(err && err.message) || err})`
+      )
+    await world.unload()
+    const settledAs = await Promise.race([
+      abandonedOutcome,
+      new Promise((resolve) => setTimeout(() => resolve('HUNG'), 60_000))
+    ])
+    t.not(
+      settledAs,
+      'HUNG',
+      `response left streaming at unload settles instead of hanging: ${settledAs}`
+    )
+    await t.execution(world.load(), 'same instance reloads after unload-with-inflight-work')
+    const resumed = await world.step(['W'])
+    const resumedFrames = []
+    await resumed
+      .onUpdate((data) => {
+        if (data instanceof Uint8Array) resumedFrames.push(data)
+      })
+      .await()
+    t.is(resumedFrames.length, 9, 'post-reload first block streams 9 frames (busy guard released)')
+
+    // 4. cancel() during a streaming block: the in-flight step must never
+    //    resolve as a success with a silently truncated frame stream - it
+    //    rejects with the typed Diffusion/Cancelled error (the engine cannot
+    //    abort mid-block, so 'resolved' is tolerated only for the race where
+    //    the block finished before the cancel flag landed).
+    const inflight = await world.step({ W: true })
+    const inflightOutcome = inflight
+      .onUpdate(() => {})
+      .await()
+      .then(
+        () => 'resolved',
+        (err) => `rejected (${(err && err.message) || err})`
+      )
+    await world.cancel()
+    const cancelOutcome = await inflightOutcome
+    t.ok(
+      cancelOutcome === 'resolved' || /cancel/i.test(cancelOutcome),
+      `cancelled step settles with the typed error (or won the race): ${cancelOutcome}`
     )
 
     await world.unload().catch(() => {})

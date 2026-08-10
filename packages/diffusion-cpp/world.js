@@ -301,6 +301,16 @@ class WorldStableDiffusion {
             if (!this.addon)
                 return;
             this.logger.info('Unloading ABot-World walk session');
+            // Same teardown order as StableDiffusion.unload(): cancel first, then
+            // explicitly fail a job the scheduler admitted but never started (its
+            // teardown emits no terminal event for that case) so the QvacResponse
+            // settles and the busy guard is released instead of bricking the
+            // instance.
+            await this.cancel();
+            if (this._job.active) {
+                this._job.fail(new Error('Model was unloaded'));
+            }
+            this._hasActiveResponse = false;
             await this.addon.unload();
             this.addon = null;
             this.state.configLoaded = false;

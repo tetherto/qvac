@@ -287,6 +287,17 @@ Key API facts:
   pack; create one pack per resolution you need.
 - **Failures are terminal per session**: if a step fails, `unload()` and
   create a fresh instance (the engine's RNG/history cannot be resumed).
+- **Cancellation has block granularity**: the engine exposes no mid-block
+  abort hook, so `cancel()` lets the current DiT block finish internally,
+  stops the remaining frame delivery, and rejects the in-flight `step()`
+  with the typed `Diffusion/Cancelled` error (never a silently truncated
+  "success"). Treat it like any failed step: reload the session.
+  `createScene()` is **uninterruptible** (no engine abort hook yet) — a
+  `cancel()` or `unload()` issued during a scene creation blocks until the
+  encode completes, so await the creation response before tearing down.
+- **`unload()` settles in-flight work**: it cancels, fails any job that was
+  admitted but never started (`Model was unloaded`), and releases the busy
+  guard — the instance can be `load()`-ed again afterwards.
 - **Sizing**: 832x480 native quality (390 latent tokens/frame), 448x256 for
   ~6 GB GPUs. Attention cost scales ~quadratically with pixel area.
 

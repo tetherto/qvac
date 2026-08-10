@@ -1,6 +1,7 @@
 #include "WorldSessionModel.hpp"
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <utility>
 
@@ -88,7 +89,11 @@ std::any WorldSessionModel::process(const std::any& input) {
 }
 
 std::any WorldSessionModel::processSceneCreate(const SceneCreateJob& job) {
-  cancelRequested_.store(false);
+  // Deliberately no cancelRequested_ handling here: sd_abot_scene_create()
+  // exposes no abort hook, so the umT5 + VAE encode is uninterruptible and
+  // pretending otherwise (resetting/reading the flag) would imply a
+  // capability this path does not have. cancel() granularity is documented
+  // in docs/abot-world.md; the walk path resets the flag itself.
   const auto t0 = std::chrono::steady_clock::now();
 
   sd_image_t decoded = image_codec::decodeImage(job.imageBytes);
@@ -151,6 +156,14 @@ std::any WorldSessionModel::processWalkStep(const WalkStepJob& job) {
         general_error::InternalError,
         "ABot-World walk step failed (see native logs)");
   }
+  // RAII: the encoders can throw bad_alloc and the output callback can throw
+  // from the queue, so every exit below must release the decoded block (same
+  // idiom as the scene path's FreeDeleter).
+  auto framesGuard =
+      std::unique_ptr<sd_image_t, std::function<void(sd_image_t*)>>(
+          frames, [numFrames](sd_image_t* ptr) {
+            sd_abot_session_frames_free(ptr, numFrames);
+          });
 
   const auto stepEnd = std::chrono::steady_clock::now();
   const int64_t stepMs = static_cast<int64_t>(
@@ -171,7 +184,6 @@ std::any WorldSessionModel::processWalkStep(const WalkStepJob& job) {
                          ? image_codec::encodeToJpeg(frames[i], jpegQuality)
                          : image_codec::encodeToPng(frames[i]);
       if (encoded.empty()) {
-        sd_abot_session_frames_free(frames, numFrames);
         throw StatusError(
             general_error::InternalError, "failed to encode walk frame");
       }
@@ -179,7 +191,14 @@ std::any WorldSessionModel::processWalkStep(const WalkStepJob& job) {
       delivered++;
     }
   }
-  sd_abot_session_frames_free(frames, numFrames);
+
+  // A cancelled step must reject like the package's four other cancellation
+  // sites (typed Diffusion/Cancelled) - resolving with a silently truncated
+  // frame stream would hide a permanent gap in the walk: the DiT already
+  // committed this block to the session history, undelivered frames are gone.
+  if (cancelRequested_.load()) {
+    throw qvac_lib_inference_addon_sd::errors::makeCancelledError();
+  }
 
   stats_.totalStepMs += stepMs;
   stats_.totalSteps++;
