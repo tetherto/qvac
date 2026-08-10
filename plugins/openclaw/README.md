@@ -126,18 +126,23 @@ Expected result:
 - The execution trace uses `provider: "qvac"` and `model: "qwen3.5-9b"`.
 - `fallbackUsed` is `false`.
 
+The managed `qvac serve` requires bearer authentication. OpenClaw resolves the
+same private key file for client requests and readiness probes, so no additional
+auth setup is needed for this smoke test.
+
 ## Configure
 
 The plugin defaults to `qwen3.5-9b` on `127.0.0.1:11434`. It generates the
 temporary QVAC serve config internally when OpenClaw starts its `localService`.
-The provider API key is also passed to `qvac serve openai --api-key`, so every
-request requires the same bearer credential OpenClaw sends. A missing or empty
-local-service key prevents the server from starting.
+On first setup it generates a random 32-byte base64url bearer key and stores it
+at `~/.openclaw/plugins/qvac/api-key` (or under `OPENCLAW_STATE_DIR`). The key is
+reused across restarts. Its directory is kept at mode `0700` and the file at
+mode `0600`.
 
-The default key remains the OpenClaw synthetic-auth marker `custom-local` for
-compatibility with provider discovery and setup. Configure a unique key for
-meaningful protection; the key is stored in OpenClaw's provider configuration
-and is not written to the generated QVAC serve config.
+OpenClaw's provider config uses a file SecretRef, and the local-service arguments
+contain only the key-file path. The launcher reads that file and passes the key
+to `qvac serve openai --api-key`. A missing, invalid, or unsafe key prevents the
+server from starting. The generated QVAC serve config does not contain the key.
 
 Plugin config can override the local service launcher:
 
@@ -149,7 +154,6 @@ Plugin config can override the local service launcher:
         enabled: true,
         config: {
           model: 'qwen3.5-9b',
-          apiKey: 'replace-with-a-unique-secret',
           qvacCommand: '/absolute/path/to/qvac',
           port: 11434,
           ctxSize: 32768,
@@ -161,12 +165,40 @@ Plugin config can override the local service launcher:
 }
 ```
 
+To supply your own key, set `apiKey` to 32-128 base64url characters. Leading and
+trailing whitespace is removed; control characters, Unicode, other punctuation,
+and values beginning with `-` are rejected. Setup materializes the normalized
+value into the private key file:
+
+```bash
+openclaw config set plugins.entries.qvac.config.apiKey \
+  '"abcdefghijklmnopqrstuvwxyzABCDE_"' --strict-json
+openclaw onboard --auth-choice qvac
+openclaw config unset plugins.entries.qvac.config.apiKey
+```
+
+Removing the temporary plaintext plugin option after onboarding leaves the
+generated provider configuration pointing at the private key file.
+
+Other clients connecting to the managed server must send the same bearer key:
+
+```bash
+QVAC_API_KEY="$(tr -d '\r\n' < "${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/plugins/qvac/api-key")"
+curl -H "Authorization: Bearer $QVAC_API_KEY" http://127.0.0.1:11434/v1/models
+unset QVAC_API_KEY
+```
+
+The launcher key is not exposed in its process arguments. The `qvac serve`
+grandchild still receives `--api-key <key>`, so the key can be visible to
+same-user or privileged process inspection until the QVAC CLI supports a secret
+file, environment, or file-descriptor transport.
+
 ## What It Registers
 
 - Provider id: `qvac`
 - API adapter: `openai-completions`
 - Bearer authentication: the configured provider `apiKey` is required by the
-  managed `qvac serve openai` process
+  managed `qvac serve openai` process through a file SecretRef
 - Base URL: `http://127.0.0.1:11434/v1` by default
 - Local service command: `node <plugin>/dist/local-service.js`, which writes a
   temporary QVAC serve config and starts `qvac serve openai`

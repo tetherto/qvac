@@ -18,6 +18,7 @@ interface PluginManifest {
     readonly providers?: {
       readonly qvac?: {
         readonly api?: string
+        readonly apiKey?: unknown
         readonly models?: readonly {
           readonly id: string
           readonly name: string
@@ -62,6 +63,7 @@ test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
   ) as PluginManifest
 
   assert.equal(manifest.modelCatalog?.providers?.qvac?.api, 'openai-completions')
+  assert.equal(manifest.modelCatalog?.providers?.qvac?.apiKey, undefined)
   assert.equal(manifest.modelCatalog?.discovery?.qvac, 'static')
   assert.deepEqual(
     manifest.modelCatalog?.providers?.qvac?.models?.map((model) => model.id),
@@ -103,4 +105,11 @@ test('openclaw.plugin.json declares static QVAC model catalog rows', () => {
     ]
   )
   assert.equal(Object.hasOwn(manifest.configSchema?.properties ?? {}, 'configPath'), false)
+  assert.deepEqual(manifest.configSchema?.properties?.['apiKey'], {
+    type: 'string',
+    minLength: 32,
+    maxLength: 128,
+    pattern: '^[A-Za-z0-9_][A-Za-z0-9_-]{31,127}$',
+    description: 'Optional base64url bearer key to materialize into the private QVAC key file.'
+  })
 })

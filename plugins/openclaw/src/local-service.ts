@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,13 +8,14 @@ import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_OPTIONS,
   createQvacServeModels,
+  normalizeApiKey,
   resolveOptions,
   type QvacServeModel
 } from './provider-config.js'
 
 export interface LocalServiceOptions {
   readonly qvacCommand: string
-  readonly apiKey: string
+  readonly apiKeyFile: string
   readonly model: string
   readonly host: string
   readonly port: number
@@ -28,19 +30,39 @@ export interface LocalServiceServeConfig {
   }
 }
 
-function readOption(argv: readonly string[], name: string): string | undefined {
-  const index = argv.indexOf(name)
-  if (index === -1) return undefined
-  const value = argv[index + 1]
-  if (value === undefined) throw new TypeError(`${name} requires a value`)
-  return value
+const LOCAL_SERVICE_OPTIONS = new Set([
+  '--qvac-command',
+  '--api-key-file',
+  '--model',
+  '--host',
+  '--port',
+  '--ctx-size',
+  '--reasoning-budget',
+  '--tools'
+])
+
+function parseOptions(argv: readonly string[]): ReadonlyMap<string, string> {
+  const options = new Map<string, string>()
+  for (let index = 0; index < argv.length; index += 2) {
+    const name = argv[index]
+    const value = argv[index + 1]
+    if (name === undefined || !LOCAL_SERVICE_OPTIONS.has(name)) {
+      throw new TypeError(`Unknown local service option: ${name ?? ''}`)
+    }
+    if (value === undefined || value.startsWith('--')) {
+      throw new TypeError(`${name} requires a value`)
+    }
+    if (options.has(name)) {
+      throw new TypeError(`${name} cannot be specified more than once`)
+    }
+    options.set(name, value)
+  }
+  return options
 }
 
-function readRequiredOption(argv: readonly string[], name: string): string {
-  const value = readOption(argv, name)
-  if (value === undefined || value.trim() === '') {
-    throw new TypeError(`${name} requires a non-empty value`)
-  }
+function requireOption(options: ReadonlyMap<string, string>, name: string): string {
+  const value = options.get(name)
+  if (value === undefined) throw new TypeError(`${name} requires a value`)
   return value
 }
 
@@ -59,24 +81,25 @@ function parseBooleanOption(name: string, value: string | undefined, fallback: b
 }
 
 export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOptions {
+  const values = parseOptions(argv)
   return {
-    qvacCommand: readOption(argv, '--qvac-command') ?? DEFAULT_OPTIONS.qvacCommand,
-    apiKey: readRequiredOption(argv, '--api-key'),
-    model: readOption(argv, '--model') ?? DEFAULT_OPTIONS.model,
-    host: readOption(argv, '--host') ?? DEFAULT_OPTIONS.host,
-    port: parseNumberOption('--port', readOption(argv, '--port'), DEFAULT_OPTIONS.port),
-    ctxSize: parseNumberOption(
-      '--ctx-size',
-      readOption(argv, '--ctx-size'),
-      DEFAULT_OPTIONS.ctxSize
-    ),
+    qvacCommand: values.get('--qvac-command') ?? DEFAULT_OPTIONS.qvacCommand,
+    apiKeyFile: requireOption(values, '--api-key-file'),
+    model: values.get('--model') ?? DEFAULT_OPTIONS.model,
+    host: values.get('--host') ?? DEFAULT_OPTIONS.host,
+    port: parseNumberOption('--port', values.get('--port'), DEFAULT_OPTIONS.port),
+    ctxSize: parseNumberOption('--ctx-size', values.get('--ctx-size'), DEFAULT_OPTIONS.ctxSize),
     reasoningBudget: parseNumberOption(
       '--reasoning-budget',
-      readOption(argv, '--reasoning-budget'),
+      values.get('--reasoning-budget'),
       DEFAULT_OPTIONS.reasoningBudget
     ),
-    tools: parseBooleanOption('--tools', readOption(argv, '--tools'), DEFAULT_OPTIONS.tools)
+    tools: parseBooleanOption('--tools', values.get('--tools'), DEFAULT_OPTIONS.tools)
   }
+}
+
+export function loadApiKey(keyFile: string): string {
+  return normalizeApiKey(readFileSync(keyFile, 'utf8'), 'stored QVAC API key')
 }
 
 export function createLocalServiceServeConfig(
@@ -89,7 +112,6 @@ export function createLocalServiceServeConfig(
           model: options.model,
           host: options.host,
           port: options.port,
-          apiKey: options.apiKey,
           qvacCommand: options.qvacCommand,
           ctxSize: options.ctxSize,
           reasoningBudget: options.reasoningBudget,
@@ -101,6 +123,7 @@ export function createLocalServiceServeConfig(
 }
 
 export function buildQvacServeArgs(options: LocalServiceOptions, configPath: string): string[] {
+  const apiKey = loadApiKey(options.apiKeyFile)
   return [
     'serve',
     'openai',
@@ -113,8 +136,20 @@ export function buildQvacServeArgs(options: LocalServiceOptions, configPath: str
     '--model',
     options.model,
     '--api-key',
-    options.apiKey
+    apiKey
   ]
+}
+
+export function formatSpawnError(error: unknown, command: string): string {
+  const code =
+    error instanceof Error && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : 'unknown'
+  const syscall =
+    error instanceof Error && 'syscall' in error && typeof error.syscall === 'string'
+      ? error.syscall
+      : 'unknown'
+  return `Failed to start QVAC service: code=${code} syscall=${syscall} command=${command}`
 }
 
 export function resolveLocalServiceExitCode(
@@ -164,7 +199,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void stop('SIGTERM'))
 
   child.on('error', async (err) => {
-    console.error(err)
+    console.error(formatSpawnError(err, options.qvacCommand))
     await generated.cleanup()
     process.exit(1)
   })
@@ -181,8 +216,8 @@ async function main(): Promise<void> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  void main().catch((err: unknown) => {
-    console.error(err)
+  void main().catch(() => {
+    console.error('QVAC local service launcher failed')
     process.exit(1)
   })
 }

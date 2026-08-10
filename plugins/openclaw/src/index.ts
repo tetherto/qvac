@@ -11,7 +11,10 @@ const configProperties = {
   baseUrl: { type: 'string', description: 'OpenAI-compatible base URL exposed by qvac serve.' },
   apiKey: {
     type: 'string',
-    description: 'Bearer key shared by OpenClaw and the managed qvac serve process.'
+    minLength: 32,
+    maxLength: 128,
+    pattern: '^[A-Za-z0-9_][A-Za-z0-9_-]{31,127}$',
+    description: 'Optional base64url bearer key to materialize into the private QVAC key file.'
   },
   qvacCommand: {
     type: 'string',
