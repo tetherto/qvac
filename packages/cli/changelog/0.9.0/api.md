@@ -19,25 +19,3 @@ if (!info.isDelegated && info.toolDialect === 'qwen35') {
 ```
 
 ---
-
-## Configure trusted CORS origins
-
-The HTTP server accepts exact trusted origins through repeatable `--cors-origin` flags and `serve.cors.origins`:
-
-```json
-{
-  "serve": {
-    "cors": {
-      "origins": ["https://app.example.com"]
-    }
-  }
-}
-```
-
-```bash
-qvac serve openai --cors-origin http://localhost:3000
-```
-
-`--docs` adds only same-port loopback origins automatically. The CLI also warns when a non-loopback bind starts without `--api-key`.
-
----

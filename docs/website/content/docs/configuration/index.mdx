@@ -134,7 +134,7 @@ Configure every browser origin explicitly:
 }
 ```
 
-Configuring one or more origins enables CORS. The legacy `--cors` flag no longer grants wildcard access; when retained in scripts, it must be paired with `--cors-origin` or a non-empty `serve.cors.origins` list.
+Configuring one or more origins enables CORS. `--docs` also enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when it is itself loopback. The legacy `--cors` flag is a compatibility validation switch: it does not enable CORS by itself and fails unless `--cors-origin` or `serve.cors.origins` supplies at least one explicit origin. `--cors --docs` still needs an explicit origin because the docs defaults do not satisfy that validation.
 
 #### `ModelEntry`
 

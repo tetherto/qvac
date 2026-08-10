@@ -8,7 +8,7 @@ This document describes the supported routes and how to configure `serve.models`
 
 The default `127.0.0.1` bind is unauthenticated. Use `--api-key` whenever the server binds to a non-loopback address; without it, the CLI logs a security warning that the API is exposed to the network but still starts.
 
-Browser access requires explicit trusted origins. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
+Browser access requires explicit trusted origins unless `--docs` enables its same-port loopback defaults. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
 
 ```bash
 qvac serve openai \
@@ -17,7 +17,11 @@ qvac serve openai \
   --cors-origin http://localhost:3000
 ```
 
-The legacy `--cors` flag no longer enables wildcard access and fails unless at least one explicit origin is configured. `--docs` automatically adds only same-port loopback origins (`localhost`, `127.0.0.1`, and `[::1]`) for Swagger UI. Add any non-loopback or forwarded browser origin explicitly.
+The legacy `--cors` flag is only a compatibility validation switch: it does not enable CORS and fails unless at least one explicit CLI/config origin is supplied. `--cors --docs` also fails without one because docs defaults are added after that validation.
+
+Independently, `--docs` adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins for Swagger UI, plus the bound host's same-port origin when that host is itself loopback. Add any non-loopback or forwarded browser origin explicitly.
+
+`/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. `/openapi.json` is always public; the docs routes exist only with `--docs`. Do not enable docs on a non-loopback bind unless public introspection is acceptable.
 
 For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../docs/architecture/AGENT-INTEGRATIONS.md). Use this file for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.
 

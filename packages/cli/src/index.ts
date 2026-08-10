@@ -251,7 +251,7 @@ function setupCli(): void {
       []
     )
     .option('--api-key <key>', 'Require Bearer token authentication')
-    .option('--cors', 'Require configured trusted CORS origins')
+    .option('--cors', 'Validate that explicit trusted CORS origins are configured')
     .option('--cors-origin <origin>', 'Trusted CORS origin (repeatable)', collect, [])
     .option(
       '--public-base-url <url>',

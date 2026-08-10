@@ -95,22 +95,24 @@ Start an OpenAI-compatible REST API server.
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
 | `--model <alias>` | Model alias to preload (repeatable, must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
+| `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
 | `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
-| `--cors` | Compatibility switch that enables CORS only when at least one origin is supplied by `--cors-origin` or `serve.cors.origins` |
-| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds only same-port loopback origins to CORS automatically. |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
+| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS. |
 | `-v, --verbose` | Detailed output |
 
 Use `--api-key` whenever `--host` is not a loopback address. The CLI logs a security warning when a non-loopback bind starts without authentication; it does not block startup.
 
-Scripts that previously relied on wildcard CORS must name every trusted browser origin:
+`--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback.
+
+Scripts that previously relied on wildcard CORS must retain `--cors` only as validation and name every trusted browser origin:
 
 ```bash
 # Before: allowed every browser origin
 qvac serve openai --cors
 
-# After: repeat once per trusted origin
-qvac serve openai \
+# After: retain validation and repeat once per trusted origin
+qvac serve openai --cors \
   --cors-origin https://app.example.com \
   --cors-origin http://localhost:3000
 ```

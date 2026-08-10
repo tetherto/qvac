@@ -324,24 +324,26 @@ Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC model
 qvac serve openai [options]
 ```
 
-| Flag                      | Description                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------- |
-| `-c, --config <path>`     | Config file path (default: auto-detect `qvac.config.*`).                                    |
-| `-p, --port <number>`     | Port to listen on (default: `11434`).                                                       |
-| `-H, --host <address>`    | Host to bind to (default: `127.0.0.1`).                                                     |
-| `--model <alias>`         | Model alias to preload (repeatable; must be in config).                                     |
-| `--api-key <key>`         | Require Bearer authentication. Recommended for every non-loopback bind.                     |
-| `--cors-origin <origin>`  | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                   |
-| `--cors`                  | Compatibility switch; requires `--cors-origin` or a non-empty `serve.cors.origins` list.    |
-| `--docs`                  | Mount Swagger UI at `/docs`; automatically trusts only same-port loopback origins for CORS. |
-| `--public-base-url <url>` | Externally reachable origin required for image `response_format=url`.                       |
-| `-v, --verbose`           | Detailed output.                                                                            |
+| Flag                      | Description                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `-c, --config <path>`     | Config file path (default: auto-detect `qvac.config.*`).                                   |
+| `-p, --port <number>`     | Port to listen on (default: `11434`).                                                      |
+| `-H, --host <address>`    | Host to bind to (default: `127.0.0.1`).                                                    |
+| `--model <alias>`         | Model alias to preload (repeatable; must be in config).                                    |
+| `--api-key <key>`         | Require Bearer authentication. Recommended for every non-loopback bind.                    |
+| `--cors`                  | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin. |
+| `--cors-origin <origin>`  | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                  |
+| `--public-base-url <url>` | Externally reachable origin required for image `response_format=url`.                      |
+| `--docs`                  | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                       |
+| `-v, --verbose`           | Detailed output.                                                                           |
 
-`serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. Existing `--cors` scripts must add every trusted origin explicitly:
+`serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. `--cors` is only a compatibility validation switch and does not enable CORS itself. It fails without an explicit CLI/config origin, including with `--docs`. Existing `--cors` scripts must add every trusted origin explicitly:
 
 ```bash
 qvac serve openai --cors --cors-origin https://app.example.com
 ```
+
+Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
 
 The CLI logs a security warning—but still starts—when `--host` is not loopback and `--api-key` is omitted.
 
