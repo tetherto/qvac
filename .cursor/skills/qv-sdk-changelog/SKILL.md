@@ -42,19 +42,16 @@ three-part `release-<pkg>-x.y.z`. Full rules live in
 Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
 The script fetches from `upstream` first, falling back to `origin`.
 
-**Full-history requirement (fail-stop):** changelog discovery is
-`git log <base>..HEAD -- <packagePath>`. A shallow clone silently omits
-commits and produces incomplete release notes (this caused SDK 0.17.0 to
-miss `getSystemResources` and other path-scoped PRs). Before generating:
+**Full-history requirement (fail-stop):** discovery is
+`git log <base>..HEAD -- <packagePath>`. Before generating:
 
-1. Confirm `git rev-parse --is-shallow-repository` is `false`. If `true`,
-   run `git fetch --unshallow` (or re-clone without `--depth`) and stop —
-   do not generate from shallow history.
-2. Confirm the resolved base tag/commit is an ancestor of `HEAD`
-   (`git merge-base --is-ancestor <base> HEAD`). If not, check out the
+1. `git rev-parse --is-shallow-repository` must be `false` (else
+   `git fetch --unshallow` / re-clone without `--depth`, then stop).
+2. Base must be an ancestor of `HEAD`
+   (`git merge-base --is-ancestor <base> HEAD`); otherwise check out the
    release tip / package tag first.
 
-The generator script enforces both checks and exits non-zero on failure.
+The generator enforces both checks and exits non-zero on failure.
 
 Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing version tags.
 

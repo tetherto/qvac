@@ -138,11 +138,8 @@ function resolveBaseRef(packageName, baseCommit, releaseType = "minor") {
 }
 
 /**
- * Extract the PR number from a commit subject line.
- *
- * Prefer the trailing squash-merge `(#123)` / `Merge pull request #123`
- * form. Falling back to the first `#N` is unsafe: subjects like
- * `chore: … - #3522 (#3534)` would otherwise attribute the wrong PR.
+ * Extract PR number from a commit subject.
+ * Prefer trailing `(#123)` / `Merge pull request #123`; last `#N` otherwise.
  *
  * @param {string} line
  * @returns {number|null}
@@ -331,9 +328,7 @@ function parseArgs(argv) {
  * @returns {Promise<{packageName: string, baseRef: string|null, baseVersion: string|null, version: string, prs: Array}>}
  */
 /**
- * Fail-stop when the working clone cannot produce a complete changelog.
- * Shallow clones silently omit commits from `git log base..HEAD`, which
- * drops real package PRs from the release notes (seen on SDK 0.17.0).
+ * Fail-stop if the clone is shallow or baseRef is not an ancestor of HEAD.
  *
  * @param {string} baseRef
  */
@@ -343,16 +338,14 @@ function assertChangelogHistoryReady(baseRef) {
     isShallow = git("rev-parse --is-shallow-repository");
   } catch (error) {
     throw new Error(
-      "Unable to determine whether the repository is shallow. " +
-        "Refusing to generate a changelog without a full history check.",
+      "Unable to determine whether the repository is shallow.",
     );
   }
 
   if (isShallow === "true") {
     throw new Error(
-      "Repository is a shallow clone. Changelog generation requires full " +
-        "history so path-scoped `git log` does not miss merged PRs.\n" +
-        "Fix: `git fetch --unshallow` (or re-clone without --depth), then re-run.",
+      "Shallow clone: run `git fetch --unshallow` (or re-clone without " +
+        "--depth), then re-run.",
     );
   }
 
@@ -360,12 +353,11 @@ function assertChangelogHistoryReady(baseRef) {
     git(`rev-parse --verify ${baseRef}^{commit}`);
   } catch (error) {
     throw new Error(
-      `Base reference '${baseRef}' does not resolve to a commit in this clone.`,
+      `Base reference '${baseRef}' does not resolve to a commit.`,
     );
   }
 
   try {
-    // merge-base --is-ancestor exits 0 when baseRef is an ancestor of HEAD.
     execSync(`git merge-base --is-ancestor ${baseRef} HEAD`, {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -373,9 +365,7 @@ function assertChangelogHistoryReady(baseRef) {
   } catch (error) {
     throw new Error(
       `Base reference '${baseRef}' is not an ancestor of HEAD. ` +
-        "Changelog ranges are empty or misleading when the tip does not " +
-        "contain the release base. Check out the release tip (or the " +
-        "package tag) before generating.",
+        "Check out the release tip (or package tag) before generating.",
     );
   }
 }
