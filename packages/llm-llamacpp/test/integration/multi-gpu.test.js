@@ -82,7 +82,7 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
     t.is(stats.backendDevice, 'gpu', 'should report gpu backend')
 
     const devices = extractBufferDevices(specLogger.logs)
-    assertDevices(t, devices)
+    assertDevices(t, devices, specLogger.logs)
   } catch (error) {
     console.error(error)
     t.fail('multi-gpu test failed: ' + error.message)
@@ -108,6 +108,21 @@ function assertSingleDevice(t, devices) {
   )
 }
 
+// Row-split needs split buffers from every GPU device the model is distributed
+// over. As of qvac-fabric v10069 only SYCL provides them, and qvac-fabric now
+// throws on load instead of silently behaving like layer-split, so the addon
+// degrades 'row' -> 'layer' and warns. Asserting the warning is what makes this
+// test row-specific: without it, it only re-checks the layer-split case above.
+function assertRowDegradedToLayer(t, devices, logs) {
+  const warned = logs.some(
+    (line) =>
+      line.includes("split-mode 'row' is not supported") &&
+      line.includes("falling back to split-mode 'layer'")
+  )
+  t.ok(warned, "should warn that split-mode 'row' degraded to 'layer'")
+  assertMultiDevice('layers')(t, devices)
+}
+
 safeTest(
   'multi-gpu: split-mode=layer distributes layers across GPUs',
   { timeout: 600_000, skip },
@@ -117,10 +132,10 @@ safeTest(
 )
 
 safeTest(
-  'multi-gpu: split-mode=row distributes tensors across GPUs',
+  'multi-gpu: split-mode=row degrades to layer and still distributes across GPUs',
   { timeout: 600_000, skip },
   async (t) => {
-    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
+    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertRowDegradedToLayer)
   }
 )
 

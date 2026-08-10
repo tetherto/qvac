@@ -51,6 +51,7 @@
       "runToolsCompactTest",
       "runSlidingContextTest",
       "runKvCacheTypeDefaultsTest",
+      "runCacheStateMachineTest",
       "runUnloadThrowingListenerTest"
     ],
     "funcShardC": [
@@ -60,8 +61,7 @@
       "runGenerationParamsTest"
     ],
     "funcShardD": [
-      "runGemma4Test",
-      "runCacheStateMachineTest"
+      "runGemma4Test"
     ],
     "funcShardE": [
       "runApiBehaviorTest",

@@ -2,11 +2,13 @@
 
 Text-to-speech Bare addon backed by the [`qvac-tts.cpp`][qvac-tts-cpp]
 GGML library.  Wraps multiple engines under one package: **Chatterbox**
-(Turbo English + multilingual), **Supertonic** (v1 English, v2, and
-v3 31-language), **Parler** (mini/large English + indic 21-language,
+(Turbo English + multilingual), **Supertonic** (v3 31-language preferred;
+v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), and **CosyVoice3**
 (Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU), plus optional
-LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.
+LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
+which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
+
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
@@ -42,11 +44,67 @@ Android paths, including Vulkan on ARM Mali (see
 - **Cancellation** via `model.cancel()` — stops T3 decode on the next
   token; in-flight S3Gen chunk runs to completion.
 
+## Choosing a model
+
+Pick a **specific GGUF** (or CosyVoice3 model directory), not only an engine
+family. Capabilities overlap; the tables below weight language coverage,
+latency, size, and control surface so the default recommendation is
+obvious for each job.
+
+### Decision guide
+
+| If you need… | Use this model | Notes |
+| --- | --- | --- |
+| Lowest RTF on phones / edge devices | `supertonic3-q4_0.gguf` (or `supertonic3-q8_0.gguf` for quality) | ~80 MB (`q4_0`) / ~126 MB (`q8_0`); 31 languages. Prefer v3 over v1/v2. |
+| English + voice cloning + low first-audio latency | `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` | Reference-wav / voice-profile cloning; native `streamChunkTokens` chunk streaming. Native 24 kHz. |
+| Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
+| Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
+| Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU today; native 24 kHz. |
+| Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
+| Voice cloning with noisy input audio | Any engine above + `lavasr-denoiser.gguf` | Post-process (batch path); cleans before optional enhancement. See [Speech enhancement (LavaSR)](#speech-enhancement-lavasr). |
+| 48 kHz bandwidth-extended output | Any engine above + `lavasr-enhancer.gguf` | Post-process, not a TTS engine. Optional `lavasr-denoiser.gguf` first (batch path). |
+
+GPU / backend support is documented in
+[Backends & GPU acceleration](#backends--gpu-acceleration) — not duplicated
+here, so this guide does not go stale when backends change.
+
+### Capability matrix
+
+| Model | Languages | Size (approx.) | Sample rate | Voice control | Streaming |
+| --- | --- | ---: | ---: | --- | --- |
+| `supertonic3-q4_0` / `q8_0` / `f16` | 31 | ~80 / ~126 / ~191 MB | 44.1 kHz | Baked voice ids (`F1`, `M1`, …) | Sentence streaming |
+| `chatterbox-t3-turbo` + `s3gen` | English | ~1.7 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
+| `chatterbox-t3-mtl` + `s3gen-mtl` | Multilingual | ~2.0 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
+| `parler-indic-q8_0` | 21 Indic | ~1.3 GB | 44.1 kHz | `voice` / `emotion` / description | Sentence streaming |
+| `parler-mini-v1-q8_0` | English | ~1.2 GB | 44.1 kHz | Description / templates | Sentence streaming |
+| CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir | 24 kHz | `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts |
+
+### Legacy Supertonic v1 / v2
+
+| Model | Status | Why |
+| --- | --- | --- |
+| `supertonic.gguf` (v1, English) | **Not recommended for new integrations** | Supertonic 3 covers English and is the edge/RTF default. No reason to prefer v1 over v3. |
+| `supertonic2.gguf` (en/ko/es/pt/fr) | **Not recommended for new integrations** | Supertonic 3 is a strict superset (31 languages, same engine path, published quant tiers). Prefer `supertonic3-*.gguf`. |
+
+Both remain loadable for existing apps and CI. New projects should stage
+Supertonic 3 only unless a pinned dependency still requires v1/v2.
+
+### Quick defaults
+
+- **Mobile / low RTF:** `supertonic3-q4_0.gguf`
+- **Product English with cloning:** Chatterbox Turbo GGUF pair
+- **Indic product:** `parler-indic-q8_0.gguf`
+- **Chinese dialect product:** CosyVoice3 model directory
+
+See [Model files](#model-files) for on-disk layouts and
+[API overview](#api-overview) for constructor options.
+
 ## Install
 
 ```bash
 npm install @qvac/tts-ggml
 ```
+
 
 Requires [Bare](https://github.com/holepunchto/bare) `>=1.19.0`.
 Prebuilds are published for darwin-arm64, android-arm64, ios-arm64;
@@ -68,15 +126,14 @@ chatterbox-s3gen.gguf      (~1.0 GB) — S3Gen encoder/CFM + HiFT + CAMPPlus + S
 chatterbox-t3-mtl.gguf     (~1.0 GB)
 chatterbox-s3gen-mtl.gguf  (~1.0 GB)
 
-# Supertonic English (Supertone/supertonic; 44.1 kHz, voice baked in)
-supertonic.gguf            (~263 MB)
+# Supertonic 3 (Supertone/supertonic-3; 31 languages) — preferred Supertonic
+# checkpoint; published per quant tier (auto-detected from modelDir)
+supertonic3-q4_0.gguf      (~80 MB; also -q8_0 ~126 MB / -f16 ~191 MB / -f32)
 
-# Supertonic multilingual (Supertone/supertonic-2; en/ko/es/pt/fr)
-supertonic2.gguf           (~263 MB)
+# Legacy Supertonic (not recommended for new integrations — see Choosing a model)
+supertonic.gguf            (~263 MB) — v1 English only
+supertonic2.gguf           (~263 MB) — v2 en/ko/es/pt/fr; subset of v3
 
-# Supertonic 3 (Supertone/supertonic-3; 31 languages) — published per quant
-# tier with the quant in the filename (auto-detected from modelDir)
-supertonic3-f16.gguf       (also -q8_0 / -q4_0 / -f32)
 
 # Parler (parler-tts/parler-tts-{mini,large}-v1 + ai4bharat/indic-parler-tts;
 # 44.1 kHz, description-conditioned) — published per quant tier
@@ -264,16 +321,42 @@ python scripts/convert-lavasr-enhancer-to-gguf.py \
 
 Notes:
 
-- Works for Supertonic and Chatterbox, on the batch path, sentence-level
-  streaming, **and** Chatterbox native chunk streaming (`streamChunkTokens > 0`).
+- Works for all four engines — Chatterbox, Supertonic, Parler and CosyVoice3 —
+  on the batch path, sentence-level streaming, **and** the native chunk
+  streaming of Chatterbox, Parler and CosyVoice3 (`streamChunkTokens > 0`).
 - For native chunk streaming the enhancer runs over a sliding window with
   look-ahead + crossfade so each emitted chunk is bandwidth-extended seam-free.
   This adds **~0.34 s of look-ahead latency** (inherent to the enhancer's
   receptive field), so first-audio-out arrives a little later than un-enhanced
   streaming.
+- That window re-runs the enhancer over a fixed left context + look-ahead around
+  every chunk, so streamed enhancement costs a constant factor above a single
+  batch pass: **~1.7×** for ~1 s chunks, ~2.7× for ~0.4 s, ~4.4× for ~0.2 s. How
+  many tokens that is depends on the engine's speech-token rate (Chatterbox's S3
+  tokens run at a fixed 25 Hz, so `streamChunkTokens: 25` ≈ 1 s). The factor is
+  flat in utterance length, and the enhancer is only a small share of synthesis,
+  so ~1 s chunks cost roughly 2% of total synthesis time.
+- That extra enhancer CPU buys a real latency win on **Chatterbox**, so prefer
+  larger chunks there only if enhancer CPU matters more to you than first-audio
+  latency. On **CosyVoice3** it currently buys nothing: the tts-cpp engine
+  computes the whole utterance and only then slices it, so chunks arrive
+  progressively but first-audio latency is not yet reduced (true token2wav
+  streaming is reserved upstream). Until that lands, prefer **batch** synthesis
+  when enhancing CosyVoice3 — streaming there pays the reprocess cost and yields
+  a seam-free result that is not bit-identical to the batch pass, with no
+  latency benefit in return.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio
   is 48 kHz; set `config.outputSampleRate` to resample the enhanced output to a
   different rate (`TTSOutputChunk.sampleRate` reports the actual rate).
+- Parler is natively 44.1 kHz, so enhancement there buys spectral detail rather
+  than raw bandwidth. It also lifts a streaming restriction: Parler normally
+  rejects `config.outputSampleRate` together with `streamChunkTokens` (the engine
+  has no seam-free per-chunk resampler), but with the enhancer active the
+  requested rate is applied inside the enhancer's overlap windows and is
+  accepted.
+- CosyVoice3 native chunk streaming otherwise emits only at its native 24 kHz;
+  enabling the enhancer is what makes a different `config.outputSampleRate`
+  valid there, since the resample happens inside the seam-free window.
 - With `opts.stats`, `response.stats.enhancerBackendDevice` (`-1` none / `0` CPU
   / `1` GPU) and `enhancerBackendId` report where the enhancer actually ran.
 
@@ -283,7 +366,7 @@ LavaSR's first stage — the UL-UNAS **denoiser**, which cleans the signal befor
 the enhancer bandwidth-extends it — is wired through the addon. It is enabled the
 same way as the enhancer, via `files.lavasrDenoiser` (or a
 `denoiser: { type: 'lavasr', denoiserPath }` block), and runs before the
-enhancer (rate-preserving) on the batch path for both engines:
+enhancer (rate-preserving) on the batch path for all four engines:
 
 ```js
 const model = new TTSGgml({
@@ -313,9 +396,9 @@ Notes:
 - The UL-UNAS forward runs at 16 kHz internally (resampled in/out), so the
   denoiser is **rate-preserving**: the emitted audio keeps the engine's sample
   rate. With no denoiser path the output is unchanged (full backward compat).
-- Denoiser + Chatterbox native chunk streaming (`streamChunkTokens > 0`) is
-  rejected up front — a stateful streaming denoiser is the follow-up. Use batch
-  synthesis, or drop the denoiser for streaming.
+- Denoiser + native chunk streaming (`streamChunkTokens > 0`) is rejected up
+  front for every engine — a stateful streaming denoiser is the follow-up. Use
+  batch synthesis, or drop the denoiser for streaming.
 - The tts-cpp UL-UNAS forward is implemented in
   [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
@@ -472,7 +555,7 @@ CosyVoice3 runs on **CPU** and emits native **24 kHz**.
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
-| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz) |
+| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic/Parler 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
@@ -547,7 +630,9 @@ Runnable demos under `examples/`:
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
+| `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz, CPU). `bare examples/cosyvoice-tts.js "Hello"` |
+| `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any

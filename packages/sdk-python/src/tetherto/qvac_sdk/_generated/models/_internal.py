@@ -10011,6 +10011,53 @@ class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
     cpu = "cpu"
 
 
+class Embodiment(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').",
+            max_length=256,
+            min_length=1,
+        ),
+    ]
+
+
+class Embodiment1(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(description="The embodiment's numeric `cat_id` (0..31).", ge=0, le=31),
+    ]
+
+
+class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
+    tag: Annotated[
+        str | None,
+        Field(
+            description="Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').",
+            max_length=256,
+            min_length=1,
+        ),
+    ] = None
+    cat_id: Annotated[
+        int | None,
+        Field(
+            alias="catId",
+            description="The embodiment's numeric `cat_id` (0..31).",
+            ge=0,
+            le=31,
+        ),
+    ] = None
+    num_cameras: Annotated[
+        int | None,
+        Field(
+            alias="numCameras",
+            description="Overrides the camera count stored in the GGUF for the selected embodiment. Required to select an embodiment whose count was unknown at conversion time.",
+            ge=1,
+            le=64,
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
         LoadModelSrcRequestGgmlVlaModelConfigBackend | None,
@@ -10025,6 +10072,15 @@ class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
             description="Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).",
             ge=-9007199254740991,
             le=9007199254740991,
+        ),
+    ] = None
+    embodiment: Annotated[
+        Embodiment
+        | Embodiment1
+        | LoadModelSrcRequestGgmlVlaModelConfigEmbodiment
+        | None,
+        Field(
+            description="GR00T only: which embodiment of a multi-embodiment GGUF to activate at load — a tag string, a numeric `cat_id` (0..31), or `{ tag | catId, numCameras }`. Omitted = the GGUF's default embodiment. Rejected by the addon for non-GR00T models."
         ),
     ] = None
 
