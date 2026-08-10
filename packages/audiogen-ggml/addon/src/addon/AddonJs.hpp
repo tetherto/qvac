@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include <js.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -18,6 +17,7 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
 #include "model-interface/acestep/AcestepModel.hpp"
@@ -28,8 +28,8 @@ namespace js = qvac_lib_inference_addon_cpp::js;
 
 using acestep::AcestepModel;
 
-inline std::vector<int> copyAudioCodes(
-    js_env_t* env, js::TypedArray<int32_t> array) {
+inline std::vector<int>
+copyAudioCodes(js_env_t* env, js::TypedArray<int32_t> array) {
   int32_t* data = nullptr;
   size_t len = 0;
   if (js_get_typedarray_info(
