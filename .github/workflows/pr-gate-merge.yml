@@ -220,6 +220,14 @@ jobs:
             echo "::error title=Missing PR timestamp::github.event.pull_request.updated_at is empty; cannot correlate prebuild status freshness."
             exit 1
           fi
+          # Normalise the threshold to epoch seconds once, so run-freshness is a
+          # numeric compare (robust against any timestamp-format differences)
+          # rather than a lexical string compare.
+          PR_UPDATED_EPOCH=$(date -d "$PR_UPDATED_AT" +%s 2>/dev/null || echo "")
+          if [ -z "$PR_UPDATED_EPOCH" ]; then
+            echo "::error title=Unparseable PR timestamp::Could not parse pull_request.updated_at ($PR_UPDATED_AT)."
+            exit 1
+          fi
           deadline=$(( $(date +%s) + 180 * 60 ))
           while :; do
             statuses=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" --paginate)
@@ -243,13 +251,14 @@ jobs:
               esac
               # Bind the status to its producing run: trust it only if that run is
               # the on-pr-<pkg> workflow AND was triggered at/after this PR event
-              # (created_at >= PR_UPDATED_AT, ISO timestamps compare lexically).
-              # This rejects a superseded pre-label run whose skipped success only
+              # (created_at >= PR_UPDATED_AT, compared as epoch seconds). This
+              # rejects a superseded pre-label run whose skipped success only
               # post-dates the label, without ever listing "the newest run".
               run_json=$(gh api "repos/${REPO}/actions/runs/${run_id}" 2>/dev/null || echo '{}')
               run_path=$(echo "$run_json" | jq -r '.path // ""')
               run_created=$(echo "$run_json" | jq -r '.created_at // ""')
-              if [ "$run_path" != ".github/workflows/on-pr-${pkg}.yml" ] || [ -z "$run_created" ] || [[ "$run_created" < "$PR_UPDATED_AT" ]]; then
+              run_created_epoch=$(date -d "$run_created" +%s 2>/dev/null || echo "")
+              if [ "$run_path" != ".github/workflows/on-pr-${pkg}.yml" ] || [ -z "$run_created_epoch" ] || [ "$run_created_epoch" -lt "$PR_UPDATED_EPOCH" ]; then
                 pending="${pending} ${ctx}"
                 continue
               fi

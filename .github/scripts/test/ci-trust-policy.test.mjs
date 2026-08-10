@@ -1055,8 +1055,8 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   )
   assert.match(
     verify,
-    /run_created.*<.*PR_UPDATED_AT/,
-    'verify-prebuilds rejects a producing run triggered before this PR event',
+    /run_created_epoch"\s+-lt\s+"\$PR_UPDATED_EPOCH/,
+    'verify-prebuilds rejects a producing run created before this PR event',
   )
 })
 
