@@ -234,16 +234,21 @@ export async function* translate(
   }
   const modelExecutionMs = nowMs() - modelStart
 
+  // The nmtcpp addon reports totalTime/decodeTime/encodeTime in seconds
+  // (TTFT is already milliseconds); the TranslationStats contract documents
+  // milliseconds, so convert here.
   const stats: TranslationStats = {
-    ...(nmtResponse.stats?.totalTime !== undefined && { totalTime: nmtResponse.stats.totalTime }),
+    ...(nmtResponse.stats?.totalTime !== undefined && {
+      totalTime: nmtResponse.stats.totalTime * 1000
+    }),
     ...(nmtResponse.stats?.totalTokens !== undefined && {
       totalTokens: nmtResponse.stats.totalTokens
     }),
     ...(nmtResponse.stats?.decodeTime !== undefined && {
-      decodeTime: nmtResponse.stats.decodeTime
+      decodeTime: nmtResponse.stats.decodeTime * 1000
     }),
     ...(nmtResponse.stats?.encodeTime !== undefined && {
-      encodeTime: nmtResponse.stats.encodeTime
+      encodeTime: nmtResponse.stats.encodeTime * 1000
     }),
     ...(nmtResponse.stats?.TPS !== undefined && { tokensPerSecond: nmtResponse.stats.TPS }),
     ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT })

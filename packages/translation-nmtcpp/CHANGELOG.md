@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.1.0] - 2026-08-10
+
+### Added
+
+- `TranslationResponse` public type: `run()` now resolves with the streaming
+  response surface plus a typed `stats` property, so TypeScript consumers can
+  read `response.stats` (`RuntimeStats`) without casting.
+- `QvacErrorAddonMarian` and `ERR_CODES` are exported through a supported
+  public path: `@qvac/translation-nmtcpp/lib/error`.
+- Focused unit tests for run/runBatch serialization, activation-failure
+  cleanup, lifecycle state flags, `load()`-after-`destroy()` rejection, and
+  the en→pt target-token handling — driven against the real wrapper with an
+  injected fake native interface.
+
+### Changed
+
+- **Inference is serialized through completion.** `run()` now holds its
+  exclusive-queue slot until the returned response settles, and `runBatch()`
+  goes through the same queue — a new job can no longer replace an active
+  response mid-flight (previously the queue was released as soon as the job
+  was submitted, and `runBatch()` bypassed it entirely).
+- The job handler is now started before the native job is submitted (and
+  failed when submission throws), so output events can never race the
+  response registration.
+- The hardcoded en→pt `>>por<<` literal moved into a named
+  per-language-pair target-token table
+  (`BERGAMOT_TARGET_TOKEN_BY_PAIR`) with documentation and tests explaining
+  why that pair needs the Opus-MT-style token.
+- The native binding is resolved lazily on first use instead of at import
+  time, so the package can be imported (for types, error codes, or the model
+  fetchers) without a prebuild present.
+- Documentation overhaul: batch translation documented for both backends
+  (IndicTrans2 batching is implemented and integration-tested), obsolete
+  `params.mode` removed from examples/docs, phantom loading-progress claim
+  removed, cancellation (`response.cancel()`) documented accurately, new
+  consolidated API Reference (methods, `RuntimeStats` with units, error
+  codes, subpath exports), new Model Registry and pivot-translation
+  sections, broken links fixed, development instructions corrected
+  (Prettier/lunte/ESLint instead of StandardJS), `docs/` architecture
+  material linked from the README and refreshed (removed
+  Hyperdrive/weights-provider/progress-callback/`processBatch` descriptions
+  and Opus-era naming).
+
+### Fixed
+
+- A failed `activate()` during `load()` now destroys the just-created native
+  instance (releasing the C++ → JS logger bridge) and clears the addon
+  handle instead of leaking both.
+- `getState().weightsLoaded` is now set after a successful `load()`
+  (previously only `configLoaded` was set).
+- `load()` after `destroy()` now rejects — destruction is documented as
+  permanent (previously it silently resurrected the instance).
+- `run()` before `load()` now rejects with a clear "Model not loaded" error
+  instead of an internal null dereference.
+
 ## [10.0.0] - 2026-08-10
 
 ### Changed
@@ -28,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - chore[notask]:
   test addon-cpp 1.3.3 across consumers
 
 ## [8.3.1] - 2026-08-03
@@ -74,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3468](https://github.com/tetherto/qvac/pull/3468) - QVAC-22177 chore: migrate translation-nmtcpp wrapper to TypeScript
+- [#3468](https://github.com/tetherto/qvac/pull/3468) - chore: migrate translation-nmtcpp wrapper to TypeScript
 
 ## [8.2.1] - 2026-07-30
 
@@ -99,13 +154,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - rebase qvac-fabric to b9840 (9840.0.0)
 
 ## [8.0.0] - 2026-07-14
 
 ### Fixed
 
-- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix).
 
 ## [7.2.2] - 2026-07-08
 
@@ -117,7 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, tetherto/qvac#2932).
 
 ## [7.2.0] - 2026-07-07
 
@@ -139,7 +194,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - feat[api]: bump qvac-fabric to 9341.1.3 across consumers
 
 ## [6.3.1] - 2026-07-01
 
@@ -155,7 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Pull Requests
 
-- [#2839](https://github.com/tetherto/qvac/pull/2839) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (translation-nmtcpp)
+- [#2839](https://github.com/tetherto/qvac/pull/2839) - feat[api]: bump qvac-fabric to 9341.1.0 (translation-nmtcpp)
 
 ## [6.2.1] - 2026-06-22
 
@@ -170,7 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Pull Requests
 
-- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - Switch to static C/C++ windows runtimes
 
 ## [6.2.0] - 2026-06-22
 
@@ -180,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Pull Requests
 
-- [#2733](https://github.com/tetherto/qvac/pull/2733) - QVAC-20827 feat[api]: GGML_BACKEND_DL desktop backends (Vulkan) across fabric consumers
+- [#2733](https://github.com/tetherto/qvac/pull/2733) - feat[api]: GGML_BACKEND_DL desktop backends (Vulkan) across fabric consumers
 
 ## [6.1.0] - 2026-06-18
 
