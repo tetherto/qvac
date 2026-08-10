@@ -74,6 +74,10 @@ function isExpectedAuthorization(header: string | undefined, expected: string): 
   return given.length === want.length && timingSafeEqual(given, want)
 }
 
+function isProxyAuthorized(req: IncomingMessage, proxyToken: string): boolean {
+  return isExpectedAuthorization(req.headers['authorization'], `Bearer ${proxyToken}`)
+}
+
 function isInferenceRequest(req: IncomingMessage): boolean {
   return req.method === 'POST' && (req.url ?? '').includes('/chat/completions')
 }
@@ -198,6 +202,14 @@ function writeUnauthorized(res: ServerResponse): void {
   )
 }
 
+function rejectUnauthorized(req: IncomingMessage, res: ServerResponse, logger: HostLogger): void {
+  logger.trace(`401 ${req.method ?? '?'} ${req.url ?? '?'}`)
+  writeUnauthorized(res)
+  // Discard whatever body is still in flight instead of collecting it: a caller
+  // we have already refused must not be able to size an allocation here.
+  req.resume()
+}
+
 async function forwardToUpstream(
   req: IncomingMessage,
   res: ServerResponse,
@@ -260,11 +272,10 @@ async function handleRequest(
   options: ProxyOptions,
   runInference: SerializedRunner
 ): Promise<void> {
-  // Authenticate before anything else, so an unauthenticated caller can neither
-  // wait on managed startup nor borrow the host's serve credential.
-  if (!isExpectedAuthorization(req.headers['authorization'], `Bearer ${options.proxyToken}`)) {
-    options.logger.trace(`401 ${req.method ?? '?'} ${req.url ?? '?'}`)
-    writeUnauthorized(res)
+  // Defense in depth: the connection handler already refuses unauthenticated
+  // callers before a body is read, so reaching this is a wiring mistake.
+  if (!isProxyAuthorized(req, options.proxyToken)) {
+    rejectUnauthorized(req, res, options.logger)
     return
   }
 
@@ -311,6 +322,13 @@ export function startOpenAICompatibleProxy(
     res.on('error', () => {})
     req.on('error', () => {})
     const reqStart = Date.now()
+    // Authenticate on the headers alone, before a `data` listener exists: an
+    // unauthenticated caller must not get the host to buffer a body, nor to wait
+    // on managed startup, nor to borrow the serve credential.
+    if (!isProxyAuthorized(req, options.proxyToken)) {
+      rejectUnauthorized(req, res, options.logger)
+      return
+    }
     const chunks: Buffer[] = []
     req.on('data', (c: Buffer) => chunks.push(c))
     req.on('end', () => {
@@ -335,6 +353,9 @@ export function startOpenAICompatibleProxy(
               if (err === undefined) res()
               else rej(err)
             })
+            // A refused caller can leave a half-sent request on the socket, which
+            // would keep `close` pending forever; shutdown must not wait on it.
+            server.closeAllConnections()
           })
       })
     })

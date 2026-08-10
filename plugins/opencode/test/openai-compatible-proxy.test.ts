@@ -119,6 +119,44 @@ function postJson(
   })
 }
 
+// Announces a large body but sends only its first chunk, then resolves on the
+// response. A proxy that buffers the body before authenticating can never
+// answer this request, because the request never ends.
+function postUnfinishedBody(
+  port: number,
+  path: string,
+  authorization: string
+): Promise<TestResponse> {
+  const chunk = 'x'.repeat(1024)
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      {
+        hostname: '127.0.0.1',
+        port,
+        path,
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-length': String(chunk.length * 1024),
+          authorization
+        }
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          req.destroy()
+          resolve({ statusCode: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') })
+        })
+        res.on('error', reject)
+      }
+    )
+    // Abandoning a half-sent request raises here; the response is what matters.
+    req.on('error', () => {})
+    req.write(chunk)
+  })
+}
+
 function postRaw(port: number, path: string, body: string): Promise<TestResponse> {
   return new Promise((resolve, reject) => {
     const req = httpRequest(
@@ -221,6 +259,34 @@ test(
       assert.equal(res.statusCode, 401)
     } finally {
       await proxy.close()
+    }
+  }
+)
+
+// The rejection has to happen in the connection handler, not after the body is
+// assembled: an unauthenticated caller must not be able to make the host buffer
+// a body-sized allocation for a request it has already refused.
+test(
+  'proxy rejects an unauthorized request before reading its body',
+  { timeout: 5_000 },
+  async () => {
+    let upstreamHits = 0
+    const upstreamServer = await startServer((_req, res) => {
+      upstreamHits += 1
+      res.writeHead(200)
+      res.end()
+    })
+    const proxy = await startProxy({
+      getUpstream: () => ({ hostname: '127.0.0.1', port: String(upstreamServer.port) })
+    })
+    try {
+      const res = await postUnfinishedBody(proxy.port, '/v1/chat/completions', 'Bearer nope')
+      assert.equal(res.statusCode, 401)
+      assert.match(res.body, /invalid_api_key/)
+      assert.equal(upstreamHits, 0)
+    } finally {
+      await proxy.close()
+      await upstreamServer.close()
     }
   }
 )
