@@ -155,8 +155,8 @@ reused across restarts. Its directory is kept at mode `0700` and the file at
 mode `0600`.
 
 OpenClaw's provider config uses a file SecretRef, and the local-service arguments
-contain only the key-file path. The launcher reads that file and passes the key
-to `qvac serve openai --api-key`. A missing, invalid, or unsafe key prevents the
+contain only the key-file path. The launcher validates that file and points
+`qvac serve openai --api-key-file` at it. A missing, invalid, or unsafe key prevents the
 server from starting. The generated QVAC serve config does not contain the key.
 The SecretRef provider id is namespaced as `qvac_key_file` so setup does not
 replace an unrelated `secrets.providers.qvac` entry.
@@ -207,10 +207,16 @@ curl -H "Authorization: Bearer $QVAC_API_KEY" http://127.0.0.1:11434/v1/models
 unset QVAC_API_KEY
 ```
 
-The launcher key is not exposed in its process arguments. The `qvac serve`
-grandchild still receives `--api-key <key>`, so the key can be visible to
-same-user or privileged process inspection until the QVAC CLI supports a secret
-file, environment, or file-descriptor transport.
+Neither the launcher nor the `qvac serve` grandchild is handed the key in its
+process arguments: the serve is started with `--api-key-file`, pointing at the
+same owner-only file, so the key cannot be recovered from `ps` or
+`/proc/<pid>/cmdline`. Against a `@qvac/cli` older than 0.11.0, or a custom
+`--qvac-command` whose version cannot be determined, the launcher falls back to
+`--api-key <key>` and the key is visible to local process inspection.
+
+The key file is re-checked on every launch, not just at onboarding: a path that
+is no longer a regular file, or that has become readable beyond its owner, stops
+the launcher rather than being used.
 
 ## Upgrading
 

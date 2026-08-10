@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
 import { ServeExitedError, ServeStartTimeoutError } from '../src/managed/errors.js'
 import { isProcessAlive } from '../src/managed/registry.js'
-import { allocateFreePort, spawnServe, stopServe } from '../src/managed/serve-process.js'
+import {
+  allocateFreePort,
+  cliSupportsApiKeyFile,
+  spawnServe,
+  stopServe,
+  writeApiKeyFile
+} from '../src/managed/serve-process.js'
 import { fakeServeSkip as skip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
 
 const API_KEY = 'managed-test-key'
@@ -182,3 +188,27 @@ test(
     }
   }
 )
+
+test('the serve credential is kept out of argv when the CLI can read it from a file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'qvac-serve-key-'))
+  try {
+    const configPath = join(dir, 'qvac.config.json')
+    const keyPath = writeApiKeyFile(configPath, API_KEY)
+
+    assert.equal(await readFile(keyPath, 'utf8'), API_KEY)
+    assert.equal((await stat(keyPath)).mode & 0o777, 0o600)
+
+    // A recovery respawn reuses the same path, where `mode` on write is ignored.
+    await writeFile(keyPath, 'stale', { mode: 0o644 })
+    writeApiKeyFile(configPath, API_KEY)
+    assert.equal((await stat(keyPath)).mode & 0o777, 0o600)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a serve binary we cannot version keeps the argv credential form', () => {
+  // An older CLI rejects `--api-key-file` outright and would never start, so an
+  // unversionable binary must not be handed the newer flag.
+  assert.equal(cliSupportsApiKeyFile('/opt/custom/qvac'), false)
+})

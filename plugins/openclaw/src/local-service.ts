@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { lstatSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -47,7 +48,11 @@ function parseOptions(argv: readonly string[]): ReadonlyMap<string, string> {
     const name = argv[index]
     const value = argv[index + 1]
     if (name === undefined || !LOCAL_SERVICE_OPTIONS.has(name)) {
-      throw new TypeError('Unknown local service option')
+      // The offending token is deliberately not echoed: a misaligned argv puts a
+      // *value* in this slot, and one of those values can be a credential.
+      throw new TypeError(
+        `Unknown local service option. Expected one of: ${[...LOCAL_SERVICE_OPTIONS].join(', ')}`
+      )
     }
     if (value === undefined || value.startsWith('--')) {
       throw new TypeError(`${name} requires a value`)
@@ -107,7 +112,20 @@ export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOpti
   }
 }
 
+// Re-checked on every read, not just at onboarding: the path is long-lived, and
+// a key swapped for a symlink or loosened to group-readable between runs would
+// otherwise be picked up silently.
 export function loadApiKey(keyFile: string): string {
+  const stat = lstatSync(keyFile)
+  if (!stat.isFile()) {
+    throw new TypeError(`QVAC API key path must be a regular file: ${keyFile}`)
+  }
+  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+    throw new TypeError(
+      `QVAC API key file ${keyFile} is readable beyond its owner. Run \`chmod 600 ${keyFile}\`, ` +
+        'or re-run `openclaw onboard --auth-choice qvac` to regenerate it.'
+    )
+  }
   return normalizeApiKey(readFileSync(keyFile, 'utf8'), 'stored QVAC API key')
 }
 
@@ -131,6 +149,63 @@ export function createLocalServiceServeConfig(
   }
 }
 
+// First `@qvac/cli` able to take the key from a file instead of argv.
+const MIN_CLI_VERSION_API_KEY_FILE = '0.11.0'
+
+function isAtLeast(version: string, minimum: string): boolean {
+  const parts = (value: string): number[] =>
+    (value.split('-')[0] ?? '').split('.').map((part) => Number.parseInt(part, 10) || 0)
+  const actual = parts(version)
+  const wanted = parts(minimum)
+  for (let index = 0; index < 3; index += 1) {
+    const left = actual[index] ?? 0
+    const right = wanted[index] ?? 0
+    if (left !== right) return left > right
+  }
+  return true
+}
+
+function resolveCliVersion(): string | undefined {
+  const require = createRequire(import.meta.url)
+  try {
+    const pkg = require(require.resolve('@qvac/cli/package.json')) as { version?: string }
+    if (typeof pkg.version === 'string') return pkg.version
+  } catch {
+    // The published CLI ships a string `exports`, so the ./package.json subpath
+    // is not resolvable; walk up from the main entry instead.
+  }
+  try {
+    let dir = dirname(require.resolve('@qvac/cli'))
+    for (let depth = 0; depth < 8; depth += 1) {
+      try {
+        const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+          name?: string
+          version?: string
+        }
+        if (pkg.name === '@qvac/cli' && typeof pkg.version === 'string') return pkg.version
+      } catch {
+        // Not this level; keep walking.
+      }
+      const parent = dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  } catch {
+    // CLI not resolvable from here; fall back to the argv form.
+  }
+  return undefined
+}
+
+// `--api-key <key>` puts the credential in the process list, which /proc exposes
+// to every local account on Linux. An older CLI rejects `--api-key-file` outright
+// and would never start, so support is confirmed before switching. A custom
+// `--qvac-command` points somewhere we cannot version, so it keeps the argv form.
+export function cliSupportsApiKeyFile(qvacCommand: string): boolean {
+  if (qvacCommand !== DEFAULT_OPTIONS.qvacCommand) return false
+  const version = resolveCliVersion()
+  return version !== undefined && isAtLeast(version, MIN_CLI_VERSION_API_KEY_FILE)
+}
+
 function serveArgs(options: LocalServiceOptions, configPath: string, apiKey: string): string[] {
   return [
     'serve',
@@ -143,8 +218,9 @@ function serveArgs(options: LocalServiceOptions, configPath: string, apiKey: str
     String(options.port),
     '--model',
     options.model,
-    '--api-key',
-    apiKey
+    ...(cliSupportsApiKeyFile(options.qvacCommand)
+      ? ['--api-key-file', options.apiKeyFile]
+      : ['--api-key', apiKey])
   ]
 }
 

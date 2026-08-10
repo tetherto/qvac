@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
 import {
   buildQvacServeArgs,
+  cliSupportsApiKeyFile,
   createLocalServiceServeConfig,
   formatLauncherError,
   formatSpawnError,
@@ -40,7 +41,7 @@ async function withIsolatedTmpdir(
 test('local service launcher creates QVAC serve config and command args from OpenClaw options', () => {
   const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-local-service-test-'))
   const keyFile = join(dir, 'api-key')
-  writeFileSync(keyFile, 'abcdefghijklmnopqrstuvwxyzABCDE_')
+  writeFileSync(keyFile, 'abcdefghijklmnopqrstuvwxyzABCDE_', { mode: 0o600 })
   const options = parseLocalServiceArgs([
     '--qvac-command',
     '/usr/local/bin/qvac',
@@ -144,7 +145,7 @@ test('local service launcher rejects a missing or ambiguous API key file', () =>
     () => parseLocalServiceArgs([secretLookingOption, 'value']),
     (error: unknown) => {
       assert.ok(error instanceof TypeError)
-      assert.equal(error.message, 'Unknown local service option')
+      assert.match(error.message, /^Unknown local service option\. Expected one of: --qvac-command/)
       assert.doesNotMatch(error.message, /abcdefghijklmnopqrstuvwxyzABCDE_/)
       return true
     }
@@ -185,7 +186,7 @@ test('local service launcher rejects unsafe key-file contents', () => {
     'abcdefghijklmnopqrstuvwxyzABCD\u0000',
     '--modelabcdefghijklmnopqrstuvwxyz'
   ]) {
-    writeFileSync(keyFile, value)
+    writeFileSync(keyFile, value, { mode: 0o600 })
     assert.throws(() => loadApiKey(keyFile), /must be 32-128 base64url characters/)
   }
 
@@ -202,7 +203,7 @@ test('launch preparation leaves no temp config directory when the key file is un
     assert.deepEqual(readdirSync(tmpRoot), [], 'no temp config dir after a missing key file')
 
     // Present but unusable key file.
-    writeFileSync(keyFile, 'short')
+    writeFileSync(keyFile, 'short', { mode: 0o600 })
     await assert.rejects(prepareLocalServiceLaunch(options), /must be 32-128 base64url characters/)
     assert.deepEqual(readdirSync(tmpRoot), [], 'no temp config dir after an invalid key file')
   })
@@ -211,7 +212,7 @@ test('launch preparation leaves no temp config directory when the key file is un
 test('launch preparation cleans up its temp config directory on shutdown', async () => {
   await withIsolatedTmpdir(async ({ tmpRoot, scratch }) => {
     const keyFile = join(scratch, 'api-key')
-    writeFileSync(keyFile, VALID_KEY)
+    writeFileSync(keyFile, VALID_KEY, { mode: 0o600 })
     const options = parseLocalServiceArgs(['--api-key-file', keyFile])
 
     const launch = await prepareLocalServiceLaunch(options)
@@ -274,4 +275,54 @@ test('local service exits cleanly for intentional child signal stops', () => {
   assert.equal(resolveLocalServiceExitCode(null, 'SIGTERM', false), null)
   assert.equal(resolveLocalServiceExitCode(0, null, false), 0)
   assert.equal(resolveLocalServiceExitCode(null, null, false), 1)
+})
+
+test('local service launcher re-validates the key file on every read', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-key-'))
+  try {
+    const keyFile = join(dir, 'api-key')
+    writeFileSync(keyFile, VALID_KEY, { mode: 0o600 })
+    assert.equal(loadApiKey(keyFile), VALID_KEY)
+
+    // Onboarding wrote a private regular file, but the path is long-lived and
+    // whatever sits there at launch time is what gets trusted.
+    const link = join(dir, 'linked-key')
+    symlinkSync(keyFile, link)
+    assert.throws(() => loadApiKey(link), /must be a regular file/)
+
+    const loose = join(dir, 'loose-key')
+    writeFileSync(loose, VALID_KEY, { mode: 0o644 })
+    assert.throws(() => loadApiKey(loose), /readable beyond its owner/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('local service launcher keeps the key out of argv only against a CLI that supports it', () => {
+  // A custom command points somewhere unversionable, so it must not be handed a
+  // flag that would make an older CLI refuse to start at all.
+  assert.equal(cliSupportsApiKeyFile('/opt/custom/qvac'), false)
+
+  const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-key-'))
+  try {
+    const apiKeyFile = join(dir, 'api-key')
+    writeFileSync(apiKeyFile, VALID_KEY, { mode: 0o600 })
+    const args = buildQvacServeArgs(
+      {
+        qvacCommand: '/opt/custom/qvac',
+        apiKeyFile,
+        model: 'qwen3.5-9b',
+        host: '127.0.0.1',
+        port: 11434,
+        ctxSize: 32768,
+        reasoningBudget: 0,
+        tools: true
+      },
+      join(dir, 'qvac.config.json')
+    )
+    assert.ok(args.includes('--api-key'), 'the fallback still authenticates the serve')
+    assert.equal(args.includes('--api-key-file'), false)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

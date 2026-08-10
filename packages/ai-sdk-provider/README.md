@@ -233,7 +233,7 @@ const res = await fetch(`${qvac.baseURL}/models`, {
 
 Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
 
-The detached runner receives the key through a one-shot `0600` file rather than its argv, but the `qvac serve` process it starts is still launched with `--api-key <key>`, so the key can be read from `ps` by same-user or privileged process inspection until the QVAC CLI accepts a key from a file, environment variable, or file descriptor. This matches the limitation documented for `@qvac/openclaw-plugin`; both call sites move together when the CLI gains a non-argv key source.
+Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Passing the key on the serve command line requires a CLI too old for `--api-key-file`, which the provider detects and falls back to; the same is true of a `serveBinPath` override, whose version cannot be determined. Install `@qvac/cli` 0.11.0 or newer to keep the key out of the process list.
 
 ### Per-model configuration
 
