@@ -97,7 +97,7 @@ test('MODEL_SHARDS excludes pi05 (deferred on mobile)', () => {
   assert.deepEqual(MODEL_SHARDS.map((s) => s.test).sort(), ['runAddonTest', 'runGrootTest'])
 })
 
-test('buildScript reads the shard grep and stages only matching models via adb', () => {
+test('buildScript reads the shard grep and stages only matching models via adb on Android', () => {
   const man = { runAddonTest: [{ name: 'smolvla.gguf', url: 'https://x/smolvla.gguf' }] }
   const b64 = Buffer.from(JSON.stringify(man)).toString('base64')
   const script = buildScript(b64)
@@ -120,6 +120,31 @@ test('buildScript reads the shard grep and stages only matching models via adb',
   const failedTempSetup = runWithStubs(script, { mkdirExit: 1 })
   assert.equal(failedTempSetup.status, 0, failedTempSetup.stderr)
   assert.match(failedTempSetup.stdout, /host temp setup failed/)
+})
+
+test('buildScript ios backend uses pymobiledevice3 apps push into Documents', () => {
+  const man = { runAddonTest: [{ name: 'smolvla.gguf', url: 'https://x/smolvla.gguf' }] }
+  const b64 = Buffer.from(JSON.stringify(man)).toString('base64')
+  const script = buildScript(b64, 'ios')
+  assert.match(script, /wdio\.config\.devicefarm\.js/)
+  assert.match(script, /shard grep/)
+  assert.match(script, new RegExp(b64.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')))
+  assert.match(script, /pymobiledevice3 apps push/)
+  assert.match(script, /Documents\/\$NAME/)
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /--max-time 3600/)
+  assert.match(script, /not found during afc operation\|failed to perform afc operation/)
+  assert.match(script, /pymobiledevice3==10\.3\.1/)
+  assert.match(script, /device will use network fallback/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
+  assert.doesNotMatch(script, /FATAL/)
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildScript rejects unknown platforms', () => {
+  assert.throws(() => buildScript('e30=', 'windows'), /unknown platform/)
 })
 
 test('formatYamlBlock emits a literal block with every shell line indented', () => {

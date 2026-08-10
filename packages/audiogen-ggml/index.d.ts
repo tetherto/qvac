@@ -58,6 +58,24 @@ export interface GenerateOptions {
     timesignature?: string;
     /** Target length in seconds; undefined lets the LM decide the full length. */
     duration?: number;
+    /** LM sampling temperature (ACE-Step default: 0.85). */
+    lmTemperature?: number;
+    /** LM nucleus-sampling probability (ACE-Step default: 0.9). */
+    lmTopP?: number;
+    /** LM top-k cutoff; 0 disables top-k filtering. */
+    lmTopK?: number;
+    /** Classifier-free guidance scale used by the LM. */
+    lmCfgScale?: number;
+    /** Allow the LM to infer missing metadata before semantic-code generation. */
+    lmPhase1?: boolean;
+    /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
+    dcwEnabled?: boolean;
+    /** DCW low-frequency correction strength (official default: 0.05). */
+    dcwScaler?: number;
+    /** DCW high-frequency correction strength (official default: 0.02). */
+    dcwHighScaler?: number;
+    /** Frozen ACE-Step semantic codes; when present, skips the LM stage. */
+    audioCodes?: Int32Array;
 }
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
 export interface AudiogenProgress {

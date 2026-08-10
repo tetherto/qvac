@@ -9,6 +9,7 @@ export interface GGMLConfig {
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
+    /** How to split the model across GPUs. 'row' (tensor parallelism) needs split buffers, which no shipped backend provides as of qvac-fabric v10069, so it is degraded to 'layer' at load with a warning. */
     "split-mode"?: "none" | "layer" | "row";
     "tensor-split"?: string;
     verbosity?: NumericLike;

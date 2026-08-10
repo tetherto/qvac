@@ -87,10 +87,14 @@ jobs:
       # Android / Metal on iOS via the benchmark's resolveBackend(). New rows are
       # q4-only to keep the Device Farm run count bounded; chatterbox keeps its
       # q4+q8 CPU coverage. The LavaSR rows (enhancer CPU+GPU, denoiser CPU on
-      # supertonic + chatterbox) use the fp16 enhancer + denoiser: iOS fetches
-      # them from the registry on-device, Android pre-stages them (see the
-      # manifest / prestage steps below). Functional runs build once per
-      # platform, then upload one Device Farm spec per model-family shard.
+      # supertonic + chatterbox) use the fp16 enhancer + denoiser. On the
+      # run_rtf_benchmarks matrix both platforms now pre-stage on the Device
+      # Farm host (see the manifest / prestage steps below): Android
+      # adb-pushes into /data/local/tmp, iOS pushes into Documents/models via
+      # pymobiledevice3. Functional multi-spec runs (the default, non-benchmark
+      # matrix) stay Android-only for pre-staging — iOS fetches from the
+      # registry on-device there — and build once per platform, then upload
+      # one Device Farm spec per model-family shard.
       matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q8","engine":"chatterbox","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic3","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"supertonic","use_gpu":false,"denoiser":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":true,"enhancer":"lavasr"},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false,"denoiser":"lavasr"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","variant":"q4","engine":"chatterbox","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","variant":"q4","engine":"chatterbox","use_gpu":false}]}') }}
 
     steps:
@@ -137,15 +141,18 @@ jobs:
 
       # The release environment authorizes GitHub OIDC to assume the scoped AWS
       # role used for model-manifest signing; no long-lived AWS keys are stored.
+      # Needed on Android always (functional multi-spec default matrix +
+      # benchmark matrix both pre-stage there) and on iOS only for the
+      # benchmark matrix, where it now also pre-stages via pymobiledevice3.
       - name: Configure AWS credentials via OIDC
-        if: ${{ matrix.platform == 'Android' }}
+        if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Generate TTS-GGML mobile model manifest
-        if: ${{ matrix.platform == 'Android' }}
+        if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         shell: bash
         env:
@@ -173,10 +180,12 @@ jobs:
           GPU_TAG: ${{ matrix.use_gpu && 'gpu' || 'cpu' }}
           # Enhancer / denoiser axes (none|lavasr) plus the enhancer quant tier
           # (f16 default | f32 | q8_0); the mobile LavaSR rows use the fp16 enhancer
-          # + denoiser. iOS resolves those from the registry on-device (like the
-          # engine GGUFs); Android has no on-device network, so the fp16 enhancer +
-          # denoiser are pre-signed into the model manifest and adb-pushed by the
-          # prestage step below. Default to none/f16 for the existing engine-only rows.
+          # + denoiser. Both platforms now pre-stage on the Device Farm host so the
+          # phone never fetches over its flaky network: the fp16 enhancer + denoiser
+          # (and the engine + quality GGUFs) are pre-signed into the model manifest
+          # and pushed by the platform prestage step below (Android → adb into
+          # /data/local/tmp; iOS → pymobiledevice3 into Documents/models). Default to
+          # none/f16 for the existing engine-only rows.
           ENHANCER: ${{ matrix.enhancer || 'none' }}
           ENHANCER_VARIANT: ${{ matrix.enhancer_variant || 'f16' }}
           DENOISER: ${{ matrix.denoiser || 'none' }}
@@ -221,10 +230,30 @@ jobs:
           TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'true'
           TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
         run: |
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # iOS counterpart: the macOS Device Farm host downloads the same presigned
+      # models and pushes them into the app's Documents/models container via
+      # pymobiledevice3, so the phone never fetches from the registry/HF on-device.
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: ${{ inputs.run_rtf_benchmarks && matrix.platform == 'iOS' }}
+        working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
+        env:
+          TTS_GGML_MOBILE_BENCHMARK_VARIANT: ${{ matrix.variant }}
+          TTS_GGML_MOBILE_BENCHMARK_ENHANCER: ${{ matrix.enhancer || 'none' }}
+          TTS_GGML_MOBILE_BENCHMARK_DENOISER: ${{ matrix.denoiser || 'none' }}
+          TTS_GGML_MOBILE_BENCHMARK_QUALITY: 'true'
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/ios-prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/ios-prestage-block.txt"
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -280,7 +309,10 @@ jobs:
           # Keep Mocha's per-test ceiling above the 45-minute Android wait.
           mocha-timeout-ms: '3300000'
           wdio-waitfor-timeout-ms: '600000'
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          # Host pre-stages this row's models so the phone never downloads them.
+          # iOS pushes into Documents/models via pymobiledevice3; Android adb-pushes
+          # into /data/local/tmp. Empty on non-benchmark runs (both steps skipped).
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule

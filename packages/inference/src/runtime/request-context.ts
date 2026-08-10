@@ -23,6 +23,7 @@ export type RequestKind =
   | 'transcribe'
   | 'translate'
   | 'diffusion'
+  | 'audiogen'
   | 'tts'
   | 'ocr'
   | 'vla'
@@ -111,6 +112,16 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64,
     sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP
+  })
+  // ACE-Step owns one active job per model. Starting another run replaces the
+  // addon's active response, and model-scoped cancel targets that single active
+  // job. Keep the registry authoritative by admitting one AudioGen request per
+  // model and queueing later requests FIFO.
+  r.policy({
+    kind: 'audiogen',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
   })
 }
 

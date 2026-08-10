@@ -133,7 +133,15 @@ declare namespace LlmLlamacpp {
         verbosity?: NumericLike;
         n_discarded?: NumericLike;
         "main-gpu"?: NumericLike | string;
-        /** How to split the model across GPUs: 'none' (default, single GPU), 'layer' (pipeline parallelism), 'row' (tensor parallelism). */
+        /**
+         * How to split the model across GPUs: 'none' (default, single GPU), 'layer'
+         * (pipeline parallelism), 'row' (tensor parallelism).
+         *
+         * 'row' needs split buffers, which only the SYCL backend provides as of
+         * qvac-fabric v10069 — no backend this package ships does. It is accepted but
+         * degraded to 'layer' at load with a WARNING, so it behaves like 'layer'. See
+         * docs/multi-gpu.md.
+         */
         "split-mode"?: "none" | "layer" | "row";
         /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
         "tensor-split"?: string;
