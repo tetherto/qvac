@@ -68,6 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `speed` is unchanged: it remains the exact rate multiplier on Chatterbox and
   Supertonic.
 
+  Bumps `tts-cpp` to `2026-08-10#1`, which owns the shared vocabulary.
+
 ### Fixed
 
 - **LavaSR enhancer on ARM Mali Vulkan.** Bumps `tts-cpp` to `2026-08-06`
