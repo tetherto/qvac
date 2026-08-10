@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+## Fixed
+
+- Duplex Whisper and Parakeet transcription sessions now expose terminal engine statistics through `session.stats`.
+
 ## [0.17.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.0
