@@ -130,6 +130,14 @@ Expected result:
 
 The plugin defaults to `qwen3.5-9b` on `127.0.0.1:11434`. It generates the
 temporary QVAC serve config internally when OpenClaw starts its `localService`.
+The provider API key is also passed to `qvac serve openai --api-key`, so every
+request requires the same bearer credential OpenClaw sends. A missing or empty
+local-service key prevents the server from starting.
+
+The default key remains the OpenClaw synthetic-auth marker `custom-local` for
+compatibility with provider discovery and setup. Configure a unique key for
+meaningful protection; the key is stored in OpenClaw's provider configuration
+and is not written to the generated QVAC serve config.
 
 Plugin config can override the local service launcher:
 
@@ -141,6 +149,7 @@ Plugin config can override the local service launcher:
         enabled: true,
         config: {
           model: 'qwen3.5-9b',
+          apiKey: 'replace-with-a-unique-secret',
           qvacCommand: '/absolute/path/to/qvac',
           port: 11434,
           ctxSize: 32768,
@@ -156,6 +165,8 @@ Plugin config can override the local service launcher:
 
 - Provider id: `qvac`
 - API adapter: `openai-completions`
+- Bearer authentication: the configured provider `apiKey` is required by the
+  managed `qvac serve openai` process
 - Base URL: `http://127.0.0.1:11434/v1` by default
 - Local service command: `node <plugin>/dist/local-service.js`, which writes a
   temporary QVAC serve config and starts `qvac serve openai`

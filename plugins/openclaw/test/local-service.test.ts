@@ -12,6 +12,8 @@ test('local service launcher creates QVAC serve config and command args from Ope
   const options = parseLocalServiceArgs([
     '--qvac-command',
     '/usr/local/bin/qvac',
+    '--api-key',
+    'test-openclaw-key',
     '--model',
     'qwen3.5-9b',
     '--host',
@@ -27,6 +29,7 @@ test('local service launcher creates QVAC serve config and command args from Ope
   ])
 
   assert.equal(options.qvacCommand, '/usr/local/bin/qvac')
+  assert.equal(options.apiKey, 'test-openclaw-key')
   assert.equal(options.model, 'qwen3.5-9b')
   assert.equal(options.port, 11500)
 
@@ -52,12 +55,29 @@ test('local service launcher creates QVAC serve config and command args from Ope
     '--port',
     '11500',
     '--model',
-    'qwen3.5-9b'
+    'qwen3.5-9b',
+    '--api-key',
+    'test-openclaw-key'
   ])
 })
 
+test('local service launcher rejects a missing or empty API key', () => {
+  assert.throws(() => parseLocalServiceArgs([]), /--api-key requires a non-empty value/)
+  assert.throws(
+    () => parseLocalServiceArgs(['--api-key', '']),
+    /--api-key requires a non-empty value/
+  )
+})
+
 test('local service launcher resolves GPT-OSS friendly id to SDK constant', () => {
-  const options = parseLocalServiceArgs(['--model', 'gpt-oss-20b', '--ctx-size', '32768'])
+  const options = parseLocalServiceArgs([
+    '--api-key',
+    'test-openclaw-key',
+    '--model',
+    'gpt-oss-20b',
+    '--ctx-size',
+    '32768'
+  ])
 
   const config = createLocalServiceServeConfig(options)
   assert.deepEqual(config.serve.models['gpt-oss-20b'], {

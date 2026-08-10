@@ -258,6 +258,12 @@ function coerceString(option: string, value: unknown): string {
   return value
 }
 
+function coerceNonEmptyString(option: string, value: unknown): string {
+  const stringValue = coerceString(option, value)
+  if (stringValue.trim() === '') throw new TypeError(`${option} must be a non-empty string`)
+  return stringValue
+}
+
 function coerceNumber(option: string, value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) throw new TypeError(`${option} must be a finite number`)
@@ -281,7 +287,10 @@ export function resolveOptions(raw: RawOptions = {}): ResolvedOptions {
     host,
     port,
     baseUrl,
-    apiKey: raw.apiKey === undefined ? DEFAULT_OPTIONS.apiKey : coerceString('apiKey', raw.apiKey),
+    apiKey:
+      raw.apiKey === undefined
+        ? DEFAULT_OPTIONS.apiKey
+        : coerceNonEmptyString('apiKey', raw.apiKey),
     qvacCommand:
       raw.qvacCommand === undefined
         ? DEFAULT_OPTIONS.qvacCommand
@@ -346,6 +355,8 @@ export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvid
         options.serviceEntrypoint,
         '--qvac-command',
         options.qvacCommand,
+        '--api-key',
+        options.apiKey,
         '--model',
         options.model,
         '--host',

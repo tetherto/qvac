@@ -13,6 +13,7 @@ import {
 
 export interface LocalServiceOptions {
   readonly qvacCommand: string
+  readonly apiKey: string
   readonly model: string
   readonly host: string
   readonly port: number
@@ -35,6 +36,14 @@ function readOption(argv: readonly string[], name: string): string | undefined {
   return value
 }
 
+function readRequiredOption(argv: readonly string[], name: string): string {
+  const value = readOption(argv, name)
+  if (value === undefined || value.trim() === '') {
+    throw new TypeError(`${name} requires a non-empty value`)
+  }
+  return value
+}
+
 function parseNumberOption(name: string, value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback
   const n = Number(value)
@@ -52,6 +61,7 @@ function parseBooleanOption(name: string, value: string | undefined, fallback: b
 export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOptions {
   return {
     qvacCommand: readOption(argv, '--qvac-command') ?? DEFAULT_OPTIONS.qvacCommand,
+    apiKey: readRequiredOption(argv, '--api-key'),
     model: readOption(argv, '--model') ?? DEFAULT_OPTIONS.model,
     host: readOption(argv, '--host') ?? DEFAULT_OPTIONS.host,
     port: parseNumberOption('--port', readOption(argv, '--port'), DEFAULT_OPTIONS.port),
@@ -79,6 +89,7 @@ export function createLocalServiceServeConfig(
           model: options.model,
           host: options.host,
           port: options.port,
+          apiKey: options.apiKey,
           qvacCommand: options.qvacCommand,
           ctxSize: options.ctxSize,
           reasoningBudget: options.reasoningBudget,
@@ -100,7 +111,9 @@ export function buildQvacServeArgs(options: LocalServiceOptions, configPath: str
     '--port',
     String(options.port),
     '--model',
-    options.model
+    options.model,
+    '--api-key',
+    options.apiKey
   ]
 }
 

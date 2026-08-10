@@ -11,7 +11,7 @@ const configProperties = {
   baseUrl: { type: 'string', description: 'OpenAI-compatible base URL exposed by qvac serve.' },
   apiKey: {
     type: 'string',
-    description: 'Optional API key marker for local OpenAI-compatible requests.'
+    description: 'Bearer key shared by OpenClaw and the managed qvac serve process.'
   },
   qvacCommand: {
     type: 'string',

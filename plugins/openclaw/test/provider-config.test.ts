@@ -98,6 +98,7 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   const provider = createOpenClawProvider(
     resolveOptions({
       port: 11500,
+      apiKey: 'test-openclaw-key',
       qvacCommand: '/usr/local/bin/qvac',
       serviceRuntime: '/usr/local/bin/node',
       serviceEntrypoint: '/tmp/qvac-openclaw-local-service.js',
@@ -109,7 +110,7 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   )
 
   assert.equal(provider.baseUrl, 'http://127.0.0.1:11500/v1')
-  assert.equal(provider.apiKey, 'custom-local')
+  assert.equal(provider.apiKey, 'test-openclaw-key')
   assert.equal(provider.api, 'openai-completions')
   assert.equal(provider.timeoutSeconds, 300)
   assert.deepEqual(provider.localService, {
@@ -118,6 +119,8 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
       '/tmp/qvac-openclaw-local-service.js',
       '--qvac-command',
       '/usr/local/bin/qvac',
+      '--api-key',
+      'test-openclaw-key',
       '--model',
       'qwen3.5-9b',
       '--host',
@@ -138,6 +141,10 @@ test('createOpenClawProvider builds a localService-backed OpenAI-compatible prov
   })
   assert.equal(provider.models.length, openClawModels.length)
   assert.equal(provider.models.find((entry) => entry.id === 'qwen3.5-9b')?.contextWindow, 65536)
+})
+
+test('resolveOptions rejects an empty configured API key', () => {
+  assert.throws(() => resolveOptions({ apiKey: '' }), /apiKey must be a non-empty string/)
 })
 
 test('createQvacSetupResult materializes provider config without pasted JSON', () => {
@@ -274,7 +281,7 @@ test('registerQvacProvider registers a catalog provider for OpenClaw', async () 
 test('registerQvacProvider reads OpenClaw pluginConfig when present', async () => {
   const registered: RegisteredProvider[] = []
   const api: RegistrationApi = {
-    pluginConfig: { model: 'qwen3.5-4b', port: 11500 },
+    pluginConfig: { model: 'qwen3.5-4b', port: 11500, apiKey: 'configured-openclaw-key' },
     registerProvider(provider: RegisteredProvider) {
       registered.push(provider)
     }
@@ -289,6 +296,10 @@ test('registerQvacProvider reads OpenClaw pluginConfig when present', async () =
     'http://127.0.0.1:11500/v1'
   )
   const args = (catalog.provider as ReturnType<typeof createOpenClawProvider>).localService.args
+  assert.deepEqual(args.slice(args.indexOf('--api-key'), args.indexOf('--api-key') + 2), [
+    '--api-key',
+    'configured-openclaw-key'
+  ])
   assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), [
     '--model',
     'qwen3.5-4b'
