@@ -1,17 +1,8 @@
 name: General CI/CD (libs)
-# Generic publish workflow for the plain-shape libraries. Replaces the
-# per-package trigger-reusable-*.yml clones (rag, dl-base, dl-filesystem,
-# dl-hyperdrive, logging, error, diagnostics, langdetect-text, qvac-ci):
-# dorny/paths-filter selects the changed library and a matrix fans the publish
-# jobs over it. All differences reduce to the package slug plus error's tag
-# repo_name, so no per-package config table is needed. One package per push:
-# dorny selection reproduces the per-file path scoping exactly (owner-only, no
-# dependency-graph expansion).
-#
-# Out of scope (kept as their own workflows, distinct shapes): cli,
-# ai-sdk-provider, inference (build+artifact); openclaw-plugin, opencode-plugin
-# (build + release-notes gate); langdetect-text-cld2 (PR test job); infer-base
-# (validate-artifacts pre-publish gate).
+# Consolidated publish workflow for plain-shape libraries (dorny selects the
+# changed package, matrix publishes it).
+# Left out: cli, ai-sdk-provider, inference, openclaw-plugin, opencode-plugin,
+# langdetect-text-cld2, infer-base.
 
 on:
   push:
