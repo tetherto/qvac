@@ -30,11 +30,6 @@ import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
  */
 export type OcrGgmlPipelineType = "easyocr" | "doctr";
 
-/**
- * Placeholder forwarded to the native addon when the language-agnostic DocTR
- * pipeline is used without an explicit `langList` (the native configuration
- * parser requires the property to be present, but DocTR never reads it).
- */
 const DOCTR_INTERNAL_LANG_LIST = ["en"];
 
 export interface OcrGgmlParams {
@@ -280,12 +275,6 @@ export class OcrGgml {
         adds: "pathRecognizer",
       });
     }
-    // DocTR is language-agnostic and ignores `langList`, so the parameter is
-    // optional for that pipeline; the native addon still requires the property
-    // to be present, so forward an internal placeholder when it is omitted.
-    // For EasyOCR the list is required here, but which languages are actually
-    // supported is validated by the native pipeline (against its language
-    // registry and the loaded recognizer's character set), not in JS.
     const isDoctr = this.params.pipelineType === "doctr";
     if (this.params.langList === undefined && !isDoctr) {
       throw new QvacErrorAddonOcrGgml({
@@ -339,8 +328,6 @@ export class OcrGgml {
     try {
       await this.addon.activate();
     } catch (err) {
-      // A failed activation must not leak the native instance or keep the
-      // global C++ -> JS logger bridge registered; destroy() releases both.
       try {
         await this.addon.destroy();
       } catch (cleanupErr) {

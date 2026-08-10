@@ -33,11 +33,6 @@ test('load() rejects when langList is missing', { timeout: TEST_TIMEOUT }, async
   }
 })
 
-// Language validation is deferred to the native pipeline (which knows the
-// full language registry and the loaded recognizer's character set), so an
-// all-unsupported list is rejected by the native model load with its own
-// error message — not by a JS-side UNSUPPORTED_LANGUAGE gate. Needs real
-// model files because the native pipeline validates during model creation.
 test(
   'load() rejects unsupported languages via native validation',
   { timeout: TEST_TIMEOUT },

@@ -32,10 +32,6 @@ exports.ERR_CODES = Object.freeze({
     FAILED_TO_DESTROY: 8105,
     FAILED_TO_ACTIVATE: 8106,
     MISSING_REQUIRED_PARAMETER: 8107,
-    // Language validation is performed by the native pipeline (which checks the
-    // requested languages against its registry and the loaded recognizer's
-    // character set); the JS wrapper no longer emits this code. It stays
-    // registered so existing consumers matching on it keep compiling.
     UNSUPPORTED_LANGUAGE: 8108,
     INVALID_IMAGE_OR_INSUFFICIENT_DATA: 8109,
     UNSUPPORTED_IMAGE_FORMAT: 8110,

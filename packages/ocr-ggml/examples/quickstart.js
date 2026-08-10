@@ -87,8 +87,8 @@ async function main () {
       }
     })
 
-    await response.await() // resolves with the output rows
-    const stats = response.stats // RuntimeStats (opts.stats: true)
+    await response.await()
+    const stats = response.stats
     if (stats && 'totalTime' in stats) {
       console.log('[quickstart] stats =', stats)
     }

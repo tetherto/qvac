@@ -14,9 +14,6 @@ test('package entry point exposes the public surface without loading the native 
   t.is(typeof pkgExports.QvacErrorAddonOcrGgml, 'function', 'QvacErrorAddonOcrGgml is exported')
   t.is(typeof pkgExports.ERR_CODES, 'object', 'ERR_CODES is exported')
 
-  // The native binding must stay behind lazy getters so importing the package
-  // (e.g. for types, error codes, or validation-only paths) never dlopens the
-  // prebuild.
   const descriptors = Object.getOwnPropertyDescriptors(pkgExports)
   t.is(typeof descriptors.binding.get, 'function', 'binding is a lazy getter')
   t.is(typeof descriptors.addonLogging.get, 'function', 'addonLogging is a lazy getter')
@@ -27,9 +24,6 @@ test('published entrypoints only require declared runtime dependencies', (t) => 
   const pkg = require('../../package.json')
   const declared = pkg.dependencies || {}
 
-  // Every file published to npm (see package.json "files") that executes on
-  // import. Anything it requires from node_modules must be a runtime
-  // dependency: devDependencies are absent in a consumer install.
   const entrypoints = ['index.js', 'ocr-ggml.js', 'addonLogging.js', 'binding.js', 'lib/error.js']
   const requireRe = /require\((["'])([^"']+)\1\)/g
 
@@ -53,7 +47,6 @@ test('ERR_CODES stays frozen with stable code values', (t) => {
   const { ERR_CODES } = require('../..')
 
   t.ok(Object.isFrozen(ERR_CODES), 'ERR_CODES is frozen')
-  // Allocated range 8101..8200 (see lib/error.js).
   for (const [name, code] of Object.entries(ERR_CODES)) {
     t.ok(code >= 8101 && code <= 8200, `${name} (${code}) is inside the allocated 8101..8200 range`)
   }

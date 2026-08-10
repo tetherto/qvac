@@ -103,8 +103,8 @@ async function main () {
       }
     })
 
-    await response.await() // resolves with the output rows
-    const stats = response.stats // RuntimeStats (opts.stats: true)
+    await response.await()
+    const stats = response.stats
     if (stats && 'backendIsGpu' in stats) {
       console.log('[backend-device] stats =', stats)
       console.log('[backend-device] ran on', stats.backendIsGpu ? 'GPU' : 'CPU')
