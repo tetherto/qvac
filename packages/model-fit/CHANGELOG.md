@@ -4,6 +4,10 @@
 
 ### Changed
 
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`, joining the rest of
+  the addon consumers on the b10069 rebase. `common/fit.h` is unchanged between
+  the two, so `common_fit_params` keeps its signature and behaviour here.
+
 - The JS API is now generated from TypeScript. `src/index.ts` is the single
   hand-written copy; root `index.js` and `index.d.ts` are emitted by
   `npm run build:ts` and committed, matching `@qvac/embed-llamacpp`. Previously

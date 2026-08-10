@@ -2,11 +2,11 @@ name: Mobile Integration Tests (ASR GGML)
 
 # Unified whisper + parakeet mobile lane for @qvac/asr-ggml.
 #
-# Functional runs (default matrix) build ONE app and run the whole mobile suite
-# in single-spec mode — this package ships no test/mobile/test-groups.json, so
-# every runner in test/mobile/integration.auto.cjs executes, functional AND
-# mobile-perf, exactly as in both parent lanes. Perf collection is therefore
-# unconditional (enables-perf: 'true'), and so is Android model pre-staging.
+# Functional runs (default matrix) build one app per platform, then split every
+# runner in test/mobile/integration.auto.cjs into independent Whisper and
+# Parakeet specs. Each spec runs on both flagship targets, so an early engine
+# failure cannot mask the other engine. Perf collection remains unconditional,
+# and Android pre-staging selects only the models required by the current spec.
 #
 # Benchmark runs (run_rtf_benchmarks=true) narrow each matrix row to the single
 # mobile-perf runner registered in test/mobile/perf-tests.json that matches the
@@ -68,6 +68,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.repository || github.repository }}-${{ inputs.ref || github.ref }}-${{ inputs.package_spec || inputs.prebuild_package || 'artifact' }}-${{ inputs.run_rtf_benchmarks && 'benchmark' || 'functional' }}
+  cancel-in-progress: true
+
 jobs:
   # NOTE: continue-on-error: true matches the parent families' workflows.
   # on-pr-asr-ggml.yml's merge-guard treats `success || skipped` as a pass, so
@@ -77,7 +81,10 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.engine && format('{0} {1} {2}', matrix.engine, matrix.model || matrix.model_type, matrix.use_gpu && 'gpu' || 'cpu') || 'functional' }}) and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
-    timeout-minutes: 120
+    # Device Farm monitoring can consume 150 minutes for functional runs and
+    # 120 for benchmarks. Reserve another hour for checkout, dependency setup,
+    # app build, upload, scheduling, log collection, and cancellation cleanup.
+    timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 210 || 180 }}
     continue-on-error: true
     permissions:
       contents: read
@@ -111,10 +118,29 @@ jobs:
       matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          # Audit Device Farm, object-store, GitHub, npm, and mobile build egress
+          # before promoting this mixed hosted/self-hosted workflow to block mode.
+          egress-policy: audit
+
+      - name: Manual Workspace Cleanup
+        if: runner.environment != 'github-hosted'
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package_spec
+        env:
+          PACKAGE_SPEC: ${{ github.event.inputs.package_spec }}
         run: |
-          if [[ ! "${{ github.event.inputs.package_spec }}" =~ ^@qvac/|^@tetherto/ ]]; then
+          set -euo pipefail
+          if [[ ! "$PACKAGE_SPEC" =~ ^@qvac/|^@tetherto/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
@@ -143,18 +169,13 @@ jobs:
       # The whispercpp pair is deliberately not the fallback: bci-whispercpp still
       # runs against that project, so we would be sharing its concurrency.
       #
-      # Scope of the pool swap, precisely: this lane passes one spec and no
-      # scheduling-mode, so schedule-test-run takes its default dual-flagship
-      # path. There, Android schedules two filter-based runs (Samsung + Pixel,
-      # hardcoded in the shared action) and iOS schedules one pool-based run plus
-      # one iPhone-17 filter run. Filters are project-independent, so only that
-      # single iOS pool run is affected by borrowing parakeet's project -- three
-      # of the four runs are identical either way. The collected Device Farm logs
-      # name the device that ran, so a mismatch is visible on the first iOS run;
-      # the fix would be a union pool inside the same project (a child resource,
-      # no new project or IAM). No android-device-pool-arn is needed here: the
-      # ANDROID_DEVICE_POOL_ARN_* secrets serve packages that run in the sharded
-      # or single-pool modes, which this lane does not use.
+      # Scope of the pool swap, precisely: this lane explicitly uses
+      # dual-flagship scheduling. Functional runs create two specs and opt into
+      # multi-spec dual-flagship, producing one independent run per
+      # engine/device combination. Android targets Samsung + Pixel filters; iOS
+      # targets the configured pool + iPhone 17. Filters are project-independent,
+      # so only the first iOS run is affected by borrowing parakeet's project.
+      # No Android pool secret is needed for this scheduling mode.
       - name: Verify Device Farm secrets are provisioned
         shell: bash
         env:
@@ -162,10 +183,15 @@ jobs:
           IOS_DEVICE_POOL_ARN: ${{ secrets.IOS_DEVICE_POOL_ARN_ASR_GGML || secrets.IOS_DEVICE_POOL_ARN_PARAKEET }}
           PLATFORM: ${{ matrix.platform }}
         run: |
+          set -euo pipefail
           missing=""
-          [ -z "$DEVICE_FARM_PROJECT_ARN" ] && missing="$missing AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML (or _PARAKEET)"
-          if [ "$PLATFORM" = "iOS" ] && [ -z "$IOS_DEVICE_POOL_ARN" ]; then
-            missing="$missing IOS_DEVICE_POOL_ARN_ASR_GGML (or _PARAKEET)"
+          if [ -z "$DEVICE_FARM_PROJECT_ARN" ]; then
+            missing="$missing AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML (or _PARAKEET)"
+          fi
+          if [ "$PLATFORM" = "iOS" ]; then
+            if [ -z "$IOS_DEVICE_POOL_ARN" ]; then
+              missing="$missing IOS_DEVICE_POOL_ARN_ASR_GGML (or _PARAKEET)"
+            fi
           fi
           if [ -n "$missing" ]; then
             echo "::error::Missing Device Farm secret(s):$missing. This lane reads the ASR_GGML names if present and otherwise falls back to the retiring transcription-parakeet pair, so it needs no new secrets while those still exist. If both are gone, add the ASR_GGML pair to the 'release' environment with the parakeet project + iOS pool ARNs."
@@ -201,11 +227,14 @@ jobs:
           addon-npm-name: '@qvac/asr-ggml'
           prebuild-artifact-prefix: 'asr-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # workflow_call uses prebuild_package; workflow_dispatch exposes the
+          # equivalent package_spec input. Pin either path explicitly.
+          package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
+          force-npm-prebuild: ${{ (inputs.prebuild_package != '' || inputs.package_spec != '') && 'true' || 'false' }}
 
-      # Always configure OIDC — parakeet models need presigning even on
-      # functional runs.
+      # The release environment authorizes GitHub OIDC to assume the scoped AWS
+      # role used for model-manifest signing and Device Farm; no long-lived AWS
+      # keys are stored. Parakeet models need presigning on every run.
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
@@ -215,16 +244,17 @@ jobs:
       # Presigns the PARAKEET GGUF URLs and stores a local manifest consumed by
       # generate-prestage-block.js below. Whisper models are NOT in the manifest
       # (they are public HuggingFace downloads, not presigned registry GGUFs):
-      # the prestage block stages them from a fixed list inside
-      # generate-prestage-block.js, and helpers.copyPrestagedModel() picks them
-      # up on-device (falling back to helpers.ensureWhisperModel() if a host-side
-      # stage was skipped). Runs on every mobile run (functional and benchmark).
+      # generate-prestage-block.js maps the current shard grep to only the
+      # required public Whisper models, and helpers.copyPrestagedModel() picks
+      # them up on-device (falling back to helpers.ensureWhisperModel() if a
+      # host-side stage was skipped). Runs on every mobile run.
       - name: Generate ASR GGML mobile model manifest
         working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
         shell: bash
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
+          set -euo pipefail
           node scripts/generate-mobile-model-manifest.js
           ls -lh test/mobile/testAssets/
 
@@ -233,24 +263,21 @@ jobs:
       # so the phone does not rely on flaky large downloads and Metro never
       # bundles the models into the app.
       #
-      # UNCONDITIONAL for Android, matching the parakeet parent. It must not be
-      # gated on run_rtf_benchmarks: packages/asr-ggml/test/mobile has no
-      # test-groups.json, so a normal PR run executes EVERY runner in
-      # integration.auto.cjs — including the 12 parakeet perf runners, which
-      # would otherwise fall through parakeet-helpers.prestagedModelDir() === null
-      # into per-model on-device downloads of 600 MB-class GGUFs inside the
-      # 45-minute mocha budget.
+      # UNCONDITIONAL for Android, matching the parakeet parent. Functional runs
+      # resolve test/mobile/test-groups.json into one Whisper and one Parakeet
+      # spec; benchmark rows resolve one explicit runner below.
       #
-      # The prestage block derives its model list from the deployed wdio
-      # config's grep, looked up in the manifest by RUNNER FUNCTION NAME, so
+      # The shared upload action passes each spec's grep through
+      # /tmp/qvacShardGrep.txt. The prestage block looks up those runner names in
+      # the model manifests, so
       # scripts/generate-mobile-model-manifest.js must key TEST_MODELS with the
-      # names exported by test/mobile/integration.auto.cjs. With an empty grep
-      # (functional runs) it stages every model in the manifest.
+      # names exported by test/mobile/integration.auto.cjs.
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: ${{ matrix.platform == 'Android' }}
         working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
         run: |
+          set -euo pipefail
           node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
@@ -270,6 +297,10 @@ jobs:
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+          # Parakeet performance runners sweep multiple quantizations in one
+          # test. Keep the generated harness above its 20-minute default on both
+          # platforms, with a separate Mocha ceiling below.
+          per-test-timeout-minutes: '45'
 
       # Benchmark runs (run_rtf_benchmarks=true): run ONLY the one on-device
       # benchmark runner that matches this matrix row, instead of the whole
@@ -281,10 +312,8 @@ jobs:
       # files. An unmapped or unregistered row fails here with a named error
       # rather than silently benchmarking the wrong thing.
       #
-      # On a normal (non-benchmark) run this step is skipped, the output is
-      # empty, and the action falls back to auto-detecting test-groups.json —
-      # which this package does not have, so it runs the full suite in
-      # single-spec mode, exactly as both parent lanes did.
+      # On a normal (non-benchmark) run this step is skipped and the upload
+      # action auto-detects test/mobile/test-groups.json.
       - name: Resolve benchmark test-groups from perf-tests.json
         id: perf_groups
         if: ${{ inputs.run_rtf_benchmarks }}
@@ -295,6 +324,7 @@ jobs:
           MODEL_TYPE: ${{ matrix.model_type || '' }}
           BACKEND_TAG: ${{ matrix.use_gpu && 'Gpu' || 'Cpu' }}
         run: |
+          set -euo pipefail
           PERF_FILE=test/mobile/perf-tests.json
           if [ ! -f "$PERF_FILE" ]; then
             echo "::error::$PERF_FILE is missing — the mobile benchmark lane resolves its Mocha grep from it. Run 'npm run test:mobile:validate' locally."
@@ -348,18 +378,15 @@ jobs:
           # verification step above. Not the whisper/BCI-shared project: that one
           # still has a live tenant.
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
-          # Empty on normal runs => action auto-detects test-groups.json
-          # (functional tests). Set on benchmark runs => only the benchmarks.
+          # Empty on normal runs => action auto-detects test-groups.json.
+          # Set on benchmark runs => only the selected benchmark runner.
           test-groups: ${{ steps.perf_groups.outputs.groups }}
-          # Always 'true', matching both parent lanes. It must NOT be gated on
-          # run_rtf_benchmarks: this package has no test-groups.json, so a normal
-          # run executes every runner in integration.auto.cjs — including the 14
-          # mobile-perf runners, which emit [PERF_REPORT_START] blocks. With
-          # enables-perf false, perf-extract.js is never deployed and those
-          # measurements are thrown away, leaving on-pr-asr-ggml.yml's unified
-          # performance report with zero mobile rows on every PR.
+          # Both functional shards include performance runners; their names end
+          # in "-perf" so the shared action enables performance bridging.
           enables-perf: 'true'
-          mocha-timeout-ms: '2700000'
+          # Mocha wraps the generated 45-minute per-test wait, so it needs its
+          # own headroom rather than expiring at the same boundary.
+          mocha-timeout-ms: '3300000'
           wdio-waitfor-timeout-ms: '600000'
           extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
 
@@ -373,6 +400,8 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          scheduling-mode: dual-flagship
+          multi-spec-dual-flagship: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
@@ -381,6 +410,9 @@ jobs:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           run-count: ${{ steps.schedule.outputs.run-count }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # Functional multi-spec runs need headroom beyond Device Farm's
+          # 120-minute execution ceiling for normal queue variance.
+          max-wait-time-seconds: ${{ !inputs.run_rtf_benchmarks && '9000' || '7200' }}
 
       - name: Cancel Device Farm runs on workflow cancellation
         if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'

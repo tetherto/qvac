@@ -12,6 +12,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Added
+
+- **Choosing a model guide.** README documents which specific Whisper `.bin` or
+  Parakeet `.gguf` to pick per use case (default TDT, EOU, CTC, Sortformer
+  offline vs streaming, Whisper turbo/small for language breadth / translation).
+
 ## [0.2.0] - 2026-08-06
 
 ### Changed

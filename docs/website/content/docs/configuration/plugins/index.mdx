@@ -58,7 +58,7 @@ qvac bundle sdk
 ```
 </Tab>
 <Tab value="mobile" label="Expo">
-[When developing for mobile environment, use the Expo CLI to prebuild your project only with the selected plugins:](/installation/#expo)
+[When developing for mobile environment, use the Expo CLI to prebuild your project only with the selected plugins:](/js-ts-sdk#expo)
 
 ```bash
 npx expo prebuild
@@ -118,7 +118,7 @@ qvac bundle sdk
 ```
 </Tab>
 <Tab value="mobile" label="Expo">
-[When developing for mobile environment, use the Expo CLI to prebuild your project with all listed plugins:](/installation/#expo)
+[When developing for mobile environment, use the Expo CLI to prebuild your project with all listed plugins:](/js-ts-sdk#expo)
 
 ```bash
 npx expo prebuild
@@ -158,6 +158,18 @@ for await (const char of echoStream({ modelId, message: "Streaming test!" })) {
 
 await unloadModel({ modelId });
 ```
+
+The Python SDK exposes plugin invocation through the same worker contract:
+
+<Tabs>
+<Tab value="python" label="Python" default>
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/plugins.py title="plugins.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 ## Runtime registration on Bare
 

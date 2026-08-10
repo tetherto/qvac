@@ -6,36 +6,16 @@ schemaType: HowTo
 
 ## Overview
 
-QVAC configuration is loaded once during initialization from a `qvac.config.*` file and remains immutable for the lifetime of the SDK instance. To provide configuration, either set the `QVAC_CONFIG_PATH` environment variable or place a `qvac.config.*` file at the root of your project.
+QVAC configuration is loaded once during initialization and remains immutable for the lifetime of the SDK instance. The schema and options below are shared across clients; how the config reaches the worker is client-specific — see [JS/TS SDK — Configuration](/js-ts-sdk#configuration) and [Python SDK — Configuration](/python-sdk#configuration).
 
-<Callout type="info">
+Providing a configuration is optional; when omitted, the SDK uses the default settings.
 
-When using only the SDK, providing a configuration is **not required**. If you do not provide one, the SDK uses the default settings. *When using the HTTP server, however, providing a configuration **is required**.*
+## Example
 
-</Callout>
+Values marked with `<placeholders>` should be replaced with your actual values.
 
-## File formats
-
-The `qvac.config.*` format you can use depends on the JS environment where QVAC will run in:
-
-| Format | Node.js | Bare | Expo |
-| --- | --- | --- | --- |
-| `qvac.config.json` | ✅ | ✅ | ✅ |
-| `qvac.config.js` | ✅ | ✅ | ❌ |
-| `qvac.config.ts` | ✅ | ❌ | ❌ |
-
-<Callout type="info">
-`qvac.config.ts` requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
-</Callout>
-
-## Examples
-
-Below are examples of `qvac.config.*` files. Values marked with `<placeholders>` should be replaced with your actual values.
-
-<Tabs>
-<Tab value="json" label="JSON" default>
 <WrapCode>
-```json title="qvac.config.json" lineNumbers
+```json title="Configuration schema" lineNumbers
 {
   "plugins": ["<builtin_plugin_1>", "<custom_plugin_2>"],
   "loggerConsoleOutput": true,
@@ -67,91 +47,6 @@ Below are examples of `qvac.config.*` files. Values marked with `<placeholders>`
 }
 ```
 </WrapCode>
-</Tab>
-
-<Tab value="js" label="JavaScript">
-<Callout type="warn">
-Supported on Node.js and Bare. Not supported in Expo — use JSON instead.
-</Callout>
-<WrapCode>
-```js title="qvac.config.js" lineNumbers
-module.exports = {
-  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
-  loggerConsoleOutput: true,
-  loggerLevel: "info",
-  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
-  cacheDirectory: "</absolute/path/to/.qvac/models>",
-  httpDownloadConcurrency: 3,
-  httpConnectionTimeoutMs: 10000,
-  registryDownloadMaxRetries: 3,
-  registryStreamTimeoutMs: 60000,
-  deviceDefaults: [
-    {
-      name: "Samsung Galaxy force CPU",
-      match: { platform: "android", deviceBrand: "samsung" },
-      defaults: { llm: { device: "cpu" } },
-    },
-  ],
-  bareRuntimeVersion: "<x.y.z>",
-  serve: {
-    models: {
-      "<model_alias>": {
-        model: "<SDK_MODEL_CONSTANT>",
-        default: true,
-        preload: true,
-        config: {},
-      },
-    },
-  },
-};
-```
-</WrapCode>
-</Tab>
-
-<Tab value="ts" label="TypeScript">
-<Callout type="info">
-Supported on Node.js only, and requires installing [`tsx`](https://www.npmjs.com/package/tsx) as a devDependency.
-</Callout>
-<WrapCode>
-
-```ts title="qvac.config.ts" lineNumbers
-import type { QvacConfig } from "@qvac/sdk";
-
-const config: QvacConfig = {
-  plugins: ["<builtin_plugin_1>", "<custom_plugin_2>"],
-  loggerConsoleOutput: true,
-  loggerLevel: "info",
-  swarmRelays: ["<hyperbee_key_1>", "<hyperbee_key_2>"],
-  cacheDirectory: "</absolute/path/to/.qvac/models>",
-  httpDownloadConcurrency: 3,
-  httpConnectionTimeoutMs: 10000,
-  registryDownloadMaxRetries: 3,
-  registryStreamTimeoutMs: 60000,
-  deviceDefaults: [
-    {
-      name: "Samsung Galaxy force CPU",
-      match: { platform: "android", deviceBrand: "samsung" },
-      defaults: { llm: { device: "cpu" } },
-    },
-  ],
-  bareRuntimeVersion: "<x.y.z>",
-  serve: {
-    models: {
-      "<model_alias>": {
-        model: "<SDK_MODEL_CONSTANT>",
-        default: true,
-        preload: true,
-        config: {},
-      },
-    },
-  },
-};
-
-export default config;
-```
-</WrapCode>
-</Tab>
-</Tabs>
 
 ## Options
 

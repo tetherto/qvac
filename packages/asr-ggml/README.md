@@ -16,6 +16,7 @@ breaking changes the merge introduced.
 ## Table of Contents
 
 - [Supported Engines and Models](#supported-engines-and-models)
+- [Choosing a model](#choosing-a-model)
 - [Supported Platforms](#supported-platforms)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
@@ -80,6 +81,34 @@ GGUF metadata** — there is no `modelType` to pass.
 Upstream `.nemo` checkpoints are NVIDIA's; see the
 [Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2)
 for the per-checkpoint NVIDIA Open Model License terms.
+
+## Choosing a model
+
+Pick a **specific checkpoint**, not only an engine. Whisper and Parakeet
+overlap on English batch transcription; they diverge on streaming semantics,
+language coverage, translation, and diarization.
+
+### Decision guide
+
+| If you need… | Use this model | Notes |
+| --- | --- | --- |
+| Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect, low-latency streaming. |
+| Native end-of-turn for conversational / duplex English | `parakeet-eou-120m-v1` | Emits `<EOU>`; smallest Parakeet (~132 MiB). Pair with TDT when you need broader language coverage *and* EOU. |
+| Fast English-only, no punctuation | `parakeet-ctc-0.6b` | Lowest decode cost in the Parakeet family; no PnC. |
+| Offline 4-speaker diarization | `sortformer-4spk-v1` | Default offline diarization head. |
+| Streaming 4-speaker diarization | `diar_streaming_sortformer_4spk-v2.1` | AOSC keeps speaker slots across silence; prefer over v1 for live streams. |
+| Broadest language set + translate-to-English | `ggml-large-v3-turbo.bin` (or `ggml-small.bin` on edge) | Whisper: ~99 languages, translation, Silero-VAD live capture. Turbo is the accuracy/speed sweet spot; use `tiny`/`base` only when size dominates. |
+| Live capture with VAD segmentation (Whisper path) | Whisper ASR model + `ggml-silero-v5.1.2.bin` | Silero VAD is required for Whisper `runStreaming()`. |
+
+### Engine vs model
+
+| Engine | Prefer when… | Prefer the other when… |
+| --- | --- | --- |
+| **Parakeet** | Low-latency streaming, native EOU, diarization, English / ~25-lang product ASR | You need Whisper’s language breadth or translate-to-English |
+| **Whisper** | Multilingual offline, translation, VAD-segmented live capture on the whisper.cpp path | You need Parakeet EOU / Sortformer diarization or tighter streaming RTF |
+
+Always pass `config.engine` (or top-level `engine`) explicitly in library and
+SDK code — see [Engine Selection](#engine-selection).
 
 ## Supported Platforms
 
