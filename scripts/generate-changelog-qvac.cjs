@@ -138,6 +138,36 @@ function resolveBaseRef(packageName, baseCommit, releaseType = "minor") {
 }
 
 /**
+ * Extract the PR number from a commit subject line.
+ *
+ * Prefer the trailing squash-merge `(#123)` / `Merge pull request #123`
+ * form. Falling back to the first `#N` is unsafe: subjects like
+ * `chore: … - #3522 (#3534)` would otherwise attribute the wrong PR.
+ *
+ * @param {string} line
+ * @returns {number|null}
+ */
+function extractPRNumberFromSubject(line) {
+  const trailingSquash = line.match(/\(#(\d+)\)\s*$/);
+  if (trailingSquash) {
+    return parseInt(trailingSquash[1], 10);
+  }
+
+  const mergeRequest = line.match(/Merge pull request #(\d+)/i);
+  if (mergeRequest) {
+    return parseInt(mergeRequest[1], 10);
+  }
+
+  const matches = [...line.matchAll(/#(\d+)/g)];
+  if (matches.length === 0) {
+    return null;
+  }
+
+  // Last resort: last #N on the line (closer to GitHub's squash trailer).
+  return parseInt(matches[matches.length - 1][1], 10);
+}
+
+/**
  * Get PR numbers from path-scoped commits.
  * Searches all commits (not just merges) because squash-merged PRs
  * have only one parent but still contain "#123" in the commit message.
@@ -161,10 +191,9 @@ function getPRNumbers(baseRef, packagePath) {
     const lines = commits.split("\n");
 
     for (const line of lines) {
-      // Match "Merge pull request #123" or "(#123)" squash-merge patterns
-      const match = line.match(/#(\d+)/);
-      if (match) {
-        prNumbers.push(parseInt(match[1], 10));
+      const prNumber = extractPRNumberFromSubject(line);
+      if (prNumber !== null) {
+        prNumbers.push(prNumber);
       }
     }
 
@@ -301,6 +330,56 @@ function parseArgs(argv) {
  * @param {boolean} [options.dryRun] - If true, don't write files
  * @returns {Promise<{packageName: string, baseRef: string|null, baseVersion: string|null, version: string, prs: Array}>}
  */
+/**
+ * Fail-stop when the working clone cannot produce a complete changelog.
+ * Shallow clones silently omit commits from `git log base..HEAD`, which
+ * drops real package PRs from the release notes (seen on SDK 0.17.0).
+ *
+ * @param {string} baseRef
+ */
+function assertChangelogHistoryReady(baseRef) {
+  let isShallow = "false";
+  try {
+    isShallow = git("rev-parse --is-shallow-repository");
+  } catch (error) {
+    throw new Error(
+      "Unable to determine whether the repository is shallow. " +
+        "Refusing to generate a changelog without a full history check.",
+    );
+  }
+
+  if (isShallow === "true") {
+    throw new Error(
+      "Repository is a shallow clone. Changelog generation requires full " +
+        "history so path-scoped `git log` does not miss merged PRs.\n" +
+        "Fix: `git fetch --unshallow` (or re-clone without --depth), then re-run.",
+    );
+  }
+
+  try {
+    git(`rev-parse --verify ${baseRef}^{commit}`);
+  } catch (error) {
+    throw new Error(
+      `Base reference '${baseRef}' does not resolve to a commit in this clone.`,
+    );
+  }
+
+  try {
+    // merge-base --is-ancestor exits 0 when baseRef is an ancestor of HEAD.
+    execSync(`git merge-base --is-ancestor ${baseRef} HEAD`, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error(
+      `Base reference '${baseRef}' is not an ancestor of HEAD. ` +
+        "Changelog ranges are empty or misleading when the tip does not " +
+        "contain the release base. Check out the release tip (or the " +
+        "package tag) before generating.",
+    );
+  }
+}
+
 async function generateChangelog(options) {
   const { packageName, baseCommit, baseVersion, dryRun } = options;
   const packagePath = getPackageDir(packageName);
@@ -343,6 +422,8 @@ async function generateChangelog(options) {
         `For initial release, use: --base-commit=<sha> --base-version=<version>`,
     );
   }
+
+  assertChangelogHistoryReady(baseRef);
 
   const resolvedBaseVersion =
     baseVersion || extractVersionFromTag(baseRef) || null;
@@ -528,6 +609,8 @@ module.exports = {
   detectReleaseType,
   resolveBaseRef,
   getPRNumbers,
+  extractPRNumberFromSubject,
+  assertChangelogHistoryReady,
   fetchPRMetadata,
   getGitHubToken,
   getRepoRoot,
