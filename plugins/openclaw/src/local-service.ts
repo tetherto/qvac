@@ -47,7 +47,7 @@ function parseOptions(argv: readonly string[]): ReadonlyMap<string, string> {
     const name = argv[index]
     const value = argv[index + 1]
     if (name === undefined || !LOCAL_SERVICE_OPTIONS.has(name)) {
-      throw new TypeError(`Unknown local service option: ${name ?? ''}`)
+      throw new TypeError('Unknown local service option')
     }
     if (value === undefined || value.startsWith('--')) {
       throw new TypeError(`${name} requires a value`)

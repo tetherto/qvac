@@ -195,7 +195,9 @@ openclaw config unset plugins.entries.qvac.config.apiKey
 ```
 
 Removing the temporary plaintext plugin option after onboarding leaves the
-generated provider configuration pointing at the private key file.
+generated provider configuration pointing at the private key file. `apiKey`
+changes take effect only after re-running
+`openclaw onboard --auth-choice qvac`.
 
 Other clients connecting to the managed server must send the same bearer key:
 
@@ -209,6 +211,12 @@ The launcher key is not exposed in its process arguments. The `qvac serve`
 grandchild still receives `--api-key <key>`, so the key can be visible to
 same-user or privileged process inspection until the QVAC CLI supports a secret
 file, environment, or file-descriptor transport.
+
+## Troubleshooting
+
+If the QVAC key file is missing or its permissions have drifted, rerun
+`openclaw onboard --auth-choice qvac`. Setup recreates a missing key file and
+self-heals its directory to mode `0700` and the file to mode `0600`.
 
 ## What It Registers
 

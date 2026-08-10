@@ -56,6 +56,28 @@ test('README install instructions materialize QVAC credentials through onboardin
   assert.doesNotMatch(readme, /no additional auth setup is needed/i)
 })
 
+test('README explains QVAC key updates and recovery through onboarding', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+  const configureSection = readme.slice(
+    readme.indexOf('## Configure'),
+    readme.indexOf('## Troubleshooting')
+  )
+  const troubleshootingSection = readme.slice(
+    readme.indexOf('## Troubleshooting'),
+    readme.indexOf('## What It Registers')
+  )
+
+  assert.match(
+    configureSection,
+    /`apiKey`\s+changes[\s\S]*re-running[\s\S]*`openclaw onboard --auth-choice qvac`/i
+  )
+  assert.match(
+    troubleshootingSection,
+    /missing[\s\S]*permission[\s\S]*openclaw onboard --auth-choice qvac/i
+  )
+  assert.match(troubleshootingSection, /recreate[\s\S]*self-heal/i)
+})
+
 test('package entrypoint exports the plugin and serve config helpers', () => {
   assert.equal(typeof pluginEntry, 'object')
   assert.deepEqual(createQvacServeModels(resolveOptions())['qwen3.5-9b'], {

@@ -88,6 +88,17 @@ test('local service launcher rejects a missing or ambiguous API key file', () =>
       ]),
     /--api-key-file cannot be specified more than once/
   )
+
+  const secretLookingOption = '--secret-looking-token-abcdefghijklmnopqrstuvwxyzABCDE_'
+  assert.throws(
+    () => parseLocalServiceArgs([secretLookingOption, 'value']),
+    (error: unknown) => {
+      assert.ok(error instanceof TypeError)
+      assert.equal(error.message, 'Unknown local service option')
+      assert.doesNotMatch(error.message, /abcdefghijklmnopqrstuvwxyzABCDE_/)
+      return true
+    }
+  )
 })
 
 test('local service launcher resolves GPT-OSS friendly id to SDK constant', () => {
