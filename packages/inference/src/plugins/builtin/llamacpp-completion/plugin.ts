@@ -26,7 +26,7 @@ import {
   type LlmConfigInput
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
-import { expandGGUFIntoShards } from '@/utils/index'
+import { getFirstShardPath } from '@/utils/index'
 import { completion } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { batchCompletion } from '@/plugins/builtin/llamacpp-completion/ops/batch-completion-stream'
 import { finetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
@@ -67,11 +67,9 @@ function createLlmModel(
     }
   }
 
-  const modelFiles = expandGGUFIntoShards(modelPath)
-
   const model = new LlmLlamacpp({
     files: {
-      model: modelFiles,
+      model: [getFirstShardPath(modelPath)],
       ...(projectionModelPath && { projectionModel: projectionModelPath })
     },
     config: llmConfigStrings,
