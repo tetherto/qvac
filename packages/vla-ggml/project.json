@@ -8,6 +8,7 @@
         "command": "echo 'orchestrated by on-pr-nx.yml'",
         "cwd": "packages/vla-ggml",
         "ci": {
+          "_syntheticTestMarker": "test-on-pr-nx-dispatch",
           "hasCppLint": true,
           "includeRocmSdk": true,
           "hasTsChecks": true,

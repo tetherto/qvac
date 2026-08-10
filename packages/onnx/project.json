@@ -8,6 +8,7 @@
         "command": "echo 'orchestrated by on-pr-nx.yml'",
         "cwd": "packages/onnx",
         "ci": {
+          "_syntheticTestMarker": "test-on-pr-nx-dispatch",
           "sanityVariant": "inline",
           "hasCppLint": true
         }

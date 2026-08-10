@@ -8,6 +8,7 @@
         "command": "echo 'orchestrated by on-pr-nx.yml'",
         "cwd": "packages/tts-ggml",
         "ci": {
+          "_syntheticTestMarker": "test-on-pr-nx-dispatch",
           "hasCppLint": true,
           "hasCoload": true,
           "coloadActive": true

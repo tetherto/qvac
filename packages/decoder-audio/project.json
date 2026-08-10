@@ -7,7 +7,9 @@
       "options": {
         "command": "echo 'orchestrated by on-pr-nx.yml'",
         "cwd": "packages/decoder-audio",
-        "ci": {}
+        "ci": {
+          "_syntheticTestMarker": "test-on-pr-nx-dispatch"
+        }
       }
     },
     "test:unit": {
