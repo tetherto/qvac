@@ -38,7 +38,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://localhost:11434/v1', // match your HTTP server
-  apiKey: 'qvac'                         // any non-empty value; HTTP server does not validate it
+  apiKey: process.env.QVAC_API_KEY       // must match qvac serve --api-key when enabled
 })
 
 const { textStream } = streamText({
@@ -93,6 +93,8 @@ const res = await fetch(`${qvac.baseURL}/models`, {
 <Callout type="warn">
 `provider.apiKey` is secret material. Read it fresh per request — crash recovery respawns the server with a new key — and never log it or pass it to a process you do not trust. The property is non-enumerable so spreads and object dumps of the provider do not carry it.
 </Callout>
+
+Managed integrations authenticate automatically. The OpenCode plugin gives OpenCode a per-session proxy token while keeping the managed serve key inside its host process. The OpenClaw plugin instead requires `openclaw onboard --auth-choice qvac`; onboarding creates its private key file and configures both OpenClaw and the local serve to use it. Installing or enabling the OpenClaw plugin without onboarding is not sufficient.
 
 <Callout type="info">
 Liveness is tracked by the process that called `createQvac`, not by HTTP traffic. A tool that connects directly to `baseURL` only keeps the server warm while that resolving process stays alive.

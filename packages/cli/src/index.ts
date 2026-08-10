@@ -251,13 +251,16 @@ function setupCli(): void {
       []
     )
     .option('--api-key <key>', 'Require Bearer token authentication')
-    .option('--cors', 'Enable CORS headers')
+    .option('--cors', 'Require configured trusted CORS origins')
     .option('--cors-origin <origin>', 'Trusted CORS origin (repeatable)', collect, [])
     .option(
       '--public-base-url <url>',
       'Externally reachable origin (required for image response_format=url)'
     )
-    .option('--docs', 'Expose Swagger UI at /docs (JSON spec is always at /openapi.json)')
+    .option(
+      '--docs',
+      'Expose Swagger UI at /docs and add loopback CORS origins (JSON spec is always at /openapi.json)'
+    )
     .option('-v, --verbose', 'Detailed output')
     .action(
       async (options: {

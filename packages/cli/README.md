@@ -324,6 +324,27 @@ Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC model
 qvac serve openai [options]
 ```
 
+| Flag                      | Description                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `-c, --config <path>`     | Config file path (default: auto-detect `qvac.config.*`).                                    |
+| `-p, --port <number>`     | Port to listen on (default: `11434`).                                                       |
+| `-H, --host <address>`    | Host to bind to (default: `127.0.0.1`).                                                     |
+| `--model <alias>`         | Model alias to preload (repeatable; must be in config).                                     |
+| `--api-key <key>`         | Require Bearer authentication. Recommended for every non-loopback bind.                     |
+| `--cors-origin <origin>`  | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                   |
+| `--cors`                  | Compatibility switch; requires `--cors-origin` or a non-empty `serve.cors.origins` list.    |
+| `--docs`                  | Mount Swagger UI at `/docs`; automatically trusts only same-port loopback origins for CORS. |
+| `--public-base-url <url>` | Externally reachable origin required for image `response_format=url`.                       |
+| `-v, --verbose`           | Detailed output.                                                                            |
+
+`serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. Existing `--cors` scripts must add every trusted origin explicitly:
+
+```bash
+qvac serve openai --cors --cors-origin https://app.example.com
+```
+
+The CLI logs a security warning—but still starts—when `--host` is not loopback and `--api-key` is omitted.
+
 See **[docs/serve-openai.md](./docs/serve-openai.md)** for supported `/v1/...` routes, multipart request shapes, and how to register models — including **`whispercpp-audio-translation`** for `POST /v1/audio/translations` (Whisper translate-to-English), the volatile **`POST /v1/responses`** Responses API with `previous_response_id` chaining, the diffusion-backed **`POST /v1/images/generations`** / **`POST /v1/images/edits`** routes (use `--public-base-url <origin>` to enable `response_format=url` responses backed by `GET /v1/files/{id}/content`), and **`POST /v1/audio/speech`** (Chatterbox / Supertonic TTS — `wav` + `pcm` natively, plus `mp3` / `opus` / `aac` / `flac` when `ffmpeg` is on the server's `PATH` — with a `serve.openai.audio.speech.voices` map from OpenAI voice → model alias, and the `GET /v1/audio/voices` / `GET /v1/audio/models` discovery endpoints).
 
 ## Configuration

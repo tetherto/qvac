@@ -39,3 +39,25 @@ PR: [#3370](https://github.com/tetherto/qvac/pull/3370)
 The request-scoped `tools_compact` / dynamic-tools changes were removed from this PR following maintainer feedback. This PR no longer changes the SDK or `llm-llamacpp` addon.
 
 ---
+
+## Require trusted origins for CORS
+
+`qvac serve openai --cors` no longer grants wildcard browser access. Configure every trusted HTTP(S) origin explicitly; wildcard (`*`) is rejected.
+
+**BEFORE:**
+
+```bash
+qvac serve openai --cors
+```
+
+**AFTER:**
+
+```bash
+qvac serve openai \
+  --cors-origin https://app.example.com \
+  --cors-origin http://localhost:3000
+```
+
+Origins can also be stored in `serve.cors.origins`. The compatibility `--cors` flag may remain in scripts only when at least one explicit origin is supplied.
+
+---

@@ -230,7 +230,7 @@ On the tool side, register QVAC as a custom OpenAI-compatible provider. The exac
 
 - **Base URL** pointing at the running server (`http://localhost:11434/v1` by default).
 - **Model name(s)** that match the aliases declared in `serve.models`.
-- **API key** — the server does not validate it, but some clients refuse to send a request without an `Authorization` header, so set any non-empty value when required.
+- **API key** — if the server was started with `--api-key`, configure that exact value so the client sends it as a Bearer token. Otherwise requests are rejected with `401`. Authentication is strongly recommended for non-loopback binds.
 
 Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The manual OpenCode recipe below is a concrete example of this pattern.
 

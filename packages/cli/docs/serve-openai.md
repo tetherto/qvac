@@ -4,6 +4,21 @@ The CLI exposes an **OpenAI-compatible HTTP API** (`qvac serve openai`) so tools
 
 This document describes the supported routes and how to configure `serve.models` for each capability. For general CLI usage, see [README.md](../README.md).
 
+## Network security and CORS
+
+The default `127.0.0.1` bind is unauthenticated. Use `--api-key` whenever the server binds to a non-loopback address; without it, the CLI logs a security warning that the API is exposed to the network but still starts.
+
+Browser access requires explicit trusted origins. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
+
+```bash
+qvac serve openai \
+  --api-key "$QVAC_API_KEY" \
+  --cors-origin https://app.example.com \
+  --cors-origin http://localhost:3000
+```
+
+The legacy `--cors` flag no longer enables wildcard access and fails unless at least one explicit origin is configured. `--docs` automatically adds only same-port loopback origins (`localhost`, `127.0.0.1`, and `[::1]`) for Swagger UI. Add any non-loopback or forwarded browser origin explicitly.
+
 For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../docs/architecture/AGENT-INTEGRATIONS.md). Use this file for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.
 
 ## Implemented endpoints (today)

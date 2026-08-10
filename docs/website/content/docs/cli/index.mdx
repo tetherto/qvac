@@ -95,10 +95,25 @@ Start an OpenAI-compatible REST API server.
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
 | `--model <alias>` | Model alias to preload (repeatable, must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
-| `--cors` | Enable CORS headers |
-| `--docs` | Mount the Swagger UI at `/docs` (auto-enables CORS so the UI's "Try it out" works across origins). Off by default. |
+| `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
+| `--cors` | Compatibility switch that enables CORS only when at least one origin is supplied by `--cors-origin` or `serve.cors.origins` |
+| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds only same-port loopback origins to CORS automatically. |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
 | `-v, --verbose` | Detailed output |
+
+Use `--api-key` whenever `--host` is not a loopback address. The CLI logs a security warning when a non-loopback bind starts without authentication; it does not block startup.
+
+Scripts that previously relied on wildcard CORS must name every trusted browser origin:
+
+```bash
+# Before: allowed every browser origin
+qvac serve openai --cors
+
+# After: repeat once per trusted origin
+qvac serve openai \
+  --cors-origin https://app.example.com \
+  --cors-origin http://localhost:3000
+```
 
 ### `qvac openai spec`
 
