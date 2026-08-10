@@ -376,6 +376,15 @@ export function ensureApiKeyFile(keyFile: string, configuredApiKey?: string): st
     if (raw !== normalized) writePrivateKeyFile(keyFile, normalized, false)
     return normalized
   } catch (error) {
+    // A stored key that no longer parses is unusable, and it is a locally
+    // generated secret with no external copy — so re-onboarding replaces it in
+    // place (over the already-validated regular-file path) instead of leaving the
+    // user to delete the file by hand. Read failures (EACCES, …) still propagate.
+    if (error instanceof TypeError) {
+      const replacement = randomBytes(32).toString('base64url')
+      writePrivateKeyFile(keyFile, replacement, false)
+      return replacement
+    }
     if (!isNodeError(error) || error.code !== 'ENOENT') throw error
   }
 

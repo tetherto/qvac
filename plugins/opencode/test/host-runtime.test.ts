@@ -205,6 +205,117 @@ test('host reads the managed serve key live on every upstream request', async ()
   }
 })
 
+test('host fails startup when the managed provider exposes no apiKey', async () => {
+  const upstream = await startServeStub()
+  let closed = 0
+  const handshakes: HostListening[] = []
+  const host = await startManagedServeHost({
+    config: hostConfig(),
+    logger: quietLogger(),
+    emitHandshake: (payload) => handshakes.push(payload),
+    // A published @qvac/ai-sdk-provider older than the one that added
+    // `ManagedQvacProvider.apiKey` resolves a handle without the getter.
+    startManagedServe: () =>
+      Promise.resolve({
+        baseURL: upstream.baseURL,
+        port: upstream.port,
+        pid: process.pid,
+        close: () => {
+          closed += 1
+          return Promise.resolve()
+        }
+      } as unknown as ManagedServeHandle)
+  })
+  try {
+    await assert.rejects(host.whenManaged, (err: unknown) => {
+      assert.ok(err instanceof Error)
+      assert.equal(err.name, 'IncompatibleProviderError')
+      assert.match(err.message, /@qvac\/ai-sdk-provider/)
+      assert.match(err.message, /upgrade/i)
+      return true
+    })
+    assert.equal(closed, 1, 'the incompatible managed serve must be released')
+
+    // The proxy never starts borrowing a credential it does not have, so no
+    // request is answered from a half-configured upstream.
+    const listening = handshakes[0]
+    assert.ok(listening)
+    let settled = false
+    void getModels(listening.baseURL, listening.proxyToken).then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await delay(200)
+    assert.equal(settled, false)
+    assert.deepEqual(upstream.authorizations, [])
+  } finally {
+    await host.stop('test')
+    await upstream.close()
+  }
+})
+
+test('host fails startup when the managed provider apiKey is not usable', async () => {
+  const upstream = await startServeStub()
+  const host = await startManagedServeHost({
+    config: hostConfig(),
+    logger: quietLogger(),
+    emitHandshake: () => {},
+    startManagedServe: () =>
+      Promise.resolve({
+        apiKey: '   ',
+        baseURL: upstream.baseURL,
+        port: upstream.port,
+        pid: process.pid,
+        close: () => Promise.resolve()
+      })
+  })
+  try {
+    await assert.rejects(host.whenManaged, { name: 'IncompatibleProviderError' })
+  } finally {
+    await host.stop('test')
+    await upstream.close()
+  }
+})
+
+test('host startup failure for an incompatible provider never logs the serve key', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'qvac-host-incompat-'))
+  const logFile = join(dir, 'host.log')
+  const out: string[] = []
+  const err: string[] = []
+  const upstream = await startServeStub()
+  const host = await startManagedServeHost({
+    config: hostConfig({ debug: true, logFile }),
+    logger: createHostLogger({
+      debug: true,
+      logFile,
+      out: (text) => out.push(text),
+      err: (text) => err.push(text)
+    }),
+    emitHandshake: () => {},
+    startManagedServe: () =>
+      Promise.resolve({
+        apiKey: SERVE_KEY,
+        baseURL: 'not a url',
+        port: upstream.port,
+        pid: process.pid,
+        close: () => Promise.resolve()
+      })
+  })
+  try {
+    await assert.rejects(host.whenManaged, { name: 'IncompatibleProviderError' })
+    const sink = out.join('') + err.join('') + (await readFile(logFile, 'utf8'))
+    assert.doesNotMatch(sink, new RegExp(SERVE_KEY))
+  } finally {
+    await host.stop('test')
+    await upstream.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('host debug and log output never contain the proxy token or the serve key', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'qvac-host-log-'))
   const logFile = join(dir, 'host.log')

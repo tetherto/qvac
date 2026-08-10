@@ -98,12 +98,12 @@ Start an OpenAI-compatible REST API server.
 | `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
 | `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
-| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS. |
+| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS, so it requires a fixed `--port`. |
 | `-v, --verbose` | Detailed output |
 
 Use `--api-key` whenever `--host` is not a loopback address. The CLI logs a security warning when a non-loopback bind starts without authentication; it does not block startup.
 
-`--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback.
+`--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. Since those origins come from the configured port, `--docs --port 0` is rejected at startup instead of producing unusable `http://localhost:0` origins.
 
 Scripts that previously relied on wildcard CORS must name every trusted browser origin. They may keep `--cors` as a validation guard or drop it:
 

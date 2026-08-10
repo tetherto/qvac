@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
 import { describe, it } from 'node:test'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '../src/serve/cors.js'
 import { parseServeConfig } from '../src/serve/config.js'
+import { buildServer } from '../src/serve/index.js'
+import {
+  networkExposureWarning,
+  ServeOptionsError,
+  validateServeStartup
+} from '../src/serve/startup.js'
 
 describe('normalizeCorsOrigin', () => {
   it('normalizes HTTP(S) origins', () => {
@@ -112,5 +119,72 @@ describe('serve.cors.origins', () => {
         ),
       /serve\.cors\.origins must be an array/i
     )
+  })
+})
+
+describe('serve startup validation', () => {
+  it('rejects --cors without an explicit trusted origin', () => {
+    assert.throws(
+      () => validateServeStartup([], { cors: true, port: 11434 }),
+      (error: unknown) => {
+        assert.ok(error instanceof ServeOptionsError)
+        assert.equal(error.name, 'ServeOptionsError')
+        assert.equal(error.option, '--cors')
+        assert.match(error.message, /--cors-origin|serve\.cors\.origins/)
+        return true
+      }
+    )
+    validateServeStartup(['https://example.com'], { cors: true, port: 11434 })
+  })
+
+  it('rejects --docs with an ephemeral port', () => {
+    // The docs allowlist is derived from the configured port, so `--port 0`
+    // would produce `http://localhost:0` — an origin no browser can ever send.
+    assert.throws(
+      () => validateServeStartup([], { docs: true, port: 0 }),
+      (error: unknown) => {
+        assert.ok(error instanceof ServeOptionsError)
+        assert.equal(error.option, '--docs')
+        assert.match(error.message, /--port/)
+        return true
+      }
+    )
+    validateServeStartup([], { docs: true, port: 11434 })
+    validateServeStartup([], { port: 0 })
+  })
+})
+
+describe('network exposure warning', () => {
+  it('warns only for a non-loopback bind without an API key', () => {
+    assert.match(
+      networkExposureWarning({ host: '0.0.0.0' }) ?? '',
+      /Security warning.*0\.0\.0\.0.*--api-key/s
+    )
+    assert.equal(networkExposureWarning({ host: '0.0.0.0', apiKey: 'secret' }), undefined)
+    assert.equal(networkExposureWarning({ host: '127.0.0.1' }), undefined)
+  })
+
+  it('is emitted while options are resolved, before preload or listen', async () => {
+    const warnings: string[] = []
+    const originalWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '))
+    }
+    let app
+    try {
+      // buildServer runs before startServer's preload/listen, so a warning
+      // observed here necessarily precedes the socket accepting connections.
+      app = await buildServer({ projectRoot: tmpdir(), port: 0, host: '0.0.0.0' })
+    } finally {
+      console.warn = originalWarn
+    }
+    try {
+      assert.ok(
+        warnings.some((line) => /Security warning: binding to non-loopback host/.test(line)),
+        `expected an exposure warning, got: ${warnings.join(' | ')}`
+      )
+    } finally {
+      await app.close()
+    }
   })
 })

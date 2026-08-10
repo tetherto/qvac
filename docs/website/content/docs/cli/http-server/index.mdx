@@ -144,7 +144,7 @@ Relevant options are summarized below; run `qvac serve openai --help` for the ex
 | `--cors` | Validate that an explicit trusted origin is configured |
 | `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
 | `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
-| `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins |
+| `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
 | `-v, --verbose` | Detailed output |
 
 ### CORS
@@ -1347,6 +1347,8 @@ open http://localhost:11434/docs
 ```
 
 `--docs` adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins to CORS so a locally opened Swagger UI can use "Try it out." When the configured `--host` is itself loopback, its same-port origin is added too. It does not trust a bound non-loopback host, a port-forwarded origin, or arbitrary websites. Add each additional browser origin with `--cors-origin` or `serve.cors.origins`.
+
+Because those origins are derived from the configured port, `--docs` requires a fixed port: `--docs --port 0` fails startup with a `Serve Options Error` rather than binding an ephemeral port whose `http://localhost:0` origins no browser can match. Pick a port, or drop `--docs` and read the always-available `/openapi.json`.
 
 #### Emit the spec without starting the server
 

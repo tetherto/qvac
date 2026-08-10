@@ -1,3 +1,4 @@
+import { IncompatibleProviderError } from './errors.js'
 import type { HostLogger } from './host-logger.js'
 import type { ManagedServeHostConfig } from './managed-serve-config.js'
 import { generateProxyToken, type HostListening } from './managed-serve-handshake.js'
@@ -38,6 +39,31 @@ function deferred(): Deferred {
     resolve = res
   })
   return { promise, resolve }
+}
+
+// `ManagedServeHandle` is the compile-time contract; at runtime the handle comes
+// from whichever @qvac/ai-sdk-provider the install resolved, which may predate
+// `ManagedQvacProvider.apiKey`. Detect that before the proxy can start serving
+// 503s, and never put the credential itself in the failure.
+function assertCompatibleHandle(handle: ManagedServeHandle): void {
+  const apiKey: unknown = (handle as { apiKey?: unknown }).apiKey
+  if (typeof apiKey !== 'string') {
+    throw new IncompatibleProviderError(
+      'apiKey',
+      `is ${apiKey === undefined ? 'missing' : 'not a string'}`
+    )
+  }
+  if (apiKey.trim().length === 0) {
+    throw new IncompatibleProviderError('apiKey', 'is empty')
+  }
+  try {
+    originOf(handle.baseURL)
+  } catch {
+    throw new IncompatibleProviderError(
+      'baseURL',
+      `is not a usable URL ("${String(handle.baseURL)}")`
+    )
+  }
 }
 
 // Bring the authenticated proxy up first and hand OpenCode its credentials as
@@ -86,6 +112,12 @@ export async function startManagedServeHost(
 
   const whenManaged = (async () => {
     const managed = await deps.startManagedServe()
+    try {
+      assertCompatibleHandle(managed)
+    } catch (err) {
+      await managed.close().catch(() => {})
+      throw err
+    }
     live.managed = managed
     upstreamReady.resolve()
     logger.log(`healthy in ${((Date.now() - t0) / 1000).toFixed(1)}s`)

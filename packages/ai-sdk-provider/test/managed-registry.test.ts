@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -11,6 +11,7 @@ import {
   addConsumer,
   consumersDir,
   ensureDirSync,
+  ensureManagedServesDir,
   findReusableServe,
   isProcessAlive,
   liveConsumers,
@@ -18,6 +19,7 @@ import {
   readRecord,
   removeConsumer,
   removeRecord,
+  RUNNER_PARAMS_STALE_MS,
   type ServeRecord,
   sweepServes,
   writeRecord
@@ -165,6 +167,136 @@ test('sweepServes removes a dead legacy keyless record and its config artifacts'
     await assert.rejects(stat(configDir), { code: 'ENOENT' })
   })
 })
+
+test('sweepServes reaps a live legacy keyless serve, probing it without authorization', async () => {
+  await withFakeHome(async () => {
+    const configDir = join(managedServesDir(), 'legacy-live-config')
+    const configPath = join(configDir, 'qvac.config.json')
+    await mkdir(configDir, { recursive: true })
+    await writeFile(configPath, '{}')
+
+    // A serve started by a pre-auth provider: alive, listening without a key,
+    // and its runner is gone, so nothing else will ever shut it down.
+    const legacyServe = spawn(process.execPath, ['-e', 'setInterval(()=>{},1e9)'], {
+      stdio: 'ignore'
+    })
+    // An unrelated process whose recorded destination answers nothing.
+    const stranger = spawn(process.execPath, ['-e', 'setInterval(()=>{},1e9)'], { stdio: 'ignore' })
+    await new Promise((r) => setTimeout(r, 100))
+    assert.ok(legacyServe.pid)
+    assert.ok(stranger.pid)
+
+    try {
+      const { apiKey: _live, ...liveLegacy } = makeRecord({
+        fleetKey: 'legacy-live',
+        servePid: legacyServe.pid,
+        runnerPid: DEAD_PID,
+        host: '127.0.0.1',
+        port: 4242,
+        baseURL: 'http://127.0.0.1:4242/v1',
+        configPath
+      })
+      await writeRecord(liveLegacy as ServeRecord)
+
+      const { apiKey: _quiet, ...quietLegacy } = makeRecord({
+        fleetKey: 'legacy-quiet',
+        servePid: stranger.pid,
+        runnerPid: DEAD_PID,
+        host: '127.0.0.1',
+        port: 4243,
+        baseURL: 'http://127.0.0.1:4243/v1',
+        configPath: ''
+      })
+      await writeRecord(quietLegacy as ServeRecord)
+
+      const probed: string[] = []
+      const fetchImpl: typeof fetch = (input, init) => {
+        const url = String(input)
+        probed.push(url)
+        // A keyless legacy serve must be probed anonymously — sending the
+        // Authorization header of a *different* record would be a credential leak.
+        assert.equal(new Headers(init?.headers).get('authorization'), null)
+        if (url.startsWith('http://127.0.0.1:4242/')) {
+          return Promise.resolve(new Response(null, { status: 200 }))
+        }
+        return Promise.reject(new Error('ECONNREFUSED'))
+      }
+
+      const swept = await sweepServes(fetchImpl)
+      assert.ok(swept.includes('legacy-live'), 'a confirmed legacy serve must be reaped')
+      assert.ok(!swept.includes('legacy-quiet'), 'an unconfirmed live pid must not be swept')
+      assert.deepEqual(probed.sort(), [
+        'http://127.0.0.1:4242/v1/models',
+        'http://127.0.0.1:4243/v1/models'
+      ])
+
+      await new Promise((r) => setTimeout(r, 300))
+      assert.equal(isProcessAlive(legacyServe.pid), false, 'legacy serve should be terminated')
+      assert.equal(isProcessAlive(stranger.pid), true, 'unrelated pid must not be signalled')
+      assert.equal(await readRecord('legacy-live'), undefined)
+      await assert.rejects(stat(join(managedServesDir(), 'legacy-live.json')), { code: 'ENOENT' })
+      await assert.rejects(stat(configDir), { code: 'ENOENT' })
+      assert.ok(await readSweptRecordExists('legacy-quiet'), 'record retained for a later sweep')
+    } finally {
+      for (const child of [legacyServe, stranger]) {
+        if (child.pid !== undefined && isProcessAlive(child.pid)) child.kill('SIGKILL')
+      }
+      removeRecord('legacy-quiet')
+    }
+  })
+})
+
+test('sweepServes rejects a legacy record with a mismatched destination before probing', async () => {
+  await withFakeHome(async () => {
+    const { apiKey: _apiKey, ...tampered } = makeRecord({
+      fleetKey: 'legacy-tampered',
+      servePid: process.pid,
+      runnerPid: DEAD_PID,
+      host: '127.0.0.1',
+      port: 4242,
+      baseURL: 'http://evil.example:4242/v1',
+      configPath: ''
+    })
+    await writeRecord(tampered as ServeRecord)
+
+    let calls = 0
+    const fetchImpl: typeof fetch = () => {
+      calls += 1
+      return Promise.resolve(new Response(null, { status: 200 }))
+    }
+
+    assert.deepEqual(await sweepServes(fetchImpl), [])
+    assert.equal(calls, 0, 'a record whose baseURL disagrees with host/port is never probed')
+    removeRecord('legacy-tampered')
+  })
+})
+
+test('sweepServes unlinks abandoned runner-params files but keeps fresh handoffs', async () => {
+  await withFakeHome(async () => {
+    await ensureManagedServesDir()
+    const stale = join(managedServesDir(), 'gone.1234.abcdef.runner-params.json')
+    const fresh = join(managedServesDir(), 'live.5678.fedcba.runner-params.json')
+    await writeFile(stale, '{}', { mode: 0o600 })
+    await writeFile(fresh, '{}', { mode: 0o600 })
+    // Older than the spawn budget: whoever wrote it can no longer be waiting.
+    const old = Date.now() - RUNNER_PARAMS_STALE_MS - 60_000
+    await utimes(stale, new Date(old), new Date(old))
+
+    await sweepServes()
+
+    await assert.rejects(stat(stale), { code: 'ENOENT' })
+    assert.ok(await stat(fresh), 'an in-flight handoff file must survive the sweep')
+  })
+})
+
+async function readSweptRecordExists(fleetKey: string): Promise<boolean> {
+  try {
+    await stat(join(managedServesDir(), `${fleetKey}.json`))
+    return true
+  } catch {
+    return false
+  }
+}
 
 test('consumer markers: add, prune-dead, remove', async () => {
   await withFakeHome(async () => {

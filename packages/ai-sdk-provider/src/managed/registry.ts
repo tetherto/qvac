@@ -1,7 +1,9 @@
 import { chmodSync, mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+
+import { DEFAULT_SERVE_START_TIMEOUT_MS } from '../defaults.js'
 
 // Shared, cross-process registry of managed serves. Each running serve is
 // described by one record keyed by its *fleet key* (model set + config + host),
@@ -244,9 +246,12 @@ export async function liveConsumers(fleetKey: string): Promise<number[]> {
 
 // ── Health & discovery ────────────────────────────────────────────────────────
 
+// `apiKey === undefined` probes anonymously, for records written by a provider
+// that predates managed auth. Only ever used on a record whose baseURL has
+// already been checked against its own host/port.
 export async function healthCheck(
   baseURL: string,
-  apiKey: string,
+  apiKey: string | undefined,
   fetchImpl: typeof fetch,
   timeoutMs = 2_000
 ): Promise<boolean> {
@@ -254,7 +259,7 @@ export async function healthCheck(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetchImpl(`${baseURL}/models`, {
-      headers: { authorization: `Bearer ${apiKey}` },
+      ...(apiKey === undefined ? {} : { headers: { authorization: `Bearer ${apiKey}` } }),
       signal: controller.signal
     })
     return res.ok
@@ -291,7 +296,6 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
     if (serveAlive && isProcessAlive(rec.runnerPid)) continue // healthy, owned
 
     if (serveAlive) {
-      if (rec.apiKey === undefined) continue
       // Orphan: runner gone, nobody will reap it. Only act if it still answers
       // as *our* serve on the recorded baseURL. If it doesn't respond we must
       // NOT drop the record: the pid is alive, so removing its registry trace
@@ -301,6 +305,12 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
       // the OS recycled to a stranger also lands here; its stale record is
       // harmless — reuse health-checks and skips it, and the next spawn for the
       // key overwrites it.)
+      //
+      // A record with no `apiKey` was written by a provider that predates managed
+      // auth, so its serve is listening unauthenticated: probe it anonymously —
+      // never with another record's credential — and reap it on the same terms.
+      // `parseRecordBase` has already confirmed baseURL agrees with host/port, so
+      // the probe cannot be redirected by a tampered record.
       if (!(await healthCheck(rec.baseURL, rec.apiKey, fetchImpl))) continue
       try {
         process.kill(rec.servePid, 'SIGTERM')
@@ -318,7 +328,35 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
     }
     swept.push(rec.fleetKey)
   }
+  await sweepRunnerParams()
   return swept
+}
+
+// One-shot runner handoff files carry the serve key in plaintext (mode 0o600) and
+// are unlinked by the runner as it reads them. A client that dies in the window
+// between write and read leaves one behind with nothing to remove it, so they are
+// swept here once no runner could still be waiting to read one: the spawn budget
+// plus a wide margin for a machine that was busy or asleep mid-handoff.
+export const RUNNER_PARAMS_STALE_MS = DEFAULT_SERVE_START_TIMEOUT_MS * 2
+
+async function sweepRunnerParams(now = Date.now()): Promise<void> {
+  let files: string[]
+  try {
+    files = await readdir(managedServesDir())
+  } catch {
+    return
+  }
+  for (const file of files) {
+    if (!file.endsWith('.runner-params.json')) continue
+    const path = join(managedServesDir(), file)
+    try {
+      const { mtimeMs } = await stat(path)
+      if (now - mtimeMs < RUNNER_PARAMS_STALE_MS) continue
+      await rm(path, { force: true })
+    } catch {
+      // best-effort: a file the runner just consumed is already gone
+    }
+  }
 }
 
 export function ensureDirSync(): void {

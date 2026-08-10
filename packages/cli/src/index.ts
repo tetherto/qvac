@@ -259,7 +259,7 @@ function setupCli(): void {
     )
     .option(
       '--docs',
-      'Expose Swagger UI at /docs and add loopback CORS origins (JSON spec is always at /openapi.json)'
+      'Expose Swagger UI at /docs and add same-port loopback CORS origins; requires a fixed --port (JSON spec is always at /openapi.json)'
     )
     .option('-v, --verbose', 'Detailed output')
     .action(

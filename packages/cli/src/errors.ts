@@ -25,6 +25,7 @@ export class ConfigLoadError extends Error {
 const ERROR_LABELS: Record<string, string> = {
   ConfigNotFoundError: 'Configuration Error',
   ConfigLoadError: 'Config Load Error',
+  ServeOptionsError: 'Serve Options Error',
   LockfileReadError: 'Lockfile Error',
   LockfileNotFoundAtRefError: 'Lockfile Error',
   UnsupportedLockfileError: 'Lockfile Error',

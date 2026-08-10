@@ -233,6 +233,8 @@ const res = await fetch(`${qvac.baseURL}/models`, {
 
 Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
 
+The detached runner receives the key through a one-shot `0600` file rather than its argv, but the `qvac serve` process it starts is still launched with `--api-key <key>`, so the key can be read from `ps` by same-user or privileged process inspection until the QVAC CLI accepts a key from a file, environment variable, or file descriptor. This matches the limitation documented for `@qvac/openclaw-plugin`; both call sites move together when the CLI gains a non-argv key source.
+
 ### Per-model configuration
 
 A bare string keeps the serve defaults. To set serve options per model — most importantly `ctx_size` and `reasoning_budget`, which coding agents need (see [Using with coding agents](#using-with-coding-agents)) — pass a spec object instead. The `config` block is written verbatim into the synthesized `qvac.config.json` for that model:
@@ -264,7 +266,7 @@ Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that ope
 - **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters _your_ session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
 - **Crash recovery.** If the underlying serve is gone when a request goes out (connection refused), the provider's `fetch` transparently re-resolves — reattaching to a healthy serve or spawning a fresh one — and retries that request once. Only connection-refused is retried, so a completion that the serve had already begun processing is never blindly replayed.
 - **Private serves.** Pass `reuse: false` (or pin `servePort`) to force a dedicated serve that is **not** shared and is reaped as soon as your process exits.
-- **Self-healing registry.** Records live under `~/.qvac/managed-serves/`. Every `createQvac` first sweeps the registry, dropping dead records and terminating any serve whose runner has died — so a hard crash can never strand a process or wedge reuse.
+- **Self-healing registry.** Records live under `~/.qvac/managed-serves/`. Every `createQvac` first sweeps the registry, dropping dead records and terminating any serve whose runner has died — so a hard crash can never strand a process or wedge reuse. The sweep also reaps serves left behind by a provider version that predates managed authentication (their records carry no key, so they are probed anonymously and shut down rather than left listening unauthenticated), and removes abandoned one-shot runner handoff files once no runner could still be waiting to read one.
 
 ### Behaviour notes
 

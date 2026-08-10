@@ -145,7 +145,26 @@ running `opencode` from the terminal.
 ## Requirements
 
 - [`@qvac/ai-sdk-provider@^0.5.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
-  for managed mode (AI SDK 7).
+  for managed mode (AI SDK 7). The host proxies on behalf of the managed serve,
+  so it needs the provider's `ManagedQvacProvider.apiKey` getter — see
+  [Provider compatibility](#provider-compatibility).
 - [`@qvac/cli@^0.10.0`](https://www.npmjs.com/package/@qvac/cli) available so the
   host can run `qvac serve` (SDK 0.16 runtime).
 - Node.js 22 or newer.
+
+### Provider compatibility
+
+The managed serve requires bearer authentication, and the proxy reads the
+serve's key from the resolved `ManagedQvacProvider`. A provider release that
+predates that getter cannot supply one, so the host checks for it as soon as the
+managed provider is created and fails startup with an
+`IncompatibleProviderError` (code `INCOMPATIBLE_PROVIDER`) naming the required
+upgrade, rather than answering every proxied request with an opaque `503`. The
+credential itself is never part of that error or of any log line.
+
+The `@qvac/ai-sdk-provider` dependency floor in this package is raised as part of
+the ordered agent-stack release cascade — the provider is published first, then
+the plugins that depend on the new surface are bumped against the published
+version. A feature branch that adds a provider surface therefore leaves the floor
+alone and relies on the runtime check above; the release cascade is what turns it
+into a manifest guarantee.

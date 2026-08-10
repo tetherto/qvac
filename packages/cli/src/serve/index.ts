@@ -20,6 +20,7 @@ import type { Logger } from '../logger.js'
 import { findConfigFile, loadConfig } from '../config.js'
 import { parseServeConfig } from './config.js'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from './cors.js'
+import { networkExposureWarning, validateServeStartup } from './startup.js'
 import { createModelRegistry } from './core/model-registry.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
@@ -62,11 +63,11 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
   const configPath = findConfigFile(options.projectRoot, options.config)
   const rawConfig = configPath ? ((await loadConfig(configPath)) as Record<string, unknown>) : {}
   const serveConfig = parseServeConfig(rawConfig as Parameters<typeof parseServeConfig>[0], options)
-  if (options.cors && serveConfig.cors.origins.length === 0) {
-    throw new Error(
-      '--cors requires at least one explicit origin from --cors-origin or serve.cors.origins'
-    )
-  }
+  validateServeStartup(serveConfig.cors.origins, options)
+  // Emitted here, while options resolve, so an operator sees it before the
+  // socket opens rather than after a preload that can run for minutes.
+  const exposureWarning = networkExposureWarning(options)
+  if (exposureWarning !== undefined) logger.warn(exposureWarning)
   const registry = createModelRegistry()
 
   const responsesStore = createResponsesStore()
@@ -224,11 +225,6 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
   app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
-  if (!isLoopbackHost(options.host) && !options.apiKey) {
-    app.qvac.logger.warn(
-      `Security warning: binding to non-loopback host "${options.host}" without --api-key exposes the API to the network.`
-    )
-  }
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')

@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -204,6 +205,49 @@ test('API key file is generated once, reused, and permission-hardened', () => {
   assert.equal(readFileSync(keyFile, 'utf8'), TEST_KEY)
   assert.equal(statSync(join(stateDir, 'plugins', 'qvac')).mode & 0o777, 0o700)
   assert.equal(statSync(keyFile).mode & 0o777, 0o600)
+  rmSync(stateDir, { recursive: true })
+})
+
+test('re-onboarding regenerates a corrupt key file in place', () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
+  const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
+
+  // Materialize the directory tree with a healthy key first.
+  ensureApiKeyFile(keyFile)
+
+  // The key is locally generated and has no external copy, so an unusable one
+  // can be replaced instead of demanding a manual delete.
+  for (const corrupt of [
+    '',
+    '   \n',
+    'short',
+    'abcdefghijklmnopqrstuvwxyzABCD🙂',
+    '-abcdefghijklmnopqrstuvwxyzABCDE'
+  ]) {
+    writeFileSync(keyFile, corrupt)
+    const regenerated = ensureApiKeyFile(keyFile)
+    assert.match(regenerated, /^[A-Za-z0-9_-]{43}$/)
+    assert.equal(readFileSync(keyFile, 'utf8'), regenerated)
+    assert.equal(statSync(keyFile).mode & 0o777, 0o600)
+    // Stable once healthy again.
+    assert.equal(ensureApiKeyFile(keyFile), regenerated)
+  }
+
+  rmSync(stateDir, { recursive: true })
+})
+
+test('a key path that is not a regular file is rejected rather than overwritten', () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
+  const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
+  ensureApiKeyFile(keyFile)
+  rmSync(keyFile)
+  const target = join(stateDir, 'elsewhere')
+  writeFileSync(target, 'not-a-key')
+  symlinkSync(target, keyFile)
+
+  assert.throws(() => ensureApiKeyFile(keyFile), /must be a regular file/)
+  assert.equal(readFileSync(target, 'utf8'), 'not-a-key')
+
   rmSync(stateDir, { recursive: true })
 })
 

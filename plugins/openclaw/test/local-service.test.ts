@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -11,8 +11,31 @@ import {
   formatSpawnError,
   loadApiKey,
   parseLocalServiceArgs,
+  prepareLocalServiceLaunch,
   resolveLocalServiceExitCode
 } from '../src/local-service.ts'
+
+const VALID_KEY = 'abcdefghijklmnopqrstuvwxyzABCDE_'
+
+// `os.tmpdir()` re-reads TMPDIR on every call, so pointing it at an empty
+// directory makes the launcher's temp-config bookkeeping directly observable.
+// `scratch` stays outside it so test fixtures don't count as launcher leftovers.
+async function withIsolatedTmpdir(
+  fn: (paths: { tmpRoot: string; scratch: string }) => Promise<void>
+): Promise<void> {
+  const previous = process.env['TMPDIR']
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'qvac-openclaw-tmproot-'))
+  const scratch = mkdtempSync(join(tmpdir(), 'qvac-openclaw-scratch-'))
+  process.env['TMPDIR'] = tmpRoot
+  try {
+    await fn({ tmpRoot, scratch })
+  } finally {
+    if (previous === undefined) delete process.env['TMPDIR']
+    else process.env['TMPDIR'] = previous
+    rmSync(tmpRoot, { recursive: true, force: true })
+    rmSync(scratch, { recursive: true, force: true })
+  }
+}
 
 test('local service launcher creates QVAC serve config and command args from OpenClaw options', () => {
   const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-local-service-test-'))
@@ -72,8 +95,35 @@ test('local service launcher creates QVAC serve config and command args from Ope
   rmSync(dir, { recursive: true })
 })
 
+test('local service launcher tells pre-upgrade installs to re-onboard', () => {
+  // An OpenClaw install onboarded before bearer auth has a persisted arg list
+  // with no `--api-key-file`. Failing closed is correct, but the message has to
+  // name the remedy or the whole existing user base is stuck on a raw arg error.
+  assert.throws(
+    () => parseLocalServiceArgs([]),
+    (error: unknown) => {
+      assert.ok(error instanceof TypeError)
+      assert.match(error.message, /--api-key-file/)
+      assert.match(error.message, /openclaw onboard --auth-choice qvac/)
+      return true
+    }
+  )
+  assert.match(
+    formatLauncherError(new TypeError(parseFailureMessage())),
+    /openclaw onboard --auth-choice qvac/
+  )
+})
+
+function parseFailureMessage(): string {
+  try {
+    parseLocalServiceArgs([])
+    return ''
+  } catch (error) {
+    return error instanceof Error ? error.message : ''
+  }
+}
+
 test('local service launcher rejects a missing or ambiguous API key file', () => {
-  assert.throws(() => parseLocalServiceArgs([]), /--api-key-file requires a value/)
   assert.throws(
     () => parseLocalServiceArgs(['--api-key-file', '--model', 'qwen3.5-9b']),
     /--api-key-file requires a value/
@@ -140,6 +190,39 @@ test('local service launcher rejects unsafe key-file contents', () => {
   }
 
   rmSync(dir, { recursive: true })
+})
+
+test('launch preparation leaves no temp config directory when the key file is unusable', async () => {
+  await withIsolatedTmpdir(async ({ tmpRoot, scratch }) => {
+    const keyFile = join(scratch, 'api-key')
+    const options = parseLocalServiceArgs(['--api-key-file', keyFile])
+
+    // Missing key file.
+    await assert.rejects(prepareLocalServiceLaunch(options))
+    assert.deepEqual(readdirSync(tmpRoot), [], 'no temp config dir after a missing key file')
+
+    // Present but unusable key file.
+    writeFileSync(keyFile, 'short')
+    await assert.rejects(prepareLocalServiceLaunch(options), /must be 32-128 base64url characters/)
+    assert.deepEqual(readdirSync(tmpRoot), [], 'no temp config dir after an invalid key file')
+  })
+})
+
+test('launch preparation cleans up its temp config directory on shutdown', async () => {
+  await withIsolatedTmpdir(async ({ tmpRoot, scratch }) => {
+    const keyFile = join(scratch, 'api-key')
+    writeFileSync(keyFile, VALID_KEY)
+    const options = parseLocalServiceArgs(['--api-key-file', keyFile])
+
+    const launch = await prepareLocalServiceLaunch(options)
+    assert.equal(readdirSync(tmpRoot).length, 1)
+    assert.deepEqual(launch.args, buildQvacServeArgs(options, launch.configPath))
+
+    await launch.cleanup()
+    assert.deepEqual(readdirSync(tmpRoot), [], 'cleanup removes the temp config dir')
+    // Shutdown paths can run cleanup more than once (stop + child exit).
+    await launch.cleanup()
+  })
 })
 
 test('spawn errors are formatted without args or secret-bearing properties', () => {

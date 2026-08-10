@@ -212,11 +212,39 @@ grandchild still receives `--api-key <key>`, so the key can be visible to
 same-user or privileged process inspection until the QVAC CLI supports a secret
 file, environment, or file-descriptor transport.
 
+## Upgrading
+
+The managed `qvac serve` now requires bearer authentication, and the key reaches
+the launcher as a `--api-key-file` path in `localService.args`. That argument list
+is written into `openclaw.json` by onboarding, so an install configured **before**
+this change has a persisted arg list without it.
+
+**A plugin upgrade alone is not enough — re-onboard once:**
+
+```bash
+openclaw onboard --auth-choice qvac
+```
+
+Until you do, every attempt to start the local QVAC service fails with
+`--api-key-file requires a value …` and names this same remedy. The launcher fails
+closed on purpose: it will not fall back to an unauthenticated serve, and it will
+not guess a key-file path that onboarding never wrote.
+
+Re-onboarding is idempotent for already-migrated installs: it reuses the existing
+key file, refreshes the provider entry, and leaves your model choice alone.
+
 ## Troubleshooting
 
-If the QVAC key file is missing or its permissions have drifted, rerun
-`openclaw onboard --auth-choice qvac`. Setup recreates a missing key file and
-self-heals its directory to mode `0700` and the file to mode `0600`.
+If the QVAC key file is missing, unreadable as a key, or its permissions have
+drifted, rerun `openclaw onboard --auth-choice qvac`. Setup recreates a missing
+key file, replaces a corrupt or empty one with a freshly generated key in place
+(the key is local-only, so there is nothing to recover from it), and self-heals
+its directory to mode `0700` and the file to mode `0600`. A key path that is not
+a regular file — a symlink or directory — is rejected instead of overwritten;
+remove it yourself and rerun onboarding.
+
+If the local service fails with `--api-key-file requires a value`, see
+[Upgrading](#upgrading).
 
 ## What It Registers
 

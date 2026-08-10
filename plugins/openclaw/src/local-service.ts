@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -60,9 +60,18 @@ function parseOptions(argv: readonly string[]): ReadonlyMap<string, string> {
   return options
 }
 
-function requireOption(options: ReadonlyMap<string, string>, name: string): string {
-  const value = options.get(name)
-  if (value === undefined) throw new TypeError(`${name} requires a value`)
+// A pre-auth OpenClaw install has `localService.args` persisted in openclaw.json
+// without `--api-key-file`. Failing closed is deliberate — the launcher must not
+// start an unauthenticated serve — so the message has to name the remedy.
+function requireApiKeyFile(options: ReadonlyMap<string, string>): string {
+  const value = options.get('--api-key-file')
+  if (value === undefined) {
+    throw new TypeError(
+      '--api-key-file requires a value. This QVAC provider entry was created before the managed ' +
+        'qvac serve required bearer authentication; re-run `openclaw onboard --auth-choice qvac` ' +
+        'to regenerate it.'
+    )
+  }
   return value
 }
 
@@ -84,7 +93,7 @@ export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOpti
   const values = parseOptions(argv)
   return {
     qvacCommand: values.get('--qvac-command') ?? DEFAULT_OPTIONS.qvacCommand,
-    apiKeyFile: requireOption(values, '--api-key-file'),
+    apiKeyFile: requireApiKeyFile(values),
     model: values.get('--model') ?? DEFAULT_OPTIONS.model,
     host: values.get('--host') ?? DEFAULT_OPTIONS.host,
     port: parseNumberOption('--port', values.get('--port'), DEFAULT_OPTIONS.port),
@@ -122,8 +131,7 @@ export function createLocalServiceServeConfig(
   }
 }
 
-export function buildQvacServeArgs(options: LocalServiceOptions, configPath: string): string[] {
-  const apiKey = loadApiKey(options.apiKeyFile)
+function serveArgs(options: LocalServiceOptions, configPath: string, apiKey: string): string[] {
   return [
     'serve',
     'openai',
@@ -138,6 +146,10 @@ export function buildQvacServeArgs(options: LocalServiceOptions, configPath: str
     '--api-key',
     apiKey
   ]
+}
+
+export function buildQvacServeArgs(options: LocalServiceOptions, configPath: string): string[] {
+  return serveArgs(options, configPath, loadApiKey(options.apiKeyFile))
 }
 
 export function formatSpawnError(error: unknown, command: string): string {
@@ -204,19 +216,49 @@ async function writeConfig(
   }
 }
 
+export interface PreparedLocalServiceLaunch {
+  readonly configPath: string
+  readonly args: string[]
+  cleanup: () => Promise<void>
+}
+
+// Resolves the key *before* creating the temp config dir, so an unusable key file
+// cannot strand one, and unwinds the dir if anything after that throws.
+export async function prepareLocalServiceLaunch(
+  options: LocalServiceOptions
+): Promise<PreparedLocalServiceLaunch> {
+  const apiKey = loadApiKey(options.apiKeyFile)
+  const generated = await writeConfig(options)
+  try {
+    return {
+      configPath: generated.configPath,
+      args: serveArgs(options, generated.configPath, apiKey),
+      cleanup: generated.cleanup
+    }
+  } catch (error) {
+    await generated.cleanup()
+    throw error
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseLocalServiceArgs(process.argv.slice(2))
-  const generated = await writeConfig(options)
-  const child = spawn(options.qvacCommand, buildQvacServeArgs(options, generated.configPath), {
-    stdio: 'inherit'
-  })
+  const launch = await prepareLocalServiceLaunch(options)
+
+  let child: ChildProcess
+  try {
+    child = spawn(options.qvacCommand, launch.args, { stdio: 'inherit' })
+  } catch (error) {
+    await launch.cleanup()
+    throw error
+  }
 
   let stopping = false
   async function stop(signal: NodeJS.Signals): Promise<void> {
     if (stopping) return
     stopping = true
     child.kill(signal)
-    await generated.cleanup()
+    await launch.cleanup()
   }
 
   process.on('SIGINT', () => void stop('SIGINT'))
@@ -224,12 +266,12 @@ async function main(): Promise<void> {
 
   child.on('error', async (err) => {
     console.error(formatSpawnError(err, options.qvacCommand))
-    await generated.cleanup()
+    await launch.cleanup()
     process.exit(1)
   })
 
   child.on('exit', async (code, signal) => {
-    await generated.cleanup()
+    await launch.cleanup()
     const exitCode = resolveLocalServiceExitCode(code, signal, stopping)
     if (exitCode === null && signal !== null) {
       process.kill(process.pid, signal)

@@ -5,6 +5,7 @@
 
 export type QvacOpencodePluginErrorCode =
   | 'INVALID_OPTION'
+  | 'INCOMPATIBLE_PROVIDER'
   | 'HOST_SPAWN_FAILED'
   | 'HOST_EXITED'
   | 'HOST_LISTEN_TIMEOUT'
@@ -28,6 +29,23 @@ export class InvalidOptionError extends QvacOpencodePluginError {
     super('INVALID_OPTION', `Invalid \`${option}\` option for @qvac/opencode-plugin: ${message}`)
     this.name = 'InvalidOptionError'
     this.option = option
+  }
+}
+
+// The host proxies on behalf of the managed serve, so it needs the serve's own
+// credential from the provider. A provider release without that surface can only
+// answer every proxied request with a 503, so startup stops here instead.
+export class IncompatibleProviderError extends QvacOpencodePluginError {
+  readonly field: string
+
+  constructor(field: string, detail: string) {
+    super(
+      'INCOMPATIBLE_PROVIDER',
+      `The installed @qvac/ai-sdk-provider is not compatible with this @qvac/opencode-plugin: managed provider ${field} ${detail}. ` +
+        'Upgrade @qvac/ai-sdk-provider to a release that exposes `ManagedQvacProvider.apiKey` (run `npm install @qvac/ai-sdk-provider@latest` in the OpenCode plugin install, or delete its lockfile entry and reinstall).'
+    )
+    this.name = 'IncompatibleProviderError'
+    this.field = field
   }
 }
 
