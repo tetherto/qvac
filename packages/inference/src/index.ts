@@ -43,6 +43,7 @@ export {
   invokePluginStream,
   diffusion,
   type DiffusionProgressTick,
+  audioGen,
   classify,
   video,
   type VideoProgressTick,

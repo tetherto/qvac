@@ -13,8 +13,8 @@ name: Mobile Integration Tests (ASR GGML)
 # row's engine + model/model_type + use_gpu: whisper tiny CPU/GPU, parakeet
 # ctc/tdt CPU+GPU and eou/sortformer CPU, per platform.
 #
-# Android pre-stages models on the Device Farm host (presigned URLs + adb push);
-# iOS resolves them from the registry on-device.
+# Mobile pre-stages models on the Device Farm host (presigned URLs + platform
+# push) before device tests.
 
 on:
   workflow_call:
@@ -261,7 +261,8 @@ jobs:
       # Android mirrors the LLM mobile pattern: Device Farm's host downloads
       # the models from presigned URLs and adb-pushes them to /data/local/tmp,
       # so the phone does not rely on flaky large downloads and Metro never
-      # bundles the models into the app.
+      # bundles the models into the app. iOS uses the same generator pattern
+      # with pymobiledevice3 apps push into the app's Documents directory.
       #
       # UNCONDITIONAL for Android, matching the parakeet parent. Functional runs
       # resolve test/mobile/test-groups.json into one Whisper and one Parakeet
@@ -278,7 +279,20 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
         run: |
           set -euo pipefail
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: ${{ matrix.platform == 'iOS' }}
+        working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
+        run: |
+          set -euo pipefail
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
@@ -388,7 +402,7 @@ jobs:
           # own headroom rather than expiring at the same boundary.
           mocha-timeout-ms: '3300000'
           wdio-waitfor-timeout-ms: '600000'
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
