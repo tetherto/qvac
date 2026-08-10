@@ -13,11 +13,13 @@
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
 using qvac_lib_inference_addon_llama::ReasoningBlockCompactor;
+using qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot;
 using qvac_lib_inference_addon_llama::utils::ReasoningRollbackState;
 using qvac_lib_inference_addon_llama::utils::recurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::RecurrentReasoningBoundaryDecision;
 using qvac_lib_inference_addon_llama::utils::
     shouldCaptureRecurrentReasoningBoundary;
+using qvac_lib_inference_addon_llama::utils::shouldRollbackInterruptedReasoning;
 
 // Unit coverage for the hybrid / recurrent reasoning replay seam.
 //
@@ -34,6 +36,25 @@ using qvac_lib_inference_addon_llama::utils::
 //      `recordPreReasoningToken`) feature gates and open-span
 //      invariants,
 //   3. the success path against a seeded boundary snapshot.
+
+TEST(ReasoningSnapshotPolicy, RoutesDeepSeekV4ToFullStateSnapshots) {
+  EXPECT_TRUE(needsFullStateSnapshot(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*isDeepSeekV4=*/true));
+  EXPECT_TRUE(needsFullStateSnapshot(
+      /*isRecurrent=*/true,
+      /*isHybrid=*/false,
+      /*isDeepSeekV4=*/false));
+  EXPECT_TRUE(needsFullStateSnapshot(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/true,
+      /*isDeepSeekV4=*/false));
+  EXPECT_FALSE(needsFullStateSnapshot(
+      /*isRecurrent=*/false,
+      /*isHybrid=*/false,
+      /*isDeepSeekV4=*/false));
+}
 
 TEST(ReasoningSnapshotPolicy, CapturesOnlyForForcedOpenRecurrentReasoning) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
@@ -118,6 +139,55 @@ TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
           /*thinkingForcedOpen=*/true,
           /*closeMarkerSingleToken=*/false),
       RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose);
+}
+
+TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {
+  // Every terminal stop reason (EOG, antiprompt, n_predict, and sequence
+  // limit) must restore a checkpoint-backed context rather than attempting
+  // to compact an unclosed span.
+  EXPECT_TRUE(shouldRollbackInterruptedReasoning(
+      GenerationStopReason::Eos,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+  EXPECT_TRUE(shouldRollbackInterruptedReasoning(
+      GenerationStopReason::Antiprompt,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+}
+
+TEST(ReasoningSnapshotPolicy, KeepsCompletedOrNonTerminalReasoning) {
+  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
+      GenerationStopReason::None,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
+      GenerationStopReason::Eos,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/false,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/false));
+  EXPECT_FALSE(shouldRollbackInterruptedReasoning(
+      GenerationStopReason::Eos,
+      /*needsRecurrentSnapshot=*/true,
+      /*removeThinkingFromContext=*/true,
+      /*reasoningEnabled=*/true,
+      /*insideReasoning=*/true,
+      /*hasOpenSpan=*/true,
+      /*hasCapturedCloseSpan=*/true));
 }
 
 TEST(ReasoningRollbackStateAppend, AppendsRegardlessOfCaptureFlag) {
@@ -271,6 +341,11 @@ struct CompactorFixture {
 };
 
 } // namespace
+
+TEST(ReasoningBlockCompactor, DefaultsRemoveThinkingOff) {
+  CompactorFixture fx;
+  EXPECT_FALSE(fx.compactor.removeThinkingFromContext());
+}
 
 TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenRemoveThinkingOff) {
   CompactorFixture fx;

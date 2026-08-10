@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.19.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0` (b10069 rebase; no
+  API change for this package).
+
+### Pull Requests
+
+- [#3621](https://github.com/tetherto/qvac/pull/3621) - Sync all addons with
+  fabric v10069.0.0
+
+## [0.18.0] - 2026-08-06
+
+### Fixed
+
+- The native binding now treats the shared runtime's optional job id return from
+  `runJob()` as the acceptance signal, fixing the `qvac-lib-inference-addon-cpp`
+  1.3.3 build failure.
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
 ## [0.17.0] - 2026-08-03
 
 ### Added

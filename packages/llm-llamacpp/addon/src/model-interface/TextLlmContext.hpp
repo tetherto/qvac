@@ -88,6 +88,8 @@ public:
    */
   void stop() override;
 
+  void resetStopFlag() override;
+
   /**
    * The get context method. It returns the context.
    *
@@ -290,7 +292,7 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
   void configureReasoningTags(
@@ -395,21 +397,19 @@ private:
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
 
-  // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-on (opt-out via `generationParams` with
-  // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
-  bool removeThinkingFromContext_ = true;
+  // Per-request toggle for post-generation thinking-block KV compaction.
+  // Default-off, except Qwen3-family models opt in during initialization;
+  // `generationParams` can always override it.
+  bool removeThinkingFromContext_ = false;
 
-  // True when this context's model is recurrent or hybrid
+  // True when this context's model is recurrent, hybrid, or DeepSeek V4.
   // (`llama_model_is_recurrent || llama_model_is_hybrid`) — Mamba /
   // RWKV pure-recurrent and hybrid SSM + attention families (Qwen3.5,
   // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
   // For these we use the snapshot + replay path: snapshot the full
-  // sequence state at end-of-prefill, restore at end-of-generation,
+  // DeepSeek V4 has the same checkpoint requirement despite not reporting
+  // either predicate. We snapshot the full sequence state at end-of-prefill,
+  // restore at end-of-generation,
   // then batched-replay the captured post-reasoning tokens.
   // Pure-attention models keep the existing
   // `seq_rm + seq_add` path untouched.

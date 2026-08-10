@@ -317,14 +317,45 @@ async function setupMultimodalBatchModel(t, configOverrides = {}) {
   return model
 }
 
+// Replays chunks already delivered (QvacResponse.output) before subscribing,
+// like firstChunk below: onUpdate never replays, so a collector attached
+// after other awaits (a cancelled peer, the cancel promise) would silently
+// miss everything a fast job streamed in the meantime.
 async function collectText(response) {
-  const chunks = []
+  const chunks = [...response.output]
   await response
     .onUpdate((chunk) => {
       chunks.push(chunk)
     })
     .await()
   return chunks.join('')
+}
+
+// Resolves with the first streamed chunk of a response — the deterministic
+// "this job is decoding in a slot" signal the targeted-cancel tests key on
+// (no fixed sleeps). Replays chunks already delivered (QvacResponse.output)
+// so a listener attached a tick late can never hang.
+function firstChunk(response) {
+  if (response.output.length > 0) return Promise.resolve(response.output[0])
+  return new Promise((resolve) => response.once('output', resolve))
+}
+
+// Resolves once every id in `ids` has streamed at least one chunk on a batch
+// response (batch chunks are `{ id, chunk }`). Replays already-delivered
+// chunks like firstChunk does.
+function waitForChunkFromEach(response, ids) {
+  return new Promise((resolve) => {
+    const pending = new Set(ids)
+    const onChunk = ({ id }) => {
+      pending.delete(id)
+      if (pending.size === 0) {
+        response.off('output', onChunk)
+        resolve()
+      }
+    }
+    response.on('output', onChunk)
+    for (const delivered of response.output) onChunk(delivered)
+  })
 }
 
 function logStreamingProgress(response, tag) {
@@ -795,5 +826,429 @@ test(
       toNumber(batchResponse.stats.avgConcurrentSeq) > 1.5,
       `avgConcurrentSeq (${toNumber(batchResponse.stats.avgConcurrentSeq)}) > 1.5 confirms concurrent scheduling across slot types`
     )
+  }
+)
+
+// New feature: independent concurrent run(Message[]) calls (not a bundled
+// batch) admitted through the MultiJobScheduler when parallel >= 2. Each call
+// gets its own QvacResponse fed only its own tokens; admission is gated by the
+// scheduler's activeJobs() count (no JS-side counter). Proves no cross-talk and
+// that the jobs decode together (avgConcurrentSeq > 1).
+test(
+  'continuous batching: independent concurrent run() calls stay isolated and decode in parallel',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const cases = ['capital-france', 'sky-color', 'bee-product', 'frozen-water'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+
+    // Fire every run() before awaiting any, so all jobs are in flight at once.
+    const responses = await Promise.all(
+      cases.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
+    )
+    const texts = await Promise.all(responses.map(collectText))
+
+    for (let idx = 0; idx < cases.length; idx++) {
+      const item = cases[idx]
+      console.log(`[concurrent-run result] ${item.id}: ${texts[idx].trim()}`)
+      t.comment(`${item.id}: ${texts[idx].trim()}`)
+      t.ok(
+        containsExpectedWord(texts[idx], item.expected),
+        `${item.id} received its own output [${item.expected.join(', ')}] — no cross-talk`
+      )
+    }
+
+    const maxConcurrentSeq = Math.max(
+      0,
+      ...responses.map((r) => toNumber(r?.stats?.avgConcurrentSeq))
+    )
+    t.comment(`max avgConcurrentSeq across responses: ${maxConcurrentSeq}`)
+    t.ok(
+      maxConcurrentSeq > 1,
+      `avgConcurrentSeq (${maxConcurrentSeq}) > 1 confirms multi-job decode concurrency`
+    )
+
+    // Per-job stats: each response's TTFT / TPS / generatedTokens /
+    // promptTokens are that job's OWN observed figures (same key names,
+    // overriding the aggregate on its tagged jobEnded). The own-scale proof
+    // lives in the dedicated per-job stats test below; here just check every
+    // job reports its figures.
+    for (let idx = 0; idx < cases.length; idx++) {
+      const stats = responses[idx].stats
+      const generated = toNumber(stats.generatedTokens)
+      t.comment(
+        `${cases[idx].id} per-job stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${generated} promptTokens=${toNumber(stats.promptTokens)}`
+      )
+      t.ok(generated > 0, `${cases[idx].id} reports its own generatedTokens`)
+      t.ok(toNumber(stats.TTFT) > 0, `${cases[idx].id} reports its own time to first token`)
+      t.ok(toNumber(stats.promptTokens) > 0, `${cases[idx].id} reports its own promptTokens`)
+      t.ok(toNumber(stats.TPS) >= 0, `${cases[idx].id} reports an observed TPS`)
+    }
+  }
+)
+
+// model.cancel() (no id) is snapshot-based: the binding captures the live job
+// ids synchronously at the moment of the call and the deferred native
+// cancellation targets only that snapshot. A run() admitted right after the
+// cancel call — while that cancellation is still in flight — must survive and
+// produce its own full output.
+test(
+  'continuous batching: cancel() only stops jobs live at call time; a later run() survives',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const doomed = CASES.find((item) => item.id === 'story-otter')
+    const doomedResponse = await model.run(buildPrompt(doomed), {
+      generationParams: { predict: 512 }
+    })
+
+    // Not awaited yet: the native call runs synchronously up to the snapshot,
+    // so the admission below can only land after it.
+    const cancelPromise = model.cancel()
+
+    const survivor = CASES.find((item) => item.id === 'capital-france')
+    const survivorResponse = await model.run(buildPrompt(survivor), runOptionsForCase(survivor))
+
+    // The doomed job settles either as a cancel error or as a truncated
+    // normal completion, depending on where the cancel lands.
+    const doomedText = await collectText(doomedResponse).catch((err) => {
+      if (!/cancel|aborted|stopp?ed/i.test(err?.message || '')) throw err
+      return ''
+    })
+    await cancelPromise
+
+    const survivorText = await collectText(survivorResponse)
+    t.comment(`survivor output: ${survivorText.trim()}`)
+    t.comment(`doomed output (cut short by cancel): ${doomedText.trim()}`)
+    t.ok(
+      containsExpectedWord(survivorText, survivor.expected),
+      'a run() started after cancel() was requested must complete with its own output'
+    )
+  }
+)
+
+// Per-job stats reflect each job's OWN scale. A long story job (predict 96)
+// and short one-word jobs run together: the short jobs must report their own
+// tiny token counts. Under the old whole-model aggregate every jobEnded would
+// carry the epoch total (story included), pushing the short jobs' figures far
+// above 16 — this is the assertion that flips red without per-job override.
+test(
+  'continuous batching: per-job stats report each job own scale, not the epoch total',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const story = CASES.find((item) => item.id === 'story-otter')
+    const shorts = ['capital-france', 'sky-color'].map((id) => CASES.find((item) => item.id === id))
+
+    // The short jobs get a HARD 8-token predict cap, so their own counts can
+    // never exceed 8 no matter how the model behaves — deterministic
+    // discriminator, unlike relying on an early EOG.
+    const [storyResponse, ...shortResponses] = await Promise.all([
+      model.run(buildPrompt(story), runOptionsForCase(story)),
+      ...shorts.map((item) => model.run(buildPrompt(item), { generationParams: { predict: 8 } }))
+    ])
+    await Promise.all([storyResponse, ...shortResponses].map(collectText))
+
+    const storyGenerated = toNumber(storyResponse.stats.generatedTokens)
+    t.comment(`story generatedTokens: ${storyGenerated}`)
+    t.ok(storyGenerated > 20, `story job generated a long output (${storyGenerated})`)
+
+    for (let idx = 0; idx < shorts.length; idx++) {
+      const generated = toNumber(shortResponses[idx].stats.generatedTokens)
+      t.comment(`${shorts[idx].id} generatedTokens: ${generated}`)
+      t.ok(generated > 0, `${shorts[idx].id} reports its own tokens`)
+      t.ok(
+        generated <= 8 && generated < storyGenerated,
+        `${shorts[idx].id} generatedTokens (${generated}) stays under its own 8-token cap — the epoch total (story included) would exceed it`
+      )
+    }
+  }
+)
+
+// Variant parallel = 1 (no continuous batching) is covered by the general
+// single-prompt suites, not here: the run falls back to the single-prompt
+// path, where the model-level snapshot already IS the request's own figures
+// (nothing overridden, avgConcurrentSeq exactly 1, no per-job stats entry).
+
+// Variant: multiple async batched runs, micro-batch (2) < parallel (4). Each
+// run(batch) is one tagged group: outputs stay isolated per group, and each
+// group's stats are ITS OWN aggregation (avg TTFT/TPS over its prompts,
+// summed token counts) — never the other group's figures. Model-level keys
+// (avgConcurrentSeq) still span the shared backend.
+test(
+  'continuous batching: concurrent batched runs keep isolated outputs and per-group stats',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    // Group 0 is two hard-capped short prompts (predict 8 each, so its group
+    // sum can never pass 16); group 1 carries a long story job — the groups'
+    // token counts diverge by construction, the discriminator below.
+    const groupCases = [
+      ['capital-france', 'sky-color'],
+      ['story-otter', 'frozen-water']
+    ].map((ids) => ids.map((id) => CASES.find((item) => item.id === id)))
+
+    const toBatchInput = (items) =>
+      items.map((item) => ({
+        id: item.id,
+        prompt: buildPrompt(item),
+        runOptions: item.story ? runOptionsForCase(item) : { generationParams: { predict: 8 } }
+      }))
+
+    // Fire both batch runs before awaiting either, so the groups overlap.
+    const responses = await Promise.all(groupCases.map((items) => model.run(toBatchInput(items))))
+    const results = await Promise.all(responses.map((r) => r.await()))
+
+    for (let g = 0; g < groupCases.length; g++) {
+      const items = groupCases[g]
+      t.alike(
+        responses[g].ids,
+        items.map((i) => i.id),
+        `group ${g} reports its own ids`
+      )
+      const byId = new Map(results[g].map((r) => [r.id, r.output]))
+      for (const item of items) {
+        const output = byId.get(item.id) || ''
+        t.comment(`group ${g} ${item.id}: ${output.trim()}`)
+        t.ok(
+          containsExpectedWord(output, item.expected),
+          `group ${g} ${item.id} got its own answer`
+        )
+      }
+
+      const stats = responses[g].stats
+      t.comment(
+        `group ${g} stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${toNumber(stats.generatedTokens)} promptTokens=${toNumber(stats.promptTokens)} avgConcurrentSeq=${toNumber(stats.avgConcurrentSeq)}`
+      )
+      t.ok(toNumber(stats.generatedTokens) > 0, `group ${g} reports its own generatedTokens`)
+      t.ok(toNumber(stats.TTFT) > 0, `group ${g} reports an averaged time to first token`)
+      t.ok(toNumber(stats.promptTokens) > 0, `group ${g} reports its own promptTokens`)
+    }
+
+    // Own-scale discriminator: group 0 (two one-word answers) must stay tiny,
+    // group 1 (story job) must dwarf it. Under the old epoch-global snapshot
+    // both groups would report the same total (story included) and group 0
+    // would blow past 16.
+    const shortGroupGenerated = toNumber(responses[0].stats.generatedTokens)
+    const storyGroupGenerated = toNumber(responses[1].stats.generatedTokens)
+    t.ok(
+      shortGroupGenerated < 16 && shortGroupGenerated < storyGroupGenerated,
+      `group 0 generatedTokens (${shortGroupGenerated}) stays at its own scale vs story group (${storyGroupGenerated}) — groups never read each other's figures`
+    )
+    t.ok(storyGroupGenerated > 20, `story group generated a long output (${storyGroupGenerated})`)
+
+    const maxConcurrentSeq = Math.max(
+      0,
+      ...responses.map((r) => toNumber(r?.stats?.avgConcurrentSeq))
+    )
+    t.comment(`max avgConcurrentSeq across groups: ${maxConcurrentSeq}`)
+    t.ok(
+      maxConcurrentSeq > 1,
+      `avgConcurrentSeq (${maxConcurrentSeq}) > 1 confirms the groups decoded together`
+    )
+  }
+)
+
+// Variant: one batched run of exactly `parallel` prompts (full width). Same
+// engine path as the legacy bundled batch; the group IS the whole epoch, so
+// its per-group stats are also the aggregate figures.
+test(
+  'continuous batching: full-width batch reports group stats spanning the whole epoch',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const items = ['capital-france', 'sky-color', 'bee-product', 'frozen-water'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+    const response = await model.run(
+      items.map((item) => ({
+        id: item.id,
+        prompt: buildPrompt(item),
+        runOptions: runOptionsForCase(item)
+      }))
+    )
+    const results = await response.await()
+
+    const byId = new Map(results.map((r) => [r.id, r.output]))
+    for (const item of items) {
+      const output = byId.get(item.id) || ''
+      t.ok(containsExpectedWord(output, item.expected), `${item.id} answered correctly`)
+    }
+
+    const stats = response.stats
+    const generated = toNumber(stats.generatedTokens)
+    t.comment(
+      `full-width stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${generated} avgConcurrentSeq=${toNumber(stats.avgConcurrentSeq)}`
+    )
+    t.ok(generated > 0, 'group generatedTokens reported')
+    // 4 one-word prompts, each capped at predict 64. A full-width group IS the
+    // whole epoch, so its figures also equal the aggregate — no discrimination
+    // possible or needed here.
+    t.ok(
+      generated <= 4 * 64,
+      `group generatedTokens (${generated}) stays within its own 4 prompts' budget`
+    )
+    t.ok(toNumber(stats.TTFT) > 0, 'group TTFT reported')
+    // The four answers finish at very different lengths, so once the short ones
+    // stop the remaining decode steps run near-solo and drag the epoch mean
+    // toward 1. Anything above 1 still proves fused multi-sequence decode — a
+    // serial run reports exactly 1.
+    t.ok(
+      toNumber(stats.avgConcurrentSeq) > 1.05,
+      `avgConcurrentSeq (${toNumber(stats.avgConcurrentSeq)}) confirms full-width parallel decode`
+    )
+  }
+)
+
+// The headline multi-job behavior, end to end: response.cancel() targets only
+// its own native job. Three independent run() calls decode together; the
+// long story job is cancelled through the public API once every job has
+// streamed its first chunk (so all three are provably in slots, not queued —
+// the documented graceful-cancel case). Per docs/continuous-batching.md
+// "Cancellation semantics", the in-slot cancelled job resolves normally with
+// whatever it generated so far; the survivors must finish with their own
+// complete answers and per-job stats.
+test(
+  'continuous batching: response.cancel() stops only its own run(); concurrent runs finish',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const doomed = CASES.find((item) => item.id === 'story-otter')
+    const survivors = ['capital-france', 'bee-product'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+
+    // Fire every run() before awaiting any, so all three jobs are admitted
+    // together. The doomed job gets a 512-token budget so it is still
+    // decoding whenever the cancel lands.
+    const [doomedResponse, ...survivorResponses] = await Promise.all([
+      model.run(buildPrompt(doomed), { generationParams: { predict: 512 } }),
+      ...survivors.map((item) => model.run(buildPrompt(item), runOptionsForCase(item)))
+    ])
+
+    // Collectors attach before yielding to the event loop, so no chunk is lost.
+    const doomedTextPromise = collectText(doomedResponse)
+    const survivorTextPromises = survivorResponses.map(collectText)
+
+    // Deterministic cancel point: every job has produced its first token.
+    await Promise.all([doomedResponse, ...survivorResponses].map(firstChunk))
+    await doomedResponse.cancel()
+
+    // In-slot cancel is graceful: the response resolves normally (no
+    // rejection) and keeps the pre-cancel output — it streamed at least one
+    // chunk by construction.
+    const doomedText = await doomedTextPromise
+    t.comment(`doomed output (cut short by cancel): ${doomedText.trim()}`)
+    t.ok(doomedText.length > 0, 'cancelled run() resolves with the output generated so far')
+    t.ok(
+      toNumber(doomedResponse.stats.generatedTokens) > 0,
+      'cancelled run() still reports its own terminal stats'
+    )
+
+    const survivorTexts = await Promise.all(survivorTextPromises)
+    for (let idx = 0; idx < survivors.length; idx++) {
+      const item = survivors[idx]
+      console.log(`[targeted-cancel survivor] ${item.id}: ${survivorTexts[idx].trim()}`)
+      t.comment(`${item.id}: ${survivorTexts[idx].trim()}`)
+      t.ok(survivorTexts[idx].trim().length > 0, `${item.id} produced non-empty output`)
+      t.ok(
+        containsExpectedWord(survivorTexts[idx], item.expected),
+        `${item.id} completed with its own answer despite the peer cancel`
+      )
+
+      const stats = survivorResponses[idx].stats
+      t.comment(
+        `${item.id} per-job stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${toNumber(stats.generatedTokens)} promptTokens=${toNumber(stats.promptTokens)}`
+      )
+      t.ok(toNumber(stats.generatedTokens) > 0, `${item.id} reports its own generatedTokens`)
+      t.ok(toNumber(stats.TTFT) > 0, `${item.id} reports its own time to first token`)
+      t.ok(toNumber(stats.promptTokens) > 0, `${item.id} reports its own promptTokens`)
+    }
+  }
+)
+
+// Group-scope variant of the targeted cancel: cancelling a batch response
+// cancels only that group's native job; a plain run() sharing the scheduler
+// keeps decoding to completion. With 2 batch prompts + 1 single job under
+// parallel 4 every prompt is admitted straight into a slot, and waiting for a
+// first chunk from each proves it — so per README "Cancelling a batch" the
+// cancelled group must RESOLVE normally (in-flight prompts keep their partial
+// output; only queued never-admitted prompts would reject with Cancelled).
+test(
+  'continuous batching: batch group cancel leaves a concurrent plain run() untouched',
+  { timeout: 900_000, skip: skipHeavyPlatform },
+  async (t) => {
+    const model = await setupModel(t, { parallel: '4' })
+
+    const batchItems = ['story-lantern', 'story-canyon'].map((id) =>
+      CASES.find((item) => item.id === id)
+    )
+    const survivor = CASES.find((item) => item.id === 'frozen-water')
+
+    // Fire the batch and the single run before awaiting either, so the group
+    // and the plain job are in flight together. The story prompts get a
+    // 512-token budget so the group is still decoding when cancelled.
+    const [batchResponse, survivorResponse] = await Promise.all([
+      model.run(
+        batchItems.map((item) => ({
+          id: item.id,
+          prompt: buildPrompt(item),
+          runOptions: { generationParams: { predict: 512 } }
+        }))
+      ),
+      model.run(buildPrompt(survivor), runOptionsForCase(survivor))
+    ])
+
+    const survivorTextPromise = collectText(survivorResponse)
+
+    // Deterministic cancel point: both group prompts and the plain job have
+    // each produced their first token.
+    await Promise.all([
+      waitForChunkFromEach(batchResponse, batchResponse.ids),
+      firstChunk(survivorResponse)
+    ])
+    await batchResponse.cancel()
+
+    // Documented settlement: no queued prompts in the group, so the batch
+    // call resolves with [{ id, output }] carrying the pre-cancel output.
+    const batchResults = await batchResponse.await()
+    t.alike(
+      batchResults.map((result) => result.id),
+      batchItems.map((item) => item.id),
+      'cancelled group still reports its own ids in order'
+    )
+    for (const result of batchResults) {
+      const output = String(result.output || '')
+      t.comment(`cancelled batch ${result.id}: ${output.trim()}`)
+      t.ok(output.length > 0, `${result.id} keeps the output generated before the cancel`)
+    }
+    t.ok(
+      toNumber(batchResponse.stats.generatedTokens) > 0,
+      'cancelled group still reports its own per-group stats'
+    )
+
+    const survivorText = await survivorTextPromise
+    console.log(`[group-cancel survivor] ${survivor.id}: ${survivorText.trim()}`)
+    t.comment(`${survivor.id}: ${survivorText.trim()}`)
+    t.ok(survivorText.trim().length > 0, 'plain run() produced non-empty output')
+    t.ok(
+      containsExpectedWord(survivorText, survivor.expected),
+      'plain run() completed with its own answer despite the group cancel'
+    )
+
+    const stats = survivorResponse.stats
+    t.comment(
+      `${survivor.id} per-job stats: TTFT=${toNumber(stats.TTFT)} TPS=${toNumber(stats.TPS)} generatedTokens=${toNumber(stats.generatedTokens)} promptTokens=${toNumber(stats.promptTokens)}`
+    )
+    t.ok(toNumber(stats.generatedTokens) > 0, 'plain run() reports its own generatedTokens')
+    t.ok(toNumber(stats.TTFT) > 0, 'plain run() reports its own time to first token')
+    t.ok(toNumber(stats.promptTokens) > 0, 'plain run() reports its own promptTokens')
   }
 )

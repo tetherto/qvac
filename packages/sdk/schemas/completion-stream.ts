@@ -16,6 +16,8 @@ export { completionStatsSchema, type CompletionStats } from './completion-event'
  * - `"harmony"`:  `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo"}<|call|>`
  * - `"qwen35"`:   `<tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>`
  * - `"gemma4"`:   `<|tool_call>call:NAME{key:<|"|>val<|"|>,...}<tool_call|>`
+ * - `"dsml"`:     `<｜DSML｜tool_calls><｜DSML｜invoke name="NAME"><｜DSML｜parameter name="KEY" string="true">VALUE</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+ *                 (DeepSeek Markup Language, emitted by DeepSeek V3.2 / V4)
  */
 export const toolDialectSchema = z.enum([
   'hermes',
@@ -23,7 +25,8 @@ export const toolDialectSchema = z.enum([
   'json',
   'harmony',
   'qwen35',
-  'gemma4'
+  'gemma4',
+  'dsml'
 ])
 
 export const attachmentSchema = z.object({
@@ -71,7 +74,7 @@ export const generationParamsSchema = z
       .boolean()
       .optional()
       .describe(
-        'When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported.'
+        'When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.'
       )
   })
   .strict()

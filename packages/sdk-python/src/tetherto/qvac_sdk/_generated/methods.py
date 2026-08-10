@@ -15,6 +15,8 @@ from collections.abc import AsyncIterable, AsyncIterator
 
 from .._transport import Transport
 from . import (
+    AudioGenStreamRequest,
+    AudioGenStreamResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -95,6 +97,14 @@ from . import (
     VideoStreamRequest,
     VideoStreamResponse,
 )
+
+
+async def audio_gen_stream(
+    transport: Transport, params: AudioGenStreamRequest
+) -> AsyncIterator[AudioGenStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioGenStreamResponse.model_validate(chunk)
 
 
 async def batch_completion_stream(
@@ -433,6 +443,7 @@ async def video_stream(
 
 
 __all__ = [
+    "audio_gen_stream",
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",

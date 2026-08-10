@@ -66,7 +66,7 @@ function urlHost(url) {
   }
 }
 
-async function downloadFileOnce(url, dest, opts = {}) {
+function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let settled = false
@@ -416,11 +416,29 @@ function resetDownloadCount() {
 // 11+, so they cannot be used for host pre-staging.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
+// iOS Device Farm pre-staging: the device's network to huggingface.co is just as
+// unreliable as Android's, but the macOS host has solid network. The pre_test
+// phase downloads each model on the host and pushes it into the app's data
+// container via `pymobiledevice3 apps push <bundle> <file> Documents/<name>`
+// (host->device AFC/house_arrest; works because the test app is dev-signed with
+// get-task-allow=true). On-device that Documents dir is exposed as
+// global.testDir — the same directory the WDIO before-hook drops testFilter.txt
+// into (see test/mobile/integration-runtime.cjs), so the app can always read it.
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
 function prestagedModelDir(modelName) {
-  if (os.platform() !== 'android') return null
+  const platform = os.platform()
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return null
+
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+    const p = path.join(stagedDir, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
   } catch (_) {}
   return null
 }
@@ -871,8 +889,11 @@ function parsePauseCheckpointMetadata(pauseCheckpointPath) {
     }
   }
   return {
-    epoch: meta.epoch != null ? parseInt(meta.epoch, 10) : undefined,
-    global_step: meta.global_step != null ? parseInt(meta.global_step, 10) : undefined
+    epoch: meta.epoch !== null && meta.epoch !== undefined ? parseInt(meta.epoch, 10) : undefined,
+    global_step:
+      meta.global_step !== null && meta.global_step !== undefined
+        ? parseInt(meta.global_step, 10)
+        : undefined
   }
 }
 
@@ -920,7 +941,7 @@ async function handleEarlyCompletion(
   return result
 }
 
-async function verifyFinalStatus(t, model, result = null) {
+function verifyFinalStatus(t, model, result = null) {
   t.ok(result, 'Result must be provided')
 }
 
@@ -930,7 +951,7 @@ async function verifyFinalStatus(t, model, result = null) {
 // early-return on it as an earlier version did (which hid regressions).
 function assertFiniteMetricIfPresent(t, stats, key, id) {
   const v = stats?.[key]
-  if (v == null) return
+  if (v === null || v === undefined) return
   t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
   t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not NaN/Inf), got: ${v}`)
 }

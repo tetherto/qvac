@@ -6,7 +6,7 @@
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.4"
+      "version>=": "1.3.3"
     },
     {
       "name": "qvac-lint-cpp",
@@ -16,7 +16,7 @@
     "ssplit",
     {
       "name": "qvac-fabric",
-      "version>=": "9840.1.1",
+      "version>=": "10069.0.0",
       "default-features": false,
       "features": [
         "gpu-backends"

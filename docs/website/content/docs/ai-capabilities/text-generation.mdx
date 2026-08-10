@@ -64,6 +64,14 @@ The canonical way to consume `completion()` is the `events` async iterable plus 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/completion_events.py title="completion_events.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="info">
@@ -87,6 +95,31 @@ The following script shows how to provide tool definitions to `completion()`, co
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tools/llamacpp-native-tools.ts title="completion-tool-call.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/completion_tools.py title="completion_tools.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Worker-orchestrated tool loop
+
+Python also exposes an advanced worker-orchestrated path, where the worker runs
+the whole multi-turn tool loop and calls back into your local handlers. Use this
+only when you need the worker to own the tool loop rather than managing each
+turn in application code:
+
+<Tabs>
+<Tab value="python" label="Python" default>
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/completion_orchestrate.py title="completion_orchestrate.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -156,5 +189,5 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
 </Callout>

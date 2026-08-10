@@ -2,7 +2,7 @@ import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 function createFinetuneTest(
   testId: string,
-  params: Record<string, unknown>,
+  params: Record<string, unknown> & { resourceKey?: string },
   estimatedDurationMs: number,
   suites?: string[]
 ): TestDefinition {
@@ -13,7 +13,7 @@ function createFinetuneTest(
     ...(suites && { suites }),
     metadata: {
       category: 'finetune',
-      dependency: 'finetune-llm',
+      dependency: params.resourceKey ?? 'finetune-llm',
       estimatedDurationMs
     }
   }
@@ -68,11 +68,22 @@ export const finetuneProgressLossSchema = createFinetuneTest(
   60000
 )
 
+export const finetuneQwen35Arch = createFinetuneTest(
+  'finetune-qwen35-arch',
+  {
+    numberOfEpochs: 1,
+    resourceKey: 'finetune-llm-qwen35',
+    loraModules: 'ffn_gate,ffn_down'
+  },
+  90000
+)
+
 export const finetuneTests = [
   finetuneStartComplete,
   finetunePauseResume,
   finetuneProgressStreaming,
   finetuneErrorCases,
   finetuneProgressZeroDrop,
-  finetuneProgressLossSchema
+  finetuneProgressLossSchema,
+  finetuneQwen35Arch
 ]

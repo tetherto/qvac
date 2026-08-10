@@ -77,6 +77,17 @@ For model artifacts available as constants, see [SDK — Models](/introduction#m
 
 The `source` field on `endOfTurn` lets consumers narrow the union: whisper events always carry a numeric `silenceDurationMs`; parakeet events never do.
 
+After the iterator completes, await `session.stats` to read terminal engine statistics. The promise resolves to `undefined` when the engine does not report stats.
+
+```ts
+for await (const event of session) {
+  // Handle text, segment, VAD, or end-of-turn events.
+}
+
+const stats = await session.stats;
+console.log(stats?.audioDuration, stats?.realTimeFactor);
+```
+
 <Callout type="info">
 **Wire compatibility:** post-0.6 servers emit `source` on every `endOfTurn` frame. SDK parsers still accept the legacy whisper wire shape `{ silenceDurationMs }` (no `source`) and normalize it to `source: "whisper"`. Upgrade client and server together when using parakeet `source: "parakeet"` events — older servers never emit that branch.
 </Callout>
@@ -132,6 +143,14 @@ The following script shows an example of `qvac-ext-lib-whisper.cpp` transcriptio
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/asr/whispercpp-prompt.ts title="whispercpp-prompt.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription.py title="transcription.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -204,5 +223,5 @@ The following script shows an example of speaker diarization using the Parakeet 
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
 </Callout>
