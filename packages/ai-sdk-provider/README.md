@@ -218,7 +218,20 @@ interface QvacManagedModel {
 }
 ```
 
-The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics. Its read-only `provider.apiKey` getter exposes the current managed key for trusted adapters that must connect directly to the managed serve; treat it as secret material and read it fresh after recovery.
+The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics.
+
+Its read-only `provider.apiKey` getter returns the key of the serve currently in use, for trusted in-process adapters that must talk to the managed serve outside the provider's own `fetch`:
+
+```ts
+await using qvac = await createQvac({ mode: 'managed', models: ['QWEN3_8B_INST_Q4_K_M'] })
+
+// Read it fresh per request: crash recovery respawns the serve with a new key.
+const res = await fetch(`${qvac.baseURL}/models`, {
+  headers: { authorization: `Bearer ${qvac.apiKey}` }
+})
+```
+
+Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
 
 ### Per-model configuration
 

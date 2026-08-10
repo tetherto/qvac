@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import { resolve } from 'node:path'
+import type { Readable } from 'node:stream'
 import { test } from 'node:test'
 
 interface ListeningLine {
-  readonly apiKey: string
+  readonly proxyToken: string
   readonly baseURL: string
   readonly modelId: string
   readonly modelName: string
@@ -20,6 +21,9 @@ interface ReadyLine {
 
 const integration = process.env['QVAC_INTEGRATION_TEST'] === '1'
 const timeoutMs = Number(process.env['QVAC_INTEGRATION_TIMEOUT_MS'] ?? 1_200_000)
+// The handshake must land as soon as the proxy listens, so a cold model
+// download stays first-request work instead of plugin-startup work.
+const handshakeBudgetMs = 10_000
 
 function parseJsonPayload<T>(line: string, marker: string): T {
   const raw = line.slice(marker.length).trim()
@@ -27,7 +31,8 @@ function parseJsonPayload<T>(line: string, marker: string): T {
 }
 
 function waitForJsonLine<T>(
-  child: ChildProcessWithoutNullStreams,
+  child: ChildProcess,
+  stream: Readable,
   marker: string,
   timeout: number
 ): Promise<T> {
@@ -40,7 +45,7 @@ function waitForJsonLine<T>(
 
     function cleanup(): void {
       clearTimeout(timer)
-      child.stdout.off('data', onData)
+      stream.off('data', onData)
       child.off('exit', onExit)
     }
 
@@ -69,7 +74,7 @@ function waitForJsonLine<T>(
       }
     }
 
-    child.stdout.on('data', onData)
+    stream.on('data', onData)
     child.on('exit', onExit)
   })
 }
@@ -82,7 +87,7 @@ async function requestJson(
   return { status: res.status, body: (await res.json()) as unknown }
 }
 
-async function stopHost(child: ChildProcessWithoutNullStreams): Promise<void> {
+async function stopHost(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   child.kill('SIGTERM')
   let timeout: NodeJS.Timeout | undefined
@@ -118,29 +123,53 @@ test(
         QVAC_READY_TIMEOUT_MS: String(timeoutMs),
         QVAC_UPSTREAM_TIMEOUT_MS: process.env['QVAC_UPSTREAM_TIMEOUT_MS'] ?? '300000'
       },
-      stdio: ['pipe', 'pipe', 'pipe']
+      // fd 3 is the dedicated handshake channel; stdout carries only logs.
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe']
     })
-    child.stdin.end()
-    const stderr: Buffer[] = []
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+    const stdin = child.stdin
+    const stdout = child.stdout
+    const stderr = child.stderr
+    const handshakeStream = child.stdio[3] as Readable | null
+    assert.ok(stdin !== null && stdout !== null && stderr !== null && handshakeStream !== null)
+    stdin.end()
+    const logs: Buffer[] = []
+    stderr.on('data', (chunk: Buffer) => logs.push(chunk))
+    stdout.on('data', (chunk: Buffer) => logs.push(chunk))
 
     try {
-      const listeningPromise = waitForJsonLine<ListeningLine>(child, 'QVAC_LISTENING ', timeoutMs)
-      const readyPromise = waitForJsonLine<ReadyLine>(child, 'QVAC_READY ', timeoutMs)
-      void readyPromise.catch(() => undefined)
+      const listeningPromise = waitForJsonLine<ListeningLine>(
+        child,
+        handshakeStream,
+        'QVAC_LISTENING ',
+        handshakeBudgetMs
+      )
+      const readyPromise = waitForJsonLine<ReadyLine>(child, stdout, 'QVAC_READY ', timeoutMs)
+      let managedReady = false
+      void readyPromise.then(
+        () => {
+          managedReady = true
+        },
+        () => undefined
+      )
 
       const listening = await listeningPromise
-      assert.match(listening.apiKey, /^[A-Za-z0-9_-]{43}$/)
+      assert.equal(managedReady, false, 'handshake must not wait on managed readiness')
+      assert.match(listening.proxyToken, /^[A-Za-z0-9_-]{43}$/)
       assert.match(listening.baseURL, /^http:\/\/127\.0\.0\.1:\d+\/v1$/)
       assert.equal(typeof listening.modelId, 'string')
       assert.equal(typeof listening.modelName, 'string')
+      assert.equal('apiKey' in listening, false)
+
+      // An unauthenticated caller is rejected by the proxy itself.
+      const anonymous = await requestJson(`${listening.baseURL}/models`)
+      assert.equal(anonymous.status, 401)
 
       const ready = await readyPromise
       assert.equal(ready.baseURL, listening.baseURL)
       assert.ok(ready.servePort > 0)
       assert.ok(ready.pid > 0)
 
-      const authorization = { authorization: `Bearer ${listening.apiKey}` }
+      const authorization = { authorization: `Bearer ${listening.proxyToken}` }
       const models = await requestJson(`${listening.baseURL}/models`, { headers: authorization })
       assert.equal(models.status, 200)
 
@@ -156,9 +185,14 @@ test(
         })
       })
       assert.equal(chat.status, 200)
+
+      // Neither secret may leak onto the host's log streams.
+      const streamed = Buffer.concat(logs).toString('utf8')
+      assert.doesNotMatch(streamed, new RegExp(listening.proxyToken))
     } catch (err) {
-      const logs = Buffer.concat(stderr).toString('utf8')
-      assert.fail(`${err instanceof Error ? err.message : String(err)}\n${logs}`)
+      assert.fail(
+        `${err instanceof Error ? err.message : String(err)}\n${Buffer.concat(logs).toString('utf8')}`
+      )
     } finally {
       await stopHost(child)
     }

@@ -82,6 +82,18 @@ for await (const chunk of textStream) process.stdout.write(chunk)
 
 The spawned server is **shared and reused** across processes that request the same model set, and shuts down automatically once no consumer remains for `serveIdleTimeout` (default 5 minutes). `provider.baseURL` / `provider.port` / `provider.pid` expose the live server coordinates. Managed mode requires the optional `@qvac/cli` peer dependency.
 
+A managed server is started with a generated API key, so requests you make yourself must be authenticated. `provider.apiKey` returns the key of the server currently in use:
+
+```ts
+const res = await fetch(`${qvac.baseURL}/models`, {
+  headers: { authorization: `Bearer ${qvac.apiKey}` }
+})
+```
+
+<Callout type="warn">
+`provider.apiKey` is secret material. Read it fresh per request — crash recovery respawns the server with a new key — and never log it or pass it to a process you do not trust. The property is non-enumerable so spreads and object dumps of the provider do not carry it.
+</Callout>
+
 <Callout type="info">
 Liveness is tracked by the process that called `createQvac`, not by HTTP traffic. A tool that connects directly to `baseURL` only keeps the server warm while that resolving process stays alive.
 </Callout>

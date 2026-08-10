@@ -9,6 +9,7 @@ export type QvacOpencodePluginErrorCode =
   | 'HOST_EXITED'
   | 'HOST_LISTEN_TIMEOUT'
   | 'HOST_INVALID_HANDSHAKE'
+  | 'HOST_HANDSHAKE_CHANNEL_UNAVAILABLE'
 
 export class QvacOpencodePluginError extends Error {
   readonly code: QvacOpencodePluginErrorCode
@@ -54,8 +55,8 @@ export class HostListenTimeoutError extends QvacOpencodePluginError {
   constructor(timeoutMs: number) {
     super(
       'HOST_LISTEN_TIMEOUT',
-      `qvac serve host did not return a valid listening handshake within ${timeoutMs}ms. ` +
-        'The budget includes managed model startup; raise `readyTimeoutMs` for a slow cold download.'
+      `qvac serve host did not return a listening handshake within ${timeoutMs}ms. ` +
+        'This is the proxy startup budget, not the model download — raise `listenTimeoutMs` only if the host process itself is slow to boot.'
     )
     this.name = 'HostListenTimeoutError'
   }
@@ -69,5 +70,17 @@ export class HostInvalidHandshakeError extends QvacOpencodePluginError {
       cause === undefined ? undefined : { cause }
     )
     this.name = 'HostInvalidHandshakeError'
+  }
+}
+
+export class HostHandshakeChannelUnavailableError extends QvacOpencodePluginError {
+  constructor(fd: number, cause?: unknown) {
+    super(
+      'HOST_HANDSHAKE_CHANNEL_UNAVAILABLE',
+      `qvac serve host could not write its QVAC_LISTENING handshake to fd ${fd}. ` +
+        'The host must be spawned with a pipe on that descriptor; it never falls back to stdout, which would expose the token to log mirroring.',
+      cause === undefined ? undefined : { cause }
+    )
+    this.name = 'HostHandshakeChannelUnavailableError'
   }
 }

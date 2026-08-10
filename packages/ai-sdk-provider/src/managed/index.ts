@@ -380,8 +380,11 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
 
   // Expose the coordinates as getters over `live` so they keep reflecting the
   // real serve after a crash-recovery respawn moves it to a new port/pid.
+  // `apiKey` is secret material: hiding it from enumeration keeps it out of
+  // spreads, `Object.keys`, and inspector/serializer output, and locking the
+  // descriptor stops it being swapped for an attacker-chosen value.
   Object.defineProperties(base, {
-    apiKey: { get: () => live.apiKey, enumerable: true, configurable: true },
+    apiKey: { get: () => live.apiKey, enumerable: false, configurable: false },
     baseURL: { get: () => live.baseURL, enumerable: true, configurable: true },
     port: { get: () => live.port, enumerable: true, configurable: true },
     pid: { get: () => live.servePid, enumerable: true, configurable: true }

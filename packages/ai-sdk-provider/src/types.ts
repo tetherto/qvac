@@ -104,7 +104,9 @@ export type QvacProvider = OpenAICompatibleProvider & {
 // `await using qvac = await createQvac({ mode: 'managed', ... })`.
 export interface ManagedQvacProvider extends QvacProvider {
   // API key for the live managed serve. Treat it as secret material and read it
-  // fresh after recovery because a replacement serve receives a new key.
+  // fresh after recovery because a replacement serve receives a new key. The
+  // property is deliberately non-enumerable, so spreads and object dumps of the
+  // provider do not carry it.
   readonly apiKey: string
   // Base URL of the live serve, including the `/v1` suffix. Read it fresh after
   // recovery: if the serve crashes and is respawned on a new port, this getter

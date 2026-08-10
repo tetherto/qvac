@@ -70,6 +70,41 @@ test(
   }
 )
 
+test('managed provider keeps its serve key out of object inspection', { skip }, async () => {
+  await withFakeHome(async () => {
+    const fake = await makeFakeServe()
+    setBehavior('healthy')
+    try {
+      const provider = await createQvac({
+        mode: 'managed',
+        models: ['QWEN3_600M_INST_Q4'],
+        serveBinPath: fake.binPath,
+        serveStartTimeout: 15_000
+      })
+      const [record] = await readAllRecords()
+      assert.ok(record)
+
+      // The getter still resolves the live key for trusted callers…
+      assert.equal(provider.apiKey, record.apiKey)
+      // …but enumeration and spreading must not carry it.
+      assert.equal(Object.keys(provider).includes('apiKey'), false)
+      assert.equal('apiKey' in { ...provider }, false)
+
+      const descriptor = Object.getOwnPropertyDescriptor(provider, 'apiKey')
+      assert.ok(descriptor)
+      assert.equal(descriptor.enumerable, false)
+      assert.equal(descriptor.configurable, false)
+      assert.throws(() => Object.defineProperty(provider, 'apiKey', { value: 'leaked' }))
+
+      await provider.close()
+    } finally {
+      setBehavior(undefined)
+      await reapAllManaged()
+      await fake.cleanup()
+    }
+  })
+})
+
 test(
   'createQvac (managed) reuses a matching shared serve instead of spawning a second',
   { skip },

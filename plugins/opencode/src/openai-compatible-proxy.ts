@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import {
   createServer,
   request as httpRequest,
@@ -22,8 +23,12 @@ export interface Upstream {
 }
 
 export interface ProxyOptions {
+  // Credential the proxy demands from OpenCode. It is not the managed serve key.
+  readonly proxyToken: string
   readonly getUpstream: () => Upstream | undefined
-  readonly getApiKey?: () => string | undefined
+  // The managed serve's current key, read per request so a recovered serve is
+  // never sent a stale credential. Undefined until managed serve is ready.
+  readonly getApiKey: () => string | undefined
   readonly whenUpstream: Promise<void>
   readonly openAICompatTransforms: boolean
   readonly upstreamTimeoutMs: number
@@ -45,7 +50,7 @@ export function originOf(baseURL: string): Upstream {
 function buildForwardHeaders(
   req: IncomingMessage,
   bodyLength: number,
-  apiKey: string | undefined
+  apiKey: string
 ): Record<string, string> {
   const headers: Record<string, string> = {}
   for (const [key, value] of Object.entries(req.headers)) {
@@ -56,8 +61,17 @@ function buildForwardHeaders(
   delete headers['accept-encoding']
   delete headers['content-length']
   if (bodyLength > 0) headers['content-length'] = String(bodyLength)
-  if (apiKey !== undefined) headers['authorization'] = `Bearer ${apiKey}`
+  // The caller's proxy token never reaches serve; serve only sees its own key.
+  headers['authorization'] = `Bearer ${apiKey}`
   return headers
+}
+
+// Fixed-length secrets, so only a length mismatch is short-circuited.
+function isExpectedAuthorization(header: string | undefined, expected: string): boolean {
+  if (header === undefined) return false
+  const given = Buffer.from(header, 'utf8')
+  const want = Buffer.from(expected, 'utf8')
+  return given.length === want.length && timingSafeEqual(given, want)
 }
 
 function isInferenceRequest(req: IncomingMessage): boolean {
@@ -165,12 +179,32 @@ function writeProxyError(res: ServerResponse, statusCode: number, message: strin
   res.end(JSON.stringify({ error: { message } }))
 }
 
+// Matches `qvac serve`'s own rejection envelope so OpenCode surfaces a bad
+// credential the same way whichever hop refused it.
+function writeUnauthorized(res: ServerResponse): void {
+  if (res.headersSent) {
+    res.destroy()
+    return
+  }
+  res.writeHead(401, { 'content-type': 'application/json' })
+  res.end(
+    JSON.stringify({
+      error: {
+        message: 'Invalid or missing API key.',
+        type: 'invalid_request_error',
+        code: 'invalid_api_key'
+      }
+    })
+  )
+}
+
 async function forwardToUpstream(
   req: IncomingMessage,
   res: ServerResponse,
   body: Buffer,
   reqStart: number,
   upstream: Upstream,
+  apiKey: string,
   options: ProxyOptions
 ): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -187,7 +221,7 @@ async function forwardToUpstream(
         port: upstream.port,
         path: req.url,
         method: req.method,
-        headers: buildForwardHeaders(req, body.length, options.getApiKey?.())
+        headers: buildForwardHeaders(req, body.length, apiKey)
       },
       (proxyRes) => {
         options.logger.trace(
@@ -226,6 +260,14 @@ async function handleRequest(
   options: ProxyOptions,
   runInference: SerializedRunner
 ): Promise<void> {
+  // Authenticate before anything else, so an unauthenticated caller can neither
+  // wait on managed startup nor borrow the host's serve credential.
+  if (!isExpectedAuthorization(req.headers['authorization'], `Bearer ${options.proxyToken}`)) {
+    options.logger.trace(`401 ${req.method ?? '?'} ${req.url ?? '?'}`)
+    writeUnauthorized(res)
+    return
+  }
+
   let body = rawBody
   const contentType = req.headers['content-type'] ?? ''
   if (
@@ -247,17 +289,18 @@ async function handleRequest(
 
   await options.whenUpstream
   const upstream = options.getUpstream()
-  if (upstream === undefined) {
+  const apiKey = options.getApiKey()
+  if (upstream === undefined || apiKey === undefined) {
     writeProxyError(res, 503, 'qvac serve is not available')
     return
   }
 
   if (isInferenceRequest(req)) {
-    await runInference(() => forwardToUpstream(req, res, body, reqStart, upstream, options))
+    await runInference(() => forwardToUpstream(req, res, body, reqStart, upstream, apiKey, options))
     return
   }
 
-  await forwardToUpstream(req, res, body, reqStart, upstream, options)
+  await forwardToUpstream(req, res, body, reqStart, upstream, apiKey, options)
 }
 
 export function startOpenAICompatibleProxy(
