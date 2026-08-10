@@ -1,5 +1,49 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`.
+
+- **`split-mode: 'row'` is no longer effective on any shipped backend.** Row
+  split needs a backend exposing `ggml_backend_split_buffer_type`, and at
+  qvac-fabric v10069 only SYCL still does — CUDA dropped it and moved tensor
+  parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR` this package does not
+  expose. Vulkan, Metal and OpenCL never provided it. qvac-fabric also stopped
+  treating `row` as `layer` on those backends and now **fails the model load**
+  with `device <name> does not support split buffers`, so the addon degrades
+  `row` -> `layer` itself before loading and logs a `WARNING`. Models keep
+  loading and `row` keeps behaving like `layer` as it did on Vulkan/Metal
+  before, but the fallback is now explicit rather than implicit in qvac-fabric.
+  Callers who set `split-mode: 'row'` for real tensor parallelism no longer get
+  it. See `docs/multi-gpu.md`.
+
+## [0.41.0] - 2026-08-07
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now
+  live under `src/` and the published root JavaScript entrypoints (`index.js`,
+  `addon.js`, `batchHandler.js`, `addonLogging.js`) and their `.d.ts`
+  declarations are generated from them and committed. Runtime behaviour and the
+  CommonJS export shape are unchanged.
+- The package is exported with `export =` rather than a default export, which
+  gives CommonJS consumers a real construct signature (`import LlmLlamacpp =
+  require('@qvac/llm-llamacpp')` previously failed with TS2351). A consequence
+  is that `import LlmLlamacpp from '@qvac/llm-llamacpp'` now requires
+  `esModuleInterop` or `allowSyntheticDefaultImports`; without either,
+  TypeScript reports TS1259.
+- `addon` is a public member of the published type instead of `protected`. An
+  interface cannot express `protected`, and the property was already public at
+  runtime, so this widens what the declarations support rather than changing
+  behaviour.
+- `BatchResponse.on` accepts the inherited `EventEmitter` event map in addition
+  to the `"output"` overload. Callback types for `"output"` are unchanged, but
+  an unrecognised event name no longer fails to compile.
+- `./addonLogging` additionally exports `setLogger` and `releaseLogger` as named
+  bindings, so ESM named imports resolve. The default export is unchanged.
+
 ## [0.40.0] - 2026-08-06
 
 One model instance can now serve several requests at once. Every `run()` call is

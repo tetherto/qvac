@@ -21,6 +21,7 @@
 #include <type_traits>
 
 #include <common/common.h>
+#include <common/finetune.h>
 #include <ggml-backend.h>
 #include <ggml-opt.h>
 #include <ggml.h>

@@ -17,6 +17,7 @@
 #include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
@@ -101,8 +102,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   //      enhancer) — always the final emitted rate when set;
   //   2. 48000 when the LavaSR enhancer is active (it always emits 48 kHz);
   //   3. the engine's native rate.
-  constexpr int kLavasrEnhancedSampleRate = 48000;
-
   if (engineType == EngineType::Supertonic) {
     auto cfg = adapter.buildSupertonicConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
@@ -114,25 +113,30 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(stm);
   } else if (engineType == EngineType::Cosyvoice) {
     auto cfg = adapter.buildCosyvoiceConfig(configurationParams, env);
+    const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto cvm = make_unique<CosyvoiceModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : cvm->sampleRate(); // native 24 kHz
+    sampleRate = outSr > 0 ? outSr
+                           : (enhanced ? kLavasrEnhancedSampleRate
+                                       : cvm->sampleRate()); // native 24 kHz
     model = std::move(cvm);
   } else if (engineType == EngineType::Parler) {
     auto cfg = adapter.buildParlerConfig(configurationParams, env);
+    const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto ptm = make_unique<ParlerModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : ptm->sampleRate();
+    sampleRate =
+        outSr > 0 ? outSr
+                  : (enhanced ? kLavasrEnhancedSampleRate : ptm->sampleRate());
     model = std::move(ptm);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
-    sampleRate =
-        outSr > 0
-            ? outSr
-            : (enhanced ? kLavasrEnhancedSampleRate
-                        : chatterbox::kChatterboxNativeSampleRate);
+    sampleRate = outSr > 0
+                     ? outSr
+                     : (enhanced ? kLavasrEnhancedSampleRate
+                                 : chatterbox::kChatterboxNativeSampleRate);
     model = make_unique<ChatterboxModel>(std::move(cfg));
   }
 
