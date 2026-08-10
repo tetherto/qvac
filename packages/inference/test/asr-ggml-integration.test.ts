@@ -6,20 +6,12 @@ import {
   buildWhisperReloadConfig
 } from '@/plugins/builtin/asr-ggml/config'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
-import {
-  isEndOfTurnEvent,
-  isVadEvent,
-  toEndOfTurnEvent,
-  toVadStateEvent
-} from '@/utils/asr-events'
+import { isEndOfTurnEvent, isVadEvent, toEndOfTurnEvent, toVadStateEvent } from '@/utils/asr-events'
 import { ADDON_ASR, ADDON_PARAKEET, ADDON_WHISPER } from '@/schemas/plugin'
 import { LEGACY_ENGINE_TO_CANONICAL } from '@/schemas/engine-addon-map'
 import { ModelType } from '@/schemas/model-types'
 import { clearAllAddonLoggers, createAddonLoggerCallback, unregisterAddonLogger } from '@/logging'
-import {
-  clearAllLoggingStreams,
-  registerLoggingStream
-} from '@/runtime/logging-stream-registry'
+import { clearAllLoggingStreams, registerLoggingStream } from '@/runtime/logging-stream-registry'
 
 test('ASR addon constants preserve legacy engine mappings', (t) => {
   t.is(ADDON_ASR, '@qvac/asr-ggml')
