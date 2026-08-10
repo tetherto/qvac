@@ -1,8 +1,4 @@
-# Consolidates the 14 on-pr-<pkg>.yml orchestrators. INTERIM: triggers on
-# pull_request (unprivileged) — the leaves self-affect via nx-set-shas, so no
-# context/sha job and no fork-security overlay yet. Flip to pull_request_target
-# + fork-security once nx lands on main (see plan Part 2). Spine (4a): gates +
-# the 4 self-affecting -nx leaves + merge-guard; flag-gated per-package jobs (4b).
+# Consolidates the 14 on-pr-<pkg>.yml orchestrators.
 name: On PR Trigger (nx)
 
 on:
