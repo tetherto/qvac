@@ -958,9 +958,55 @@ test('infer-base changes reach the required merge-guard status check', () => {
   assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
   assert.match(
     guard,
-    /sanity-checks-status:\s*\$\{\{\s*needs\.sanity-checks\.result/,
+    /sanity-checks-status:[\s\S]*?needs\.sanity-checks\.result/,
     'merge guard reports the sanity-checks result',
   )
+})
+
+test('merge guard fails closed when the PR was not authorized', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  const guard = jobBlock(source, 'qvac-merge-guard')
+
+  // The aggregate must wait on the full authorization chain so an unapproved
+  // fork cannot pass via skipped=success on the gated jobs.
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bfork-approval\b/,
+    'merge guard must depend on fork-approval',
+  )
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bauthorize\b/,
+    'merge guard must depend on authorize',
+  )
+
+  // Each gated status input must require fork-approval success, authorize
+  // success, AND allowed == 'true' before a skip is treated as a pass.
+  for (const input of [
+    'sanity-checks-status',
+    'build-status',
+    'general-checks-status',
+  ]) {
+    const line = guard
+      .split('\n')
+      .find((l) => l.trim().startsWith(`${input}:`))
+    assert.ok(line, `merge guard defines ${input}`)
+    assert.match(
+      line,
+      /needs\.fork-approval\.result == 'success'/,
+      `${input} must require fork-approval success (fail closed)`,
+    )
+    assert.match(
+      line,
+      /needs\.authorize\.result == 'success'/,
+      `${input} must require authorize success (fail closed)`,
+    )
+    assert.match(
+      line,
+      /needs\.authorize\.outputs\.allowed == 'true'/,
+      `${input} must require authorize to allow the PR (fail closed)`,
+    )
+  }
 })
 
 test('infer-base publish jobs are gated on generated-artifact validation', () => {

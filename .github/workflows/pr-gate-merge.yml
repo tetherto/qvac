@@ -260,7 +260,15 @@ jobs:
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
   qvac-merge-guard:
-    needs: [authorize, changes, sanity-checks, verify-prebuilds, sdk-pod-checks]
+    needs:
+      [
+        fork-approval,
+        authorize,
+        changes,
+        sanity-checks,
+        verify-prebuilds,
+        sdk-pod-checks,
+      ]
     if: |
       always() && !cancelled() &&
       (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -269,6 +277,12 @@ jobs:
       packages: read
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-      build-status: ${{ needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped' }}
-      general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}
+      # A skipped gated job maps to success ONLY when the PR was actually
+      # authorized. Without this, an unapproved fork (fork-approval failed,
+      # authorize skipped, or authorize returned allowed=false) would skip
+      # sanity-checks / verify-prebuilds / sdk-pod-checks and their
+      # skipped=success would green the required check. Require the full
+      # authorization chain up front so those skips fail closed instead.
+      sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
+      build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
