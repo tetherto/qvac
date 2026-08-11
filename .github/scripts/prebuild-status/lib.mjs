@@ -103,3 +103,62 @@ export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
   if (!isRunFresh(run, pkg, prUpdatedEpoch)) return 'pending'
   return classifyState(status.state)
 }
+
+// The verify.mjs poll loop, with I/O and timing injected so the retry / deadline
+// behaviour is unit-testable. Returns a process exit code (0 pass, 1 fail).
+//
+// `fetchStatuses` may throw on a transient API error (gh exits non-zero on any
+// HTTP 4xx/5xx, incl. routine 502/503 under load; JSON.parse throws on truncated
+// output). We retry until the deadline rather than letting one hiccup escape and
+// red the gate — the deadline is what turns *persistent* failure into a hard
+// fail, keeping fail-closed semantics intact. This mirrors lookupRun's tolerance.
+export async function pollPrebuilds({
+  expected,
+  prUpdatedEpoch,
+  fetchStatuses,
+  lookupRun,
+  now,
+  sleep,
+  pollIntervalMs,
+  timeoutMs,
+  log,
+}) {
+  const deadline = now() + timeoutMs
+  for (;;) {
+    let statuses
+    try {
+      statuses = fetchStatuses()
+    } catch (err) {
+      if (now() >= deadline) {
+        log(`::error title=Prebuild verification failed::statuses fetch kept failing: ${err.message}`)
+        return 1
+      }
+      log(`::warning::statuses fetch failed, retrying: ${err.message}`)
+      await sleep(pollIntervalMs)
+      continue
+    }
+
+    const pending = []
+    const failed = []
+    for (const pkg of expected) {
+      const outcome = evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun)
+      if (outcome === 'failed') failed.push(`qvac/prebuild-${pkg}`)
+      else if (outcome === 'pending') pending.push(`qvac/prebuild-${pkg}`)
+    }
+
+    if (failed.length > 0) {
+      log(`::error title=Prebuild has not returned success::Failing prebuild status(es): ${failed.join(' ')}`)
+      return 1
+    }
+    if (pending.length === 0) {
+      log('All required prebuild statuses succeeded (fresh vs this PR event).')
+      return 0
+    }
+    if (now() >= deadline) {
+      log(`::error title=Prebuild verification timed out::No fresh terminal prebuild status after timeout for: ${pending.join(' ')}`)
+      return 1
+    }
+    log(`Waiting on prebuild status(es): ${pending.join(' ')} - re-checking in 30s`)
+    await sleep(pollIntervalMs)
+  }
+}

@@ -8,7 +8,7 @@
 // Env: GH_TOKEN, REPO, HEAD_SHA, CHANGED_PACKAGES, PR_UPDATED_AT
 import { execFileSync } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { expectedPrebuilds, flattenPages, evaluatePackage } from './lib.mjs'
+import { expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
 
 const POLL_INTERVAL_MS = 30_000
 const TIMEOUT_MS = 180 * 60 * 1000
@@ -68,34 +68,18 @@ async function main() {
     return 1
   }
   const prUpdatedEpoch = Math.floor(prUpdatedMs / 1000)
-  const deadline = Date.now() + TIMEOUT_MS
-  const lookupRun = (runId) => fetchRun(repo, runId)
 
-  for (;;) {
-    const statuses = fetchStatuses(repo, sha)
-    const pending = []
-    const failed = []
-    for (const pkg of expected) {
-      const outcome = evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun)
-      if (outcome === 'failed') failed.push(`qvac/prebuild-${pkg}`)
-      else if (outcome === 'pending') pending.push(`qvac/prebuild-${pkg}`)
-    }
-
-    if (failed.length > 0) {
-      console.log(`::error title=Prebuild has not returned success::Failing prebuild status(es): ${failed.join(' ')}`)
-      return 1
-    }
-    if (pending.length === 0) {
-      console.log('All required prebuild statuses succeeded (fresh vs this PR event).')
-      return 0
-    }
-    if (Date.now() >= deadline) {
-      console.log(`::error title=Prebuild verification timed out::No fresh terminal prebuild status after timeout for: ${pending.join(' ')}`)
-      return 1
-    }
-    console.log(`Waiting on prebuild status(es): ${pending.join(' ')} - re-checking in 30s`)
-    await sleep(POLL_INTERVAL_MS)
-  }
+  return pollPrebuilds({
+    expected,
+    prUpdatedEpoch,
+    fetchStatuses: () => fetchStatuses(repo, sha),
+    lookupRun: (runId) => fetchRun(repo, runId),
+    now: () => Date.now(),
+    sleep,
+    pollIntervalMs: POLL_INTERVAL_MS,
+    timeoutMs: TIMEOUT_MS,
+    log: (msg) => console.log(msg),
+  })
 }
 
 main()

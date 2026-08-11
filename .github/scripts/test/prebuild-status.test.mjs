@@ -11,6 +11,7 @@ import {
   isRunFresh,
   classifyState,
   evaluatePackage,
+  pollPrebuilds,
 } from '../prebuild-status/lib.mjs'
 
 const iso = (s) => new Date(s).toISOString()
@@ -154,4 +155,97 @@ test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
   assert.equal(PREBUILD_KEYS.length, 13)
   assert.ok(PREBUILD_KEYS.includes('tts-ggml'))
   assert.ok(PREBUILD_KEYS.includes('vla'))
+})
+
+// --- poll loop: retry / deadline / terminal outcomes ---------------------
+
+// A deterministic clock. `sleep` advances virtual time so the loop reaches its
+// deadline without any real waiting.
+function fakeClock(startMs = 0) {
+  let t = startMs
+  return {
+    now: () => t,
+    sleep: async (ms) => {
+      t += ms
+    },
+  }
+}
+
+const THRESHOLD = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+const FRESH_RUN = { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T12:00:00Z' }
+
+test('pollPrebuilds retries a transient statuses fetch error, then passes', async () => {
+  const clock = fakeClock()
+  const logs = []
+  let calls = 0
+  const code = await pollPrebuilds({
+    expected: ['tts-ggml'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => {
+      calls += 1
+      if (calls === 1) throw new Error('HTTP 503')
+      return [status({ updated_at: iso('2026-08-10T12:00:30Z'), target_url: 'r/actions/runs/2', state: 'success' })]
+    },
+    lookupRun: () => FRESH_RUN,
+    now: clock.now,
+    sleep: clock.sleep,
+    pollIntervalMs: 30_000,
+    timeoutMs: 180 * 60 * 1000,
+    log: (m) => logs.push(m),
+  })
+  assert.equal(code, 0)
+  assert.ok(calls >= 2, 'retried after the transient error')
+  assert.ok(logs.some((l) => /statuses fetch failed, retrying/.test(l)), 'warned instead of failing')
+})
+
+test('pollPrebuilds fails closed only when statuses fetch keeps failing past the deadline', async () => {
+  const clock = fakeClock()
+  const logs = []
+  const code = await pollPrebuilds({
+    expected: ['tts-ggml'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => {
+      throw new Error('HTTP 502')
+    },
+    lookupRun: () => null,
+    now: clock.now,
+    sleep: clock.sleep,
+    pollIntervalMs: 30_000,
+    timeoutMs: 60_000,
+    log: (m) => logs.push(m),
+  })
+  assert.equal(code, 1)
+  assert.ok(logs.some((l) => /statuses fetch kept failing/.test(l)))
+})
+
+test('pollPrebuilds times out (fail-closed) when a required status never appears', async () => {
+  const clock = fakeClock()
+  const code = await pollPrebuilds({
+    expected: ['tts-ggml'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => [],
+    lookupRun: () => null,
+    now: clock.now,
+    sleep: clock.sleep,
+    pollIntervalMs: 30_000,
+    timeoutMs: 60_000,
+    log: () => {},
+  })
+  assert.equal(code, 1)
+})
+
+test('pollPrebuilds returns failure immediately when a prebuild status is failed', async () => {
+  const clock = fakeClock()
+  const code = await pollPrebuilds({
+    expected: ['tts-ggml'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => [status({ updated_at: iso('2026-08-10T12:01:00Z'), target_url: 'r/actions/runs/2', state: 'failure' })],
+    lookupRun: () => FRESH_RUN,
+    now: clock.now,
+    sleep: clock.sleep,
+    pollIntervalMs: 30_000,
+    timeoutMs: 180 * 60 * 1000,
+    log: () => {},
+  })
+  assert.equal(code, 1)
 })
