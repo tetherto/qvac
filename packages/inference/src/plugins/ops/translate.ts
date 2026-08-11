@@ -13,6 +13,7 @@ import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/utils/addon-responses'
+import { buildNmtTranslationStats } from '@/plugins/ops/translate-stats'
 import {
   ModelIsDelegatedError,
   ModelNotFoundError,
@@ -234,20 +235,7 @@ export async function* translate(
   }
   const modelExecutionMs = nowMs() - modelStart
 
-  const stats: TranslationStats = {
-    ...(nmtResponse.stats?.totalTime !== undefined && { totalTime: nmtResponse.stats.totalTime }),
-    ...(nmtResponse.stats?.totalTokens !== undefined && {
-      totalTokens: nmtResponse.stats.totalTokens
-    }),
-    ...(nmtResponse.stats?.decodeTime !== undefined && {
-      decodeTime: nmtResponse.stats.decodeTime
-    }),
-    ...(nmtResponse.stats?.encodeTime !== undefined && {
-      encodeTime: nmtResponse.stats.encodeTime
-    }),
-    ...(nmtResponse.stats?.TPS !== undefined && { tokensPerSecond: nmtResponse.stats.TPS }),
-    ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT })
-  }
+  const stats = buildNmtTranslationStats(nmtResponse.stats)
 
   return buildStreamResult(modelExecutionMs, stats)
 }

@@ -61,7 +61,6 @@ public:
     float dcwHighScaler = 0.02F;
     std::vector<int>
         audioCodes; // non-empty => skip LM and synthesize these codes
-    // Optional timbre / cover PCM (interleaved stereo float @ 48 kHz).
     std::vector<float> referenceAudio;
     std::vector<float> sourceAudio;
     std::string taskType = "text2music";

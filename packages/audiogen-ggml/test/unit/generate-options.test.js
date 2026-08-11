@@ -120,61 +120,71 @@ test('AudioGen.run forwards text2music with optional referenceAudio only', async
   t.is(job.sourceAudio, undefined)
 })
 
-test('AudioGen.run rejects invalid cover/reference options before native dispatch', async (t) => {
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { taskType: 'repaint' }),
-      /taskType must be one of text2music\|cover\|cover-nofsq/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { taskType: 'cover-nofsq' }),
-      /taskType 'cover-nofsq' requires sourceAudio/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { taskType: 'cover', sourceAudio: new Float32Array(0) }),
-      /taskType 'cover' requires sourceAudio/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { referenceAudio: new Int16Array([1, 2]) }),
-      /referenceAudio must be a Float32Array/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { sourceAudio: new Float32Array([1, 2, 3]) }),
-      /sourceAudio must be interleaved stereo/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { referenceAudio: new Float32Array([1, 2, 3]) }),
-      /referenceAudio must be interleaved stereo/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { audioCoverStrength: Number.NaN }),
-      /audioCoverStrength must be a finite number/
-    )
-  }
-  {
-    const { gen } = createHarness()
-    await t.exception(
-      () => gen.run('test', { coverNoiseStrength: Number.POSITIVE_INFINITY }),
-      /coverNoiseStrength must be a finite number/
-    )
-  }
+async function rejectRunOptions(t, options, pattern) {
+  const { gen } = createHarness()
+  await t.exception(() => gen.run('test', options), pattern)
+}
+
+test('AudioGen.run rejects unsupported taskType', async (t) => {
+  await rejectRunOptions(
+    t,
+    { taskType: 'repaint' },
+    /taskType must be one of text2music\|cover\|cover-nofsq/
+  )
+})
+
+test('AudioGen.run requires sourceAudio for cover-nofsq', async (t) => {
+  await rejectRunOptions(
+    t,
+    { taskType: 'cover-nofsq' },
+    /taskType 'cover-nofsq' requires sourceAudio/
+  )
+})
+
+test('AudioGen.run rejects empty sourceAudio for cover', async (t) => {
+  await rejectRunOptions(
+    t,
+    { taskType: 'cover', sourceAudio: new Float32Array(0) },
+    /taskType 'cover' requires sourceAudio/
+  )
+})
+
+test('AudioGen.run requires Float32Array referenceAudio', async (t) => {
+  await rejectRunOptions(
+    t,
+    { referenceAudio: new Int16Array([1, 2]) },
+    /referenceAudio must be a Float32Array/
+  )
+})
+
+test('AudioGen.run requires stereo sourceAudio', async (t) => {
+  await rejectRunOptions(
+    t,
+    { sourceAudio: new Float32Array([1, 2, 3]) },
+    /sourceAudio must be interleaved stereo/
+  )
+})
+
+test('AudioGen.run requires stereo referenceAudio', async (t) => {
+  await rejectRunOptions(
+    t,
+    { referenceAudio: new Float32Array([1, 2, 3]) },
+    /referenceAudio must be interleaved stereo/
+  )
+})
+
+test('AudioGen.run requires finite audioCoverStrength', async (t) => {
+  await rejectRunOptions(
+    t,
+    { audioCoverStrength: Number.NaN },
+    /audioCoverStrength must be a finite number/
+  )
+})
+
+test('AudioGen.run requires finite coverNoiseStrength', async (t) => {
+  await rejectRunOptions(
+    t,
+    { coverNoiseStrength: Number.POSITIVE_INFINITY },
+    /coverNoiseStrength must be a finite number/
+  )
 })

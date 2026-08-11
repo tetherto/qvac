@@ -21,9 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bump `audiogen-cpp` to `2026-08-11` (registry branch
-  `QVAC-22886/reference-audio-input`) so native builds pick up cover-nofsq and
-  reference-audio support.
+- Bump `audiogen-cpp` to `2026-08-11` so native builds pick up cover-nofsq and
+  reference-audio support from the official registry.
 - Bump `audiogen-cpp` to `2026-08-10`, enabling official sampler-side Haar DCW
   by default and using the validated LM decoding policy on Metal and Vulkan.
 

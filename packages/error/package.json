@@ -2,19 +2,26 @@
   "name": "@qvac/error",
   "version": "0.1.2",
   "description": "Base error handling library for QVAC",
-  "main": "index.js",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "lunte",
     "lint:fix": "lunte --fix",
-    "build:types": "tsc",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
-    "test:dts": "tsc index.d.ts --noEmit",
-    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test": "npm run test:unit && npm run test:dts",
-    "test:coverage": "brittle --coverage test/**/*.test.js",
-    "prepare": "husky || true"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "build:test": "tsc -p test/tsconfig.build.json",
+    "test:unit": "npm run build:test && brittle-bare 'test/dist/test/unit/*.test.js'"
   },
   "author": "Tether",
   "keywords": [
@@ -24,8 +31,8 @@
   ],
   "license": "Apache-2.0",
   "devDependencies": {
+    "@types/brittle": "^3.5.0",
     "brittle": "^3.10.1",
-    "husky": "^9.1.7",
     "lunte": "^1.8.3",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
@@ -39,10 +46,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "files": [
-    "src",
-    "index.d.ts",
+    "dist",
     "LICENSE",
     "NOTICE"
-  ],
-  "types": "index.d.ts"
+  ]
 }

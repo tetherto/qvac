@@ -18,6 +18,7 @@
 namespace tts_cpp::cosyvoice {
 class Engine;
 struct SynthesisResult;
+struct EngineOptions;
 } // namespace tts_cpp::cosyvoice
 
 namespace tts_cpp::lavasr {
@@ -149,5 +150,10 @@ struct EmittedAudio {
 EmittedAudio resolveEmittedAudio(
     bool streaming, bool enhanced, int streamFinalRate,
     std::size_t streamedSamples, std::size_t batchSamples, int batchRate);
+
+// Maps the addon config onto tts-cpp's EngineOptions. Free function so the
+// option forwarding (GPU intent, OpenCL cache dir, streaming, backends dir) is
+// unit-testable without weights (see test_cosyvoice_config.cpp).
+tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg);
 
 } // namespace qvac::ttsggml::cosyvoice

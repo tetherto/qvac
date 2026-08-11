@@ -1,9 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "7297cf476489e5086db43594d35d087fe4772271",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-22886/reference-audio-input"
+    "baseline": "65b1d890edc1da43617f599e92bea19f1b9bc30e",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {
