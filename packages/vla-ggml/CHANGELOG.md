@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0` (b10069 rebase; no
+  API change for this package).
+
+### Pull Requests
+
+- [#3621](https://github.com/tetherto/qvac/pull/3621) - Sync all addons with
+  fabric v10069.0.0
+
 ## [0.18.0] - 2026-08-06
 
 ### Fixed

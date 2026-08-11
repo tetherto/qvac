@@ -2396,6 +2396,40 @@
     "quantization": "q4_k_m",
     "params": "20B"
   },
+  "GROOT_MULTI_Q5_VF16": {
+    "name": "GROOT_MULTI_Q5_VF16",
+    "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    "registryPath": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    "blobBlockOffset": 4529949,
+    "blobBlockLength": 46466,
+    "blobByteOffset": 296867803651,
+    "modelId": "groot-q5_vf16.gguf",
+    "expectedSize": 3045175648,
+    "sha256Checksum": "d51e6466b63b70db39bdacc8555b85ad8b38db0dc57b7414b0daa001776165f0",
+    "addon": "vla",
+    "engine": "ggml-vla",
+    "quantization": "q5_vf16",
+    "params": "groot-n1.7-3b-multi"
+  },
+  "GROOT_MULTI_Q8_VF16": {
+    "name": "GROOT_MULTI_Q8_VF16",
+    "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    "registryPath": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
+    "blobBlockOffset": 4467918,
+    "blobBlockLength": 62031,
+    "blobByteOffset": 292802576547,
+    "modelId": "groot-q8_vf16.gguf",
+    "expectedSize": 4065227104,
+    "sha256Checksum": "2f15b9cf9dc6eeb539821b563725857c46efdf7514f25b16130700ffe9f77010",
+    "addon": "vla",
+    "engine": "ggml-vla",
+    "quantization": "q8_vf16",
+    "params": "groot-n1.7-3b-multi"
+  },
   "GROOT_Q5_VF16": {
     "name": "GROOT_Q5_VF16",
     "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q5_vf16.gguf",
@@ -2413,23 +2447,6 @@
     "quantization": "q5_vf16",
     "params": "groot-n1.7-3b-libero"
   },
-  "GROOT_Q5_VF16_1": {
-    "name": "GROOT_Q5_VF16_1",
-    "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
-    "registryPath": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
-    "registrySource": "s3",
-    "blobCoreKey": "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    "blobBlockOffset": 4529949,
-    "blobBlockLength": 46466,
-    "blobByteOffset": 296867803651,
-    "modelId": "groot-q5_vf16.gguf",
-    "expectedSize": 3045175648,
-    "sha256Checksum": "d51e6466b63b70db39bdacc8555b85ad8b38db0dc57b7414b0daa001776165f0",
-    "addon": "vla",
-    "engine": "ggml-vla",
-    "quantization": "q5_vf16",
-    "params": "groot-n1.7-3b-multi"
-  },
   "GROOT_Q8_VF16": {
     "name": "GROOT_Q8_VF16",
     "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf",
@@ -2446,23 +2463,6 @@
     "engine": "ggml-vla",
     "quantization": "q8_vf16",
     "params": "groot-n1.7-3b-libero"
-  },
-  "GROOT_Q8_VF16_1": {
-    "name": "GROOT_Q8_VF16_1",
-    "src": "registry://s3/qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
-    "registryPath": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
-    "registrySource": "s3",
-    "blobCoreKey": "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    "blobBlockOffset": 4467918,
-    "blobBlockLength": 62031,
-    "blobByteOffset": 292802576547,
-    "modelId": "groot-q8_vf16.gguf",
-    "expectedSize": 4065227104,
-    "sha256Checksum": "2f15b9cf9dc6eeb539821b563725857c46efdf7514f25b16130700ffe9f77010",
-    "addon": "vla",
-    "engine": "ggml-vla",
-    "quantization": "q8_vf16",
-    "params": "groot-n1.7-3b-multi"
   },
   "GTE_LARGE_335M_FP16_SHARD": {
     "name": "GTE_LARGE_335M_FP16_SHARD",

@@ -12660,6 +12660,47 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "embodiment": {
+                      "description": "GR00T only: which embodiment of a multi-embodiment GGUF to activate at load — a tag string, a numeric `cat_id` (0..31), or `{ tag | catId, numCameras }`. Omitted = the GGUF's default embodiment. Rejected by the addon for non-GR00T models.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256,
+                          "description": "Embodiment tag string as stored in the GGUF (e.g. 'libero_sim')."
+                        },
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 31,
+                          "description": "The embodiment's numeric `cat_id` (0..31)."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "tag": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 256,
+                              "description": "Embodiment tag string as stored in the GGUF (e.g. 'libero_sim')."
+                            },
+                            "catId": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 31,
+                              "description": "The embodiment's numeric `cat_id` (0..31)."
+                            },
+                            "numCameras": {
+                              "description": "Overrides the camera count stored in the GGUF for the selected embodiment. Required to select an embodiment whose count was unknown at conversion time.",
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 64
+                            }
+                          },
+                          "title": "LoadModelSrcRequestGgmlVlaModelConfigEmbodiment"
+                        }
+                      ]
                     }
                   },
                   "title": "LoadModelSrcRequestGgmlVlaModelConfig"
