@@ -40,10 +40,20 @@ const proc = require('bare-process')
 const fs = require('bare-fs')
 const test = require('brittle')
 
-const VideoStableDiffusion = require('../../video.js')
-const WorldStableDiffusion = require('../../world.js')
-const { readImageDimensions } = require('../../addon.js')
+// Package-name imports (not '../../*.js'): the mobile E2E harness copies the
+// test files into its own app tree and bundles them, where only the installed
+// @qvac/diffusion-cpp package resolves - same reason the newest sibling tests
+// import this way.
+const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
+const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
+const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
 const { ensureModelPath, setupJsLogger } = require('./utils.js')
+
+// The registry client is a devDependency used only by the desktop provisioning
+// path (the lanes skip on mobile). The indirect specifier keeps the literal out
+// of the mobile bundler's static module traversal, which would otherwise fail
+// the whole bundle on a module the app never loads.
+const REGISTRY_CLIENT_PKG = '@qvac/registry-client'
 
 // P2P registry namespace of the validated set. 's3' is the registry's
 // source LABEL for these entries (a key namespace in the public registry
@@ -97,7 +107,7 @@ async function provisionFromRegistry(dir) {
   if (missing.length === 0 && !sceneMissing) return
 
   // Lazy require: only lanes that actually provision touch the swarm stack.
-  const { QVACRegistryClient } = require('@qvac/registry-client')
+  const { QVACRegistryClient } = require(REGISTRY_CLIENT_PKG)
   const client = new QVACRegistryClient()
   await client.ready()
   try {
