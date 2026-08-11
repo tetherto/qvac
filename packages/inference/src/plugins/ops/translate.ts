@@ -13,6 +13,7 @@ import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/utils/addon-responses'
+import { buildNmtTranslationStats } from '@/plugins/ops/translate-stats'
 import {
   ModelIsDelegatedError,
   ModelNotFoundError,
@@ -234,25 +235,7 @@ export async function* translate(
   }
   const modelExecutionMs = nowMs() - modelStart
 
-  // The nmtcpp addon reports totalTime/decodeTime/encodeTime in seconds
-  // (TTFT is already milliseconds); the TranslationStats contract documents
-  // milliseconds, so convert here.
-  const stats: TranslationStats = {
-    ...(nmtResponse.stats?.totalTime !== undefined && {
-      totalTime: nmtResponse.stats.totalTime * 1000
-    }),
-    ...(nmtResponse.stats?.totalTokens !== undefined && {
-      totalTokens: nmtResponse.stats.totalTokens
-    }),
-    ...(nmtResponse.stats?.decodeTime !== undefined && {
-      decodeTime: nmtResponse.stats.decodeTime * 1000
-    }),
-    ...(nmtResponse.stats?.encodeTime !== undefined && {
-      encodeTime: nmtResponse.stats.encodeTime * 1000
-    }),
-    ...(nmtResponse.stats?.TPS !== undefined && { tokensPerSecond: nmtResponse.stats.TPS }),
-    ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT })
-  }
+  const stats = buildNmtTranslationStats(nmtResponse.stats)
 
   return buildStreamResult(modelExecutionMs, stats)
 }
