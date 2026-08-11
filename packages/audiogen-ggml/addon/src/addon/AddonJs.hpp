@@ -227,7 +227,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           env, "sourceAudio")) {
     modelInput.sourceAudio = copyFloat32Pcm(env, *src, "sourceAudio");
   }
-  if (auto v = optStr("taskType")) modelInput.taskType = *v;
+  if (auto v = optStr("taskType"))
+    modelInput.taskType = *v;
   if (auto v = optNum("audioCoverStrength"))
     modelInput.audioCoverStrength = static_cast<float>(*v);
   if (auto v = optNum("coverNoiseStrength"))
