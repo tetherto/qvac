@@ -163,6 +163,7 @@
     "test:bare:e2e": "bun run build && bun run link:self && bun run build:bare:e2e && bun run make:test:bare:e2e && brittle-bare test/dist/bare/e2e/all.mjs"
   },
   "dependencies": {
+    "@qvac/inference": "npm:@tetherto/inference-mono@0.16.0-tmp.runid-31469926046",
     "@qvac/decoder-audio": "^0.5.0",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",
