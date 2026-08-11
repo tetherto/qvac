@@ -1,13 +1,19 @@
 {
+  "include": ["src/**/*"],
   "compilerOptions": {
-    "allowJs": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "strict": true,
+    "lib": ["ES2022"],
+    "target": "ES2022",
+    "module": "esnext",
+    "types": [],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "noEmit": true,
+    "esModuleInterop": true,
+    "erasableSyntaxOnly": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
-    "outDir": ".",
-    "declarationMap": false
-  },
-  "include": ["index.js"],
-  "exclude": ["node_modules", "test"]
+    "strict": true,
+    "moduleDetection": "force"
+  }
 }
