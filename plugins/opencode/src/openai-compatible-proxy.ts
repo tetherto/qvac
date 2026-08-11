@@ -202,37 +202,36 @@ function pipeResponse(
   })
 }
 
-function writeProxyError(res: ServerResponse, statusCode: number, message: string): void {
+interface ProxyError {
+  readonly message: string
+  readonly type?: string
+  readonly code?: string
+}
+
+function writeProxyError(
+  res: ServerResponse,
+  statusCode: number,
+  error: ProxyError | string
+): void {
   if (res.headersSent) {
     res.destroy()
     return
   }
   res.writeHead(statusCode, { 'content-type': 'application/json' })
-  res.end(JSON.stringify({ error: { message } }))
+  res.end(JSON.stringify({ error: typeof error === 'string' ? { message: error } : error }))
 }
 
 // Matches `qvac serve`'s own rejection envelope so OpenCode surfaces a bad
 // credential the same way whichever hop refused it.
-function writeUnauthorized(res: ServerResponse): void {
-  if (res.headersSent) {
-    res.destroy()
-    return
-  }
-  res.writeHead(401, { 'content-type': 'application/json' })
-  res.end(
-    JSON.stringify({
-      error: {
-        message: 'Invalid or missing API key.',
-        type: 'invalid_request_error',
-        code: 'invalid_api_key'
-      }
-    })
-  )
+const UNAUTHORIZED: ProxyError = {
+  message: 'Invalid or missing API key.',
+  type: 'invalid_request_error',
+  code: 'invalid_api_key'
 }
 
 function rejectUnauthorized(req: IncomingMessage, res: ServerResponse, logger: HostLogger): void {
   logger.trace(`401 ${req.method ?? '?'} ${req.url ?? '?'}`)
-  writeUnauthorized(res)
+  writeProxyError(res, 401, UNAUTHORIZED)
   // Discard whatever body is still in flight instead of collecting it: a caller
   // we have already refused must not be able to size an allocation here.
   req.resume()

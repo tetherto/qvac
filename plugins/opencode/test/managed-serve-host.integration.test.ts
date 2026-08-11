@@ -186,7 +186,9 @@ test(
       })
       assert.equal(chat.status, 200)
 
-      // Neither secret may leak onto the host's log streams.
+      // The proxy token is the only secret observable from out here — the managed
+      // serve key is generated inside the host and never handed out — and it must
+      // not reach the host's log streams.
       const streamed = Buffer.concat(logs).toString('utf8')
       assert.doesNotMatch(streamed, new RegExp(listening.proxyToken))
     } catch (err) {

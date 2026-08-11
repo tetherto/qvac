@@ -181,8 +181,9 @@ export async function startManagedServeHost(
     if (stopping) return
     stopping = true
     logger.trace(`shutting down: ${reason}`)
-    // Release anything still queued on startup before the sockets go away, so a
-    // shutdown mid-download answers those requests instead of dropping them.
+    // Releases anything still queued on startup before the sockets go away, so a
+    // stop mid-download answers those requests. A failed startup rejects the same
+    // waiters but exits as that propagates, so those callers usually see a reset.
     upstreamReady.reject(new HostUnavailableError(`host is shutting down (${reason})`))
     await live.managed?.close().catch(() => {})
     await proxy.close().catch(() => {})
