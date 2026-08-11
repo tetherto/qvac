@@ -727,7 +727,7 @@ jobs:
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
-          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results/${{ matrix.pair }}
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results
           retention-days: 30
 
       - name: Upload evaluation logs

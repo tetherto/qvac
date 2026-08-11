@@ -7,6 +7,7 @@ const path = require('path')
 const METRIC_EXTENSIONS = ['bleu', 'chrfpp', 'comet']
 const STAT_EXTENSIONS = METRIC_EXTENSIONS.concat(['time', 'perf'])
 const DEVICE_DIRS = ['cpu', 'gpu']
+const PAIR_RE = /^[a-z]{2,3}-[a-z]{2,3}$/
 
 const METRIC_LABELS = {
   bleu: 'BLEU',
@@ -72,16 +73,38 @@ function parseResultFile (basename) {
   return { dataset, translator, lang, ext }
 }
 
-function collectResults (dir) {
-  const records = []
-  if (!fs.existsSync(dir)) return records
+function discoverPairRoots (dir) {
+  const roots = []
+  if (!fs.existsSync(dir)) return roots
 
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith('results-')) continue
+    if (!entry.isDirectory()) continue
+    const entryPath = path.join(dir, entry.name)
+    if (PAIR_RE.test(entry.name)) {
+      roots.push({ pair: entry.name, dir: entryPath })
+      continue
+    }
+    if (!entry.name.startsWith('results-')) continue
+    const pairDirs = fs.readdirSync(entryPath, { withFileTypes: true })
+      .filter(child => child.isDirectory() && PAIR_RE.test(child.name))
+    if (pairDirs.length) {
+      for (const child of pairDirs) {
+        roots.push({ pair: child.name, dir: path.join(entryPath, child.name) })
+      }
+      continue
+    }
     const pair = parsePairFromArtifactDir(entry.name)
-    if (!pair) continue
+    if (pair) roots.push({ pair, dir: entryPath })
+  }
+  return roots
+}
 
-    const stack = [{ dir: path.join(dir, entry.name), device: null }]
+function collectResults (dir) {
+  const records = []
+  for (const root of discoverPairRoots(dir)) {
+    const pair = root.pair
+
+    const stack = [{ dir: root.dir, device: null }]
     while (stack.length) {
       const current = stack.pop()
       for (const file of fs.readdirSync(current.dir, { withFileTypes: true })) {

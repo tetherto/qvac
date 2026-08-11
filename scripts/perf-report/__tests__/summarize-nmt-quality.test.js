@@ -62,6 +62,22 @@ test('collectResults walks results-* dirs and reads stat values', () => {
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
+test('collectResults reads pair directories at either nesting level', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nmt-summary-'))
+  const flatPairDir = path.join(dir, 'en-it')
+  const nestedPairDir = path.join(dir, 'results-en-de-qvac_bergamot-chrfpp-fast', 'en-de')
+  fs.mkdirSync(flatPairDir, { recursive: true })
+  fs.mkdirSync(nestedPairDir, { recursive: true })
+  fs.writeFileSync(path.join(flatPairDir, 'flores-devtest.qvac_bergamot.it.chrfpp'), '55.3\n')
+  fs.writeFileSync(path.join(nestedPairDir, 'flores-devtest.qvac_bergamot.de.chrfpp'), '60.1\n')
+
+  const records = collectResults(dir)
+  assert.equal(records.length, 2)
+  assert.equal(records.find(r => r.pair === 'en-it').value, 55.3)
+  assert.equal(records.find(r => r.pair === 'en-de').value, 60.1)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
 test('collectResults tags records under a device subdirectory', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nmt-summary-'))
   const artifactDir = path.join(dir, 'results-en-it-qvac_bergamot-chrfpp-fast')
