@@ -14,6 +14,7 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 # overlays, e.g. vcpkg/triplets/x64-linux.cmake appends -fPIC -stdlib=libc++),
 # repo-wide overlays second.
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/ports;${VCPKG_OVERLAY_PORTS}")
 
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
