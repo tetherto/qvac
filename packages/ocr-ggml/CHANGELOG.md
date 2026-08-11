@@ -4,55 +4,39 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.16.0] - 2026-08-10
+## [Unreleased]
 
 ### Added
 
-- `langList` is now **optional for the DocTR pipeline** (`pipelineType:
-  'doctr'`), which is language-agnostic and never reads it. The wrapper
-  forwards an internal placeholder to the native addon (whose configuration
-  parser requires the property). An explicitly provided list is still
-  validated (non-empty array) and forwarded unchanged.
-- New runnable examples: `examples/doctr.js` (DBNet + doctr CRNN, no
-  `langList`) and `examples/backend-device.js` (CPU/Vulkan/Metal/OpenCL
-  selection, `getBackendInfo()` fallback reporting).
-- Focused unit tests for the langList validation paths (Latin-only lists,
-  DocTR without `langList`), activation-failure cleanup, and package
-  import/dependency hygiene (lazy native binding, runtime `require`s
-  declared in `dependencies`).
+- `langList` is now optional for the language-agnostic DocTR pipeline
+  (`pipelineType: 'doctr'`). An explicitly provided list is still validated
+  and forwarded unchanged.
+- New runnable examples: `examples/doctr.js` and `examples/backend-device.js`.
 
 ### Changed
 
-- **Language validation is deferred to the native pipeline.** The JS wrapper
-  no longer rejects `langList`s without `'en'`; the native EasyOCR pipeline
-  validates the requested languages against its full language registry and
-  the loaded recognizer's character set (so e.g. `['fr']` with
-  `latin_g2.gguf` now loads). `ERR_CODES.UNSUPPORTED_LANGUAGE` stays
-  registered for compatibility but is no longer emitted by the wrapper.
-- Documentation refresh: `canvasSize` and `OCR_DOCTR_FUSED_CONV` are now
-  documented; `backendIsGpu` docs list every GPU backend (incl. OpenCL);
-  model-conversion docs point at the vendored converter
-  (`scripts/pth_to_gguf.py`) instead of the upstream repo; new sections for
-  registry-hosted models via `@qvac/inference`, supported platforms, and
-  exported error codes; repository-layout tree corrected; `samples/README.md`
-  reflects that `samples/english.png` is tracked in-repo (but not published);
-  package description/keywords now mention DocTR.
+- Language validation is deferred to the native pipeline, which checks the
+  requested languages against its registry and the loaded recognizer's
+  character set — Latin-only lists such as `['fr']` with `latin_g2.gguf` now
+  load. `ERR_CODES.UNSUPPORTED_LANGUAGE` stays registered but is no longer
+  emitted.
+- Model-creation failures (bad model file, unsupported `langList`) now reject
+  `load()` with `ERR_CODES.FAILED_TO_LOAD_WEIGHTS`, preserving the native
+  error message.
+- Documentation refresh: `canvasSize`, `OCR_DOCTR_FUSED_CONV`, `backendIsGpu`
+  (all GPU backends incl. OpenCL), vendored model converter, registry-hosted
+  models via `@qvac/inference`, supported platforms, error codes, corrected
+  repository layout, and DocTR in the package description/keywords.
 
 ### Fixed
 
-- **Activation-failure cleanup:** when native activation fails during
-  `load()`, the wrapper now destroys the just-created native instance and
-  releases the C++ → JS logger bridge instead of leaking both, and no stale
-  `addon` handle is retained.
-- Removed the unconditional `[OCR-DLOPEN-DEBUG]` console diagnostics from
-  `binding.js` — a failed native-addon load now simply rethrows.
-- `bare-fs` and `bare-path` moved from `devDependencies` to `dependencies`:
-  both are required at import time by the published entrypoints, so consumer
-  installs previously depended on hoisting luck.
-- `examples/quickstart.js` and the README usage snippet treated the value
-  resolved by `response.await()` as the stats object; it resolves with the
-  output rows — `RuntimeStats` is exposed via `response.stats` (or the
-  `'stats'` event). All examples now read `response.stats`.
+- `load()` no longer leaks the native instance and the C++ → JS logger bridge
+  when activation fails.
+- Removed unconditional native-loading console diagnostics from `binding.js`.
+- `bare-fs` and `bare-path` are now runtime dependencies (required at import
+  time by the published entrypoints).
+- Examples and the README read `RuntimeStats` from `response.stats` instead of
+  the `response.await()` result.
 
 ## [0.15.0] - 2026-08-10
 

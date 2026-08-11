@@ -213,6 +213,25 @@ test('OcrGgml.load rejects an explicit empty langList for the doctr pipeline', a
   )
 })
 
+test('OcrGgml.load wraps native creation failures as FAILED_TO_LOAD_WEIGHTS', async (t) => {
+  const ocr = new OcrGgml({
+    params: {
+      pathDetector: 'unused',
+      pathRecognizer: 'unused',
+      langList: ['en']
+    }
+  })
+  ocr._createAddon = () => {
+    throw new Error('Received unsupported languages for the OCR addon: [xx]')
+  }
+
+  const err = await captureRejection(() => ocr.load())
+  t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
+  t.is(err && err.code, ERR_CODES.FAILED_TO_LOAD_WEIGHTS, 'error.code is FAILED_TO_LOAD_WEIGHTS')
+  t.ok(String(err && err.message).includes('unsupported languages'), 'native message is preserved')
+  t.is(ocr.addon, null, 'no addon handle is retained')
+})
+
 test('OcrGgml.load destroys the addon when activation fails', async (t) => {
   let destroyed = 0
   const ocr = new OcrGgml({

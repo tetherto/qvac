@@ -1,6 +1,7 @@
 'use strict'
 
 const fs = require('bare-fs')
+const process = require('bare-process')
 const { OcrGgml } = require('../..')
 const { QvacErrorAddonOcrGgml, ERR_CODES } = require('../..')
 const test = require('brittle')
@@ -40,7 +41,15 @@ test(
     const pathDetector = await ensureModelPath('detector_craft')
     const pathRecognizer = await ensureModelPath('recognizer_latin')
     if (!fs.existsSync(pathDetector) || !fs.existsSync(pathRecognizer)) {
-      t.pass('Models not available - skipping native language validation test')
+      // CI provides models via OCR_GGML_DETECTOR/OCR_GGML_RECOGNIZER (and the
+      // mobile harness pre-stages them): a missing file there is a harness
+      // bug, and silently skipping would let the native-validation contract
+      // regress unnoticed. Only local runs without models soft-skip.
+      if (process.env.OCR_GGML_DETECTOR || process.env.OCR_GGML_RECOGNIZER || isMobile) {
+        t.fail(`Model fixtures missing (${pathDetector}, ${pathRecognizer})`)
+      } else {
+        t.pass('Models not available locally - skipping native language validation test')
+      }
       return
     }
 
@@ -52,19 +61,28 @@ test(
       }
     })
 
+    let err = null
     try {
       await ocrGgml.load()
-      t.fail('Should have thrown for all-unsupported languages')
-    } catch (err) {
-      const message = String(err && err.message)
-      t.ok(
-        /unsupported languages/i.test(message),
-        `Native error reports the unsupported languages, got: ${message}`
-      )
-      t.ok(message.includes('klingon'), 'Error names the offending language')
+    } catch (e) {
+      err = e
     } finally {
       await ocrGgml.unload()
     }
+
+    t.ok(err, 'load() rejected for all-unsupported languages')
+    t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
+    t.is(
+      err && err.code,
+      ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+      'error.code is FAILED_TO_LOAD_WEIGHTS (native model-creation failure)'
+    )
+    const message = String(err && err.message)
+    t.ok(
+      /unsupported languages/i.test(message),
+      `native message reports the unsupported languages, got: ${message}`
+    )
+    t.ok(message.includes('klingon'), 'error names the offending language')
   }
 )
 

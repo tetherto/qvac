@@ -141,7 +141,19 @@ class OcrGgml {
                 ? this.params.backendsDir
                 : path.join(__dirname, "prebuilds");
         this.logger.info("Creating ocr-ggml addon");
-        this.addon = this._createAddon(configurationParams);
+        try {
+            this.addon = this._createAddon(configurationParams);
+        }
+        catch (err) {
+            // Native instance creation loads the models and validates langList, so
+            // its failures are weight-load errors; wrap them with a stable code
+            // while preserving the native message.
+            throw new error_1.QvacErrorAddonOcrGgml({
+                code: error_1.ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+                adds: (0, error_1.errorMessage)(err),
+                cause: err,
+            });
+        }
         try {
             await this.addon.activate();
         }
