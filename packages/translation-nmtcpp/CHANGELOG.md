@@ -5,60 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [10.1.0] - 2026-08-10
+## [Unreleased]
 
 ### Added
 
-- `TranslationResponse` public type: `run()` now resolves with the streaming
-  response surface plus a typed `stats` property, so TypeScript consumers can
-  read `response.stats` (`RuntimeStats`) without casting.
+- `TranslationResponse` public type: `run()` resolves with the streaming
+  response surface plus a typed `stats` property (`RuntimeStats`).
 - `QvacErrorAddonMarian` and `ERR_CODES` are exported through a supported
   public path: `@qvac/translation-nmtcpp/lib/error`.
-- Focused unit tests for run/runBatch serialization, activation-failure
-  cleanup, lifecycle state flags, `load()`-after-`destroy()` rejection, and
-  the en→pt target-token handling — driven against the real wrapper with an
-  injected fake native interface.
 
 ### Changed
 
-- **Inference is serialized through completion.** `run()` now holds its
+- Inference is serialized through completion: `run()` holds its
   exclusive-queue slot until the returned response settles, and `runBatch()`
   goes through the same queue — a new job can no longer replace an active
-  response mid-flight (previously the queue was released as soon as the job
-  was submitted, and `runBatch()` bypassed it entirely).
-- The job handler is now started before the native job is submitted (and
-  failed when submission throws), so output events can never race the
-  response registration.
-- The hardcoded en→pt `>>por<<` literal moved into a named
-  per-language-pair target-token table
-  (`BERGAMOT_TARGET_TOKEN_BY_PAIR`) with documentation and tests explaining
-  why that pair needs the Opus-MT-style token.
-- The native binding is resolved lazily on first use instead of at import
-  time, so the package can be imported (for types, error codes, or the model
-  fetchers) without a prebuild present.
-- Documentation overhaul: batch translation documented for both backends
-  (IndicTrans2 batching is implemented and integration-tested), obsolete
-  `params.mode` removed from examples/docs, phantom loading-progress claim
-  removed, cancellation (`response.cancel()`) documented accurately, new
-  consolidated API Reference (methods, `RuntimeStats` with units, error
-  codes, subpath exports), new Model Registry and pivot-translation
-  sections, broken links fixed, development instructions corrected
-  (Prettier/lunte/ESLint instead of StandardJS), `docs/` architecture
-  material linked from the README and refreshed (removed
-  Hyperdrive/weights-provider/progress-callback/`processBatch` descriptions
-  and Opus-era naming).
+  response mid-flight.
+- The en→pt `>>por<<` handling moved into a named per-language-pair
+  target-token table with documentation on why that pair needs the
+  Opus-MT-style token.
+- The native binding is resolved lazily on first use, so the package can be
+  imported (for types, error codes, or the model fetchers) without a
+  prebuild present.
+- Documentation overhaul: batch translation documented for both backends,
+  obsolete `params.mode` removed, cancellation documented accurately, new
+  Model Registry / pivot-translation / API Reference sections (with
+  `RuntimeStats` units and error codes), broken links and development
+  instructions fixed, `docs/` architecture material refreshed and linked.
 
 ### Fixed
 
 - A failed `activate()` during `load()` now destroys the just-created native
-  instance (releasing the C++ → JS logger bridge) and clears the addon
-  handle instead of leaking both.
-- `getState().weightsLoaded` is now set after a successful `load()`
-  (previously only `configLoaded` was set).
-- `load()` after `destroy()` now rejects — destruction is documented as
-  permanent (previously it silently resurrected the instance).
-- `run()` before `load()` now rejects with a clear "Model not loaded" error
-  instead of an internal null dereference.
+  instance and releases the logger bridge instead of leaking both.
+- `getState().weightsLoaded` is set after a successful `load()`.
+- `load()` after `destroy()` now rejects — destruction is permanent.
+- `run()` before `load()` rejects with a clear "Model not loaded" error.
 
 ## [10.0.0] - 2026-08-10
 
