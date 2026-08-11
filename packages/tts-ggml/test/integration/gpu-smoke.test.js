@@ -34,13 +34,15 @@ const {
 } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
+const { loadCosyvoiceTTS, runCosyvoiceTTS } = require('../utils/runCosyvoiceTTS')
 const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
-  ensureParlerModel
+  ensureParlerModel,
+  ensureCosyvoiceModel
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
@@ -50,6 +52,9 @@ const isApple = platform === 'darwin' || platform === 'ios'
 // Parler GPU coverage is validated on Apple and the Android Device Farm.
 // Keep desktop Vulkan out until dedicated Linux/Windows runs prove it there.
 const isParlerGpuPlatform = isApple || platform === 'android'
+// CosyVoice3's tts-cpp allowlist is Metal (Apple) + OpenCL/Adreno (Android);
+// Vulkan hosts are declined by policy, so the strict GPU leg skips them.
+const isCosyvoiceGpuPlatform = isApple || platform === 'android'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
@@ -630,3 +635,86 @@ for (const v of [
     }
   )
 }
+
+// CosyVoice3 smoke. The GPU leg is strict on Apple (Metal, tts-cpp allowlisted
+// under QVAC-22775); on Android the allowlist takes OpenCL/Adreno only, so
+// non-Adreno farm devices (Mali) decline by policy — the allowPolicyCpu hatch
+// accepts that fallback when stats.gpuUnsupported is set.
+test(
+  'CosyVoice3 GPU smoke - useGPU=true must engage GPU on Apple/Android',
+  { timeout: 600000, skip: NO_GPU || !isCosyvoiceGpuPlatform },
+  async (t) => {
+    const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
+    const download = await ensureCosyvoiceModel({ targetDir: modelsDir })
+    if (!download.success) {
+      t.fail(
+        'CosyVoice3 model files not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
+    const model = await loadCosyvoiceTTS({
+      cosyvoiceModelDir: download.modelDir,
+      useGPU: true
+    })
+    try {
+      const t0 = Date.now()
+      const result = await runCosyvoiceTTS(
+        model,
+        { text: 'GPU smoke check for the CosyVoice engine.' },
+        { minSamples: 10000 }
+      )
+      const wallMs = Date.now() - t0
+      console.log(result.output)
+      t.ok(result.passed, 'CosyVoice3/GPU produced expected sample count')
+      t.ok(result.data.sampleCount > 0, 'CosyVoice3/GPU produced audio')
+      assertGpuBackend(
+        t,
+        'CosyVoice3',
+        result.data.stats,
+        /* allowPolicyCpu */ platform === 'android'
+      )
+      recordSmoke(t, 'cosyvoice3 gpu-smoke', result, wallMs)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+test(
+  'CosyVoice3 CPU smoke - useGPU=false must run on the CPU backend',
+  { timeout: 600000 },
+  async (t) => {
+    const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
+    const download = await ensureCosyvoiceModel({ targetDir: modelsDir })
+    if (!download.success) {
+      t.fail(
+        'CosyVoice3 model files not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
+    const model = await loadCosyvoiceTTS({
+      cosyvoiceModelDir: download.modelDir,
+      useGPU: false
+    })
+    try {
+      const t0 = Date.now()
+      const result = await runCosyvoiceTTS(
+        model,
+        { text: 'CPU smoke check for the CosyVoice engine.' },
+        { minSamples: 10000 }
+      )
+      const wallMs = Date.now() - t0
+      console.log(result.output)
+      t.ok(result.passed, 'CosyVoice3/CPU produced expected sample count')
+      t.ok(result.data.sampleCount > 0, 'CosyVoice3/CPU produced audio')
+      assertCpuBackend(t, 'CosyVoice3', result.data.stats)
+      recordSmoke(t, 'cosyvoice3 cpu-smoke', result, wallMs)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)

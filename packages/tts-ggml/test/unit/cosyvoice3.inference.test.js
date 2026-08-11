@@ -121,6 +121,25 @@ test('CosyVoice3: ttsParams shape forwards dir/language/streaming/cfm/promptText
   t.absent(params.supertonicModelPath, 'no supertonic fields leaked')
 })
 
+test('CosyVoice3: GPU options forward to params (useGPU / nGpuLayers)', (t) => {
+  const gpu = createMockedCosyvoiceModel({ extra: { config: { language: 'en', useGPU: true } } })
+  t.is(gpu._buildTtsParams().useGPU, true, 'useGPU:true forwards to params')
+
+  const layers = createMockedCosyvoiceModel({
+    extra: { config: { language: 'en' }, nGpuLayers: 99 }
+  })
+  t.is(layers._buildTtsParams().nGpuLayers, 99, 'nGpuLayers forwards to params')
+
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        extra: { config: { language: 'en', useGPU: false }, nGpuLayers: 99 }
+      }),
+    /conflicts/,
+    'useGPU:false + nGpuLayers:99 conflict rejects'
+  )
+})
+
 test('CosyVoice3: per-component model paths forward to params', (t) => {
   const model = createMockedCosyvoiceModel({
     files: {
