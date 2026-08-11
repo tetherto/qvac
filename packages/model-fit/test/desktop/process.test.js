@@ -27,14 +27,20 @@ const HAS_NATIVE_PREBUILD =
   (process.platform === 'darwin' && fs.existsSync(path.join(PREBUILDS_DIR, 'darwin-universal')))
 
 const RUNNER_DEADLINE_MS = 10_000
+// A cold spawn on darwin compiles the embedded Metal library before the fitter
+// can answer, which is far slower than the protocol paths.
+const NATIVE_DEADLINE_MS = 120_000
 
 // The runner has no timeout of its own, so the harness supplies one. Without it
 // a stuck child is a bare assertion timeout with no output and an orphaned
 // process left on the runner.
-function runRunner (input) {
+function runRunner (input, deadlineMs = RUNNER_DEADLINE_MS) {
   return new Promise((resolve, reject) => {
+    // Overlapped, not plain pipes: libuv gives a child synchronous stdio handles
+    // on Windows, and a Bare child then emulates async reads with a worker
+    // thread and never sees the request. The flag is a no-op off Windows.
     const child = spawn(process.execPath, [resolveFitProcessRunnerPath()], {
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['overlapped', 'overlapped', 'overlapped']
     })
     let stdout = ''
     let stderr = ''
@@ -45,10 +51,10 @@ function runRunner (input) {
       settled = true
       child.kill('SIGKILL')
       reject(new Error(
-        `runner did not exit within ${RUNNER_DEADLINE_MS}ms; ` +
+        `runner did not exit within ${deadlineMs}ms; ` +
         `stdout=${JSON.stringify(stdout)} stderr=${JSON.stringify(stderr)}`
       ))
-    }, RUNNER_DEADLINE_MS)
+    }, deadlineMs)
 
     function settle (result, error) {
       if (settled) return
@@ -433,12 +439,14 @@ test('fit process runner answers a closed stdin without a request', async (t) =>
 })
 
 test('fit process runner returns a real fit through the boundary', { skip: !HAS_NATIVE_PREBUILD }, async (t) => {
+  t.timeout(NATIVE_DEADLINE_MS * 1.5)
+
   // The only test that loads the addon in the child. A path that cannot exist is
   // a documented ERROR outcome rather than a throw, so this exercises native
   // load, backend registration and the response encoding without a model file.
   const outcome = await runRunner(encodeFitProcessRequest({
     modelPath: path.join(__dirname, 'no-such-model.gguf')
-  }))
+  }), NATIVE_DEADLINE_MS)
   const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
 
   t.is(outcome.code, 0)

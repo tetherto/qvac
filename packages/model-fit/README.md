@@ -214,7 +214,27 @@ alive forever. Imposing a deadline and killing the child is the supervisor's
 job, as is cancellation.
 
 The addon is loaded only once a request has parsed, so a rejected request costs
-a process spawn and nothing else — never backend registration.
+a process spawn and nothing else — never backend registration. When it is
+loaded, the child pays for backend discovery on every spawn; on darwin that
+includes compiling the embedded Metal library, which is slow enough on a cold
+runner to dwarf the fit itself. Size the deadline for that, not for the
+projection.
+
+### Spawning on Windows
+
+The child's stdio must be created as **overlapped** pipes:
+
+```js
+spawn(bareExecutable, [resolveFitProcessRunnerPath()], {
+  stdio: ['overlapped', 'overlapped', 'overlapped']
+})
+```
+
+libuv hands a child synchronous stdio handles by default on Windows. The runner
+is itself a libuv program, so it falls back to emulating async reads on a worker
+thread and never observes the request: the child hangs with no output and no
+diagnostic until the supervisor's deadline fires. The flag is a no-op on other
+platforms, so it can be set unconditionally.
 
 ## SDK usage (intended)
 
