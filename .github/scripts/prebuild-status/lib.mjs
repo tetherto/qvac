@@ -158,7 +158,7 @@ export async function pollPrebuilds({
       log(`::error title=Prebuild verification timed out::No fresh terminal prebuild status after timeout for: ${pending.join(' ')}`)
       return 1
     }
-    log(`Waiting on prebuild status(es): ${pending.join(' ')} - re-checking in 30s`)
+    log(`Waiting on prebuild status(es): ${pending.join(' ')} - re-checking in ${Math.round(pollIntervalMs / 1000)}s`)
     await sleep(pollIntervalMs)
   }
 }

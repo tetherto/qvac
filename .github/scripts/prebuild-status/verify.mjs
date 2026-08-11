@@ -10,7 +10,10 @@ import { execFileSync } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
 
-const POLL_INTERVAL_MS = 30_000
+// Prebuilds take tens of minutes (median 9-32 min, worst ~32 min observed);
+// nothing resolves inside 2 minutes, so a longer interval costs no meaningful
+// release latency while cutting the request count 4x over the full timeout.
+const POLL_INTERVAL_MS = 120_000
 const TIMEOUT_MS = 180 * 60 * 1000
 
 function ghJson(args) {
@@ -69,11 +72,23 @@ async function main() {
   }
   const prUpdatedEpoch = Math.floor(prUpdatedMs / 1000)
 
+  // A run's path/created_at are immutable once it exists, so memoize successful
+  // lookups to keep the request count independent of the poll interval. Cache
+  // successes only: memoizing a null from a transient failure would poison that
+  // run id for the whole timeout and guarantee a spurious pending/timeout.
+  const runCache = new Map()
+  const lookupRun = (runId) => {
+    if (runCache.has(runId)) return runCache.get(runId)
+    const run = fetchRun(repo, runId)
+    if (run) runCache.set(runId, run)
+    return run
+  }
+
   return pollPrebuilds({
     expected,
     prUpdatedEpoch,
     fetchStatuses: () => fetchStatuses(repo, sha),
-    lookupRun: (runId) => fetchRun(repo, runId),
+    lookupRun,
     now: () => Date.now(),
     sleep,
     pollIntervalMs: POLL_INTERVAL_MS,
