@@ -65,7 +65,7 @@ test('Parler: parlerModel file path alone routes to parler engine', (t) => {
 test('Parler: invalid engine error message lists parler', (t) => {
   t.exception(
     () => new TTSGgml({ engine: 'parakeet' }),
-    /'chatterbox', 'supertonic', 'cosyvoice3' or 'parler'/,
+    /'chatterbox', 'supertonic', 'cosyvoice3', 'parler' or 'audio8'/,
     'engine validation message includes parler'
   )
 })
@@ -288,8 +288,8 @@ test('Parler: parler-only options on other engines throw', (t) => {
         files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
         temperature: 0.8
       }),
-    /parler-only/,
-    'temperature on chatterbox throws'
+    /parler\/audio8-only/,
+    'temperature on chatterbox throws (audio8 samples too, so it is shared)'
   )
 })
 
