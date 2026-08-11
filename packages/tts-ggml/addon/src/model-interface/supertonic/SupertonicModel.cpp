@@ -39,7 +39,8 @@ void detail::applyVulkanPipelineCache(
 
 void detail::validateNoPerCallControls(
     const std::string& emotion, const std::string& pace) {
-  if (emotion.empty() && pace.empty()) return;
+  if (emotion.empty() && pace.empty())
+    return;
   const std::string channel = emotion.empty() ? "pace" : "emotion";
   throw qvac_errors::StatusError(
       qvac_errors::general_error::InvalidArgument,

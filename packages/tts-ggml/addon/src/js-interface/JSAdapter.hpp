@@ -4,7 +4,6 @@
 
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <js.h>
-
 #include <tts-cpp/cosyvoice/engine.h>
 
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"

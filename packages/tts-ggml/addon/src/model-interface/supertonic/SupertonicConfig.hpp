@@ -12,7 +12,8 @@ struct SupertonicConfig {
   std::optional<int> steps;
   /** Exact rate multiplier. Mutually exclusive with `pace` (engine rejects). */
   std::optional<float> speed;
-  /** Canonical rate step: slow | moderate | fast. See tts-cpp/voice_controls.h. */
+  /** Canonical rate step: slow | moderate | fast. See tts-cpp/voice_controls.h.
+   */
   std::string pace;
   std::optional<int> seed;
   std::optional<int> threads;

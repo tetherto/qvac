@@ -240,7 +240,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   }
   cfg.steps             = readOptionalInt(configurationParams, env, "steps");
   cfg.speed             = readOptionalFloat(configurationParams, env, "speed");
-  cfg.pace              = readOptionalString(configurationParams, env, "pace");
+  cfg.pace = readOptionalString(configurationParams, env, "pace");
   cfg.seed              = readOptionalInt(configurationParams, env, "seed");
   cfg.threads           = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers        = readOptionalInt(configurationParams, env, "nGpuLayers");

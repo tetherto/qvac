@@ -498,8 +498,7 @@ void CosyvoiceModel::cancel() const {
 }
 
 CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
-    const std::string& text,
-    const tts_cpp::cosyvoice::VoiceControls& controls,
+    const std::string& text, const tts_cpp::cosyvoice::VoiceControls& controls,
     const ChunkCallback& onChunk) {
   // Keep the engine (and enhancer/denoiser) alive for the whole call even if
   // reload() swaps new ones in concurrently — the replacements take effect on
