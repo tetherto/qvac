@@ -187,7 +187,7 @@ def download_dataset(data_dir, dataset_name="flores-devtest"):
 
     if config["type"] == "flores":
         # Download Flores200 dataset
-        url = "https://tinyurl.com/flores200dataset"
+        url = "https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz"
 
         # Download and extract
         tarball = data_dir_path / f"{config['folder']}.tar.gz"
