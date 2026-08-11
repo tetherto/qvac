@@ -138,7 +138,7 @@ bare examples/backend-device.js --backend metal
 |---|---|:-:|---|---|
 | `params.pathDetector` | `string` | ✓ | — | detector `.gguf` (CRAFT for `easyocr`, DBNet for `doctr`) |
 | `params.pathRecognizer` | `string` | ✓ | — | recognizer `.gguf` (`english_g2`/`latin_g2` for `easyocr`, doctr CRNN for `doctr`) |
-| `params.langList` | `string[]` | ✓ (`easyocr`) | — | language codes (`['en']`, `['en','fr']`, …). Required for `easyocr` and validated by the **native** pipeline against its language registry and the loaded recognizer's character set (an incompatible list rejects `load()` with `ERR_CODES.FAILED_TO_LOAD_WEIGHTS`, preserving the native error message). Optional and ignored for the language-agnostic `doctr` pipeline |
+| `params.langList` | `string[]` | ✓ (`easyocr`) | — | language codes (`['en']`, `['en','fr']`, …). Required for `easyocr` and validated by the **native** pipeline against its language registry and the loaded recognizer's character set (an incompatible list rejects `load()` with `ERR_CODES.UNSUPPORTED_LANGUAGE`, preserving the native error message). Optional and ignored for the language-agnostic `doctr` pipeline |
 | `params.pipelineType` | `'easyocr'` \| `'doctr'` | | `'easyocr'` | which pipeline backs the addon |
 | `params.magRatio` | `number` | | `1.5` | CRAFT input-image magnification (`easyocr` only) |
 | `params.canvasSize` | `number` | | `2560` | detection canvas cap (long side, px) applied after `magRatio` scaling — EasyOCR's `canvas_size`. Bounds CRAFT peak memory on dense/high-resolution pages; lower it (e.g. `1280`) on memory-constrained targets such as mobile (`easyocr` only) |
@@ -186,14 +186,14 @@ The allocated code range is `8101..8200`:
 
 | Code | Name | Thrown when |
 |---|---|---|
-| 8101 | `FAILED_TO_LOAD_WEIGHTS` | creating the native instance failed — bad/unreadable model file or a `langList` the native pipeline rejects. The native error message is preserved in the wrapper's message and `cause` |
+| 8101 | `FAILED_TO_LOAD_WEIGHTS` | creating the native instance failed for a non-language reason (e.g. bad/unreadable model file). The native error message is preserved in the wrapper's message and `cause` |
 | 8102 | `FAILED_TO_CANCEL` | cancelling an in-flight job failed |
 | 8103 | `FAILED_TO_RUN_JOB` | submitting a job to the native addon failed |
 | 8104 | `FAILED_TO_GET_STATUS` | reserved |
 | 8105 | `FAILED_TO_DESTROY` | releasing the native instance failed |
 | 8106 | `FAILED_TO_ACTIVATE` | native activation failed (after the instance was created) |
 | 8107 | `MISSING_REQUIRED_PARAMETER` | `load()` called without `pathDetector` / `pathRecognizer` / a non-empty `langList` (the latter only for `easyocr`) |
-| 8108 | `UNSUPPORTED_LANGUAGE` | legacy — no longer thrown by the JS wrapper; language validation happens in the native pipeline, whose error propagates with its own message |
+| 8108 | `UNSUPPORTED_LANGUAGE` | the native pipeline rejected `langList` (unknown language, or a mix the recognizer does not support). The native message is preserved in the wrapper's message and `cause` |
 | 8109 | `INVALID_IMAGE_OR_INSUFFICIENT_DATA` | the input file is empty, truncated, or a malformed BMP |
 | 8110 | `UNSUPPORTED_IMAGE_FORMAT` | the input is not JPEG / PNG / BMP (or an unsupported BMP variant) |
 | 8111 | `NOT_LOADED` | `run()` called before `load()` |

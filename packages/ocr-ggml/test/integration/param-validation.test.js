@@ -74,8 +74,8 @@ test(
     t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
     t.is(
       err && err.code,
-      ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
-      'error.code is FAILED_TO_LOAD_WEIGHTS (native model-creation failure)'
+      ERR_CODES.UNSUPPORTED_LANGUAGE,
+      'error.code is UNSUPPORTED_LANGUAGE (mapped from the native validation failure)'
     )
     const message = String(err && err.message)
     t.ok(

@@ -213,7 +213,7 @@ test('OcrGgml.load rejects an explicit empty langList for the doctr pipeline', a
   )
 })
 
-test('OcrGgml.load wraps native creation failures as FAILED_TO_LOAD_WEIGHTS', async (t) => {
+test('OcrGgml.load maps native language failures to UNSUPPORTED_LANGUAGE', async (t) => {
   const ocr = new OcrGgml({
     params: {
       pathDetector: 'unused',
@@ -227,8 +227,43 @@ test('OcrGgml.load wraps native creation failures as FAILED_TO_LOAD_WEIGHTS', as
 
   const err = await captureRejection(() => ocr.load())
   t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
-  t.is(err && err.code, ERR_CODES.FAILED_TO_LOAD_WEIGHTS, 'error.code is FAILED_TO_LOAD_WEIGHTS')
+  t.is(err && err.code, ERR_CODES.UNSUPPORTED_LANGUAGE, 'error.code is UNSUPPORTED_LANGUAGE')
   t.ok(String(err && err.message).includes('unsupported languages'), 'native message is preserved')
+  t.is(ocr.addon, null, 'no addon handle is retained')
+})
+
+test('OcrGgml.load maps language-compatibility failures to UNSUPPORTED_LANGUAGE', async (t) => {
+  const ocr = new OcrGgml({
+    params: {
+      pathDetector: 'unused',
+      pathRecognizer: 'unused',
+      langList: ['th', 'fr']
+    }
+  })
+  ocr._createAddon = () => {
+    throw new Error('Thai is only compatible with English, try langList=["th","en"]')
+  }
+
+  const err = await captureRejection(() => ocr.load())
+  t.is(err && err.code, ERR_CODES.UNSUPPORTED_LANGUAGE, 'error.code is UNSUPPORTED_LANGUAGE')
+})
+
+test('OcrGgml.load wraps other native creation failures as FAILED_TO_LOAD_WEIGHTS', async (t) => {
+  const ocr = new OcrGgml({
+    params: {
+      pathDetector: 'unused',
+      pathRecognizer: 'unused',
+      langList: ['en']
+    }
+  })
+  ocr._createAddon = () => {
+    throw new Error('gguf_init_from_file: failed to open GGUF file')
+  }
+
+  const err = await captureRejection(() => ocr.load())
+  t.ok(err instanceof QvacErrorAddonOcrGgml, 'rejection is a QvacErrorAddonOcrGgml')
+  t.is(err && err.code, ERR_CODES.FAILED_TO_LOAD_WEIGHTS, 'error.code is FAILED_TO_LOAD_WEIGHTS')
+  t.ok(String(err && err.message).includes('failed to open'), 'native message is preserved')
   t.is(ocr.addon, null, 'no addon handle is retained')
 })
 

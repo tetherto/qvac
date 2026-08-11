@@ -18,11 +18,10 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Language validation is deferred to the native pipeline, which checks the
   requested languages against its registry and the loaded recognizer's
   character set — Latin-only lists such as `['fr']` with `latin_g2.gguf` now
-  load. `ERR_CODES.UNSUPPORTED_LANGUAGE` stays registered but is no longer
-  emitted.
-- Model-creation failures (bad model file, unsupported `langList`) now reject
-  `load()` with `ERR_CODES.FAILED_TO_LOAD_WEIGHTS`, preserving the native
-  error message.
+  load. Native language-validation failures still reject `load()` with
+  `ERR_CODES.UNSUPPORTED_LANGUAGE`, now carrying the native error message.
+- Other model-creation failures (e.g. a bad model file) reject `load()` with
+  `ERR_CODES.FAILED_TO_LOAD_WEIGHTS`, preserving the native error message.
 - Documentation refresh: `canvasSize`, `OCR_DOCTR_FUSED_CONV`, `backendIsGpu`
   (all GPU backends incl. OpenCL), vendored model converter, registry-hosted
   models via `@qvac/inference`, supported platforms, error codes, corrected

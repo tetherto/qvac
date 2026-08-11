@@ -32,6 +32,14 @@ export type OcrGgmlPipelineType = "easyocr" | "doctr";
 
 const DOCTR_INTERNAL_LANG_LIST = ["en"];
 
+/**
+ * Native language-validation failure messages (see the EasyOCR pipeline's
+ * lang.cpp): "Received unsupported languages for the OCR addon: [...]" and
+ * "<X> is only compatible with English, try langList=...". Used to map
+ * create-time failures to ERR_CODES.UNSUPPORTED_LANGUAGE.
+ */
+const NATIVE_LANGUAGE_ERROR = /unsupported languages|only compatible with english/i;
+
 export interface OcrGgmlParams {
   /**
    * Path to the detector GGUF file.
@@ -327,12 +335,16 @@ export class OcrGgml {
     try {
       this.addon = this._createAddon(configurationParams);
     } catch (err) {
-      // Native instance creation loads the models and validates langList, so
-      // its failures are weight-load errors; wrap them with a stable code
-      // while preserving the native message.
+      // Native instance creation loads the models and validates langList.
+      // Wrap its failures with a stable code — language-validation failures
+      // keep the public UNSUPPORTED_LANGUAGE code, everything else is a
+      // weight-load error — while preserving the native message.
+      const message = errorMessage(err);
       throw new QvacErrorAddonOcrGgml({
-        code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
-        adds: errorMessage(err),
+        code: NATIVE_LANGUAGE_ERROR.test(message)
+          ? ERR_CODES.UNSUPPORTED_LANGUAGE
+          : ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+        adds: message,
         cause: err as Error,
       });
     }

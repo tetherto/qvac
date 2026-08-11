@@ -13,6 +13,13 @@ Object.defineProperty(exports, "QvacErrorAddonOcrGgml", { enumerable: true, get:
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
 const DOCTR_INTERNAL_LANG_LIST = ["en"];
 /**
+ * Native language-validation failure messages (see the EasyOCR pipeline's
+ * lang.cpp): "Received unsupported languages for the OCR addon: [...]" and
+ * "<X> is only compatible with English, try langList=...". Used to map
+ * create-time failures to ERR_CODES.UNSUPPORTED_LANGUAGE.
+ */
+const NATIVE_LANGUAGE_ERROR = /unsupported languages|only compatible with english/i;
+/**
  * GGML-backed OCR implementation.
  *
  * Public surface matches `@qvac/ocr-onnx` so a downstream caller can switch
@@ -145,12 +152,16 @@ class OcrGgml {
             this.addon = this._createAddon(configurationParams);
         }
         catch (err) {
-            // Native instance creation loads the models and validates langList, so
-            // its failures are weight-load errors; wrap them with a stable code
-            // while preserving the native message.
+            // Native instance creation loads the models and validates langList.
+            // Wrap its failures with a stable code — language-validation failures
+            // keep the public UNSUPPORTED_LANGUAGE code, everything else is a
+            // weight-load error — while preserving the native message.
+            const message = (0, error_1.errorMessage)(err);
             throw new error_1.QvacErrorAddonOcrGgml({
-                code: error_1.ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
-                adds: (0, error_1.errorMessage)(err),
+                code: NATIVE_LANGUAGE_ERROR.test(message)
+                    ? error_1.ERR_CODES.UNSUPPORTED_LANGUAGE
+                    : error_1.ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+                adds: message,
                 cause: err,
             });
         }
