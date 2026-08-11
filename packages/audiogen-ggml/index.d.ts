@@ -91,7 +91,7 @@ export interface GenerateOptions {
      * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
      * in the engine yet.
      */
-    taskType?: 'text2music' | 'cover' | 'cover-nofsq' | string;
+    taskType?: 'text2music' | 'cover' | 'cover-nofsq';
     /**
      * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
      * Values < 1 are rejected by the engine until context switching lands.
