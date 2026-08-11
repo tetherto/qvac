@@ -57,7 +57,7 @@ test('modelsFromManifest rejects entries without a usable URL', () => {
   )
 })
 
-test('buildScript stages every model to the prestage dir', () => {
+test('buildScript stages every model to the Android prestage dir', () => {
   const script = buildScript([
     { name: 'a.gguf', url: 'https://example.com/a.gguf' },
     { name: 'b.gguf', url: 'https://example.com/b.gguf' }
@@ -66,7 +66,24 @@ test('buildScript stages every model to the prestage dir', () => {
   assert.match(script, /stage "a\.gguf" "https:\/\/example\.com\/a\.gguf"/)
   assert.match(script, /stage "b\.gguf" "https:\/\/example\.com\/b\.gguf"/)
   assert.match(script, /adb push/)
+  assert.doesNotMatch(script, /pymobiledevice3/)
   assert.match(script, /\[prestage\] done/)
+})
+
+test('buildScript ios backend uses pymobiledevice3 apps push into Documents', () => {
+  const script = buildScript([{ name: 'a.gguf', url: 'https://example.com/a.gguf' }], 'ios')
+  assert.match(script, /stage "a\.gguf" "https:\/\/example\.com\/a\.gguf"/)
+  assert.match(script, /pymobiledevice3 apps push/)
+  assert.match(script, /Documents\/\$NAME/)
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /not found during afc operation\|failed to perform afc operation/)
+  assert.match(script, /pymobiledevice3==10\.3\.1/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
+})
+
+test('buildScript rejects unknown platforms', () => {
+  assert.throws(() => buildScript([], 'windows'), /unknown platform/)
 })
 
 test('real integration manifest drives the complete pre-stage set', () => {
