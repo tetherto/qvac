@@ -175,7 +175,8 @@ async function initSystemPromptCache(
   cachePathToUse: string,
   systemPromptToUse: string,
   cacheKey: string,
-  tools?: Tool[]
+  tools?: Tool[],
+  onResponse?: (response: { cancel(): Promise<void> }) => void
 ) {
   const primeMessages: ChatHistory[] = [{ role: 'system', content: systemPromptToUse }]
 
@@ -194,6 +195,8 @@ async function initSystemPromptCache(
     saveCacheToDisk: true,
     prefill: true
   })
+  // Register the prime so an abort during a cold-cache prefill cancels it.
+  onResponse?.(primeResponse)
 
   await primeResponse.await()
 }
@@ -302,7 +305,8 @@ async function* processModelResponse(
   tools?: Tool[],
   generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
-  dialect?: ToolDialect
+  dialect?: ToolDialect,
+  onResponse?: (response: { cancel(): Promise<void> }) => void
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & {
     generationParams?: CompletionGenerationParams
@@ -319,6 +323,8 @@ async function* processModelResponse(
 
   const modelStart = nowMs()
   const response = await runModel(model, messagesToSend, hasRunOptions ? runOptions : undefined)
+  // Hand the admitted response back so the caller can cancel just this job.
+  onResponse?.(response)
 
   let accumulatedText = ''
   let producedTokens = false
@@ -408,44 +414,35 @@ export async function* completion(
 
   const model = getModel(modelId)
 
-  // Hard-cancel wiring: when the registry aborts the request's signal,
-  // forward to the addon so the C++ work stops as soon as it can. The
-  // SDK still treats `signal.aborted` as the truth for cancel detection
-  // (post-completion bookkeeping below) — this listener only shortens
-  // the latency between "user clicked stop" and "addon stops decoding".
-  //
-  // Fire-and-forget by construction (event listeners can't `await`), but
-  // `addon.cancel()` returns a Promise — if it ever rejects the bare
-  // `void` would leak it as an unhandledRejection. Attach `.catch(...)`
-  // so a rejection is logged and the process stays clean; the iterator
-  // below still sees EOF/empty tokens via the addon's normal cancel path
-  // so callers aren't affected.
-  const onAbort = () => {
-    const addon = model.addon
-    if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
-        requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-      })
-    }
+  // Per-request hard cancel: under continuous batching the model runs several
+  // jobs at once, so an abort must cancel only THIS request's job, not the
+  // whole model — `response.cancel()` routes to the addon's per-job cancel.
+  // `.catch(...)` keeps the fire-and-forget cancel from leaking a rejection.
+  let activeResponse: { cancel(): Promise<void> } | null = null
+  const cancelActive = () => {
+    activeResponse?.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] response.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    })
   }
+  // Publish each run's response as it's admitted; the `signal.aborted` re-check
+  // cancels it if the abort landed while run() was still being admitted.
+  const setActiveResponse = (response: { cancel(): Promise<void> }) => {
+    activeResponse = response
+    if (signal.aborted) cancelActive()
+  }
+  const onAbort = () => cancelActive()
   signal.addEventListener('abort', onAbort, { once: true })
-  // `addEventListener("abort", ..., { once: true })` does *not* fire if
-  // the signal is already aborted at register time — but the registry
-  // synchronously aborts a fresh controller when `parentSignal` was
-  // already aborted at `begin(...)`. Without this fall-through, the
-  // addon would keep decoding until the post-loop check notices.
-  // Re-using `onAbort` here keeps the listener body as the single
-  // source of truth for "what cancel does."
+  // `{ once: true }` won't fire for an already-aborted signal (e.g. an
+  // already-aborted parentSignal at begin), so fire once here; a no-op before
+  // any response exists.
   if (signal.aborted) onAbort()
 
-  // Detach the abort listener on every exit path (happy, throw, generator
-  // `return()` from upstream). `{ once: true }` already removes the
-  // listener if the signal fires, so the `removeEventListener` here is
-  // the cleanup hook for the signal-never-fired path.
   scope.defer(() => {
     signal.removeEventListener('abort', onAbort)
+    // Drop the ref so a late abort can't cancel an already-settled response.
+    activeResponse = null
   })
 
   if (!kvCache) {
@@ -466,7 +463,8 @@ export async function* completion(
       tools,
       mergedGenerationParams,
       undefined,
-      dialect
+      dialect,
+      setActiveResponse
     )
   }
 
@@ -498,7 +496,8 @@ export async function* completion(
       // Static-mode tools are baked into the system-prompt cache so
       // they're shared across the session. Dynamic-mode tools belong
       // to a per-turn anchor and must not enter the system cache.
-      staticTools ? tools : undefined
+      staticTools ? tools : undefined,
+      setActiveResponse
     )
   }
 
@@ -549,7 +548,8 @@ export async function* completion(
     tools,
     mergedGenerationParams,
     { cacheKey: turn.cachePath, saveCacheToDisk: true },
-    dialect
+    dialect,
+    setActiveResponse
   )
   const shouldCommitTurn = shouldCommitCachedTurn({
     aborted: signal.aborted,

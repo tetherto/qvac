@@ -94,6 +94,20 @@ export const serializeConcurrentCompletion: TestDefinition = {
   }
 }
 
+export const cancelIsolatesConcurrentBatches: TestDefinition = {
+  testId: 'cancel-isolates-concurrent-batches',
+  params: {
+    doomedPredict: 256,
+    survivorPredict: 16
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'cancellation',
+    dependency: 'llm-batch',
+    estimatedDurationMs: 30000
+  }
+}
+
 export const cancelByRequestIdEmbed: TestDefinition = {
   testId: 'cancel-by-requestid-embed',
   params: {
@@ -150,6 +164,7 @@ export const cancellationTests = [
   cancelBroadEmbeddings,
   cancelBroadTranslateLlm,
   serializeConcurrentCompletion,
+  cancelIsolatesConcurrentBatches,
   cancelByRequestIdEmbed,
   cancelByRequestIdTranscribe,
   cancelByRequestIdRagIngest

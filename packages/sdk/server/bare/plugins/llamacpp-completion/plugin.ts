@@ -36,7 +36,11 @@ import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { getModelConfig } from '@/server/bare/registry/model-registry'
 import { createCompletionNormalizer } from '@/server/utils/completion-normalizer'
 import { detectToolDialect } from '@/server/utils/tool-integration'
-import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
+import {
+  getRequestRegistry,
+  withRequestContext,
+  LLAMACPP_COMPLETION_CACHED_SLOT_GROUP
+} from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 import { getServerLogger } from '@/logging'
 import { ContextOverflowError } from '@/utils/errors-server'
@@ -48,6 +52,11 @@ import { stoppedByLength } from '@/server/bare/plugins/llamacpp-completion/ops/c
 import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
+
+// The model's concurrent sequence slots. Missing / 0 / NaN all mean single-slot.
+function getModelParallel(config: { parallel?: number | undefined }) {
+  return Number(config.parallel) || 1
+}
 
 function createLlmModel(
   modelId: string,
@@ -68,6 +77,10 @@ function createLlmModel(
     }
   }
 
+  // Addon overflow flag: at a single slot the addon throws when driven over
+  // capacity, at parallel>1 it queues the surplus. Not on the SDK surface.
+  const rejectWhenBusy = getModelParallel(llmConfig) <= 1
+
   const model = new LlmLlamacpp({
     files: {
       model: [getFirstShardPath(modelPath)],
@@ -75,7 +88,7 @@ function createLlmModel(
     },
     config: llmConfigStrings,
     logger,
-    opts: { stats: true }
+    opts: { stats: true, rejectWhenBusy }
   })
 
   return { model }
@@ -147,7 +160,8 @@ export const llmPlugin = definePlugin({
       requestSchema: batchCompletionStreamRequestSchema,
       responseSchema: batchCompletionStreamResponseSchema,
       streaming: true,
-      cancel: { scope: 'model', hard: true },
+      // Request-scope: a model-wide cancel would kill concurrent batching peers.
+      cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
@@ -180,10 +194,17 @@ export const llmPlugin = definePlugin({
           return normalizer
         }
 
+        // Batches share the completion lane at the model's `parallel` cap, so a
+        // batch and singles run concurrently on an N-way model; the surplus
+        // queues FCFS. A single-slot model admits one at a time, unchanged.
+        // The cap counts admitted requests, not the prompt sequences inside a
+        // batch — the addon schedules those across its own slots.
+        const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: 'batchCompletion',
-          modelId: request.modelId
+          modelId: request.modelId,
+          maxConcurrentPerModel: parallel
         })
         const requestLogger = withRequestContext(getServerLogger(), ctx)
 
@@ -316,7 +337,8 @@ export const llmPlugin = definePlugin({
       requestSchema: completionStreamRequestSchema,
       responseSchema: completionStreamResponseSchema,
       streaming: true,
-      cancel: { scope: 'model', hard: true },
+      // Request-scope: a model-wide cancel would kill concurrent batching peers.
+      cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
         const filteredHistory = request.history.map(({ role, content, attachments }) => ({
@@ -352,10 +374,18 @@ export const llmPlugin = definePlugin({
         // client can target this run with `cancel({ requestId })`.
         // Falls back to a server-generated id if the client (e.g. an
         // older release) didn't send one.
+        // Admit up to the model's `parallel` jobs; the surplus queues FCFS. A
+        // single-slot model keeps admitting one at a time, unchanged.
+        // Disk-KV-cache turns on an N-way model go to a cap-1 lane so same-file
+        // turns can't corrupt state (they only run at parallel > 1).
+        const parallel = getModelParallel(modelCfg as { parallel?: number })
+        const useCachedLane = Boolean(request.kvCache) && parallel > 1
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: 'completion',
-          modelId: request.modelId
+          modelId: request.modelId,
+          maxConcurrentPerModel: useCachedLane ? 1 : parallel,
+          ...(useCachedLane && { slotGroup: LLAMACPP_COMPLETION_CACHED_SLOT_GROUP })
         })
 
         const requestLogger = withRequestContext(getServerLogger(), ctx)

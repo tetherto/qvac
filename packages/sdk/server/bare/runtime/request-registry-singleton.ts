@@ -16,24 +16,17 @@ import {
  */
 let registry: RequestRegistry | null = null
 
-// `completion` and `batchCompletion` both run on the same `@qvac/llm-llamacpp`
-// instance, which funnels every `run()` (single-prompt and batch alike) through
-// one per-instance exclusive run queue plus a single-job native runner. They
-// therefore can't actually execute at once on the same model. Sharing one
-// admission lane makes the SDK queue reflect that reality: a completion and a
-// batch on the same model serialize FIFO at the SDK layer instead of both being
-// admitted and silently serializing inside the addon (which hides them from the
-// registry's queue-depth accounting, `requestId` diagnostics, and cancel).
+// completion + batchCompletion share one lane: singles and batches compete for
+// the model's `parallel` slots first-come-first-serve.
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
+// Concurrent disk-KV-cache turns would corrupt shared on-disk cache state, so on
+// N-way models the handler serializes them on this dedicated cap-1 lane.
+export const LLAMACPP_COMPLETION_CACHED_SLOT_GROUP = 'llamacppCompletionCached'
+
 function installDefaultPolicies(r: RequestRegistry): void {
-  // A loaded model is a single native context (one KV-cache, single-slot
-  // decode), so two same-model completions can't run in parallel. Serialize
-  // rather than reject: the second waits FIFO. maxConcurrentPerModel: 1 is
-  // today's reality — raise it once continuous batching lands. The depth cap
-  // bounds queue memory. The shared slot group extends that serialization
-  // across `completion` + `batchCompletion` on the same model (see note
-  // above).
+  // Cap is the model's `parallel`, passed per request by the handlers; the value
+  // here is only the fallback when a caller supplies none.
   r.policy({
     kind: 'completion',
     maxConcurrentPerModel: 1,

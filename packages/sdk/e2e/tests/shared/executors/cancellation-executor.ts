@@ -1,4 +1,5 @@
 import {
+  batchCompletion,
   cancel,
   completion,
   type CompletionEvent,
@@ -21,6 +22,7 @@ import {
   cancelBroadTranslateLlm,
   cancelByRequestIdEmbed,
   cancelByRequestIdRagIngest,
+  cancelIsolatesConcurrentBatches,
   cancelMidStreamCompletion,
   cancelThenResumeKvCache,
   serializeConcurrentCompletion
@@ -316,6 +318,7 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       [cancelByRequestIdEmbed.testId]: this.embedTargeted.bind(this),
       [cancelBroadTranslateLlm.testId]: this.translateLlmBroad.bind(this),
       [serializeConcurrentCompletion.testId]: this.serializeConcurrent.bind(this),
+      [cancelIsolatesConcurrentBatches.testId]: this.cancelIsolatesConcurrentBatches.bind(this),
       [cancelByRequestIdRagIngest.testId]: this.ragIngestTargeted.bind(this)
     }
   }
@@ -667,6 +670,82 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       output:
         `Serialize-concurrent OK: both same-model completions succeeded ` +
         `(run1 ${obs1.contentEvents} deltas, run2 ${obs2.contentEvents} deltas)`
+    }
+  }
+
+  // Fires two concurrent batchCompletions on a parallel>1 model, cancels one by
+  // requestId, and asserts the peer batch still decodes to completion — pinning
+  // that batch cancel is per-group (addon cancelJob), not whole-model.
+  async cancelIsolatesConcurrentBatches(
+    params: { doomedPredict: number; survivorPredict: number },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const mkBatch = (tag: string, predict: number, ask: string) =>
+      batchCompletion({
+        modelId,
+        prompts: [
+          {
+            id: `${tag}-a`,
+            history: [{ role: 'user', content: ask }],
+            generationParams: { temp: 0, seed: 1, predict }
+          },
+          {
+            id: `${tag}-b`,
+            history: [{ role: 'user', content: ask }],
+            generationParams: { temp: 0, seed: 2, predict }
+          }
+        ]
+      })
+
+    // doomed generates long so it is still decoding when cancelled; survivor is short.
+    const doomed = mkBatch(
+      'doomed',
+      params.doomedPredict,
+      'Write a very long detailed story about an otter and a river.'
+    )
+    const survivor = mkBatch('survivor', params.survivorPredict, 'Reply with only the word MELON.')
+
+    await cancel({ requestId: doomed.requestId })
+
+    const doomedOutcome = await captureFinal(doomed.results)
+    if (doomedOutcome.resolved) {
+      return {
+        passed: false,
+        output: 'doomed batch resolved, but its cancel should have rejected it'
+      }
+    }
+    if (!(doomedOutcome.error instanceof InferenceCancelledError)) {
+      return {
+        passed: false,
+        output: `doomed batch rejected with ${describeError(doomedOutcome.error)}, expected InferenceCancelledError`
+      }
+    }
+
+    let results: Awaited<ReturnType<typeof batchCompletion>['results']>
+    try {
+      results = await survivor.results
+    } catch (err) {
+      return {
+        passed: false,
+        output: `peer batch rejected with ${describeError(err)} — cancelling one batch must not stop a concurrent peer`
+      }
+    }
+    if (
+      !Array.isArray(results) ||
+      results.length !== 2 ||
+      results.some((r) => r.final.contentText.length === 0)
+    ) {
+      return {
+        passed: false,
+        output: `peer batch resolved but produced no content: ${JSON.stringify(results)}`
+      }
+    }
+
+    return {
+      passed: true,
+      output:
+        'Per-group batch cancel: doomed batch cancelled, concurrent peer batch decoded to completion'
     }
   }
 

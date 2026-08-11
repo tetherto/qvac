@@ -821,9 +821,9 @@ test("queue: onOverflow 'reject' still throws RequestRejectedByPolicyError", asy
 })
 
 test('queue: a sharedSlotGroup serializes different kinds on the same model', async (t) => {
-  // Mirrors the singleton wiring: completion + batchCompletion share one
-  // llama.cpp run queue, so they must contend for one admission lane per
-  // model rather than each getting an independent (kind, modelId) slot.
+  // Mirrors the singleton wiring: completion + batchCompletion share one lane
+  // so a completion and a batch on the same model contend for a single
+  // admission pool rather than each getting an independent (kind, modelId) slot.
   const r = createRequestRegistry()
   const sharedSlotGroup = 'llamacppCompletion'
   r.policy({
@@ -1108,5 +1108,190 @@ test('queue: cancelAll drains queued waiters so no begin() promise hangs', async
   t.is(holder.signal.aborted, true, 'the in-flight holder was aborted too')
 
   await holder[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+// -----------------------------------------------------------------------------
+// Per-request concurrency (multi-job continuous batching).
+//
+// A loaded model's real slot count is its own `parallel`, which varies per
+// model — so the completionStream handler passes it as
+// `begin({ maxConcurrentPerModel })` instead of baking one number into the
+// per-kind policy. A per-request `slotGroup` puts a subset of a kind (disk
+// KV-cache completions) on its own serialized lane while the rest go N-way.
+// -----------------------------------------------------------------------------
+
+test('policy: per-request maxConcurrentPerModel overrides the kind default and admits N-way', async (t) => {
+  const r = createRequestRegistry()
+  // Policy default serializes; the per-request override opens the gate to the
+  // model's `parallel` (3 here).
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  const opts = (id: string) => ({
+    requestId: id,
+    kind: 'completion' as const,
+    modelId: 'm1',
+    maxConcurrentPerModel: 3
+  })
+
+  const a = await r.begin(opts('r-1'))
+  const b = await r.begin(opts('r-2'))
+  const c = await r.begin(opts('r-3'))
+  t.is(r.list().length, 3, 'three concurrent completions admitted on one model')
+
+  let fourthResolved = false
+  const fourth = r.begin(opts('r-4')).then((ctx) => {
+    fourthResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(fourthResolved, false, 'the fourth queues once the model is at its 3-slot cap')
+
+  await a[Symbol.asyncDispose]()
+  const d = await fourth
+  t.is(fourthResolved, true, 'freeing one slot admits the queued fourth')
+
+  await b[Symbol.asyncDispose]()
+  await c[Symbol.asyncDispose]()
+  await d[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('policy: per-request maxConcurrentPerModel is scoped per model', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  // m1 was loaded with parallel=2, m2 with parallel=1.
+  const big1 = await r.begin({
+    requestId: 'a-1',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  const big2 = await r.begin({
+    requestId: 'a-2',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  t.is(r.list().length, 2, 'm1 admits two concurrently at its own cap')
+
+  const small1 = await r.begin({
+    requestId: 'b-1',
+    kind: 'completion',
+    modelId: 'm2',
+    maxConcurrentPerModel: 1
+  })
+  let small2Resolved = false
+  const small2 = r
+    .begin({ requestId: 'b-2', kind: 'completion', modelId: 'm2', maxConcurrentPerModel: 1 })
+    .then((ctx) => {
+      small2Resolved = true
+      return ctx
+    })
+  await settle()
+  t.is(small2Resolved, false, "m2's second request queues at its own 1-slot cap, unaffected by m1")
+
+  await small1[Symbol.asyncDispose]()
+  const small2ctx = await small2
+  await big1[Symbol.asyncDispose]()
+  await big2[Symbol.asyncDispose]()
+  await small2ctx[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('policy: a per-request slotGroup serializes a subset onto its own lane while the rest go N-way', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  // Plain completions go N-way on the default lane; disk-KV-cache completions
+  // are pinned to a cap-1 lane so they never decode concurrently with each
+  // other and corrupt shared on-disk cache state.
+  const plain = (id: string) => ({
+    requestId: id,
+    kind: 'completion' as const,
+    modelId: 'm1',
+    maxConcurrentPerModel: 3
+  })
+  const cached = (id: string) => ({
+    requestId: id,
+    kind: 'completion' as const,
+    modelId: 'm1',
+    maxConcurrentPerModel: 1,
+    slotGroup: 'cached'
+  })
+
+  const plain1 = await r.begin(plain('p-1'))
+  const cached1 = await r.begin(cached('c-1'))
+  t.is(r.list().length, 2, 'a plain and a cached completion run on separate lanes at once')
+
+  const plain2 = await r.begin(plain('p-2'))
+  t.is(r.list().length, 3, 'the N-way lane keeps admitting plain completions')
+
+  let cached2Resolved = false
+  const cached2 = r.begin(cached('c-2')).then((ctx) => {
+    cached2Resolved = true
+    return ctx
+  })
+  await settle()
+  t.is(
+    cached2Resolved,
+    false,
+    'the second cached completion queues behind the first on the cap-1 cache lane'
+  )
+
+  await cached1[Symbol.asyncDispose]()
+  const cached2ctx = await cached2
+  t.is(cached2Resolved, true, 'freeing the cache lane admits the queued cached completion')
+
+  await plain1[Symbol.asyncDispose]()
+  await plain2[Symbol.asyncDispose]()
+  await cached2ctx[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('policy: completion and batchCompletion share one lane and run concurrently up to the cap', async (t) => {
+  const r = createRequestRegistry()
+  const sharedSlotGroup = 'llamacppCompletion'
+  // Mirrors the singleton: both kinds share the lane; the per-request cap is
+  // the model's `parallel` (2 here), so a single and a batch run together.
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue', sharedSlotGroup })
+  r.policy({
+    kind: 'batchCompletion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup
+  })
+
+  const single = await r.begin({
+    requestId: 's-1',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  const batch = await r.begin({
+    requestId: 'b-1',
+    kind: 'batchCompletion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  t.is(r.list().length, 2, 'a single completion and a batch run concurrently on the shared lane')
+
+  let thirdResolved = false
+  const third = r
+    .begin({ requestId: 's-2', kind: 'completion', modelId: 'm1', maxConcurrentPerModel: 2 })
+    .then((ctx) => {
+      thirdResolved = true
+      return ctx
+    })
+  await settle()
+  t.is(thirdResolved, false, 'a third request queues once the shared lane is at its 2-slot cap')
+
+  await batch[Symbol.asyncDispose]()
+  const thirdCtx = await third
+  t.is(thirdResolved, true, 'freeing a shared slot admits the queued request regardless of kind')
+
+  await single[Symbol.asyncDispose]()
+  await thirdCtx[Symbol.asyncDispose]()
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
 })

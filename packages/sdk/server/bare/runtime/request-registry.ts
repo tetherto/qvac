@@ -28,6 +28,25 @@ export interface BeginOpts {
    * the parent does not require iterating the registry.
    */
   parentSignal?: AbortSignal
+  /**
+   * Per-request override of the kind policy's `maxConcurrentPerModel`. The
+   * policy value is one number for every model of a kind, but a loaded
+   * model's real concurrency is its own `parallel` (continuous-batching
+   * slot count), which varies per model — so the handler passes it here.
+   * Must be uniform across all requests routed to the same `(lane, modelId)`
+   * (a given model always yields the same `parallel`): the FIFO slot
+   * hand-off assumes one cap per lane and does not re-check it. A finite
+   * value below 1 is floored to 1.
+   */
+  maxConcurrentPerModel?: number
+  /**
+   * Per-request override of the admission lane. Defaults to the policy's
+   * `sharedSlotGroup` or the kind. Routes a subset of one kind onto its own
+   * serialized lane without a new `RequestKind` — e.g. disk-KV-cache
+   * completions serialize so concurrent turns can't corrupt a shared on-disk
+   * cache file, while plain completions of the same kind stay concurrent.
+   */
+  slotGroup?: string
 }
 
 export interface CancelByRequestId {
@@ -451,26 +470,33 @@ export function createRequestRegistry(options?: {
   async function acquireSlot(opts: BeginOpts): Promise<{ slotKey: string | undefined }> {
     if (opts.modelId === undefined) return { slotKey: undefined }
     const policy = policies.get(opts.kind)
-    if (!policy || !Number.isFinite(policy.maxConcurrent)) {
+    if (!policy) return { slotKey: undefined }
+    // The per-request override (the model's own `parallel`) wins over the
+    // per-kind default. A non-finite effective cap disables gating entirely; a
+    // finite value is floored at 1 (matching `normalizePolicy`) so a stray 0
+    // can't wedge the lane into queuing every request forever.
+    const requestedMax = opts.maxConcurrentPerModel ?? policy.maxConcurrent
+    if (!Number.isFinite(requestedMax)) {
       return { slotKey: undefined }
     }
+    const maxConcurrent = requestedMax < 1 ? 1 : requestedMax
     // A parent (worker-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
     if (opts.parentSignal?.aborted) return { slotKey: undefined }
 
     const modelId = opts.modelId
-    // A shared lane lets unrelated kinds (e.g. completion + batchCompletion)
-    // contend for one slot pool per model, matching an addon that serializes
-    // them on a single native context.
-    const key = slotKey(policy.slotGroup ?? opts.kind, modelId)
+    // Lane precedence: per-request override (e.g. a serialized KV-cache
+    // lane) → the policy's shared group → the kind itself. A shared lane
+    // lets unrelated kinds contend for one slot pool per model.
+    const key = slotKey(opts.slotGroup ?? policy.slotGroup ?? opts.kind, modelId)
     let st = keyStates.get(key)
     if (!st) {
       st = { active: 0, waiters: [] }
       keyStates.set(key, st)
     }
 
-    if (st.active < policy.maxConcurrent) {
+    if (st.active < maxConcurrent) {
       st.active++
       return { slotKey: key }
     }
