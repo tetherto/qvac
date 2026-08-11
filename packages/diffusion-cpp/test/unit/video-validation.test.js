@@ -204,6 +204,26 @@ test('load | passes native-required path fields as strings', async (t) => {
   t.is(captured.embeddingsConnectorsPath, '')
 })
 
+test('load | forwards VAE fallback config to the native context', async (t) => {
+  const m = makeWanModel({ config: { threads: 1, vae_auto_cpu_fallback: true } })
+  let captured = null
+  m._createAddon = (configurationParams) => {
+    captured = configurationParams
+    return {
+      activate: async () => {},
+      unload: async () => {}
+    }
+  }
+
+  await m.load()
+
+  t.is(
+    captured.config.vae_auto_cpu_fallback,
+    true,
+    'vae_auto_cpu_fallback reaches native configuration'
+  )
+})
+
 test('load | passes the Wan 2.2 high-noise expert to the native context', async (t) => {
   const m = new VideoStableDiffusion({
     files: {
