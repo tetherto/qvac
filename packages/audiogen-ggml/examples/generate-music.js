@@ -14,6 +14,11 @@
 //   AUDIOGEN_TSIG        time signature, e.g. "4/4"
 //   AUDIOGEN_DUR         target seconds (omit => LM decides length)
 //   AUDIOGEN_SEED        RNG seed
+//   AUDIOGEN_CODES       JSON file containing `audio_codes` as CSV or an array;
+//                        skips the LM for deterministic synthesis comparisons
+//   AUDIOGEN_DCW         "0" to disable Haar DCW (enabled by default)
+//   AUDIOGEN_DCW_LOW     low-band DCW strength (default 0.05)
+//   AUDIOGEN_DCW_HIGH    high-band DCW strength (default 0.02)
 //   AUDIOGEN_FORMAT      output format: "wav" (default) or "pcm"
 //   AUDIOGEN_GPU         "1" to run the whole pipeline (LM/DiT/encoders AND the
 //                        VAE) on GPU (Metal/Vulkan). Falls back to CPU if
@@ -27,6 +32,20 @@ const { AudioGen } = require('..')
 function numEnv (name) {
   const v = process.env[name]
   return v === undefined || v === '' ? undefined : Number(v)
+}
+
+function audioCodesEnv () {
+  const file = process.env.AUDIOGEN_CODES
+  if (!file) return undefined
+  const value = JSON.parse(fs.readFileSync(file, 'utf8')).audio_codes
+  const codes = Array.isArray(value) ? value : String(value).split(',').filter(Boolean).map(Number)
+  return Int32Array.from(codes)
+}
+
+function boolEnv (name) {
+  const v = process.env[name]
+  if (v === undefined || v === '') return undefined
+  return /^(1|true|yes|on)$/i.test(v)
 }
 
 async function main () {
@@ -49,7 +68,11 @@ async function main () {
     keyscale: process.env.AUDIOGEN_KEY || undefined,
     timesignature: process.env.AUDIOGEN_TSIG || undefined,
     duration: numEnv('AUDIOGEN_DUR'),
-    seed: numEnv('AUDIOGEN_SEED')
+    seed: numEnv('AUDIOGEN_SEED'),
+    dcwEnabled: boolEnv('AUDIOGEN_DCW'),
+    dcwScaler: numEnv('AUDIOGEN_DCW_LOW'),
+    dcwHighScaler: numEnv('AUDIOGEN_DCW_HIGH'),
+    audioCodes: audioCodesEnv()
   }
 
   console.log('[audiogen] prompt: ' + caption)

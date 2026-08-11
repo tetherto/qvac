@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
+  `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
+  produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
+  Pixel 9a instead of silently accepting a CPU fallback.
+- Expose ACE-Step LM sampling controls, Haar DCW parameters, and optional frozen
+  semantic codes through the JavaScript API for reproducible quality comparisons.
+
+### Changed
+
+- Bump `audiogen-cpp` to `2026-08-10`, enabling official sampler-side Haar DCW
+  by default and using the validated LM decoding policy on Metal and Vulkan.
+
 ## [0.2.0] - 2026-08-06
 
 ### Changed

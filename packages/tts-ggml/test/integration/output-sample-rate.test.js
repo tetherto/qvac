@@ -1,9 +1,10 @@
 'use strict'
 
 // Output-sample-rate selection: a requested outputSampleRate is honored
-// end-to-end and reported on the output chunk. Gated on the Supertonic GGUF +
-// a tts-cpp build that supports EngineOptions::output_sample_rate (PR #69);
-// skips/fails cleanly otherwise.
+// end-to-end and reported on the output chunk. The construct-time CosyVoice3
+// test needs no models; the model-backed ones are gated on the Supertonic /
+// Parler GGUFs plus a tts-cpp build that supports
+// EngineOptions::output_sample_rate (PR #69), and skip/fail cleanly otherwise.
 
 const os = require('bare-os')
 const path = require('bare-path')
@@ -31,6 +32,31 @@ async function collect(model, text) {
     .await()
   return { samples, sampleRate }
 }
+
+// CosyVoice3 native chunk streaming emits at its native 24 kHz, so the addon
+// rejects a different outputSampleRate there unless the LavaSR enhancer is on:
+// the enhancer's overlap-reprocess window resamples without leaving chunk
+// seams. That decision lives in CosyvoiceModel::validateConfig; this pins the
+// JS half, which must forward the combination rather than reject it up front.
+test('CosyVoice3: enhancer + streaming forwards a non-native outputSampleRate', (t) => {
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_COSYVOICE3,
+    files: {
+      cosyvoiceModelDir: './models/cosyvoice3',
+      lavasrEnhancer: './models/lavasr/lavasr-enhancer.gguf'
+    },
+    streamChunkTokens: 25,
+    config: { language: 'en', outputSampleRate: 16000 }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.outputSampleRate, 16000, 'requested rate forwarded')
+  t.is(params.streamChunkTokens, 25, 'streaming still requested')
+  t.is(
+    params.lavasrEnhancerPath,
+    './models/lavasr/lavasr-enhancer.gguf',
+    'enhancer forwarded — it is what makes the rate valid while streaming'
+  )
+})
 
 test(
   'Supertonic: outputSampleRate=16000 resamples and reports 16 kHz',

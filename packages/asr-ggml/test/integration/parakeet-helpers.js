@@ -13,6 +13,11 @@ const isMobile = platform === 'ios' || platform === 'android'
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 let _mobileModelManifest = null
 
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
 // ---------------------------------------------------------------------------
 // Performance reporter — captures Parakeet integration-test stats and emits
 // them through the shared QVAC perf-report pipeline (desktop) or via console
@@ -664,10 +669,13 @@ async function downloadFile(url, destPath) {
 }
 
 function prestagedModelDir(modelName) {
-  if (platform !== 'android') return null
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return null
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+    const p = path.join(stagedDir, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
   } catch (_) {}
   return null
 }
@@ -1174,8 +1182,8 @@ function quantFromGgufName(ggufPathOrName) {
  *   3. Existing cache in the test models dir for the preferred quant
  *      (q4_0 on mobile, q8_0 on desktop), then the other quant as a
  *      fallback.
- *   4. Android only: host-prestaged GGUF under /data/local/tmp, copied
- *      into the writable test models dir before use.
+ *   4. Mobile pre-stage: host-prestaged GGUF copied into the writable test
+ *      models dir before use.
  *   5. On mobile only: bundled GGUF in the React-Native asset cache,
  *      preferring `<samplesDir>/<mobileFile>` (q4_0). Surviving
  *      contract for dev flows that adb-push a GGUF into testAssets;

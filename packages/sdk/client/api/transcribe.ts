@@ -12,7 +12,8 @@ import {
   type TranscribeStreamMetadataSession,
   type TranscribeStreamConversationSession,
   type TranscribeStreamEvent,
-  type TranscribeStreamResponse
+  type TranscribeStreamResponse,
+  type TranscribeStats
 } from '@/schemas'
 import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
@@ -21,6 +22,11 @@ import { decoratePromise } from '@/utils/decorate-promise'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 
 const logger = getClientLogger()
+
+type TranscribeDuplexFactory = (
+  request: TranscribeStreamRequest,
+  options?: RPCOptions
+) => ReturnType<typeof duplex>
 
 function buildTranscribeRequest(
   params: TranscribeClientParams,
@@ -162,7 +168,8 @@ export function transcribeStream(
  * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
  *          (Node `Buffer` is a `Uint8Array` subtype) to feed audio,
  *          iterate with `for await (...)` to receive transcription, and
- *          `end()` to signal end of audio.
+ *          `end()` to signal end of audio. After consuming the iterator,
+ *          await `session.stats` for terminal engine statistics.
  */
 export function transcribeStream(
   params: TranscribeStreamClientParams & { emitVadEvents: true },
@@ -272,12 +279,17 @@ function buildTranscribeStreamRequest(
  * to surface strings or segments; `sessionName` is only used to label the
  * "already iterated" error so callers see the correct session type.
  */
-async function createTranscribeStreamSession<T>(
+export async function createTranscribeStreamSession<T>(
   params: TranscribeStreamClientParams,
   options: RPCOptions | undefined,
-  process: (line: string) => T | undefined | null,
-  sessionName: string
+  process: (
+    line: string,
+    onStats: (stats: TranscribeStats | undefined) => void
+  ) => T | undefined | null,
+  sessionName: string,
+  duplexFactory: TranscribeDuplexFactory = duplex
 ): Promise<{
+  stats: Promise<TranscribeStats | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -285,12 +297,42 @@ async function createTranscribeStreamSession<T>(
 }> {
   const request = buildTranscribeStreamRequest(params)
 
-  const { requestStream, responseStream } = await duplex(request, options)
+  const { requestStream, responseStream } = await duplexFactory(request, options)
 
-  const responses = parseLines(responseStream, process)
+  let statsSettled = false
+  let resolveStatsPromise: (stats: TranscribeStats | undefined) => void = () => {}
+  let rejectStatsPromise: (error: unknown) => void = () => {}
+  const stats = new Promise<TranscribeStats | undefined>((resolve, reject) => {
+    resolveStatsPromise = resolve
+    rejectStatsPromise = reject
+  })
+  stats.catch(() => {})
+
+  function resolveStats(value: TranscribeStats | undefined) {
+    if (statsSettled) return
+    statsSettled = true
+    resolveStatsPromise(value)
+  }
+
+  function rejectStats(error: unknown) {
+    if (statsSettled) return
+    statsSettled = true
+    rejectStatsPromise(error)
+  }
+
+  function resolveEmptyStats() {
+    resolveStats(undefined)
+  }
+
+  function processResponse(line: string) {
+    return process(line, resolveStats)
+  }
+
+  const responses = parseLines(responseStream, processResponse, resolveEmptyStats, rejectStats)
   let consumed = false
 
   return {
+    stats,
     write(audioChunk: Uint8Array) {
       requestStream.write(audioChunk)
     },
@@ -298,6 +340,7 @@ async function createTranscribeStreamSession<T>(
       requestStream.end()
     },
     destroy() {
+      resolveStats(undefined)
       requestStream.destroy()
       responseStream.destroy()
     },
@@ -338,7 +381,7 @@ function transcribeStreamDuplexConversation(
   return createTranscribeStreamSession(
     params,
     options,
-    (line) => processLineConversation(line, wantsMetadata),
+    (line, onStats) => processLineConversation(line, wantsMetadata, onStats),
     'TranscribeStreamConversationSession'
   )
 }
@@ -350,26 +393,35 @@ function transcribeStreamDuplexConversation(
  */
 async function* parseLines<T>(
   responseStream: DuplexReadable,
-  process: (line: string) => T | undefined | null
+  process: (line: string) => T | undefined | null,
+  onClose: () => void,
+  onError: (error: unknown) => void
 ): AsyncGenerator<T> {
   let buf = ''
 
-  for await (const chunk of responseStream) {
-    buf += chunk.toString()
-    const lines = buf.split('\n')
-    buf = lines.pop() || ''
+  try {
+    for await (const chunk of responseStream) {
+      buf += chunk.toString()
+      const lines = buf.split('\n')
+      buf = lines.pop() || ''
 
-    for (const line of lines) {
-      const result = process(line)
-      if (result === null) return
-      if (result !== undefined) yield result
+      for (const line of lines) {
+        const result = process(line)
+        if (result === null) return
+        if (result !== undefined) yield result
+      }
     }
-  }
 
-  // Process any residual data after stream ends
-  if (buf.trim()) {
-    const result = process(buf)
-    if (result !== null && result !== undefined) yield result
+    // Process any residual data after stream ends
+    if (buf.trim()) {
+      const result = process(buf)
+      if (result !== null && result !== undefined) yield result
+    }
+  } catch (error) {
+    onError(error)
+    throw error
+  } finally {
+    onClose()
   }
 }
 
@@ -399,57 +451,76 @@ function parseResponseLine(line: string): TranscribeStreamResponse | null {
  */
 function processWith<T>(
   line: string,
-  extract: (response: TranscribeStreamResponse) => T | undefined
+  extract: (response: TranscribeStreamResponse) => T | undefined,
+  onStats: (stats: TranscribeStats | undefined) => void
 ): T | undefined | null {
   const response = parseResponseLine(line)
   if (response === null) return undefined
   if (response.error) throw new TranscriptionFailedError(response.error)
-  if (response.done) return null
+  if (response.done) {
+    onStats(response.stats)
+    return null
+  }
   return extract(response)
 }
 
-function processLine(line: string): string | undefined | null {
-  return processWith(line, (response) => (response.text?.trim() ? response.text : undefined))
+export function processLine(
+  line: string,
+  onStats: (stats: TranscribeStats | undefined) => void
+): string | undefined | null {
+  return processWith(
+    line,
+    (response) => (response.text?.trim() ? response.text : undefined),
+    onStats
+  )
 }
 
-function processLineMetadata(line: string): TranscribeSegment | undefined | null {
-  return processWith(line, (response) => response.segment)
+function processLineMetadata(
+  line: string,
+  onStats: (stats: TranscribeStats | undefined) => void
+): TranscribeSegment | undefined | null {
+  return processWith(line, (response) => response.segment, onStats)
 }
 
 function processLineConversation(
   line: string,
-  wantsMetadata: boolean
+  wantsMetadata: boolean,
+  onStats: (stats: TranscribeStats | undefined) => void
 ): TranscribeStreamEvent | undefined | null {
-  return processWith(line, (response) => {
-    if (response.vad) {
-      return {
-        type: 'vad',
-        speaking: response.vad.speaking,
-        probability: response.vad.probability
-      }
-    }
-    if (response.endOfTurn) {
-      if (response.endOfTurn.source === 'whisper') {
+  return processWith(
+    line,
+    (response) => {
+      if (response.vad) {
         return {
-          type: 'endOfTurn',
-          source: 'whisper',
-          silenceDurationMs: response.endOfTurn.silenceDurationMs
+          type: 'vad',
+          speaking: response.vad.speaking,
+          probability: response.vad.probability
         }
       }
-      return {
-        type: 'endOfTurn',
-        source: 'parakeet'
+      if (response.endOfTurn) {
+        if (response.endOfTurn.source === 'whisper') {
+          return {
+            type: 'endOfTurn',
+            source: 'whisper',
+            silenceDurationMs: response.endOfTurn.silenceDurationMs
+          }
+        }
+        return {
+          type: 'endOfTurn',
+          source: 'parakeet'
+        }
       }
-    }
-    if (wantsMetadata) {
-      if (response.segment) {
-        return { type: 'segment', segment: response.segment }
+      if (wantsMetadata) {
+        if (response.segment) {
+          return { type: 'segment', segment: response.segment }
+        }
+        return undefined
+      }
+      if (response.text && response.text.trim()) {
+        return { type: 'text', text: response.text }
       }
       return undefined
-    }
-    if (response.text && response.text.trim()) {
-      return { type: 'text', text: response.text }
-    }
-    return undefined
-  })
+    },
+    onStats
+  )
 }

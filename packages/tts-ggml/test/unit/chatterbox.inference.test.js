@@ -373,8 +373,44 @@ test('Chatterbox: denoiser + streamChunkTokens is rejected (streaming denoise is
         streamChunkTokens: 25,
         config: { language: 'en' }
       }),
-    /denoiser is not yet supported with Chatterbox native chunk streaming/,
+    /denoiser is not yet supported with native chunk streaming/,
     'denoiser + native chunk streaming throws (unlike the enhancer, which supports it)'
+  )
+})
+
+test('Chatterbox: denoiser + streamChunkTokens 0 is accepted (0 means no streaming)', (t) => {
+  t.execution(
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf',
+          lavasrDenoiser: '/abs/den.gguf'
+        },
+        streamChunkTokens: 0,
+        streamFirstChunkTokens: 0,
+        config: { language: 'en' }
+      }),
+    'an explicit 0 requests batch synthesis, so the denoiser stays allowed'
+  )
+})
+
+test('Chatterbox: denoiser + streamFirstChunkTokens alone is accepted (batch)', (t) => {
+  // The addon starts native chunk streaming on streamChunkTokens > 0 alone, so
+  // a first-chunk size without it is still batch synthesis and must not cost
+  // the caller the denoiser.
+  t.execution(
+    () =>
+      new TTSGgml({
+        files: {
+          t3Model: './models/chatterbox-t3-turbo.gguf',
+          s3genModel: './models/chatterbox-s3gen.gguf',
+          lavasrDenoiser: '/abs/den.gguf'
+        },
+        streamFirstChunkTokens: 20,
+        config: { language: 'en' }
+      }),
+    'streamFirstChunkTokens on its own does not start streaming'
   )
 })
 

@@ -154,6 +154,8 @@ function generateBaseName(input: BaseNameInput): string {
       return generateDiffusionName(input)
     case 'audiogen':
       return generateAudioGenName(input)
+    case 'vla':
+      return generateVlaName(input)
     default:
       return cleanPart(input.filename.replace(/\.\w+$/, ''))
   }
@@ -162,6 +164,22 @@ function generateBaseName(input: BaseNameInput): string {
 function generateAudioGenName({ filename }: BaseNameInput): string {
   const modelName = cleanPart(filename.replace(/\.\w+$/, ''))
   return `AUDIOGEN_${modelName}`
+}
+
+// VLA filenames alone don't always identify the model: the single- and
+// multi-embodiment GR00T conversions ship the same `groot-<quant>.gguf`
+// filename and differ only in `params`/tags, which the default filename-based
+// name can't see (it would collide into a positional `_1` suffix). Mark
+// multi-embodiment models by splicing MULTI after the family token
+// (GROOT_Q8_VF16 → GROOT_MULTI_Q8_VF16); everything else keeps the exact
+// default-case name so existing VLA constants don't rename.
+function generateVlaName({ filename, tags }: BaseNameInput): string {
+  const base = cleanPart(filename.replace(/\.\w+$/, ''))
+  if (!tags.includes('multi-embodiment') || base.includes('MULTI')) {
+    return base
+  }
+  const [family, ...rest] = base.split('_')
+  return [family, 'MULTI', ...rest].join('_')
 }
 
 function generateVadSileroName({ filename }: BaseNameInput): string {

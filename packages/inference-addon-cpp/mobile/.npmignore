@@ -1,0 +1,7 @@
+# Shadows .gitignore for `npm pack`. npm falls back to .gitignore when no
+# .npmignore exists, and .gitignore excludes the generated test tree — but the
+# harness builds the on-device app from pack output, so stripping it would ship an
+# app with no tests. The package.json "files" allowlist decides what is packed.
+node_modules/
+build/
+dist/

@@ -27,8 +27,8 @@ You get the audio as **interleaved Int16 PCM** through an output callback
 (a single PCM payload once generation completes; progress ticks stream during
 the run), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
-opens them. GPU (Metal / Vulkan) is used when you ask for it, with a CPU
-fallback.
+opens them. GPU (Metal / Vulkan, including Vulkan on Android Mali devices) is
+used when you ask for it, with a CPU fallback.
 
 ## Install & build
 
@@ -182,7 +182,7 @@ runnable end-to-end script (`npm run example`).
 
 | Option | Meaning |
 |--------|---------|
-| `useGPU` | Run on GPU (Metal / Vulkan); falls back to CPU. |
+| `useGPU` | Run on GPU (Metal / Vulkan, including Android Mali); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
