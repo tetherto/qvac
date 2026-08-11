@@ -121,11 +121,24 @@ struct CosyvoiceConfig {
   /** Smaller first chunk for low first-audio latency. 0 = same as
    * streamChunkTokens. */
   std::optional<int> streamFirstChunkTokens;
-  /** Left context carried into each chunk (bounds per-chunk cost). */
+  /**
+   * Left context intended to bound per-chunk cost. RESERVED / not yet effective
+   * — the pinned tts-cpp engine accepts but does not read
+   * stream_left_context_tokens; plumbed for API stability.
+   */
   std::optional<int> streamLeftContextTokens;
 
   /** Forwarded to `tts_cpp::cosyvoice::EngineOptions::backends_dir`. */
   std::string backendsDir;
+
+  /**
+   * Forwarded to `tts_cpp::cosyvoice::EngineOptions::opencl_cache_dir`: a
+   * writable directory for ggml-opencl's compiled program-binary cache. Only
+   * consumed on the Android OpenCL/Adreno GPU path (nGpuLayers/useGpu > 0);
+   * empty leaves ggml's default. Dropping it makes every process recompile the
+   * OpenCL kernels from scratch.
+   */
+  std::string openclCacheDir;
 
   // Bandwidth-extends the native 24 kHz output to 48 kHz, on both the batch
   // path and native chunk streaming. Empty disables enhancement.

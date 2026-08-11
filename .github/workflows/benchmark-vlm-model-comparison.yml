@@ -43,7 +43,7 @@ on:
         type: string
         default: "full"
       matrix_desktop:
-        description: "  desktop legs, comma-sep <os>-<backend>: linux-cpu,linux-gpu,macos-cpu,macos-gpu,windows-cpu,windows-gpu (macos = self-hosted qvac-macos26-arm64-gpu / Metal)"
+        description: "  desktop legs, comma-sep <os>-<backend>: linux-cpu,linux-gpu,macos-cpu,macos-gpu,windows-cpu,windows-gpu (macos = GitHub-hosted macos-26 / Metal)"
         required: false
         type: string
         default: "linux-cpu,linux-gpu"
@@ -191,8 +191,8 @@ jobs:
                 linux-gpu)   host=linux;   backend=gpu; runner=qvac-ubuntu2404-x64-gpu;  no_gpu=false ;;
                 # macOS arm64 (Apple Silicon): same self-hosted runner for both
                 # backends — gpu means Metal there, selected by the addon at runtime.
-                macos-cpu)   host=macos;   backend=cpu; runner=qvac-macos26-arm64-gpu;   no_gpu=true ;;
-                macos-gpu)   host=macos;   backend=gpu; runner=qvac-macos26-arm64-gpu;   no_gpu=false ;;
+                macos-cpu)   host=macos;   backend=cpu; runner=macos-26;   no_gpu=true ;;
+                macos-gpu)   host=macos;   backend=gpu; runner=macos-26;   no_gpu=false ;;
                 # Windows x64: the self-hosted runners the LLM integration tests
                 # use (the gpu one is Vulkan-provisioned).
                 windows-cpu) host=windows; backend=cpu; runner=qvac-win25-x64;           no_gpu=true ;;
@@ -505,9 +505,9 @@ jobs:
           echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> "$GITHUB_ENV"
           echo "/opt/vulkansdk/x86_64/bin" >> "$GITHUB_PATH"
 
-      # The self-hosted qvac-macos26-arm64-gpu runner may not ship the AWS CLI
-      # (hosted macOS runners do). Install it user-local (no sudo) so the S3
-      # fixture sync below works. Mirrors integration-test-ocr-ggml.yml.
+      # GitHub-hosted macOS runners ship the AWS CLI already; this is a
+      # user-local (no sudo) fallback in case that ever changes. Mirrors
+      # integration-test-ocr-ggml.yml.
       - name: Install AWS CLI (self-hosted macOS fallback)
         if: matrix.host == 'macos'
         shell: bash
