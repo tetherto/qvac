@@ -1,5 +1,4 @@
 # QVAC SDK
-<!-- ci-trigger: verifying publish-sdk.yml branch-name lowercasing fix, revert after test -->
 
 **QVAC SDK** is the canonical entry point to develop AI applications with QVAC.
 
