@@ -230,15 +230,19 @@ jobs:
           fi
           deadline=$(( $(date +%s) + 180 * 60 ))
           while :; do
-            statuses=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" --paginate)
+            # --slurp collects every page into ONE JSON value (an array of the
+            # per-page arrays); flatten(1) merges them so a context appearing on
+            # more than one page is considered together instead of per page.
+            statuses=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" --paginate --slurp)
             pending=""
             failed=""
             for pkg in $(echo "$expected" | jq -r '.[]'); do
               ctx="qvac/prebuild-${pkg}"
-              # Newest status for this context posted by our CI bot (creator.login).
+              # Newest status for this context posted by our CI bot (creator.login),
+              # selected across ALL pages by updated_at (never a per-page .[0]).
               # Base-repo statuses require base write, so a fork cannot forge one;
               # the creator filter is cheap defense-in-depth on top of that.
-              status=$(echo "$statuses" | jq -c --arg c "$ctx" 'map(select(.context == $c and .creator.login == "github-actions[bot]")) | .[0] // {}')
+              status=$(echo "$statuses" | jq -c --arg c "$ctx" 'flatten(1) | map(select(.context == $c and .creator.login == "github-actions[bot]")) | sort_by(.updated_at) | last // {}')
               state=$(echo "$status" | jq -r '.state // ""')
               turl=$(echo "$status" | jq -r '.target_url // ""')
               run_id="${turl##*/}"
