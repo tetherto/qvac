@@ -302,19 +302,33 @@ jobs:
           # Empty keeps the per-platform defaults above; when set it wins.
           per-test-timeout-minutes: ${{ inputs.per_test_timeout_minutes }}
 
-      # Generate the per-shard model pre-stage script (Android). The Device Farm
-      # host has reliable network; it downloads exactly the models the shard
-      # needs and adb pushes them to /data/local/tmp so the phone never fetches
-      # from huggingface.co. Block is derived from model-manifest.json.
+      # Generate the per-shard model pre-stage script. The Device Farm host has
+      # reliable network; it downloads exactly the models the shard needs and
+      # pushes them onto the device so the phone never fetches from
+      # huggingface.co. Block is derived from model-manifest.json.
+      #   Android → adb push into /data/local/tmp/prestaged-models
+      #   iOS     → pymobiledevice3 apps push into the app Documents/ container
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/packages/llm-llamacpp
         run: |
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: matrix.platform == 'iOS'
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/ios-prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/ios-prestage-block.txt"
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -343,9 +357,10 @@ jobs:
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
           test-groups: ${{ inputs.test_groups }}
           extra-device-env: ${{ inputs.device_env }}
-          # Host pre-stages this shard's models to /data/local/tmp (adb-writable
-          # + app-readable) so the phone never downloads from huggingface.co.
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          # Host pre-stages this shard's models so the phone never downloads
+          # from huggingface.co. iOS uses pymobiledevice3 into Documents/;
+          # Android uses adb push into /data/local/tmp.
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule
