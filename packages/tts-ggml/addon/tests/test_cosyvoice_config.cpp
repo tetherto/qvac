@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -37,20 +38,51 @@ using qvac_errors::StatusError;
 
 namespace {
 
+constexpr const char* MODEL_DIR_PREFIX = "qvac-tts-ggml-cosyvoice-tests-";
+constexpr const char* LAVASR_DIR_PREFIX = "qvac-tts-ggml-cosyvoice-lavasr-";
+constexpr const char* SETCFG_DIR_PREFIX = "qvac-tts-ggml-cosyvoice-setcfg-";
+constexpr const char* STUB_CONTENTS = "not-a-real-gguf";
+
 std::string envOrEmpty(const char* name) {
   if (const char* v = std::getenv(name))
     return v;
   return "";
 }
 
+// The directory names carry entropy because CI shares one /tmp across parallel
+// runners: under a fixed name one job's cleanup deletes the stubs another job
+// is still reading, and a directory created by the first job can be unwritable
+// by the rest, which silently drops every later stub write.
+std::filesystem::path createScratchDir(const char* prefix) {
+  std::random_device entropy;
+  auto dir = std::filesystem::temp_directory_path() /
+             (std::string(prefix) + std::to_string(entropy()));
+  std::filesystem::create_directories(dir);
+  return dir;
+}
+
+class ScratchDir {
+public:
+  explicit ScratchDir(const char* prefix) : path_(createScratchDir(prefix)) {}
+  ~ScratchDir() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+  ScratchDir(const ScratchDir&) = delete;
+  ScratchDir& operator=(const ScratchDir&) = delete;
+
+  const std::filesystem::path& path() const { return path_; }
+
+private:
+  std::filesystem::path path_;
+};
+
 // A directory that exists but holds no CosyVoice3 weights: construction (which
 // only validates the directory exists) succeeds, but load() must fail because
 // the engine can't resolve the LM/flow/HiFT/voice/tokenizer components.
-std::filesystem::path emptyModelDir() {
-  auto dir =
-      std::filesystem::temp_directory_path() / "qvac-tts-ggml-cosyvoice-tests";
-  std::filesystem::create_directories(dir);
-  return dir;
+const std::filesystem::path& emptyModelDir() {
+  static const ScratchDir dir(MODEL_DIR_PREFIX);
+  return dir.path();
 }
 
 CosyvoiceConfig configWithExistingDir() {
@@ -61,11 +93,9 @@ CosyvoiceConfig configWithExistingDir() {
 
 // Placeholder LavaSR GGUFs are staged outside the model dir so the latter keeps
 // matching the "holds no weights" contract above.
-std::filesystem::path lavasrStageDir() {
-  auto dir = std::filesystem::temp_directory_path() /
-             "qvac-tts-ggml-cosyvoice-tests-lavasr";
-  std::filesystem::create_directories(dir);
-  return dir;
+const std::filesystem::path& lavasrStageDir() {
+  static const ScratchDir dir(LAVASR_DIR_PREFIX);
+  return dir.path();
 }
 
 // validateConfig only checks for presence, so a weightless file is enough to
@@ -73,7 +103,8 @@ std::filesystem::path lavasrStageDir() {
 class TempGguf {
 public:
   explicit TempGguf(const char* name) : path_(lavasrStageDir() / name) {
-    std::ofstream(path_) << "not-a-real-gguf";
+    std::ofstream out(path_, std::ios::binary);
+    out << STUB_CONTENTS;
   }
   ~TempGguf() {
     std::error_code ec;
@@ -359,13 +390,11 @@ TEST(CosyvoiceResample, NoopWhenOutputRateMatchesOrUnset) {
 // validateConfig). A valid modelDir lets the ctor succeed without loading
 // weights; a subsequent invalid setConfig must throw and leave cfg_ untouched.
 TEST(CosyvoiceSetConfig, RejectsInvalidConfigAndKeepsPrevious) {
-  const auto dir = std::filesystem::temp_directory_path() /
-                   "qvac-tts-ggml-cosyvoice-setcfg-test";
-  std::filesystem::remove_all(dir);
-  std::filesystem::create_directories(dir);
+  const ScratchDir scratch(SETCFG_DIR_PREFIX);
+  const std::string dir = scratch.path().string();
 
   CosyvoiceConfig good;
-  good.modelDir = dir.string();
+  good.modelDir = dir;
   CosyvoiceModel model(good);
   EXPECT_FALSE(model.config().streamChunkTokens.has_value());
 
@@ -374,10 +403,8 @@ TEST(CosyvoiceSetConfig, RejectsInvalidConfigAndKeepsPrevious) {
   EXPECT_THROW(model.setConfig(bad), StatusError);
 
   // The rejected setConfig must not have mutated cfg_.
-  EXPECT_EQ(model.config().modelDir, dir.string());
+  EXPECT_EQ(model.config().modelDir, dir);
   EXPECT_FALSE(model.config().streamChunkTokens.has_value());
-
-  std::filesystem::remove_all(dir);
 }
 
 // ---- Real-GGUF round-trips (opt-in) -------------------------------------

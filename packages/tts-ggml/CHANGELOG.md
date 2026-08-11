@@ -40,9 +40,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `files.lavasrDenoiser` / `denoiser` stage runs before it on the batch path.
   `enhancerBackendDevice` / `enhancerBackendId` are reported in runtime stats,
   matching the other engines.
+- **Audio8 engine.** Fifth engine family under the same
+  `TTSGgml` surface: a DualAR model (24-layer semantic transformer +
+  4-layer acoustic head over 8 codebooks) with a DAC-style codec, native
+  44.1 kHz, CPU-only in this release. Detection via `engine: 'audio8'`,
+  `files.audio8Lm` / `files.audio8CodecDecoder`, or a `modelDir` containing
+  `audio8-lm[-<quant>].gguf` (q8_0 > f16 > q4_0 > f32 within a role). It
+  ships as three GGUFs rather than one because they have different
+  lifetimes: the language model and the codec's synthesis half are needed
+  for every synthesis, the codec's analysis half only to enrol a voice, so
+  a text-only deployment can omit `files.audio8CodecEncoder` entirely.
+- **Audio8 voice cloning, fully in-process.** `referenceAudio` plus
+  `referenceText` (what the recording says) enrol a speaker; the codec's
+  analysis half encodes the recording to codes inside the addon, with no
+  Python side-car and no pre-baked profile. The transcript is required, not
+  optional — the model conditions on it as the turn the reference answers,
+  so a missing one degrades the clone silently. Both fields are also
+  accepted **per call** (`run({ input, referenceAudio, referenceText })`,
+  `runStream`/`runStreaming` options), and the engine caches the codes for
+  the most recent reference, so repeating one across calls skips the
+  encoder.
+- **Audio8 sampling/generation knobs.** `temperature`, `topK`, `topP`,
+  `maxFrames`, `greedy`, `seed`, `threads`, `config.outputSampleRate`
+  (engine-side resample from the native 44.1 kHz), all optional with the
+  engine's own defaults. Sampling is repetition-aware: a token repeated
+  from the recent window is re-drawn under a narrower nucleus.
+  `temperature`/`topK`/`topP`/`maxFrames` are now shared with Parler rather
+  than Parler-only, so the "parler-only" rejection for those four names
+  reads "parler/audio8-only". `response.stats.tokensPerSecond` counts codec
+  frames per second on this engine, not characters per second.
 
 ### Fixed
 
+- **Audio8 native reload raced synthesis.** The reload path wrote the model's
+  configuration from the reload task while a running job read the reference
+  voice out of it, and swapped the configuration and the engine under separate
+  locks, so a job could pair one call's voice with the other call's engine.
+  Synthesis now takes the engine and a configuration snapshot together under
+  one lock and resolves the voice against that snapshot, and the reload
+  publishes both in a single critical section.
+- **Audio8 in-place native reload could mislabel the output rate.** The emitted
+  sample rate is baked into the output handlers when the instance is created,
+  so a `binding.reload()` that moved `outputSampleRate` left every later chunk
+  tagged with the old rate. Such a reload is now rejected with an error that
+  says to recreate the instance. `TTSGgml.reload()` is unaffected: it already
+  recreates the instance, handlers included.
+- **Audio8 `tokensPerSecond` changed unit under sentence streaming.** Batch
+  synthesis reports codec frames per second, but `runStream()` / `runStreaming()`
+  recomputed the figure from character count. Streamed frames are now
+  aggregated and reported the same way batch does, and `generatedFrames` is
+  carried through to `response.stats`.
+- **Audio8 reload wrote sampling knobs before they were validated.** A value
+  native would refuse (`NaN`, a negative `temperature`, `topP` outside
+  `(0, 1]`) was already on the JS object by the time native saw it, leaving the
+  two describing different samplers. The merged knobs are now checked with the
+  merged voice, before either is written.
 - **LavaSR enhancer on ARM Mali Vulkan.** Bumps `tts-cpp` to `2026-08-06`
   so GPU-enabled LavaSR enhancement uses the validated Vulkan path on supported
   Mali devices, including the Valhall-safe small-matrix workaround, while
@@ -84,6 +136,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-native rate; it is now accepted while streaming when the LavaSR enhancer
   is active, because the enhancer resamples inside its overlap-reprocess window
   without introducing chunk seams.
+- `tts-cpp` pin `2026-08-06` → `2026-08-07#1`, which ships the audio8 engine.
+  No existing engine changes shape. The `ggml-speech` floor moves from
+  `2026-08-04` to `2026-08-07` (Vulkan matmul src0 binding fix, OpenCL im2col
+  rewrite).
 
 ### Pull Requests
 
@@ -93,6 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test addon-cpp 1.3.3 across consumers
 - [#3692](https://github.com/tetherto/qvac/pull/3692) - consume the LavaSR ARM
   Mali Vulkan release
+- [#3723](https://github.com/tetherto/qvac/pull/3723) - add the Audio8 TTS
+  engine to @qvac/tts-ggml
 
 ## [0.6.2] - 2026-08-03
 

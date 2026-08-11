@@ -316,6 +316,37 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.sha }}
 
+  publish-prebuild-status:
+    # Posts qvac/prebuild-embed-llamacpp for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
+    needs: [prebuild, prebuild-artifact-reuse]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so publish logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREBUILD_RESULT: ${{ needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
+          # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/prebuild-embed-llamacpp
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
     needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, integration-tests, run-mobile-integration-tests, ts-checks, ci-router]
     if: always() && !cancelled()

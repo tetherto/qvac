@@ -85,11 +85,13 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Cosyvoice;
   if (explicitType == "parler")
     return EngineType::Parler;
+  if (explicitType == "audio8")
+    return EngineType::Audio8;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3' or "
-        "'parler' (got '" +
+        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler' "
+        "or 'audio8' (got '" +
             explicitType + "')");
   }
 
@@ -111,6 +113,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "parlerModelPath");
   if (!parlerPath.empty())
     return EngineType::Parler;
+
+  const std::string audio8Path =
+      readOptionalString(configurationParams, env, "audio8LmPath");
+  if (!audio8Path.empty())
+    return EngineType::Audio8;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -209,6 +216,41 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  return cfg;
+}
+
+audio8::Audio8Model::VoiceOverride
+JSAdapter::readAudio8Voice(js::Object obj, js_env_t* env) {
+  audio8::Audio8Model::VoiceOverride voice;
+  voice.referenceAudio = readOptionalString(obj, env, "referenceAudio");
+  voice.referenceText = readOptionalString(obj, env, "referenceText");
+  return voice;
+}
+
+audio8::Audio8Config
+JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
+  audio8::Audio8Config cfg;
+  cfg.lmModelPath =
+      readOptionalString(configurationParams, env, "audio8LmPath");
+  cfg.codecDecoderPath =
+      readOptionalString(configurationParams, env, "audio8CodecDecoderPath");
+  cfg.codecEncoderPath =
+      readOptionalString(configurationParams, env, "audio8CodecEncoderPath");
+  const auto voice = readAudio8Voice(configurationParams, env);
+  cfg.referenceAudio = voice.referenceAudio;
+  cfg.referenceText = voice.referenceText;
+  cfg.greedy = readOptionalBool(configurationParams, env, "greedy");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.temperature = readOptionalFloat(configurationParams, env, "temperature");
+  cfg.topK = readOptionalInt(configurationParams, env, "topK");
+  cfg.topP = readOptionalFloat(configurationParams, env, "topP");
+  cfg.maxFrames = readOptionalInt(configurationParams, env, "maxFrames");
+  cfg.outputSampleRate =
+      readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
 

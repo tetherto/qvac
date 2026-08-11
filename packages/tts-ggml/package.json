@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
   "version": "0.6.2",
-  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler engines from tts-cpp)",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -27,6 +27,7 @@
     "example:cosyvoice": "bare examples/cosyvoice-tts.js \"Hello from CosyVoice three.\"",
     "example:cosyvoice-enhanced": "bare examples/cosyvoice-enhanced.js \"Hello from CosyVoice three.\"",
     "example:parler": "bare examples/parler-tts.js \"Hey, how are you doing today?\"",
+    "example:audio8": "bare examples/audio8-tts.js \"Audio eight speaks on the CPU.\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"test/**/*.js\" \"binding.js\" && lunte \"test/**/*.js\" \"binding.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
