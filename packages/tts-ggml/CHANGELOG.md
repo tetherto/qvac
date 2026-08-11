@@ -9,14 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-<<<<<<< HEAD
+- **CosyVoice3 Metal GPU offload (macOS / iOS).** `useGPU: true` /
+  `nGpuLayers > 0` now engages tts-cpp's Metal backend for CosyVoice3 on Apple
+  hosts (previously Android OpenCL/Adreno only; Metal hosts fell back to CPU).
+  Requires `tts-cpp` >= 2026-08-12, which widens the engine's validated-backend
+  allowlist to Metal + OpenCL with per-stage GPU parity gates. Vulkan hosts
+  still fall back to CPU.
 - **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
   directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
   dialects, description-conditioned English), with a capability matrix and
   explicit guidance that Supertonic v1/v2 are not recommended for new
   integrations in favour of Supertonic 3.
-
-=======
 - **LavaSR enhancer and denoiser support for Parler.** The LavaSR post-processing
   stages were previously rejected for the Parler engine; supplying
   `files.lavasrEnhancer` (or `enhancer.enhancerPath`) now bandwidth-extends
@@ -32,7 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Chatterbox uses, so streamed chunks are enhanced seam-free at the cost of
   ~0.34 s of look-ahead latency. The denoiser stays batch-only and is rejected
   with streaming, as it is for Chatterbox.
->>>>>>> main
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
   vocoder (24 kHz), on CPU. Dialect / volume / style control via the `instruct`

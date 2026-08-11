@@ -16,8 +16,7 @@ async function loadCosyvoiceTTS(params = {}) {
   const cosyvoiceModelDir = params.cosyvoiceModelDir || defaultModelDir
 
   // Backend selection mirrors runParlerTTS: explicit useGPU wins, else honor the
-  // NO_GPU env (on-device runner forces cpu). CosyVoice3 is CPU-only today, but
-  // keep the same config surface so the helper reads identically to its siblings.
+  // NO_GPU env (on-device runner forces cpu). nGpuLayers is a top-level knob.
   const config = { language: params.language || 'en' }
   if (params.useGPU !== undefined) {
     config.useGPU = params.useGPU
@@ -34,6 +33,7 @@ async function loadCosyvoiceTTS(params = {}) {
     config,
     opts: { stats: true }
   }
+  if (params.nGpuLayers !== undefined) options.nGpuLayers = params.nGpuLayers
   // instruct2 control (dialect / volume / style / raw string) stays a
   // constructor-level option; emotion and pace are the cross-engine options and
   // also work on reload() and per call.
