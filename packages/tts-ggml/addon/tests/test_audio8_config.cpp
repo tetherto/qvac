@@ -286,10 +286,11 @@ TEST(Audio8Validate, ConfigDefaultsAllUnset) {
 
 TEST(Audio8Voice, PerCallTranscriptOverridesConfigured) {
   Audio8Model model{cloningStubConfig()};
-  EXPECT_NO_THROW(Audio8Model::validateVoice(
-      model.config().referenceAudio,
-      "A corrected transcript.",
-      model.config().codecEncoderPath));
+  EXPECT_NO_THROW(
+      Audio8Model::validateVoice(
+          model.config().referenceAudio,
+          "A corrected transcript.",
+          model.config().codecEncoderPath));
 }
 
 TEST(Audio8Voice, PerCallAudioWithoutTranscriptRejected) {
