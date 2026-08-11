@@ -30,9 +30,9 @@ flowchart LR
     AUTH[authorize] --> QMG
     AUTH --> CHANGES[changes<br/>dorny/paths-filter, per-package]
     CHANGES --> SC[sanity-checks<br/>matrix]
-    CHANGES --> PC[prebuilds-caller<br/>per-package caller]
+    CHANGES --> VP[verify-prebuilds<br/>reads on-pr prebuild statuses]
     SC --> QMG
-    PC --> QMG
+    VP --> QMG
     SDK[sdk-pod-checks<br/>self-detecting] --> QMG
     QMG -->|uses| PP[public-pr.yml<br/>job: validate-pr]
     PP -->|check name| CHK["qvac-merge-guard / validate-pr"]
@@ -42,7 +42,7 @@ The final job in `pr-gate-merge.yml`:
 
 ```yaml
 qvac-merge-guard:
-  needs: [authorize, fork-approval, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
+  needs: [authorize, fork-approval, changes, sanity-checks, verify-prebuilds, sdk-pod-checks]
   if: |
     always() && !cancelled() &&
     (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -51,10 +51,24 @@ qvac-merge-guard:
     packages: read
   uses: ./.github/workflows/public-pr.yml
   with:
-    sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-    build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
-    general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}
+    sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
+    build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
+    general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
 ```
+
+A skipped gated job (`sanity-checks`, `verify-prebuilds`, `sdk-pod-checks`) counts as success **only when the PR was actually authorized**. Those jobs `if`-gate on `authorize.outputs.allowed == 'true'`, so an unapproved external fork (fork-approval failed, authorize skipped, or `allowed=false`) skips all of them — and a bare `skipped → success` mapping would green the required check. Each status input therefore requires the full chain (`fork-approval` success **and** `authorize` success **and** `allowed == 'true'`) before trusting a skip, so unauthorized PRs fail closed (`validate-pr` returns a failing required check).
+
+### `verify-prebuilds`: Merge Guard checks prebuilds, it does not trigger them
+
+`build-status` comes from `verify-prebuilds`, which **reads** rather than **runs** prebuilds. Building is owned by the label-gated `on-pr-<pkg>.yml` flows (so their native-change detection + artifact-reuse optimisations are preserved and prebuilds don't run on every PR). Each prebuild-bearing `on-pr-<pkg>.yml` has a `publish-prebuild-status` job that posts a `qvac/prebuild-<pkg>` commit status on the PR head SHA — `success` when the prebuild passed *or* was legitimately skipped (no prebuild label) *or* reused an artifact, `failure` only on a real prebuild failure. That job stamps its own run URL into the status `target_url`, binding the status to the exact `on-pr-<pkg>` run that produced it. `verify-prebuilds` intersects the changed packages with its `PREBUILD_KEYS` allowlist and, for each, waits for and mirrors that commit status (fail-closed on timeout). It selects the newest matching status across **all** pages of the statuses API (paginated results are slurped and flattened, so a context that appears on more than one page is never split).
+
+Both sides share one unit-tested module in `.github/scripts/prebuild-status/` (`lib.mjs` holds the pure state-mapping / selection / run-binding / freshness logic; `publish.mjs` and `verify.mjs` are thin CLIs that inject the GitHub API calls). The producing `on-pr-<pkg>` publish jobs and the merge-guard verify job each `sparse-checkout` only that scripts directory from the trusted default branch (never PR head code) and run the corresponding CLI. The logic is covered by `.github/scripts/test/prebuild-status.test.mjs`.
+
+To avoid trusting a **superseded** status (e.g. a `skipped = success` from an earlier no-label run that is later relabelled to build on the same SHA), `verify-prebuilds` reads the producing run — by the id embedded in `target_url` — and trusts the status only when that run (a) is the `on-pr-<pkg>` workflow and (b) was triggered at/after this PR event (`run.created_at >= github.event.pull_request.updated_at`). Because the run id comes from the status itself, this never depends on the Actions API having *listed* the newest run for the SHA — so there is no listing-lag window, and a status produced by a pre-label run (whose `created_at` predates the label) is rejected even if its own timestamp happens to post-date the label. `concurrency.cancel-in-progress: true` additionally cancels an older in-flight Merge Guard run so only the newest run (with the newest threshold) gates the PR, and as cheap defense-in-depth `verify-prebuilds` only trusts statuses whose `creator.login` is `github-actions[bot]`. It compiles nothing and inherits no secrets. When you add a new prebuild-bearing addon, add its key to `PREBUILD_KEYS` and give its `on-pr-<pkg>.yml` a `publish-prebuild-status` job that stamps `target_url` with its run URL.
+
+> **Known limitation — relabel-after-green window.** A PR that changes a prebuild-bearing package *without* the prebuild label legitimately greens `qvac-merge-guard / validate-pr` (no build required — matches the "doc/version-bump changes shouldn't rebuild" goal). If someone then adds the prebuild label, a new Merge Guard run starts and its `verify-prebuilds` correctly waits for the real build, but GitHub keys required checks by **commit SHA**, so the earlier green can remain valid on that same SHA until the new run reports. `concurrency.cancel-in-progress: true` closes the *in-flight* variant (a run still polling when the label lands is cancelled), and the newly-triggered run re-marks the check pending under GitHub's latest-run-for-context semantics. The window cannot be closed by posting a same-named `pending` commit status: GitHub requires that when a check and a commit status share a name, **both** must pass, and `validate-pr` only ever reports a check-run — a same-named status would deadlock every merge. Mitigation: don't rely on auto-merge firing between adding a prebuild label and the labeled build completing; push a new commit (new SHA) if in doubt.
+
+> **Historical note:** an earlier design had Merge Guard call a `prebuilds-caller.yml` reusable workflow that built every changed package itself. That file was removed — it double-ran prebuilds (once here, once in the label-gated `on-pr` flow) and bypassed the reuse optimisations. The caller-workflow *pattern* described below is still a valid general shape; `prebuilds-caller.yml` is just no longer a live instance of it.
 
 `public-pr.yml`'s single job (`validate-pr`) fails the check if any of the boolean inputs it receives is `false` (sanity checks, builds, integration tests, etc.). External fork secret-bearing jobs are gated upstream by the `fork-ci` environment (`fork-approval` job); see [`LABELS.md`](LABELS.md). Its check name — `qvac-merge-guard / validate-pr` — is the *only* thing the ruleset requires. It also already accepts two boolean inputs `pr-gate-merge.yml` doesn't use yet: `integration-tests-status` and `build-with-model-status` — see the caller-workflow pattern below for how to use the spare `integration-tests-status` slot instead of inventing a new one.
 
