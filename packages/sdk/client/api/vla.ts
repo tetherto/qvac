@@ -1,19 +1,24 @@
 import {
   type VlaClientRunParams,
   type VlaClientRunResult,
+  type VlaEmbodimentSelection,
   type VlaHparams,
   type VlaHparamsRequest,
   type VlaHparamsResponse,
   type VlaRunRequest,
   type VlaRunResponse,
+  type VlaSetEmbodimentRequest,
+  type VlaSetEmbodimentResponse,
   vlaHparamsResponseSchema,
-  vlaRunResponseSchema
+  vlaRunResponseSchema,
+  vlaSetEmbodimentResponseSchema
 } from '@/schemas'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 import { invokePlugin } from './invoke-plugin'
 
 const VLA_RUN_HANDLER = 'vlaRun'
 const VLA_HPARAMS_HANDLER = 'vlaHparams'
+const VLA_SET_EMBODIMENT_HANDLER = 'vlaSetEmbodiment'
 
 function bytesOf(arr: Float32Array | Int32Array | Uint8Array): Uint8Array {
   return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength)
@@ -133,4 +138,56 @@ export async function vlaHparams(params: {
     params: wireRequest
   })
   return vlaHparamsResponseSchema.parse(result)
+}
+
+/**
+ * Switch a loaded multi-embodiment GR00T model to another embodiment shipped
+ * in the same GGUF — no reload, only that embodiment's weight rows are re-read.
+ *
+ * The returned hparams follow the newly active embodiment: re-read
+ * `numCameras` (and re-size buffers if needed) before the next `vla()` call.
+ * `selectedEmbodimentTag` / `selectedEmbodimentCatId` report what was
+ * resolved. Selecting by `catId` reports that id's canonical tag, which may
+ * differ from the alias used to select — the id is the stable identity.
+ *
+ * Rejects (leaving the current embodiment active) for a non-GR00T or
+ * single-embodiment model, an unknown tag or `cat_id`, one not stored in the
+ * GGUF, an embodiment with no known camera count and no `numCameras`
+ * override, or while an inference response is still pending — await the
+ * in-flight `vla()` call first.
+ *
+ * @param params.modelId - Identifier of the loaded VLA model.
+ * @param params.embodiment - The embodiment to activate: a tag string, a
+ *   numeric `cat_id` (0..31), or `{ tag | catId, numCameras }` where
+ *   `numCameras` overrides the camera count stored in the GGUF.
+ * @returns The refreshed model hparams after the switch.
+ *
+ * @example
+ * ```typescript
+ * import { loadModel, vlaSetEmbodiment, vlaHparams } from "@qvac/sdk";
+ *
+ * const modelId = await loadModel({
+ *   modelSrc: "/path/to/groot-multi.gguf",
+ *   modelType: "vla",
+ *   modelConfig: { embodiment: "libero_sim" }, // initial selection at load
+ * });
+ * const { hparams } = await vlaSetEmbodiment({ modelId, embodiment: "real_droid" });
+ * console.log(hparams.selectedEmbodimentTag, hparams.numCameras);
+ * ```
+ */
+export async function vlaSetEmbodiment(params: {
+  modelId: string
+  embodiment: VlaEmbodimentSelection
+}): Promise<{ hparams: VlaHparams }> {
+  const wireRequest: VlaSetEmbodimentRequest = {
+    type: 'vlaSetEmbodiment',
+    modelId: params.modelId,
+    embodiment: params.embodiment
+  }
+  const result = await invokePlugin<VlaSetEmbodimentResponse, VlaSetEmbodimentRequest>({
+    modelId: params.modelId,
+    handler: VLA_SET_EMBODIMENT_HANDLER,
+    params: wireRequest
+  })
+  return vlaSetEmbodimentResponseSchema.parse(result)
 }

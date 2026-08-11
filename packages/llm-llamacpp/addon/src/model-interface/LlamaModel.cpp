@@ -2101,6 +2101,19 @@ void LlamaModel::commonParamsParse(
               mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
                                                : mmprojDefaultReason));
       params.mmproj_use_gpu = mmprojUseGpu;
+
+      // Row-split needs a backend that provides split buffers.
+      // Degrade row -> layer to keep the model loadable.
+      if (splitMode == LLAMA_SPLIT_MODE_ROW &&
+          !backend_selection::gpuBackendSupportsRowSplit()) {
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] split-mode 'row' is not supported by this GPU "
+            "backend (no split-buffer support), falling back to split-mode "
+            "'layer'\n");
+        splitMode = LLAMA_SPLIT_MODE_LAYER;
+      }
+
       params.split_mode = splitMode;
       runtimeBackendDevice_ = 1;
 

@@ -25,7 +25,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 - Bergamot handles encoding/decoding internally via its BlockingService
 
 **Batch Translation:**
-- `runBatch()` bypasses the job queue and calls `processBatch()` directly
+- `runBatch()` submits `runJob({ type: 'sequences', input })` through the same single-job runner (serialized with `run()` in JS)
 - Bergamot: true batch processing; GGML: sequential per-text processing
 
 </details>
@@ -33,7 +33,7 @@ This document contains detailed diagrams showing how data moves through the `@qv
 ## Table of Contents
 
 - [Model Loading Flow](#model-loading-flow)
-- [GGML Translation Pipeline](#ggml-translation-pipeline-opus--marian--indictrans2)
+- [GGML Translation Pipeline](#ggml-translation-pipeline-indictrans2)
 - [Bergamot Translation Pipeline](#bergamot-translation-pipeline)
 - [IndicTrans2 Pre/Post Processing](#indictrans2-prepost-processing-flow)
 - [Batch Translation Flow](#batch-translation-flow-runbatch)
@@ -47,17 +47,13 @@ This document contains detailed diagrams showing how data moves through the `@qv
 sequenceDiagram
     participant App as Application
     participant NMT as TranslationNmtcpp
-    participant WP as WeightsProvider
-    participant HD as Hyperdrive Loader
     participant TI as TranslationInterface
     participant Addon as Addon<TranslationModel>
     participant TM as TranslationModel
     participant Loader as nmt_loader / bergamot_init
 
-    App->>NMT: load(close?, progressCb?)
-    NMT->>WP: downloadFiles(modelFiles, diskPath)
-    WP->>HD: download model + vocab files
-    HD-->>WP: files on disk
+    App->>NMT: load()
+    Note over NMT: model/vocab paths are caller-supplied<br/>local files (constructor `files`)
 
     NMT->>NMT: build configurationParams
     Note over NMT: {path, config, use_gpu}<br/>+ Bergamot vocab paths if needed
@@ -74,10 +70,10 @@ sequenceDiagram
     Addon->>TM: load()
     TM->>TM: detectBackendType(modelPath)
 
-    alt GGML Backend (OPUS / IndicTrans2)
+    alt GGML Backend (IndicTrans2)
         TM->>Loader: nmt_init_from_file_with_params(path, params)
         Loader->>Loader: Read GGUF header
-        Loader->>Loader: Detect model type (Marian / IndicTrans2)
+        Loader->>Loader: Detect model architecture
         Loader->>Loader: Allocate tensors (encoder + decoder layers)
         Loader->>Loader: Load SentencePiece vocabularies
         Loader->>Loader: Initialize GGML backend (CPU / Metal / Vulkan)
@@ -99,19 +95,18 @@ sequenceDiagram
 
 | Step | Component | Action | Details |
 |------|-----------|--------|---------|
-| 1 | TranslationNmtcpp | downloadWeights | Downloads model + vocab via Hyperdrive |
-| 2 | TranslationNmtcpp | build config | Assembles path, config, GPU flag, vocab paths |
-| 3 | TranslationInterface | createInstance | Creates native Addon\<TranslationModel\> |
-| 4 | Addon | configure | saveLoadParams, setConfig, setUseGpu |
-| 5 | TranslationModel | load() | Detects backend type from model file |
-| 6a | nmt_loader | init (GGML) | Read header, allocate tensors, load SPM, init backend |
-| 6b | bergamot_init | init (Bergamot) | Create BlockingService, load model + vocabs |
+| 1 | TranslationNmtcpp | build config | Assembles caller-supplied file paths, config, GPU flags |
+| 2 | TranslationInterface | createInstance | Creates native Addon\<TranslationModel\> |
+| 3 | Addon | configure | saveLoadParams, setConfig, setUseGpu |
+| 4 | TranslationModel | load() | Detects backend type from model file |
+| 5a | nmt_loader | init (GGML) | Read header, allocate tensors, load SPM, init backend |
+| 5b | bergamot_init | init (Bergamot) | Create BlockingService, load model + vocabs |
 
 </details>
 
 ---
 
-## GGML Translation Pipeline (OPUS / Marian / IndicTrans2)
+## GGML Translation Pipeline (IndicTrans2)
 
 ```mermaid
 flowchart TB
@@ -271,6 +266,7 @@ sequenceDiagram
     participant Backend as GGML / Bergamot
 
     App->>NMT: runBatch(["Hello", "World"])
+    Note over NMT: waits for the exclusive run queue<br/>(serialized with run())
 
     alt IndicTrans Model
         NMT->>NMT: preprocessBatch(texts, srcLang, dstLang)
@@ -278,8 +274,8 @@ sequenceDiagram
         NMT->>NMT: prepareInputText() for each text
     end
 
-    NMT->>TI: processBatch(processedTexts)
-    TI->>Addon: binding.processBatch(handle, texts)
+    NMT->>TI: runJob({type:'sequences', input: texts})
+    TI->>Addon: binding.runJob(handle, {type:'sequences', input})
     Addon->>TM: processBatch(texts)
 
     alt Bergamot Backend
@@ -310,11 +306,12 @@ sequenceDiagram
 
 | Step | Component | Action |
 |------|-----------|--------|
-| 1 | TranslationNmtcpp | Pre-process texts (IndicTrans: normalize; Standard: add lang prefix) |
-| 2 | TranslationInterface | binding.processBatch(handle, texts) |
-| 3a | TranslationModel (Bergamot) | bergamot_translate_batch — true batch |
-| 3b | TranslationModel (GGML) | Sequential process() per text |
-| 4 | TranslationNmtcpp | Post-process (IndicTrans: denormalize; Standard: strip prefixes) |
+| 1 | TranslationNmtcpp | Acquire the exclusive run queue (serialized with run()) |
+| 2 | TranslationNmtcpp | Pre-process texts (IndicTrans: normalize; Standard: add lang prefix) |
+| 3 | TranslationInterface | binding.runJob(handle, {type: 'sequences', input}) |
+| 4a | TranslationModel (Bergamot) | bergamot_translate_batch — true batch |
+| 4b | TranslationModel (GGML) | Sequential process() per text |
+| 5 | TranslationNmtcpp | Post-process (IndicTrans: denormalize; Standard: strip prefixes) |
 
 </details>
 
@@ -330,11 +327,8 @@ sequenceDiagram
     participant TM as TranslationModel
     participant UV as uv_async_t
 
-    JS->>Queue: append({type: "text", input})
-    Note over Queue: Job enqueued with jobId
-
-    JS->>Queue: append({type: "end of job"})
-    Note over Queue: Signal end of input
+    JS->>Queue: runJob({type: "text", input})
+    Note over Queue: single-job runner accepts the job
 
     Worker->>Queue: dequeue job
     Worker->>TM: process(input)
@@ -345,7 +339,7 @@ sequenceDiagram
     UV-->>JS: outputCallback(jobId, result)
     JS->>JS: QvacResponse.onUpdate(data)
 
-    Note over JS,Worker: Pause/Cancel signals propagate<br/>from JS → Queue → Worker
+    Note over JS,Worker: Cancel signals propagate<br/>from JS → Queue → Worker
 ```
 
 <details>
@@ -353,11 +347,11 @@ sequenceDiagram
 
 | Thread | Action | Communication |
 |--------|--------|---------------|
-| JS Thread | append() jobs to queue | Job Queue (shared) |
+| JS Thread | runJob() submits the job | Single-job runner (shared) |
 | C++ Worker | dequeue and process | TranslationModel.process() |
 | C++ Worker | signal result ready | uv_async_send |
 | JS Thread | receive callback | outputCallback → QvacResponse.onUpdate |
-| JS Thread | pause/cancel | Queue signal → Worker checks |
+| JS Thread | cancel | Runner signal → Worker checks |
 
 </details>
 
@@ -366,4 +360,4 @@ sequenceDiagram
 **Related Documents:**
 - [architecture.md](architecture.md) - Complete architecture documentation
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-08-10
