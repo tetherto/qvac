@@ -5,7 +5,8 @@ GGML library.  Wraps multiple engines under one package: **Chatterbox**
 (Turbo English + multilingual), **Supertonic** (v3 31-language preferred;
 v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), and **CosyVoice3**
-(Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU), plus optional
+(Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU with opt-in
+Android OpenCL/Adreno GPU offload), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 
@@ -59,7 +60,7 @@ obvious for each job.
 | English + voice cloning + low first-audio latency | `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` | Reference-wav / voice-profile cloning; native `streamChunkTokens` chunk streaming. Native 24 kHz. |
 | Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
 | Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
-| Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU today; native 24 kHz. |
+| Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in Android OpenCL/Adreno GPU offload; native 24 kHz. |
 | Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
 | Voice cloning with noisy input audio | Any engine above + `lavasr-denoiser.gguf` | Post-process (batch path); cleans before optional enhancement. See [Speech enhancement (LavaSR)](#speech-enhancement-lavasr). |
 | 48 kHz bandwidth-extended output | Any engine above + `lavasr-enhancer.gguf` | Post-process, not a TTS engine. Optional `lavasr-denoiser.gguf` first (batch path). |
@@ -142,7 +143,8 @@ parler-large-v1-q8_0.gguf  (~2.8 GB; also -q6_k)
 parler-indic-q8_0.gguf     (~1.3 GB; also -f16 / -f32; 21 Indic languages)
 
 # CosyVoice3 (FunAudioLLM/CosyVoice; Qwen2 speech LM + DiT flow + CausalHiFT;
-# 24 kHz, CPU) — a model DIRECTORY (default models/cosyvoice3/), auto-detected
+# 24 kHz, CPU with opt-in Android GPU) — a model DIRECTORY (default
+# models/cosyvoice3/), auto-detected
 # from the cosyvoice3-llm-*.gguf file
 cosyvoice3/
   cosyvoice3-llm-*.gguf    (~973 MB q8_0 — Qwen2.5 speech LM)
@@ -426,6 +428,11 @@ host's policy:
 > Parler also opts into ARM Mali Vulkan on Android. Its GPU smoke test is
 > strict on Apple and Android; desktop Vulkan remains outside that test until
 > dedicated Linux and Windows validation is available.
+>
+> CosyVoice3's GPU path is currently OpenCL/Adreno (Android) only. `useGPU:
+> true` / `nGpuLayers > 0` offloads it there — pair it with `openclCacheDir` to
+> persist the compiled kernels — while on Metal/Vulkan hosts it falls back to
+> CPU until those backends are wired for its graph.
 
 ### Android: dynamic backend loading
 
@@ -506,8 +513,11 @@ await model.run({ input: 'Hello from an on-device C++ pipeline.' })
 An unknown `instruct` key or an invalid value throws at construction, listing
 the valid set; with no `instruct` the model runs zero-shot on the baked voice.
 Other CosyVoice3-only options: `promptText` (reference transcript for the baked
-voice) and `streamLeftContextTokens` (native chunk-streaming left context).
-CosyVoice3 runs on **CPU** and emits native **24 kHz**.
+voice); `streamLeftContextTokens` is reserved / not yet effective (the pinned
+engine accepts but does not read it). CosyVoice3 emits native **24 kHz** and runs
+on **CPU** by default; GPU offload is opt-in via `useGPU` / `nGpuLayers` and is
+currently implemented on Android's OpenCL/Adreno path (`openclCacheDir` persists
+its compiled-kernel cache), with other hosts falling back to CPU.
 
 ## API overview
 
@@ -547,14 +557,14 @@ CosyVoice3 runs on **CPU** and emits native **24 kHz**.
 | `normalizeNumbers`        | boolean    | `true`     | Parler-only: expand digits before tokenization (English words; script-native digits on indic) — parler voices raw digits badly |
 | `instruct`                | object \| string | —    | CosyVoice3-only: instruction controls (`dialect` / `emotion` / `speed` / `volume` / `style`, resolved by precedence in that order) or a raw instruction string; an unknown key or invalid value throws (see [CosyVoice3 instruct](#cosyvoice3-instruct)) |
 | `promptText`              | string     | —          | CosyVoice3-only: reference transcript for the baked voice |
-| `streamLeftContextTokens` | number     | —          | CosyVoice3 / Chatterbox: native chunk-streaming left-context tokens |
+| `streamLeftContextTokens` | number     | —          | CosyVoice3-only: intended native chunk-streaming left-context tokens. Reserved / not yet effective — the pinned engine accepts but does not read it |
 | `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
 | `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
 | `backendsDir`             | string     | `path.join(__dirname, 'prebuilds')` | Root dir the addon scans for dynamically-loaded ggml backend `.so` files.  Required on Android (host should pass `path.join(__dirname, 'prebuilds')`); ignored on platforms that statically link the backend |
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan; CosyVoice3 offloads on Android OpenCL/Adreno only. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic/Parler 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
@@ -631,7 +641,7 @@ Runnable demos under `examples/`:
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
-| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz, CPU). `bare examples/cosyvoice-tts.js "Hello"` |
+| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz; CPU, opt-in Android GPU). `bare examples/cosyvoice-tts.js "Hello"` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 
 The two streaming examples feed PCM into a single long-running
