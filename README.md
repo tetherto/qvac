@@ -38,7 +38,7 @@ Whether you're building applications with the SDK or using QVAC as a local model
 | **Video generation** | Text-to-video and image-to-video generation via a customized Diffusion backend. |
 | **Music generation** | Generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5). |
 | **Transcription** | Automatic speech recognition (ASR) via [`@qvac/asr-ggml`](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml) (Whisper or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)), with duplex streaming and terminal performance statistics. See [Choosing a model](packages/asr-ggml/README.md#choosing-a-model). |
-| **Text-to-Speech** | Speech synthesis (TTS) via [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 (CPU, with opt-in Android OpenCL/Adreno GPU offload). See [Choosing a model](packages/tts-ggml/README.md#choosing-a-model). |
+| **Text-to-Speech** | Speech synthesis (TTS) via [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 (CPU, with opt-in Android OpenCL/Adreno GPU offload), plus Audio8 (CPU-only). See [Choosing a model](packages/tts-ggml/README.md#choosing-a-model). |
 | **Translation** | Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a customized Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
