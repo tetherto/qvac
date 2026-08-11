@@ -1,18 +1,22 @@
 'use strict'
 
 /**
- * Quickstart — GGML-backed OCR.
+ * DocTR pipeline — DBNet detector + doctr CRNN recognizer.
  *
- *   bare examples/quickstart.js \
+ *   bare examples/doctr.js \
  *     --image samples/english.png \
- *     --detector models/craft_mlt_25k.gguf \
- *     --recognizer models/english_g2.gguf
+ *     --detector models/db_mobilenet_v3_large.gguf \
+ *     --recognizer models/crnn_mobilenet_v3_small.gguf
+ *
+ * DocTR is language-agnostic: unlike the EasyOCR pipeline it needs no
+ * `langList` (and ignores `magRatio` and the contrast-retry / rotation
+ * knobs).
  *
  * Environment overrides:
- *   OCR_GGML_DETECTOR     — path to CRAFT .gguf
- *   OCR_GGML_RECOGNIZER   — path to recognizer .gguf
- *   OCR_GGML_IMAGE        — path to a JPEG/PNG/BMP test image
- *   VERBOSE=1             — forward C++ logs to console
+ *   OCR_GGML_DOCTR_DETECTOR    — path to DBNet .gguf
+ *   OCR_GGML_DOCTR_RECOGNIZER  — path to doctr CRNN .gguf
+ *   OCR_GGML_IMAGE             — path to a JPEG/PNG/BMP test image
+ *   VERBOSE=1                  — forward C++ logs to console
  */
 
 const path = require('bare-path')
@@ -31,7 +35,7 @@ const logger = VERBOSE
   : null
 
 function parseArgs (argv) {
-  const args = { lang: 'en' }
+  const args = {}
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i]
     const next = () => {
@@ -41,9 +45,7 @@ function parseArgs (argv) {
     if (a === '--image') args.image = next()
     else if (a === '--detector') args.detector = next()
     else if (a === '--recognizer') args.recognizer = next()
-    else if (a === '--lang') args.lang = next()
     else if (a === '--paragraph') args.paragraph = true
-    else if (a === '--mag-ratio') args.magRatio = parseFloat(next())
     else throw new Error(`unknown argument ${a}`)
   }
   return args
@@ -53,19 +55,18 @@ async function main () {
   const cli = parseArgs(process.argv)
 
   const image = cli.image || process.env.OCR_GGML_IMAGE || path.join(__dirname, '..', 'samples', 'english.png')
-  const detector = cli.detector || process.env.OCR_GGML_DETECTOR || path.join(__dirname, '..', 'models', 'craft_mlt_25k.gguf')
-  const recognizer = cli.recognizer || process.env.OCR_GGML_RECOGNIZER || path.join(__dirname, '..', 'models', 'english_g2.gguf')
+  const detector = cli.detector || process.env.OCR_GGML_DOCTR_DETECTOR || path.join(__dirname, '..', 'models', 'db_mobilenet_v3_large.gguf')
+  const recognizer = cli.recognizer || process.env.OCR_GGML_DOCTR_RECOGNIZER || path.join(__dirname, '..', 'models', 'crnn_mobilenet_v3_small.gguf')
 
-  console.log('[quickstart] detector  =', detector)
-  console.log('[quickstart] recognizer =', recognizer)
-  console.log('[quickstart] image      =', image)
+  console.log('[doctr] detector   =', detector)
+  console.log('[doctr] recognizer =', recognizer)
+  console.log('[doctr] image      =', image)
 
   const ocr = new OcrGgml({
     params: {
       pathDetector: detector,
       pathRecognizer: recognizer,
-      langList: cli.lang.split(','),
-      magRatio: cli.magRatio
+      pipelineType: 'doctr'
     },
     opts: { stats: true },
     logger
@@ -90,7 +91,7 @@ async function main () {
     await response.await()
     const stats = response.stats
     if (stats && 'totalTime' in stats) {
-      console.log('[quickstart] stats =', stats)
+      console.log('[doctr] stats =', stats)
     }
   } finally {
     await ocr.unload()
@@ -98,6 +99,6 @@ async function main () {
 }
 
 main().catch(err => {
-  console.error('[quickstart] failed:', err)
+  console.error('[doctr] failed:', err)
   process.exit(1)
 })

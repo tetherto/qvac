@@ -42,6 +42,17 @@ three-part `release-<pkg>-x.y.z`. Full rules live in
 Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
 The script fetches from `upstream` first, falling back to `origin`.
 
+**Full-history requirement (fail-stop):** discovery is
+`git log <base>..HEAD -- <packagePath>`. Before generating:
+
+1. `git rev-parse --is-shallow-repository` must be `false` (else
+   `git fetch --unshallow` / re-clone without `--depth`, then stop).
+2. Base must be an ancestor of `HEAD`
+   (`git merge-base --is-ancestor <base> HEAD`); otherwise check out the
+   release tip / package tag first.
+
+The generator enforces both checks and exits non-zero on failure.
+
 Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing version tags.
 
 - If tags exist: the script auto-detects the release type from `package.json` version:
@@ -336,7 +347,8 @@ Before completing:
 
 - [ ] Correct package identified
 - [ ] Working head (if branched for the release PR) is `chore/<pkg>-<x.y.z>-changelog`, not `release-*`
-- [ ] Base reference resolved (tag or `--base-commit`)
+- [ ] Clone is not shallow (`git rev-parse --is-shallow-repository` → `false`)
+- [ ] Base reference resolved (tag or `--base-commit`) and is an ancestor of `HEAD`
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md generated (mandatory) and follows format guide

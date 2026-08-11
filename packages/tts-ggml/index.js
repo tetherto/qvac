@@ -97,10 +97,28 @@ function cosyvoiceInstructValue(map, key, kind) {
  * for no instruction (zero-shot). An invalid structured key throws.
  */
 function renderCosyvoiceInstruct(instruct) {
-    if (instruct == null)
+    // Only `undefined` means "omitted" (zero-shot). An explicit `null` is a
+    // malformed value, not an omission, so it is rejected below like any other
+    // non-object.
+    if (instruct === undefined)
         return "";
     if (typeof instruct === "string")
         return instruct.trim();
+    // A JS caller can pass values the type forbids (null, a number, an array, a
+    // Date, a class instance). Check defensively as `unknown`: require an ordinary
+    // object literal so exotic objects can't slip past the presence checks below
+    // and degrade to zero-shot, and so control fields are read from the object's
+    // own properties rather than an inherited prototype.
+    const control = instruct;
+    if (control === null || typeof control !== "object" || Array.isArray(control)) {
+        throw new Error("Invalid CosyVoice instruct: expected a string or a plain control " +
+            "object such as { dialect: 'cantonese' }.");
+    }
+    const proto = Object.getPrototypeOf(control);
+    if (proto !== Object.prototype && proto !== null) {
+        throw new Error("Invalid CosyVoice instruct: expected a plain control object such as " +
+            "{ dialect: 'cantonese' }, not an instance of another type.");
+    }
     // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)
     // before the precedence chain, which would otherwise fall through to "".
     const supportedControls = ["dialect", "emotion", "speed", "volume", "style"];
@@ -109,19 +127,24 @@ function renderCosyvoiceInstruct(instruct) {
         throw new Error(`Invalid CosyVoice instruct key(s): ${unknownKeys.join(", ")}. ` +
             "Valid keys: dialect, emotion, speed, volume, style.");
     }
-    if (instruct.dialect) {
+    // Presence, not truthiness: a control that is set to a malformed value
+    // (`{ dialect: '' }`, `{ dialect: null }`) must raise via
+    // cosyvoiceInstructValue rather than fall through to zero-shot. `undefined`
+    // means the field was not set, so it is skipped. Precedence: dialect >
+    // emotion > speed > volume > style.
+    if (instruct.dialect !== undefined) {
         return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
     }
-    if (instruct.emotion) {
+    if (instruct.emotion !== undefined) {
         return cosyvoiceInstructValue(COSYVOICE_EMOTIONS, instruct.emotion, "emotion");
     }
-    if (instruct.speed) {
+    if (instruct.speed !== undefined) {
         return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
     }
-    if (instruct.volume) {
+    if (instruct.volume !== undefined) {
         return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
     }
-    if (instruct.style) {
+    if (instruct.style !== undefined) {
         return cosyvoiceInstructValue(COSYVOICE_STYLES, instruct.style, "style");
     }
     return "";
