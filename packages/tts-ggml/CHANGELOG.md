@@ -31,8 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with streaming, as it is for Chatterbox.
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
-  vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
-  volume / style) via the `instruct` option.
+  vocoder (24 kHz), on CPU with opt-in Android OpenCL/Adreno GPU offload.
+  Instruct2 control (dialect / emotion / speed / volume / style) via the
+  `instruct` option.
 - **LavaSR enhancer + denoiser for CosyVoice3.** `files.lavasrEnhancer` /
   `enhancer` now bandwidth-extend CosyVoice3's native 24 kHz output to 48 kHz,
   on both batch synthesis and native chunk streaming (seam-free). The
@@ -110,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   denoiser GGUF failed to load, the engine stayed loaded behind it, so the model
   still reported itself as loaded and a retry became a no-op that silently
   synthesized unenhanced audio. It now unloads before rethrowing.
+- **CosyVoice3 dropped `openclCacheDir`.** The option was accepted by the JS
+  layer but never forwarded to the native engine, so the Android OpenCL/Adreno
+  GPU path recompiled its kernels on every process instead of reusing the
+  persistent cache. It now reaches `EngineOptions::opencl_cache_dir`.
+- **CosyVoice3 `instruct` accepted malformed values.** A set-but-empty or null
+  control (`{ dialect: '' }`, `{ dialect: null }`), an explicit `null`, an array,
+  a non-object, or a non-plain object (e.g. a `Date`) silently degraded to
+  zero-shot synthesis. These now throw: only `undefined` counts as omitted, the
+  value must be a plain object, and controls are validated by own-property
+  presence rather than truthiness.
 
 ### Changed
 

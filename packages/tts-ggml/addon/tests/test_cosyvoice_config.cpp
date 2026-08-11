@@ -22,14 +22,17 @@
 #include <tts-cpp/cosyvoice/engine.h>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendUtils.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 
+using qvac::ttsggml::kOffloadAllGpuLayers;
 using qvac::ttsggml::cosyvoice::CosyvoiceConfig;
 using qvac::ttsggml::cosyvoice::CosyvoiceModel;
 using qvac::ttsggml::cosyvoice::resampleBatchOutput;
 using qvac::ttsggml::cosyvoice::resolveEmittedAudio;
 using qvac::ttsggml::cosyvoice::streamingRequested;
+using qvac::ttsggml::cosyvoice::toEngineOptions;
 using qvac_errors::StatusError;
 
 namespace {
@@ -238,6 +241,43 @@ TEST(CosyvoiceStreaming, EmittedAudioFollowsWhatTheCallerReceived) {
   EXPECT_EQ(streamEnhanced.sampleRate, kFinalRate)
       << "the enhanced stream is emitted at the enhancer's final rate, not the "
          "native rate the SynthesisResult still reports";
+}
+
+// toEngineOptions is the addon's whole GPU/OpenCL contract with tts-cpp, so pin
+// the forwarding directly (no weights needed). openclCacheDir is dropped for
+// the entire process without this plumbing (silent kernel recompilation on
+// Android).
+TEST(CosyvoiceEngineOptions, ForwardsOpenclCacheDir) {
+  CosyvoiceConfig cfg;
+  cfg.openclCacheDir = "/var/cache/qvac/opencl";
+  EXPECT_EQ(toEngineOptions(cfg).opencl_cache_dir, "/var/cache/qvac/opencl");
+}
+
+TEST(CosyvoiceEngineOptions, OpenclCacheDirDefaultsEmpty) {
+  EXPECT_TRUE(toEngineOptions(CosyvoiceConfig{}).opencl_cache_dir.empty());
+}
+
+TEST(CosyvoiceEngineOptions, DefaultsToCpu) {
+  EXPECT_EQ(toEngineOptions(CosyvoiceConfig{}).n_gpu_layers, 0);
+}
+
+TEST(CosyvoiceEngineOptions, UseGpuTrueOffloadsAllLayers) {
+  CosyvoiceConfig cfg;
+  cfg.useGpu = true;
+  EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, kOffloadAllGpuLayers);
+}
+
+TEST(CosyvoiceEngineOptions, UseGpuFalsePinsCpu) {
+  CosyvoiceConfig cfg;
+  cfg.useGpu = false;
+  EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, 0);
+}
+
+TEST(CosyvoiceEngineOptions, ExplicitNGpuLayersWinsOverUseGpu) {
+  CosyvoiceConfig cfg;
+  cfg.nGpuLayers = 12;
+  cfg.useGpu = true;
+  EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, 12);
 }
 
 TEST(CosyvoiceValidate, ConfigDefaultsAreCpuFriendly) {
