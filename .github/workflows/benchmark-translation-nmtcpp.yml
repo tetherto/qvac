@@ -214,19 +214,14 @@ jobs:
       - name: Update apt sources
         run: sudo apt-get update
 
-      - name: Download Vulkan SDK
-        run: |
-          sudo apt install -y xz-utils
-          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
-          cd ~
-          mkdir -p vulkan
-          cd vulkan
-          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+      - name: Install xz-utils
+        run: sudo apt install -y xz-utils
 
-      - name: Setup Vulkan SDK path
-        run: |
-          VULKAN_SDK=~/vulkan/x86_64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: linux
+          arch: x64
 
       - name: Configure git
         shell: bash
@@ -313,6 +308,17 @@ jobs:
           bare-make generate --platform linux --arch x64
           bare-make build
           bare-make install
+
+      - name: Upload vcpkg configure logs on failure
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vcpkg-buildtrees-logs
+          path: |
+            /usr/local/share/vcpkg/buildtrees/*/config-*.log
+            /usr/local/share/vcpkg/buildtrees/*/install-*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
