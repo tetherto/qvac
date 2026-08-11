@@ -2,6 +2,7 @@ import { QvacResponse } from "@qvac/infer-base";
 type TranslationNmtcppArgs = TranslationNmtcpp.TranslationNmtcppArgs;
 type TranslationNmtcppModelTypes = TranslationNmtcpp.TranslationNmtcppModelTypes;
 type InferenceClientState = TranslationNmtcpp.InferenceClientState;
+type TranslationResponse = TranslationNmtcpp.TranslationResponse;
 /**
  * Public instance surface of a translation model. Kept as an interface (public
  * members only) so the published type stays structural — emitting the class
@@ -13,15 +14,19 @@ interface TranslationNmtcpp {
      */
     getState(): InferenceClientState;
     /**
-     * Loads the model. If already loaded, unloads first.
+     * Loads the model. If already loaded, unloads first. Rejects after
+     * `destroy()` — destruction is permanent; create a new instance instead.
      */
     load(): Promise<void>;
     /**
-     * Runs inference on the given input. Serialized — only one job at a time.
+     * Runs inference on the given input. Serialized through completion — the
+     * next `run()`/`runBatch()` job starts only after the returned response
+     * has settled (finished, failed, or been cancelled).
      */
-    run(input: string): Promise<QvacResponse<string>>;
+    run(input: string): Promise<TranslationResponse>;
     /**
      * Translates multiple texts in a single batch for better performance.
+     * Serialized with `run()` through the same queue.
      */
     runBatch(texts: string[]): Promise<string[]>;
     /**
@@ -176,5 +181,14 @@ declare namespace TranslationNmtcpp {
         encodeTime?: number;
         TTFT?: number;
     }
+    /**
+     * Response returned by `run()`: the public `QvacResponse<string>` surface
+     * plus typed access to `stats`. `stats` is `{}` until the run finishes and
+     * is only populated when the model was constructed with `opts.stats = true`
+     * (narrow with e.g. `'TPS' in response.stats`).
+     */
+    type TranslationResponse = Omit<QvacResponse<string>, never> & {
+        readonly stats: RuntimeStats | Record<string, never>;
+    };
 }
 export = TranslationNmtcpp;

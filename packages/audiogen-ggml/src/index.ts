@@ -84,6 +84,24 @@ export interface GenerateOptions {
   timesignature?: string
   /** Target length in seconds; undefined lets the LM decide the full length. */
   duration?: number
+  /** LM sampling temperature (ACE-Step default: 0.85). */
+  lmTemperature?: number
+  /** LM nucleus-sampling probability (ACE-Step default: 0.9). */
+  lmTopP?: number
+  /** LM top-k cutoff; 0 disables top-k filtering. */
+  lmTopK?: number
+  /** Classifier-free guidance scale used by the LM. */
+  lmCfgScale?: number
+  /** Allow the LM to infer missing metadata before semantic-code generation. */
+  lmPhase1?: boolean
+  /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
+  dcwEnabled?: boolean
+  /** DCW low-frequency correction strength (official default: 0.05). */
+  dcwScaler?: number
+  /** DCW high-frequency correction strength (official default: 0.02). */
+  dcwHighScaler?: number
+  /** Frozen ACE-Step semantic codes; when present, skips the LM stage. */
+  audioCodes?: Int32Array
 }
 
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
@@ -271,6 +289,15 @@ export class AudioGen {
     this._logger.debug(
       `audiogen-ggml: run (caption ${caption.length} chars, lyrics=${opts.lyrics ? 'yes' : 'no'})`
     )
+    if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
+      throw new Error('audiogen-ggml: lmPhase1 must be a boolean')
+    }
+    if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
+      throw new Error('audiogen-ggml: dcwEnabled must be a boolean')
+    }
+    if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
+      throw new Error('audiogen-ggml: audioCodes must be an Int32Array')
+    }
     const response = this._job.start()
     try {
       await this._requireAddon().runJob({
@@ -282,7 +309,16 @@ export class AudioGen {
         bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
         keyscale: opts.keyscale,
         timesignature: opts.timesignature,
-        duration: optionalFiniteNumber(opts.duration, 'duration')
+        duration: optionalFiniteNumber(opts.duration, 'duration'),
+        lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+        lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+        lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true),
+        lmCfgScale: optionalFiniteNumber(opts.lmCfgScale, 'lmCfgScale'),
+        lmPhase1: opts.lmPhase1,
+        dcwEnabled: opts.dcwEnabled,
+        dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
+        dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
+        audioCodes: opts.audioCodes
       })
     } catch (error) {
       this._logger.error(
