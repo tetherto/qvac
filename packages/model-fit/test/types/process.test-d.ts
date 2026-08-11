@@ -30,7 +30,7 @@ encodeFitProcessRequest({ version: 1, config })
 // @ts-expect-error modelPath is required
 encodeFitProcessRequest({ nCtx: 4096 })
 
-const response: FitProcessResponse = parseFitProcessResponse(JSON.parse(''))
+const response: FitProcessResponse = parseFitProcessResponse(null as unknown)
 
 if (response.status === 'completed') {
   // A completed response carries a full FitResult, which then narrows on its

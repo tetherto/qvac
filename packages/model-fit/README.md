@@ -192,25 +192,29 @@ provides a proven process boundary.
 
 ### What the parent observes
 
-A supervisor sees one of three outcomes, and must distinguish them by the
-**stdout line**, not by the exit code alone:
+A supervisor must key off the **stdout line**, not the exit code, because the
+same code can arrive with or without a response:
 
 | stdout | exit | meaning |
 |---|---|---|
 | one `completed` line | 0 | the projection ran; `parseFitProcessResponse` yields a `FitResult` |
 | one `invocation-error` line | 1 | the fit call itself threw, e.g. argument validation |
-| one `invocation-error` line | 2 | the request never reached the fitter: unreadable, oversized, or wrong-version |
-| no line | non-zero or a signal | the native fitter aborted the process — the case this boundary exists for |
+| one `invocation-error` line | 2 | the request never reached the fitter: unparseable, oversized, or wrong-version |
+| no line, stderr diagnostic | 2 | the runner could not read the request or flush the response |
+| no line, no diagnostic | non-zero or a signal | the native fitter aborted the process — the case this boundary exists for |
 
-Exit 0 does not prove the response was delivered: if the parent has already
-closed its read end, the runner exits 0 having written nothing. Treat a missing
-or unparseable line as a failure regardless of status. Diagnostics for a failed
-read or write go to stderr; stdout carries the protocol and nothing else.
+So exit 2 alone does not say whether a response exists, and exit 0 does not
+prove one was delivered: a parent that has already closed its read end gets exit
+0 and no output. Treat a missing or unparseable line as a failure whatever the
+status. Diagnostics go to stderr; stdout carries the protocol and nothing else.
 
 The runner has **no internal timeout**. It waits indefinitely for a complete
 request line, so a parent that opens the pipe and then stalls leaves the child
 alive forever. Imposing a deadline and killing the child is the supervisor's
 job, as is cancellation.
+
+The addon is loaded only once a request has parsed, so a rejected request costs
+a process spawn and nothing else — never backend registration.
 
 ## SDK usage (intended)
 

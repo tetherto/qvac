@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const processModule = require("bare-process");
 /* eslint-enable @typescript-eslint/no-require-imports */
-const index_1 = require("./index");
 const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
@@ -13,6 +12,9 @@ function exitAfterWriteError(error) {
     });
 }
 function writeOutcome(outcome) {
+    // One shot: stop reading before replying, so a still-open stdin cannot hold
+    // the child open once the response has been flushed.
+    process.stdin.pause();
     process.stdout.write(outcome.responseLine, (error) => {
         if (error !== null) {
             exitAfterWriteError(error);
@@ -21,8 +23,15 @@ function writeOutcome(outcome) {
         process.exit(outcome.exitCode);
     });
 }
+// Deliberately not a top-level import: loading the addon registers the ggml
+// backends, which is the very work this boundary exists to keep disposable. A
+// malformed or oversized request is answered without ever touching native code.
+function fit(config) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
+    return require('./index').fitParams(config);
+}
 function finish(line) {
-    writeOutcome((0, process_internal_1.runFitProcessLine)(line, index_1.fitParams));
+    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit));
 }
 let input = '';
 let finished = false;

@@ -24,11 +24,9 @@ export declare function parseFitProcessResponse(value: unknown): FitProcessRespo
  * Absolute path to the one-shot runner, to be spawned with a Bare executable.
  *
  * The child reads one request line on stdin and writes one response line on
- * stdout: exit 0 with a `completed` line, exit 1 when the fit call threw, exit
- * 2 when the request never reached the fitter. A native abort produces no line
- * at all, so a supervisor must key off the line rather than the exit code — a
- * parent that has closed its read end gets exit 0 and no output. The runner
- * imposes no timeout; bounding and cancelling the child is the caller's job.
+ * stdout. Supervisors must key off that line rather than the exit code, and are
+ * responsible for the deadline the runner does not impose: see "What the parent
+ * observes" in the package README for the full set of outcomes.
  *
  * Resolved on demand so hosts without subprocess support can import the
  * protocol and refuse the feature before the runner entrypoint is looked up.

@@ -2,9 +2,9 @@
 import processModule = require('bare-process')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-import { fitParams } from './index'
 import {
   runFitProcessLine,
+  type FitProcessFit,
   type FitProcessOutcome
 } from './process-internal'
 import { FIT_PROCESS_MAX_REQUEST_BYTES } from './process'
@@ -15,6 +15,7 @@ interface RunnerInput {
   on(event: 'end', listener: () => void): void
   on(event: 'error', listener: (error: Error) => void): void
   resume(): void
+  pause(): void
 }
 
 interface RunnerOutput {
@@ -37,6 +38,9 @@ function exitAfterWriteError (error: Error): void {
 }
 
 function writeOutcome (outcome: FitProcessOutcome): void {
+  // One shot: stop reading before replying, so a still-open stdin cannot hold
+  // the child open once the response has been flushed.
+  process.stdin.pause()
   process.stdout.write(outcome.responseLine, (error: Error | null) => {
     if (error !== null) {
       exitAfterWriteError(error)
@@ -46,8 +50,16 @@ function writeOutcome (outcome: FitProcessOutcome): void {
   })
 }
 
+// Deliberately not a top-level import: loading the addon registers the ggml
+// backends, which is the very work this boundary exists to keep disposable. A
+// malformed or oversized request is answered without ever touching native code.
+function fit (config: Parameters<FitProcessFit>[0]): ReturnType<FitProcessFit> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
+  return (require('./index') as { fitParams: FitProcessFit }).fitParams(config)
+}
+
 function finish (line: string): void {
-  writeOutcome(runFitProcessLine(line, fitParams))
+  writeOutcome(runFitProcessLine(line, fit))
 }
 
 let input = ''
