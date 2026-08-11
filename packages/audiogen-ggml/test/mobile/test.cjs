@@ -39,6 +39,13 @@ const TURBO_STEPS = 8
 const TURBO_SHIFT = 3.0
 const SMOKE_DURATION_S = 10
 const SMOKE_CAPTION = 'Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook'
+const GPU_DEVICE = 1
+const VULKAN_BACKEND = 3
+const OPENCL_BACKEND = 4
+const GPU_BACKEND_NAMES = {
+  [VULKAN_BACKEND]: 'Vulkan',
+  [OPENCL_BACKEND]: 'OpenCL'
+}
 
 // The four turbo-q4 stage filenames the smoke needs on disk.
 function _stageFilenames () {
@@ -315,9 +322,23 @@ function _pcmEnergy (pcm) {
   return { peak, rms: samples > 0 ? Math.sqrt(sumSquares / samples) : 0 }
 }
 
+function _requireGpuBackend (stats) {
+  const backendDevice = stats && stats.backendDevice
+  const backendId = stats && stats.backendId
+  const backendName = GPU_BACKEND_NAMES[backendId]
+  console.log('[audiogen/GPU] backendDevice=' + backendDevice +
+    ' backendId=' + backendId + (backendName ? ' (' + backendName + ')' : ''))
+  if (backendDevice !== GPU_DEVICE || backendName === undefined) {
+    throw new Error(
+      'useGPU:true must run on Vulkan or OpenCL; got ' +
+      backendDevice + '/' + backendId)
+  }
+  return backendName
+}
+
 // End-to-end generation of a short turbo clip. Returns interleaved Int16 PCM so
 // the runner can play it back on device. The Android GPU variant additionally
-// requires the resolved backend to be Vulkan and rejects silent output.
+// requires a supported GPU backend and rejects silent output.
 async function _testGenerateMusic (useGPU) {
   const { gen, modelDir } = await _loadGenWithRetry(3, useGPU)
 
@@ -355,17 +376,7 @@ async function _testGenerateMusic (useGPU) {
       'generation produced silent or invalid audio (peak=' + energy.peak.toFixed(4) +
       ', rms=' + energy.rms.toFixed(5) + ')')
   }
-  if (useGPU) {
-    const backendDevice = stats && stats.backendDevice
-    const backendId = stats && stats.backendId
-    console.log('[audiogen/GPU] backendDevice=' + backendDevice +
-      ' backendId=' + backendId + (backendId === 3 ? ' (Vulkan)' : ''))
-    if (backendDevice !== 1 || backendId !== 3) {
-      throw new Error(
-        'useGPU:true must run on Vulkan (backendDevice=1, backendId=3); got ' +
-        backendDevice + '/' + backendId)
-    }
-  }
+  const executionTarget = useGPU ? _requireGpuBackend(stats) + ' GPU' : 'CPU'
 
   // The runner's playAudio() expects a base64 WAV string, which it writes to a
   // temp .wav and plays through the device speaker. Also persist a copy so we
@@ -380,7 +391,7 @@ async function _testGenerateMusic (useGPU) {
     sampleRate,
     channels,
     fullText:
-      (useGPU ? 'Vulkan GPU' : 'CPU') + ' generated ' + durationS.toFixed(1) +
+      executionTarget + ' generated ' + durationS.toFixed(1) +
       's (' + totalSamples + ' samples @ ' + sampleRate + ' Hz x' + channels +
       ', peak=' + energy.peak.toFixed(4) + ', rms=' + energy.rms.toFixed(5) +
       ') in ' + (elapsedMs / 1000).toFixed(1) + 's'
@@ -395,4 +406,9 @@ async function testGenerateMusicOnGpu () {
   return _testGenerateMusic(true)
 }
 
-module.exports = { testLoadModels, testGenerateMusic, testGenerateMusicOnGpu }
+module.exports = {
+  testLoadModels,
+  testGenerateMusic,
+  testGenerateMusicOnGpu,
+  _requireGpuBackend
+}

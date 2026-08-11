@@ -50,7 +50,7 @@ exports.config = {
   mochaOpts: {
     ui: 'bdd',
     timeout: __MOCHA_TIMEOUT_MS__,
-    grep: '__MOCHA_GREP__',
+    grep: __MOCHA_GREP__,
   },
 
   before: async function (capabilities, specs, browser) {

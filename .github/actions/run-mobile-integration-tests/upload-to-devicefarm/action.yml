@@ -89,8 +89,8 @@ inputs:
           }
         }
 
-      The composite transforms each `{ groupName: [tests] }` entry into
-      `{ name: groupName, grep: tests.join("|") }` for the WDIO config.
+      The composite escapes and end-anchors each test name, then transforms
+      every `{ groupName: [tests] }` entry into `{ name, grep }` for WDIO.
       Top-level keys other than `android`/`ios` are ignored (so addons
       can co-locate addon-specific config like OCR's `perf_report_filter`).
     required: false
@@ -366,7 +366,7 @@ runs:
         #   1. Explicit `test-groups` input (takes precedence — escape hatch)
         #   2. Auto-detected `<addon-workdir>/test/mobile/test-groups.json`
         #      file, transformed from `{ groupName: [tests] }` into the
-        #      canonical `[{name, grep}]` array
+        #      canonical end-anchored `[{name, grep}]` array
         #   3. Single default group using `mocha-grep`
         EFFECTIVE_GROUPS="$TEST_GROUPS"
         if { [ -z "$EFFECTIVE_GROUPS" ] || [ "$EFFECTIVE_GROUPS" = "[]" ]; } && [ -n "$ADDON_WORKDIR" ]; then
@@ -377,10 +377,12 @@ runs:
             # Only the platform's `{ groupName: [tests] }` map is consumed.
             # Other top-level keys (e.g. OCR's perf_report_filter) are ignored.
             EFFECTIVE_GROUPS=$(jq -c --arg p "$PLATFORM_LOWER" '
+              def escape_regex:
+                gsub("(?<char>[\\\\.^$|?*+(){}\\[\\]])"; "\\\(.char)");
               if (.[$p] // null) | type == "object" then
                 .[$p] | to_entries | map({
                   name: .key,
-                  grep: (.value | join("|"))
+                  grep: (.value | map((escape_regex) + "$") | join("|"))
                 })
               else
                 []
@@ -526,6 +528,7 @@ runs:
           # Python rather than sed because PLATFORM_CAPS contains characters that
           # are awkward to escape in sed substitution syntax (newlines, &, |, /).
           python3 - <<'PY' > "$WDIO_CONFIG_PATH"
+        import json
         import os
         with open(os.environ["TEMPLATE_PATH"]) as f:
             tpl = f.read()
@@ -534,7 +537,7 @@ runs:
         repl = {
             "__PLATFORM_CAPABILITIES__": os.environ["PLATFORM_CAPS"],
             "__BUNDLE_ID__": os.environ["APP_BUNDLE_ID"],
-            "__MOCHA_GREP__": os.environ.get("GROUP_GREP_OUT", ""),
+            "__MOCHA_GREP__": json.dumps(os.environ.get("GROUP_GREP_OUT", "")),
             "__MOCHA_TIMEOUT_MS__": os.environ["MOCHA_TIMEOUT_MS"],
             "__WDIO_WAITFOR_TIMEOUT_MS__": os.environ["WDIO_WAITFOR_TIMEOUT_MS"],
             "__INIT_PREDICATE__": os.environ["INIT_PREDICATE"],
