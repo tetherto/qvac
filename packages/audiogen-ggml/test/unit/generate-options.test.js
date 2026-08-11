@@ -81,3 +81,100 @@ test('AudioGen.run rejects invalid sampler and DCW controls before native dispat
     )
   }
 })
+
+test('AudioGen.run forwards reference/source audio, taskType and cover strengths', async (t) => {
+  const { gen, received } = createHarness()
+  const referenceAudio = new Float32Array([0.1, -0.1, 0.2, -0.2])
+  const sourceAudio = new Float32Array([0.3, -0.3, 0.4, -0.4, 0.5, -0.5])
+
+  const response = await gen.run('salsa cover', {
+    taskType: 'cover-nofsq',
+    referenceAudio,
+    sourceAudio,
+    audioCoverStrength: 1,
+    coverNoiseStrength: 0.25
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'cover-nofsq')
+  t.is(job.referenceAudio, referenceAudio)
+  t.is(job.sourceAudio, sourceAudio)
+  t.is(job.audioCoverStrength, 1)
+  t.is(job.coverNoiseStrength, 0.25)
+})
+
+test('AudioGen.run forwards text2music with optional referenceAudio only', async (t) => {
+  const { gen, received } = createHarness()
+  const referenceAudio = new Float32Array([0, 0, 0.5, -0.5])
+
+  const response = await gen.run('timbre conditioned', {
+    taskType: 'text2music',
+    referenceAudio
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'text2music')
+  t.is(job.referenceAudio, referenceAudio)
+  t.is(job.sourceAudio, undefined)
+})
+
+test('AudioGen.run rejects invalid cover/reference options before native dispatch', async (t) => {
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { taskType: 'repaint' }),
+      /taskType must be one of text2music\|cover\|cover-nofsq/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { taskType: 'cover-nofsq' }),
+      /taskType 'cover-nofsq' requires sourceAudio/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { taskType: 'cover', sourceAudio: new Float32Array(0) }),
+      /taskType 'cover' requires sourceAudio/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { referenceAudio: new Int16Array([1, 2]) }),
+      /referenceAudio must be a Float32Array/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { sourceAudio: new Float32Array([1, 2, 3]) }),
+      /sourceAudio must be interleaved stereo/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { referenceAudio: new Float32Array([1, 2, 3]) }),
+      /referenceAudio must be interleaved stereo/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { audioCoverStrength: Number.NaN }),
+      /audioCoverStrength must be a finite number/
+    )
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { coverNoiseStrength: Number.POSITIVE_INFINITY }),
+      /coverNoiseStrength must be a finite number/
+    )
+  }
+})
