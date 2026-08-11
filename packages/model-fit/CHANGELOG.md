@@ -1,6 +1,47 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0] - 2026-08-10
+
+### Added
+
+- Initial release of `@qvac/model-fit`, a memory-fit **preflight** addon that
+  wraps llama.cpp's `llama_params_fit` C API to project — without loading any
+  weights — whether a GGUF model fits available device memory, and if so with
+  what offload plan (layers / context / tensor split). Intended to run in a
+  short-lived isolated worklet before handing a model to `@qvac/llm-llamacpp`.
+  (The wrapped entry point became `common_fit_params` before this first
+  publish — see *Changed* below.)
+- `reason` on the result — `fits`, `does-not-fit`, `model-unreadable` or
+  `no-backend-device`. `status` alone could not separate "this hardware cannot
+  run it" from "the model could not be read", which left the documented
+  proceed-on-unknown path impossible to diagnose.
+- `buftOverrides` on the result: the tensor placement the fitter selected. These
+  were previously discarded, so a `SUCCESS` could depend on placement the real
+  load would not reproduce.
+- `FitResult` is now a discriminated union on `status`, with the plan valid only
+  on `SUCCESS`, plus a consumer type test (`test/types/`) that checks branch
+  narrowing and exhaustiveness — the dts check previously only compiled the
+  declaration itself.
+- `NOTICE` and `LICENSE`, which `package.json` already listed in `files`.
+
+- Coverage for what the fitter does under memory pressure. `llama_params_fit`
+  assumes host memory is unlimited, so an unsatisfiable device margin is met by
+  moving every layer to the host rather than by reporting `FAILURE` — `fits`
+  stays true, and the plan rather than the flag is the admission signal. Driven
+  by the margin rather than by model size, which keeps it deterministic across
+  runners with different VRAM.
+- Coverage for the `FAILURE` verdict, which turns out to require a pinned
+  constraint. Unpinned, the fitter always has the host to fall back on, so it
+  answers even an unsatisfiable margin with `SUCCESS` and zero offload; pinning
+  `nGpuLayers` makes offload a hard requirement and produces a real "won't fit".
+  Documented, because it means `fits` alone is not an admission signal.
+- Documented two crash paths inside `llama_params_fit` that this addon cannot
+  contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
+  Windows divide-by-zero. Both terminate the process.
+- `nDevices` and `nGpuDevices` on the result — the device inventory the
+  projection was actually made against. Zero registered devices now returns
+  `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
+  be read as a detection result.
 
 ### Changed
 
@@ -141,47 +182,3 @@
   place, win32 CI returns a real projection and the SEH filter never fires.
   Removing it also resolves the objection that resuming after a structured
   exception leaves llama's global logger pointing at a dead stack frame.
-
-### Added
-
-- `reason` on the result — `fits`, `does-not-fit`, `model-unreadable` or
-  `no-backend-device`. `status` alone could not separate "this hardware cannot
-  run it" from "the model could not be read", which left the documented
-  proceed-on-unknown path impossible to diagnose.
-- `buftOverrides` on the result: the tensor placement the fitter selected. These
-  were previously discarded, so a `SUCCESS` could depend on placement the real
-  load would not reproduce.
-- `FitResult` is now a discriminated union on `status`, with the plan valid only
-  on `SUCCESS`, plus a consumer type test (`test/types/`) that checks branch
-  narrowing and exhaustiveness — the dts check previously only compiled the
-  declaration itself.
-- `NOTICE` and `LICENSE`, which `package.json` already listed in `files`.
-
-- Coverage for what the fitter does under memory pressure. `llama_params_fit`
-  assumes host memory is unlimited, so an unsatisfiable device margin is met by
-  moving every layer to the host rather than by reporting `FAILURE` — `fits`
-  stays true, and the plan rather than the flag is the admission signal. Driven
-  by the margin rather than by model size, which keeps it deterministic across
-  runners with different VRAM.
-- Coverage for the `FAILURE` verdict, which turns out to require a pinned
-  constraint. Unpinned, the fitter always has the host to fall back on, so it
-  answers even an unsatisfiable margin with `SUCCESS` and zero offload; pinning
-  `nGpuLayers` makes offload a hard requirement and produces a real "won't fit".
-  Documented, because it means `fits` alone is not an admission signal.
-- Documented two crash paths inside `llama_params_fit` that this addon cannot
-  contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
-  Windows divide-by-zero. Both terminate the process.
-- `nDevices` and `nGpuDevices` on the result — the device inventory the
-  projection was actually made against. Zero registered devices now returns
-  `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
-  be read as a detection result.
-
-## [0.1.0] - 2026-07-27
-
-### Added
-
-- Initial release of `@qvac/model-fit`, a memory-fit **preflight** addon that
-  wraps llama.cpp's `llama_params_fit` C API to project — without loading any
-  weights — whether a GGUF model fits available device memory, and if so with
-  what offload plan (layers / context / tensor split). Intended to run in a
-  short-lived isolated worklet before handing a model to `@qvac/llm-llamacpp`.
