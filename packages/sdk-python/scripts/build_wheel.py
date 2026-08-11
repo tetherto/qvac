@@ -60,8 +60,31 @@ def _stage_ignore(prebuild_host: str):
     subdir except this host's. The addon npm packages bundle all platforms'
     prebuilds in one package (~0.5 GB each, ~4.5 GB total); keeping only the
     target host's keeps each wheel to one platform's binaries and under GitHub's
-    2 GB asset limit."""
-    base = shutil.ignore_patterns(".git", "node_modules", "example*")
+    2 GB asset limit.
+
+    Also drops non-runtime dirs the addon npm packages over-publish -- test
+    fixtures especially (asr-ggml ships a 28 MB test audio .raw), plus
+    docs/coverage/CI config. Native prebuilds and each addon's own weights/ are
+    kept; the worker only imports from package entry points, never test/."""
+    base = shutil.ignore_patterns(
+        ".git",
+        "node_modules",
+        "example",
+        "examples",
+        "test",
+        "tests",
+        "__tests__",
+        "testAssets",
+        "test-assets",
+        "fixtures",
+        "__fixtures__",
+        "benchmark",
+        "benchmarks",
+        "docs",
+        "doc",
+        "coverage",
+        ".github",
+    )
 
     def ignore(directory: str, names: list[str]) -> set[str]:
         ignored = set(base(directory, names))
