@@ -504,6 +504,15 @@ jobs:
       contents: read
       statuses: write
     steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so publish logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Publish prebuild status for Merge Guard
         env:
           GH_TOKEN: ${{ github.token }}
@@ -511,26 +520,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PREBUILD_RESULT: ${{ needs.prebuild.result }}
           REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
-          # Binds the status to THIS on-pr run so Merge Guard can reject a status
-          # from a superseded (e.g. pre-label) run whose timestamp still looks fresh.
+          # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
+          # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          if [ -z "$HEAD_SHA" ]; then
-            echo "No PR head SHA in context; nothing to publish."
-            exit 0
-          fi
-          if [ "$PREBUILD_RESULT" = "success" ] || [ "$PREBUILD_RESULT" = "skipped" ] || [ "$REUSE_HIT" = "true" ]; then
-            state=success
-          else
-            state=failure
-          fi
-          gh api -X POST "repos/${REPO}/statuses/${HEAD_SHA}" \
-            -f state="$state" \
-            -f context="qvac/prebuild-asr-ggml" \
-            -f target_url="$RUN_URL" \
-            -f description="prebuild ${state}" >/dev/null
-          echo "Posted qvac/prebuild-asr-ggml = $state on $HEAD_SHA"
+          CONTEXT: qvac/prebuild-asr-ggml
+        run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
     needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests, coload-smoke, coload-smoke-mobile, combine-unified-performance-report]

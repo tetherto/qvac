@@ -1033,30 +1033,46 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   const source = read('.github/workflows/pr-gate-merge.yml')
   const verify = jobBlock(source, 'verify-prebuilds')
 
-  // Needs actions:read to fetch the producing run, reads target_url from the
-  // status, and only trusts a run triggered at/after this PR event. Timestamp
-  // alone is insufficient: a superseded pre-label run can post a fresh-looking
-  // skipped success, so the status must be bound to the run that produced it.
+  // The gate reads workflow runs (to bind a status to its producing run) and
+  // delegates the decision to a single, unit-tested module checked out from the
+  // trusted default branch (never PR head code).
   assert.match(verify, /actions:\s*read/, 'verify-prebuilds can read workflow runs')
   assert.match(
     verify,
-    /\.target_url/,
-    'verify-prebuilds reads the producing run from the status target_url',
+    /sparse-checkout:\s*\.github\/scripts\/prebuild-status/,
+    'verify-prebuilds checks out only the prebuild-status scripts',
   )
   assert.match(
     verify,
-    /actions\/runs\/\$\{run_id\}/,
-    'verify-prebuilds fetches the producing run by id',
+    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
+    'verify-prebuilds checks out the trusted default branch, never PR head',
   )
   assert.match(
     verify,
+    /run:\s*node \.github\/scripts\/prebuild-status\/verify\.mjs/,
+    'verify-prebuilds runs the shared verify script',
+  )
+  assert.match(
+    verify,
+    /PR_UPDATED_AT:\s*\$\{\{ github\.event\.pull_request\.updated_at \}\}/,
+    'verify-prebuilds passes the PR event timestamp as the freshness threshold',
+  )
+
+  // Timestamp alone is insufficient: a superseded pre-label run can post a
+  // fresh-looking skipped success, so the module binds the status to the run
+  // that produced it (target_url -> run -> on-pr-<pkg> workflow -> created_at).
+  const lib = read('.github/scripts/prebuild-status/lib.mjs')
+  assert.match(lib, /target_url/, 'lib reads the producing run from the status target_url')
+  assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
+  assert.match(
+    lib,
     /on-pr-\$\{pkg\}\.yml/,
-    'verify-prebuilds checks the producing run is the on-pr-<pkg> workflow',
+    'lib checks the producing run is the on-pr-<pkg> workflow',
   )
   assert.match(
-    verify,
-    /run_created_epoch"\s+-lt\s+"\$PR_UPDATED_EPOCH/,
-    'verify-prebuilds rejects a producing run created before this PR event',
+    lib,
+    /createdMs \/ 1000\) >= prUpdatedEpoch/,
+    'lib rejects a producing run created before this PR event',
   )
 })
 
@@ -1067,19 +1083,29 @@ test('publish-prebuild-status stamps its run URL into target_url', () => {
     .filter((name) => {
       const text = readFileSync(join(workflowDirectory, name), 'utf8')
       if (!text.includes('publish-prebuild-status')) return false
-      // A publish job must both define RUN_URL from github.run_id and pass it as
-      // the status target_url, so Merge Guard can bind the status to this run.
+      // A publish job must define RUN_URL from github.run_id, pass its context,
+      // and delegate to the shared publish script (which stamps target_url), so
+      // Merge Guard can bind the status to this run.
       const hasRunUrl =
         /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
           text,
         )
-      const passesTargetUrl = /-f target_url="\$RUN_URL"/.test(text)
-      return !(hasRunUrl && passesTargetUrl)
+      const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text)
+      const runsScript = /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(text)
+      return !(hasRunUrl && hasContext && runsScript)
     })
   assert.deepEqual(
     offenders,
     [],
-    'every on-pr publish-prebuild-status must stamp target_url with its run URL',
+    'every on-pr publish-prebuild-status must run the shared publish script with RUN_URL and CONTEXT',
+  )
+
+  // The shared script is what actually stamps the run URL into target_url.
+  const publish = read('.github/scripts/prebuild-status/publish.mjs')
+  assert.match(
+    publish,
+    /target_url=\$\{runUrl\}/,
+    'publish.mjs stamps the run URL into the status target_url',
   )
 })
 
