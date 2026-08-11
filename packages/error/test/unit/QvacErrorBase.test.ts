@@ -1,13 +1,14 @@
-'use strict'
-
-const test = require('brittle')
-const {
+import test from 'brittle'
+import {
   QvacErrorBase,
   addCodes,
   getRegisteredCodes,
   isCodeRegistered,
-  INTERNAL_ERROR_CODES
-} = require('../..')
+  INTERNAL_ERROR_CODES,
+  type ErrorCodesMap,
+  type PackageInfo,
+  type QvacErrorOptions
+} from '../../src/index.js'
 
 test('QvacErrorBase should handle basic error creation', (t) => {
   // Define a test error code
@@ -111,7 +112,9 @@ test('addCodes should throw when registering duplicate codes', (t) => {
     t.fail('Should throw when registering duplicate code')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.ERROR_CODE_ALREADY_EXISTS, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.ERROR_CODE_ALREADY_EXISTS, 'Has the correct error code')
+    }
   }
 })
 
@@ -121,11 +124,13 @@ test('addCodes should throw with invalid definition', (t) => {
   try {
     addCodes({
       [INVALID_CODE]: 'not an object'
-    })
+    } as unknown as ErrorCodesMap)
     t.fail('Should throw with invalid definition')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.INVALID_CODE_DEFINITION, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.INVALID_CODE_DEFINITION, 'Has the correct error code')
+    }
   }
 })
 
@@ -138,11 +143,13 @@ test('addCodes should throw when missing name or message', (t) => {
         name: 'MISSING_MESSAGE'
         // missing message
       }
-    })
+    } as unknown as ErrorCodesMap)
     t.fail('Should throw when missing message')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.MISSING_ERROR_DEFINITION, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.MISSING_ERROR_DEFINITION, 'Has the correct error code')
+    }
   }
 })
 
@@ -157,16 +164,17 @@ test('getRegisteredCodes should return all registered codes', (t) => {
   })
 
   const codes = getRegisteredCodes()
-  t.ok(codes[TEST_CODE], 'Registered code is present in returned object')
-  t.is(codes[TEST_CODE].name, 'GET_REGISTERED_TEST', 'Code has the correct name')
-  t.is(codes[TEST_CODE].message, 'Test for getRegisteredCodes', 'Code has the correct message')
+  const entry = codes[TEST_CODE]
+  t.ok(entry, 'Registered code is present in returned object')
+  t.is(entry?.name, 'GET_REGISTERED_TEST', 'Code has the correct name')
+  t.is(entry?.message, 'Test for getRegisteredCodes', 'Code has the correct message')
 
   // Verify integrity - modifications to returned object shouldn't affect the original
-  codes[TEST_CODE].name = 'MODIFIED'
+  if (entry) entry.name = 'MODIFIED'
   const newCodes = getRegisteredCodes()
 
   t.is(
-    newCodes[TEST_CODE].name,
+    newCodes[TEST_CODE]?.name,
     'GET_REGISTERED_TEST',
     'Original registry is not affected by modifications'
   )
@@ -190,7 +198,8 @@ test('isCodeRegistered should correctly check code registration', (t) => {
 test('Extending QvacErrorBase works correctly', (t) => {
   // Custom error class extending QvacErrorBase
   class CustomError extends QvacErrorBase {
-    constructor(options) {
+    isCustom: boolean
+    constructor(options?: QvacErrorOptions) {
       super(options)
       this.isCustom = true
     }
@@ -243,12 +252,14 @@ test('addCodes should throw when package info is invalid', (t) => {
           message: 'Error with invalid package info'
         }
       },
-      { name: 'test-package' }
+      { name: 'test-package' } as unknown as PackageInfo
     )
     t.fail('Should throw when package version is missing')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.INVALID_PACKAGE_INFO, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.INVALID_PACKAGE_INFO, 'Has the correct error code')
+    }
   }
 
   try {
@@ -259,12 +270,14 @@ test('addCodes should throw when package info is invalid', (t) => {
           message: 'Error with invalid package info'
         }
       },
-      { version: '1.0.0' }
+      { version: '1.0.0' } as unknown as PackageInfo
     )
     t.fail('Should throw when package name is missing')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.INVALID_PACKAGE_INFO, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.INVALID_PACKAGE_INFO, 'Has the correct error code')
+    }
   }
 })
 
@@ -353,7 +366,9 @@ test('addCodes should throw when different package tries to use same code', (t) 
     t.fail('Should throw when different package uses same code')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.ERROR_CODE_ALREADY_EXISTS, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.ERROR_CODE_ALREADY_EXISTS, 'Has the correct error code')
+    }
   }
 })
 
@@ -383,13 +398,15 @@ test('addCodes with package info should validate code definitions', (t) => {
     addCodes(
       {
         2007: 'invalid definition'
-      },
+      } as unknown as ErrorCodesMap,
       { name: 'invalid-package', version: '1.0.0' }
     )
     t.fail('Should throw with invalid definition')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.INVALID_CODE_DEFINITION, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.INVALID_CODE_DEFINITION, 'Has the correct error code')
+    }
   }
 
   try {
@@ -398,13 +415,15 @@ test('addCodes with package info should validate code definitions', (t) => {
         2008: {
           name: 'MISSING_MESSAGE_ERROR'
         }
-      },
+      } as unknown as ErrorCodesMap,
       { name: 'invalid-package', version: '1.0.0' }
     )
     t.fail('Should throw when missing message')
   } catch (error) {
     t.ok(error instanceof QvacErrorBase, 'Throws a QvacErrorBase error')
-    t.is(error.code, INTERNAL_ERROR_CODES.MISSING_ERROR_DEFINITION, 'Has the correct error code')
+    if (error instanceof QvacErrorBase) {
+      t.is(error.code, INTERNAL_ERROR_CODES.MISSING_ERROR_DEFINITION, 'Has the correct error code')
+    }
   }
 })
 
@@ -419,10 +438,14 @@ test('QvacErrorBase: error without cause has its own stack and no cause', (t) =>
   try {
     throw new QvacErrorBase({ code: CODE })
   } catch (err) {
+    if (!(err instanceof QvacErrorBase)) {
+      t.fail('Expected QvacErrorBase to be thrown')
+      return
+    }
     t.is(err.name, 'NO_CAUSE_ERROR', 'Correct error name')
     t.is(err.message, 'Error without cause', 'Correct error message')
     t.is(err.code, CODE, 'Correct error code')
-    t.ok(err.stack.includes('QvacErrorBase'), 'Stack trace is present')
+    t.ok(err.stack?.includes('QvacErrorBase'), 'Stack trace is present')
     t.absent(err.cause, 'Cause is undefined when not passed')
   }
 })
@@ -435,19 +458,23 @@ test('QvacErrorBase: error with cause appends original stack', (t) => {
       message: 'Error with cause'
     }
   })
-  let originalError
+  let originalError: Error | undefined
   try {
     throw new TypeError('Original error')
   } catch (err) {
-    originalError = err
+    if (err instanceof Error) originalError = err
     try {
       throw new QvacErrorBase({ code: CODE, cause: originalError })
     } catch (wrapped) {
+      if (!(wrapped instanceof QvacErrorBase)) {
+        t.fail('Expected QvacErrorBase to be thrown')
+        return
+      }
       t.is(wrapped.name, 'WITH_CAUSE_ERROR', 'Correct error name')
       t.is(wrapped.message, 'Error with cause', 'Correct error message')
       t.is(wrapped.code, CODE, 'Correct error code')
-      t.ok(wrapped.stack.includes('QvacErrorBase'), 'Stack trace is present')
-      t.ok(wrapped.stack.includes('TypeError: Original error'), 'Original error stack is appended')
+      t.ok(wrapped.stack?.includes('QvacErrorBase'), 'Stack trace is present')
+      t.ok(wrapped.stack?.includes('TypeError: Original error'), 'Original error stack is appended')
       t.is(wrapped.cause, originalError, 'Cause is set to original error')
     }
   }
@@ -471,7 +498,7 @@ test('QvacErrorBase: subclass preserves name and stack', (t) => {
   class CustomError extends QvacErrorBase {}
   const err = new CustomError({})
   t.is(err.name, 'CustomError', 'Subclass name is preserved')
-  t.ok(err.stack.includes('CustomError'), 'Subclass stack is present')
+  t.ok(err.stack?.includes('CustomError'), 'Subclass stack is present')
 })
 
 test('QvacErrorBase: message formatting with function', (t) => {

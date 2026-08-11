@@ -1,41 +1,37 @@
-'use strict'
+export interface ErrorDefinition {
+  name: string
+  message: string | ((...args: any[]) => string)
+}
 
-/**
- * @typedef {Object} ErrorDefinition
- * @property {string} name - Error name identifier
- * @property {string | ((...args: any[]) => string)} message - Error message or message factory
- */
+export type ErrorCodesMap = Record<number, ErrorDefinition>
 
-/**
- * @typedef {{ [code: number]: ErrorDefinition }} ErrorCodesMap
- */
+export interface QvacErrorOptions {
+  code?: number | undefined
+  adds?: any[] | string | undefined
+  cause?: Error | undefined
+}
 
-/**
- * @typedef {Object} QvacErrorOptions
- * @property {number} [code] - The error code
- * @property {any[] | string} [adds] - Additional arguments to format the message
- * @property {Error} [cause] - The original error that caused this one
- */
+export interface SerializedError {
+  name: string
+  code: number
+  message: string
+  stack?: string | undefined
+  cause?: Error | undefined
+}
 
-/**
- * @typedef {Object} SerializedError
- * @property {string} name
- * @property {number} code
- * @property {string} message
- * @property {string} [stack]
- * @property {Error} [cause]
- */
+export interface PackageInfo {
+  // Package name (e.g., '@tetherto/inference-addon-mlc-base')
+  name: string
+  // Package version (semantic version)
+  version: string
+}
 
-/**
- * @typedef {Object} PackageInfo
- * @property {string} name - Package name (e.g., '@tetherto/inference-addon-mlc-base')
- * @property {string} version - Package version (semantic version)
- */
+interface PackageRegistryEntry {
+  version: string
+  codes: number[]
+}
 
-/**
- * Reserved internal error codes
- * @private
- */
+// Reserved internal error codes.
 const ERR_CODES = Object.freeze({
   // Internal error codes (0-999)
   UNKNOWN_ERROR_CODE: 0,
@@ -44,17 +40,17 @@ const ERR_CODES = Object.freeze({
   MISSING_ERROR_DEFINITION: 3,
   PACKAGE_VERSION_CONFLICT: 4,
   INVALID_PACKAGE_INFO: 5
-})
+} as const)
 
-/**
- * Map of error codes to their content (name and message)
- * @private
- */
-const codeToContent = {
-  [ERR_CODES.UNKNOWN_ERROR_CODE]: {
-    name: 'UNKNOWN_ERROR_CODE',
-    message: (code) => `Unknown QVAC error code: ${code}`
-  },
+// Fallback definition used when a requested code is not registered.
+const UNKNOWN_ERROR = {
+  name: 'UNKNOWN_ERROR_CODE',
+  message: (code: number) => `Unknown QVAC error code: ${code}`
+}
+
+// Map of error codes to their content (name and message).
+const codeToContent: ErrorCodesMap = {
+  [ERR_CODES.UNKNOWN_ERROR_CODE]: UNKNOWN_ERROR,
   [ERR_CODES.INVALID_CODE_DEFINITION]: {
     name: 'INVALID_CODE_DEFINITION',
     message: (code) => `Invalid definition for error code: ${code}`
@@ -78,19 +74,11 @@ const codeToContent = {
   }
 }
 
-/**
- * Registry of packages and their registered code ranges
- * @private
- */
-const packageRegistry = new Map()
+// Registry of packages and their registered code ranges.
+const packageRegistry = new Map<string, PackageRegistryEntry>()
 
-/**
- * Compares two semantic version strings
- * @param {string} version1
- * @param {string} version2
- * @returns {number} -1 if v1 < v2, 0 if equal, 1 if v1 > v2
- */
-function compareVersions(version1, version2) {
+// Compares two semantic version strings; -1 if v1 < v2, 0 if equal, 1 if v1 > v2.
+function compareVersions(version1: string, version2: string): number {
   const v1Parts = version1.split('.').map(Number)
   const v2Parts = version2.split('.').map(Number)
 
@@ -107,31 +95,19 @@ function compareVersions(version1, version2) {
   return 0
 }
 
-/**
- * Base class for all QVAC errors
- * Extends the standard Error class with QVAC-specific functionality
- */
-class QvacErrorBase extends Error {
-  /** @type {number} */
-  code
-  /** @type {string} */
-  name
-  /** @type {Error | undefined} */
-  cause
+// Base class for all QVAC errors. Extends the standard Error class with
+// QVAC-specific functionality.
+export class QvacErrorBase extends Error {
+  code: number
+  override name: string
+  override cause: Error | undefined
 
-  /**
-   * Creates a new QVAC error
-   * @param {QvacErrorOptions} [options] - Error options
-   */
-  constructor(options = {}) {
+  constructor(options: QvacErrorOptions = {}) {
     const { code, adds, cause } = options
     let msgContent = ''
-    /** @type {number} */
-    let errorCode = ERR_CODES.UNKNOWN_ERROR_CODE
-    /** @type {string} */
+    let errorCode: number = ERR_CODES.UNKNOWN_ERROR_CODE
     let errorName = new.target.name
 
-    const unknownError = codeToContent[ERR_CODES.UNKNOWN_ERROR_CODE]
     const codeObj = code !== undefined ? codeToContent[code] : undefined
 
     if (code === undefined) {
@@ -139,9 +115,9 @@ class QvacErrorBase extends Error {
       errorCode = ERR_CODES.UNKNOWN_ERROR_CODE
       errorName = new.target.name
     } else if (!codeObj) {
-      msgContent = unknownError.message(code)
+      msgContent = UNKNOWN_ERROR.message(code)
       errorCode = ERR_CODES.UNKNOWN_ERROR_CODE
-      errorName = unknownError.name
+      errorName = UNKNOWN_ERROR.name
     } else {
       if (typeof codeObj.message === 'function') {
         msgContent = codeObj.message(...(Array.isArray(adds) ? adds : [adds]))
@@ -158,19 +134,20 @@ class QvacErrorBase extends Error {
     this.cause = cause
 
     Object.setPrototypeOf(this, new.target.prototype)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, this.constructor)
+
+    const captureStackTrace = (
+      Error as { captureStackTrace?: (target: object, ctor?: unknown) => void }
+    ).captureStackTrace
+    if (typeof captureStackTrace === 'function') {
+      captureStackTrace(this, this.constructor)
     }
-    if (cause && cause.stack) {
-      this.stack += '\n\nCaused by: ' + cause.stack
+    if (cause?.stack) {
+      this.stack = `${this.stack ?? ''}\n\nCaused by: ${cause.stack}`
     }
   }
 
-  /**
-   * Serializes the error to a plain object
-   * @returns {SerializedError}
-   */
-  toJSON() {
+  // Serializes the error to a plain object.
+  toJSON(): SerializedError {
     return {
       name: this.name,
       code: this.code,
@@ -181,28 +158,24 @@ class QvacErrorBase extends Error {
   }
 }
 
-/**
- * Registers new error codes with optional package information for collision avoidance
- * @param {ErrorCodesMap} codes - Map of error codes to their definitions
- * @param {PackageInfo} [packageInfo] - Optional package information for collision management
- * @throws {QvacErrorBase} If there are conflicts or invalid definitions
- */
-function addCodes(codes, packageInfo) {
+// Registers new error codes with optional package information for collision
+// avoidance. Throws QvacErrorBase on conflicts or invalid definitions.
+export function addCodes(codes: ErrorCodesMap, packageInfo?: PackageInfo): void {
   // If no package info provided, use legacy behavior
   if (!packageInfo) {
     for (const [code, def] of Object.entries(codes)) {
       const numericCode = Number(code)
 
       if (codeToContent[numericCode]) {
-        throw new QvacErrorBase({ code: ERR_CODES.ERROR_CODE_ALREADY_EXISTS, adds: numericCode })
+        throw new QvacErrorBase({ code: ERR_CODES.ERROR_CODE_ALREADY_EXISTS, adds: [numericCode] })
       }
 
       if (!def || typeof def !== 'object') {
-        throw new QvacErrorBase({ code: ERR_CODES.INVALID_CODE_DEFINITION, adds: numericCode })
+        throw new QvacErrorBase({ code: ERR_CODES.INVALID_CODE_DEFINITION, adds: [numericCode] })
       }
 
       if (!def.name || !def.message) {
-        throw new QvacErrorBase({ code: ERR_CODES.MISSING_ERROR_DEFINITION, adds: numericCode })
+        throw new QvacErrorBase({ code: ERR_CODES.MISSING_ERROR_DEFINITION, adds: [numericCode] })
       }
 
       codeToContent[numericCode] = {
@@ -236,7 +209,7 @@ function addCodes(codes, packageInfo) {
   }
 
   // Validate and register new codes
-  const registeredCodes = []
+  const registeredCodes: number[] = []
 
   for (const [code, def] of Object.entries(codes)) {
     const numericCode = Number(code)
@@ -246,15 +219,15 @@ function addCodes(codes, packageInfo) {
       codeToContent[numericCode] &&
       (!existingPackage || !existingPackage.codes.includes(numericCode))
     ) {
-      throw new QvacErrorBase({ code: ERR_CODES.ERROR_CODE_ALREADY_EXISTS, adds: numericCode })
+      throw new QvacErrorBase({ code: ERR_CODES.ERROR_CODE_ALREADY_EXISTS, adds: [numericCode] })
     }
 
     if (!def || typeof def !== 'object') {
-      throw new QvacErrorBase({ code: ERR_CODES.INVALID_CODE_DEFINITION, adds: numericCode })
+      throw new QvacErrorBase({ code: ERR_CODES.INVALID_CODE_DEFINITION, adds: [numericCode] })
     }
 
     if (!def.name || !def.message) {
-      throw new QvacErrorBase({ code: ERR_CODES.MISSING_ERROR_DEFINITION, adds: numericCode })
+      throw new QvacErrorBase({ code: ERR_CODES.MISSING_ERROR_DEFINITION, adds: [numericCode] })
     }
 
     codeToContent[numericCode] = {
@@ -272,29 +245,16 @@ function addCodes(codes, packageInfo) {
   })
 }
 
-/**
- * Gets all registered error codes and their definitions
- * @returns {ErrorCodesMap}
- */
-function getRegisteredCodes() {
+// Gets all registered error codes and their definitions.
+export function getRegisteredCodes(): ErrorCodesMap {
   return JSON.parse(JSON.stringify(codeToContent))
 }
 
-/**
- * Checks if a code is already registered
- * @param {number} code - The error code to check
- * @returns {boolean} True if the code is already registered
- */
-function isCodeRegistered(code) {
+// Checks if a code is already registered.
+export function isCodeRegistered(code: number): boolean {
   return !!codeToContent[code]
 }
 
-module.exports = {
-  QvacErrorBase,
-  addCodes,
-  getRegisteredCodes,
-  isCodeRegistered,
-  INTERNAL_ERROR_CODES: ERR_CODES
-}
+export { ERR_CODES as INTERNAL_ERROR_CODES }
 
-module.exports.default = QvacErrorBase
+export default QvacErrorBase
