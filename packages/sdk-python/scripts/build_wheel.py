@@ -55,20 +55,13 @@ def _prebuild_host() -> str:
     return bare_runtime_package().removeprefix("bare-runtime-")
 
 
-def _stage_ignore(prebuild_host: str):
-    """copytree ignore that drops the usual noise AND every addon `prebuilds/`
-    subdir except this host's. The addon npm packages bundle all platforms'
-    prebuilds in one package (~0.5 GB each, ~4.5 GB total); keeping only the
-    target host's keeps each wheel to one platform's binaries and under GitHub's
-    2 GB asset limit.
-
-    Also drops non-runtime dirs the addon npm packages over-publish -- test
-    fixtures especially (asr-ggml ships a 28 MB test audio .raw), plus
-    docs/coverage/CI config. Native prebuilds and each addon's own weights/ are
-    kept; the worker only imports from package entry points, never test/."""
-    base = shutil.ignore_patterns(
-        ".git",
-        "node_modules",
+# Non-runtime dirs the addon npm packages over-publish. Dropped ONLY at a
+# package root, never nested -- so a runtime dir that happens to be named e.g.
+# `test`/`benchmark` inside another package's src/ or dist/ (zod/src/.../tests,
+# tinyld/dist/benchmark) is kept. Validated against the production closure: every
+# match with real size is a root-level `<pkg>/test` (asr-ggml, decoder-audio, ...).
+_ROOT_ONLY_DROP = frozenset(
+    {
         "example",
         "examples",
         "test",
@@ -84,14 +77,35 @@ def _stage_ignore(prebuild_host: str):
         "doc",
         "coverage",
         ".github",
-    )
+    }
+)
+
+
+def _stage_ignore(package_root: Path, prebuild_host: str):
+    """copytree ignore for a single addon package.
+
+    - `.git` and nested `node_modules` are dropped at any depth (structural;
+      nested deps are copied separately from the npm ls listing).
+    - The `_ROOT_ONLY_DROP` non-runtime dirs are dropped only when they are a
+      direct child of this package's root, so a package's own internals are never
+      reached into.
+    - Every `prebuilds/<host>/` except this host's is dropped (the npm packages
+      bundle all platforms, ~4.5 GB total; keeping one host keeps each wheel small
+      and under GitHub's 2 GB asset limit). Each addon's own weights/ are kept."""
+    root = os.path.abspath(package_root)
 
     def ignore(directory: str, names: list[str]) -> set[str]:
-        ignored = set(base(directory, names))
-        if os.path.basename(directory) == "prebuilds":
+        here = os.path.abspath(directory)
+        ignored = {n for n in names if n in (".git", "node_modules")}
+        if here == root:
+            ignored.update(
+                n
+                for n in names
+                if n in _ROOT_ONLY_DROP and os.path.isdir(os.path.join(directory, n))
+            )
+        # `prebuilds/` sits at the package root; host-prune only that one.
+        if os.path.basename(here) == "prebuilds" and os.path.dirname(here) == root:
             for name in names:
-                if name in ignored:
-                    continue
                 full = os.path.join(directory, name)
                 # Keep `<host>` and same-host variants (`<host>-vulkan`, ...);
                 # drop other platforms (linux-arm64, android-*, ios-*, ...).
@@ -141,7 +155,7 @@ def stage_bundle(sdk_dir: Path) -> None:
         text=True,
         check=False,  # npm ls exits non-zero on peer quirks; paths still print
     )
-    ignore = _stage_ignore(_prebuild_host())
+    host = _prebuild_host()
     node_modules = sdk_dir / "node_modules"
     dest_root = BUNDLE_DIR / "worker" / "node_modules"
     for line in sorted(set(listing.stdout.splitlines())):
@@ -154,10 +168,12 @@ def stage_bundle(sdk_dir: Path) -> None:
         destination = dest_root / relative
         if destination.exists():
             continue
+        # Per-package ignore so the non-runtime-dir prune is scoped to each
+        # package's own root, not applied at every nested level.
         shutil.copytree(
             path,
             destination,
-            ignore=ignore,
+            ignore=_stage_ignore(path, host),
             symlinks=False,
         )
     (BUNDLE_DIR / "__init__.py").write_text("")
