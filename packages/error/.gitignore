@@ -1,8 +1,5 @@
 node_modules
-coverage
-test/unit/all.js
-.npmrc
-test/integration/all.js
-package-lock.json
-.idea
+dist
+test/dist
 bun.lock
+.npmrc

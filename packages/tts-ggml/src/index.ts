@@ -146,8 +146,30 @@ function cosyvoiceInstructValue(
 function renderCosyvoiceInstruct(
   instruct: string | CosyvoiceInstruct | undefined,
 ): string {
-  if (instruct == null) return "";
+  // Only `undefined` means "omitted" (zero-shot). An explicit `null` is a
+  // malformed value, not an omission, so it is rejected below like any other
+  // non-object.
+  if (instruct === undefined) return "";
   if (typeof instruct === "string") return instruct.trim();
+  // A JS caller can pass values the type forbids (null, a number, an array, a
+  // Date, a class instance). Check defensively as `unknown`: require an ordinary
+  // object literal so exotic objects can't slip past the presence checks below
+  // and degrade to zero-shot, and so control fields are read from the object's
+  // own properties rather than an inherited prototype.
+  const control = instruct as unknown;
+  if (control === null || typeof control !== "object" || Array.isArray(control)) {
+    throw new Error(
+      "Invalid CosyVoice instruct: expected a string or a plain control " +
+        "object such as { dialect: 'cantonese' }.",
+    );
+  }
+  const proto = Object.getPrototypeOf(control) as object | null;
+  if (proto !== Object.prototype && proto !== null) {
+    throw new Error(
+      "Invalid CosyVoice instruct: expected a plain control object such as " +
+        "{ dialect: 'cantonese' }, not an instance of another type.",
+    );
+  }
   // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)
   // before the precedence chain, which would otherwise fall through to "".
   const supportedControls = ["dialect", "emotion", "speed", "volume", "style"];
@@ -160,23 +182,28 @@ function renderCosyvoiceInstruct(
         "Valid keys: dialect, emotion, speed, volume, style.",
     );
   }
-  if (instruct.dialect) {
+  // Presence, not truthiness: a control that is set to a malformed value
+  // (`{ dialect: '' }`, `{ dialect: null }`) must raise via
+  // cosyvoiceInstructValue rather than fall through to zero-shot. `undefined`
+  // means the field was not set, so it is skipped. Precedence: dialect >
+  // emotion > speed > volume > style.
+  if (instruct.dialect !== undefined) {
     return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
   }
-  if (instruct.emotion) {
+  if (instruct.emotion !== undefined) {
     return cosyvoiceInstructValue(
       COSYVOICE_EMOTIONS,
       instruct.emotion,
       "emotion",
     );
   }
-  if (instruct.speed) {
+  if (instruct.speed !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
   }
-  if (instruct.volume) {
+  if (instruct.volume !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
   }
-  if (instruct.style) {
+  if (instruct.style !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_STYLES, instruct.style, "style");
   }
   return "";
@@ -417,7 +444,12 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
    * latency.
    */
   streamFirstChunkTokens?: number;
-  /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
+  /**
+   * CosyVoice3-only: left-context speech tokens intended to be carried into each
+   * streaming chunk. Reserved / not yet effective — the pinned tts-cpp engine
+   * accepts the value but does not read it (true low-latency token2wav streaming
+   * is still reserved), so setting it currently has no effect.
+   */
   streamLeftContextTokens?: number;
   /**
    * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet
