@@ -676,7 +676,8 @@ Whisper:
 
 Parakeet:
 
-- [`examples/parakeet-transcribe.js`](examples/parakeet-transcribe.js) — universal transcribe/diarize, any GGUF (`npm run example:parakeet`)
+- [`examples/parakeet-transcribe.js`](examples/parakeet-transcribe.js) — CTC, TDT, EOU, or Sortformer transcription (`npm run example:parakeet`)
+- [`examples/parakeet-indic-conformer-transcribe.js`](examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
 - [`examples/parakeet-diarized-transcribe.js`](examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
 - [`examples/parakeet-live-mic.js`](examples/parakeet-live-mic.js) — live mic via the duplex streaming session
 - [`examples/parakeet-live-mic-diarized.js`](examples/parakeet-live-mic-diarized.js) — live mic with speaker tags

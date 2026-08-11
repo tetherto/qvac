@@ -8,7 +8,7 @@
 // It fails loudly if:
 //   - documentation or other non-key metadata is added to the hashed manifest,
 //   - the manifest schema drifts (missing s3Path / malformed sha256 / bytes),
-//   - the staged set no longer matches the expected 13 desktop GGUFs, or
+//   - the staged set no longer matches the expected desktop GGUFs, or
 //   - a manifest filename or its S3 date prefix is not referenced by
 //     test/integration/parakeet-helpers.js (i.e. the manifest and the runtime
 //     model config have drifted apart).

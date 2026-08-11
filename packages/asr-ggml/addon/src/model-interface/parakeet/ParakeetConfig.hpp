@@ -30,10 +30,6 @@ struct ParakeetConfig {
   bool timestampsEnabled = true;
   int seed = -1;
 
-  // Multilingual CTC language id (e.g. "hi", "ta"). Forwarded to
-  // pkt::EngineOptions::language. Required when the GGUF advertises
-  // parakeet.ctc.lang_* ranges (IndicConformer aggregate vocab); ignored
-  // on monolingual CTC. Empty keeps full-vocab greedy.
   std::string language;
 
   // ── Streaming mode ──────────────────────────────────────────────────────

@@ -26,12 +26,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Temporary `parakeet-cpp` pin via `ishanvohra2/qvac-registry-vcpkg` baseline
-  `70cdbe7e` (`parakeet-cpp` `2026-08-10`, tip `079cddd7` of
-  [qvac-ext-lib-whisper.cpp#133](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/133))
-  so CI builds IndicConformer CTC language masking before #133 merges
-  (QVAC-23279). Re-point `vcpkg-configuration.json` at
-  `tetherto/qvac-registry-vcpkg` once the canonical registry republishes.
+- Update `parakeet-cpp` to `2026-08-10#1` for Indic Conformer CTC language
+  masking.
 
 ## [0.2.0] - 2026-08-06
 

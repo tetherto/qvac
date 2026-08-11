@@ -1023,10 +1023,6 @@ const MODEL_CONFIGS = {
     minSize: 50 * 1024 * 1024,
     url: null
   },
-  // Indic Conformer CTC (ai4bharat multilingual aggregate vocab). Desktop
-  // uses q8_0 like the other Parakeet ASR GGUFs; mobile uses q4_0. Callers
-  // must pass parakeetConfig.language (e.g. "hi") — the GGUF advertises
-  // parakeet.ctc.lang_* ranges and the engine rejects an empty language.
   indicConformer: {
     file: 'indic-conformer-ctc.q8_0.gguf',
     mobileFile: 'indic-conformer-ctc.q4_0.gguf',
