@@ -495,7 +495,7 @@ host's policy:
 > persist the compiled kernels — while on Metal/Vulkan hosts it falls back to
 > CPU until those backends are wired for its graph.
 >
-> Audio8 uses Vulkan only and is validated on Linux and Windows. A GPU request
+> Audio8 uses Vulkan only and is supported on Linux and Windows. A GPU request
 > on another platform, or in a build without Vulkan, falls back to CPU and sets
 > `response.stats.gpuUnsupported`.
 

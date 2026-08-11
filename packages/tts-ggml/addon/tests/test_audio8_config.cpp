@@ -17,10 +17,10 @@
 #include "model-interface/audio8/Audio8Config.hpp"
 #include "model-interface/audio8/Audio8Model.hpp"
 
-using qvac::ttsggml::audio8::Audio8Config;
-using qvac::ttsggml::audio8::Audio8Model;
 using qvac::ttsggml::backendIdFromName;
 using qvac::ttsggml::kBackendDeviceGpu;
+using qvac::ttsggml::audio8::Audio8Config;
+using qvac::ttsggml::audio8::Audio8Model;
 using qvac_errors::StatusError;
 
 namespace {
