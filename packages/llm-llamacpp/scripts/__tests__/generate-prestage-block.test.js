@@ -111,7 +111,7 @@ test('every generated benchmark grep name maps to its matrix model', () => {
   }
 })
 
-test('buildScript embeds the resolved manifest', () => {
+test('buildScript embeds the resolved manifest (android default)', () => {
   const encoded = Buffer.from('{"runExampleTest":[]}').toString('base64')
   const script = buildScript(encoded)
 
@@ -119,4 +119,24 @@ test('buildScript embeds the resolved manifest', () => {
   assert.match(script, /PRESTAGE_DIR=\/data\/local\/tmp\/prestaged-models/)
   assert.match(script, /missing benchmark mapping/)
   assert.match(script, /adb push/)
+  assert.doesNotMatch(script, /pymobiledevice3/)
+})
+
+test('buildScript ios backend uses pymobiledevice3 apps push into Documents', () => {
+  const encoded = Buffer.from('{"runExampleTest":[]}').toString('base64')
+  const script = buildScript(encoded, 'ios')
+
+  assert.match(script, new RegExp(encoded))
+  assert.match(script, /missing benchmark mapping/)
+  assert.match(script, /pymobiledevice3 apps push/)
+  assert.match(script, /Documents\/\$NAME/)
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /not found during afc operation\|failed to perform afc operation/)
+  assert.match(script, /pymobiledevice3==10\.3\.1/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
+})
+
+test('buildScript rejects unknown platforms', () => {
+  assert.throws(() => buildScript('e30=', 'windows'), /unknown platform/)
 })
