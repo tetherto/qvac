@@ -287,35 +287,54 @@ std::string getPrompt(
       *outGenerationPrompt = params.generation_prompt;
     }
   };
+  // A template can fail either because it rejects the tool definitions or
+  // because it rejects the shape of the message list (e.g. Qwen3.5 raises
+  // when there is no user turn to anchor its tool block on). Retry without
+  // tools to tell the two apart, and only drop to the legacy renderer —
+  // which ignores tools and can disagree with the Jinja template — when the
+  // template cannot render the conversation at all.
+  std::string firstError;
   try {
     auto params = common_chat_templates_apply(tmpls, inputs);
     exportParams(params);
     return params.prompt;
   } catch (const std::exception& e) {
-    // Catching known issue when a model does not support tools
-    QLOG_IF(
-        Priority::ERROR,
-        string_format(
-            "[ChatTemplateUtils] model does not support tools. Error: %s. "
-            "Tools will "
-            "be ignored.\n",
-            e.what()));
-    inputs.use_jinja = false;
-    auto params = common_chat_templates_apply(tmpls, inputs);
-    exportParams(params);
-    return params.prompt;
+    firstError = e.what();
   } catch (...) {
-    // Catching any other exception type
-    QLOG_IF(
-        Priority::ERROR,
-        "[ChatTemplateUtils] model does not support tools (unknown exception). "
-        "Tools "
-        "will be ignored.\n");
-    inputs.use_jinja = false;
-    auto params = common_chat_templates_apply(tmpls, inputs);
-    exportParams(params);
-    return params.prompt;
+    firstError = "unknown exception";
   }
+
+  if (!inputs.tools.empty()) {
+    common_chat_templates_inputs withoutTools = inputs;
+    withoutTools.tools.clear();
+    try {
+      auto params = common_chat_templates_apply(tmpls, withoutTools);
+      QLOG_IF(
+          Priority::ERROR,
+          string_format(
+              "[ChatTemplateUtils] chat template rejected the tool "
+              "definitions; rendering without tools. Error: %s\n",
+              firstError.c_str()));
+      inputs.tools.clear();
+      exportParams(params);
+      return params.prompt;
+    } catch (...) {
+      // Falls through: the template rejects this conversation with or
+      // without tools, so tools were not the cause.
+    }
+  }
+
+  QLOG_IF(
+      Priority::ERROR,
+      string_format(
+          "[ChatTemplateUtils] chat template could not render this "
+          "conversation; falling back to the legacy renderer, which ignores "
+          "tools. Error: %s\n",
+          firstError.c_str()));
+  inputs.use_jinja = false;
+  auto params = common_chat_templates_apply(tmpls, inputs);
+  exportParams(params);
+  return params.prompt;
 }
 
 bool configureReasoningBudgetSampling(
