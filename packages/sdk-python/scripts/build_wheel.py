@@ -4,7 +4,7 @@ Bare runtime binary and the built SDK worker bundled under tetherto/qvac_sdk/_bu
 `pip install` needs no separately-provisioned worker.
 
 Usage:
-  python3 scripts/build_wheel.py [--sdk-dir ../sdk] [--out dist/] [--plat-name <tag>]
+  python3 scripts/build_wheel.py [--sdk-dir ../sdk] [--out-dir dist/] [--platform <tag>]
 
 Requires `bun run build` to have produced ../sdk/dist and the platform's
 bare-runtime package under ../sdk/node_modules. The wheel is tagged
@@ -163,12 +163,12 @@ def stage_bundle(sdk_dir: Path) -> None:
     (BUNDLE_DIR / "__init__.py").write_text("")
 
 
-def _default_plat_name() -> str:
+def _default_platform_tag() -> str:
     """Portable-ish default wheel platform tag. No native Python C-extension is
     built (the platform code is the bundled Bare binary + node prebuilds), so the
     tag is a pure install gate: lower the macOS floor well below the build host
     so older macOS still installs. Linux/Windows fall back to the host tag; CI
-    passes an explicit --plat-name (e.g. manylinux_2_35_x86_64) for release."""
+    passes an explicit --platform (e.g. manylinux_2_35_x86_64) for release."""
     if platform.system() == "Darwin":
         arch = "arm64" if platform.machine() == "arm64" else "x86_64"
         return f"macosx_11_0_{arch}"
@@ -177,21 +177,29 @@ def _default_plat_name() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sdk-dir", default=str(PACKAGE_ROOT.parent / "sdk"))
-    parser.add_argument("--out", default=str(PACKAGE_ROOT / "dist"))
     parser.add_argument(
-        "--plat-name",
+        "--sdk-dir",
+        default=str(PACKAGE_ROOT.parent / "sdk"),
+        help="built @qvac/sdk checkout to bundle (needs dist/ + node_modules/)",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default=str(PACKAGE_ROOT / "dist"),
+        help="directory to write the built wheel into (default: ./dist)",
+    )
+    parser.add_argument(
+        "--platform",
         default=None,
-        help="wheel platform tag (default: derived; CI passes e.g. "
-        "manylinux_2_35_x86_64 / macosx_11_0_arm64 / win_amd64)",
+        help="PEP 425 wheel platform tag to stamp, e.g. macosx_11_0_arm64 / "
+        "manylinux_2_35_x86_64 / win_amd64 (default: derived from this host)",
     )
     args = parser.parse_args()
 
-    plat_name = args.plat_name or _default_plat_name()
+    platform_tag = args.platform or _default_platform_tag()
     stage_bundle(Path(args.sdk_dir).resolve())
     try:
-        # hatch_build.py reads QVAC_WHEEL_PLAT and stamps `py3-none-<plat>`.
-        env = {**os.environ, "QVAC_WHEEL_PLAT": plat_name}
+        # hatch_build.py reads QVAC_WHEEL_PLAT and stamps `py3-none-<tag>`.
+        env = {**os.environ, "QVAC_WHEEL_PLAT": platform_tag}
         subprocess.run(
             [
                 sys.executable,
@@ -199,7 +207,7 @@ def main() -> int:
                 "build",
                 "--wheel",
                 "--outdir",
-                args.out,
+                args.out_dir,
                 str(PACKAGE_ROOT),
             ],
             check=True,
@@ -207,7 +215,7 @@ def main() -> int:
         )
     finally:
         shutil.rmtree(BUNDLE_DIR, ignore_errors=True)
-    print(f"wheel written to {args.out} (tagged py3-none-{plat_name})")
+    print(f"wheel written to {args.out_dir} (tagged py3-none-{platform_tag})")
     return 0
 
 

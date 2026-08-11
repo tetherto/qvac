@@ -81,10 +81,10 @@ jobs:
           platforms="${IN_PLATFORMS:-all}"
           [ -z "$platforms" ] && platforms="all"
           all='[
-            {"label":"darwin-arm64","os":"macos-15","plat_name":"macosx_11_0_arm64"},
-            {"label":"linux-x64","os":"ubuntu-22.04","plat_name":"manylinux_2_35_x86_64"},
-            {"label":"linux-arm64","os":"ubuntu-22.04-arm","plat_name":"manylinux_2_35_aarch64"},
-            {"label":"win32-x64","os":"windows-2025","plat_name":"win_amd64"}
+            {"label":"darwin-arm64","os":"macos-15","platform":"macosx_11_0_arm64"},
+            {"label":"linux-x64","os":"ubuntu-22.04","platform":"manylinux_2_35_x86_64"},
+            {"label":"linux-arm64","os":"ubuntu-22.04-arm","platform":"manylinux_2_35_aarch64"},
+            {"label":"win32-x64","os":"windows-2025","platform":"win_amd64"}
           ]'
           if [ "$platforms" = "all" ]; then
             matrix=$(echo "$all" | jq -c '{include: .}')
@@ -175,7 +175,7 @@ jobs:
 
       - name: Build fat wheel
         shell: bash
-        run: python scripts/build_wheel.py --out dist --plat-name "${{ matrix.plat_name }}"
+        run: python scripts/build_wheel.py --out-dir dist --platform "${{ matrix.platform }}"
 
       - name: Upload wheel to release
         shell: bash
