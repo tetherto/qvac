@@ -6,11 +6,10 @@ worker, same rigor as test_bare_rpc_transport.py.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk._generated.sdk_version import SDK_VERSION
 from tetherto.qvac_sdk.client import (
@@ -20,11 +19,19 @@ from tetherto.qvac_sdk.client import (
     _resolve_command,
 )
 
-SDK_DIR = os.environ.get(
-    "QVAC_POC_SDK_DIR",
-    str(Path(__file__).resolve().parent.parent.parent / "sdk"),
-)
-WORKER_PATH = f"{SDK_DIR}/dist/server/worker.js"
+
+@pytest.fixture(autouse=True)
+def _neutralize_ambient_bundle(monkeypatch, tmp_path):
+    """Make the resolver-tier tests deterministic regardless of how the package
+    under test was installed. `_resolve_command` finds a self-contained wheel's
+    `_bundle` relative to the client module's __file__; an installed fat wheel
+    carries one, which would win the bundle tier and break the tests that assert
+    the sdk_dir / managed / global tiers (or that no worker is found). Point
+    __file__ at a bundle-less dir so those tiers are exercised. The bundle-tier
+    test stages its own `_bundle` under this same tmp_path, so it is unaffected."""
+    monkeypatch.setattr(
+        "tetherto.qvac_sdk.client.__file__", str(tmp_path / "client.py")
+    )
 
 
 def test_resolve_command_prefers_explicit_paths(monkeypatch) -> None:
