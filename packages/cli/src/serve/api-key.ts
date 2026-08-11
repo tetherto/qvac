@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs'
 
 import { ServeOptionsError } from './startup.js'
 
@@ -16,36 +16,57 @@ export interface ResolvedServeApiKey {
 // can read it, which is the whole reason the file form exists.
 const PRIVATE_FILE_MODE = 0o600
 
-function readKeyFile(path: string): string {
-  let stat: ReturnType<typeof lstatSync>
+// POSIX-only; Windows resolves symlinks below the API and has no equivalent flag.
+const NO_FOLLOW = constants.O_NOFOLLOW ?? 0
+
+interface KeyFile {
+  readonly key: string
+  readonly mode: number
+}
+
+// Everything is inspected through one descriptor. Checking the path with `lstat`
+// and then reading it by name leaves a window in which the path can be swapped
+// for a symlink, so the bytes read would come from a file whose type and
+// permissions were never the ones checked.
+function readKeyFile(path: string): KeyFile {
+  let fd: number
   try {
-    stat = lstatSync(path)
+    fd = openSync(path, constants.O_RDONLY | NO_FOLLOW)
   } catch (error: unknown) {
+    const code = error instanceof Error && 'code' in error ? error.code : undefined
+    if (code === 'ELOOP') {
+      throw new ServeOptionsError(
+        '--api-key-file',
+        `the API key path "${path}" must be a regular file, not a symlink`
+      )
+    }
     throw new ServeOptionsError(
       '--api-key-file',
       `cannot read the API key file at "${path}": ${error instanceof Error ? error.message : String(error)}`
     )
   }
-  // `lstat`, so a symlink is refused rather than followed to a file whose
-  // permissions we never checked.
-  if (!stat.isFile()) {
-    throw new ServeOptionsError(
-      '--api-key-file',
-      `the API key path "${path}" must be a regular file (symlinks and directories are refused)`
-    )
-  }
 
-  const key = readFileSync(path, 'utf8').trim()
-  if (key.length === 0) {
-    throw new ServeOptionsError('--api-key-file', `the API key file at "${path}" is empty`)
+  try {
+    const stat = fstatSync(fd)
+    if (!stat.isFile()) {
+      throw new ServeOptionsError(
+        '--api-key-file',
+        `the API key path "${path}" must be a regular file (symlinks and directories are refused)`
+      )
+    }
+    const key = readFileSync(fd, 'utf8').trim()
+    if (key.length === 0) {
+      throw new ServeOptionsError('--api-key-file', `the API key file at "${path}" is empty`)
+    }
+    return { key, mode: stat.mode & 0o777 }
+  } finally {
+    closeSync(fd)
   }
-  return key
 }
 
-function loosePermissionWarning(path: string): string | undefined {
+function loosePermissionWarning(path: string, mode: number): string | undefined {
   // Windows does not model these bits; checking them there is noise.
   if (process.platform === 'win32') return undefined
-  const mode = lstatSync(path).mode & 0o777
   if ((mode & 0o077) === 0) return undefined
   return `Security warning: the API key file at "${path}" is readable beyond its owner (mode ${mode.toString(8).padStart(3, '0')}). Run \`chmod ${PRIVATE_FILE_MODE.toString(8)} ${path}\`.`
 }
@@ -63,8 +84,9 @@ export function resolveServeApiKey(options: ServeApiKeyOptions): ResolvedServeAp
     )
   }
 
+  const file = readKeyFile(options.apiKeyFile)
   return {
-    apiKey: readKeyFile(options.apiKeyFile),
-    warning: loosePermissionWarning(options.apiKeyFile)
+    apiKey: file.key,
+    warning: loosePermissionWarning(options.apiKeyFile, file.mode)
   }
 }

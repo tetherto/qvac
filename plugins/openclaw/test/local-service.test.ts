@@ -5,15 +5,15 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import {
-  buildQvacServeArgs,
-  cliSupportsApiKeyFile,
+  buildQvacLaunch,
   createLocalServiceServeConfig,
   formatLauncherError,
   formatSpawnError,
   loadApiKey,
   parseLocalServiceArgs,
   prepareLocalServiceLaunch,
-  resolveLocalServiceExitCode
+  resolveLocalServiceExitCode,
+  resolveQvacCli
 } from '../src/local-service.ts'
 
 const VALID_KEY = 'abcdefghijklmnopqrstuvwxyzABCDE_'
@@ -79,7 +79,7 @@ test('local service launcher creates QVAC serve config and command args from Ope
     }
   })
 
-  assert.deepEqual(buildQvacServeArgs(options, '/tmp/qvac-openclaw/qvac.config.json'), [
+  assert.deepEqual(buildQvacLaunch(options, '/tmp/qvac-openclaw/qvac.config.json').args, [
     'serve',
     'openai',
     '--config',
@@ -217,7 +217,9 @@ test('launch preparation cleans up its temp config directory on shutdown', async
 
     const launch = await prepareLocalServiceLaunch(options)
     assert.equal(readdirSync(tmpRoot).length, 1)
-    assert.deepEqual(launch.args, buildQvacServeArgs(options, launch.configPath))
+    const expected = buildQvacLaunch(options, launch.configPath)
+    assert.equal(launch.command, expected.command)
+    assert.deepEqual(launch.args, expected.args)
 
     await launch.cleanup()
     assert.deepEqual(readdirSync(tmpRoot), [], 'cleanup removes the temp config dir')
@@ -301,13 +303,16 @@ test('local service launcher re-validates the key file on every read', () => {
 test('local service launcher keeps the key out of argv only against a CLI that supports it', () => {
   // A custom command points somewhere unversionable, so it must not be handed a
   // flag that would make an older CLI refuse to start at all.
-  assert.equal(cliSupportsApiKeyFile('/opt/custom/qvac'), false)
+  const custom = resolveQvacCli('/opt/custom/qvac')
+  assert.equal(custom.supportsApiKeyFile, false)
+  assert.equal(custom.command, '/opt/custom/qvac')
+  assert.deepEqual(custom.baseArgs, [])
 
   const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-key-'))
   try {
     const apiKeyFile = join(dir, 'api-key')
     writeFileSync(apiKeyFile, VALID_KEY, { mode: 0o600 })
-    const args = buildQvacServeArgs(
+    const launch = buildQvacLaunch(
       {
         qvacCommand: '/opt/custom/qvac',
         apiKeyFile,
@@ -320,8 +325,48 @@ test('local service launcher keeps the key out of argv only against a CLI that s
       },
       join(dir, 'qvac.config.json')
     )
-    assert.ok(args.includes('--api-key'), 'the fallback still authenticates the serve')
-    assert.equal(args.includes('--api-key-file'), false)
+    assert.equal(launch.command, '/opt/custom/qvac')
+    assert.ok(launch.args.includes('--api-key'), 'the fallback still authenticates the serve')
+    assert.equal(launch.args.includes('--api-key-file'), false)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('the version gate describes the binary the launcher actually spawns', () => {
+  // The gate reads its version out of the resolved `@qvac/cli`, so that is what
+  // has to run: a bare `qvac` off PATH can be an unrelated older global install
+  // that would die on the `--api-key-file` this decided to pass.
+  const resolved = resolveQvacCli('qvac')
+  assert.equal(resolved.command, process.execPath)
+  assert.equal(resolved.baseArgs.length, 1)
+  assert.match(String(resolved.baseArgs[0]), /@qvac[/\\]cli[/\\]/)
+
+  const dir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-key-'))
+  try {
+    const apiKeyFile = join(dir, 'api-key')
+    writeFileSync(apiKeyFile, VALID_KEY, { mode: 0o600 })
+    const launch = buildQvacLaunch(
+      {
+        qvacCommand: 'qvac',
+        apiKeyFile,
+        model: 'qwen3.5-9b',
+        host: '127.0.0.1',
+        port: 11434,
+        ctxSize: 32768,
+        reasoningBudget: 0,
+        tools: true
+      },
+      join(dir, 'qvac.config.json')
+    )
+    assert.equal(launch.command, resolved.command)
+    assert.equal(launch.args[0], resolved.baseArgs[0])
+    assert.equal(launch.args[1], 'serve')
+    assert.equal(
+      launch.args.includes('--api-key-file'),
+      resolved.supportsApiKeyFile,
+      'the credential form follows the version of the entry being spawned'
+    )
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

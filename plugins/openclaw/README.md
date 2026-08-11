@@ -74,16 +74,15 @@ plugins and explicitly trusts the local `qvac` plugin.
 
 ### 3. Let the plugin configure OpenClaw's provider entry
 
-Point the plugin at the `qvac` binary, then run OpenClaw's provider setup path.
-The plugin writes `models.providers.qvac` for you with its bundled
-`local-service.js` launcher. You do not need to create `qvac.config.json` or
-paste a `models.providers.qvac` JSON block by hand.
+Run OpenClaw's provider setup path. The plugin writes `models.providers.qvac`
+for you with its bundled `local-service.js` launcher, which runs the `@qvac/cli`
+installed alongside the plugin. You do not need to supply a binary path, create
+`qvac.config.json`, or paste a `models.providers.qvac` JSON block by hand. Set
+`qvacCommand` only to point at a different `qvac` (see below).
 
 ```bash
-QVAC_BIN="$(which qvac)"
-
 openclaw config set plugins.entries.qvac.config \
-  "{\"model\":\"qwen3.5-9b\",\"qvacCommand\":\"$QVAC_BIN\",\"port\":11434}" \
+  '{"model":"qwen3.5-9b","port":11434}' \
   --strict-json
 
 openclaw onboard \
@@ -210,9 +209,14 @@ unset QVAC_API_KEY
 Neither the launcher nor the `qvac serve` grandchild is handed the key in its
 process arguments: the serve is started with `--api-key-file`, pointing at the
 same owner-only file, so the key cannot be recovered from `ps` or
-`/proc/<pid>/cmdline`. Against a `@qvac/cli` older than 0.11.0, or a custom
-`--qvac-command` whose version cannot be determined, the launcher falls back to
-`--api-key <key>` and the key is visible to local process inspection.
+`/proc/<pid>/cmdline`.
+
+Whether that is possible depends on the CLI version, so the launcher runs the
+`@qvac/cli` installed with the plugin — the same install it reads the version
+from — through the current Node executable. A `qvacCommand` set to an explicit
+path is spawned verbatim instead, and its version cannot be determined; that
+case, and a resolved `@qvac/cli` older than 0.11.0, fall back to `--api-key
+<key>`, where the key is visible to local process inspection.
 
 The key file is re-checked on every launch, not just at onboarding: a path that
 is no longer a regular file, or that has become readable beyond its owner, stops

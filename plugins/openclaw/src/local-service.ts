@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { lstatSync, readFileSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -112,21 +112,40 @@ export function parseLocalServiceArgs(argv: readonly string[]): LocalServiceOpti
   }
 }
 
+// POSIX-only; Windows resolves symlinks below the API and has no equivalent flag.
+const NO_FOLLOW = constants.O_NOFOLLOW ?? 0
+
 // Re-checked on every read, not just at onboarding: the path is long-lived, and
 // a key swapped for a symlink or loosened to group-readable between runs would
-// otherwise be picked up silently.
+// otherwise be picked up silently. Checks run against the open descriptor so the
+// path cannot be swapped between the check and the read.
 export function loadApiKey(keyFile: string): string {
-  const stat = lstatSync(keyFile)
-  if (!stat.isFile()) {
-    throw new TypeError(`QVAC API key path must be a regular file: ${keyFile}`)
+  let fd: number
+  try {
+    fd = openSync(keyFile, constants.O_RDONLY | NO_FOLLOW)
+  } catch (error: unknown) {
+    const code = error instanceof Error && 'code' in error ? error.code : undefined
+    if (code === 'ELOOP') {
+      throw new TypeError(`QVAC API key path must be a regular file, not a symlink: ${keyFile}`)
+    }
+    throw error
   }
-  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
-    throw new TypeError(
-      `QVAC API key file ${keyFile} is readable beyond its owner. Run \`chmod 600 ${keyFile}\`, ` +
-        'or re-run `openclaw onboard --auth-choice qvac` to regenerate it.'
-    )
+
+  try {
+    const stat = fstatSync(fd)
+    if (!stat.isFile()) {
+      throw new TypeError(`QVAC API key path must be a regular file: ${keyFile}`)
+    }
+    if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+      throw new TypeError(
+        `QVAC API key file ${keyFile} is readable beyond its owner. Run \`chmod 600 ${keyFile}\`, ` +
+          'or re-run `openclaw onboard --auth-choice qvac` to regenerate it.'
+      )
+    }
+    return normalizeApiKey(readFileSync(fd, 'utf8'), 'stored QVAC API key')
+  } finally {
+    closeSync(fd)
   }
-  return normalizeApiKey(readFileSync(keyFile, 'utf8'), 'stored QVAC API key')
 }
 
 export function createLocalServiceServeConfig(
@@ -165,67 +184,92 @@ function isAtLeast(version: string, minimum: string): boolean {
   return true
 }
 
-function resolveCliVersion(): string | undefined {
-  const require = createRequire(import.meta.url)
-  try {
-    const pkg = require(require.resolve('@qvac/cli/package.json')) as { version?: string }
-    if (typeof pkg.version === 'string') return pkg.version
-  } catch {
-    // The published CLI ships a string `exports`, so the ./package.json subpath
-    // is not resolvable; walk up from the main entry instead.
-  }
-  try {
-    let dir = dirname(require.resolve('@qvac/cli'))
-    for (let depth = 0; depth < 8; depth += 1) {
-      try {
-        const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
-          name?: string
-          version?: string
-        }
-        if (pkg.name === '@qvac/cli' && typeof pkg.version === 'string') return pkg.version
-      } catch {
-        // Not this level; keep walking.
+// Walked up from the entry rather than asked for by subpath: the published CLI
+// ships a string `exports`, which makes `@qvac/cli/package.json` unresolvable.
+function cliVersionFor(entry: string): string | undefined {
+  let dir = dirname(entry)
+  for (let depth = 0; depth < 8; depth += 1) {
+    try {
+      const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+        name?: string
+        version?: string
       }
-      const parent = dirname(dir)
-      if (parent === dir) break
-      dir = parent
+      if (pkg.name === '@qvac/cli' && typeof pkg.version === 'string') return pkg.version
+    } catch {
+      // Not this level; keep walking.
     }
-  } catch {
-    // CLI not resolvable from here; fall back to the argv form.
+    const parent = dirname(dir)
+    if (parent === dir) break
+    dir = parent
   }
   return undefined
 }
 
+export interface ResolvedQvacCli {
+  readonly command: string
+  readonly baseArgs: readonly string[]
+  readonly supportsApiKeyFile: boolean
+}
+
 // `--api-key <key>` puts the credential in the process list, which /proc exposes
-// to every local account on Linux. An older CLI rejects `--api-key-file` outright
-// and would never start, so support is confirmed before switching. A custom
-// `--qvac-command` points somewhere we cannot version, so it keeps the argv form.
-export function cliSupportsApiKeyFile(qvacCommand: string): boolean {
-  if (qvacCommand !== DEFAULT_OPTIONS.qvacCommand) return false
-  const version = resolveCliVersion()
-  return version !== undefined && isAtLeast(version, MIN_CLI_VERSION_API_KEY_FILE)
+// to every local account on Linux. An older CLI rejects `--api-key-file` and
+// would never start, so the version has to come from the binary that actually
+// runs — a bare `qvac` on PATH can be an unrelated global install. Running the
+// resolved entry through the current executable keeps the two in step without
+// relying on the bin's exec bit. A custom command is unversionable, so it stays
+// on argv.
+export function resolveQvacCli(qvacCommand: string): ResolvedQvacCli {
+  const onPath: ResolvedQvacCli = {
+    command: qvacCommand,
+    baseArgs: [],
+    supportsApiKeyFile: false
+  }
+  if (qvacCommand !== DEFAULT_OPTIONS.qvacCommand) return onPath
+
+  let entry: string
+  try {
+    entry = createRequire(import.meta.url).resolve('@qvac/cli')
+  } catch {
+    // Not installed beside the plugin; PATH is all there is.
+    return onPath
+  }
+
+  const version = cliVersionFor(entry)
+  return {
+    command: process.execPath,
+    baseArgs: [entry],
+    supportsApiKeyFile: version !== undefined && isAtLeast(version, MIN_CLI_VERSION_API_KEY_FILE)
+  }
 }
 
-function serveArgs(options: LocalServiceOptions, configPath: string, apiKey: string): string[] {
-  return [
-    'serve',
-    'openai',
-    '--config',
-    configPath,
-    '--host',
-    options.host,
-    '--port',
-    String(options.port),
-    '--model',
-    options.model,
-    ...(cliSupportsApiKeyFile(options.qvacCommand)
-      ? ['--api-key-file', options.apiKeyFile]
-      : ['--api-key', apiKey])
-  ]
+export interface QvacLaunch {
+  readonly command: string
+  readonly args: string[]
 }
 
-export function buildQvacServeArgs(options: LocalServiceOptions, configPath: string): string[] {
-  return serveArgs(options, configPath, loadApiKey(options.apiKeyFile))
+function qvacLaunch(options: LocalServiceOptions, configPath: string, apiKey: string): QvacLaunch {
+  const cli = resolveQvacCli(options.qvacCommand)
+  return {
+    command: cli.command,
+    args: [
+      ...cli.baseArgs,
+      'serve',
+      'openai',
+      '--config',
+      configPath,
+      '--host',
+      options.host,
+      '--port',
+      String(options.port),
+      '--model',
+      options.model,
+      ...(cli.supportsApiKeyFile ? ['--api-key-file', options.apiKeyFile] : ['--api-key', apiKey])
+    ]
+  }
+}
+
+export function buildQvacLaunch(options: LocalServiceOptions, configPath: string): QvacLaunch {
+  return qvacLaunch(options, configPath, loadApiKey(options.apiKeyFile))
 }
 
 export function formatSpawnError(error: unknown, command: string): string {
@@ -294,21 +338,25 @@ async function writeConfig(
 
 export interface PreparedLocalServiceLaunch {
   readonly configPath: string
+  readonly command: string
   readonly args: string[]
   cleanup: () => Promise<void>
 }
 
 // Resolves the key *before* creating the temp config dir, so an unusable key file
-// cannot strand one, and unwinds the dir if anything after that throws.
+// cannot strand one, and unwinds the dir if anything after that throws. The key
+// is validated even when it travels to the child by path.
 export async function prepareLocalServiceLaunch(
   options: LocalServiceOptions
 ): Promise<PreparedLocalServiceLaunch> {
   const apiKey = loadApiKey(options.apiKeyFile)
   const generated = await writeConfig(options)
   try {
+    const launch = qvacLaunch(options, generated.configPath, apiKey)
     return {
       configPath: generated.configPath,
-      args: serveArgs(options, generated.configPath, apiKey),
+      command: launch.command,
+      args: launch.args,
       cleanup: generated.cleanup
     }
   } catch (error) {
@@ -323,7 +371,7 @@ async function main(): Promise<void> {
 
   let child: ChildProcess
   try {
-    child = spawn(options.qvacCommand, launch.args, { stdio: 'inherit' })
+    child = spawn(launch.command, launch.args, { stdio: 'inherit' })
   } catch (error) {
     await launch.cleanup()
     throw error
@@ -341,7 +389,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void stop('SIGTERM'))
 
   child.on('error', async (err) => {
-    console.error(formatSpawnError(err, options.qvacCommand))
+    console.error(formatSpawnError(err, launch.command))
     await launch.cleanup()
     process.exit(1)
   })
