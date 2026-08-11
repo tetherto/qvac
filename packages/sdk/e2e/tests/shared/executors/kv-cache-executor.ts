@@ -458,6 +458,14 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     expectation: Expectation
   ): Promise<TestResult> {
     let toolsModelId = await this.resources.ensureLoaded('tools')
+    const declaredTools = new Map(
+      (
+        params.tools as Array<{
+          name: string
+          parameters?: { required?: string[] }
+        }>
+      ).map((tool) => [tool.name, tool.parameters?.required ?? []])
+    )
 
     try {
       try {
@@ -487,6 +495,30 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         let response = ''
         for await (const token of result.tokenStream) {
           response += token
+        }
+
+        const toolCalls = result.toolCalls ? await result.toolCalls : []
+        const declaredCall = toolCalls.find((call) => declaredTools.has(call.name))
+        if (!declaredCall) {
+          return {
+            passed: false,
+            output:
+              `Tool completion ${i + 1} emitted no call matching a declared tool after ` +
+              `${i === 0 ? 'cache creation' : 'model reload and cache reuse'}. ` +
+              `Got: [${toolCalls.map((call) => call.name).join(', ')}]`
+          }
+        }
+
+        const requiredArgs = declaredTools.get(declaredCall.name) ?? []
+        const missingArgs = requiredArgs.filter((key) => !(key in declaredCall.arguments))
+        if (missingArgs.length > 0) {
+          return {
+            passed: false,
+            output:
+              `Tool completion ${i + 1} call '${declaredCall.name}' is missing required ` +
+              `arguments after ${i === 0 ? 'cache creation' : 'model reload and cache reuse'}: ` +
+              `${missingArgs.join(', ')}`
+          }
         }
 
         const stats = await result.stats
