@@ -79,6 +79,12 @@ jobs:
       run_mobile: ${{ steps.route.outputs.run_mobile }}
       run_coload: ${{ steps.route.outputs.run_coload }}
     steps:
+      # DRYRUN-ONLY: force ci-router to fail BEFORE it produces run_prebuilds,
+      # simulating a crashed label-detection job. This makes the prebuild job
+      # skip (run_prebuilds empty) so we can prove publish fails closed. Delete
+      # before merge.
+      - name: DRYRUN force ci-router failure
+        run: exit 1
       - name: Checkout ci-router composite (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
