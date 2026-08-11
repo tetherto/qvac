@@ -192,7 +192,7 @@ completionStream: defineHandler({
   requestSchema: completionStreamRequestSchema,
   responseSchema: completionStreamResponseSchema,
   streaming: true,
-  cancel: { scope: "model", hard: true },
+  cancel: { scope: "request", hard: true },
   handler: async function* (request) { /* ... */ },
 }),
 ```
@@ -200,7 +200,7 @@ completionStream: defineHandler({
 `cancel.scope`:
 
 - `"request"` — addon targets a specific in-flight request by id. Framework can route `cancel({ requestId })` straight to the addon without colliding with siblings on the same model.
-- `"model"` — addon cancels "whatever is currently running on this model" (today's `addon.cancel()` semantics). Sufficient under a one-at-a-time concurrency policy.
+- `"model"` — addon cancels "whatever is currently running on this model" (`addon.cancel()` semantics). Under continuous batching this also stops concurrent peers on the same model, so it is a coarse fallback, not a per-request cancel. `translate` and `finetune` use it; `completionStream` and `batchCompletionStream` route per-request cancel through the run response instead.
 - `"none"` — addon does not expose a cancel surface. SDK falls back to soft-cancel (stop yielding, drop result, skip post-processing; C++ work runs to completion).
 
 `cancel.hard` (only meaningful for `"model"` / `"request"`):
@@ -214,7 +214,9 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 
 | Plugin                       | Handler(s)                            | `cancel`                          |
 |------------------------------|---------------------------------------|-----------------------------------|
-| `llamacpp-completion`        | `completionStream`, `translate`       | `{ scope: "model", hard: true }`  |
+| `llamacpp-completion`        | `completionStream`                    | `{ scope: "request", hard: true }`|
+| `llamacpp-completion`        | `batchCompletionStream`               | `{ scope: "request", hard: true }`|
+| `llamacpp-completion`        | `translate`                           | `{ scope: "model", hard: true }`  |
 | `llamacpp-completion`        | `finetune`                            | `{ scope: "model", hard: true }`  |
 | `llamacpp-embedding`         | `embed`                               | `{ scope: "model", hard: true }`  |
 | `whispercpp-transcription`   | `transcribe`, `transcribeStream`      | `{ scope: "model", hard: true }`  |
@@ -276,13 +278,13 @@ interface RequestRegistry {
 }
 ```
 
-A policy turns admission into a per-`(lane, modelId)` FIFO queue with a configurable concurrency limit. `maxConcurrentPerModel` is the slot count (`1` serializes — today's single-context reality; bump it to the addon's batching width once continuous batching lands; `Infinity`/omitted leaves the kind ungated). `onOverflow` decides what an over-capacity `begin(...)` does: `"queue"` (the default) waits FIFO for a slot; `"reject"` throws immediately. A `begin` rejects with `RequestRejectedByPolicyError` (code 52420) when `onOverflow: "reject"` hits capacity, the `(maxQueueDepthPerModel + 1)`th waiter would exceed the depth cap, or a queued waiter exceeds `queueTimeoutMs` — a typed error carrying `requestId` / `kind` / `modelId` / `reason` that survives the RPC boundary so clients can `instanceof`-narrow. `oneAtATimePerModel: true` is a back-compat alias for `{ maxConcurrentPerModel: 1, onOverflow: "reject" }`.
+A policy turns admission into a per-`(lane, modelId)` FIFO queue with a configurable concurrency limit. `maxConcurrentPerModel` is the slot count (`1` serializes; the completion handlers pass the loaded model's own `parallel` — its continuous-batching width — per request via `begin(...)`, so admission tracks the addon's real concurrency; `Infinity`/omitted leaves the kind ungated). `maxConcurrentPerModel` and `slotGroup` accept a per-request override on `begin(...)` that wins over the kind policy (each loaded model's real cap is its own `parallel`). `onOverflow` is a per-kind policy value: `"queue"` (the default) waits FIFO for a slot; `"reject"` throws immediately. A `begin` rejects with `RequestRejectedByPolicyError` (code 52420) when `onOverflow: "reject"` hits capacity, the `(maxQueueDepthPerModel + 1)`th waiter would exceed the depth cap, or a queued waiter exceeds `queueTimeoutMs` — a typed error carrying `requestId` / `kind` / `modelId` / `reason` that survives the RPC boundary so clients can `instanceof`-narrow. `oneAtATimePerModel: true` is a back-compat alias for `{ maxConcurrentPerModel: 1, onOverflow: "reject" }`.
 
 ### Shared slot groups
 
 `sharedSlotGroup` keys the admission slot on `(group, modelId)` instead of `(kind, modelId)`, so **different kinds** that target the same model contend for one slot pool. This exists to mirror an addon that serializes unrelated kinds on a single native context.
 
-`getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `completion` and `batchCompletion` on first use, both serializing (`maxConcurrentPerModel: 1, onOverflow: "queue", maxQueueDepthPerModel: 64`) and both keyed to the **same** `sharedSlotGroup: "llamacppCompletion"`. The reason: `@qvac/llm-llamacpp` funnels every `run()` (single-prompt **and** batch) through one per-instance `exclusiveRunQueue` plus a single-job native runner, so a completion and a batch on the same model can never actually execute at once. Sharing one lane makes the SDK admission queue the authoritative serialization point — a batch fired while a completion runs waits FIFO at the SDK layer instead of both being admitted and silently serializing inside the addon (which would hide the second request from the registry's queue-depth accounting, `requestId` diagnostics, and cancel routing). `audiogen` has its own one-slot FIFO policy because ACE-Step supports one active job per model and replaces the prior response when another run starts.
+`getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `completion` and `batchCompletion` on first use, both keyed to the **same** `sharedSlotGroup: "llamacppCompletion"` so single completions and batches compete for one slot pool per model first-come-first-serve. `@qvac/llm-llamacpp` now admits multiple concurrent top-level `run()` calls (each its own native job) up to the model's `parallel`, so a batch and singles can genuinely decode together. The registered `maxConcurrentPerModel: 1` is only the fallback; each handler passes the loaded model's `parallel` per request, capping admission at the model's slot count. Admission always queues the surplus FIFO (`onOverflow: "queue"`): a single-slot model (`parallel: 1` or unset) admits one at a time and the rest wait, unchanged from before; an N-way model admits up to `parallel` concurrently and queues the surplus. Disk-KV-cache completions on an N-way model divert to a private cap-1 lane (`slotGroup: "llamacppCompletionCached"`) so concurrent turns can't corrupt the shared on-disk cache — that lane serializes only cache writers, not the whole model. Both single-completion and batch cancel are per-request: `response.cancel()` routes to `cancelJob` for that call's own job or batch group, so cancelling one leaves concurrent peers on the model decoding. Both `completionStream` and `batchCompletionStream` therefore advertise `cancel: { scope: "request" }`.
 
 Kinds without a registered policy are unconstrained, and a policy without `sharedSlotGroup` only contends with its own kind. `embeddings` / `transcribe` / `translate` / `finetune` deliberately register no policy — those addons tolerate concurrent requests against the same model (and the registry's per-request lifecycle is enough for cancel routing). Note this means `translate` / `finetune` on an llama.cpp model are *not* in the completion lane today; they still serialize against completion inside the addon's run queue, just not at the SDK admission layer. Fold them into `llamacppCompletion` if that addon-level serialization ever needs to be SDK-visible.
 
