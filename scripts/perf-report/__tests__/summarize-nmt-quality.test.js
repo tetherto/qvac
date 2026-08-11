@@ -2,9 +2,12 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { spawnSync } = require('node:child_process')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+
+const SCRIPT_PATH = path.join(__dirname, '..', 'summarize-nmt-quality.js')
 
 const {
   parsePairFromArtifactDir,
@@ -124,9 +127,76 @@ test('renderMarkdown emits one row per model x device with stat columns', () => 
   assert.match(md, /\| en-de \| qvac_bergamot \| CPU \| flores-devtest \| N\/A \| N\/A \| N\/A \| N\/A \|/)
   assert.ok(!md.includes('BLEU'))
   assert.match(md, /GPU rows: none/)
+  assert.ok(md.endsWith('\n'))
+  assert.ok(!md.endsWith('\n\n'))
 })
 
 test('renderMarkdown reports when no rows exist at all', () => {
   const md = renderMarkdown([], { metrics: ['chrfpp'] })
   assert.match(md, /No evaluation results found/)
+  assert.ok(md.endsWith('\n'))
+  assert.ok(!md.endsWith('\n\n'))
+})
+
+function runCli (args, cwd) {
+  return spawnSync(process.execPath, [SCRIPT_PATH].concat(args), { cwd, encoding: 'utf8' })
+}
+
+function makeArtifactFixture () {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nmt-summary-cli-'))
+  const artifactDir = path.join(dir, 'results-en-it-qvac_bergamot-chrfpp-fast')
+  fs.mkdirSync(artifactDir, { recursive: true })
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.chrfpp'), '55.3\n')
+  fs.writeFileSync(path.join(artifactDir, 'flores-devtest.qvac_bergamot.it.time'), '42.17\n')
+  return dir
+}
+
+test('cli writes markdown and json output files', () => {
+  const dir = makeArtifactFixture()
+  const mdPath = path.join(dir, 'out', 'summary.md')
+  const jsonPath = path.join(dir, 'out', 'summary.json')
+  const proc = runCli([
+    '--dir', dir,
+    '--pairs', 'en-it,en-de',
+    '--translators', 'qvac_bergamot',
+    '--datasets', 'flores-devtest',
+    '--metrics', 'chrfpp',
+    '--output', mdPath,
+    '--output-json', jsonPath
+  ], dir)
+
+  assert.equal(proc.status, 0)
+  const md = fs.readFileSync(mdPath, 'utf8')
+  assert.match(md, /## Benchmark Summary — All Models/)
+  assert.match(md, /\| en-it \| qvac_bergamot \| CPU \| flores-devtest \| 55\.3 \| 42\.17 \| N\/A \|/)
+  assert.match(md, /\| en-de \| qvac_bergamot \| CPU \| flores-devtest \| N\/A \| N\/A \| N\/A \|/)
+  assert.ok(md.endsWith('\n'))
+  const parsed = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
+  assert.equal(parsed.rows.length, 2)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('cli prints markdown to stdout without --output', () => {
+  const dir = makeArtifactFixture()
+  const proc = runCli(['--dir', dir, '--metrics', 'chrfpp'], dir)
+
+  assert.equal(proc.status, 0)
+  assert.match(proc.stdout, /## Benchmark Summary — All Models/)
+  assert.match(proc.stdout, /\| en-it \| qvac_bergamot \| CPU \| flores-devtest \|/)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('cli fails with a usage error when --dir is missing', () => {
+  const proc = runCli([], os.tmpdir())
+
+  assert.equal(proc.status, 1)
+  assert.match(proc.stderr, /--dir is required/)
+  assert.match(proc.stdout, /Usage:/)
+})
+
+test('cli prints usage and exits 0 on --help', () => {
+  const proc = runCli(['--help'], os.tmpdir())
+
+  assert.equal(proc.status, 0)
+  assert.match(proc.stdout, /Usage: summarize-nmt-quality\.js --dir <results-dir>/)
 })

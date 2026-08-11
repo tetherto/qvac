@@ -681,6 +681,11 @@ jobs:
             batch_flag="--batch"
           fi
 
+          quantized_flag=""
+          if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+            quantized_flag="--is-quantized-model"
+          fi
+
           # Loop through each selected dataset
           IFS=',' read -ra DATASETS <<< "${{ needs.setup.outputs.datasets }}"
           for dataset in "${DATASETS[@]}"; do
@@ -705,7 +710,8 @@ jobs:
               --topp "$TOPP" \
               --maxlength "$MAXLENGTH" \
               $pivot_flag \
-              $batch_flag
+              $batch_flag \
+              $quantized_flag
           done
         env:
           PYTHONUNBUFFERED: 1
