@@ -10,6 +10,17 @@ on:
       - ready_for_review
     branches:
       - main
+  # DRYRUN-ONLY: run the HEAD version of this gate so verify-prebuilds can be
+  # exercised before merge. Revert before merging the real PR.
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - ready_for_review
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -58,7 +69,9 @@ jobs:
           github-token: ${{ github.token }}
 
   changes:
-    if: github.event_name == 'pull_request_target'
+    # DRYRUN-ONLY: also allow pull_request so the HEAD gate detects changed
+    # packages. Revert to pull_request_target-only before merging the real PR.
+    if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
@@ -194,7 +207,9 @@ jobs:
       - name: Checkout prebuild-status scripts (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          # DRYRUN-ONLY: use PR head so the not-yet-on-main scripts exist. Revert to
+          # ${{ github.event.repository.default_branch }} before merging the real PR.
+          ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: .github/scripts/prebuild-status
           sparse-checkout-cone-mode: false
           persist-credentials: false

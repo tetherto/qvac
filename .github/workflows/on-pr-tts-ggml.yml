@@ -8,6 +8,16 @@ on:
       - "packages/tts-ggml/**"
       - ".github/workflows/*tts-ggml*.yml"
 
+  # DRYRUN-ONLY: run this flow's HEAD version so the new publish job can be
+  # exercised before merge (pull_request_target always loads from base). Revert
+  # before merging the real PR.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - "packages/tts-ggml/**"
+      - ".github/workflows/*tts-ggml*.yml"
+
   workflow_dispatch:
     inputs:
       repository:
@@ -394,7 +404,7 @@ jobs:
   publish-prebuild-status:
     # Posts qvac/prebuild-tts-ggml for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
     needs: [prebuild, prebuild-artifact-reuse]
-    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    if: always() && !cancelled() && (github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -405,7 +415,9 @@ jobs:
       - name: Checkout prebuild-status scripts (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          # DRYRUN-ONLY: use PR head so the not-yet-on-main scripts exist. Revert to
+          # ${{ github.event.repository.default_branch }} before merging the real PR.
+          ref: ${{ github.event.pull_request.head.sha }}
           sparse-checkout: .github/scripts/prebuild-status
           sparse-checkout-cone-mode: false
           persist-credentials: false
