@@ -170,23 +170,24 @@ export function transformMessages(
   return transformed
 }
 
+/**
+ * Prime the cache prefix with the system prompt only.
+ *
+ * Tools deliberately stay out of the prefix: a message list with no user turn
+ * is not a renderable conversation for every chat template (Qwen3.5 raises
+ * `No user query found in messages.` because it anchors its tool block on the
+ * last user query), and a template failure degrades the whole render rather
+ * than just the tool block. Tools travel with the turn instead.
+ */
 async function initSystemPromptCache(
   model: AnyModel,
   cachePathToUse: string,
   systemPromptToUse: string,
-  cacheKey: string,
-  tools?: Tool[]
+  cacheKey: string
 ) {
   const primeMessages: ChatHistory[] = [{ role: 'system', content: systemPromptToUse }]
 
-  let toolCount = 0
-  if (tools && tools.length > 0) {
-    const transformedTools = transformMessages(tools)
-    primeMessages.push(...transformedTools)
-    toolCount = tools.length
-  }
-
-  logCacheInit(cacheKey, systemPromptToUse, toolCount)
+  logCacheInit(cacheKey, systemPromptToUse)
   logMessagesToAddon(primeMessages, 'CACHE_INIT')
 
   const primeResponse = await runModel(model, primeMessages, {
@@ -204,10 +205,16 @@ type HistoryMsg = {
   attachments?: { path: string }[] | undefined
 }
 
+type ToolPlacement = 'static' | 'dynamic'
+
 /**
  * Pick the messages that need to reach the model for the next turn.
  *
- * Static mode (no `tools` argument):
+ * `placement` selects the slicing strategy; it is independent of whether
+ * `tools` are present, because tools now ride on every turn regardless of
+ * mode (they are never baked into the primed prefix).
+ *
+ * Static placement:
  *   - Cache miss: send the whole history minus the system message (which
  *     was primed during cache init).
  *   - Cache hit with a recorded `savedCount`: send only the unsaved tail
@@ -218,7 +225,7 @@ type HistoryMsg = {
  *     non-system history. The session is told (`dropStaleSavedCount`) so
  *     the bad boundary doesn't propagate into the next turn.
  *
- * Dynamic mode (`tools` argument set):
+ * Dynamic placement:
  *   - The addon anchors the tool block after the last user message and
  *     trims tools + the assistant's tool-call output from the cache once
  *     the chain resolves. After that trim, the cache only holds messages
@@ -237,17 +244,17 @@ function prepareMessagesForCache(
   turn: TurnHandle,
   cacheExists: boolean,
   history: HistoryMsg[],
-  tools?: Tool[]
+  tools?: Tool[],
+  placement: ToolPlacement = 'static'
 ): ChatHistory[] {
   const addTools = tools?.length ? transformMessages(tools) : []
-  const dynamic = addTools.length > 0
 
   if (!(cacheExists && history.length > 0)) {
     const historyWithoutSystem = history.filter((msg) => msg.role !== 'system')
     return [...transformMessages(historyWithoutSystem), ...addTools]
   }
 
-  if (!dynamic) {
+  if (placement === 'static') {
     // Static path — slice from the turn's `savedCount` so callers can
     // stage multiple messages between completions. `decideCachedHistorySlice`
     // also guards against the QVAC-17780 stale-count regression: if the
@@ -267,7 +274,9 @@ function prepareMessagesForCache(
       session.dropStaleSavedCount(turn)
     }
 
-    return transformMessages(messages)
+    // Tool entries are position-independent — the addon lifts them out of the
+    // message list and the template decides where the tool block lands.
+    return [...addTools, ...transformMessages(messages)]
   }
 
   // Dynamic path. The addon trimmed tools after the previous round, so the
@@ -479,10 +488,10 @@ export async function* completion(
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
-  // Dynamic mode lets each turn carry its own tool set, so the cache
-  // hash must not depend on the tool list — otherwise a tool change
-  // would force a fresh cache file and defeat the whole optimisation.
-  const configHash = generateConfigHash(systemPromptFromHistory, dynamicTools ? undefined : tools)
+  // The cached prefix holds the system prompt and nothing else, so the hash
+  // must not depend on the tool list — every turn carries its own tools, and
+  // keying on them would fragment the cache per tool set for no benefit.
+  const configHash = generateConfigHash(systemPromptFromHistory)
 
   const systemPromptToUse =
     systemPromptFromHistory ||
@@ -494,11 +503,7 @@ export async function* completion(
       model,
       cachePath,
       systemPromptToUse,
-      typeof kvCache === 'string' ? kvCache : 'auto',
-      // Static-mode tools are baked into the system-prompt cache so
-      // they're shared across the session. Dynamic-mode tools belong
-      // to a per-turn anchor and must not enter the system cache.
-      staticTools ? tools : undefined
+      typeof kvCache === 'string' ? kvCache : 'auto'
     )
   }
 
@@ -539,7 +544,8 @@ export async function* completion(
     turn,
     /* cacheExists */ true,
     history,
-    dynamicTools ? tools : undefined
+    staticTools || dynamicTools ? tools : undefined,
+    dynamicTools ? 'dynamic' : 'static'
   )
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
