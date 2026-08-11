@@ -115,6 +115,10 @@
       "types": "./marian.d.ts",
       "default": "./marian.js"
     },
+    "./lib/error": {
+      "types": "./lib/error.d.ts",
+      "default": "./lib/error.js"
+    },
     "./lib/bergamot-model-fetcher": {
       "types": "./lib/bergamot-model-fetcher.d.ts",
       "default": "./lib/bergamot-model-fetcher.js"

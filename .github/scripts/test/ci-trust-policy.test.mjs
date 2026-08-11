@@ -879,9 +879,24 @@ test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording'
 
 test('audit-called-out privileged checkouts are pinned to event head SHA', () => {
   const mergeGuard = read('.github/workflows/pr-gate-merge.yml')
+  // Merge Guard verifies prebuilds, it does not trigger them: it must not call a
+  // prebuild workflow, and must not privileged-checkout the PR head repo for
+  // prebuild verification. Its verify-prebuilds job only READS commit statuses on
+  // the immutable event head SHA (never a mutable ref).
+  assert.doesNotMatch(
+    mergeGuard,
+    /uses:\s+\.\/\.github\/workflows\/prebuilds-/,
+    'Merge Guard must not call a prebuild workflow (verify, do not trigger)',
+  )
+  assert.doesNotMatch(
+    mergeGuard,
+    /head\.repo\.full_name/,
+    'Merge Guard must not privileged-checkout the PR head repo',
+  )
   assert.match(
     mergeGuard,
-    /repository:\s+\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}\n\s+ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+    /HEAD_SHA:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+    'verify-prebuilds reads statuses from the immutable event head SHA',
   )
 
   const sanityChecks = read('.github/actions/sanity-checks/action.yaml')
@@ -943,8 +958,154 @@ test('infer-base changes reach the required merge-guard status check', () => {
   assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
   assert.match(
     guard,
-    /sanity-checks-status:\s*\$\{\{\s*needs\.sanity-checks\.result/,
+    /sanity-checks-status:[\s\S]*?needs\.sanity-checks\.result/,
     'merge guard reports the sanity-checks result',
+  )
+})
+
+test('merge guard fails closed when the PR was not authorized', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  const guard = jobBlock(source, 'qvac-merge-guard')
+
+  // The aggregate must wait on the full authorization chain so an unapproved
+  // fork cannot pass via skipped=success on the gated jobs.
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bfork-approval\b/,
+    'merge guard must depend on fork-approval',
+  )
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bauthorize\b/,
+    'merge guard must depend on authorize',
+  )
+
+  // Each gated status input must require fork-approval success, authorize
+  // success, AND allowed == 'true' before a skip is treated as a pass.
+  for (const input of [
+    'sanity-checks-status',
+    'build-status',
+    'general-checks-status',
+  ]) {
+    const line = guard
+      .split('\n')
+      .find((l) => l.trim().startsWith(`${input}:`))
+    assert.ok(line, `merge guard defines ${input}`)
+    assert.match(
+      line,
+      /needs\.fork-approval\.result == 'success'/,
+      `${input} must require fork-approval success (fail closed)`,
+    )
+    assert.match(
+      line,
+      /needs\.authorize\.result == 'success'/,
+      `${input} must require authorize success (fail closed)`,
+    )
+    assert.match(
+      line,
+      /needs\.authorize\.outputs\.allowed == 'true'/,
+      `${input} must require authorize to allow the PR (fail closed)`,
+    )
+  }
+})
+
+test('merge guard cancels superseded in-flight runs', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  // verify-prebuilds uses a static per-run freshness threshold, so an older
+  // run started before a prebuild label must be cancelled rather than allowed
+  // to trust a pre-label skipped=success. That relies on concurrency
+  // cancel-in-progress; assert it stays enabled.
+  const concurrency = source
+    .split('\n')
+    .slice(
+      source.split('\n').findIndex((l) => l.startsWith('concurrency:')),
+    )
+    .slice(0, 12)
+    .join('\n')
+  assert.match(
+    concurrency,
+    /cancel-in-progress:\s*true/,
+    'Merge Guard must cancel superseded in-flight runs (verify-only gate)',
+  )
+})
+
+test('verify-prebuilds binds a prebuild status to its producing on-pr run', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  const verify = jobBlock(source, 'verify-prebuilds')
+
+  // The gate reads workflow runs (to bind a status to its producing run) and
+  // delegates the decision to a single, unit-tested module checked out from the
+  // trusted default branch (never PR head code).
+  assert.match(verify, /actions:\s*read/, 'verify-prebuilds can read workflow runs')
+  assert.match(
+    verify,
+    /sparse-checkout:\s*\.github\/scripts\/prebuild-status/,
+    'verify-prebuilds checks out only the prebuild-status scripts',
+  )
+  assert.match(
+    verify,
+    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
+    'verify-prebuilds checks out the trusted default branch, never PR head',
+  )
+  assert.match(
+    verify,
+    /run:\s*node \.github\/scripts\/prebuild-status\/verify\.mjs/,
+    'verify-prebuilds runs the shared verify script',
+  )
+  assert.match(
+    verify,
+    /PR_UPDATED_AT:\s*\$\{\{ github\.event\.pull_request\.updated_at \}\}/,
+    'verify-prebuilds passes the PR event timestamp as the freshness threshold',
+  )
+
+  // Timestamp alone is insufficient: a superseded pre-label run can post a
+  // fresh-looking skipped success, so the module binds the status to the run
+  // that produced it (target_url -> run -> on-pr-<pkg> workflow -> created_at).
+  const lib = read('.github/scripts/prebuild-status/lib.mjs')
+  assert.match(lib, /target_url/, 'lib reads the producing run from the status target_url')
+  assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
+  assert.match(
+    lib,
+    /on-pr-\$\{pkg\}\.yml/,
+    'lib checks the producing run is the on-pr-<pkg> workflow',
+  )
+  assert.match(
+    lib,
+    /createdMs \/ 1000\) >= prUpdatedEpoch/,
+    'lib rejects a producing run created before this PR event',
+  )
+})
+
+test('publish-prebuild-status stamps its run URL into target_url', () => {
+  const workflowDirectory = join(root, '.github/workflows')
+  const offenders = readdirSync(workflowDirectory)
+    .filter((name) => /^on-pr-.*\.yml$/.test(name))
+    .filter((name) => {
+      const text = readFileSync(join(workflowDirectory, name), 'utf8')
+      if (!text.includes('publish-prebuild-status')) return false
+      // A publish job must define RUN_URL from github.run_id, pass its context,
+      // and delegate to the shared publish script (which stamps target_url), so
+      // Merge Guard can bind the status to this run.
+      const hasRunUrl =
+        /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
+          text,
+        )
+      const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text)
+      const runsScript = /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(text)
+      return !(hasRunUrl && hasContext && runsScript)
+    })
+  assert.deepEqual(
+    offenders,
+    [],
+    'every on-pr publish-prebuild-status must run the shared publish script with RUN_URL and CONTEXT',
+  )
+
+  // The shared script is what actually stamps the run URL into target_url.
+  const publish = read('.github/scripts/prebuild-status/publish.mjs')
+  assert.match(
+    publish,
+    /target_url=\$\{runUrl\}/,
+    'publish.mjs stamps the run URL into the status target_url',
   )
 })
 
