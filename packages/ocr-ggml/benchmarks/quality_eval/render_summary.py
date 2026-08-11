@@ -212,14 +212,20 @@ def summary_table(platforms):
     lines = [
         "## Summary — All Models",
         "",
-        "> Full-page OCR (HierText) + Text Spotting (IC15) stats per model, "
-        "backend, platform and device. _`-` = not run in this configuration._",
+        (
+            "> Full-page OCR (HierText) + Text Spotting (IC15) stats per model, "
+            + "backend, platform and device. _`-` = not run in this configuration._"
+        ),
         "",
-        "| Model | Backend | Platform | Device | Samples (FP/TS) | CER ↓ | WER ↓ | ANLS ↑ "
-        "| FP Speed (s/img) | E2E F1 ↑ | Det F1 ↑ | Avg CER ↓ | Avg ANLS ↑ "
-        "| TS Speed (s/img) |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
-        "| ---: | ---: | ---: |",
+        (
+            "| Model | Backend | Platform | Device | Samples (FP/TS) | CER ↓ | WER ↓ | ANLS ↑ "
+            + "| FP Speed (s/img) | E2E F1 ↑ | Det F1 ↑ | Avg CER ↓ | Avg ANLS ↑ "
+            + "| TS Speed (s/img) |"
+        ),
+        (
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
+            + "| ---: | ---: | ---: |"
+        ),
     ]
     for backend, platform, device in sorted(
         rows,
