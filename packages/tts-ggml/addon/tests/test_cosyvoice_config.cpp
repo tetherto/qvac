@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -61,11 +62,18 @@ CosyvoiceConfig configWithExistingDir() {
 }
 
 // Placeholder LavaSR GGUFs are staged outside the model dir so the latter keeps
-// matching the "holds no weights" contract above.
+// matching the "holds no weights" contract above. The directory is unique per
+// process: a fixed /tmp name races with concurrent CI jobs on shared
+// self-hosted runner hosts (another job's TempGguf destructor deletes the
+// fixture, or the dir belongs to another runner's user and the write fails).
 std::filesystem::path lavasrStageDir() {
-  auto dir = std::filesystem::temp_directory_path() /
-             "qvac-tts-ggml-cosyvoice-tests-lavasr";
-  std::filesystem::create_directories(dir);
+  static const std::filesystem::path dir = [] {
+    std::random_device rd;
+    auto d = std::filesystem::temp_directory_path() /
+             ("qvac-tts-ggml-cosyvoice-tests-lavasr-" + std::to_string(rd()));
+    std::filesystem::create_directories(d);
+    return d;
+  }();
   return dir;
 }
 
