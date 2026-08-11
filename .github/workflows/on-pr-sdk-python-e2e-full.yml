@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]
+        os: ["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "macos-26"]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     defaults:

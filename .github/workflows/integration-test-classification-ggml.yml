@@ -53,10 +53,10 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: mac-mini-m4
+          - os: macos-26
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: macos-26
           # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
           # the Vulkan loader installed (same env as llm-llamacpp and other fabric
           # consumers being migrated).
