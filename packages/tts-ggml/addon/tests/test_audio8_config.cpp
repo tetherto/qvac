@@ -5,7 +5,9 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <random>
 #include <string>
+#include <system_error>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -32,17 +34,45 @@ constexpr char AUDIO8_VULKAN_ENV[] = "QVAC_TEST_AUDIO8_VULKAN";
 constexpr char AUDIO8_BACKENDS_DIR_ENV[] = "QVAC_TEST_AUDIO8_BACKENDS_DIR";
 constexpr char VULKAN_BACKEND_NAME[] = "Vulkan";
 constexpr int REAL_GGUF_MAX_FRAMES = 16;
+constexpr const char* STUB_DIR_PREFIX = "qvac-tts-ggml-audio8-tests-";
+constexpr const char* STUB_CONTENTS = "stub";
+
+// The directory name carries entropy because CI shares one /tmp across parallel
+// runners: a fixed name is created by whichever job runs first and is then
+// unwritable by the rest, which silently drops every later stub write.
+std::filesystem::path createStubDir() {
+  std::random_device entropy;
+  auto dir = std::filesystem::temp_directory_path() /
+             (std::string(STUB_DIR_PREFIX) + std::to_string(entropy()));
+  std::filesystem::create_directories(dir);
+  return dir;
+}
+
+class StubDir {
+public:
+  StubDir() : path_(createStubDir()) {}
+  ~StubDir() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+  StubDir(const StubDir&) = delete;
+  StubDir& operator=(const StubDir&) = delete;
+
+  const std::filesystem::path& path() const { return path_; }
+
+private:
+  std::filesystem::path path_;
+};
 
 std::filesystem::path tempPath(const std::string& suffix) {
-  auto dir =
-      std::filesystem::temp_directory_path() / "qvac-tts-ggml-audio8-tests";
-  std::filesystem::create_directories(dir);
-  return dir / suffix;
+  static const StubDir dir;
+  return dir.path() / suffix;
 }
 
 std::string stubFile(const std::string& name) {
   const auto path = tempPath(name);
-  std::ofstream(path, std::ios::binary) << "stub";
+  std::ofstream out(path, std::ios::binary);
+  out << STUB_CONTENTS;
   return path.string();
 }
 

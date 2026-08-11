@@ -35,6 +35,8 @@ using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 using qvac::ttsggml::pcmFloatToInt16;
 
+} // namespace
+
 tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   tts_cpp::cosyvoice::EngineOptions opts;
   opts.model_dir = cfg.modelDir;
@@ -81,10 +83,11 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
 #endif
     opts.backends_dir = backendsDirPath.string();
   }
+  // Forwarded as-is; only consumed on Android's OpenCL/Adreno GPU path
+  // (n_gpu_layers > 0). Empty leaves ggml's default cache location.
+  opts.opencl_cache_dir = cfg.openclCacheDir;
   return opts;
 }
-
-} // namespace
 
 // The tts-cpp engine ignores output_sample_rate, so the addon resamples the
 // batch output itself; unenhanced streaming is validated to the native rate
