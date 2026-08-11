@@ -1,0 +1,525 @@
+name: General CI/CD (native addons, nx)
+# Consolidated publish workflow for the 14 on-merge-<pkg>.yml files (dorny
+# selects the changed package, matrix publishes it — no nx-affected).
+# Left out: on-merge-model-fit.yml.
+
+on:
+  push:
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/asr-ggml/**"
+      - "packages/audiogen-ggml/**"
+      - "packages/bci-whispercpp/**"
+      - "packages/classification-ggml/**"
+      - "packages/decoder-audio/**"
+      - "packages/diffusion-cpp/**"
+      - "packages/embed-llamacpp/**"
+      - "packages/fabric/**"
+      - "packages/llm-llamacpp/**"
+      - "packages/ocr-ggml/**"
+      - "packages/onnx/**"
+      - "packages/translation-nmtcpp/**"
+      - "packages/tts-ggml/**"
+      - "packages/vla-ggml/**"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - asr-ggml
+          - audiogen-ggml
+          - bci-whispercpp
+          - classification-ggml
+          - decoder-audio
+          - diffusion-cpp
+          - embed-llamacpp
+          - fabric
+          - llm-llamacpp
+          - ocr-ggml
+          - onnx
+          - translation-nmtcpp
+          - tts-ggml
+          - vla-ggml
+      npm_tag:
+        description: "NPM dist-tag override (release publish only, default: latest)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Detect changed packages
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.rows.outputs.any }}
+      matrix: ${{ steps.rows.outputs.matrix }}
+      prebuild-rows: ${{ steps.rows.outputs.prebuild-rows }}
+      pre-publish-rows: ${{ steps.rows.outputs.pre-publish-rows }}
+      post-integration-rows: ${{ steps.rows.outputs.post-integration-rows }}
+      post-mobile-rows: ${{ steps.rows.outputs.post-mobile-rows }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Filter changed packages
+        id: filter
+        if: github.event_name == 'push'
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        with:
+          # base == this branch -> dorny diffs the push delta (commit before the
+          # push -> after), NOT against the default branch. Without this it
+          # defaults to `main`, where these nx project.json files don't exist
+          # yet, so every package matches and all 14 would publish. On a freshly
+          # created release-* branch (before=0000) dorny falls back to the merge
+          # base vs main, which is exactly the one bumped package; a stale/
+          # drifted release branch would surface extra packages and trip the
+          # single-package assertion in the compute step (safe, loud failure).
+          base: ${{ github.ref_name }}
+          filters: |
+            asr-ggml: packages/asr-ggml/**
+            audiogen-ggml: packages/audiogen-ggml/**
+            bci-whispercpp: packages/bci-whispercpp/**
+            classification-ggml: packages/classification-ggml/**
+            decoder-audio: packages/decoder-audio/**
+            diffusion-cpp: packages/diffusion-cpp/**
+            embed-llamacpp: packages/embed-llamacpp/**
+            fabric: packages/fabric/**
+            llm-llamacpp: packages/llm-llamacpp/**
+            ocr-ggml: packages/ocr-ggml/**
+            onnx: packages/onnx/**
+            translation-nmtcpp: packages/translation-nmtcpp/**
+            tts-ggml: packages/tts-ggml/**
+            vla-ggml: packages/vla-ggml/**
+
+      - name: Compute per-package config rows
+        id: rows
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          DISPATCH_PKG: ${{ inputs.package }}
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            packages="[\"${DISPATCH_PKG}\"]"
+          else
+            packages="${CHANGED:-[]}"
+          fi
+
+          # Identity gate: a release-* branch is named release-<package>-x.y.z
+          # and must publish EXACTLY that package — checked against what this
+          # push/dispatch actually selected, before anything builds. Hard
+          # fail on any mismatch (wrong package, extra package, zero
+          # packages, malformed branch name, unknown package). This closes a
+          # real gap in release-merge-guard: that guard's package-identity
+          # check is a warning only (it hard-fails on version/changelog
+          # instead), so a same-versioned sibling package with its own
+          # CHANGELOG touched in a later push on the SAME release branch
+          # could otherwise pass the guard and publish under someone else's
+          # release line. Applies to both push and workflow_dispatch — a
+          # manual dispatch with the wrong `package` on a release-* branch
+          # must fail exactly the same way.
+          if [[ "$REF_NAME" == release-* ]]; then
+            if [[ "$REF_NAME" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              branch_pkg="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Invalid release branch name — expected release-<package>-x.y.z, actual: ${REF_NAME}"
+              exit 1
+            fi
+
+            if [ ! -f "packages/${branch_pkg}/project.json" ]; then
+              echo "::error::release branch names package '${branch_pkg}' but packages/${branch_pkg}/project.json does not exist"
+              exit 1
+            fi
+
+            matches_branch_pkg=$(echo "$packages" | jq --arg p "$branch_pkg" '. == [$p]')
+            if [ "$matches_branch_pkg" != "true" ]; then
+              echo "::error::release-${branch_pkg}-* must publish exactly packages/${branch_pkg}/**; this run selected: ${packages}. No package reaches npm publish unless it is the sole package matching this release branch's name."
+              exit 1
+            fi
+          fi
+
+          rows="[]"
+          for pkg in $(echo "$packages" | jq -r '.[]'); do
+            pj="packages/${pkg}/project.json"
+            onmerge=$(jq -c '.targets["on-merge"].options.ci // {}' "$pj")
+            root=$(jq -r '.root' "$pj")
+            has_build=$(jq -r 'if .targets.build then "true" else "false" end' "$pj")
+            row=$(jq -n \
+              --arg pkg "$pkg" \
+              --arg workdir "$root" \
+              --argjson hasPrebuilds "$has_build" \
+              --argjson onmerge "$onmerge" \
+              '{package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds} + $onmerge')
+            rows=$(echo "$rows" | jq -c --argjson r "$row" '. + [$r]')
+          done
+
+          any="false"
+          [ "$(echo "$rows" | jq 'length')" -gt 0 ] && any="true"
+
+          prebuild_rows=$(echo "$rows" | jq -c '[.[] | select(.hasPrebuilds == true)]')
+          pre_publish_rows=$(echo "$rows" | jq -c '[.[] | select((.testGateMode // "") | startswith("pre-publish"))]')
+          post_integration_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration" or .testGateMode == "post-publish-integration+mobile")]')
+          post_mobile_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration+mobile")]')
+
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+          echo "matrix=$rows" >> "$GITHUB_OUTPUT"
+          echo "prebuild-rows=$prebuild_rows" >> "$GITHUB_OUTPUT"
+          echo "pre-publish-rows=$pre_publish_rows" >> "$GITHUB_OUTPUT"
+          echo "post-integration-rows=$post_integration_rows" >> "$GITHUB_OUTPUT"
+          echo "post-mobile-rows=$post_mobile_rows" >> "$GITHUB_OUTPUT"
+
+  publish-logic:
+    runs-on: ubuntu-latest
+    outputs:
+      publish_main: ${{ steps.logic.outputs.publish_main }}
+      publish_release: ${{ steps.logic.outputs.publish_release }}
+      publish_feature: ${{ steps.logic.outputs.publish_feature }}
+      publish_tmp: ${{ steps.logic.outputs.publish_tmp }}
+      gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
+    steps:
+      - id: logic
+        uses: tetherto/qvac-actions/npm-publish-logic@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+
+  release-merge-guard:
+    name: Release Merge Guard (${{ matrix.package }})
+    needs: detect
+    if: >-
+      github.event_name == 'push' && startsWith(github.ref_name, 'release-')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: ${{ matrix.package }}
+          package-json-path: ${{ matrix.workdir }}/package.json
+          changelog-path: ${{ matrix.workdir }}/CHANGELOG.md
+
+  # Packages whose tests gate publish itself (today: decoder-audio only).
+  # `packages` is explicit (this package only) — bypasses nx-affected inside
+  # the leaf entirely, same owner-only guarantee as the dorny selection above.
+  pre-publish-integration:
+    name: Pre-publish integration (${{ matrix.package }})
+    needs: detect
+    if: needs.detect.outputs.pre-publish-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.pre-publish-rows) }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  pre-publish-mobile:
+    name: Pre-publish mobile integration (${{ matrix.package }})
+    needs: detect
+    if: needs.detect.outputs.pre-publish-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.pre-publish-rows) }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  # Same `packages` bypass — asks the leaf to build exactly this package,
+  # not whatever nx-affected would compute against base-ref/head-ref.
+  prebuild:
+    name: Prebuild (${{ matrix.package }})
+    needs: detect
+    if: needs.detect.outputs.prebuild-rows != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.prebuild-rows) }}
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  publish-gpr:
+    name: Publish GPR (${{ matrix.package }})
+    needs:
+      - detect
+      - publish-logic
+      - prebuild
+      - pre-publish-integration
+      - pre-publish-mobile
+    if: >-
+      always() &&
+      (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') &&
+      (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
+      (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
+    runs-on: ubuntu-latest
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ matrix.installToken == 'PAT_TOKEN' && secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Download prebuild artifacts
+        if: matrix.hasPrebuilds == true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ matrix.workdir }}/prebuilds
+
+      - name: Set up Node.js
+        if: matrix.buildStep != 'none'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Run build step
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        run: npm run ${{ matrix.buildStep }}
+
+      - name: Rename prebuild files from qvac_ to tetherto_ prefix
+        if: matrix.nameTransform == 'rename-prefix'
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          find prebuilds -depth -name 'qvac_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+          if [ -f binding.js ]; then
+            sed -i 's/qvac_/tetherto_/g' binding.js
+          fi
+
+      - name: Scope package as @tetherto for GPR
+        if: matrix.nameTransform == 'scope-rewrite'
+        shell: bash
+        env:
+          WORKDIR: ${{ matrix.workdir }}
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          node -e "const fs=require('fs');const f=process.env.WORKDIR+'/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/'+process.env.PACKAGE;if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
+
+      - name: Publish to GitHub Package Registry
+        uses: ./.github/actions/publish-library-to-gpr
+        with:
+          secret-token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
+          workdir: ${{ matrix.workdir }}
+          name-suffix: "-mono"
+
+  publish-npm:
+    name: Publish NPM (${{ matrix.package }})
+    needs:
+      - detect
+      - publish-logic
+      - release-merge-guard
+      - prebuild
+      - pre-publish-integration
+      - pre-publish-mobile
+    if: >-
+      always() &&
+      (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') &&
+      (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
+      (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
+      needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          token: ${{ matrix.installToken == 'PAT_TOKEN' && secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Download prebuild artifacts
+        if: matrix.hasPrebuilds == true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: ${{ matrix.workdir }}/prebuilds
+
+      - name: Set up Node.js
+        if: matrix.buildStep != 'none'
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Run build step
+        if: matrix.buildStep != 'none'
+        working-directory: ${{ matrix.workdir }}
+        run: npm run ${{ matrix.buildStep }}
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+        with:
+          workdir: ${{ matrix.workdir }}
+          tag: ${{ matrix.npmTagOverride || inputs.npm_tag }}
+
+      - name: Publish to npm
+        id: publish
+        uses: tetherto/qvac-actions/publish-library-to-npm@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+        with:
+          workdir: ${{ matrix.workdir }}
+          tag: ${{ steps.dist-tag.outputs.tag }}
+
+  # OR-gate: post-publish tests only run after a real publish landed. Single
+  # (non-matrixed) job so its output propagates reliably to the matrixed
+  # post-publish jobs (matrix-job outputs do not propagate to dependents).
+  # Reads the publish jobs' rolled-up .result (that does propagate).
+  post-build-gate:
+    name: Post-build gate
+    needs:
+      - detect
+      - publish-gpr
+      - publish-npm
+    if: >-
+      always() && needs.detect.outputs.post-integration-rows != '[]'
+    runs-on: ubuntu-latest
+    outputs:
+      should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
+    steps:
+      - id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          should="false"
+          if [ "${{ needs.publish-npm.result }}" = "success" ] || \
+             [ "${{ needs.publish-gpr.result }}" = "success" ]; then
+            should="true"
+          fi
+          echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
+
+  post-publish-integration:
+    name: Post-publish integration (${{ matrix.package }})
+    needs: [detect, post-build-gate]
+    if: needs.post-build-gate.outputs.should_run_tests == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.post-integration-rows) }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  post-publish-mobile:
+    name: Post-publish mobile integration (${{ matrix.package }})
+    needs: [detect, post-build-gate]
+    if: >-
+      needs.detect.outputs.post-mobile-rows != '[]' &&
+      needs.post-build-gate.outputs.should_run_tests == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.post-mobile-rows) }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
+
+  # Release branches carry exactly one package (enforced in `detect`), so this
+  # matrix is always size 1 in practice and published_version resolves
+  # unambiguously despite the job-level output collapsing across matrix rows.
+  create-tag:
+    name: Create tag (${{ matrix.package }})
+    needs: [detect, publish-npm]
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: ${{ matrix.useVTag == true && '' || matrix.repoName }}
+      tag_name: ${{ matrix.useVTag == true && format('v{0}', needs.publish-npm.outputs.published_version) || '' }}
+      published_version: ${{ needs.publish-npm.outputs.published_version }}

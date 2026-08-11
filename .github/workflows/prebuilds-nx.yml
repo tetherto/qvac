@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      packages:
+        description: "JSON array of explicit package short-names. When non-empty, skips nx-affected and builds exactly these packages."
+        type: string
+        required: false
+        default: "[]"
   workflow_call:
     inputs:
       ref:
@@ -29,6 +34,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      packages:
+        description: "JSON array of explicit package short-names. When non-empty, skips nx-affected and builds exactly these packages."
+        type: string
+        required: false
+        default: "[]"
 
 permissions:
   contents: read
@@ -48,6 +58,7 @@ jobs:
           target: build
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          packages: ${{ inputs.packages }}
 
   prebuild:
     name: Prebuild (${{ matrix.package }})

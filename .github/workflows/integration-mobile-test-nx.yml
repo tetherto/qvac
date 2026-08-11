@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      packages:
+        description: "JSON array of explicit package short-names. When non-empty, skips nx-affected and tests exactly these packages."
+        type: string
+        required: false
+        default: "[]"
   workflow_call:
     inputs:
       ref:
@@ -29,6 +34,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      packages:
+        description: "JSON array of explicit package short-names. When non-empty, skips nx-affected and tests exactly these packages."
+        type: string
+        required: false
+        default: "[]"
 
 permissions:
   contents: read
@@ -49,6 +59,7 @@ jobs:
           target: test:integration-mobile
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          packages: ${{ inputs.packages }}
 
   # Carve-out: llm-llamacpp uses sharded Device Farm scheduling outside the
   # generic 2-D matrix; routed to its own reusable when nx flags it affected

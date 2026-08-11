@@ -103,6 +103,20 @@
         "command": "pnpm run test:cpp",
         "cwd": "packages/ocr-ggml"
       }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/ocr-ggml",
+        "ci": {
+          "buildStep": "build:ts",
+          "nameTransform": "none",
+          "installToken": "PAT_TOKEN",
+          "repoName": "ocr-ggml",
+          "testGateMode": "post-publish-integration"
+        }
+      }
     }
   },
   "implicitDependencies": [
