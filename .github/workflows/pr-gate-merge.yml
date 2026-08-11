@@ -36,7 +36,9 @@ concurrency:
   # could otherwise trust a pre-label "skipped = success" while the newer
   # labeled build is still running. Killing the older run leaves only the newer
   # run, which waits for the real build.
-  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
+  # DRYRUN-ONLY: event-scoped so the head pull_request gate isn't cancelled by the
+  # base pull_request_target gate (which still fires from main). Revert before merge.
+  group: pr-gate-merge-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
