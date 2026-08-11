@@ -25,8 +25,13 @@ export interface OcrGgmlParams {
      *   - doctr:   doctr recognition model (e.g. `crnn_mobilenet_v3_small.gguf`)
      */
     pathRecognizer: string;
-    /** Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`). */
-    langList: string[];
+    /**
+     * Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`).
+     * Required for `easyocr` (validated by the native pipeline against the
+     * loaded recognizer's character set); optional for `doctr`, which is
+     * language-agnostic and ignores it.
+     */
+    langList?: string[];
     /** Pipeline backing the addon. Default: `'easyocr'`. */
     pipelineType?: OcrGgmlPipelineType;
     /** Detection magnification ratio (easyocr only). Default: 1.5. */
@@ -134,7 +139,8 @@ export interface RuntimeStats {
     /** Number of detected boxes (aligned + unaligned). */
     numBoxes: number;
     /**
-     * Whether inference ran on a GPU (Vulkan) device (`1`) or the CPU (`0`).
+     * Whether inference ran on a GPU device (`1`) — Vulkan, Metal, or OpenCL —
+     * or on the CPU (`0`).
      * `RuntimeStats` values are numeric only, so this flag is the in-stats signal
      * for the selected backend; richer string detail (name, fallback reason) is
      * available via {@link OcrGgml.getBackendInfo}.
