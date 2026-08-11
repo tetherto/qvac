@@ -100,6 +100,7 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdParsers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/WorldSessionHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/WorldSessionModel.cpp

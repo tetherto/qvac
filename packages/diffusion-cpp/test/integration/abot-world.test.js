@@ -494,7 +494,10 @@ test(
     const world = new WorldStableDiffusion({
       files: { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath },
       // frameJpegQuality exercises the demo's streaming transport (MJPEG).
-      config: { seed: 42, kvCache: true, frameJpegQuality: 60 },
+      // kvCache deliberately NUMERIC: plain-JS callers write 1, and the
+      // native handler map must parse it as true (regression: it used to
+      // fail a literal 'true' comparison and silently keep the default).
+      config: { seed: 42, kvCache: 1, frameJpegQuality: 60 },
       logger: console,
       opts: { stats: true }
     })
@@ -521,7 +524,23 @@ test(
       framesAre(blocks, 448, 256, [0xff, 0xd8]),
       'every frame is a 448x256 JPEG (frameJpegQuality transport)'
     )
-
     await world.unload().catch(() => {})
+
+    // Numeric-boolean handler proof, end to end: kvCache '1' must reach the
+    // engine as TRUE - with localAttnSize 21 the compiled KV ring cannot hold
+    // the window, so the load MUST fail fast. A silently-false kvCache (the
+    // old literal-'true' comparison bug) would load fine and hide the
+    // regression.
+    const failFast = new WorldStableDiffusion({
+      files: { model: path.join(dir, DIT_NAME), taehv: taehvPath, scene: scenePath },
+      config: { seed: 42, kvCache: 1, localAttnSize: 21 },
+      logger: console
+    })
+    await t.exception.all(
+      async () => failFast.load(),
+      /kvCache\/localAttnSize|walk session/i,
+      'kvCache: 1 parses as true natively (engine KV fail-fast fires at load)'
+    )
+    await failFast.unload().catch(() => {})
   }
 )

@@ -17,6 +17,7 @@
 #include <picojson/picojson.h>
 
 #include "handlers/SdCtxHandlers.hpp"
+#include "handlers/WorldSessionHandlers.hpp"
 #include "model-interface/EsrganUpscalerModel.hpp"
 #include "model-interface/SdModel.hpp"
 #include "model-interface/WorldSessionModel.hpp"
@@ -319,32 +320,11 @@ createWorldInstance(js_env_t* env, js_callback_info_t* info) try {
   config.taehvPath = args.getMapEntry(1, "taehvPath");
   config.scenePath = args.getMapEntry(1, "scenePath");
 
-  // config sub-object: flat string key/values (coerced in addon.js)
-  auto configMap = args.getSubmap(1, "config");
-  auto lookup = [&configMap](const char* key) -> std::string {
-    auto it = configMap.find(key);
-    return it == configMap.end() ? std::string() : it->second;
-  };
-  if (auto v = lookup("backendsDir"); !v.empty())
-    config.backendsDir = v;
-  if (auto v = lookup("backend"); !v.empty())
-    config.backend = v;
-  if (auto v = lookup("threads"); !v.empty())
-    config.nThreads = std::stoi(v);
-  if (auto v = lookup("seed"); !v.empty())
-    config.seed = std::stoll(v);
-  if (auto v = lookup("numFramePerBlock"); !v.empty())
-    config.numFramePerBlock = std::stoi(v);
-  if (auto v = lookup("localAttnSize"); !v.empty())
-    config.localAttnSize = std::stoi(v);
-  if (auto v = lookup("offloadParamsToCpu"); v == "true")
-    config.offloadParamsToCpu = true;
-  if (auto v = lookup("frameJpegQuality"); !v.empty())
-    config.frameJpegQuality = std::stoi(v);
-  if (auto v = lookup("kvCache"); v == "true")
-    config.kvCache = true;
-  if (auto v = lookup("profile"); v == "true")
-    config.profile = true;
+  // config sub-object: flat string key/values (coerced in addon.js), routed
+  // through the validated handler map like every other instance constructor
+  // here - numeric booleans ("1"/"0") parse, bad values throw typed
+  // InvalidArgument instead of raw stoi errors or silent no-ops.
+  applyWorldSessionHandlers(config, args.getSubmap(1, "config"));
 
   auto model = make_unique<WorldSessionModel>(std::move(config));
 

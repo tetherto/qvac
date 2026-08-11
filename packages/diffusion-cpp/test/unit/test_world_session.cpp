@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "handlers/WorldSessionHandlers.hpp"
 #include "model-interface/WorldSessionModel.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
@@ -110,4 +111,90 @@ TEST_F(WorldSessionModelTest, RuntimeStatsEmptyBeforeAnyJob) {
 
 TEST_F(WorldSessionModelTest, DestroyUnloadedModelIsNoop) {
   EXPECT_NO_THROW({ WorldSessionModel model(WorldSessionConfig{}); });
+}
+
+// -- Config handler map (applyWorldSessionHandlers) ---------------------------
+// The JS layer stringifies every config value, so the native handlers must
+// accept the same lexical forms as SD_CTX_HANDLERS. The regression that
+// motivated this map: `kvCache: 1` arrived as "1", failed a literal
+// `v == "true"` comparison, and silently kept the false default.
+
+class WorldSessionHandlersTest : public ::testing::Test {};
+
+TEST_F(WorldSessionHandlersTest, NumericBooleansParse) {
+  WorldSessionConfig config{};
+  applyWorldSessionHandlers(
+      config,
+      {{"kvCache", "1"}, {"offloadParamsToCpu", "1"}, {"profile", "1"}});
+  EXPECT_TRUE(config.kvCache);
+  EXPECT_TRUE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.profile);
+
+  applyWorldSessionHandlers(
+      config, {{"kvCache", "0"}, {"offloadParamsToCpu", "false"}});
+  EXPECT_FALSE(config.kvCache);
+  EXPECT_FALSE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.profile); // untouched keys keep their values
+}
+
+TEST_F(WorldSessionHandlersTest, InvalidBooleanThrowsTyped) {
+  WorldSessionConfig config{};
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"kvCache", "yes"}}), StatusError);
+}
+
+TEST_F(WorldSessionHandlersTest, ThreadsMatchesSiblingSemantics) {
+  WorldSessionConfig config{};
+  applyWorldSessionHandlers(config, {{"threads", "8"}});
+  EXPECT_EQ(config.nThreads, 8);
+  applyWorldSessionHandlers(config, {{"threads", "-1"}});
+  EXPECT_EQ(config.nThreads, -1);
+  // 0 and non-numeric throw typed errors, exactly like StableDiffusion.
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"threads", "0"}}), StatusError);
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"threads", "auto"}}), StatusError);
+}
+
+TEST_F(WorldSessionHandlersTest, JpegQualityRangeChecked) {
+  WorldSessionConfig config{};
+  applyWorldSessionHandlers(config, {{"frameJpegQuality", "85"}});
+  EXPECT_EQ(config.frameJpegQuality, 85);
+  applyWorldSessionHandlers(config, {{"frameJpegQuality", "0"}});
+  EXPECT_EQ(config.frameJpegQuality, 0);
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"frameJpegQuality", "101"}}),
+      StatusError);
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"frameJpegQuality", "-1"}}),
+      StatusError);
+}
+
+TEST_F(WorldSessionHandlersTest, BlockShapeKnobsRejectNegatives) {
+  WorldSessionConfig config{};
+  applyWorldSessionHandlers(
+      config, {{"numFramePerBlock", "3"}, {"localAttnSize", "8"}});
+  EXPECT_EQ(config.numFramePerBlock, 3);
+  EXPECT_EQ(config.localAttnSize, 8);
+  applyWorldSessionHandlers(config, {{"numFramePerBlock", "0"}});
+  EXPECT_EQ(config.numFramePerBlock, 0); // 0 = model default
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"localAttnSize", "-8"}}),
+      StatusError);
+}
+
+TEST_F(WorldSessionHandlersTest, SeedAndStringsAndUnknownKeys) {
+  WorldSessionConfig config{};
+  applyWorldSessionHandlers(
+      config,
+      {{"seed", "1234567890123"},
+       {"backend", "cuda0"},
+       {"backendsDir", "/opt/backends"},
+       {"someFutureKey", "whatever"}}); // unknown keys silently ignored
+  EXPECT_EQ(config.seed, 1234567890123LL);
+  EXPECT_EQ(config.backend, "cuda0");
+  EXPECT_EQ(config.backendsDir, "/opt/backends");
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"seed", "not-a-number"}}),
+      StatusError);
 }

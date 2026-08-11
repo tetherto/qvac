@@ -42,6 +42,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/handlers/WorldSessionHandlers.cpp
 )
 
 target_compile_options(
