@@ -61,6 +61,11 @@ jobs:
         if: github.event_name == 'push'
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         with:
+          # base == this branch -> dorny diffs the push delta (commit before the
+          # push -> after), not the default branch. Without it, dorny defaults
+          # to `main` and a diverged feature/tmp branch would match every lib,
+          # over-publishing instead of just the changed one.
+          base: ${{ github.ref_name }}
           filters: |
             rag: packages/rag/**
             dl-base: packages/dl-base/**
