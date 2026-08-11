@@ -6,7 +6,9 @@ This document describes the supported routes and how to configure `serve.models`
 
 ## Network security and CORS
 
-The default `127.0.0.1` bind is unauthenticated. Use `--api-key` whenever the server binds to a non-loopback address; without it, the CLI logs a security warning that the API is exposed to the network but still starts.
+The default `127.0.0.1` bind is unauthenticated. A non-loopback `--host` refuses to start without `--api-key <key>` or `--api-key-file <path>`; `--allow-unauthenticated` downgrades that refusal to a warning for operators who accept the exposure.
+
+Prefer `--api-key-file`: `--api-key` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. The file must be a regular file, and the CLI warns when it is readable beyond its owner (`chmod 600`).
 
 Browser access requires explicit trusted origins unless `--docs` enables its same-port loopback defaults. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
 
