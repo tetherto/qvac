@@ -470,9 +470,11 @@ export const llmPlugin = definePlugin({
             modelExecutionMs
           )
         } catch (err) {
-          // A cancel while queued rejects Cancelled; ride the done path so the
-          // client sees InferenceCancelledError.
-          if (ctx.signal.aborted && isAddonCancelledError(err)) {
+          // Any error thrown once the request is aborted is a consequence of the
+          // cancel (the addon's Cancelled rejection, or an aborted KV lock wait
+          // that rejects with a plain Error). Ride the done path so the client
+          // sees InferenceCancelledError, not a generic CompletionFailedError.
+          if (ctx.signal.aborted) {
             yield attachModelExecutionMs(
               {
                 type: 'completionStream' as const,
