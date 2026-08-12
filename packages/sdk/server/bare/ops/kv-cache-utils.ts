@@ -136,9 +136,7 @@ export async function pruneEmptyCacheDirectories(
   let currentDirectory = path.dirname(cacheFilePath)
 
   while (currentDirectory.startsWith(cacheDirPrefix)) {
-    // Don't remove a directory another in-flight turn will write into: a turn's
-    // cache path is registered active before its .bin lands on disk, so a
-    // still-empty shared parent must survive until that turn releases.
+    // Keep a directory another in-flight turn still holds (its .bin isn't on disk yet).
     const childPrefix = `${currentDirectory}${path.sep}`
     if (activePaths.some((p) => p.startsWith(childPrefix))) return
     try {

@@ -39,10 +39,8 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxQueueDepthPerModel: 64,
     sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP
   })
-  // Finetune has no per-job cancel — its only stop is the addon's global cancel,
-  // which would kill concurrent completions. Make it an exclusive writer over
-  // this lane so no completion runs while it does; then the global cancel only
-  // hits the finetune. (Also correct on its own: finetune mutates weights.)
+  // Finetune's only stop is the addon's global cancel, which would kill
+  // concurrent completions. Run it exclusively so nothing else is on the model.
   r.policy({
     kind: 'finetune',
     maxConcurrentPerModel: 1,
@@ -51,10 +49,8 @@ function installDefaultPolicies(r: RequestRegistry): void {
     sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP,
     exclusive: true
   })
-  // LLM translate runs on the completion addon, so it joins the lane as a reader
-  // (its cap comes per request from the model's `parallel`). NMT translate
-  // passes no cap and stays ungated on its own model. Sharing the lane keeps it
-  // out of the addon while a finetune holds it.
+  // LLM translate shares the completion lane as a reader (capped by `parallel`),
+  // so a finetune blocks it too. NMT passes no cap and stays ungated.
   r.policy({
     kind: 'translate',
     onOverflow: 'queue',

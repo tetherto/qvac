@@ -77,11 +77,8 @@ let lastAutoCacheSweepMs = 0
 let autoCacheSweepInFlight: Promise<void> | null = null
 let cacheStateLockTail = Promise.resolve()
 
-// Per-path write locks: same-file turns serialise, different files decode
-// concurrently, and a custom key and auto turn resolving to the same file share
-// one lock. A FIFO queue (not a promise chain) so a cancelled waiter drops out
-// without waiting for the holder — else it keeps its admission slot until the
-// holder's decode finishes, wedging the model.
+// Per-path write locks: same file serialises, different files run concurrently.
+// FIFO queue so an aborted waiter drops out instead of holding its admission slot.
 type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
 type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
 const cachePathLocks = new Map<string, CacheLock>()
@@ -98,8 +95,7 @@ function releaseCachePathWriteLock(key: string): void {
   cachePathLocks.delete(key)
 }
 
-// Resolves to the release fn. If `signal` aborts while queued, the wait rejects
-// and the waiter is removed, keeping FIFO order for the rest.
+// Returns the release fn. Aborting while queued rejects and removes the waiter.
 async function acquireCachePathWriteLock(
   key: string,
   signal?: AbortSignal
@@ -157,8 +153,7 @@ function releaseCachePath(cachePath: string): void {
   activeCachePaths.set(cachePath, count - 1)
 }
 
-// Snapshot of paths in-flight turns hold, so directory pruning skips a shared
-// parent another concurrent turn is about to write into.
+// Paths in-flight turns hold, so pruning skips a directory still in use.
 function snapshotActivePaths(): string[] {
   return Array.from(activeCachePaths.keys())
 }
@@ -416,10 +411,8 @@ export function createKvCacheSession(
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
     const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
-    // Held across the whole turn (decode + commit/rollback) so a same-file
-    // peer — custom or auto — can't interleave writes to this cache file.
-    // Released on commit, rollback, or the error path below. Throws if the
-    // request aborts while queued behind the holder.
+    // Held for the whole turn so a same-file peer can't interleave writes.
+    // Released on commit/rollback/error; throws if aborted while queued.
     const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
     const handle = makeHandle(cachePath, registryKey, undefined, releaseWriteLock)
 
@@ -456,13 +449,9 @@ export function createKvCacheSession(
   }
 
   async function beginAuto(input: BeginAutoTurnInput): Promise<TurnHandle> {
-    // Lock on the resolved path (like the custom path) so a custom key that
-    // resolves to the same file shares one lock and different histories run
-    // concurrently. Three phases because the path comes from a lookup, not the
-    // caller: discover the path, acquire its lock (outside the state lock, so
-    // `commitTurn`'s rename can't deadlock a waiter), then re-check existence
-    // once held — a same-file peer may have primed and renamed it while we
-    // waited.
+    // The path comes from a history lookup, so: discover it, lock it (outside
+    // the state lock, or commitTurn's rename could deadlock a waiter), then
+    // re-check existence under the lock in case a same-file peer just renamed it.
     const discovered = await withCacheStateLock(async () => {
       const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
       const cacheInfo =
@@ -481,8 +470,7 @@ export function createKvCacheSession(
     let cacheExists: boolean
     try {
       const resolved = await withCacheStateLock(async () => {
-        // `makeHandle` marks the path active here, under the state lock, so the
-        // retention sweep (which also takes the state lock) can't evict it.
+        // Mark the path active under the state lock so retention can't evict it.
         const h = makeHandle(cachePath, registryKey, cacheKey, releaseWriteLock)
         let exists = initializedCaches.has(registryKey)
         if (!exists) {
@@ -561,8 +549,7 @@ export function createKvCacheSession(
     const sourceCachePath = state.cachePath
     const sourceCacheKey = state.autoCacheKey
     const targetCacheKey = path.basename(path.dirname(path.dirname(result.targetCachePath)))
-    // Also hold the target's lock across the rename so a peer that resolves to
-    // it (a continuation or a matching custom key) can't write it concurrently.
+    // Hold the target's lock across the rename so a peer can't write it concurrently.
     const releaseTargetLock = await acquireCachePathWriteLock(result.targetCachePath)
     let renamed: boolean
     try {
@@ -638,9 +625,8 @@ export function createKvCacheSession(
         `[kv-cache] Failed to remove cache file during rollback; next turn may load stale KV state. path=${state.cachePath} error=${unlinkError instanceof Error ? unlinkError.message : String(unlinkError)}`
       )
     }
-    // Release this turn's active-path hold BEFORE pruning so an empty parent it
-    // no longer occupies can be removed; a sibling still holding the same path
-    // (refcount > 0) keeps it in the active snapshot and protects the directory.
+    // Release before pruning so an empty parent can go; a sibling still holding
+    // the path keeps it in the active snapshot and protects the directory.
     releaseCachePath(state.cachePath)
     await pruneEmptyCacheDirectories(state.cachePath, snapshotActivePaths())
     if (state.autoCacheKey !== undefined) {

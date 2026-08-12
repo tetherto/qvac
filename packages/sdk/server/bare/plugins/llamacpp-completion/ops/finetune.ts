@@ -134,9 +134,8 @@ export async function startFinetune(
     clearFinetuneRuntimeState(request.modelId)
   })
 
-  // model.cancel() is the addon's global cancel — the only stop finetune has.
-  // The registry admits finetune as an exclusive writer, so no completion is on
-  // the model when this fires; it only ever cancels the finetune itself.
+  // Global cancel is finetune's only stop; it runs exclusively, so nothing else
+  // is on the model when this fires.
   const onAbort = () => {
     model.cancel().catch((err: unknown) => {
       requestLogger.warn(

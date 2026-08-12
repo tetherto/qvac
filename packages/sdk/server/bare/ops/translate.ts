@@ -132,9 +132,8 @@ export async function* translate(
   })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
 
-  // Per-job cancel on the LLM path, mirroring completion(): cancel only this
-  // translate's own run response, never the addon's global cancel (which would
-  // stop every concurrent completion on the shared model).
+  // Cancel only this run's response, not the addon's global cancel, so a peer
+  // completion keeps running.
   let activeResponse: { cancel(): Promise<void> } | null = null
   const cancelActive = () => {
     activeResponse?.cancel().catch((err: unknown) => {

@@ -190,12 +190,8 @@ export const llmPlugin = definePlugin({
           return normalizer
         }
 
-        // Batches share the completion lane at the model's `parallel` cap, so a
-        // batch and singles run concurrently on an N-way model; the surplus
-        // queues FCFS. A single-slot model admits one at a time, unchanged. The
-        // cap counts admitted requests, not the prompt sequences inside a batch:
-        // the addon schedules those across its slots and queues any past
-        // `parallel`.
+        // Batches share the completion lane at the `parallel` cap. The cap counts
+        // requests, not the prompts inside a batch (the addon schedules those).
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
@@ -371,11 +367,8 @@ export const llmPlugin = definePlugin({
         // client can target this run with `cancel({ requestId })`.
         // Falls back to a server-generated id if the client (e.g. an
         // older release) didn't send one.
-        // Admit up to the model's `parallel` jobs; the surplus queues FCFS. A
-        // single-slot model keeps admitting one at a time, unchanged. Disk-KV-
-        // cache turns share this lane too, so they count toward `parallel` and
-        // hold their FCFS place; same-file writes serialise per cache path
-        // inside the KV-cache session, not by a separate admission lane.
+        // Admit up to `parallel` jobs. Disk-KV-cache turns share this lane too;
+        // same-file writes serialise per cache path inside the KV-cache session.
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
@@ -474,8 +467,8 @@ export const llmPlugin = definePlugin({
             modelExecutionMs
           )
         } catch (err) {
-          // A cancel while queued rejects with the addon's Cancelled error; ride
-          // the done path so the client sees InferenceCancelledError.
+          // A cancel while queued rejects Cancelled; ride the done path so the
+          // client sees InferenceCancelledError.
           if (ctx.signal.aborted && isAddonCancelledError(err)) {
             yield attachModelExecutionMs(
               {
@@ -530,8 +523,7 @@ export const llmPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
-      // LLM translate now cancels its own run job (response.cancel), so it is
-      // request-scoped like completion. NMT translate is a separate plugin.
+      // LLM translate cancels its own run (request-scoped), like completion.
       cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
