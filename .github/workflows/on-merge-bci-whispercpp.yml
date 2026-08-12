@@ -112,14 +112,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        working-directory: ${{ env.WORKDIR }}
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run build:ts
-
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         shell: bash
         run: |
@@ -208,14 +200,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Install dependencies
-        working-directory: ${{ env.WORKDIR }}
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: ${{ env.WORKDIR }}
-        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag
