@@ -134,6 +134,13 @@ export async function startFinetune(
     clearFinetuneRuntimeState(request.modelId)
   })
 
+  // A finetune cancelled while queued resolves aborted without the exclusive
+  // slot, so completions may still hold the lane. Stop before the global cancel
+  // or any native finetune so neither runs against them.
+  if (ctx.signal.aborted) {
+    return { type: 'finetune', status: 'CANCELLED' }
+  }
+
   // Global cancel is finetune's only stop; it runs exclusively, so nothing else
   // is on the model when this fires.
   const onAbort = () => {

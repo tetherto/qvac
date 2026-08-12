@@ -14,6 +14,7 @@ import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/server/bare/types/addon-responses'
 import {
+  InferenceCancelledError,
   ModelIsDelegatedError,
   ModelNotFoundError,
   ModelTypeMismatchError,
@@ -194,6 +195,13 @@ export async function* translate(
               : `${context ? `${context}. ` : ''}Translate the following text from ${fromLanguage} into ${toLanguage}. Only output the translation, nothing else.\n\n${fromLanguage}: ${singleText}\n${toLanguage}:`
           }
         ]
+
+  // A queued LLM translate cancelled before admission must not call run(): it
+  // could decode against an exclusive finetune holding the lane. Surface the
+  // cancellation instead of running and returning truncated output.
+  if (isLlm && ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId)
+  }
 
   const modelStart = nowMs()
   let response
