@@ -832,22 +832,44 @@ TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
   EXPECT_TRUE(model.getCommonParams().use_mmap);
 }
 
-// The dynamic tools ("tools_compact") feature was removed, but the config key
-// is still tolerated: it must be ignored, not rejected as an unknown argument
-// (which would fail the whole model load). Guards the deprecation tombstone in
-// commonParamsParse.
-TEST_F(LlamaModelTest, CommonParamsParseToolsCompactIgnored) {
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactFalseIgnored) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["tools_compact"] = "true";
+  config["tools_compact"] = "false";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseToolsCompactTrueRejected) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["tools_compact"] = "TRUE";
+  std::string errorMessage;
+
+  try {
+    LlamaModel model = createModelWithConfig(std::move(config));
+    model.waitForLoadInitialization();
+  } catch (const qvac_errors::StatusError& error) {
+    errorMessage = error.what();
+  }
+
+  ASSERT_FALSE(errorMessage.empty())
+      << "tools_compact=true must reject model loading";
+  EXPECT_NE(errorMessage.find("tools_compact=true"), std::string::npos)
+      << "unexpected error: " << errorMessage;
+  EXPECT_NE(
+      errorMessage.find("dynamic tools KV-cache compaction has been removed"),
+      std::string::npos)
+      << "unexpected error: " << errorMessage;
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {

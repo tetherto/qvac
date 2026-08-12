@@ -1857,16 +1857,28 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(iter);
   }
 
-  // The dynamic tools ("tools_compact") feature has been removed. Accept and
-  // ignore a lingering `tools_compact` key instead of letting it fall through
-  // to the generic CLI-arg conversion below, where the unknown
-  // `--tools-compact` argument would throw InvalidArgument and fail the entire
-  // model load. This keeps configs that still carry the key — including older
-  // SDK builds that emit it — loading, matching the pre-removal behavior where
-  // the key was a no-op (`false`) or ignored-with-warning. Remove this
-  // tombstone in a future release once no consumer emits the key.
+  // The dynamic tools ("tools_compact") feature has been removed. A lingering
+  // false-equivalent value is harmless and remains an ignored tombstone, but
+  // accepting `true` would let older SDK/inference dynamic-cache slicing run
+  // without the addon-side anchor/trim behavior it assumes.
   for (const std::string& key : {"tools_compact", "tools-compact"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      std::string value = it->second;
+      std::transform(
+          value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+          });
+      if (value == "true") {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "[LlamaModel] `%s=true` is no longer supported; dynamic tools "
+                "KV-cache compaction has been removed. Remove this option and "
+                "use static tool placement.\n",
+                key.c_str()));
+      }
       QLOG_IF(
           Priority::WARNING,
           string_format(

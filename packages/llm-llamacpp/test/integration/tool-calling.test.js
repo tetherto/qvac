@@ -268,9 +268,11 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
         })
       )
 
-      const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
+      const secondPrompt = buildPrompt2(firstRun.text)
+      const secondRun = await runPrompt(model, secondPrompt)
       t.ok(secondRun.text.length > 0, `${label} prompt2: generated text`)
       t.ok(secondRun.generatedTokens > 0, `${label} prompt2: generated tokens tracked`)
+      assertDeclaredToolCalls(t, secondRun.text, secondPrompt, `${label} prompt2`)
       const perfLabel2 = `[tools followup] [${modelVariant.id}] [${epTag}]`
       t.comment(
         recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {
