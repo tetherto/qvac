@@ -1297,3 +1297,161 @@ test('policy: completion and batchCompletion share one lane and run concurrently
   await thirdCtx[Symbol.asyncDispose]()
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
 })
+
+// -----------------------------------------------------------------------------
+// Exclusive (reader/writer) admission. A writer (finetune) holds the shared
+// lane alone; readers (completion) run N-way but never alongside it — so
+// finetune's only-global cancel can't touch a concurrent completion.
+// -----------------------------------------------------------------------------
+
+const RW_LANE = 'llamacppCompletion'
+function rwRegistry() {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 2, onOverflow: 'queue', sharedSlotGroup: RW_LANE })
+  r.policy({
+    kind: 'finetune',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup: RW_LANE,
+    exclusive: true
+  })
+  return r
+}
+
+test('exclusive: a writer waits until active readers drain, then is admitted', async (t) => {
+  const r = rwRegistry()
+  const c1 = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+  const c2 = await r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' })
+
+  let ftResolved = false
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' }).then((ctx) => {
+    ftResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(ftResolved, false, 'writer waits while two readers hold the lane')
+
+  await c1[Symbol.asyncDispose]()
+  await settle()
+  t.is(ftResolved, false, 'still waits with one reader active')
+
+  await c2[Symbol.asyncDispose]()
+  const ft = await ftP
+  t.is(ftResolved, true, 'writer admitted once the lane is empty')
+
+  await ft[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: an active writer blocks readers; releasing it drains them up to cap', async (t) => {
+  const r = rwRegistry()
+  const ft = await r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' })
+
+  const admitted: string[] = []
+  const enqueue = (id: string) =>
+    r.begin({ requestId: id, kind: 'completion', modelId: 'm1' }).then((ctx) => {
+      admitted.push(id)
+      return ctx
+    })
+  const p1 = enqueue('c-1')
+  const p2 = enqueue('c-2')
+  const p3 = enqueue('c-3')
+  await settle()
+  t.alike(admitted, [], 'no reader runs while the writer holds the lane')
+
+  await ft[Symbol.asyncDispose]()
+  const c1 = await p1
+  const c2 = await p2
+  await settle()
+  t.alike(admitted, ['c-1', 'c-2'], 'writer release drains readers up to cap=2; the third waits')
+
+  await c1[Symbol.asyncDispose]()
+  const c3 = await p3
+  t.alike(admitted, ['c-1', 'c-2', 'c-3'], 'freeing a reader admits the third')
+
+  await c2[Symbol.asyncDispose]()
+  await c3[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: a reader behind a queued writer waits (no barging past the writer)', async (t) => {
+  const r = rwRegistry()
+  const c1 = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+
+  let ftResolved = false
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' }).then((ctx) => {
+    ftResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(ftResolved, false, 'writer queues behind the active reader')
+
+  // active(1) < cap(2), but the new reader must still queue behind the writer.
+  let c2Resolved = false
+  const c2P = r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' }).then((ctx) => {
+    c2Resolved = true
+    return ctx
+  })
+  await settle()
+  t.is(c2Resolved, false, 'a new reader does not barge past the queued writer')
+
+  await c1[Symbol.asyncDispose]()
+  const ft = await ftP
+  t.is(ftResolved, true, 'writer admitted after the lane drains')
+  t.is(c2Resolved, false, 'reader still waits behind the writer')
+
+  await ft[Symbol.asyncDispose]()
+  const c2 = await c2P
+  t.is(c2Resolved, true, 'reader admitted after the writer releases')
+
+  await c2[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: cancelling a queued writer releases the readers stacked behind it', async (t) => {
+  const r = rwRegistry()
+  const c1 = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' })
+  await settle()
+
+  let c2Resolved = false
+  const c2P = r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' }).then((ctx) => {
+    c2Resolved = true
+    return ctx
+  })
+  await settle()
+  t.is(c2Resolved, false, 'reader queued behind the writer')
+
+  t.is(r.cancel({ requestId: 'ft' }), 1, 'the queued writer is cancelled')
+  const ft = await ftP
+  t.is(ft.signal.aborted, true, 'cancelled writer resolves aborted')
+
+  const c2 = await c2P
+  t.is(c2Resolved, true, 'reader behind the cancelled writer is admitted')
+
+  await ft[Symbol.asyncDispose]()
+  await c1[Symbol.asyncDispose]()
+  await c2[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: cancelAll rejects a queued writer and its trailing readers', async (t) => {
+  const r = rwRegistry()
+  const holder = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+  const ftP = r
+    .begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' })
+    .then(() => 'resolved' as const, (err) => err)
+  const c2P = r
+    .begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' })
+    .then(() => 'resolved' as const, (err) => err)
+  await settle()
+
+  await r.cancelAll('modelUnload')
+
+  t.ok((await ftP) instanceof RequestRejectedByPolicyError, 'queued writer rejected on teardown')
+  t.ok((await c2P) instanceof RequestRejectedByPolicyError, 'queued reader rejected on teardown')
+  t.is(holder.signal.aborted, true, 'the in-flight reader was aborted too')
+
+  await holder[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after cancelAll teardown')
+})

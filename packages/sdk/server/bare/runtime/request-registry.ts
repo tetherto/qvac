@@ -121,6 +121,13 @@ export interface ConcurrencyPolicy {
    * internal queue.
    */
   sharedSlotGroup?: string
+  /**
+   * Admit at most one such request per lane AND only while no other request
+   * holds the lane — a writer in a reader/writer lock. Used for finetune,
+   * whose only cancel is the addon's global cancel: making it exclusive keeps
+   * completions out of the addon while it runs, so that cancel can't hit them.
+   */
+  exclusive?: boolean
 }
 
 /**
@@ -228,6 +235,8 @@ interface RegistryEntry {
    * handed back in `disposeEntry` once the scope has fully unwound.
    */
   slotKey: string | undefined
+  /** Held the lane as an exclusive writer; passed back to `releaseSlot`. */
+  exclusive: boolean
 }
 
 /**
@@ -259,6 +268,8 @@ interface NormalizedPolicy {
    * `undefined` ⇒ slot is keyed on the request's own `kind`.
    */
   slotGroup: string | undefined
+  /** Reader/writer-lock writer: exclusive over the whole lane. */
+  exclusive: boolean
 }
 
 /**
@@ -277,6 +288,10 @@ interface SlotWaiter {
   reject: (err: unknown) => void
   /** `queueTimeoutMs` timer, cleared on resolve / reject / drain. */
   timer: ReturnType<typeof setTimeout> | undefined
+  /** Exclusive writer (admit only when the lane is empty). */
+  exclusive: boolean
+  /** This waiter's own slot cap, captured so `drain` restores N-way. */
+  cap: number
 }
 
 /**
@@ -288,6 +303,8 @@ interface SlotWaiter {
 interface KeyState {
   active: number
   waiters: SlotWaiter[]
+  /** A writer holds the lane exclusively; no reader may be admitted. */
+  exclusiveActive: boolean
 }
 
 /**
@@ -432,7 +449,7 @@ export function createRequestRegistry(options?: {
    * removal resolves (granted / graceful cancel) or rejects (timeout /
    * teardown).
    */
-  function removeWaiter(key: string, waiter: SlotWaiter): void {
+  function removeWaiter(key: string, waiter: SlotWaiter, drainAfter = true): void {
     if (waiter.timer !== undefined) {
       clearTimeout(waiter.timer)
       waiter.timer = undefined
@@ -442,7 +459,13 @@ export function createRequestRegistry(options?: {
     if (!st) return
     const i = st.waiters.indexOf(waiter)
     if (i >= 0) st.waiters.splice(i, 1)
-    if (st.active <= 0 && st.waiters.length === 0) keyStates.delete(key)
+    // Removing a queued writer can unblock the readers behind it, so drain
+    // (which also deletes the KeyState once idle). `cancelAll` passes false:
+    // it's tearing every waiter down, so granting one mid-sweep is wrong.
+    if (drainAfter) drain(st, key)
+    else if (st.active <= 0 && !st.exclusiveActive && st.waiters.length === 0) {
+      keyStates.delete(key)
+    }
   }
 
   /**
@@ -459,23 +482,25 @@ export function createRequestRegistry(options?: {
    * across a hand-off — that's what guarantees FIFO fairness with no
    * acquire/release race in the single-threaded event loop.
    */
-  async function acquireSlot(opts: BeginOpts): Promise<{ slotKey: string | undefined }> {
-    if (opts.modelId === undefined) return { slotKey: undefined }
+  async function acquireSlot(
+    opts: BeginOpts
+  ): Promise<{ slotKey: string | undefined; exclusive: boolean }> {
+    if (opts.modelId === undefined) return { slotKey: undefined, exclusive: false }
     const policy = policies.get(opts.kind)
-    if (!policy) return { slotKey: undefined }
+    if (!policy) return { slotKey: undefined, exclusive: false }
     // The per-request override (the model's own `parallel`) wins over the
     // per-kind default. A non-finite effective cap disables gating entirely; a
     // finite value is floored at 1 (matching `normalizePolicy`) so a stray 0
     // can't wedge the lane into queuing every request forever.
     const requestedMax = opts.maxConcurrentPerModel ?? policy.maxConcurrent
     if (!Number.isFinite(requestedMax)) {
-      return { slotKey: undefined }
+      return { slotKey: undefined, exclusive: false }
     }
     const maxConcurrent = requestedMax < 1 ? 1 : requestedMax
     // A parent (worker-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
-    if (opts.parentSignal?.aborted) return { slotKey: undefined }
+    if (opts.parentSignal?.aborted) return { slotKey: undefined, exclusive: false }
 
     const modelId = opts.modelId
     // Lane precedence: the policy's shared group → the kind itself. A shared
@@ -483,13 +508,23 @@ export function createRequestRegistry(options?: {
     const key = slotKey(policy.slotGroup ?? opts.kind, modelId)
     let st = keyStates.get(key)
     if (!st) {
-      st = { active: 0, waiters: [] }
+      st = { active: 0, waiters: [], exclusiveActive: false }
       keyStates.set(key, st)
     }
 
-    if (st.active < maxConcurrent) {
-      st.active++
-      return { slotKey: key }
+    const exclusive = policy.exclusive
+    // A reader admits below the cap; an exclusive writer needs the lane empty.
+    // A queued waiter (of any kind) blocks admission so a writer isn't starved
+    // by a steady reader stream. For reader-only lanes `waiters` is empty
+    // whenever `active < cap`, so this guard is a no-op there.
+    const canAdmit =
+      st.waiters.length === 0 &&
+      !st.exclusiveActive &&
+      (exclusive ? st.active === 0 : st.active < maxConcurrent)
+    if (canAdmit) {
+      if (exclusive) st.exclusiveActive = true
+      else st.active++
+      return { slotKey: key, exclusive }
     }
 
     if (policy.onOverflow === 'reject') {
@@ -519,7 +554,9 @@ export function createRequestRegistry(options?: {
         enqueuedAt: Date.now(),
         resolve,
         reject,
-        timer: undefined
+        timer: undefined,
+        exclusive,
+        cap: maxConcurrent
       }
       if (policy.queueTimeoutMs !== undefined) {
         const timeoutMs = policy.queueTimeoutMs
@@ -539,31 +576,50 @@ export function createRequestRegistry(options?: {
       waitersById.set(opts.requestId, { key, waiter })
     })
 
-    return granted ? { slotKey: key } : { slotKey: undefined }
+    return granted ? { slotKey: key, exclusive } : { slotKey: undefined, exclusive: false }
   }
 
   /**
-   * Hand a freed slot to the next FIFO waiter, or free it outright when
-   * none are queued. Called from `disposeEntry` after the scope has fully
-   * unwound, so the native context is genuinely free before the next
-   * same-model request is admitted.
+   * Grant the lane to as many FIFO-head waiters as now fit: an exclusive writer
+   * only when the lane is idle, readers up to each one's own cap. Stops at the
+   * first head that can't be admitted, so FIFO order holds. Deletes the
+   * `KeyState` once fully idle.
    */
-  function releaseSlot(key: string): void {
+  function drain(st: KeyState, key: string): void {
+    while (st.waiters.length > 0) {
+      const head = st.waiters[0]
+      if (head === undefined) break
+      if (head.exclusive) {
+        if (st.exclusiveActive || st.active > 0) break
+        st.exclusiveActive = true
+      } else {
+        if (st.exclusiveActive || st.active >= head.cap) break
+        st.active++
+      }
+      st.waiters.shift()
+      waitersById.delete(head.requestId)
+      if (head.timer !== undefined) {
+        clearTimeout(head.timer)
+        head.timer = undefined
+      }
+      head.resolve(true)
+    }
+    if (st.active <= 0 && !st.exclusiveActive && st.waiters.length === 0) {
+      keyStates.delete(key)
+    }
+  }
+
+  /**
+   * Release a held slot, then hand the freed capacity to waiters. Called from
+   * `disposeEntry` after the scope has fully unwound, so the native context is
+   * genuinely free before the next same-model request is admitted.
+   */
+  function releaseSlot(key: string, wasExclusive: boolean): void {
     const st = keyStates.get(key)
     if (!st) return
-    const next = st.waiters.shift()
-    if (next) {
-      // Hand off: the waiter inherits the slot, so `active` is unchanged.
-      waitersById.delete(next.requestId)
-      if (next.timer !== undefined) {
-        clearTimeout(next.timer)
-        next.timer = undefined
-      }
-      next.resolve(true)
-      return
-    }
-    st.active--
-    if (st.active <= 0 && st.waiters.length === 0) keyStates.delete(key)
+    if (wasExclusive) st.exclusiveActive = false
+    else st.active--
+    drain(st, key)
   }
 
   function cancelEntry(entry: RegistryEntry, reason?: string): boolean {
@@ -591,7 +647,7 @@ export function createRequestRegistry(options?: {
       // (and start decoding) until this one has actually let go. `finally`
       // guarantees the slot is freed even if a deferred cleanup throws,
       // otherwise a throwing teardown would strand the queue forever.
-      if (entry.slotKey !== undefined) releaseSlot(entry.slotKey)
+      if (entry.slotKey !== undefined) releaseSlot(entry.slotKey, entry.exclusive)
     }
   }
 
@@ -610,14 +666,14 @@ export function createRequestRegistry(options?: {
     // no controller / scope behind. This may await: a gated `(kind,
     // modelId)` at capacity queues the begin FIFO and resolves once a slot
     // frees (or rejects on overflow / queue-depth cap / timeout).
-    const { slotKey } = await acquireSlot(opts)
+    const { slotKey, exclusive } = await acquireSlot(opts)
 
     // The only interleaving point in this otherwise synchronous body is the
     // await above. A duplicate id could (astronomically unlikely) have
     // landed while we were queued — re-check and hand the just-acquired
     // slot back rather than stranding it on the conflicting throw.
     if (entries.has(opts.requestId)) {
-      if (slotKey !== undefined) releaseSlot(slotKey)
+      if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
       throw new RequestIdConflictError(opts.requestId)
     }
 
@@ -669,7 +725,8 @@ export function createRequestRegistry(options?: {
       scope,
       detachParent,
       startedAt: Date.now(),
-      slotKey
+      slotKey,
+      exclusive
     }
     entries.set(opts.requestId, entry)
     logLifecycle('begin', ctx)
@@ -780,7 +837,7 @@ export function createRequestRegistry(options?: {
     // so there is nothing left for them to run. Snapshot first —
     // `removeWaiter` mutates `waitersById`.
     for (const { key, waiter } of Array.from(waitersById.values())) {
-      removeWaiter(key, waiter)
+      removeWaiter(key, waiter, false)
       waiter.reject(
         new RequestRejectedByPolicyError(
           waiter.requestId,
@@ -862,7 +919,8 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
     onOverflow,
     maxQueueDepth: opts.maxQueueDepthPerModel ?? DEFAULT_MAX_QUEUE_DEPTH_PER_MODEL,
     queueTimeoutMs: opts.queueTimeoutMs,
-    slotGroup: opts.sharedSlotGroup
+    slotGroup: opts.sharedSlotGroup,
+    exclusive: opts.exclusive === true
   }
 }
 

@@ -39,6 +39,28 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxQueueDepthPerModel: 64,
     sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP
   })
+  // Finetune has no per-job cancel — its only stop is the addon's global cancel,
+  // which would kill concurrent completions. Make it an exclusive writer over
+  // this lane so no completion runs while it does; then the global cancel only
+  // hits the finetune. (Also correct on its own: finetune mutates weights.)
+  r.policy({
+    kind: 'finetune',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64,
+    sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP,
+    exclusive: true
+  })
+  // LLM translate runs on the completion addon, so it joins the lane as a reader
+  // (its cap comes per request from the model's `parallel`). NMT translate
+  // passes no cap and stays ungated on its own model. Sharing the lane keeps it
+  // out of the addon while a finetune holds it.
+  r.policy({
+    kind: 'translate',
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64,
+    sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP
+  })
   // ACE-Step owns one active job per model. Starting another run replaces
   // the addon's active response, and model-scoped cancel targets that single
   // active job. Keep the SDK registry authoritative by admitting one AudioGen
