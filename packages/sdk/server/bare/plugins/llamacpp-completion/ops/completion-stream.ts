@@ -208,15 +208,35 @@ type HistoryMsg = {
 type ToolPlacement = 'static' | 'dynamic'
 
 /**
+ * Attach the tool block to a turn payload at the position its placement
+ * requires.
+ *
+ * Static mirrors the no-kv-cache path (`prependToolsToHistory`) and keeps the
+ * block ahead of the conversation. Dynamic must leave it immediately after the
+ * last anchor message, which is what the addon's `ToolsCompactController`
+ * validates before it will anchor and later trim the block.
+ */
+function withToolBlock(
+  messages: ChatHistory[],
+  toolBlock: ChatHistory[],
+  placement: ToolPlacement
+): ChatHistory[] {
+  if (toolBlock.length === 0) return messages
+  return placement === 'static' ? [...toolBlock, ...messages] : [...messages, ...toolBlock]
+}
+
+/**
  * Pick the messages that need to reach the model for the next turn.
  *
- * `placement` selects the slicing strategy; it is independent of whether
- * `tools` are present, because tools now ride on every turn regardless of
- * mode (they are never baked into the primed prefix).
+ * `placement` selects both the slicing strategy and where the tool block sits
+ * in the payload. Tools are never baked into the primed prefix — a prefix with
+ * no user turn is not a renderable conversation for every template — so they
+ * travel with a turn instead.
  *
  * Static placement:
- *   - Cache miss: send the whole history minus the system message (which
- *     was primed during cache init).
+ *   - Empty history: nothing to slice; send whatever non-system messages
+ *     exist. (The call site always reports the cache as existing, so this
+ *     is the only way into this branch.)
  *   - Cache hit with a recorded `savedCount`: send only the unsaved tail
  *     (`history.slice(savedCount)`), so a multi-message turn (e.g. a
  *     consumer pushing both an assistant transcript and a follow-up user
@@ -224,6 +244,8 @@ type ToolPlacement = 'static' | 'dynamic'
  *   - Cache hit with a stale/missing `savedCount`: fall back to the full
  *     non-system history. The session is told (`dropStaleSavedCount`) so
  *     the bad boundary doesn't propagate into the next turn.
+ *   - The tool block travels only with the turn that first writes it into
+ *     the cache; see `toolBlockAlreadyCached` below.
  *
  * Dynamic placement:
  *   - The addon anchors the tool block after the last user message and
@@ -247,11 +269,11 @@ function prepareMessagesForCache(
   tools?: Tool[],
   placement: ToolPlacement = 'static'
 ): ChatHistory[] {
-  const addTools = tools?.length ? transformMessages(tools) : []
+  const toolBlock = tools?.length ? transformMessages(tools) : []
 
   if (!(cacheExists && history.length > 0)) {
     const historyWithoutSystem = history.filter((msg) => msg.role !== 'system')
-    return [...transformMessages(historyWithoutSystem), ...addTools]
+    return withToolBlock(transformMessages(historyWithoutSystem), toolBlock, placement)
   }
 
   if (placement === 'static') {
@@ -274,9 +296,20 @@ function prepareMessagesForCache(
       session.dropStaleSavedCount(turn)
     }
 
-    // Tool entries are position-independent — the addon lifts them out of the
-    // message list and the template decides where the tool block lands.
-    return [...addTools, ...transformMessages(messages)]
+    // Static never trims the block back out of the cache, so re-sending it
+    // every turn would leave one copy per turn and grow the prefix with the
+    // conversation. Send it only when this turn is the one writing it:
+    // `savedCount === 0` is a freshly primed prefix nothing has committed
+    // against yet, and a stale boundary means we are resending the whole
+    // conversation anyway. On an ordinary warm hit the block is already in
+    // the cache from the turn that first sent it.
+    const toolBlockAlreadyCached = turn.savedCount > 0 && !clearStaleCount
+
+    return withToolBlock(
+      transformMessages(messages),
+      toolBlockAlreadyCached ? [] : toolBlock,
+      placement
+    )
   }
 
   // Dynamic path. The addon trimmed tools after the previous round, so the
@@ -297,10 +330,10 @@ function prepareMessagesForCache(
   if (lastMsg.role === 'user') {
     const prevMsg = history[history.length - 2]
     const tail = prevMsg?.role === 'assistant' ? [prevMsg, lastMsg] : [lastMsg]
-    return [...transformMessages(tail), ...addTools]
+    return withToolBlock(transformMessages(tail), toolBlock, placement)
   }
 
-  return [...transformMessages([lastMsg]), ...addTools]
+  return withToolBlock(transformMessages([lastMsg]), toolBlock, placement)
 }
 
 type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'saveCacheToDisk'>
@@ -391,8 +424,9 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsMode = (modelConfig as { toolsMode?: string }).toolsMode
-  const dynamicTools = !!tools?.length && toolsEnabled && toolsMode === TOOLS_MODE.dynamic
-  const staticTools = !!tools?.length && toolsEnabled && !dynamicTools
+  const toolsActive = !!tools?.length && toolsEnabled
+  const dynamicTools = toolsActive && toolsMode === TOOLS_MODE.dynamic
+  const staticTools = toolsActive && !dynamicTools
 
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
@@ -544,7 +578,7 @@ export async function* completion(
     turn,
     /* cacheExists */ true,
     history,
-    staticTools || dynamicTools ? tools : undefined,
+    toolsActive ? tools : undefined,
     dynamicTools ? 'dynamic' : 'static'
   )
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')

@@ -150,3 +150,103 @@ test('completion: kv-cache keeps tools out of the prefix and sends them with the
   unregisterModel(modelId)
   clearRegistry()
 })
+
+// Static placement never trims the tool block back out of the cache, so a
+// block that travels on every turn leaves one copy per turn and grows the
+// prefix with the conversation. It only needs to enter the cache once.
+test('completion: kv-cache sends the tool block once, not on every warm turn', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-multiturn-${Date.now()}`
+  const calls: RecordedCall[] = []
+
+  registerModel(modelId, {
+    model: {
+      run(
+        prompt: unknown,
+        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+      ) {
+        calls.push({
+          messages: prompt as RecordedCall['messages'],
+          prefill: opts?.prefill === true
+        })
+        const written =
+          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        return {
+          iterate: async function* () {
+            await written
+            yield 'The area is 25 square units.'
+          },
+          await: () => written,
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: '/tmp/kvcache-tools-multiturn.gguf',
+    config: { tools: true },
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+  const tools = [
+    {
+      type: 'function',
+      name: 'calculate_triangle_area',
+      description: 'Calculate the area of a triangle given its base and height.',
+      parameters: {
+        type: 'object',
+        properties: {
+          base: { type: 'integer', description: 'base' },
+          height: { type: 'integer', description: 'height' }
+        },
+        required: ['base', 'height']
+      }
+    }
+  ]
+
+  const complete = async (history: { role: string; content: string; attachments: never[] }[]) => {
+    const gen = handler({
+      modelId,
+      requestId: `kvcache-tools-multiturn-${history.length}`,
+      history,
+      stream: true,
+      kvCache: 'tools-multiturn-key',
+      tools
+    })
+    for await (const _ of gen) void _
+  }
+
+  const first = { role: 'user', content: 'Area of a triangle, base 10 height 5?', attachments: [] }
+  const reply = { role: 'assistant', content: 'The area is 25 square units.', attachments: [] }
+  const second = { role: 'user', content: 'And with base 4 height 3?', attachments: [] }
+
+  await complete([first])
+  await complete([first, reply, second])
+
+  const primeCalls = calls.filter((call) => call.prefill)
+  const turnCalls = calls.filter((call) => !call.prefill)
+
+  t.is(primeCalls.length, 1, 'the prefix was primed once across both turns')
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+
+  t.alike(
+    turnCalls[0]!.messages.filter(isToolEntry).map((msg) => msg.name),
+    ['calculate_triangle_area'],
+    'the first turn writes the tool block into the cache'
+  )
+  t.absent(
+    turnCalls[1]!.messages.some(isToolEntry),
+    'the warm turn does not append a second copy of the tool block'
+  )
+  t.alike(
+    turnCalls[1]!.messages.map((msg) => msg.role),
+    ['user'],
+    'the warm turn sends only the unsaved tail'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
