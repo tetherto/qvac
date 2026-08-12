@@ -22,7 +22,7 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
 export interface FinetuneHandle {
   progressStream: AsyncGenerator<FinetuneProgress>
   result: Promise<FinetuneResult>
-  /** Stable id for this run; pass to `finetune({ operation: 'cancel', requestId })`. */
+  /** Stable id for this run; pass to `cancel({ requestId })` to stop it. */
   requestId: string
 }
 
