@@ -44,12 +44,19 @@ image, then walked in real time — the package's first interactive
 - `stable-diffusion-cpp` engine floor raised to `2026-07-03#6`, which ships
   the ABot session C API and the masked-attention formulation compatible
   with the registry ggml's CUDA kernels.
+- Removed the package-local `ggml` overlay port and the `overlay-ports`
+  entry in `vcpkg-configuration.json`: registry ggml `2026-07-03#4` now
+  builds with position-independent code (Linux CUDA `.bare` linking), so
+  `ggml` and `stable-diffusion-cpp` resolve purely from
+  `tetherto/qvac-registry-vcpkg`.
 
 ### Pull Requests
 
 - [#3352](https://github.com/tetherto/qvac/pull/3352) - QVAC-21981
   feat[api]: ABot-World interactive world sessions (walk + native scene
   creation)
+- [#3793](https://github.com/tetherto/qvac/pull/3793) - QVAC-21981 fix:
+  drop the ggml overlay port, resolve builds purely from the registry
 
 ## [0.18.0] - 2026-08-06
 
