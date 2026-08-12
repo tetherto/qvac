@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CosyVoice3 Vulkan GPU offload (Linux / Windows).** `useGPU: true` /
   `nGpuLayers > 0` now engages tts-cpp's Vulkan backend for CosyVoice3 on
   desktop hosts (previously a policy CPU fallback). Requires `tts-cpp` >=
-  2026-08-13, which admits desktop Vulkan to the engine's validated-backend
+  2026-08-12#1, which admits desktop Vulkan to the engine's validated-backend
   requirement with per-stage GPU parity gates (greedy LM trajectories are
   bit-identical to CPU on Vulkan, including q8_0 weights). Android keeps the
   Metal-or-OpenCL requirement, so Mali / Xclipse devices still decline to CPU.
