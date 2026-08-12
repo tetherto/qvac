@@ -45,6 +45,23 @@ copyAudioCodes(js_env_t* env, js::TypedArray<int32_t> array) {
   return {data, data + len};
 }
 
+inline std::vector<float>
+copyFloat32Pcm(js_env_t* env, js::TypedArray<float> array, const char* name) {
+  float* data = nullptr;
+  size_t len = 0;
+  if (js_get_typedarray_info(
+          env,
+          array,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
+    throw std::runtime_error(std::string(name) + " must be a Float32Array");
+  }
+  return {data, data + len};
+}
+
 // Emits the generated track as interleaved stereo Int16 + sample rate, mirror
 // of ttsggml::JsAudioOutputHandler. The rate/channels are sourced from the model
 // (which reads them from the engine's decode result) rather than hardcoded, so
@@ -202,6 +219,20 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           env, "audioCodes")) {
     modelInput.audioCodes = copyAudioCodes(env, *codes);
   }
+  if (auto ref = jobObj.getOptionalProperty<js::TypedArray<float>>(
+          env, "referenceAudio")) {
+    modelInput.referenceAudio = copyFloat32Pcm(env, *ref, "referenceAudio");
+  }
+  if (auto src = jobObj.getOptionalProperty<js::TypedArray<float>>(
+          env, "sourceAudio")) {
+    modelInput.sourceAudio = copyFloat32Pcm(env, *src, "sourceAudio");
+  }
+  if (auto v = optStr("taskType"))
+    modelInput.taskType = *v;
+  if (auto v = optNum("audioCoverStrength"))
+    modelInput.audioCoverStrength = static_cast<float>(*v);
+  if (auto v = optNum("coverNoiseStrength"))
+    modelInput.coverNoiseStrength = static_cast<float>(*v);
   return instance.runJob(std::any(std::move(modelInput)));
 }
 JSCATCH
