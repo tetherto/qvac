@@ -211,7 +211,7 @@ jobs:
               SUFFIX="mono"
               ;;
             fix-*|feature-*)
-              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | tr '[:upper:]' '[:lower:]')
               ;;
             *)
               echo "Branch $BRANCH_NAME not configured for modified package name"
@@ -494,7 +494,7 @@ jobs:
               SUFFIX="dev"
               ;;
             fix-*|feature-*)
-              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | tr '[:upper:]' '[:lower:]')
               ;;
             *)
               echo "Branch $BRANCH_NAME not configured for modified package name"
@@ -554,7 +554,7 @@ jobs:
               SUFFIX="dev"
               ;;
             fix-*|feature-*)
-              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g')
+              SUFFIX=$(echo "$BRANCH_NAME" | sed 's/\//-/g' | tr '[:upper:]' '[:lower:]')
               ;;
             *)
               echo "Branch $BRANCH_NAME not configured for modified package name"

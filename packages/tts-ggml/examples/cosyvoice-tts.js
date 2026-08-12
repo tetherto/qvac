@@ -7,12 +7,18 @@
  * CausalHiFT vocoder, plus the Qwen2 BPE tokenizer and a baked default voice)
  * and synthesizes a single utterance.  CPU-only (iteration 1); native 24 kHz.
  *
+ * `emotion` is the cross-engine conditioning option: the same spelling works on
+ * Parler (see parler-tts.js).  CosyVoice3 supports anger, happy, neutral and
+ * sad -- the emotions it was trained on -- and takes one instruction per
+ * synthesis, so combining emotion with pace or instruct throws.
+ *
  * Usage:
- *   bare examples/cosyvoice-tts.js "text to synthesize" [modelDir]
+ *   bare examples/cosyvoice-tts.js "text to synthesize" [emotion] [modelDir]
  *
  * Examples:
  *   bare examples/cosyvoice-tts.js "Hello from a fully on-device C++ pipeline."
- *   bare examples/cosyvoice-tts.js "Peer to peer, local first." /path/to/cosyvoice3
+ *   bare examples/cosyvoice-tts.js "What a wonderful day." happy
+ *   bare examples/cosyvoice-tts.js "Peer to peer, local first." sad /path/to/cosyvoice3
  *
  * The model directory is produced by
  * qvac-ext-lib-whisper.cpp/tts-cpp/scripts/assemble-cosyvoice3-model.py and
@@ -35,10 +41,11 @@ const COSYVOICE_SAMPLE_RATE = 24000
 const argv = global.Bare ? global.Bare.argv : process.argv
 const env = proc.env || {}
 const textArg = argv[2]
-const modelDirArg = argv[3]
+const emotionArg = argv[3]
+const modelDirArg = argv[4]
 
 if (!textArg || typeof textArg !== 'string' || textArg.trim().length === 0) {
-  console.error('Usage: cosyvoice-tts.js "<text to synthesize>" [modelDir]')
+  console.error('Usage: cosyvoice-tts.js "<text to synthesize>" [emotion] [modelDir]')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
@@ -57,7 +64,7 @@ if (!fs.existsSync(cosyvoiceModelDir)) {
   else process.exit(1)
 }
 
-async function main () {
+async function main() {
   setLogger((priority, message) => {
     if (priority > 1) return
     const names = { 0: 'ERROR', 1: 'WARNING', 2: 'INFO', 3: 'DEBUG', 4: 'OFF' }
@@ -71,6 +78,7 @@ async function main () {
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: { cosyvoiceModelDir },
     config: { language: 'en' },
+    ...(emotionArg ? { emotion: emotionArg } : {}),
     logger: console,
     opts: { stats: true }
   })
@@ -86,7 +94,7 @@ async function main () {
 
     let buffer = []
     await response
-      .onUpdate(data => {
+      .onUpdate((data) => {
         if (data && data.outputArray) {
           buffer = buffer.concat(Array.from(data.outputArray))
         }
@@ -96,7 +104,9 @@ async function main () {
     console.log('TTS finished!')
     if (response.stats) {
       const s = response.stats
-      console.log(`Inference stats: totalTime=${s.totalTime.toFixed(2)}s, realTimeFactor=${s.realTimeFactor.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
+      console.log(
+        `Inference stats: totalTime=${s.totalTime.toFixed(2)}s, realTimeFactor=${s.realTimeFactor.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`
+      )
     }
 
     console.log('\nWriting to .wav file...')
@@ -113,7 +123,7 @@ async function main () {
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err)
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
