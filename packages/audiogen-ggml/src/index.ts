@@ -230,6 +230,14 @@ function optionalTaskType (value: string | undefined): string | undefined {
   return value
 }
 
+function requireFinitePcm (value: Float32Array, name: string): void {
+  for (const sample of value) {
+    if (!Number.isFinite(sample)) {
+      throw new Error(`audiogen-ggml: ${name} must contain only finite samples`)
+    }
+  }
+}
+
 function optionalStereoPcm (
   value: Float32Array | undefined,
   name: string
@@ -241,6 +249,7 @@ function optionalStereoPcm (
   if ((value.length & 1) !== 0) {
     throw new Error(`audiogen-ggml: ${name} must be interleaved stereo`)
   }
+  requireFinitePcm(value, name)
   return value
 }
 

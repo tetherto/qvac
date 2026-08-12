@@ -53,6 +53,13 @@ function optionalTaskType(value) {
     }
     return value;
 }
+function requireFinitePcm(value, name) {
+    for (const sample of value) {
+        if (!Number.isFinite(sample)) {
+            throw new Error(`audiogen-ggml: ${name} must contain only finite samples`);
+        }
+    }
+}
 function optionalStereoPcm(value, name) {
     if (value === undefined)
         return undefined;
@@ -62,6 +69,7 @@ function optionalStereoPcm(value, name) {
     if ((value.length & 1) !== 0) {
         throw new Error(`audiogen-ggml: ${name} must be interleaved stereo`);
     }
+    requireFinitePcm(value, name);
     return value;
 }
 function isCoverTask(taskType) {

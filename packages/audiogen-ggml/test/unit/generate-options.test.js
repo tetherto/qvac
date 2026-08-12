@@ -173,6 +173,22 @@ test('AudioGen.run requires stereo referenceAudio', async (t) => {
   )
 })
 
+test('AudioGen.run rejects non-finite referenceAudio samples', async (t) => {
+  await rejectRunOptions(
+    t,
+    { referenceAudio: new Float32Array([0, Number.NaN]) },
+    /referenceAudio must contain only finite samples/
+  )
+})
+
+test('AudioGen.run rejects non-finite sourceAudio samples', async (t) => {
+  await rejectRunOptions(
+    t,
+    { sourceAudio: new Float32Array([Number.POSITIVE_INFINITY, 0]) },
+    /sourceAudio must contain only finite samples/
+  )
+})
+
 test('AudioGen.run requires finite audioCoverStrength', async (t) => {
   await rejectRunOptions(
     t,
