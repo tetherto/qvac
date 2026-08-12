@@ -200,12 +200,15 @@ jobs:
 
       - name: Parse language pairs and datasets
         id: set-matrix
+        env:
+          PLATFORM_ROWS: ${{ steps.platforms.outputs.rows }}
         run: |
           # Convert comma-separated pairs to JSON array
           pairs_input="${{ inputs.pairs }}"
           pairs_array=$(echo "$pairs_input" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R -s -c 'split("\n")[:-1]')
-          echo "matrix={\"pair\":$pairs_array,\"platform\":${{ steps.platforms.outputs.rows }}}" >> $GITHUB_OUTPUT
+          echo "matrix={\"pair\":$pairs_array,\"platform\":$PLATFORM_ROWS}" >> $GITHUB_OUTPUT
           echo "Parsed pairs: $pairs_array"
+          echo "matrix={\"pair\":$pairs_array,\"platform\":$PLATFORM_ROWS}" | cut -d= -f2- | jq -e . > /dev/null
 
           # Build dataset list from boolean inputs
           datasets=""
