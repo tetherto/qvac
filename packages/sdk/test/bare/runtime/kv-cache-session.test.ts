@@ -210,6 +210,86 @@ test('kv-cache-session: turns on different cache keys do not block each other', 
   }
 })
 
+test('kv-cache-session: an auto turn and a custom key that resolve to the same file share one lock', async (t) => {
+  const { mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const history = [{ role: 'user', content: 'alias me' }]
+    // The custom key equal to the auto-derived key resolves to the same .bin.
+    const autoKey = utils.generateCacheKey(history)
+    const primeIfMissing = async (cachePath: string) => {
+      writeFakeCache(cachePath)
+    }
+
+    const autoTurn = await session.beginTurn({ kind: 'auto', configHash, history, primeIfMissing })
+
+    let customResolved = false
+    const customPromise = session
+      .beginTurn({ kind: 'custom', customKey: autoKey, configHash, primeIfMissing })
+      .then((handle) => {
+        customResolved = true
+        return handle
+      })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    t.is(customResolved, false, 'a custom key aliasing the auto file is blocked by the auto turn')
+
+    await session.rollback(autoTurn)
+    const custom = await customPromise
+    t.is(customResolved, true, 'releasing the auto turn admits the aliasing custom turn')
+    await session.commitTurn(custom, { kind: 'static', messageCount: 1 })
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: a cancelled waiter drops out without waiting for the holder', async (t) => {
+  const { mod, cleanup, writeFakeCache } = await loadSession()
+  const { AbortController } = await import('bare-abort-controller')
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const primeIfMissing = async (cachePath: string) => {
+      writeFakeCache(cachePath)
+    }
+
+    // First turn holds the lock and is never committed during the wait.
+    const first = await session.beginTurn({ kind: 'custom', customKey: 'k', configHash, primeIfMissing })
+
+    const controller = new AbortController()
+    let rejected = false
+    const secondPromise = session
+      .beginTurn({ kind: 'custom', customKey: 'k', configHash, primeIfMissing, signal: controller.signal })
+      .then(
+        () => 'resolved',
+        () => {
+          rejected = true
+          return 'rejected'
+        }
+      )
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Abort while the holder is still decoding — the waiter must bow out at once
+    // rather than block until `first` commits.
+    controller.abort(new Error('request cancelled'))
+    const outcome = await Promise.race([
+      secondPromise,
+      new Promise((resolve) => setTimeout(() => resolve('timeout'), 300))
+    ])
+    t.is(outcome, 'rejected', 'the aborted waiter rejected promptly, not after the holder finished')
+    t.is(rejected, true, 'wait rejected')
+
+    // Lock is uncorrupted: a later turn still acquires after the holder releases.
+    await session.commitTurn(first, { kind: 'static', messageCount: 1 })
+    const third = await session.beginTurn({ kind: 'custom', customKey: 'k', configHash, primeIfMissing })
+    t.ok(third, 'a later turn acquires the lock after the cancelled waiter dropped')
+    await session.commitTurn(third, { kind: 'static', messageCount: 1 })
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: commitTurn records the new saved count and suppresses rollback', async (t) => {
   const { fs, mod, cleanup, writeFakeCache } = await loadSession()
   try {
