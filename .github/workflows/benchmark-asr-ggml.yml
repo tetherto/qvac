@@ -314,7 +314,7 @@ jobs:
     environment: release
     timeout-minutes: 1440
     env:
-      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
       packages: read
@@ -371,7 +371,7 @@ jobs:
         with:
           repository: ${{ github.event.inputs.repository || github.repository }}
           ref: ${{ github.event.inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Install system dependencies
@@ -398,7 +398,7 @@ jobs:
         id: prebuilds
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BENCHMARK_REPOSITORY: ${{ github.event.inputs.repository || github.repository }}
           BENCHMARK_REF: ${{ github.event.inputs.ref || github.ref_name }}
         run: |

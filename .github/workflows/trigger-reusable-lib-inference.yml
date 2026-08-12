@@ -107,7 +107,7 @@ jobs:
         shell: bash
         working-directory: packages/inference
         env:
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
           # @qvac/* resolve from public npm; @tetherto/* (mono dev builds) from GPR.

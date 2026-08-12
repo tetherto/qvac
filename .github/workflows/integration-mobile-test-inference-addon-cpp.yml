@@ -479,7 +479,7 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ needs.resolve-framework.outputs.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
           path: test-framework
 

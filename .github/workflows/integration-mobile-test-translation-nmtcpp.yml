@@ -81,7 +81,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || 'tetherto/qvac' }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
