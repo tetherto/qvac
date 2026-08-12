@@ -1,17 +1,4 @@
 import { completion, loadModel, unloadModel, LLAMA_3_2_1B_INST_Q4_0, profiler } from '@qvac/sdk'
-import type { ProfilingEvent } from '@qvac/sdk'
-
-function findLastEvent(
-  events: ProfilingEvent[] | undefined,
-  predicate: (event: ProfilingEvent) => boolean
-): ProfilingEvent | undefined {
-  if (!events) return undefined
-  for (let i = events.length - 1; i >= 0; i--) {
-    const event = events[i]
-    if (event && predicate(event)) return event
-  }
-  return undefined
-}
 
 try {
   // Enable profiling globally
@@ -84,10 +71,11 @@ try {
     console.log('  Available ops:', ops.join(', '))
   }
 
-  const resourceEvent = findLastEvent(json.recentEvents, (event) => event.resources !== undefined)
+  const resourceEvent = json.recentEvents?.filter((event) => event.resources).at(-1)
   console.log('\n▸ Resource Gauges')
   if (resourceEvent?.resources) {
     const resources = resourceEvent.resources
+    console.log('  op:', resourceEvent.op)
     console.log('  origin:', resources.origin)
     console.log(
       '  cpu:',
@@ -109,10 +97,11 @@ try {
     console.log('  (no resource gauges reported)')
   }
 
-  const backendEvent = findLastEvent(json.recentEvents, (event) => event.backend !== undefined)
+  const backendEvent = json.recentEvents?.filter((event) => event.backend).at(-1)
   console.log('\n▸ Backend Diagnostics')
   if (backendEvent?.backend) {
     const backend = backendEvent.backend
+    console.log('  op:', backendEvent.op)
     console.log('  selectedBackend:', backend.selectedBackend)
     console.log('  selectedDevice:', backend.selectedDevice)
     console.log('  graphicsApi:', backend.graphicsApi ?? '(not reported)')
