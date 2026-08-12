@@ -123,25 +123,33 @@ export async function* translate(
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: 'translate',
-    modelId
+    modelId,
+    // LLM translate joins the completion lane (its cap = the model's own
+    // `parallel`); NMT passes no cap and stays ungated on its own model.
+    ...(isLlm && {
+      maxConcurrentPerModel: Number((entry.local.config as { parallel?: number }).parallel) || 1
+    })
   })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
 
+  // Per-job cancel on the LLM path, mirroring completion(): cancel only this
+  // translate's own run response, never the addon's global cancel (which would
+  // stop every concurrent completion on the shared model).
+  let activeResponse: { cancel(): Promise<void> } | null = null
+  const cancelActive = () => {
+    activeResponse?.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] translate response.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    })
+  }
   if (isLlm) {
-    const onAbort = () => {
-      const addon = model.addon
-      if (addon?.cancel) {
-        addon.cancel.call(addon).catch((err: unknown) => {
-          requestLogger.warn(
-            `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-          )
-        })
-      }
-    }
+    const onAbort = () => cancelActive()
     ctx.signal.addEventListener('abort', onAbort, { once: true })
     if (ctx.signal.aborted) onAbort()
     ctx.scope.defer(() => {
       ctx.signal.removeEventListener('abort', onAbort)
+      activeResponse = null
     })
   }
 
@@ -199,6 +207,11 @@ export async function* translate(
     })
   } else {
     response = await model.run(input)
+  }
+  if (isLlm) {
+    activeResponse = response
+    // A cancel that landed while `run(...)` was admitting still applies.
+    if (ctx.signal.aborted) cancelActive()
   }
 
   // Check if the response has an iterate method (like LLM models)

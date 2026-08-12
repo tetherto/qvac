@@ -56,7 +56,7 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
       batchCompletionStream: { scope: 'request', hard: true },
       completionStream: { scope: 'request', hard: true },
       finetune: { scope: 'model', hard: true },
-      translate: { scope: 'model', hard: true }
+      translate: { scope: 'request', hard: true }
     },
     [embeddingsPlugin.modelType]: {
       embed: { scope: 'model', hard: true }

@@ -192,9 +192,10 @@ export const llmPlugin = definePlugin({
 
         // Batches share the completion lane at the model's `parallel` cap, so a
         // batch and singles run concurrently on an N-way model; the surplus
-        // queues FCFS. A single-slot model admits one at a time, unchanged.
-        // The cap counts admitted requests, not the prompt sequences inside a
-        // batch — the addon schedules those across its own slots.
+        // queues FCFS. A single-slot model admits one at a time, unchanged. The
+        // cap counts admitted requests, not the prompt sequences inside a batch:
+        // the addon schedules those across its slots and queues any past
+        // `parallel`.
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
@@ -473,6 +474,19 @@ export const llmPlugin = definePlugin({
             modelExecutionMs
           )
         } catch (err) {
+          // A cancel while queued rejects with the addon's Cancelled error; ride
+          // the done path so the client sees InferenceCancelledError.
+          if (ctx.signal.aborted && isAddonCancelledError(err)) {
+            yield attachModelExecutionMs(
+              {
+                type: 'completionStream' as const,
+                done: true,
+                events: normalizer.finish({ stopReason: 'cancelled' as const })
+              },
+              0
+            )
+            return
+          }
           // The llama.cpp addon emits a structured `ContextOverflow` status
           // (LlmErrors.hpp::ContextOverflow = 14) when the prompt exceeds
           // the model's `ctx_size`. Bare's `js_throw_error(env, code, msg)`
@@ -516,7 +530,9 @@ export const llmPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
-      cancel: { scope: 'model', hard: true },
+      // LLM translate now cancels its own run job (response.cancel), so it is
+      // request-scoped like completion. NMT translate is a separate plugin.
+      cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
         const stream = translate(request, request.requestId)

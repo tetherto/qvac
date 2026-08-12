@@ -507,7 +507,8 @@ export async function* completion(
       kind: 'custom',
       customKey: kvCache,
       configHash,
-      primeIfMissing
+      primeIfMissing,
+      signal
     })
   } else {
     const cacheMessages: CacheMessage[] = history.map((msg) => ({
@@ -519,7 +520,8 @@ export async function* completion(
       kind: 'auto',
       configHash,
       history: cacheMessages,
-      primeIfMissing
+      primeIfMissing,
+      signal
     })
   }
 

@@ -28,15 +28,24 @@ test("isAddonCancelledError: codeString anchored — sibling names don't match",
   t.is(isAddonCancelledError(Object.assign(new Error('x'), { code: '[ LLM :: Cancelled ]' })), true)
 })
 
+test('isAddonCancelledError: detects the queued-cancel error (message only, no code)', (t) => {
+  // A job still queued behind the `parallel` limit when its group is cancelled
+  // is rejected by the scheduler as a plain Error with no `.code`.
+  const err = new Error(
+    'ContinuousBatchScheduler: request cancelled before it could run (queued behind the parallel limit when its group was cancelled)'
+  )
+  t.is((err as { code?: unknown }).code, undefined)
+  t.is(isAddonCancelledError(err), true)
+})
+
 test('isAddonCancelledError: ignores unrelated errors', (t) => {
   t.is(isAddonCancelledError(new Error('model failed to load')), false)
   t.is(
     isAddonCancelledError(Object.assign(new Error('x'), { code: '[ LLM :: ContextOverflow ]' })),
     false
   )
-  // A bare "cancelled" message without the structured code must NOT match —
-  // the addon always sets `.code` on this path, and a message-only match
-  // would false-positive on unrelated cancellation log text.
+  // The message match is anchored to the scheduler's specific phrase, so a
+  // generic cancellation message can't false-positive.
   t.is(isAddonCancelledError(new Error('operation was cancelled')), false)
   t.is(isAddonCancelledError(null), false)
   t.is(isAddonCancelledError(undefined), false)

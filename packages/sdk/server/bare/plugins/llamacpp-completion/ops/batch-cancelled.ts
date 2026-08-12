@@ -21,9 +21,11 @@
  */
 export function isAddonCancelledError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false
+  // Mid-decode cancel: a `Cancelled` StatusError with code tail `:: Cancelled ]`
+  // (anchored so a sibling like `CancelledByPolicy` can't false-positive).
   const code = (err as { code?: unknown }).code
-  // Anchor to the codeString tail (`[ <addonId> :: Cancelled ]`) so a
-  // hypothetical sibling like `CancelledByPolicy` after an addon-side
-  // rename doesn't false-positive here.
-  return typeof code === 'string' && /::\s*Cancelled\s*\]/.test(code)
+  if (typeof code === 'string' && /::\s*Cancelled\s*\]/.test(code)) return true
+  // Queued cancel: a plain Error with no code, only this scheduler message.
+  const message = (err as { message?: unknown }).message
+  return typeof message === 'string' && /cancelled before it could run/i.test(message)
 }
