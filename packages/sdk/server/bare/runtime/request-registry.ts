@@ -662,32 +662,38 @@ export function createRequestRegistry(options?: {
       throw new RequestIdConflictError(opts.requestId)
     }
 
-    // Admission control runs before allocation so a rejected begin leaves
-    // no controller / scope behind. This may await: a gated `(kind,
-    // modelId)` at capacity queues the begin FIFO and resolves once a slot
-    // frees (or rejects on overflow / queue-depth cap / timeout).
-    const { slotKey, exclusive } = await acquireSlot(opts)
+    // A request cancelled BEFORE begin must not queue for a slot on a saturated
+    // lane: consume its marker first and skip admission, so it resolves at once
+    // into an aborted context holding no slot instead of waiting for the holder.
+    let preCancel = consumeCancelBeforeBegin(opts.requestId)
 
-    // The only interleaving point in this otherwise synchronous body is the
-    // await above. A duplicate id could (astronomically unlikely) have
-    // landed while we were queued — re-check and hand the just-acquired
-    // slot back rather than stranding it on the conflicting throw.
-    if (entries.has(opts.requestId)) {
-      if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
-      throw new RequestIdConflictError(opts.requestId)
+    // Admission control runs before allocation so a rejected begin leaves no
+    // controller / scope behind. This may await: a gated `(kind, modelId)` at
+    // capacity queues the begin FIFO and resolves once a slot frees (or rejects
+    // on overflow / queue-depth cap / timeout).
+    let slotKey: string | undefined
+    let exclusive = false
+    if (!preCancel) {
+      const acquired = await acquireSlot(opts)
+      slotKey = acquired.slotKey
+      exclusive = acquired.exclusive
+
+      // The only interleaving point in this otherwise synchronous body is the
+      // await above. A duplicate id could (astronomically unlikely) have landed
+      // while we were queued — re-check and hand the just-acquired slot back
+      // rather than stranding it on the conflicting throw.
+      if (entries.has(opts.requestId)) {
+        if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
+        throw new RequestIdConflictError(opts.requestId)
+      }
+
+      // A cancel that landed WHILE we were queued resolved acquireSlot with no
+      // slot and recorded a marker; consume it so the context starts aborted.
+      preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
 
     const controller = new AbortController()
     const scope = createDisposableScope()
-
-    // Stop-button race close. If a
-    // `cancel({ requestId })` already arrived for this id, abort the
-    // new controller before observers can subscribe to it. The
-    // tripwire entry is consumed so a later, separate `begin(...)`
-    // with the same id is unaffected (in practice ids are UUIDv4 and
-    // never reused; this guard just keeps the contract self-
-    // consistent under retries).
-    const preCancel = consumeCancelBeforeBegin(opts.requestId)
     if (preCancel) {
       controller.abort(preCancel.reason)
     }

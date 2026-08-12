@@ -82,6 +82,31 @@ test('registry: cancel by requestId aborts only that signal', async (t) => {
   t.is(b.state, 'running')
 })
 
+test('registry: cancel-before-begin does not wait for a saturated lane', async (t) => {
+  const r = createRequestRegistry()
+  // Holder saturates a single-slot lane and is held for the whole test.
+  await using holder = await r.begin({
+    requestId: 'holder',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 1
+  })
+  t.ok(holder, 'holder admitted')
+
+  // Cancel lands BEFORE begin: it only records a cancel-before-begin marker.
+  r.cancel({ requestId: 'pre' })
+
+  // Without the fix this begin would queue behind the still-held holder and
+  // never resolve; with it, it skips admission and returns aborted at once.
+  await using pre = await r.begin({
+    requestId: 'pre',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 1
+  })
+  t.is(pre.signal.aborted, true, 'pre-cancelled begin resolves immediately aborted')
+})
+
 test('registry: cancel-by-requestId is idempotent and counts only first abort', async (t) => {
   const r = createRequestRegistry()
   await using ctx = await r.begin({
