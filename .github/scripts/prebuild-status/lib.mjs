@@ -26,15 +26,19 @@ export const PREBUILD_KEYS = [
 
 export const BOT_LOGIN = 'github-actions[bot]'
 
-// A prebuild counts as a pass when it actually succeeded, was legitimately
-// skipped (no prebuild label), or reused a cached artifact; else it failed.
-export function resolvePublishState(prebuildResult, reuseHit) {
-  if (
-    prebuildResult === 'success' ||
-    prebuildResult === 'skipped' ||
-    reuseHit === 'true'
-  ) {
-    return 'success'
+// A prebuild counts as a pass when it actually succeeded or reused a cached
+// artifact. A `skipped` prebuild is trusted ONLY when it was skipped for a
+// legitimate reason: the ci-router job succeeded and decided not to build
+// (run_prebuilds == 'false', i.e. no prebuild label). Any other skip is
+// failure-induced - e.g. ci-router (which produces run_prebuilds) errored, so
+// the gating condition fell through and the job never ran - and must fail
+// closed rather than masquerade as a green prebuild. `reuse_hit` also skips the
+// prebuild job (run_prebuilds == 'true', native unchanged) and is a real pass.
+export function resolvePublishState(prebuildResult, reuseHit, ciRouterResult, runPrebuilds) {
+  if (prebuildResult === 'success' || reuseHit === 'true') return 'success'
+  if (prebuildResult === 'skipped') {
+    if (ciRouterResult === 'success' && runPrebuilds === 'false') return 'success'
+    return 'failure'
   }
   return 'failure'
 }
