@@ -120,7 +120,9 @@ def test_resolve_command_uses_bundled_wheel(monkeypatch, tmp_path) -> None:
     assert Path(bare) == bundled_bare
 
 
-def test_resolve_command_uses_bundled_bare_exe_on_windows(monkeypatch, tmp_path) -> None:
+def test_resolve_command_uses_bundled_bare_exe_on_windows(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setattr(
         "tetherto.qvac_sdk.client._bare_executable_name", lambda: "bare.exe"
     )
