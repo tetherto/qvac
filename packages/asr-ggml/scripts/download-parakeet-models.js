@@ -9,10 +9,18 @@ const REGISTRY_DATE_Q8_0 = '2026-05-11'
 const REGISTRY_DATE_Q4_0 = '2026-05-27'
 const REGISTRY_DATE_2026_07_01 = '2026-07-01'
 const REGISTRY_DATE_STREAMING = '2026-05-20'
+const REGISTRY_DATE_INDIC = '2026-08-07'
 const REGISTRY_SOURCE = 's3'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
-const ALL_TYPES = ['ctc', 'tdt', 'eou', 'sortformer', 'sortformer-streaming-v2.1']
+const ALL_TYPES = [
+  'ctc',
+  'tdt',
+  'eou',
+  'sortformer',
+  'sortformer-streaming-v2.1',
+  'indic-conformer'
+]
 const ALL_QUANTS = ['f16', 'q8_0', 'q4_0']
 
 const MODELS = {
@@ -40,6 +48,11 @@ const MODELS = {
     f16: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf')
+  },
+  'indic-conformer': {
+    f16: filenameAtIndic(REGISTRY_DATE_INDIC, 'indic-conformer-ctc.f16.gguf'),
+    q8_0: filenameAtIndic(REGISTRY_DATE_INDIC, 'indic-conformer-ctc.q8_0.gguf'),
+    q4_0: filenameAtIndic(REGISTRY_DATE_INDIC, 'indic-conformer-ctc.q4_0.gguf')
   }
 }
 
@@ -47,6 +60,14 @@ function filenameAt (date, filename) {
   return {
     filename,
     registryPath: `qvac_models_compiled/ggml/parakeet/${date}/${filename}`,
+    registrySource: REGISTRY_SOURCE
+  }
+}
+
+function filenameAtIndic (date, filename) {
+  return {
+    filename,
+    registryPath: `qvac_models_compiled/ggml/indic_conformer/${date}/${filename}`,
     registrySource: REGISTRY_SOURCE
   }
 }

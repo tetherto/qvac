@@ -49,6 +49,12 @@ export interface ParakeetConfig {
   /** Random seed for reproducibility (-1 for random, default: -1). */
   seed?: number;
   /**
+   * Multilingual CTC language id (e.g. `"hi"`, `"ta"`). Required for GGUFs
+   * that advertise `parakeet.ctc.lang_*` ranges (Indic Conformer); ignored on
+   * monolingual CTC. Empty keeps full-vocab greedy decode.
+   */
+  language?: string;
+  /**
    * Open a long-lived streaming session at load time. Cross-append state is
    * preserved within one `run()` call, but not across separate calls.
    */
@@ -110,6 +116,7 @@ const PARAKEET_CONFIG_KEYS: readonly string[] = [
   "captionEnabled",
   "timestampsEnabled",
   "seed",
+  "language",
   "streaming",
   "streamingChunkMs",
   "streamingHistoryMs",
@@ -377,6 +384,7 @@ export class ParakeetDriver implements AsrDriver {
       captionEnabled: this.params.captionEnabled === true,
       timestampsEnabled: this.params.timestampsEnabled !== false,
       seed: this.params.seed ?? -1,
+      language: this.params.language || "",
       streaming: this.params.streaming === true,
       streamingChunkMs: this.params.streamingChunkMs ?? 2000,
       streamingHistoryMs: this.params.streamingHistoryMs ?? 30000,

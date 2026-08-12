@@ -27,19 +27,19 @@
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-08-03",
+      "version>=": "2026-08-10#2",
       "features": ["metal"],
       "platform": "osx | ios"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-08-03",
+      "version>=": "2026-08-10#2",
       "features": ["vulkan", "opencl"],
       "platform": "android"
     },
     {
       "name": "parakeet-cpp",
-      "version>=": "2026-08-03",
+      "version>=": "2026-08-10#2",
       "features": ["vulkan"],
       "platform": "!(osx | ios | android)"
     },
