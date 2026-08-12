@@ -319,3 +319,121 @@ jobs:
             packages/tts-ggml/benchmarks/results/streaming-benchmark-*.json
           if-no-files-found: warn
           retention-days: 30
+
+  audio8-runtime-tests:
+    if: ${{ inputs.run_integration_tests != false }}
+    timeout-minutes: 30
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    name: ${{ matrix.platform }}-x64-audio8-vulkan
+    env:
+      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NO_GPU: 'false'
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      # Both Vulkan targets must complete so a platform-specific regression is visible in one run.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: qvac-ubuntu2404-x64-gpu
+          - platform: win32
+            runner: qvac-win25-x64-gpu
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install NPM dependencies
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm install
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - run: mkdir -p "${{ runner.temp }}/tts-ggml"
+        shell: bash
+
+      - run: mkdir -p "${{ github.workspace }}/packages/tts-ggml/prebuilds"
+        shell: bash
+
+      - name: Download prebuilds from artifact
+        if: ${{ !inputs.prebuild_package }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/tts-ggml
+          merge-multiple: true
+
+      - if: ${{ !inputs.prebuild_package }}
+        shell: bash
+        run: cp -r "${{ runner.temp }}/tts-ggml"/* "${{ github.workspace }}/packages/tts-ggml/prebuilds"
+
+      - name: Download prebuilds from package
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ runner.temp }}/tts-ggml
+        shell: bash
+        run: |
+          npm pack ${{ inputs.prebuild_package }}
+          tar -xzf *.tgz
+          cp -r ./package/prebuilds/* "${{ github.workspace }}/packages/tts-ggml/prebuilds"
+
+      - name: Rename prebuilds from tetherto_ to qvac_ prefix
+        if: ${{ inputs.prebuild_package }}
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        shell: bash
+        run: |
+          find prebuilds -depth -name 'tetherto_*' | while read -r file; do
+            dir=$(dirname "$file")
+            base=$(basename "$file")
+            newbase=$(echo "$base" | sed 's/^tetherto_/qvac_/')
+            mv "$file" "$dir/$newbase"
+          done
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Set Vulkan SDK Path on Windows Server 2025
+        run: echo "VULKAN_SDK=C:\VulkanSDK" >> $Env:GITHUB_ENV
+
+      - if: ${{ matrix.platform == 'win32' }}
+        name: Pin ggml Vulkan to the NVIDIA GPU on Windows
+        run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
+
+      - name: Cache Audio8 GGUF models
+        id: audio8-model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: tts-ggml
+          cache-key-suffix: audio8
+          paths: packages/tts-ggml/models
+          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
+          enable-cross-os: 'true'
+
+      - name: Download Audio8 GGUF models from registry
+        if: steps.audio8-model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm run download-models:registry -- --group audio8
+
+      - name: Run Audio8 JavaScript integration tests
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        run: npm run test:integration:audio8
+        env:
+          INTEGRATION_TEST_TIMEOUT: '900'
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/tts-ggml/prebuilds/${{ matrix.platform }}-x64
