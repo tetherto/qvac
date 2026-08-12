@@ -357,6 +357,8 @@ interface InternalTurnState {
   cachePath: string
   registryKey: string
   autoCacheKey?: string
+  /** Request abort signal, so commit's target-lock wait stays abortable. */
+  signal?: AbortSignal
   /** Releases this turn's per-cache-path write lock; idempotent. */
   releaseWriteLock: () => void
   /** Flipped by `commitTurn`; consulted at the top of `rollback`. */
@@ -387,7 +389,8 @@ export function createKvCacheSession(
     cachePath: string,
     registryKey: string,
     autoCacheKey?: string,
-    releaseWriteLock: () => void = () => {}
+    releaseWriteLock: () => void = () => {},
+    signal?: AbortSignal
   ): TurnHandle {
     const handle: TurnHandle = {
       cachePath,
@@ -397,6 +400,7 @@ export function createKvCacheSession(
       cachePath,
       registryKey,
       ...(autoCacheKey !== undefined && { autoCacheKey }),
+      ...(signal !== undefined && { signal }),
       releaseWriteLock,
       committed: false,
       rolledBack: false
@@ -411,7 +415,7 @@ export function createKvCacheSession(
     // Held for the whole turn so a same-file peer can't interleave writes.
     // Released on commit/rollback/error; throws if aborted while queued.
     const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
-    const handle = makeHandle(cachePath, registryKey, undefined, releaseWriteLock)
+    const handle = makeHandle(cachePath, registryKey, undefined, releaseWriteLock, input.signal)
 
     try {
       // In-memory registry check first — the addon defers disk writes, so
@@ -468,7 +472,7 @@ export function createKvCacheSession(
     try {
       const resolved = await withCacheStateLock(async () => {
         // Mark the path active under the state lock so retention can't evict it.
-        const h = makeHandle(cachePath, registryKey, cacheKey, releaseWriteLock)
+        const h = makeHandle(cachePath, registryKey, cacheKey, releaseWriteLock, input.signal)
         let exists = initializedCaches.has(registryKey)
         if (!exists) {
           try {
@@ -546,11 +550,18 @@ export function createKvCacheSession(
     const sourceCachePath = state.cachePath
     const sourceCacheKey = state.autoCacheKey
     const targetCacheKey = path.basename(path.dirname(path.dirname(result.targetCachePath)))
-    // Hold the target's lock across the rename so a peer can't write it concurrently.
-    const releaseTargetLock = await acquireCachePathWriteLock(result.targetCachePath)
-    let renamed: boolean
+    // Hold the target's lock across the rename AND commit verification, so a peer
+    // resolving to the same file can't observe it before its saved count is
+    // published. Abortable: a cancel while waiting for the lock rejects here.
+    const releaseTargetLock = await acquireCachePathWriteLock(result.targetCachePath, state.signal)
     try {
-      renamed = await withCacheStateLock(async () => {
+      // A cancel that landed while we waited for the target lock must not commit.
+      if (state.signal?.aborted) {
+        await runRollback(state)
+        return
+      }
+
+      const renamed = await withCacheStateLock(async () => {
         markCachePathActive(result.targetCachePath)
         await fsPromises.mkdir(path.dirname(result.targetCachePath), { recursive: true })
         await markAutoCacheKey(targetCacheKey)
@@ -573,34 +584,33 @@ export function createKvCacheSession(
         initializedCaches.delete(state.registryKey)
         return true
       })
+
+      if (!renamed) {
+        logger.warn(
+          `[kv-cache] Auto cache rename failed; rolling back. from=${sourceCachePath} to=${result.targetCachePath}`
+        )
+        await runRollback(state)
+        return
+      }
+
+      const ok = await verifySaveAndRecord(result.targetCachePath, result.messageCount)
+      if (!ok) {
+        // Rename succeeded but the file isn't where we expected. Roll back via
+        // the target path instead of the (now-empty) source.
+        await runRollback(state)
+        return
+      }
+
+      // Successful auto-rename. The handle's `cachePath` field still points at
+      // the (now-gone) source path — fine, the handle is committed and won't
+      // roll back. Future turns compute fresh paths.
+      state.committed = true
+      releaseCachePath(state.cachePath)
+      state.releaseWriteLock()
+      scheduleAutoCacheSweep(logger)
     } finally {
       releaseTargetLock()
     }
-
-    if (!renamed) {
-      logger.warn(
-        `[kv-cache] Auto cache rename failed; rolling back. from=${sourceCachePath} to=${result.targetCachePath}`
-      )
-      await runRollback(state)
-      return
-    }
-
-    const ok = await verifySaveAndRecord(result.targetCachePath, result.messageCount)
-    if (!ok) {
-      // Rename succeeded but the file isn't where we expected. Roll
-      // back via the target path instead of the (now-empty) source.
-      await runRollback(state)
-      return
-    }
-
-    // Successful auto-rename. The handle's `cachePath` field still
-    // points at the (now-gone) source path — that's fine, the handle
-    // is committed and won't roll back. Future turns compute fresh
-    // paths.
-    state.committed = true
-    releaseCachePath(state.cachePath)
-    state.releaseWriteLock()
-    scheduleAutoCacheSweep(logger)
   }
 
   async function rollback(turn: TurnHandle): Promise<void> {

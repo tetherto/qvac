@@ -435,6 +435,51 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
   }
 })
 
+test('kv-cache-session: an auto turn cancelled before commit does not persist to the target', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const history = [
+      { role: 'system' as const, content: 'sys' },
+      { role: 'user' as const, content: 'hello' }
+    ]
+    const { AbortController } = await import('bare-abort-controller')
+    const ac = new AbortController()
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history,
+      signal: ac.signal as never,
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    const target = await utils.getCurrentCacheInfo('test-model', configHash, [
+      ...history,
+      { role: 'assistant', content: 'hi' }
+    ])
+
+    // Cancelled after decoding, before the commit reaches the target lock.
+    ac.abort()
+
+    await session.commitTurn(turn, {
+      kind: 'autoRename',
+      targetCachePath: target.cachePath,
+      messageCount: 3
+    })
+
+    t.is(fs.existsSync(target.cachePath), false, 'cancelled turn did not persist to the target')
+    t.is(
+      mod.__kvCacheSessionTestHooks.getSavedCount(target.cachePath),
+      undefined,
+      'no saved count published for a cancelled target'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: marker write failure does not abort auto-cache path resolution', async (t) => {
   const { fs, path, utils, cleanup } = await loadSession()
   try {
