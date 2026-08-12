@@ -136,6 +136,34 @@ test('CosyVoice3: per-component model paths forward to params', (t) => {
   t.is(params.cosyvoiceHiftModelPath, './models/cv3/hift.gguf')
 })
 
+// Guards the JS half of the openclCacheDir boundary: the native
+// buildCosyvoiceConfig reads the "openclCacheDir" key by name and forwards it to
+// EngineOptions::opencl_cache_dir (covered on the C++ side by
+// test_cosyvoice_config.cpp CosyvoiceEngineOptions.ForwardsOpenclCacheDir). The
+// original regression was the addon dropping this key, so pin that the JS layer
+// emits it under the exact name from both the top-level option and config.
+test('CosyVoice3: openclCacheDir forwards into the native configuration params', (t) => {
+  const fromOption = createMockedCosyvoiceModel({
+    extra: { openclCacheDir: '/var/cache/qvac/opencl' }
+  })
+  t.is(
+    fromOption._buildTtsParams().openclCacheDir,
+    '/var/cache/qvac/opencl',
+    'openclCacheDir option reaches the native configurationParams'
+  )
+
+  const fromConfig = new TTSGgml({
+    engine: TTSGgml.ENGINE_COSYVOICE3,
+    files: { cosyvoiceModelDir: './models/cosyvoice3' },
+    config: { language: 'en', useGPU: false, openclCacheDir: '/data/opencl' }
+  })
+  t.is(
+    fromConfig._buildTtsParams().openclCacheDir,
+    '/data/opencl',
+    'config.openclCacheDir reaches the native configurationParams'
+  )
+})
+
 test('CosyVoice3: instruct renders structured control to the trained instruction', (t) => {
   const dialect = createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'cantonese' } } })
   t.is(dialect._buildTtsParams().instruct, '请用广东话表达。', 'dialect renders')
@@ -169,6 +197,75 @@ test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
     /Invalid CosyVoice instruct key/,
     'unknown structured key throws instead of silently zero-shot'
   )
+})
+
+test('CosyVoice3: malformed instruct values rejected instead of silent zero-shot', (t) => {
+  // Presence, not truthiness: a set-but-empty or null control is malformed and
+  // must throw rather than degrade to zero-shot synthesis.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: '' } } }),
+    /Invalid CosyVoice instruct/,
+    'empty dialect string throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: null } } }),
+    /Invalid CosyVoice instruct/,
+    'null dialect throws'
+  )
+  // Non-object structured values would slip past the presence checks.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: ['cantonese'] } }),
+    /control object/,
+    'array instruct throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: 42 } }),
+    /control object/,
+    'numeric instruct throws'
+  )
+})
+
+test('CosyVoice3: explicit null instruct is rejected, not treated as omitted', (t) => {
+  // Only `undefined` means omitted (zero-shot); an explicit null is malformed.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: null } }),
+    /control object/,
+    'null instruct throws instead of silently selecting zero-shot'
+  )
+})
+
+test('CosyVoice3: non-plain instruct objects are rejected', (t) => {
+  // A Date is an object but not a control map; without a plain-object check it
+  // would carry no control fields and degrade to silent zero-shot.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: new Date() } }),
+    /control object/,
+    'Date instruct throws'
+  )
+  // Controls inherited from a prototype must not be honored: only own
+  // properties of a plain object count.
+  const inherited = Object.create({ dialect: 'cantonese' })
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: inherited } }),
+    /control object/,
+    'prototype-inherited control throws instead of being accepted'
+  )
+})
+
+test('CosyVoice3: undefined control fields are skipped, not malformed', (t) => {
+  // A field explicitly set to undefined means "not selected", so it is skipped
+  // and the next control by precedence takes effect (zero-shot when none do).
+  const skipped = createMockedCosyvoiceModel({
+    extra: { instruct: { dialect: undefined, emotion: 'happy' } }
+  })
+  t.is(
+    skipped._buildTtsParams().instruct,
+    '请非常开心地说一句话。',
+    'undefined dialect falls through to emotion'
+  )
+
+  const empty = createMockedCosyvoiceModel({ extra: { instruct: { dialect: undefined } } })
+  t.absent(empty._buildTtsParams().instruct, 'all-undefined instruct -> zero-shot, field absent')
 })
 
 test('CosyVoice3: LavaSR enhancer/denoiser accepted and forwarded to the addon', (t) => {

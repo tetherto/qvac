@@ -132,6 +132,15 @@ class AudioGen {
         // start() is typed QvacResponse<any>; run()'s explicit return type narrows
         // the public surface to QvacResponse<AudiogenOutputChunk>.
         this._logger.debug(`audiogen-ggml: run (caption ${caption.length} chars, lyrics=${opts.lyrics ? 'yes' : 'no'})`);
+        if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
+            throw new Error('audiogen-ggml: lmPhase1 must be a boolean');
+        }
+        if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
+            throw new Error('audiogen-ggml: dcwEnabled must be a boolean');
+        }
+        if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
+            throw new Error('audiogen-ggml: audioCodes must be an Int32Array');
+        }
         const response = this._job.start();
         try {
             await this._requireAddon().runJob({
@@ -143,7 +152,16 @@ class AudioGen {
                 bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
                 keyscale: opts.keyscale,
                 timesignature: opts.timesignature,
-                duration: optionalFiniteNumber(opts.duration, 'duration')
+                duration: optionalFiniteNumber(opts.duration, 'duration'),
+                lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+                lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+                lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true),
+                lmCfgScale: optionalFiniteNumber(opts.lmCfgScale, 'lmCfgScale'),
+                lmPhase1: opts.lmPhase1,
+                dcwEnabled: opts.dcwEnabled,
+                dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
+                dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
+                audioCodes: opts.audioCodes
             });
         }
         catch (error) {
