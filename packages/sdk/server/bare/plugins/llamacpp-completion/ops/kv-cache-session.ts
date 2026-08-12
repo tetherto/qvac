@@ -83,8 +83,16 @@ type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
 type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
 const cachePathLocks = new Map<string, CacheLock>()
 
-function releaseCachePathWriteLock(key: string): void {
-  const lock = cachePathLocks.get(key)
+// Case-fold the lock-map key so case-only path variants (e.g. "Session" vs
+// "session"), which name the SAME file on case-insensitive filesystems (default
+// macOS/Windows), share one lock. Over-locks case-only variants on case-sensitive
+// filesystems, which is safe.
+function lockKeyFor(cachePath: string): string {
+  return cachePath.toLowerCase()
+}
+
+function releaseCachePathWriteLock(lockKey: string): void {
+  const lock = cachePathLocks.get(lockKey)
   if (!lock) return
   const next = lock.waiters.shift()
   if (next) {
@@ -92,19 +100,23 @@ function releaseCachePathWriteLock(key: string): void {
     return
   }
   lock.held = false
-  cachePathLocks.delete(key)
+  cachePathLocks.delete(lockKey)
 }
 
 // Returns the release fn. Aborting while queued rejects and removes the waiter.
-async function acquireCachePathWriteLock(key: string, signal?: AbortSignal): Promise<() => void> {
-  let lock = cachePathLocks.get(key)
+async function acquireCachePathWriteLock(
+  cachePath: string,
+  signal?: AbortSignal
+): Promise<() => void> {
+  const lockKey = lockKeyFor(cachePath)
+  let lock = cachePathLocks.get(lockKey)
   if (!lock) {
     lock = { held: false, waiters: [] }
-    cachePathLocks.set(key, lock)
+    cachePathLocks.set(lockKey, lock)
   }
   if (!lock.held) {
     lock.held = true
-    return () => releaseCachePathWriteLock(key)
+    return () => releaseCachePathWriteLock(lockKey)
   }
 
   await new Promise<void>((resolve, reject) => {
@@ -129,7 +141,7 @@ async function acquireCachePathWriteLock(key: string, signal?: AbortSignal): Pro
     signal?.addEventListener('abort', onAbort, { once: true })
   })
 
-  return () => releaseCachePathWriteLock(key)
+  return () => releaseCachePathWriteLock(lockKey)
 }
 
 function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
