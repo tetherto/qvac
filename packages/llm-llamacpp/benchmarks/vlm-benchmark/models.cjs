@@ -133,6 +133,18 @@ function isFlagToken (a) {
   return a.startsWith('-') && !/^-\d/.test(a)
 }
 
+// One array element must stay one CLI token, because resolve-cli-model.cjs joins the array
+// with a space into the env file and cli-fixture-runner.cjs splits it back on whitespace.
+// An element carrying a space would therefore pass the allowlist as a single token and then
+// become two, and since extra args are appended after the fixed ones it could override a
+// benchmark-controlled flag such as --ctx-size.
+function assertNoWhitespace (args, i, label) {
+  const bad = args.filter(a => /\s/.test(a))
+  if (bad.length) {
+    throw new Error(`json model #${i} ('${label || '?'}'): cliArgs elements must not contain whitespace, one element is one argument; rejected ${bad.map(a => JSON.stringify(a)).join(', ')}`)
+  }
+}
+
 // Every URL the workflow hands to curl must be https. curl reads a leading dash as an
 // option however the shell quotes it, so a value like `--config=/tmp/curlrc` would be
 // obeyed rather than fetched; requiring the https:// prefix rejects that by construction.
@@ -175,6 +187,7 @@ function normalizeSpec (spec, i) {
     if (!Array.isArray(spec.cliArgs) || spec.cliArgs.some(a => typeof a !== 'string')) {
       throw new Error(`json model #${i} ('${spec.label || '?'}'): cliArgs must be an array of strings`)
     }
+    assertNoWhitespace(spec.cliArgs, i, spec.label)
     const bad = spec.cliArgs.filter(a => isFlagToken(a) && !ALLOWED_CLI_FLAGS.has(canonicalCliFlag(a)))
     if (bad.length) {
       throw new Error(`json model #${i} ('${spec.label || '?'}'): cliArgs may only carry per-model image preprocessing flags (${[...ALLOWED_CLI_FLAGS].join(', ')}); rejected ${bad.join(', ')}`)
