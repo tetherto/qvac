@@ -1,13 +1,21 @@
-'use strict'
+// End-to-end retrieval-augmented generation: ingest a small knowledge base,
+// then stream an answer grounded in the retrieved context.
+//
+// Run: bare examples/quickstart.ts (build @qvac/rag first: npm run build)
 
-const Corestore = require('corestore')
-const EmbedderPlugin = require('@qvac/embed-llamacpp')
-const LlmPlugin = require('@qvac/llm-llamacpp')
-const QvacLogger = require('@qvac/logging')
+import fs from 'bare-fs'
+import Corestore from 'corestore'
+import EmbedderPlugin from '@qvac/embed-llamacpp'
+import LlmPlugin from '@qvac/llm-llamacpp'
+import QvacLogger from '@qvac/logging'
 
-const { RAG, HyperDBAdapter, QvacLlmAdapter } = require('../index')
-const knowledgeBase = require('./knowledge-base.json')
-const { ensureModels } = require('./utils')
+import { RAG, HyperDBAdapter, QvacLlmAdapter } from '@qvac/rag'
+import { ensureModels } from './utils'
+
+interface StreamResponse {
+  onUpdate(callback: (update: string) => void): StreamResponse
+  await(): Promise<void>
+}
 
 const store = new Corestore('./store')
 const query = 'Who won the individual title in LIV Golf UK by JCB in 2025?'
@@ -16,7 +24,7 @@ async function main() {
   // 1. Fetch embedder + LLM model files from the QVAC registry (cached on disk after first run).
   const models = await ensureModels(['embedder', 'llm'])
 
-  // 2. Construct embedder with the new files-based addon shape.
+  // 2. Construct embedder with the files-based addon shape.
   const embedder = new EmbedderPlugin({
     files: { model: [models.embedder.fullPath] },
     config: { device: 'gpu', gpu_layers: '99' },
@@ -25,18 +33,18 @@ async function main() {
   })
   await embedder.load()
 
-  const embeddingFunction = async (text) => {
+  const embeddingFunction = async (text: string | string[]) => {
     const response = await embedder.run(text)
     const embeddings = await response.await()
 
     if (Array.isArray(text)) {
-      return embeddings[0].map((embedding) => Array.from(embedding))
+      return embeddings[0].map((embedding: Iterable<number>) => Array.from(embedding))
     } else {
-      return Array.from(embeddings[0][0])
+      return Array.from(embeddings[0][0]) as number[]
     }
   }
 
-  // 3. Construct LLM with the new files-based addon shape.
+  // 3. Construct LLM with the files-based addon shape.
   const llm = new LlmPlugin({
     files: { model: [models.llm.fullPath] },
     config: { device: 'gpu', gpu_layers: '99', ctx_size: '1024' },
@@ -52,11 +60,15 @@ async function main() {
   const rag = new RAG({ embeddingFunction, dbAdapter, llm: llmAdapter, logger })
   await rag.ready()
 
+  const knowledgeBasePath = new URL('knowledge-base.json', import.meta.url).pathname
+  const knowledgeBase: Array<{ text: string }> = JSON.parse(
+    fs.readFileSync(knowledgeBasePath, 'utf8')
+  )
   const knowledgeBaseMapped = knowledgeBase.map((kb) => kb.text)
 
   const docs = await rag.ingest(knowledgeBaseMapped, models.embedder.filename)
 
-  const response = await rag.infer(query)
+  const response = (await rag.infer(query)) as StreamResponse
 
   let fullResponse = ''
   await response
@@ -67,7 +79,10 @@ async function main() {
 
   console.log(fullResponse)
 
-  await rag.deleteEmbeddings(docs.processed.map((doc) => doc.id))
+  const processedIds = docs.processed
+    .map((doc) => doc.id)
+    .filter((id): id is string => id !== undefined)
+  await rag.deleteEmbeddings(processedIds)
 
   await rag.close()
   await llm.unload()

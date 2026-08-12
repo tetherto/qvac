@@ -1,11 +1,14 @@
-'use strict'
+// A tour of the chunking strategies exposed by RAG.chunk: built-in split
+// strategies, chunk strategies, and custom splitter functions.
+//
+// Run: bare examples/chunking.ts (build @qvac/rag first: npm run build)
 
-const Corestore = require('corestore')
-const EmbedderPlugin = require('@qvac/embed-llamacpp')
-const QvacLogger = require('@qvac/logging')
+import Corestore from 'corestore'
+import EmbedderPlugin from '@qvac/embed-llamacpp'
+import QvacLogger from '@qvac/logging'
 
-const { RAG, HyperDBAdapter } = require('../index')
-const { ensureModels } = require('./utils')
+import { RAG, HyperDBAdapter } from '@qvac/rag'
+import { ensureModels } from './utils'
 
 const store = new Corestore('./local-store')
 
@@ -21,10 +24,10 @@ async function main() {
   })
   await embedder.load()
 
-  const embeddingFunction = async (text) => {
+  const embeddingFunction = async (text: string | string[]) => {
     const response = await embedder.run(text)
     const embeddings = await response.await()
-    return Array.from(embeddings[0][0])
+    return Array.from(embeddings[0][0]) as number[]
   }
 
   const dbAdapter = new HyperDBAdapter({ store })
@@ -94,7 +97,7 @@ async function main() {
 
   console.log('\n=== 5. Custom Delimiter Splitter ===')
   const delimiterText = 'AI|Machine Learning|Deep Learning|NLP|Computer Vision|Robotics'
-  const customDelimiterSplitter = (text) => text.split('|')
+  const customDelimiterSplitter = (text: string) => text.split('|')
 
   const delimiterResult = await rag.chunk(delimiterText, {
     splitter: customDelimiterSplitter,
@@ -108,7 +111,7 @@ async function main() {
   })
 
   console.log('\n=== 6. Custom Whitespace-Aware Splitter ===')
-  const whitespaceSplitter = (text) => {
+  const whitespaceSplitter = (text: string) => {
     return text.split(/\s+/).filter((word) => word.length > 0)
   }
 

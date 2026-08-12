@@ -1,10 +1,20 @@
-'use strict'
-
-const fs = require('bare-fs')
-const path = require('bare-path')
-const { QVACRegistryClient } = require('@qvac/registry-client')
+import fs from 'bare-fs'
+import path from 'bare-path'
+import { QVACRegistryClient } from '@qvac/registry-client'
 
 const DEFAULT_DISK_PATH = './models'
+
+interface ModelSpec {
+  path: string
+  source: string
+  filename: string
+}
+
+interface EnsuredModel {
+  filename: string
+  dir: string
+  fullPath: string
+}
 
 const RAG_MODELS = {
   embedder: {
@@ -17,12 +27,20 @@ const RAG_MODELS = {
     source: 'hf',
     filename: 'Llama-3.2-1B-Instruct-Q4_0.gguf'
   }
+} satisfies Record<string, ModelSpec>
+
+type ModelKey = keyof typeof RAG_MODELS
+
+interface RequestedModel extends ModelSpec {
+  key: string
+  fullPath: string
 }
 
-async function ensureModels(keys, diskPath) {
-  diskPath = diskPath || DEFAULT_DISK_PATH
-
-  const requested = keys.map((key) => {
+async function ensureModels(
+  keys: ModelKey[],
+  diskPath: string = DEFAULT_DISK_PATH
+): Promise<Record<string, EnsuredModel>> {
+  const requested: RequestedModel[] = keys.map((key) => {
     const model = RAG_MODELS[key]
     if (!model) {
       throw new Error(
@@ -64,12 +82,12 @@ async function ensureModels(keys, diskPath) {
   return toResult(requested, diskPath)
 }
 
-function toResult(requested, diskPath) {
-  const out = {}
+function toResult(requested: RequestedModel[], diskPath: string): Record<string, EnsuredModel> {
+  const out: Record<string, EnsuredModel> = {}
   for (const m of requested) {
     out[m.key] = { filename: m.filename, dir: diskPath, fullPath: m.fullPath }
   }
   return out
 }
 
-module.exports = { ensureModels, RAG_MODELS, DEFAULT_DISK_PATH }
+export { ensureModels, RAG_MODELS, DEFAULT_DISK_PATH }
