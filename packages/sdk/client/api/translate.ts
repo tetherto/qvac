@@ -1,4 +1,5 @@
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 import {
   translateResponseSchema,
   type TranslateRequest,
@@ -55,14 +56,20 @@ export function translate(
   tokenStream: AsyncGenerator<string>
   stats: Promise<TranslationStats | undefined>
   text: Promise<string>
+  requestId: string
 } {
+  // Stable identity generated client-side so `cancel({ requestId })` works the
+  // moment we return, before the first round-trip. Surfaced on the handle.
+  const requestId = generateClientRequestId()
+
   // Source-language auto-detection lives in the worker now
   // (server/bare/ops/translate.ts): `from` is passed through when present and
   // resolved server-side when absent, so every language binding shares one
   // detector instead of each shipping its own.
   const request: TranslateRequest = {
     type: 'translate',
-    ...params
+    ...params,
+    requestId
   }
 
   let stats: TranslationStats | undefined
@@ -91,7 +98,8 @@ export function translate(
     return {
       tokenStream,
       text: textPromise,
-      stats: statsPromise
+      stats: statsPromise,
+      requestId
     }
   } else {
     const tokenStream = (async function* () {
@@ -118,7 +126,8 @@ export function translate(
     return {
       tokenStream,
       text: textPromise,
-      stats: statsPromise
+      stats: statsPromise,
+      requestId
     }
   }
 }
