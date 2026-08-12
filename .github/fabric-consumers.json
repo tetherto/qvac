@@ -1,0 +1,13 @@
+{
+  "vcpkg_direct": [
+    "fabric",
+    "llm-llamacpp",
+    "embed-llamacpp",
+    "translation-nmtcpp",
+    "ocr-ggml",
+    "vla-ggml"
+  ],
+  "npm_runtime": [
+    "classification-ggml"
+  ]
+}
