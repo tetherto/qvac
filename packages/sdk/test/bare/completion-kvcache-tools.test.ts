@@ -33,6 +33,31 @@ type RecordedCall = {
   prefill: boolean
 }
 
+type ToolDef = {
+  type: string
+  name: string
+  description: string
+  parameters: unknown
+}
+
+type HistoryEntry = { role: string; content: string; attachments: never[] }
+
+function makeTool(name: string): ToolDef {
+  return {
+    type: 'function',
+    name,
+    description: `Invoke ${name}.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        base: { type: 'integer', description: 'base' },
+        height: { type: 'integer', description: 'height' }
+      },
+      required: ['base', 'height']
+    }
+  }
+}
+
 function isToolEntry(entry: { type?: string }): boolean {
   return entry.type === 'function'
 }
@@ -245,6 +270,98 @@ test('completion: kv-cache sends the tool block once, not on every warm turn', a
     turnCalls[1]!.messages.map((msg) => msg.role),
     ['user'],
     'the warm turn sends only the unsaved tail'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The send-once gate keys off the turn's saved count, which records that
+// history was committed — not that this tool block is the one in the cache. A
+// tool set that shows up after a tools-free turn, or changes mid-session, must
+// still reach the model: it keys into its own cache through `configHash`, which
+// primes fresh and so passes the gate.
+test('completion: kv-cache sends a tool set that appears late or changes', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-changing-${Date.now()}`
+  const calls: RecordedCall[] = []
+
+  registerModel(modelId, {
+    model: {
+      run(
+        prompt: unknown,
+        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+      ) {
+        calls.push({
+          messages: prompt as RecordedCall['messages'],
+          prefill: opts?.prefill === true
+        })
+        const written =
+          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        return {
+          iterate: async function* () {
+            await written
+            yield 'The area is 25 square units.'
+          },
+          await: () => written,
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: '/tmp/kvcache-tools-changing.gguf',
+    config: { tools: true },
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+
+  const complete = async (history: HistoryEntry[], tools?: ToolDef[]) => {
+    const gen = handler({
+      modelId,
+      requestId: `kvcache-tools-changing-${history.length}`,
+      history,
+      stream: true,
+      kvCache: 'tools-changing-key',
+      ...(tools ? { tools } : {})
+    })
+    for await (const _ of gen) void _
+  }
+
+  const user = (content: string): HistoryEntry => ({ role: 'user', content, attachments: [] })
+  const reply = (): HistoryEntry => ({
+    role: 'assistant',
+    content: 'The area is 25 square units.',
+    attachments: []
+  })
+
+  const turn1 = [user('Hello, no tools yet.')]
+  const turn2 = [...turn1, reply(), user('Area of a triangle, base 10 height 5?')]
+  const turn3 = [...turn2, reply(), user('And its perimeter?')]
+
+  await complete(turn1)
+  await complete(turn2, [makeTool('calculate_triangle_area')])
+  await complete(turn3, [makeTool('calculate_triangle_area'), makeTool('calculate_perimeter')])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+
+  t.absent(
+    turnCalls[0]!.messages.some(isToolEntry),
+    'the tools-free turn carries no tool definitions'
+  )
+  t.alike(
+    turnCalls[1]!.messages.filter(isToolEntry).map((msg) => msg.name),
+    ['calculate_triangle_area'],
+    'a tool set that appears after a tools-free turn still reaches the model'
+  )
+  t.alike(
+    turnCalls[2]!.messages.filter(isToolEntry).map((msg) => msg.name),
+    ['calculate_triangle_area', 'calculate_perimeter'],
+    'a changed tool set reaches the model instead of reusing the cached block'
   )
 
   unregisterModel(modelId)

@@ -298,11 +298,11 @@ function prepareMessagesForCache(
 
     // Static never trims the block back out of the cache, so re-sending it
     // every turn would leave one copy per turn and grow the prefix with the
-    // conversation. Send it only when this turn is the one writing it:
-    // `savedCount === 0` is a freshly primed prefix nothing has committed
-    // against yet, and a stale boundary means we are resending the whole
-    // conversation anyway. On an ordinary warm hit the block is already in
-    // the cache from the turn that first sent it.
+    // conversation. Send it only on the turn that writes it: `savedCount === 0`
+    // is a freshly primed prefix nothing has committed against yet, and a stale
+    // boundary means we are resending the whole conversation anyway. Skipping on
+    // a warm hit is safe because the tool set is part of `configHash`, so a late
+    // or changed set gets its own cache and primes at `savedCount === 0`.
     const toolBlockAlreadyCached = turn.savedCount > 0 && !clearStaleCount
 
     return withToolBlock(
@@ -522,10 +522,11 @@ export async function* completion(
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
-  // The cached prefix holds the system prompt and nothing else, so the hash
-  // must not depend on the tool list — every turn carries its own tools, and
-  // keying on them would fragment the cache per tool set for no benefit.
-  const configHash = generateConfigHash(systemPromptFromHistory)
+  // Static bakes the tool block into the cache on the turn that first sends it
+  // and never trims it, so a late or changed tool set has to land on a fresh
+  // cache rather than a warm prefix holding the old block. Dynamic trims its
+  // block after each chain, so nothing tool-specific survives in its cache.
+  const configHash = generateConfigHash(systemPromptFromHistory, staticTools ? tools : undefined)
 
   const systemPromptToUse =
     systemPromptFromHistory ||

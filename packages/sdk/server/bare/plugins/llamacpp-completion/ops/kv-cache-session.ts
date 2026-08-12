@@ -202,10 +202,11 @@ export interface BeginCustomTurnInput {
   /** Hash of system prompt + (static) tool names. */
   configHash: string
   /**
-   * Prime the cache by sending system prompt + (static) tools to the
-   * addon. Called when the cache doesn't exist in-memory OR on disk.
-   * Kept as an injected closure so this module has no dependency on the
-   * model registry / addon — the handler closes over `model` and tools.
+   * Prime the cache by sending the system prompt to the addon. Tools are not
+   * primed — a prefix with no user turn is not a renderable conversation for
+   * every template — so they travel with a turn instead. Called when the cache
+   * doesn't exist in-memory OR on disk. Kept as an injected closure so this
+   * module has no dependency on the model registry / addon.
    */
   primeIfMissing: (cachePath: string) => Promise<void>
 }
