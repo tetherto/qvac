@@ -108,28 +108,45 @@ try {
     stream: true
   })
 
-  // Wait for the doomed run to actually start streaming before cancelling, so
-  // the cancel hits the real per-job cancel path, not a pre-admission drop.
-  await doomed.events[Symbol.asyncIterator]().next()
+  // Wait until BOTH runs are actually streaming before cancelling, so the
+  // cancel hits a genuinely in-flight peer (not a pre-admission drop) and the
+  // survivor is provably decoding alongside the one we cancel.
+  await Promise.all([
+    doomed.events[Symbol.asyncIterator]().next(),
+    survivor.events[Symbol.asyncIterator]().next()
+  ])
 
   await cancel({ requestId: doomed.requestId })
 
   let doomedOutcome: string
+  let doomedErrored = false
   try {
     await doomed.final
     doomedOutcome = 'completed (cancel lost the race)'
   } catch (err) {
-    // Count only a genuine cancellation; surface anything else as an error.
-    doomedOutcome =
-      err instanceof InferenceCancelledError ? 'cancelled' : `errored: ${String(err)}`
+    if (err instanceof InferenceCancelledError) {
+      doomedOutcome = 'cancelled'
+    } else {
+      // A peer cancel must never surface the cancelled run as a generic error.
+      doomedOutcome = `errored: ${String(err)}`
+      doomedErrored = true
+    }
   }
   const survivorText = (await survivor.final).contentText.replace(/\s+/g, ' ').trim()
+  const survivorSaidMelon = /MELON/i.test(survivorText)
   console.log(`  ▸ cancelled run -> ${doomedOutcome}`)
-  console.log(
-    `  ▸ peer run kept decoding -> "${survivorText}" (${survivorText.length > 0 ? 'produced output' : 'EMPTY — peer was affected'})`
-  )
+  console.log(`  ▸ peer run kept decoding -> "${survivorText}"`)
 
   await unloadModel({ modelId, clearStorage: false })
+
+  // The isolation claim only holds if the cancelled run didn't error out and
+  // the peer still produced its deterministic answer.
+  if (doomedErrored || !survivorSaidMelon) {
+    console.error(
+      `✖ cancel isolation not demonstrated (doomedErrored=${doomedErrored}, survivorSaidMelon=${survivorSaidMelon})`
+    )
+    process.exit(1)
+  }
   process.exit(0)
 } catch (error) {
   console.error('✖', error)
