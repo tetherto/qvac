@@ -1,15 +1,16 @@
 'use strict'
 
 /**
- * Universal transcribe / diarize example.
+ * Parakeet transcribe / diarize example.
  *
- * Loads a single Parakeet GGUF (CTC, TDT, EOU, or Sortformer) and
+ * Loads a single Parakeet GGUF (CTC, TDT, EOU, or Sortformer; use the
+ * Indic Conformer example when a language mask is required) and
  * runs inference on a wav / raw PCM file via the public
  * `ASRGgml` class. The binding auto-detects the model
- * type from GGUF metadata, so the same script handles every engine.
+ * type from GGUF metadata.
  *
  * Usage:
- *   bare examples/transcribe.js --model <gguf> --audio <file>
+ *   bare examples/parakeet-transcribe.js --model <gguf> --audio <file>
  */
 
 /* global Bare */
@@ -47,7 +48,7 @@ async function loadAudio(audioPath) {
 async function main() {
   const args = parseArgs()
   if (!args.model || !args.audio) {
-    console.error('Usage: bare examples/transcribe.js --model <gguf> --audio <file>')
+    console.error('Usage: bare examples/parakeet-transcribe.js --model <gguf> --audio <file>')
     process.exit(1)
   }
 

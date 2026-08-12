@@ -32,8 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
   vocoder (24 kHz), on CPU with opt-in Android OpenCL/Adreno GPU offload.
-  Instruct2 control (dialect / emotion / speed / volume / style) via the
-  `instruct` option.
+  Dialect / volume / style control via the `instruct` option; emotion and
+  speaking rate use the cross-engine `emotion` / `pace` options below.
 - **LavaSR enhancer + denoiser for CosyVoice3.** `files.lavasrEnhancer` /
   `enhancer` now bandwidth-extend CosyVoice3's native 24 kHz output to 48 kHz,
   on both batch synthesis and native chunk streaming (seam-free). The
@@ -74,6 +74,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than Parler-only, so the "parler-only" rejection for those four names
   reads "parler/audio8-only". `response.stats.tokensPerSecond` counts codec
   frames per second on this engine, not characters per second.
+
+### Changed
+
+- **Unified emotion and pace across engines.** `emotion` and `pace` now mean the
+  same thing on every engine that supports them, and are set the same way: the
+  constructor and `reload()` on all of them, plus per call on Parler and
+  CosyVoice3. The vocabulary is owned by tts-cpp and each engine declares the
+  subset it supports, so an unsupported value throws naming that engine's set
+  instead of being silently ignored. Parler keeps all 12 emotions and its
+  existing behaviour is unchanged; CosyVoice3 gains `emotion` (anger, happy,
+  neutral, sad), `pace`, and the per-call / `reload()` channels it did not have
+  before; Supertonic gains `pace` (mapped onto its duration multiplier, relative
+  to the model's own default, so `moderate` is a no-op). Supertonic conditions
+  its engine at construction, so its `pace` belongs in the constructor or
+  `reload({ pace })` and a per-call one throws instead of being dropped.
+
+  `reload()` is atomic: a rejected configuration leaves the instance exactly as
+  it was, so a later partial reload is never validated against values the
+  caller never accepted.
+
+  Breaking for CosyVoice3 callers: `instruct: { emotion }` and
+  `instruct: { speed }` are removed in favour of the top-level `emotion` /
+  `pace`, and the emotion value is spelled `anger`, not `angry`. `instruct`
+  keeps `dialect` / `volume` / `style` and the raw-string escape hatch.
+  CosyVoice3 is trained on one instruction per synthesis, so engaging two
+  controls now throws instead of silently resolving by precedence.
+
+  `speed` is unchanged: it remains the exact rate multiplier on Chatterbox and
+  Supertonic.
+
+  The vocabulary itself is owned by `tts-cpp` `2026-08-10#1`, already the
+  package's floor.
 
 ### Fixed
 
