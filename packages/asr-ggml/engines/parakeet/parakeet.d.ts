@@ -12,6 +12,8 @@ export interface ParakeetConfigurationParams {
     captionEnabled?: boolean;
     timestampsEnabled?: boolean;
     seed?: number;
+    /** Multilingual CTC language id; required for Indic Conformer GGUFs. */
+    language?: string;
     streaming?: boolean;
     streamingChunkMs?: number;
     streamingHistoryMs?: number;

@@ -102,6 +102,32 @@ export interface GenerateOptions {
   dcwHighScaler?: number
   /** Frozen ACE-Step semantic codes; when present, skips the LM stage. */
   audioCodes?: Int32Array
+  /**
+   * Optional timbre reference: interleaved stereo float PCM at 48 kHz.
+   * Empty / omitted keeps the engine's canonical silence reference.
+   */
+  referenceAudio?: Float32Array
+  /**
+   * Source / cover audio (same layout as `referenceAudio`). Required when
+   * `taskType` is `"cover"` or `"cover-nofsq"`.
+   */
+  sourceAudio?: Float32Array
+  /**
+   * Task discriminator. Supported today: `"text2music"` (default) |
+   * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
+   * in the engine yet.
+   */
+  taskType?: 'text2music' | 'cover' | 'cover-nofsq'
+  /**
+   * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
+   * Values < 1 are rejected by the engine until context switching lands.
+   */
+  audioCoverStrength?: number
+  /**
+   * Blend initial DiT noise toward clean source latents (0..1). 0 = pure noise;
+   * 1 ≈ source latent. Default 0.
+   */
+  coverNoiseStrength?: number
 }
 
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
@@ -190,6 +216,45 @@ function optionalFiniteNumber (
   integer = false
 ): number | undefined {
   return value === undefined ? undefined : requireFiniteNumber(value, name, integer)
+}
+
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq'])
+
+function optionalTaskType (value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
+    throw new Error(
+      'audiogen-ggml: taskType must be one of text2music|cover|cover-nofsq'
+    )
+  }
+  return value
+}
+
+function requireFinitePcm (value: Float32Array, name: string): void {
+  for (const sample of value) {
+    if (!Number.isFinite(sample)) {
+      throw new Error(`audiogen-ggml: ${name} must contain only finite samples`)
+    }
+  }
+}
+
+function optionalStereoPcm (
+  value: Float32Array | undefined,
+  name: string
+): Float32Array | undefined {
+  if (value === undefined) return undefined
+  if (!(value instanceof Float32Array)) {
+    throw new Error(`audiogen-ggml: ${name} must be a Float32Array`)
+  }
+  if ((value.length & 1) !== 0) {
+    throw new Error(`audiogen-ggml: ${name} must be interleaved stereo`)
+  }
+  requireFinitePcm(value, name)
+  return value
+}
+
+function isCoverTask (taskType: string | undefined): boolean {
+  return taskType === 'cover' || taskType === 'cover-nofsq'
 }
 
 /**
@@ -298,6 +363,12 @@ export class AudioGen {
     if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
       throw new Error('audiogen-ggml: audioCodes must be an Int32Array')
     }
+    const taskType = optionalTaskType(opts.taskType)
+    const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio')
+    const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio')
+    if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+      throw new Error(`audiogen-ggml: taskType '${taskType}' requires sourceAudio`)
+    }
     const response = this._job.start()
     try {
       await this._requireAddon().runJob({
@@ -318,7 +389,18 @@ export class AudioGen {
         dcwEnabled: opts.dcwEnabled,
         dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
         dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
-        audioCodes: opts.audioCodes
+        audioCodes: opts.audioCodes,
+        referenceAudio,
+        sourceAudio,
+        taskType,
+        audioCoverStrength: optionalFiniteNumber(
+          opts.audioCoverStrength,
+          'audioCoverStrength'
+        ),
+        coverNoiseStrength: optionalFiniteNumber(
+          opts.coverNoiseStrength,
+          'coverNoiseStrength'
+        )
       })
     } catch (error) {
       this._logger.error(
