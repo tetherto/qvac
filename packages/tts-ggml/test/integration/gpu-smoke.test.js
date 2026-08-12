@@ -682,8 +682,9 @@ async function probeAndroidGpuVendor(t) {
   }
 }
 
-// CosyVoice3 smoke. The GPU leg is strict on Apple (Metal, tts-cpp allowlisted
-// under QVAC-22775). On Android the allowlist takes OpenCL/Adreno only:
+// CosyVoice3 smoke. The GPU leg is strict on Apple (Metal is on the tts-cpp
+// validated-backend allowlist). On Android the allowlist takes OpenCL/Adreno
+// only:
 // Adreno devices must resolve to OpenCL (backendId 4 — Vulkan would mean the
 // selection requirement regressed), Mali/Xclipse devices must decline by
 // policy (CPU with stats.gpuUnsupported set); an inconclusive vendor probe
