@@ -17,7 +17,7 @@ import {
   removeAutoCacheMarkerIfMissing
 } from '@/server/bare/ops/kv-cache-retention'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
-import { type CacheMessage, getKVCacheDir } from '@/server/utils'
+import { type CacheMessage, assertSafeCacheKey, getKVCacheDir } from '@/server/utils'
 import {
   logCacheSaveError,
   logCacheStatus
@@ -422,6 +422,10 @@ export function createKvCacheSession(
   }
 
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
+    // Reject non-canonical keys so two aliases (e.g. "foo" and "/foo") can't
+    // resolve to one file while splitting its init/registry metadata across
+    // distinct keys. Matches the path/marker guards in the cache utils.
+    assertSafeCacheKey(input.customKey, getKVCacheDir())
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
     const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
     // Held for the whole turn so a same-file peer can't interleave writes.
