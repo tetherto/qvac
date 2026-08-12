@@ -36,6 +36,7 @@ export { diffusion, type DiffusionProgressTick } from './diffusion'
 export { classify } from './classify'
 export { video, type VideoProgressTick } from './video'
 export { upscale } from './upscale'
+export { worldCreateScene, worldStep } from './world'
 export {
   modelRegistryList,
   modelRegistrySearch,

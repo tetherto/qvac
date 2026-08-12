@@ -17,6 +17,7 @@ export type RequestKind =
   | 'transcribe'
   | 'translate'
   | 'diffusion'
+  | 'world'
   | 'audiogen'
   | 'tts'
   | 'ocr'

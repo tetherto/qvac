@@ -49,7 +49,7 @@ const cacheModeSchema = z.enum([
 
 export const sdcppConfigSchema = z.object({
   mode: z
-    .enum(['diffusion', 'upscale', 'video'])
+    .enum(['diffusion', 'upscale', 'video', 'world'])
     .default('diffusion')
     .describe(
       'Operation mode for the diffusion plugin. ' +
@@ -68,7 +68,13 @@ export const sdcppConfigSchema = z.object({
         'On React Native, loading the video model on-device will likely fail ' +
         'because the video diffusion models currently ' +
         'shipped by the SDK are too large to load on typical mobile devices; ' +
-        'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.'
+        'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead. ' +
+        "`'world'` builds an ABot-World interactive world session and exposes " +
+        'worldCreateScene({ ... }) and worldStep({ ... }). It requires ' +
+        '`taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes ' +
+        'and/or `sceneSrc` to walk a pre-built one. World sessions run only on ' +
+        'the machine hosting the worker and need a dedicated GPU with at least ' +
+        '20 GB free VRAM; there is no delegated route for them.'
     ),
   threads: z.number().optional(),
   device: z.enum(['gpu', 'cpu']).optional(),
@@ -194,6 +200,87 @@ export const sdcppConfigSchema = z.object({
         'presence selects the LTX-2 video layout (Gemma text encoder via ' +
         '`llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead ' +
         'of the Wan layout.'
+    ),
+  taehvModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'taew2_2 streaming pixel decoder (`taew2_2_f16.gguf`) — required for ' +
+        "mode: 'world'. Decodes each generated block's latents to RGB frames. " +
+        'Rejected in every other mode.'
+    ),
+  sceneSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      "Pre-built ABot-World scene pack (`.safetensors`) — mode: 'world' only. " +
+        'Supplying it loads the walk session eagerly at loadModel time, so a ' +
+        'bad pack fails fast. Omit it to start with no world and build one with ' +
+        'worldCreateScene({ ... }), in which case the session activates on the ' +
+        'first worldStep. Scene packs are produced by worldCreateScene and are ' +
+        'specific to the resolution they were created at.'
+    ),
+  world: z
+    .object({
+      seed: z.number().int().optional().describe('Walk RNG seed.'),
+      threads: z
+        .number()
+        .int()
+        .optional()
+        .describe('CPU threads for the session. -1 = auto-detect (default).'),
+      backend: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Per-module backend override, e.g. "diffusion=cuda0,vae=cuda1" to keep ' +
+            'scene creation off the walk GPU on a multi-GPU host.'
+        ),
+      numFramePerBlock: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe('Latent frames denoised per step. 0 = model default (3).'),
+      localAttnSize: z
+        .number()
+        .int()
+        .nonnegative()
+        .optional()
+        .describe(
+          'History attention window in latent frames. 0 = engine default (8). ' +
+            'With `kvCache` the engine validates this against the compiled KV ' +
+            'ring and fails at load on an unsupported combination.'
+        ),
+      offloadParamsToCpu: z
+        .boolean()
+        .optional()
+        .describe('Keep weights in CPU memory and offload during GPU compute.'),
+      frameJpegQuality: z
+        .number()
+        .int()
+        .min(0)
+        .max(100)
+        .optional()
+        .describe(
+          'Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at ' +
+            'that quality on the standard scale (higher = better quality and ' +
+            'larger frames). A block is roughly 14 MB of raw pixels, so 85 is a ' +
+            'good choice whenever frames cross a process or network boundary.'
+        ),
+      kvCache: z
+        .boolean()
+        .optional()
+        .describe(
+          'Per-layer history KV cache (~3.7x fewer frame-passes per block). ' +
+            'Costs ~1.2 GB more VRAM but keeps block times flat; without it they ' +
+            'ramp from ~1.8 s to ~7.5 s as the recompute window fills.'
+        ),
+      profile: z.boolean().optional().describe('Per-stage timing logs from the native session.')
+    })
+    .strict()
+    .optional()
+    .describe(
+      "ABot-World session tuning — mode: 'world' only, rejected in every other " +
+        'mode. Forwarded to the native session as-is.'
     ),
   upscaler: z
     .object({
@@ -925,5 +1012,191 @@ export const upscaleStreamResponseSchema = z.object({
 export type UpscaleStreamResponse = z.infer<typeof upscaleStreamResponseSchema>
 
 export type UpscaleClientParams = Omit<UpscaleRequest, 'image'> & {
+  image: Uint8Array
+}
+
+// ============================================
+// ABot-World interactive world sessions (mode: "world")
+// ============================================
+
+export const walkKeySchema = z.enum(['W', 'A', 'S', 'D', 'I', 'J', 'K', 'L'])
+
+export type WalkKey = z.infer<typeof walkKeySchema>
+
+/**
+ * Keys held for one block, as accepted by the client helpers: an array
+ * (`['W', 'J']`), a keys object (`{ W: true }`), or a raw 8-bit mask
+ * (bit 0..7 = W,A,S,D,I,J,K,L). All three normalize to the array form
+ * before the request goes on the wire.
+ */
+export type WalkKeysInput =
+  number | readonly string[] | Readonly<Record<string, boolean | undefined>>
+
+export const worldStepStatsSchema = z.object({
+  modelLoadMs: z
+    .number()
+    .optional()
+    .describe('Time in milliseconds spent loading the DiT, decoder and scene pack.'),
+  stepMs: z
+    .number()
+    .optional()
+    .describe('Generation time in milliseconds for this block, excluding frame encoding.'),
+  totalStepMs: z
+    .number()
+    .optional()
+    .describe('Cumulative generation time in milliseconds across the session.'),
+  totalSteps: z
+    .number()
+    .optional()
+    .describe(
+      'Number of blocks generated so far in this session; resets when the session reloads.'
+    ),
+  totalFrames: z.number().optional().describe('Cumulative frames delivered across the session.'),
+  frames: z
+    .number()
+    .optional()
+    .describe(
+      'Frames delivered for this block — 9 for the first block after a load ' +
+        '(decoder warmup), 12 thereafter at the default numFramePerBlock.'
+    ),
+  width: z.number().optional().describe('Frame width in pixels.'),
+  height: z.number().optional().describe('Frame height in pixels.'),
+  actionMask: z
+    .number()
+    .optional()
+    .describe('The 8-bit key mask this block was generated under (bit 0..7 = W,A,S,D,I,J,K,L).')
+})
+
+export type WorldStepStats = z.infer<typeof worldStepStatsSchema>
+
+export const worldSceneStatsSchema = z.object({
+  sceneCreateMs: z
+    .number()
+    .optional()
+    .describe(
+      'Wall-clock time in milliseconds for the scene pack: loading the prompt ' +
+        'and image encoders, encoding both, and writing the pack.'
+    ),
+  width: z.number().optional().describe('Scene width in pixels, baked into the pack.'),
+  height: z.number().optional().describe('Scene height in pixels, baked into the pack.')
+})
+
+export type WorldSceneStats = z.infer<typeof worldSceneStatsSchema>
+
+export const worldStepRequestSchema = z.object({
+  modelId: z
+    .string()
+    .describe(
+      "Identifier of a model loaded with modelConfig.mode: 'world'. The session " +
+        'activates on the first step when no sceneSrc was supplied at load.'
+    ),
+  requestId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Stable identifier for this in-flight block, for cancel(). Optional on the ' +
+        'wire — the server generates one when the field is missing.'
+    ),
+  keys: z
+    .array(walkKeySchema)
+    .optional()
+    .describe(
+      'Keys held for this block. WASD move, IJKL steer the camera; duplicates are ' +
+        'collapsed. Omit or pass an empty array to idle.'
+    )
+})
+
+export type WorldStepRequest = z.input<typeof worldStepRequestSchema>
+
+export const worldStepStreamRequestSchema = worldStepRequestSchema.extend({
+  type: z.literal('worldStepStream')
+})
+
+export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema>
+
+export const worldStepStreamResponseSchema = z.object({
+  type: z.literal('worldStepStream'),
+  data: z
+    .string()
+    .optional()
+    .describe('Base64 of one decoded frame — PNG, or JPEG when world.frameJpegQuality is 1..100.'),
+  frameIndex: z.number().optional().describe('Zero-based index of this frame within the block.'),
+  done: z.boolean().optional(),
+  stats: worldStepStatsSchema.optional()
+})
+
+export type WorldStepStreamResponse = z.infer<typeof worldStepStreamResponseSchema>
+
+export const worldSceneRequestSchema = z.object({
+  modelId: z.string().describe("Identifier of a model loaded with modelConfig.mode: 'world'."),
+  requestId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Stable identifier for this scene creation. Note that scene creation cannot ' +
+        'be interrupted — the engine exposes no abort hook — so cancelling it stops ' +
+        'the SDK from yielding, but the encode runs to completion.'
+    ),
+  prompt: z
+    .string()
+    .min(1)
+    .describe(
+      'Scene prompt, encoded verbatim by umT5-XXL. The reference pipeline prefixes ' +
+        'prompts with "| unknown | ".'
+    ),
+  image: z
+    .string()
+    .min(1)
+    .regex(BASE64_PATTERN)
+    .describe(
+      'Base64 PNG/JPEG bytes of the first frame. Any size — it is cover-scaled and ' +
+        'center-cropped to width x height.'
+    ),
+  width: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(32)
+    .optional()
+    .describe('Scene width in pixels, a multiple of 32. Defaults to 832.'),
+  height: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(32)
+    .optional()
+    .describe('Scene height in pixels, a multiple of 32. Defaults to 480.')
+})
+
+export type WorldSceneRequest = z.input<typeof worldSceneRequestSchema>
+
+export const worldSceneStreamRequestSchema = worldSceneRequestSchema.extend({
+  type: z.literal('worldSceneStream')
+})
+
+export type WorldSceneStreamRequest = z.input<typeof worldSceneStreamRequestSchema>
+
+export const worldSceneStreamResponseSchema = z.object({
+  type: z.literal('worldSceneStream'),
+  data: z
+    .string()
+    .optional()
+    .describe(
+      'Base64 of the finished scene pack (~10 MB). Persist it and pass it back as ' +
+        'modelConfig.sceneSrc to walk the same world again later.'
+    ),
+  done: z.boolean().optional(),
+  stats: worldSceneStatsSchema.optional()
+})
+
+export type WorldSceneStreamResponse = z.infer<typeof worldSceneStreamResponseSchema>
+
+export type WorldStepClientParams = Omit<WorldStepRequest, 'requestId' | 'keys'> & {
+  keys?: WalkKeysInput
+}
+
+export type WorldSceneClientParams = Omit<WorldSceneRequest, 'requestId' | 'image'> & {
   image: Uint8Array
 }

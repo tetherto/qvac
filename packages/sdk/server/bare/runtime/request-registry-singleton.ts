@@ -58,6 +58,17 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
   })
+  // An ABot-World session runs one job at a time — the addon rejects a second
+  // step while a block is still streaming, and scene creation shares the same
+  // lane. Reject rather than queue: a walk is driven by live key input, so a
+  // backlog of stale keypresses is worse for the caller than a prompt refusal
+  // it can drop. Making the registry authoritative also means the refusal
+  // arrives as a typed SDK error instead of the addon's opaque busy string.
+  r.policy({
+    kind: 'world',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
+  })
 }
 
 export function getRequestRegistry(): RequestRegistry {

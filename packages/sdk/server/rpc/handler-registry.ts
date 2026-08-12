@@ -34,6 +34,8 @@ import { handleCancelDelegated } from '@/server/rpc/handlers/cancel-delegated'
 import { handleDiffusionStream } from '@/server/rpc/handlers/diffusion-stream'
 import { handleVideoStream } from '@/server/rpc/handlers/video-stream'
 import { handleUpscaleStream } from '@/server/rpc/handlers/upscale-stream'
+import { handleWorldStepStream } from '@/server/rpc/handlers/world-step-stream'
+import { handleWorldSceneStream } from '@/server/rpc/handlers/world-scene-stream'
 import { handleClassify } from '@/server/rpc/handlers/classify'
 import { handleAudioGenStream } from '@/server/rpc/handlers/audio-gen-stream'
 import { handlePluginInvoke, handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
@@ -143,6 +145,10 @@ export const registry: Record<string, HandlerEntry> = {
   diffusionStream: { type: 'stream', handler: handleDiffusionStream },
   videoStream: { type: 'stream', handler: handleVideoStream },
   upscaleStream: { type: 'stream', handler: handleUpscaleStream },
+  // No delegated route: an ABot-World session is bound to the worker that
+  // holds the GPU, and the diffusion ops have no delegated handlers.
+  worldStepStream: { type: 'stream', handler: handleWorldStepStream },
+  worldSceneStream: { type: 'stream', handler: handleWorldSceneStream },
   classify: { type: 'stream', handler: handleClassify },
   pluginInvokeStream: { type: 'stream', handler: handlePluginInvokeStream },
 

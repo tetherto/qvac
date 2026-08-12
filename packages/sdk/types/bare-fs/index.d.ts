@@ -85,6 +85,7 @@ declare module 'bare-fs' {
     rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
     readFile(path: string, encoding?: BufferEncoding): Promise<string | Buffer>
     writeFile(path: string, data: string | Buffer, encoding?: BufferEncoding): Promise<void>
+    copyFile(src: string, dst: string, mode?: number): Promise<void>
     mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<void>
     rmdir(path: string): Promise<void>
     readdir(

@@ -1,5 +1,11 @@
 import type { LoadModelSrcRequest, LoadModelResponse, ModelProgressUpdate } from '@/schemas'
-import { DELEGATION_BREAKDOWN_KEY, OPERATION_EVENT_KEY, modelInputToSrcSchema } from '@/schemas'
+import {
+  DELEGATION_BREAKDOWN_KEY,
+  OPERATION_EVENT_KEY,
+  ModelType,
+  modelInputToSrcSchema,
+  normalizeModelType
+} from '@/schemas'
 import type { DelegatedHandlerOptions } from '@/server/rpc/profiling'
 import type { ResponseWithDelegation } from '@/server/rpc/delegate-transport'
 import {
@@ -19,6 +25,32 @@ export interface HandleLoadModelDelegatedOptions extends DelegatedHandlerOptions
   progressCallback?: (update: ModelProgressUpdate) => void
 }
 
+/**
+ * Refuses a delegated load whose operations have no delegated route.
+ *
+ * `loadModel` proxies happily to the provider and registers a delegated entry,
+ * but an op only reaches that provider if its handler-registry entry declares a
+ * `delegatedHandler`. `worldStepStream` / `worldSceneStream` do not, so without
+ * this the load would report success and every subsequent step would fail with
+ * `ModelIsDelegatedError` — the failure arriving far from its cause.
+ *
+ * Deliberately narrow. The same gap applies to video, diffusion, upscale, OCR
+ * and the rest (only `completionStream` is delegated today), but those are
+ * shipped behaviour and changing them belongs in their own change.
+ */
+function rejectUndelegatableModel(request: LoadModelSrcRequest): void {
+  if (normalizeModelType(request.modelType ?? '') !== ModelType.sdcppGeneration) return
+  const mode = (request.modelConfig as { mode?: unknown } | undefined)?.mode
+  if (mode !== 'world') return
+
+  throw new ModelLoadFailedError(
+    "modelConfig.mode: 'world' cannot be delegated. An ABot-World session is bound " +
+      'to the worker holding the GPU, and the world operations have no delegated ' +
+      'route, so the walk would fail on the first step. Load it on a host with a ' +
+      'dedicated GPU (at least 20 GB free VRAM) and omit `delegate`.'
+  )
+}
+
 export async function handleLoadModelDelegated(
   request: LoadModelSrcRequest,
   options?: HandleLoadModelDelegatedOptions
@@ -27,6 +59,7 @@ export async function handleLoadModelDelegated(
   if (!request.delegate) {
     throw new ModelLoadFailedError('Delegate information is required for delegated load model')
   }
+  rejectUndelegatableModel(request)
 
   const { delegate } = request
   const { providerPublicKey, timeout, healthCheckTimeout, fallbackToLocal, forceNewConnection } =

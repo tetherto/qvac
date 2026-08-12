@@ -43,6 +43,8 @@ export {
   video,
   type VideoProgressTick,
   upscale,
+  worldCreateScene,
+  worldStep,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
