@@ -1,4 +1,4 @@
-# QVAC sdk-python fat-wheel e2e - PR (test-wheel-e2e-gated)
+# QVAC sdk-python fat-wheel e2e - PR (test-wheel-e2e)
 #
 # Proves the SHIPPED artifact: builds the self-contained fat wheel per platform,
 # installs it into a CLEAN venv (no @qvac/sdk checkout on the path, no editable

@@ -9,15 +9,24 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import (
+    BARE_BIN,
+    WORKER_AVAILABLE,
+    WORKER_PATH,
+    _bundled_worker_and_bare,
+)
 
+import tetherto.qvac_sdk as qvac_sdk_pkg
 from tetherto.qvac_sdk._generated.sdk_version import SDK_VERSION
 from tetherto.qvac_sdk.client import (
     Client,
     WorkerNotFoundError,
+    _bare_executable_name,
     _bare_runtime_package_suffix,
     _resolve_command,
 )
+from tetherto.qvac_sdk.methods import heartbeat
+from tetherto.qvac_sdk.schemas import HeartbeatRequest
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +74,8 @@ def test_resolve_command_resolves_worker_and_bare_independently(monkeypatch) -> 
     # Derived paths are OS-native (pathlib), so compare via Path, not a POSIX
     # string literal -- on Windows the join yields backslashes.
     assert Path(bare) == Path(
-        f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/bare"
+        f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/"
+        f"{_bare_executable_name()}"
     )
 
 
@@ -75,7 +85,8 @@ def test_resolve_command_derives_from_sdk_dir(monkeypatch) -> None:
     bare, worker = _resolve_command(None, None, "/sdk")
     assert Path(worker) == Path("/sdk/dist/server/worker.js")
     assert Path(bare) == Path(
-        f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/bare"
+        f"/sdk/node_modules/bare-runtime-{_bare_runtime_package_suffix()}/bin/"
+        f"{_bare_executable_name()}"
     )
 
 
@@ -94,13 +105,34 @@ def test_resolve_command_uses_bundled_wheel(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
     monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
     bundled_worker = tmp_path / "_bundle" / "worker" / "dist" / "server" / "worker.js"
-    bundled_bare = tmp_path / "_bundle" / "runtime" / "bare"
+    bundled_bare = tmp_path / "_bundle" / "runtime" / _bare_executable_name()
     bundled_worker.parent.mkdir(parents=True)
     bundled_worker.write_text("")
     bundled_bare.parent.mkdir(parents=True)
     bundled_bare.write_text("")
     # _resolve_command derives the bundle from Path(__file__).parent of the
     # client module; point that at tmp_path so the staged _bundle is found.
+    monkeypatch.setattr(
+        "tetherto.qvac_sdk.client.__file__", str(tmp_path / "client.py")
+    )
+    bare, worker = _resolve_command(None, None, "/sdk")
+    assert Path(worker) == bundled_worker
+    assert Path(bare) == bundled_bare
+
+
+def test_resolve_command_uses_bundled_bare_exe_on_windows(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        "tetherto.qvac_sdk.client._bare_executable_name", lambda: "bare.exe"
+    )
+    monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
+    monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
+    bundled_worker = tmp_path / "_bundle" / "worker" / "dist" / "server" / "worker.js"
+    bundled_bare = tmp_path / "_bundle" / "runtime" / "bare.exe"
+    bundled_worker.parent.mkdir(parents=True)
+    bundled_worker.write_text("")
+    bundled_bare.parent.mkdir(parents=True)
+    bundled_bare.write_text("")
+    (tmp_path / "_bundle" / "runtime" / "bare").write_text("")
     monkeypatch.setattr(
         "tetherto.qvac_sdk.client.__file__", str(tmp_path / "client.py")
     )
@@ -199,10 +231,28 @@ def test_client_transport_property_requires_connect() -> None:
     reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",
 )
 async def test_client_connects_and_round_trips_a_heartbeat() -> None:
-    from tetherto.qvac_sdk.methods import heartbeat
-    from tetherto.qvac_sdk.schemas import HeartbeatRequest
-
     async with Client(worker_path=WORKER_PATH, bare_path=BARE_BIN) as client:
+        response = await heartbeat(client.transport, HeartbeatRequest(type="heartbeat"))
+        assert response.type == "heartbeat"
+        assert isinstance(response.number, float)
+
+
+@pytest.mark.skipif(
+    _bundled_worker_and_bare() is None,
+    reason="zero-config Client() requires an installed fat-wheel _bundle",
+)
+async def test_client_zero_config_uses_installed_bundle(monkeypatch) -> None:
+    # Restores real client.__file__ past the autouse neutralization so the
+    # installed wheel's `_bundle` is what `Client()` resolves.
+    monkeypatch.setattr(
+        "tetherto.qvac_sdk.client.__file__",
+        str(Path(qvac_sdk_pkg.__file__).resolve().parent / "client.py"),
+    )
+    monkeypatch.delenv("QVAC_WORKER_PATH", raising=False)
+    monkeypatch.delenv("QVAC_BARE_PATH", raising=False)
+    monkeypatch.delenv("QVAC_SDK_DIR", raising=False)
+
+    async with Client() as client:
         response = await heartbeat(client.transport, HeartbeatRequest(type="heartbeat"))
         assert response.type == "heartbeat"
         assert isinstance(response.number, float)

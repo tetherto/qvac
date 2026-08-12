@@ -8,7 +8,9 @@
 # prebuilds); the thin `py3-none-any` wheel + sdist still go to PyPI via
 # publish-sdk.yml. Both triggers below share one build:
 #   - workflow_dispatch: build + attach to a chosen existing release tag (manual
-#     backfill / re-run / single-platform fix).
+#     backfill / re-run / single-platform fix). Builds from `github.sha` (not the
+#     tag) so pre-tooling tags don't die on argparse; SDK_VERSION must still
+#     match the target tag.
 #   - workflow_call: invoked by publish-sdk.yml after a release is created,
 #     passing the published version.
 #
@@ -96,10 +98,11 @@ jobs:
           echo "tag=${tag}"
           echo "matrix=${matrix}"
 
-      - name: Check out release tag
+      - name: Check out workflow revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ steps.compute.outputs.tag }}
+          # Build from this workflow's revision; attach assets to the release tag.
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -113,11 +116,11 @@ jobs:
             packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py)
           tag_ver="${TAG#sdk-v}"
           if [ -z "$py_ver" ]; then
-            echo "::error::could not parse SDK_VERSION at ${TAG}"
+            echo "::error::could not parse SDK_VERSION at ${GITHUB_SHA}"
             exit 1
           fi
           if [ "$py_ver" != "$tag_ver" ]; then
-            echo "::error::tetherto-qvac-sdk ${py_ver} at ${TAG} != tag version ${tag_ver}"
+            echo "::error::tetherto-qvac-sdk ${py_ver} at ${GITHUB_SHA} != tag version ${tag_ver}"
             exit 1
           fi
           echo "OK: tetherto-qvac-sdk ${py_ver} matches ${TAG}"
@@ -149,10 +152,10 @@ jobs:
       run:
         working-directory: packages/sdk-python
     steps:
-      - name: Check out release tag
+      - name: Check out workflow revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ needs.setup.outputs.tag }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
