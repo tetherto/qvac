@@ -456,7 +456,11 @@ export function createKvCacheSession(
       // at the same path. Verify the file persisted (the addon
       // currently swallows save errors — see TODO in
       // `verifySaveAndRecord`) and record the new boundary.
-      const ok = await verifySaveAndRecord(state.cachePath, result.messageCount, result.toolBlockCached)
+      const ok = await verifySaveAndRecord(
+        state.cachePath,
+        result.messageCount,
+        result.toolBlockCached
+      )
       if (!ok) {
         // The expected save didn't land — treat the turn as a rollback
         // so the next turn re-primes cleanly.
@@ -503,7 +507,11 @@ export function createKvCacheSession(
       return
     }
 
-    const ok = await verifySaveAndRecord(result.targetCachePath, result.messageCount, result.toolBlockCached)
+    const ok = await verifySaveAndRecord(
+      result.targetCachePath,
+      result.messageCount,
+      result.toolBlockCached
+    )
     if (!ok) {
       // Rename succeeded but the file isn't where we expected. Roll
       // back via the target path instead of the (now-empty) source.
