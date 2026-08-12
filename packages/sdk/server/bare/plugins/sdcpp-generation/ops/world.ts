@@ -104,12 +104,17 @@ function getWorldInfo(model: WorldStableDiffusion, method: string): WorldModelIn
   if (!info) {
     // Unreachable through the plugin (createModel always marks the model);
     // guards direct registrations in tests.
-    throw new PluginRequestValidationFailedError(method, 'world model is missing its load-time info')
+    throw new PluginRequestValidationFailedError(
+      method,
+      'world model is missing its load-time info'
+    )
   }
   return info
 }
 
-export async function* worldStep(request: WorldStepRequest): AsyncGenerator<WorldStepStreamResponse> {
+export async function* worldStep(
+  request: WorldStepRequest
+): AsyncGenerator<WorldStepStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateServerRequestId(),
     kind: 'diffusion',
@@ -237,9 +242,7 @@ export async function* worldCreateScene(
   }
 }
 
-function toWorldSceneStats(
-  stats: WorldSceneRuntimeStats | undefined
-): WorldSceneStats | undefined {
+function toWorldSceneStats(stats: WorldSceneRuntimeStats | undefined): WorldSceneStats | undefined {
   if (!stats) return undefined
   return stats
 }

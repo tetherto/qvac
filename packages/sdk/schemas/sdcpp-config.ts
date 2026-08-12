@@ -1090,10 +1090,7 @@ export const worldStepStreamResponseSchema = z.object({
 export type WorldStepStreamResponse = z.infer<typeof worldStepStreamResponseSchema>
 
 export const worldSceneRequestSchema = z.object({
-  requestId: z
-    .string()
-    .optional()
-    .describe('Stable identifier for this in-flight scene creation.'),
+  requestId: z.string().optional().describe('Stable identifier for this in-flight scene creation.'),
   modelId: z
     .string()
     .describe(

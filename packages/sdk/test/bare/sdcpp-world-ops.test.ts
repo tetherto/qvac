@@ -28,18 +28,19 @@ async function withRegisteredWorldModel<T>(
   info: { scenePath: string; t5Path?: string; vaePath?: string },
   body: (modelId: string) => Promise<T>
 ) {
-  const [{ registerModel, unregisterModel }, { ModelType }, { markWorldModel }] =
-    await Promise.all([
+  const [{ registerModel, unregisterModel }, { ModelType }, { markWorldModel }] = await Promise.all(
+    [
       import('@/server/bare/registry/model-registry'),
       import('@/schemas'),
       import('@/server/bare/plugins/sdcpp-generation/ops/world')
-    ])
+    ]
+  )
   const modelId = makeId('test-world')
   const fakeModel = Object.create(WorldStableDiffusion.prototype) as Record<string, unknown>
-  fakeModel['load'] = stubs.load ?? (async function () {})
+  fakeModel['load'] = stubs.load ?? async function () {}
   fakeModel['step'] = stubs.step
   fakeModel['createScene'] = stubs.createScene
-  fakeModel['cancel'] = stubs.cancel ?? (async function () {})
+  fakeModel['cancel'] = stubs.cancel ?? async function () {}
   markWorldModel(fakeModel as unknown as WorldStableDiffusion, info)
 
   try {
@@ -72,7 +73,14 @@ test('world step op: loads on demand, forwards keys, and emits frame/progress/te
       step: async function (keys: unknown) {
         observedKeys = keys
         return {
-          stats: { stepMs: 1780, totalSteps: 1, totalFrames: 12, frames: 12, width: 832, height: 480 },
+          stats: {
+            stepMs: 1780,
+            totalSteps: 1,
+            totalFrames: 12,
+            frames: 12,
+            width: 832,
+            height: 480
+          },
           iterate: async function* () {
             yield new Uint8Array([137, 80, 78, 71])
             yield new Uint8Array([137, 80, 78, 71])
@@ -257,9 +265,8 @@ test('world ops: refuse a non-world model with a structured error', async functi
 })
 
 test('deferred world load: eager load no-ops without the pack, loads once it exists', async function (t) {
-  const { installDeferredWorldLoad, markWorldModel } = await import(
-    '@/server/bare/plugins/sdcpp-generation/ops/world'
-  )
+  const { installDeferredWorldLoad, markWorldModel } =
+    await import('@/server/bare/plugins/sdcpp-generation/ops/world')
 
   const dir = makeTmpDir()
   const scenePath = path.join(dir, 'scene.safetensors')

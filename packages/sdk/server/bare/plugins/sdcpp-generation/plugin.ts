@@ -38,12 +38,7 @@ import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 import { diffusion } from './ops/diffusion'
 import { markLtxVideoModel, markMoeCapableVideoModel, video } from './ops/video'
 import { upscale } from './ops/upscale'
-import {
-  installDeferredWorldLoad,
-  markWorldModel,
-  worldCreateScene,
-  worldStep
-} from './ops/world'
+import { installDeferredWorldLoad, markWorldModel, worldCreateScene, worldStep } from './ops/world'
 
 type DiffusionArtifactKey =
   | 'clipLModelPath'
@@ -149,7 +144,7 @@ export const diffusionPlugin = definePlugin({
     if (cfg.mode === 'world') {
       if (!cfg.taehvModelSrc) {
         throw new ModelLoadFailedError(
-          "modelConfig.taehvModelSrc is required in world mode. Provide the taehv (taew2.2) streaming pixel decoder before loading the walk session."
+          'modelConfig.taehvModelSrc is required in world mode. Provide the taehv (taew2.2) streaming pixel decoder before loading the walk session.'
         )
       }
       if (!cfg.world?.scenePack) {

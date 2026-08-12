@@ -85,7 +85,9 @@ try {
   for (const keys of walkTape) {
     const { progressStream, frames } = worldStep({ modelId, keys })
     for await (const { step, frames: blockFrames, elapsedMs } of progressStream) {
-      console.log(`▸ block ${step}: ${blockFrames} frames in ${elapsedMs} ms [${keys.join('+') || 'idle'}]`)
+      console.log(
+        `▸ block ${step}: ${blockFrames} frames in ${elapsedMs} ms [${keys.join('+') || 'idle'}]`
+      )
     }
     for (const frame of await frames) {
       const outputPath = path.join(outputDir, `walk_${String(frameIndex).padStart(4, '0')}.png`)

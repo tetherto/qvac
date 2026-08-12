@@ -81,7 +81,10 @@ test('worldStepStreamRequestSchema: requires the type literal', (t: BrittleT) =>
     worldStepStreamRequestSchema.safeParse({ type: 'worldStep', modelId: 'm1', keys: 3 }).success,
     true
   )
-  t.is(worldStepStreamRequestSchema.safeParse({ type: 'videoStream', modelId: 'm1' }).success, false)
+  t.is(
+    worldStepStreamRequestSchema.safeParse({ type: 'videoStream', modelId: 'm1' }).success,
+    false
+  )
 })
 
 test('worldStepStreamResponseSchema: frame, progress, and terminal chunks parse', (t: BrittleT) => {
