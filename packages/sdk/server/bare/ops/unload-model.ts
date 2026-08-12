@@ -20,10 +20,11 @@ export async function unloadModel(params: UnloadModelParams) {
     throw new ModelNotLoadedError(modelId)
   }
 
-  // Cancel every in-flight and queued request for this model before tearing it
-  // down, so a queued op can't be admitted and start decoding against a model
-  // object that is about to be unloaded.
-  getRequestRegistry().cancel({ modelId })
+  // Cancel every in-flight and queued request for this model AND wait for the
+  // active ones to fully dispose (native context freed, slot released) before
+  // tearing the model down, so nothing is still decoding against a model object
+  // that is about to be unloaded.
+  await getRequestRegistry().cancelAndDrain(modelId)
 
   clearFinetuneRuntimeState(modelId)
 

@@ -209,6 +209,15 @@ export interface RequestRegistry {
   cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void>
 
   /**
+   * Cancel every active request for a model (optionally narrowed by kind) and
+   * resolve only once each has fully disposed — native context freed and slot
+   * released. Queued waiters are aborted too but not awaited, since they never
+   * held a slot or touched the model. Used by model unload so the model object
+   * isn't freed while a request is still mid-teardown against it.
+   */
+  cancelAndDrain(modelId: string, kind?: RequestKind): Promise<void>
+
+  /**
    * Mark a request finished and dispose its scope. Equivalent to
    * `await ctx[Symbol.asyncDispose]()` with an explicit outcome.
    * Idempotent — calling `end` after a scope dispose is a no-op.
@@ -244,6 +253,14 @@ interface RegistryEntry {
    * slot twice; this flag makes the second return early.
    */
   disposing: boolean
+  /**
+   * Resolves once `disposeEntry` has fully unwound this entry's scope (native
+   * context freed, slot released). `cancelAndDrain` awaits it so a model isn't
+   * unloaded while one of its requests is still mid-teardown.
+   */
+  disposed: Promise<void>
+  /** Resolver for `disposed`; called in `disposeEntry`'s finally. */
+  resolveDisposed: () => void
 }
 
 /**
@@ -677,6 +694,9 @@ export function createRequestRegistry(options?: {
       // guarantees the slot is freed even if a deferred cleanup throws,
       // otherwise a throwing teardown would strand the queue forever.
       if (entry.slotKey !== undefined) releaseSlot(entry.slotKey, entry.exclusive)
+      // Signal any `cancelAndDrain` waiting on this request that its native
+      // teardown is complete.
+      entry.resolveDisposed()
     }
   }
 
@@ -770,6 +790,10 @@ export function createRequestRegistry(options?: {
       state: preCancel || opts.parentSignal?.aborted ? 'cancelling' : 'running'
     }
 
+    let resolveDisposed: () => void = () => {}
+    const disposed = new Promise<void>((resolve) => {
+      resolveDisposed = resolve
+    })
     const entry: RegistryEntry = {
       ctx,
       controller,
@@ -778,7 +802,9 @@ export function createRequestRegistry(options?: {
       startedAt: Date.now(),
       slotKey,
       exclusive,
-      disposing: false
+      disposing: false,
+      disposed,
+      resolveDisposed
     }
     entries.set(opts.requestId, entry)
     reservedIds.delete(opts.requestId)
@@ -907,6 +933,28 @@ export function createRequestRegistry(options?: {
     return Promise.resolve()
   }
 
+  async function cancelAndDrain(modelId: string, kind?: RequestKind): Promise<void> {
+    // Abort every matching active request and collect its disposal promise, so
+    // we can wait for each handler's scope to fully unwind (native context
+    // freed, slot released) before the caller tears the model down. Snapshot
+    // the disposals before awaiting — `disposeEntry` mutates `entries`.
+    const draining: Array<Promise<void>> = []
+    for (const entry of entries.values()) {
+      if (entry.ctx.modelId !== modelId) continue
+      if (kind && entry.ctx.kind !== kind) continue
+      cancelEntry(entry, 'modelUnload')
+      draining.push(entry.disposed)
+    }
+    // Queued waiters never held a slot or touched the model, so there's nothing
+    // native to drain — just resolve their begins into aborted contexts.
+    for (const { key, waiter } of Array.from(waitersById.values())) {
+      if (waiter.modelId !== modelId) continue
+      if (kind && waiter.kind !== kind) continue
+      cancelQueuedWaiterGracefully(key, waiter, 'modelUnload')
+    }
+    await Promise.all(draining)
+  }
+
   async function end(requestId: string, outcome: RequestOutcome): Promise<void> {
     const entry = entries.get(requestId)
     if (!entry) return
@@ -923,6 +971,7 @@ export function createRequestRegistry(options?: {
     list,
     cancel,
     cancelAll,
+    cancelAndDrain,
     end,
     policy,
     // Test-only: lets the registry race tests assert the bound

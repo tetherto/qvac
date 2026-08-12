@@ -1505,3 +1505,64 @@ test('exclusive: cancelAll rejects a queued writer and its trailing readers', as
   await holder[Symbol.asyncDispose]()
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after cancelAll teardown')
 })
+
+test('cancelAndDrain: waits for an active request to finish disposing, and aborts a queued one', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  const active = await r.begin({ requestId: 'active', kind: 'completion', modelId: 'm1' })
+
+  // Simulate a native teardown that takes time: the deferred cleanup blocks on
+  // a gate we release by hand, so the drain has something real to wait on.
+  let cleanupRan = false
+  let releaseCleanup = () => {}
+  const cleanupGate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve
+  })
+  active.scope.defer(async () => {
+    await cleanupGate
+    cleanupRan = true
+  })
+  // A real handler unwinds its `await using` on abort; emulate that here.
+  active.signal.addEventListener(
+    'abort',
+    () => {
+      void active[Symbol.asyncDispose]()
+    },
+    { once: true }
+  )
+
+  // A second request queues behind the cap-1 lane.
+  let queuedResolved = false
+  const queuedP = r
+    .begin({ requestId: 'queued', kind: 'completion', modelId: 'm1' })
+    .then((ctx) => {
+      queuedResolved = true
+      return ctx
+    })
+  await settle()
+  t.is(queuedResolved, false, 'second request queued behind the active one')
+
+  let drainDone = false
+  const drainP = r.cancelAndDrain('m1').then(() => {
+    drainDone = true
+  })
+  await settle()
+
+  // Abort has fired and disposal has started, but the gated cleanup has not
+  // finished, so the drain must still be pending.
+  t.is(cleanupRan, false, 'deferred cleanup still blocked')
+  t.is(drainDone, false, 'drain waits while the active request is mid-teardown')
+
+  releaseCleanup()
+  await drainP
+  t.is(cleanupRan, true, 'deferred cleanup completed')
+  t.is(drainDone, true, 'drain resolved only after disposal finished')
+  t.is(r.get('active'), null, 'active request disposed and removed')
+
+  // The queued request was resolved into an aborted context, not left hanging.
+  const queued = await queuedP
+  t.is(queued.signal.aborted, true, 'queued request aborted by the drain')
+  await queued[Symbol.asyncDispose]()
+  t.is(r.list().length, 0, 'no entries remain once the queued request unwinds')
+})
