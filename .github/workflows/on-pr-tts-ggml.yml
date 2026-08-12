@@ -393,7 +393,7 @@ jobs:
 
   publish-prebuild-status:
     # Posts qvac/prebuild-tts-ggml for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
-    needs: [prebuild, prebuild-artifact-reuse]
+    needs: [prebuild, prebuild-artifact-reuse, ci-router]
     if: always() && !cancelled() && github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
@@ -416,6 +416,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PREBUILD_RESULT: ${{ needs.prebuild.result }}
           REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # A skipped prebuild is only a pass when ci-router succeeded and chose
+          # not to build (no label); a skip from an upstream failure fails closed.
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
           # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
           # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
