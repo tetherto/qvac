@@ -490,13 +490,13 @@ export function createRequestRegistry(options?: {
     if (!policy) return { slotKey: undefined, exclusive: false }
     // The per-request override (the model's own `parallel`) wins over the
     // per-kind default. A non-finite effective cap disables gating entirely; a
-    // finite value is floored at 1 (matching `normalizePolicy`) so a stray 0
-    // can't wedge the lane into queuing every request forever.
+    // finite value is floored to an integer >= 1 (matching `normalizePolicy`) so
+    // a stray 0 can't wedge the lane and a fractional cap can't over-admit.
     const requestedMax = opts.maxConcurrentPerModel ?? policy.maxConcurrent
     if (!Number.isFinite(requestedMax)) {
       return { slotKey: undefined, exclusive: false }
     }
-    const maxConcurrent = requestedMax < 1 ? 1 : requestedMax
+    const maxConcurrent = requestedMax < 1 ? 1 : Math.floor(requestedMax)
     // A parent (worker-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
@@ -910,9 +910,9 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
     onOverflow = opts.onOverflow ?? 'queue'
   }
 
-  // A finite limit below 1 would gate every request forever; clamp to the
-  // smallest sensible serial limit.
-  if (Number.isFinite(maxConcurrent) && maxConcurrent < 1) maxConcurrent = 1
+  // A finite cap is a slot count: floor to an integer >= 1 so a value below 1
+  // can't gate every request forever and a fractional one can't over-admit.
+  if (Number.isFinite(maxConcurrent)) maxConcurrent = Math.max(1, Math.floor(maxConcurrent))
 
   return {
     maxConcurrent,

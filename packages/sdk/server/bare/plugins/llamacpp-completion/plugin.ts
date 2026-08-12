@@ -51,7 +51,10 @@ import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 
 // The model's concurrent sequence slots. Missing / 0 / NaN all mean single-slot.
 function getModelParallel(config: { parallel?: number | undefined }) {
-  return Number(config.parallel) || 1
+  // `parallel` is a slot count; floor to a finite integer >= 1 so a fractional
+  // value can't over-admit (the addon already validates this at load).
+  const n = Math.floor(Number(config.parallel))
+  return Number.isFinite(n) && n >= 1 ? n : 1
 }
 
 function createLlmModel(
