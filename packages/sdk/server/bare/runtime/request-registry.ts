@@ -312,6 +312,13 @@ interface KeyState {
   waiters: SlotWaiter[]
   /** A writer holds the lane exclusively; no reader may be admitted. */
   exclusiveActive: boolean
+  /**
+   * Reader cap pinned from the first reader admitted into this lane. Every
+   * later reader is measured against it, so a request arriving with a larger
+   * cap can't over-admit the shared pool. Reset when the lane goes idle (the
+   * `KeyState` is deleted). Undefined until the first reader admits.
+   */
+  readerCap?: number
 }
 
 /**
@@ -527,17 +534,22 @@ export function createRequestRegistry(options?: {
     }
 
     const exclusive = policy.exclusive
-    // A reader admits below the cap; an exclusive writer needs the lane empty.
-    // A queued waiter (of any kind) blocks admission so a writer isn't starved
-    // by a steady reader stream. For reader-only lanes `waiters` is empty
-    // whenever `active < cap`, so this guard is a no-op there.
+    // A reader admits below the lane's pinned cap (see `readerCap`); an exclusive
+    // writer needs the lane empty. A queued waiter (of any kind) blocks admission
+    // so a writer isn't starved by a steady reader stream. For reader-only lanes
+    // `waiters` is empty whenever `active < cap`, so this guard is a no-op there.
+    const readerCap = st.readerCap ?? maxConcurrent
     const canAdmit =
       st.waiters.length === 0 &&
       !st.exclusiveActive &&
-      (exclusive ? st.active === 0 : st.active < maxConcurrent)
+      (exclusive ? st.active === 0 : st.active < readerCap)
     if (canAdmit) {
-      if (exclusive) st.exclusiveActive = true
-      else st.active++
+      if (exclusive) {
+        st.exclusiveActive = true
+      } else {
+        st.active++
+        if (st.readerCap === undefined) st.readerCap = maxConcurrent
+      }
       return { slotKey: key, exclusive }
     }
 
@@ -607,8 +619,10 @@ export function createRequestRegistry(options?: {
         if (st.exclusiveActive || st.active > 0) break
         st.exclusiveActive = true
       } else {
-        if (st.exclusiveActive || st.active >= head.cap) break
+        const readerCap = st.readerCap ?? head.cap
+        if (st.exclusiveActive || st.active >= readerCap) break
         st.active++
+        if (st.readerCap === undefined) st.readerCap = head.cap
       }
       st.waiters.shift()
       waitersById.delete(head.requestId)
