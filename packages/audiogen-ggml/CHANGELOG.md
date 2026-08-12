@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Expose ACE-Step reference/source audio and cover task controls through the
+  JavaScript API (`referenceAudio`, `sourceAudio`, `taskType`,
+  `audioCoverStrength`, `coverNoiseStrength`) and forward them to audiogen-cpp.
 - Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
   `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
   produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
@@ -18,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump `audiogen-cpp` to `2026-08-11` so native builds pick up cover-nofsq and
+  reference-audio support from the official registry.
 - Bump `audiogen-cpp` to `2026-08-10`, enabling official sampler-side Haar DCW
   by default and using the validated LM decoding policy on Metal and Vulkan.
 
