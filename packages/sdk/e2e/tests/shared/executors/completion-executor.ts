@@ -63,6 +63,9 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       if (test.testId === 'completion-concurrent-requests') {
         return [test.testId, this.concurrentRequests.bind(this)]
       }
+      if (test.testId === 'completion-concurrent-overlap') {
+        return [test.testId, this.concurrentOverlap.bind(this)]
+      }
       if (test.testId === 'completion-seed-reproducibility') {
         return [test.testId, this.seedReproducibility.bind(this)]
       }
@@ -148,6 +151,78 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       output:
         `FIFO concurrency policy enforced: ${fulfilled.length} completed, ` +
         `${rejected.length} rejected (of ${CONCURRENCY} issued)`
+    }
+  }
+
+  // Proves the model actually decodes several completions at once, not just
+  // that they all eventually resolve. Fires CONCURRENCY streamed completions
+  // against a parallel>1 model, times each request's first->last token, and
+  // asserts at least two decode intervals overlap. A serialized (parallel=1)
+  // model admits one at a time, so request N's first token only lands after
+  // request N-1's last — peak overlap would be 1 and this test would fail.
+  async concurrentOverlap(
+    params: CompletionTestParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-batch')
+    const CONCURRENCY = 4
+
+    const intervals = await Promise.all(
+      Array.from({ length: CONCURRENCY }, async () => {
+        const run = completion({
+          modelId: llmModelId,
+          ...params,
+          stream: true
+        } as CompletionFnParams)
+        let start = 0
+        let text = ''
+        for await (const token of run.tokenStream) {
+          if (start === 0) start = Date.now()
+          text += token
+        }
+        return { start, end: Date.now(), text }
+      })
+    )
+
+    // Sweep line over the decode intervals: peak number live at once. Ties
+    // resolve end-before-start, so touching intervals don't count as overlap.
+    const events = intervals.flatMap(({ start, end }) => [
+      { t: start, delta: 1 },
+      { t: end, delta: -1 }
+    ])
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let live = 0
+    let peakOverlap = 0
+    for (const event of events) {
+      live += event.delta
+      if (live > peakOverlap) peakOverlap = live
+    }
+
+    const empty = intervals.filter((i) => i.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${CONCURRENCY} concurrent completions produced no output`
+      }
+    }
+    if (peakOverlap < 2) {
+      return {
+        passed: false,
+        output:
+          `Expected concurrent decoding on a parallel>1 model; peak overlap was ` +
+          `${peakOverlap} (requests decoded serially)`
+      }
+    }
+    const failed = intervals
+      .map((i) => ValidationHelpers.validate(i.text, expectation))
+      .find((result) => !result.passed)
+    if (failed) {
+      return { passed: false, output: `Concurrent completion failed expectation: ${failed.output}` }
+    }
+
+    return {
+      passed: true,
+      output: `Concurrent decoding proven: peak ${peakOverlap}/${CONCURRENCY} overlapping on parallel:4`
     }
   }
 

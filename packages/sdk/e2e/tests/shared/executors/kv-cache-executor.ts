@@ -31,6 +31,11 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       if (test.testId === 'kv-cache-cancel-then-new-prompt')
         return [test.testId, this.cancelThenNewPrompt.bind(this)]
       if (
+        test.testId === 'kv-cache-concurrent-same-key' ||
+        test.testId === 'kv-cache-concurrent-same-key-auto'
+      )
+        return [test.testId, this.concurrentSameKey.bind(this)]
+      if (
         test.testId.startsWith('kv-cache-delete-') ||
         test.testId === 'kv-cache-hypercore-deletion'
       ) {
@@ -109,6 +114,92 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `KV cache completion failed: ${errorMsg}` }
+    }
+  }
+
+  // Fires several completions sharing one kvCache key at once on a parallel>1
+  // model and proves the per-cache-path lock serializes them: their decode
+  // intervals must never overlap (peak overlap 1), and all must still succeed.
+  // Called directly (not via callWhenAddonIdle) so the requests race for real.
+  async concurrentSameKey(
+    params: {
+      history: ChatMessage[]
+      kvCache: string | boolean
+      generationParams?: Record<string, unknown>
+    },
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const CONCURRENCY = 2
+
+    const fire = () => {
+      const run = completion({
+        modelId,
+        history: params.history,
+        stream: true,
+        kvCache: params.kvCache as never,
+        ...(params.generationParams ? { generationParams: params.generationParams as never } : {})
+      })
+      let start = 0
+      return (async () => {
+        let text = ''
+        for await (const token of run.tokenStream) {
+          if (start === 0) start = Date.now()
+          text += token
+        }
+        return { start, end: Date.now(), text }
+      })()
+    }
+
+    let intervals: Array<{ start: number; end: number; text: string }>
+    try {
+      intervals = await Promise.all(Array.from({ length: CONCURRENCY }, fire))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Concurrent same-key completion threw: ${msg}` }
+    }
+
+    const empty = intervals.filter((i) => i.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${CONCURRENCY} same-key completions produced no output`
+      }
+    }
+
+    // Peak number of decode intervals live at once; ties resolve end-before-
+    // start so back-to-back turns don't read as overlap.
+    const events = intervals.flatMap(({ start, end }) => [
+      { t: start, delta: 1 },
+      { t: end, delta: -1 }
+    ])
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let live = 0
+    let peakOverlap = 0
+    for (const event of events) {
+      live += event.delta
+      if (live > peakOverlap) peakOverlap = live
+    }
+
+    if (peakOverlap > 1) {
+      return {
+        passed: false,
+        output:
+          `Same-key cached completions overlapped (peak ${peakOverlap}); the ` +
+          `per-cache-path lock did not serialize them`
+      }
+    }
+
+    const failed = intervals
+      .map((i) => ValidationHelpers.validate(i.text, expectation))
+      .find((result) => !result.passed)
+    if (failed) {
+      return { passed: false, output: `Same-key completion failed expectation: ${failed.output}` }
+    }
+
+    return {
+      passed: true,
+      output: `Same-key cached completions serialized (peak overlap ${peakOverlap}) and both succeeded`
     }
   }
 

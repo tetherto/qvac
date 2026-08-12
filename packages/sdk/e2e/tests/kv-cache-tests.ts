@@ -312,7 +312,47 @@ export const kvCacheCancelThenNewPrompt: TestDefinition = {
   }
 }
 
+// Two completions sharing one kvCache key are fired at once on a parallel:4
+// model. They must serialize — the per-cache-path lock in the KV-cache session
+// makes the second wait for the first to commit, so their decode intervals
+// never overlap even though the model is otherwise concurrent (proven by
+// completion-concurrent-overlap on the same resource). Both must still succeed.
+export const kvCacheConcurrentSameKey: TestDefinition = {
+  testId: 'kv-cache-concurrent-same-key',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant. Be brief.' },
+      { role: 'user', content: 'Count from one to twenty using words.' }
+    ],
+    kvCache: 'concurrent-same-key-session',
+    generationParams: { temp: 0, seed: 42, predict: 64 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+}
+
+// Same serialization guarantee for the automatic (history-derived) cache path:
+// two kvCache:true completions with identical history resolve to one cache file
+// and must serialize on the per-cache-path lock — which, for the auto path, is
+// acquired outside the global cache-state lock so the auto-rename commit can't
+// deadlock against it. Both must succeed; their decode intervals must not overlap.
+export const kvCacheConcurrentSameKeyAuto: TestDefinition = {
+  testId: 'kv-cache-concurrent-same-key-auto',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant. Be brief.' },
+      { role: 'user', content: 'Count from one to twenty using words.' }
+    ],
+    kvCache: true,
+    generationParams: { temp: 0, seed: 42, predict: 64 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+}
+
 export const kvCacheTests = [
+  kvCacheConcurrentSameKey,
+  kvCacheConcurrentSameKeyAuto,
   kvCacheDeleteAll,
   kvCacheDeleteByKey,
   kvCacheDeleteByModel,
