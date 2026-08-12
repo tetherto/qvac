@@ -82,6 +82,8 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "classify": "classify",
         "video": "video_stream",
         "upscale": "upscale_stream",
+        "worldStep": "world_step",
+        "worldCreateScene": "world_create_scene",
         "modelRegistryList": "model_registry_list",
         "modelRegistrySearch": "model_registry_search",
         "modelRegistryGetModel": "model_registry_get_model",
