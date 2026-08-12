@@ -1092,12 +1092,17 @@ test('publish-prebuild-status stamps its run URL into target_url', () => {
         )
       const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text)
       const runsScript = /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(text)
-      return !(hasRunUrl && hasContext && runsScript)
+      // A skipped prebuild must be distinguishable from a failure-induced skip,
+      // so the publish job forwards ci-router's result + run_prebuilds decision.
+      const hasSkipGuard =
+        /CI_ROUTER_RESULT:\s*\$\{\{ needs\.ci-router\.result \}\}/.test(text) &&
+        /RUN_PREBUILDS:\s*\$\{\{ needs\.ci-router\.outputs\.run_prebuilds \}\}/.test(text)
+      return !(hasRunUrl && hasContext && runsScript && hasSkipGuard)
     })
   assert.deepEqual(
     offenders,
     [],
-    'every on-pr publish-prebuild-status must run the shared publish script with RUN_URL and CONTEXT',
+    'every on-pr publish-prebuild-status must run the shared publish script with RUN_URL, CONTEXT, and the ci-router skip guard',
   )
 
   // The shared script is what actually stamps the run URL into target_url.
@@ -1106,6 +1111,23 @@ test('publish-prebuild-status stamps its run URL into target_url', () => {
     publish,
     /target_url=\$\{runUrl\}/,
     'publish.mjs stamps the run URL into the status target_url',
+  )
+
+  // Fail-closed on failure-induced skips: publish.mjs forwards ci-router's
+  // result + run_prebuilds, and the shared decision only trusts a skip that was
+  // ci-router's deliberate no-label choice (not a skip caused by an upstream
+  // failure). Otherwise a crashed label-detection job would read as a green
+  // prebuild to Merge Guard.
+  assert.match(
+    publish,
+    /resolvePublishState\(\s*process\.env\.PREBUILD_RESULT,\s*process\.env\.REUSE_HIT,\s*process\.env\.CI_ROUTER_RESULT,\s*process\.env\.RUN_PREBUILDS,?\s*\)/,
+    'publish.mjs passes ci-router result + run_prebuilds into the state decision',
+  )
+  const lib = read('.github/scripts/prebuild-status/lib.mjs')
+  assert.match(
+    lib,
+    /ciRouterResult === 'success' && runPrebuilds === 'false'/,
+    'resolvePublishState only treats a skip as success for a legit no-label skip',
   )
 })
 
