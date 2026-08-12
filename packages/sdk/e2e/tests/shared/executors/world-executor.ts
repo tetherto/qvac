@@ -33,6 +33,8 @@ const SCENE_PROMPT = '| unknown | A realistic outdoor world scene with a navigab
  * a freshly loaded model is expected to fail until `worldCreateScene` has run.
  */
 export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
+  pattern = /^world-/
+
   /**
    * Platform hook, mirroring DiffusionExecutor: params carry an image filename
    * and the platform subclass turns it into bytes, so this file stays free of
@@ -63,8 +65,10 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     return run.scene
   }
 
+  // Exhaustive testId → handler map; `Required<...>` turns a missing handler
+  // into a compile error.
   protected handlers: Required<{
-    [K in ExtractTest<typeof worldTests>['testId']]: HandlerFn
+    [K in (typeof worldTests)[number]['testId']]: HandlerFn<ExtractTest<typeof worldTests, K>>
   }> = {
     [worldCreateSceneReturnsPack.testId]: this.createScene.bind(this),
     [worldFirstBlockFrames.testId]: this.firstBlock.bind(this),
