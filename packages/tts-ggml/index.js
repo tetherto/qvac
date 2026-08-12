@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const bareOs = require("bare-os");
 const path = require("bare-path");
@@ -7,10 +40,11 @@ const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const tts_1 = require("./tts");
-const error_1 = require("./lib/error");
+const errorModule = __importStar(require("./lib/error"));
 const textChunker_1 = require("./lib/textChunker");
 const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
+const { ERR_CODES, QvacErrorAddonTTSGgml } = errorModule;
 const ENGINE_CHATTERBOX = "chatterbox";
 const ENGINE_SUPERTONIC = "supertonic";
 // CosyVoice3 (Fun-CosyVoice3-0.5B / 1.5B). Ships as a small set of GGUFs
@@ -1073,8 +1107,8 @@ class TTSGgml {
     async load(..._args) {
         void _args;
         if (this.state.destroyed) {
-            throw new error_1.QvacErrorAddonTTSGgml({
-                code: error_1.ERR_CODES.FAILED_TO_LOAD,
+            throw new QvacErrorAddonTTSGgml({
+                code: ERR_CODES.FAILED_TO_LOAD,
                 adds: "instance was destroyed",
             });
         }
@@ -1090,8 +1124,8 @@ class TTSGgml {
         if (input?.streamOutput === true) {
             if (typeof input.input !== "string" ||
                 input.input.trim().length === 0) {
-                throw new error_1.QvacErrorAddonTTSGgml({
-                    code: error_1.ERR_CODES.FAILED_TO_APPEND,
+                throw new QvacErrorAddonTTSGgml({
+                    code: ERR_CODES.FAILED_TO_APPEND,
                     adds: "run with streamOutput: non-empty string `input` is required",
                 });
             }
@@ -1190,8 +1224,8 @@ class TTSGgml {
     }
     _normalizeTextStream(textStream) {
         if (textStream == null) {
-            throw new error_1.QvacErrorAddonTTSGgml({
-                code: error_1.ERR_CODES.FAILED_TO_APPEND,
+            throw new QvacErrorAddonTTSGgml({
+                code: ERR_CODES.FAILED_TO_APPEND,
                 adds: "runStreaming: text stream is required",
             });
         }
@@ -1213,8 +1247,8 @@ class TTSGgml {
                 }
             })();
         }
-        throw new error_1.QvacErrorAddonTTSGgml({
-            code: error_1.ERR_CODES.FAILED_TO_APPEND,
+        throw new QvacErrorAddonTTSGgml({
+            code: ERR_CODES.FAILED_TO_APPEND,
             adds: "runStreaming: expected string, array of strings, Iterable, or AsyncIterable",
         });
     }
@@ -1295,8 +1329,8 @@ class TTSGgml {
             maxScalars: options.maxChunkScalars,
         });
         if (chunks.length === 0) {
-            throw new error_1.QvacErrorAddonTTSGgml({
-                code: error_1.ERR_CODES.FAILED_TO_APPEND,
+            throw new QvacErrorAddonTTSGgml({
+                code: ERR_CODES.FAILED_TO_APPEND,
                 adds: "chunked synthesis: text produced no chunks after split",
             });
         }
@@ -1729,14 +1763,10 @@ class TTSGgml {
     _enrichStreamChunk(data) {
         const context = this._sentenceStreamCtx;
         if (!context) {
-            // Preserve the historical ArrayBuffer declaration without changing the
-            // native Int16Array payload or allocating a compatibility copy.
             return data;
         }
         const index = context.chunkIdx;
         const enriched = {
-            // Public declarations historically expose ArrayBuffer; native output is
-            // the more precise Int16Array representation at runtime.
             outputArray: data.outputArray,
             chunkIndex: index,
             sentenceChunk: context.chunks[index] || "",
@@ -1786,7 +1816,7 @@ class TTSGgml {
             this._config.useGPU = runtimeConfig.useGPU;
         }
         if (runtimeConfig.outputSampleRate !== undefined) {
-            this._outputSampleRate = runtimeConfig.outputSampleRate;
+            this._outputSampleRate = validateOutputSampleRate(runtimeConfig.outputSampleRate);
         }
         this._applyAudio8Reload(newConfig);
         // Parler description/template + sampling knobs are reloadable; they rebuild
@@ -1942,4 +1972,13 @@ class TTSGgml {
         return this.logger;
     }
 }
+// eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the established class namespace API.
+(function (TTSGgml) {
+    TTSGgml.QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
+    TTSGgml.ERR_CODES = errorModule.ERR_CODES;
+})(TTSGgml || (TTSGgml = {}));
+module.exports.QvacErrorAddonTTSGgml =
+    errorModule.QvacErrorAddonTTSGgml;
+module.exports.ERR_CODES =
+    errorModule.ERR_CODES;
 module.exports = TTSGgml;
