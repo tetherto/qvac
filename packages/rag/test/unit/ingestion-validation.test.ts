@@ -1,8 +1,9 @@
-'use strict'
+import test from 'brittle'
+import { IngestionService } from '../../src/services/IngestionService.js'
+import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
+import type { EmbeddedDoc } from '../../src/types.js'
 
-const test = require('brittle')
-const IngestionService = require('../../src/services/IngestionService')
-const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
+type IngestionServiceConfig = ConstructorParameters<typeof IngestionService>[0]
 
 // Mock dependencies for IngestionService
 function createMockDeps() {
@@ -25,19 +26,19 @@ function createMockDeps() {
 }
 
 // Helper to create valid embedded doc
-function createDoc(id, overrides = {}) {
+function createDoc(id: string, overrides: Record<string, unknown> = {}): EmbeddedDoc {
   return {
     id,
     content: `Content for ${id}`,
     embedding: [0.1, 0.2, 0.3],
     embeddingModelId: 'test-model',
     ...overrides
-  }
+  } as EmbeddedDoc
 }
 
 test('IngestionService.saveEmbeddings: valid docs pass validation', async (t) => {
   const deps = createMockDeps()
-  const service = new IngestionService(deps)
+  const service = new IngestionService(deps as unknown as IngestionServiceConfig)
 
   const docs = [createDoc('doc-1'), createDoc('doc-2'), createDoc('doc-3')]
 
@@ -48,25 +49,27 @@ test('IngestionService.saveEmbeddings: valid docs pass validation', async (t) =>
 
 test('IngestionService.saveEmbeddings: rejects empty array with QvacErrorRAG', async (t) => {
   const deps = createMockDeps()
-  const service = new IngestionService(deps)
+  const service = new IngestionService(deps as unknown as IngestionServiceConfig)
 
   try {
     await service.saveEmbeddings([])
     t.fail('Should throw error for empty array')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Should throw QvacErrorRAG')
-    t.is(err.code, ERR_CODES.INVALID_INPUT, 'Should have INVALID_INPUT error code')
-    t.ok(err.message.includes('cannot be empty'), 'Error message should mention empty')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Should have INVALID_INPUT error code')
+      t.ok(err.message.includes('cannot be empty'), 'Error message should mention empty')
+    }
   }
 })
 
 test('IngestionService.saveEmbeddings: requires embeddingModelId with QvacErrorRAG', async (t) => {
   const deps = createMockDeps()
-  const service = new IngestionService(deps)
+  const service = new IngestionService(deps as unknown as IngestionServiceConfig)
 
   const docs = [
     createDoc('doc-1'),
-    { id: 'doc-2', content: 'Test', embedding: [0.1, 0.2, 0.3] } // missing embeddingModelId
+    { id: 'doc-2', content: 'Test', embedding: [0.1, 0.2, 0.3] } as unknown as EmbeddedDoc // missing embeddingModelId
   ]
 
   try {
@@ -74,13 +77,15 @@ test('IngestionService.saveEmbeddings: requires embeddingModelId with QvacErrorR
     t.fail('Should throw error for missing embeddingModelId')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Should throw QvacErrorRAG')
-    t.is(err.code, ERR_CODES.INVALID_INPUT, 'Should have INVALID_INPUT error code')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Should have INVALID_INPUT error code')
+    }
   }
 })
 
 test('IngestionService.saveEmbeddings: rejects non-numeric embeddings with QvacErrorRAG', async (t) => {
   const deps = createMockDeps()
-  const service = new IngestionService(deps)
+  const service = new IngestionService(deps as unknown as IngestionServiceConfig)
 
   const docs = [
     createDoc('doc-1'),
@@ -92,6 +97,8 @@ test('IngestionService.saveEmbeddings: rejects non-numeric embeddings with QvacE
     t.fail('Should throw error for non-numeric embeddings')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Should throw QvacErrorRAG')
-    t.is(err.code, ERR_CODES.INVALID_INPUT, 'Should have INVALID_INPUT error code')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Should have INVALID_INPUT error code')
+    }
   }
 })

@@ -1,17 +1,16 @@
-'use strict'
+import test from 'brittle'
+import { EmbeddingService } from '../../src/services/core/EmbeddingService.js'
+import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
+import type { Doc, EmbeddingOpts } from '../../src/types.js'
 
-const test = require('brittle')
-const EmbeddingService = require('../../src/services/core/EmbeddingService')
-const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
+type EmbeddingServiceConfig = ConstructorParameters<typeof EmbeddingService>[0]
 
 class MockEmbeddingFunction {
-  constructor() {
-    this.calls = []
-    this.shouldFail = false
-  }
+  calls: Array<string | string[]> = []
+  shouldFail = false
 
   // lunte-disable-next-line require-await
-  async call(text) {
+  async call(text: string | string[]): Promise<number[] | number[][]> {
     this.calls.push(text)
     if (this.shouldFail) {
       throw new Error('Mock embedding function failure')
@@ -30,12 +29,16 @@ class MockEmbeddingFunction {
   }
 }
 
+type MockEmbeddingFn = ((text: string | string[]) => Promise<number[] | number[][]>) & {
+  mock: MockEmbeddingFunction
+}
+
 // Create a callable function that delegates to the mock
-function createMockEmbeddingFunction() {
+function createMockEmbeddingFunction(): MockEmbeddingFn {
   const mock = new MockEmbeddingFunction()
-  const func = async (text) => {
+  const func = (async (text: string | string[]) => {
     return await mock.call(text)
-  }
+  }) as MockEmbeddingFn
   func.mock = mock
   return func
 }
@@ -51,20 +54,22 @@ test('EmbeddingService: should create with valid embedding function', (t) => {
 })
 
 test('EmbeddingService: should throw error when embedding function not provided', (t) => {
-  const invalidEmbeddingFunctions = [null, undefined, {}]
+  const invalidEmbeddingFunctions: unknown[] = [null, undefined, {}]
 
   invalidEmbeddingFunctions.forEach((embeddingFunction) => {
     try {
       // eslint-disable-next-line no-new
-      new EmbeddingService({ embeddingFunction })
+      new EmbeddingService({ embeddingFunction } as unknown as EmbeddingServiceConfig)
       t.fail(`Should throw error for invalid embedding function: ${embeddingFunction}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(
-        err.code,
-        ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
-        'Error code should be EMBEDDING_FUNCTION_REQUIRED'
-      )
+      if (err instanceof QvacErrorRAG) {
+        t.is(
+          err.code,
+          ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
+          'Error code should be EMBEDDING_FUNCTION_REQUIRED'
+        )
+      }
     }
   })
 })
@@ -85,19 +90,21 @@ test('EmbeddingService: should handle empty or invalid text input', async (t) =>
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
-  const invalidInputs = ['', '   ', null, undefined, 123]
+  const invalidInputs: unknown[] = ['', '   ', null, undefined, 123]
 
   for (const input of invalidInputs) {
     try {
-      await service.generateEmbeddings(input)
+      await service.generateEmbeddings(input as string)
       t.fail(`Should throw error for invalid input: ${input}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
-      t.ok(
-        err.message.includes('Invalid input') || err.message.includes('invalid'),
-        'Error message should mention invalid input'
-      )
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+        t.ok(
+          err.message.includes('Invalid input') || err.message.includes('invalid'),
+          'Error message should mention invalid input'
+        )
+      }
     }
   }
 })
@@ -112,11 +119,13 @@ test('EmbeddingService: should handle embedding function failure', async (t) => 
     t.fail('Should throw error when embedding function fails')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Error code should be GENERATION_FAILED')
-    t.ok(
-      err.message.includes('Failed to generate embeddings'),
-      'Error message should be descriptive'
-    )
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Error code should be GENERATION_FAILED')
+      t.ok(
+        err.message.includes('Failed to generate embeddings'),
+        'Error message should be descriptive'
+      )
+    }
   }
 })
 
@@ -153,15 +162,17 @@ test('EmbeddingService: should handle invalid documents array', async (t) => {
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
-  const invalidInputs = [null, undefined, 'not-array', 123, []]
+  const invalidInputs: unknown[] = [null, undefined, 'not-array', 123, []]
 
   for (const input of invalidInputs) {
     try {
-      await service.generateEmbeddingsForDocs(input)
+      await service.generateEmbeddingsForDocs(input as unknown as Doc[])
       t.fail(`Should throw error for invalid docs input: ${input}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+      }
     }
   }
 })
@@ -170,7 +181,7 @@ test('EmbeddingService: should handle documents with missing id or content', asy
   const mockEmbeddingFunction = createMockEmbeddingFunction()
   const service = new EmbeddingService({ embeddingFunction: mockEmbeddingFunction })
 
-  const invalidDocs = [
+  const invalidDocs: unknown[] = [
     [{ content: 'No ID' }],
     [{ id: 'no-content' }],
     [{ id: '', content: 'Empty ID' }],
@@ -180,12 +191,14 @@ test('EmbeddingService: should handle documents with missing id or content', asy
 
   for (const docs of invalidDocs) {
     try {
-      await service.generateEmbeddingsForDocs(docs)
+      await service.generateEmbeddingsForDocs(docs as unknown as Doc[])
       t.fail(`Should throw error for invalid docs: ${JSON.stringify(docs)}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
-      t.ok(err.message, 'Should have error message')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+        t.ok(err.message, 'Should have error message')
+      }
     }
   }
 })
@@ -205,11 +218,13 @@ test('EmbeddingService: should handle embedding function failure in batch proces
     t.fail('Should throw error when embedding function fails during batch processing')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Error code should be GENERATION_FAILED')
-    t.ok(
-      err.message.includes('Failed to generate batch embeddings'),
-      'Error message should mention batch embeddings'
-    )
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Error code should be GENERATION_FAILED')
+      t.ok(
+        err.message.includes('Failed to generate batch embeddings'),
+        'Error message should mention batch embeddings'
+      )
+    }
   }
 })
 
@@ -247,11 +262,13 @@ test('EmbeddingService: should support cancellation via AbortSignal', async (t) 
   const abortController = { signal: { aborted: true } }
 
   try {
-    await service.generateEmbeddingsForDocs(docs, abortController)
+    await service.generateEmbeddingsForDocs(docs, abortController as unknown as EmbeddingOpts)
     t.fail('Should throw error when signal is aborted')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.OPERATION_CANCELLED, 'Error code should be OPERATION_CANCELLED')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.OPERATION_CANCELLED, 'Error code should be OPERATION_CANCELLED')
+    }
   }
 })
 
@@ -264,7 +281,7 @@ test('EmbeddingService: should call onProgress callback at start and end', async
     { id: 'doc2', content: 'Second' }
   ]
 
-  const progressCalls = []
+  const progressCalls: Array<{ current: number; total: number }> = []
 
   await service.generateEmbeddingsForDocs(docs, {
     onProgress: (current, total) => {
@@ -291,17 +308,18 @@ test('EmbeddingService: should support generateEmbeddings with array input', asy
   t.alike(mockEmbeddingFunction.mock.calls[0], texts, 'Should pass array to embedding function')
 })
 
-// lunte-disable-next-line require-await
 test('EmbeddingService: Zod validation should reject invalid embedding outputs', async (t) => {
   // lunte-disable-next-line require-await
-  const invalidOutputFunction = async (text) => {
+  const invalidOutputFunction = async (text: string | string[]) => {
     if (Array.isArray(text)) {
       return ['not', 'numbers'] // Invalid: strings instead of number arrays
     }
     return 'not an array' // Invalid: string instead of array
   }
 
-  const service = new EmbeddingService({ embeddingFunction: invalidOutputFunction })
+  const service = new EmbeddingService({
+    embeddingFunction: invalidOutputFunction
+  } as unknown as EmbeddingServiceConfig)
 
   // Test single text with invalid output
   try {
@@ -309,8 +327,14 @@ test('EmbeddingService: Zod validation should reject invalid embedding outputs',
     t.fail('Should throw for invalid single embedding output')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Should throw QvacErrorRAG')
-    t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Should be GENERATION_FAILED for output validation')
-    t.ok(err.message.includes('invalid output'), 'Error message should mention invalid output')
+    if (err instanceof QvacErrorRAG) {
+      t.is(
+        err.code,
+        ERR_CODES.GENERATION_FAILED,
+        'Should be GENERATION_FAILED for output validation'
+      )
+      t.ok(err.message.includes('invalid output'), 'Error message should mention invalid output')
+    }
   }
 
   // Test batch with invalid output
@@ -319,7 +343,13 @@ test('EmbeddingService: Zod validation should reject invalid embedding outputs',
     t.fail('Should throw for invalid batch embedding output')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Should throw QvacErrorRAG')
-    t.is(err.code, ERR_CODES.GENERATION_FAILED, 'Should be GENERATION_FAILED for output validation')
-    t.ok(err.message.includes('invalid output'), 'Error message should mention invalid output')
+    if (err instanceof QvacErrorRAG) {
+      t.is(
+        err.code,
+        ERR_CODES.GENERATION_FAILED,
+        'Should be GENERATION_FAILED for output validation'
+      )
+      t.ok(err.message.includes('invalid output'), 'Error message should mention invalid output')
+    }
   }
 })

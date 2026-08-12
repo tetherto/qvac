@@ -1,26 +1,31 @@
-'use strict'
+import test from 'brittle'
+import { RAG, HyperDBAdapter, QvacLlmAdapter } from '../../src/index.js'
+import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
+import QvacLogger from '@qvac/logging'
 
-const test = require('brittle')
-const { RAG, HyperDBAdapter, QvacLlmAdapter } = require('../../index')
-const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
-const QvacLogger = require('@qvac/logging')
+import LlmPlugin from '@qvac/llm-llamacpp'
+import EmbedderPlugin from '@qvac/embed-llamacpp'
+import Corestore from 'corestore'
+import HyperDB from 'hyperdb'
+import type { Hypercore } from 'corestore'
+import type { HyperDBInstance } from 'hyperdb'
 
-const LlmPlugin = require('@qvac/llm-llamacpp')
-const EmbedderPlugin = require('@qvac/embed-llamacpp')
-const Corestore = require('corestore')
-const HyperDB = require('hyperdb')
+import fs from 'bare-fs'
 
-const fs = require('bare-fs')
-const path = require('bare-path')
-
-const { ensureModels, RAG_MODELS } = require('../../examples/utils')
+import { ensureModels, RAG_MODELS } from '../../examples/utils.js'
+import type { EmbeddingFunction, IngestStage, ReindexStage } from '../../src/types.js'
 
 const store = new Corestore('./store')
 
 const modelName = RAG_MODELS.embedder.filename
 
 // Global test state to share resources across tests
-let llm, embedder, embeddingFunction, llmAdapter, dbAdapter, rag
+let llm: InstanceType<typeof LlmPlugin> | undefined
+let embedder: InstanceType<typeof EmbedderPlugin> | undefined
+let embeddingFunction: EmbeddingFunction | undefined
+let llmAdapter: QvacLlmAdapter | undefined
+let dbAdapter: HyperDBAdapter | undefined
+let rag: RAG | undefined
 let setupComplete = false
 
 // Helper function to ensure models are loaded
@@ -42,8 +47,8 @@ async function ensureSetup() {
   await embedder.load()
 
   embeddingFunction = async (text) => {
-    const response = await embedder.run(text)
-    const embeddings = await response.await()
+    const response = await embedder!.run(text)
+    const embeddings = await (response as { await(): Promise<number[][][]> }).await()
 
     if (Array.isArray(text)) {
       // Batch: return array of arrays
@@ -93,11 +98,15 @@ test('RAG Integration: Constructor validation', { timeout: 360000 }, async (t) =
   t.comment('Testing RAG constructor')
 
   // Should work with all valid dependencies
-  const validRag = new RAG({ embeddingFunction, dbAdapter, llm: llmAdapter })
+  const validRag = new RAG({
+    embeddingFunction: embeddingFunction!,
+    dbAdapter: dbAdapter!,
+    llm: llmAdapter!
+  })
   t.ok(validRag, 'RAG instance created with valid dependencies')
 
   // Should allow construction without LLM (LLM is only required for inference)
-  const ragWithoutLLM = new RAG({ embeddingFunction, dbAdapter })
+  const ragWithoutLLM = new RAG({ embeddingFunction: embeddingFunction!, dbAdapter: dbAdapter! })
   t.ok(ragWithoutLLM, 'Should allow construction without LLM')
 
   // But inference should throw without LLM
@@ -106,29 +115,40 @@ test('RAG Integration: Constructor validation', { timeout: 360000 }, async (t) =
     t.fail('Should throw when trying to infer without LLM')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.LLM_REQUIRED, 'Should throw LLM_REQUIRED error for inference')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.LLM_REQUIRED, 'Should throw LLM_REQUIRED error for inference')
+    }
   }
 
   try {
     // eslint-disable-next-line no-new
-    new RAG({ embeddingFunction, llm: llmAdapter })
+    new RAG({
+      embeddingFunction: embeddingFunction!,
+      llm: llmAdapter!
+    } as unknown as ConstructorParameters<typeof RAG>[0])
     t.fail('Should throw when dbAdapter is missing')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.DB_ADAPTER_REQUIRED, 'Should throw DB_ADAPTER_REQUIRED error')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.DB_ADAPTER_REQUIRED, 'Should throw DB_ADAPTER_REQUIRED error')
+    }
   }
 
   try {
     // eslint-disable-next-line no-new
-    new RAG({ dbAdapter, llm: llmAdapter })
+    new RAG({ dbAdapter: dbAdapter!, llm: llmAdapter! } as unknown as ConstructorParameters<
+      typeof RAG
+    >[0])
     t.fail('Should throw when embeddingFunction is missing')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(
-      err.code,
-      ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
-      'Should throw EMBEDDING_FUNCTION_REQUIRED error'
-    )
+    if (err instanceof QvacErrorRAG) {
+      t.is(
+        err.code,
+        ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
+        'Should throw EMBEDDING_FUNCTION_REQUIRED error'
+      )
+    }
   }
 })
 
@@ -143,7 +163,7 @@ test('RAG Integration: Document ingestion and processing', { timeout: 60000 }, a
     'A third document about domestic breeding and artificial selection.'
   ]
 
-  const result = await rag.ingest(testDocs, modelName)
+  const result = await rag!.ingest(testDocs, modelName)
 
   t.ok(result.processed, 'Should return processed results')
   t.ok(Array.isArray(result.processed), 'Processed results should be an array')
@@ -159,7 +179,9 @@ test('RAG Integration: Document ingestion and processing', { timeout: 60000 }, a
 
   // Test ingest without chunking - preserves existing IDs
   const simpleDoc = [{ id: 'no-chunk', content: 'Simple document without chunking' }]
-  const noChunkResult = await rag.ingest(simpleDoc, modelName, { chunk: false })
+  const noChunkResult = await rag!.ingest(simpleDoc, modelName, {
+    chunk: false
+  })
 
   t.is(noChunkResult.processed.length, 1, 'Should process exactly one document without chunking')
   t.is(noChunkResult.processed[0].id, 'no-chunk', 'Should preserve document ID')
@@ -175,7 +197,9 @@ test('RAG Integration: Document ingestion and processing', { timeout: 60000 }, a
     { id: 'valid-id', content: 'Valid document with ID' }
   ]
 
-  const mixedResult = await rag.ingest(mixedDocs, modelName, { chunk: false })
+  const mixedResult = await rag!.ingest(mixedDocs as unknown as string[], modelName, {
+    chunk: false
+  })
   t.is(mixedResult.processed.length, 3, 'Should process only valid documents')
   t.is(mixedResult.droppedIndices.length, 3, 'Should drop invalid documents')
   t.alike(mixedResult.droppedIndices, [1, 3, 4], 'Should track correct dropped indices')
@@ -187,7 +211,7 @@ test('RAG Integration: Embedding generation and retrieval', { timeout: 30000 }, 
 
   // Test single text embedding
   const singleText = 'Generate embeddings for this text'
-  const singleEmbedding = await rag.generateEmbeddings(singleText)
+  const singleEmbedding = await rag!.generateEmbeddings(singleText)
 
   t.ok(Array.isArray(singleEmbedding), 'Single embedding should be an array')
   t.ok(singleEmbedding.length > 0, 'Embedding should have dimensions')
@@ -203,7 +227,7 @@ test('RAG Integration: Embedding generation and retrieval', { timeout: 30000 }, 
     'Third document to test batch processing'
   ]
 
-  const multiEmbeddings = await rag.generateEmbeddingsForDocs(multiDocs)
+  const multiEmbeddings = await rag!.generateEmbeddingsForDocs(multiDocs)
 
   t.ok(typeof multiEmbeddings === 'object', 'Multi-doc embeddings should return an object')
   t.is(Object.keys(multiEmbeddings).length, 3, 'Should generate embeddings for all documents')
@@ -231,11 +255,11 @@ test('RAG Integration: Search and retrieval functionality', { timeout: 30000 }, 
     'Species in nature struggle for existence due to limited resources.'
   ]
 
-  await rag.ingest(searchableDocs, modelName, { chunk: false })
+  await rag!.ingest(searchableDocs, modelName, { chunk: false })
 
   // Test search functionality
   const searchQuery = 'How does breeding change domestic animals?'
-  const searchResults = await rag.search(searchQuery, { topK: 3 })
+  const searchResults = await rag!.search(searchQuery, { topK: 3 })
 
   t.ok(Array.isArray(searchResults), 'Search results should be an array')
   t.ok(searchResults.length > 0, 'Should return search results')
@@ -270,16 +294,16 @@ test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, as
     'Sustainable agriculture practices can help preserve soil and water resources.'
   ]
 
-  await rag.ingest(knowledgeDocs, modelName, { chunk: false })
+  await rag!.ingest(knowledgeDocs, modelName, { chunk: false })
 
   // Test inference with context
   const query = 'What causes climate change and how can we address it?'
-  const response = await rag.infer(query, { topK: 2 })
+  const response = await rag!.infer(query, { topK: 2 })
 
   // For QVAC models, the response should be a stream
-  if (response && typeof response.onUpdate === 'function') {
-    const responseContent = []
-    await response
+  if (response && typeof (response as { onUpdate?: unknown }).onUpdate === 'function') {
+    const responseContent: string[] = []
+    await (response as { onUpdate(cb: (u: string) => void): { await(): Promise<void> } })
       .onUpdate((update) => {
         responseContent.push(update)
       })
@@ -297,7 +321,7 @@ test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, as
 
   // Test inference with no context (should handle gracefully)
   const noContextQuery = 'What is the capital of a fictional planet Zorbax?'
-  const noContextResponse = await rag.infer(noContextQuery, { topK: 5 })
+  const noContextResponse = await rag!.infer(noContextQuery, { topK: 5 })
 
   // Should either return null/empty or a response indicating no context
   if (noContextResponse === null) {
@@ -318,19 +342,21 @@ test('RAG Integration: Document deletion and cleanup', { timeout: 30000 }, async
     { id: 'delete-3', content: 'Document to be deleted 3' }
   ]
 
-  const saveResult = await rag.ingest(docsToDelete, modelName, { chunk: false })
+  const saveResult = await rag!.ingest(docsToDelete, modelName, {
+    chunk: false
+  })
   t.is(saveResult.processed.length, 3, 'Should save all documents for deletion test')
 
   // Test individual document deletion
-  const deleteResult1 = await rag.deleteEmbeddings(['delete-1'])
+  const deleteResult1 = await rag!.deleteEmbeddings(['delete-1'])
   t.ok(deleteResult1, 'Should successfully delete single document')
 
   // Test multiple document deletion
-  const deleteResult2 = await rag.deleteEmbeddings(['delete-2', 'delete-3'])
+  const deleteResult2 = await rag!.deleteEmbeddings(['delete-2', 'delete-3'])
   t.ok(deleteResult2, 'Should successfully delete multiple documents')
 
   // Test deletion of non-existent documents (should not throw)
-  const deleteResult3 = await rag.deleteEmbeddings(['non-existent-id'])
+  const deleteResult3 = await rag!.deleteEmbeddings(['non-existent-id'])
   t.ok(deleteResult3, 'Should handle deletion of non-existent documents gracefully')
 
   // Test invalid input to deleteEmbeddings
@@ -338,11 +364,13 @@ test('RAG Integration: Document deletion and cleanup', { timeout: 30000 }, async
 
   for (const invalidInput of invalidInputs) {
     try {
-      await rag.deleteEmbeddings(invalidInput)
+      await rag!.deleteEmbeddings(invalidInput as unknown as string[])
       t.fail(`Should throw error for invalid input: ${invalidInput}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.INVALID_PARAMS, 'Should throw INVALID_PARAMS error')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.INVALID_PARAMS, 'Should throw INVALID_PARAMS error')
+      }
     }
   }
 })
@@ -358,11 +386,13 @@ test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async
   ]
 
   try {
-    await rag.ingest(duplicateDocs, modelName, { chunk: false })
+    await rag!.ingest(duplicateDocs, modelName, { chunk: false })
     t.fail('Should throw error for duplicate document IDs')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.DUPLICATE_DOCUMENT_ID, 'Should throw DUPLICATE_DOCUMENT_ID error')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.DUPLICATE_DOCUMENT_ID, 'Should throw DUPLICATE_DOCUMENT_ID error')
+    }
   }
 
   // Test empty content handling
@@ -373,7 +403,9 @@ test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async
     { id: 'empty', content: '   ' } // dropped: whitespace-only content (trimmed to empty)
   ]
 
-  const emptyResult = await rag.ingest(emptyContentDocs, modelName, { chunk: false })
+  const emptyResult = await rag!.ingest(emptyContentDocs, modelName, {
+    chunk: false
+  })
   t.is(
     emptyResult.processed.length,
     0,
@@ -385,7 +417,9 @@ test('RAG Integration: Error handling and edge cases', { timeout: 30000 }, async
   const largeContent = 'Large document content. '.repeat(100)
   const largeDoc = [{ id: 'large-doc', content: largeContent }]
 
-  const largeResult = await rag.ingest(largeDoc, modelName, { chunk: false })
+  const largeResult = await rag!.ingest(largeDoc, modelName, {
+    chunk: false
+  })
   t.is(largeResult.processed.length, 1, 'Should handle large documents')
   t.is(largeResult.processed[0].status, 'fulfilled', 'Should successfully process large document')
 })
@@ -404,7 +438,7 @@ test('RAG Integration: Chunking behavior and options', { timeout: 30000 }, async
   `.trim()
 
   // Test with chunking enabled (using smaller chunk size to ensure chunking)
-  const chunkedResult = await rag.ingest(longDocument, modelName, {
+  const chunkedResult = await rag!.ingest(longDocument, modelName, {
     chunkOpts: {
       chunkSize: 15, // Small chunk size to ensure multiple chunks
       chunkOverlap: 3
@@ -413,11 +447,11 @@ test('RAG Integration: Chunking behavior and options', { timeout: 30000 }, async
   t.ok(chunkedResult.processed.length > 1, 'Should create multiple chunks from long document')
 
   // Test with chunking disabled
-  const unchunkedResult = await rag.ingest(longDocument, modelName, { chunk: false })
+  const unchunkedResult = await rag!.ingest(longDocument, modelName, { chunk: false })
   t.is(unchunkedResult.processed.length, 1, 'Should create single document when chunking disabled')
 
   // Test custom chunk options
-  const customChunkResult = await rag.ingest(longDocument, modelName, {
+  const customChunkResult = await rag!.ingest(longDocument, modelName, {
     chunkOpts: {
       chunkSize: 10,
       chunkOverlap: 2
@@ -440,15 +474,15 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   t.comment('Testing complete RAG workflow with sample text file, this may take a while...')
 
   // Load sample text file
-  const samplePath = path.join(__dirname, 'sample.txt')
+  const samplePath = new URL('sample.txt', import.meta.url).pathname
   const sampleText = fs.readFileSync(samplePath, 'utf8')
 
   // Track progress for verification
-  const progressCalls = []
+  const progressCalls: Array<{ stage: IngestStage; current: number; total: number }> = []
 
   // Process the complete workflow
   t.comment('Step 1: Save embeddings with chunking')
-  const saveResult = await rag.ingest(sampleText, modelName, {
+  const saveResult = await rag!.ingest(sampleText, modelName, {
     progressInterval: 5,
     onProgress: (stage, current, total) => {
       progressCalls.push({ stage, current, total })
@@ -471,17 +505,17 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
 
   t.comment('Step 2: Search for relevant context')
   const searchQuery = 'What did Darwin say about variation in domestic animals?'
-  const searchResults = await rag.search(searchQuery, { topK: 3 })
+  const searchResults = await rag!.search(searchQuery, { topK: 3 })
   console.log('searchResults:', searchResults)
   t.ok(searchResults.length > 0, 'Should find relevant context for Darwin variation query')
 
   t.comment('Step 3: Generate inference response')
   const inferenceQuery = 'How does natural selection work?'
-  const response = await rag.infer(inferenceQuery, { topK: 1 })
+  const response = await rag!.infer(inferenceQuery, { topK: 1 })
 
-  if (response && typeof response.onUpdate === 'function') {
-    const responseOutputs = []
-    await response
+  if (response && typeof (response as { onUpdate?: unknown }).onUpdate === 'function') {
+    const responseOutputs: string[] = []
+    await (response as { onUpdate(cb: (u: string) => void): { await(): Promise<void> } })
       .onUpdate((update) => {
         responseOutputs.push(update)
       })
@@ -494,10 +528,10 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   }
 
   t.comment('Step 4: Reindex database...')
-  const preReindexSearch = await rag.search('natural selection', { topK: 3 })
+  const preReindexSearch = await rag!.search('natural selection', { topK: 3 })
   console.log('preReindexSearch:', preReindexSearch)
-  const reindexProgressCalls = []
-  const reindexResult = await rag.reindex({
+  const reindexProgressCalls: Array<{ stage: ReindexStage; current: number; total: number }> = []
+  const reindexResult = await rag!.reindex({
     onProgress: (stage, current, total) => {
       reindexProgressCalls.push({ stage, current, total })
     }
@@ -515,12 +549,12 @@ test('RAG Integration: Full workflow with sample text file', { timeout: 500000 }
   t.ok(reindexStages.includes('reassigning'), 'Should report reassigning stage')
 
   t.comment('Step 5: Verify search works after reindexing')
-  const postReindexSearch = await rag.search('natural selection', { topK: 3 })
+  const postReindexSearch = await rag!.search('natural selection', { topK: 3 })
   console.log('postReindexSearch:', postReindexSearch)
   t.ok(postReindexSearch.length > 0, 'Search should work after reindexing')
 
   t.comment('Step 6: Clean up created documents')
-  const deleteResult = await rag.deleteEmbeddings(processedIds)
+  const deleteResult = await rag!.deleteEmbeddings(processedIds as string[])
   t.ok(deleteResult, 'Should successfully delete all created chunks')
 
   t.comment('Full workflow completed successfully')
@@ -535,10 +569,10 @@ test(
 
     // Create a separate store for this test
     const testStore = new Corestore('./test-external-hyperdb-store')
-    let externalHypercore = null
-    let externalHyperDB = null
-    let externalAdapter = null
-    let testRag = null
+    let externalHypercore: Hypercore | null = null
+    let externalHyperDB: HyperDBInstance | null = null
+    let externalAdapter: HyperDBAdapter | null = null
+    let testRag: RAG | null = null
 
     try {
       t.comment('Step 1: Create external HyperDB instance with default spec')
@@ -563,9 +597,9 @@ test(
 
       t.comment('Step 3: Create RAG instance with external adapter')
       testRag = new RAG({
-        embeddingFunction,
+        embeddingFunction: embeddingFunction!,
         dbAdapter: externalAdapter,
-        llm: llmAdapter
+        llm: llmAdapter!
       })
       await testRag.ready()
       t.pass('RAG instance initialized with external HyperDB adapter')
@@ -627,7 +661,7 @@ test(
       }
 
       // Clean up test data
-      const deleteResult = await testRag.deleteEmbeddings(docIds)
+      const deleteResult = await testRag.deleteEmbeddings(docIds as string[])
       t.ok(deleteResult, 'Should successfully delete test documents')
 
       t.comment('Step 6: Verify adapter state after operations')
@@ -636,7 +670,9 @@ test(
 
       t.pass('External HyperDB integration test completed successfully')
     } catch (error) {
-      t.fail(`External HyperDB test failed: ${error.message}`)
+      t.fail(
+        `External HyperDB test failed: ${error instanceof Error ? error.message : String(error)}`
+      )
     } finally {
       // Clean up resources
       if (testRag) {
@@ -644,7 +680,9 @@ test(
           await testRag.close()
           t.comment('Test RAG instance closed')
         } catch (closeError) {
-          t.comment(`RAG close error (non-critical): ${closeError.message}`)
+          t.comment(
+            `RAG close error (non-critical): ${closeError instanceof Error ? closeError.message : String(closeError)}`
+          )
         }
       }
       if (testStore) {
@@ -652,7 +690,9 @@ test(
           await testStore.close()
           t.comment('Test store closed')
         } catch (storeError) {
-          t.comment(`Store close error (non-critical): ${storeError.message}`)
+          t.comment(
+            `Store close error (non-critical): ${storeError instanceof Error ? storeError.message : String(storeError)}`
+          )
         }
       }
     }

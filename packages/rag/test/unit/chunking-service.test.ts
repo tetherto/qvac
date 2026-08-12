@@ -1,13 +1,14 @@
-'use strict'
+import test from 'brittle'
+import { ChunkingService } from '../../src/services/core/ChunkingService.js'
+import { LLMChunkAdapter } from '../../src/adapters/chunker/LLMChunkAdapter.js'
+import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
+import { tokenizeText } from '../../src/adapters/chunker/Tokenizer.js'
+import type { LLMChunkOpts } from '../../src/types.js'
 
-const test = require('brittle')
-const ChunkingService = require('../../src/services/core/ChunkingService')
-const LLMChunkAdapter = require('../../src/adapters/chunker/LLMChunkAdapter')
-const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
-const { tokenizeText } = require('../../src/adapters/chunker/Tokenizer')
+type ChunkingServiceConfig = ConstructorParameters<typeof ChunkingService>[0]
 
 test('ChunkingService: should create with default LLMChunkAdapter when no chunker provided', (t) => {
-  const service = new ChunkingService({})
+  const service = new ChunkingService({} as unknown as ChunkingServiceConfig)
 
   t.ok(service.chunker instanceof LLMChunkAdapter, 'Should use LLMChunkAdapter as default')
   t.alike(service.chunkOpts, {}, 'Should have empty chunk options by default')
@@ -20,23 +21,25 @@ test('ChunkingService: should create with provided chunker', (t) => {
   const service = new ChunkingService({
     chunker: mockChunker,
     chunkOpts
-  })
+  } as unknown as ChunkingServiceConfig)
 
   t.is(service.chunker, mockChunker, 'Should use provided chunker')
   t.alike(service.chunkOpts, chunkOpts, 'Should store provided chunk options')
 })
 
 test('ChunkingService: should throw error for invalid chunker', (t) => {
-  const invalidChunkers = ['not-a-chunker', { chunkText: () => {} }, 123, new Date()]
+  const invalidChunkers: unknown[] = ['not-a-chunker', { chunkText: () => {} }, 123, new Date()]
 
   invalidChunkers.forEach((invalidChunker) => {
     try {
       // eslint-disable-next-line no-new
-      new ChunkingService({ chunker: invalidChunker })
+      new ChunkingService({ chunker: invalidChunker } as unknown as ChunkingServiceConfig)
       t.fail(`Should throw error for invalid chunker: ${invalidChunker}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.INVALID_CHUNKER, 'Error code should be INVALID_CHUNKER')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.INVALID_CHUNKER, 'Error code should be INVALID_CHUNKER')
+      }
     }
   })
 })
@@ -45,7 +48,7 @@ test('ChunkingService: should produce chunks with word splitStrategy', async (t)
   const service = new ChunkingService({
     chunker: new LLMChunkAdapter({ splitStrategy: 'word' }),
     chunkOpts: { chunkSize: 3, chunkOverlap: 1 }
-  })
+  } as unknown as ChunkingServiceConfig)
 
   const input = 'The quick brown fox jumps over lazy dog'
   const result = await service.chunkText(input)
@@ -65,7 +68,7 @@ test('ChunkingService: should handle array input', async (t) => {
   const service = new ChunkingService({
     chunker: new LLMChunkAdapter({ splitStrategy: 'word' }),
     chunkOpts: { chunkSize: 10, chunkOverlap: 0 }
-  })
+  } as unknown as ChunkingServiceConfig)
   const input = ['First document here.', 'Second document content.', 'Third document text.']
 
   const result = await service.chunkText(input)
@@ -77,14 +80,16 @@ test('ChunkingService: should handle array input', async (t) => {
 test('ChunkingService: should handle invalid input', async (t) => {
   const service = new ChunkingService({
     chunker: new LLMChunkAdapter({ splitStrategy: 'word' })
-  })
+  } as unknown as ChunkingServiceConfig)
 
   try {
-    await service.chunkText(123)
+    await service.chunkText(123 as unknown as string)
     t.fail('Should throw error when input is invalid')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+    }
   }
 })
 
@@ -128,7 +133,7 @@ test('LLMChunkAdapter: should use line splitStrategy', async (t) => {
 })
 
 test('LLMChunkAdapter: should use custom splitter function', async (t) => {
-  const customSplitter = (text) => text.split('-')
+  const customSplitter = (text: string) => text.split('-')
   const adapter = new LLMChunkAdapter({ splitter: customSplitter })
   const input = 'one-two-three-four-five'
   const result = await adapter.chunkText(input, { chunkSize: 2, chunkOverlap: 0 })
@@ -154,7 +159,7 @@ test('LLMChunkAdapter: should allow runtime custom splitter to override default 
   // This tests the scenario where adapter has default splitStrategy: 'token'
   // and runtime opts provide a custom splitter (should not conflict)
   const adapter = new LLMChunkAdapter() // Has splitStrategy: 'token' by default
-  const customSplitter = (text) => text.split('|')
+  const customSplitter = (text: string) => text.split('|')
   const input = 'AI|Machine Learning|Deep Learning'
   const result = await adapter.chunkText(input, {
     splitter: customSplitter,
@@ -237,7 +242,9 @@ test('LLMChunkAdapter: should throw error for invalid chunk parameters', async (
       t.fail(`Should throw error for chunkSize: ${size}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+      }
     }
   }
 
@@ -248,7 +255,9 @@ test('LLMChunkAdapter: should throw error for invalid chunk parameters', async (
       t.fail(`Should throw error for chunkOverlap: ${overlap}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+      }
     }
   }
 
@@ -258,16 +267,24 @@ test('LLMChunkAdapter: should throw error for invalid chunk parameters', async (
     t.fail('Should throw error when chunkOverlap equals chunkSize')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+    }
   }
 
   // Invalid chunkStrategy
   try {
-    await adapter.chunkText('test', { chunkSize: 10, chunkOverlap: 0, chunkStrategy: 'invalid' })
+    await adapter.chunkText('test', {
+      chunkSize: 10,
+      chunkOverlap: 0,
+      chunkStrategy: 'invalid' as unknown as LLMChunkOpts['chunkStrategy']
+    })
     t.fail('Should throw error for invalid chunkStrategy')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.CHUNKING_FAILED, 'Error code should be CHUNKING_FAILED')
+    }
   }
 })
 
@@ -275,15 +292,21 @@ test('LLMChunkAdapter: should throw error for invalid splitStrategy', async (t) 
   const adapter = new LLMChunkAdapter()
 
   try {
-    await adapter.chunkText('test', { chunkSize: 10, chunkOverlap: 0, splitStrategy: 'invalid' })
+    await adapter.chunkText('test', {
+      chunkSize: 10,
+      chunkOverlap: 0,
+      splitStrategy: 'invalid' as unknown as LLMChunkOpts['splitStrategy']
+    })
     t.fail('Should throw error for invalid splitStrategy')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
-    t.ok(
-      err.message.includes('splitStrategy must be one of'),
-      'Error message should list valid options'
-    )
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
+      t.ok(
+        err.message.includes('splitStrategy must be one of'),
+        'Error message should list valid options'
+      )
+    }
   }
 })
 
@@ -291,22 +314,28 @@ test('LLMChunkAdapter: should throw error for non-function splitter', async (t) 
   const adapter = new LLMChunkAdapter()
 
   try {
-    await adapter.chunkText('test', { chunkSize: 10, chunkOverlap: 0, splitter: 'not-a-function' })
+    await adapter.chunkText('test', {
+      chunkSize: 10,
+      chunkOverlap: 0,
+      splitter: 'not-a-function' as unknown as LLMChunkOpts['splitter']
+    })
     t.fail('Should throw error for non-function splitter')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(
-      err.code,
-      ERR_CODES.CHUNKING_FAILED,
-      'Error code should be CHUNKING_FAILED (validated by llm-splitter)'
-    )
-    t.ok(err.message.length > 0, 'Error should have a message')
+    if (err instanceof QvacErrorRAG) {
+      t.is(
+        err.code,
+        ERR_CODES.CHUNKING_FAILED,
+        'Error code should be CHUNKING_FAILED (validated by llm-splitter)'
+      )
+      t.ok(err.message.length > 0, 'Error should have a message')
+    }
   }
 })
 
 test('LLMChunkAdapter: should prioritize splitter over splitStrategy when both provided', async (t) => {
   const adapter = new LLMChunkAdapter()
-  const customSplitter = (text) => text.split('-') // Split by dash
+  const customSplitter = (text: string) => text.split('-') // Split by dash
 
   const result = await adapter.chunkText('one-two-three-four', {
     chunkSize: 2,

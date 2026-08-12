@@ -1,7 +1,5 @@
-'use strict'
-
-const test = require('brittle')
-const { tokenizeText, estimateTokenCount } = require('../../src/adapters/chunker/Tokenizer')
+import test from 'brittle'
+import { tokenizeText, estimateTokenCount } from '../../src/adapters/chunker/Tokenizer.js'
 
 test('Tokenizer: should detect Unicode property support correctly', (t) => {
   const result = tokenizeText('test')

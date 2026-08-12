@@ -1,8 +1,8 @@
-'use strict'
-
-const test = require('brittle')
-const { normalizeDocs, generateId, createLRUCache } = require('../../src/utils/helper')
-const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
+import test from 'brittle'
+import { normalizeDocs, generateId, createLRUCache } from '../../src/utils/helper.js'
+import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
+import cryptoShim from '../../src/shims/crypto.js'
+import type { PartialDoc } from '../../src/types.js'
 
 test('normalizeDocs: should handle empty array input', (t) => {
   const result = normalizeDocs([])
@@ -13,15 +13,17 @@ test('normalizeDocs: should handle empty array input', (t) => {
 })
 
 test('normalizeDocs: should throw error for non-array input', (t) => {
-  const invalidInputs = [null, undefined, 'string', 123, {}, true]
+  const invalidInputs: unknown[] = [null, undefined, 'string', 123, {}, true]
 
   invalidInputs.forEach((input) => {
     try {
-      normalizeDocs(input)
+      normalizeDocs(input as unknown as Array<string | PartialDoc>)
       t.fail(`Should throw error for input: ${input}`)
     } catch (err) {
       t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-      t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+      if (err instanceof QvacErrorRAG) {
+        t.is(err.code, ERR_CODES.INVALID_INPUT, 'Error code should be INVALID_INPUT')
+      }
     }
   })
 })
@@ -45,7 +47,7 @@ test('normalizeDocs: should preserve existing document objects with content', (t
     { content: 'Doc 1', id: 'doc1' },
     { content: 'Doc 2', id: 'doc2', metadata: { type: 'test' } },
     { content: 'Doc 3' } // No ID, should get generated
-  ]
+  ] as unknown as Array<string | PartialDoc>
   const result = normalizeDocs(docs)
 
   t.is(result.normalizedDocs.length, 3, 'Should have 3 normalized documents')
@@ -55,7 +57,11 @@ test('normalizeDocs: should preserve existing document objects with content', (t
   t.is(result.normalizedDocs[0].content, 'Doc 1', 'First doc should preserve content')
 
   t.is(result.normalizedDocs[1].id, 'doc2', 'Second doc should preserve existing ID')
-  t.is(result.normalizedDocs[1].metadata.type, 'test', 'Second doc should preserve metadata')
+  t.is(
+    (result.normalizedDocs[1] as unknown as { metadata: { type: string } }).metadata.type,
+    'test',
+    'Second doc should preserve metadata'
+  )
 
   t.ok(result.normalizedDocs[2].id, 'Third doc should have generated ID')
   t.is(result.normalizedDocs[2].content, 'Doc 3', 'Third doc should preserve content')
@@ -71,7 +77,7 @@ test('normalizeDocs: should drop invalid documents and track indices', (t) => {
     { id: 'doc-with-no-content' },
     'Another valid string',
     42
-  ]
+  ] as unknown as Array<string | PartialDoc>
   const result = normalizeDocs(docs)
 
   t.is(result.normalizedDocs.length, 3, 'Should have 3 valid documents')
@@ -103,8 +109,10 @@ test('normalizeDocs: should throw error for duplicate IDs', (t) => {
     t.fail('Should throw error for duplicate IDs')
   } catch (err) {
     t.ok(err instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(err.code, ERR_CODES.DUPLICATE_DOCUMENT_ID, 'Error code should be DUPLICATE_DOCUMENT_ID')
-    t.ok(err.message.includes('duplicate-id'), 'Error message should include the duplicate ID')
+    if (err instanceof QvacErrorRAG) {
+      t.is(err.code, ERR_CODES.DUPLICATE_DOCUMENT_ID, 'Error code should be DUPLICATE_DOCUMENT_ID')
+      t.ok(err.message.includes('duplicate-id'), 'Error message should include the duplicate ID')
+    }
   }
 })
 
@@ -115,7 +123,7 @@ test('normalizeDocs: should handle edge case documents', (t) => {
     { content: 'Normal content', id: '' }, // Empty ID should get replaced
     { content: 'Content', id: null }, // Null ID should get replaced
     { content: 'Content', id: undefined } // Undefined ID should get replaced
-  ]
+  ] as unknown as Array<string | PartialDoc>
 
   const result = normalizeDocs(docs)
 
@@ -146,12 +154,18 @@ test('normalizeDocs: should preserve additional properties', (t) => {
       tags: ['test', 'document'],
       score: 0.95
     }
-  ]
+  ] as unknown as Array<string | PartialDoc>
 
   const result = normalizeDocs(docs)
 
   t.is(result.normalizedDocs.length, 1, 'Should have 1 normalized document')
-  const doc = result.normalizedDocs[0]
+  const doc = result.normalizedDocs[0] as unknown as {
+    content: string
+    id: string
+    metadata: { author: string; date: string }
+    tags: string[]
+    score: number
+  }
 
   t.is(doc.content, 'Test content', 'Content should be preserved')
   t.is(doc.id, 'test-doc', 'ID should be preserved')
@@ -186,18 +200,18 @@ test('generateId: should generate multiple unique IDs', (t) => {
 })
 
 test('generateId: should fall back to #crypto when global crypto is unusable', (t) => {
-  const original = globalThis.crypto
-  const cryptoShim = require('../../src/shims/crypto')
+  const globals = globalThis as { crypto?: unknown }
+  const original = globals.crypto
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-  globalThis.crypto = cryptoShim
+  globals.crypto = cryptoShim
   try {
     t.ok(uuidPattern.test(generateId()), 'Generated ID should match UUID v4 pattern')
   } finally {
     if (original === undefined) {
-      delete globalThis.crypto
+      delete globals.crypto
     } else {
-      globalThis.crypto = original
+      globals.crypto = original
     }
   }
 })
@@ -214,7 +228,7 @@ test('normalizeDocs: comprehensive mixed scenario', (t) => {
     { content: 'Object document 3', id: 'obj3', extra: 'data' },
     undefined,
     42
-  ]
+  ] as unknown as Array<string | PartialDoc>
 
   const result = normalizeDocs(docs)
 
@@ -236,7 +250,11 @@ test('normalizeDocs: comprehensive mixed scenario', (t) => {
 
   t.is(result.normalizedDocs[4].content, 'Object document 3', 'Fifth doc should be correct')
   t.is(result.normalizedDocs[4].id, 'obj3', 'Fifth doc should preserve ID')
-  t.is(result.normalizedDocs[4].extra, 'data', 'Fifth doc should preserve extra properties')
+  t.is(
+    (result.normalizedDocs[4] as unknown as { extra: string }).extra,
+    'data',
+    'Fifth doc should preserve extra properties'
+  )
 })
 
 // LRU Cache Tests

@@ -1,10 +1,9 @@
-'use strict'
-
-const test = require('brittle')
-const tmp = require('test-tmp')
-const Corestore = require('corestore')
-const HyperDBAdapter = require('../../src/adapters/database/HyperDBAdapter')
-const { QvacErrorRAG, ERR_CODES } = require('../../src/errors')
+import test from 'brittle'
+import tmp from 'test-tmp'
+import Corestore from 'corestore'
+import { HyperDBAdapter } from '../../src/adapters/database/HyperDBAdapter.js'
+import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
+import type { EmbeddedDoc } from '../../src/types.js'
 
 test('HyperDBAdapter - Config persistence on first save', async (t) => {
   const tmpDir = await tmp()
@@ -41,13 +40,13 @@ test('HyperDBAdapter - Config persistence on first save', async (t) => {
   // Config should now be persisted
   const configAfter = await adapter.getConfig()
   t.ok(configAfter, 'Config should exist after first save')
-  t.is(configAfter.key, 'adapter', 'Config should have key')
-  t.is(configAfter.embeddingModelId, 'model-abc123', 'Config should have correct embeddingModelId')
-  t.is(configAfter.dimension, 384, 'Config should have correct dimension')
-  t.is(configAfter.NUM_CENTROIDS, 16, 'Config should have NUM_CENTROIDS')
-  t.is(configAfter.BUCKET_SIZE, 50, 'Config should have BUCKET_SIZE')
-  t.is(configAfter.BATCH_SIZE, 100, 'Config should have BATCH_SIZE')
-  t.ok(configAfter.createdAt instanceof Date, 'Config should have createdAt timestamp')
+  t.is(configAfter!.key, 'adapter', 'Config should have key')
+  t.is(configAfter!.embeddingModelId, 'model-abc123', 'Config should have correct embeddingModelId')
+  t.is(configAfter!.dimension, 384, 'Config should have correct dimension')
+  t.is(configAfter!.NUM_CENTROIDS, 16, 'Config should have NUM_CENTROIDS')
+  t.is(configAfter!.BUCKET_SIZE, 50, 'Config should have BUCKET_SIZE')
+  t.is(configAfter!.BATCH_SIZE, 100, 'Config should have BATCH_SIZE')
+  t.ok(configAfter!.createdAt instanceof Date, 'Config should have createdAt timestamp')
 
   await adapter.close()
 })
@@ -75,8 +74,8 @@ test('HyperDBAdapter - Config validation with matching modelId and dimension', a
 
   const config1 = await adapter1.getConfig()
   t.ok(config1, 'Config should exist after save')
-  t.is(config1.embeddingModelId, 'model-abc123', 'Config should have correct modelId')
-  t.is(config1.dimension, 384, 'Config should have correct dimension')
+  t.is(config1!.embeddingModelId, 'model-abc123', 'Config should have correct modelId')
+  t.is(config1!.dimension, 384, 'Config should have correct dimension')
 
   await adapter1.close()
 
@@ -89,8 +88,8 @@ test('HyperDBAdapter - Config validation with matching modelId and dimension', a
 
   const config2 = await adapter2.getConfig()
   t.ok(config2, 'Config should still exist in new adapter instance')
-  t.is(config2.embeddingModelId, 'model-abc123', 'Config should have same modelId')
-  t.is(config2.dimension, 384, 'Config should have same dimension')
+  t.is(config2!.embeddingModelId, 'model-abc123', 'Config should have same modelId')
+  t.is(config2!.dimension, 384, 'Config should have same dimension')
 
   // Should allow saving with same modelId and dimension
   const embeddedDocs2 = [
@@ -151,13 +150,15 @@ test('HyperDBAdapter - Config mismatch error with different modelId', async (t) 
     t.fail('Should have thrown EMBEDDING_MODEL_MISMATCH')
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(
-      error.code,
-      ERR_CODES.EMBEDDING_MODEL_MISMATCH,
-      'Error code should be EMBEDDING_MODEL_MISMATCH'
-    )
-    t.ok(error.message.includes('model-abc123'), 'Error message should mention stored model')
-    t.ok(error.message.includes('model-different'), 'Error message should mention provided model')
+    if (error instanceof QvacErrorRAG) {
+      t.is(
+        error.code,
+        ERR_CODES.EMBEDDING_MODEL_MISMATCH,
+        'Error code should be EMBEDDING_MODEL_MISMATCH'
+      )
+      t.ok(error.message.includes('model-abc123'), 'Error message should mention stored model')
+      t.ok(error.message.includes('model-different'), 'Error message should mention provided model')
+    }
   }
 
   await adapter2.close()
@@ -180,18 +181,20 @@ test('HyperDBAdapter - Error when embeddingModelId missing from documents', asyn
       // Missing embeddingModelId
       embedding: Array(384).fill(0.1)
     }
-  ]
+  ] as unknown as EmbeddedDoc[]
 
   try {
     await adapter.saveEmbeddings(embeddedDocs)
     t.fail('Should have thrown INVALID_PARAMS for missing embeddingModelId')
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(error.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
-    t.ok(
-      error.message.includes('embeddingModelId is required'),
-      'Error message should mention embeddingModelId is required'
-    )
+    if (error instanceof QvacErrorRAG) {
+      t.is(error.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
+      t.ok(
+        error.message.includes('embeddingModelId is required'),
+        'Error message should mention embeddingModelId is required'
+      )
+    }
   }
 
   await adapter.close()
@@ -227,13 +230,15 @@ test('HyperDBAdapter - Error when documents have different embeddingModelIds', a
     t.fail('Should have thrown INVALID_PARAMS for inconsistent embeddingModelIds')
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(error.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
-    t.ok(
-      error.message.includes('same embeddingModelId'),
-      'Error message should mention consistency requirement'
-    )
-    t.ok(error.message.includes('model-abc123'), 'Error message should list found model IDs')
-    t.ok(error.message.includes('model-xyz789'), 'Error message should list found model IDs')
+    if (error instanceof QvacErrorRAG) {
+      t.is(error.code, ERR_CODES.INVALID_PARAMS, 'Error code should be INVALID_PARAMS')
+      t.ok(
+        error.message.includes('same embeddingModelId'),
+        'Error message should mention consistency requirement'
+      )
+      t.ok(error.message.includes('model-abc123'), 'Error message should list found model IDs')
+      t.ok(error.message.includes('model-xyz789'), 'Error message should list found model IDs')
+    }
   }
 
   await adapter.close()
@@ -278,7 +283,7 @@ test('HyperDBAdapter - Config persists across adapter instances', async (t) => {
 
   const config1 = await adapter1.getConfig()
   t.ok(config1, 'Config should exist after save')
-  t.is(config1.embeddingModelId, 'model-persist-test', 'Config should have correct modelId')
+  t.is(config1!.embeddingModelId, 'model-persist-test', 'Config should have correct modelId')
 
   await adapter1.close()
 
@@ -291,8 +296,8 @@ test('HyperDBAdapter - Config persists across adapter instances', async (t) => {
 
   const config2 = await adapter2.getConfig()
   t.ok(config2, 'Config should still exist in new adapter instance')
-  t.is(config2.embeddingModelId, 'model-persist-test', 'Config should have same modelId')
-  t.alike(config1.createdAt, config2.createdAt, 'createdAt should be the same')
+  t.is(config2!.embeddingModelId, 'model-persist-test', 'Config should have same modelId')
+  t.alike(config1!.createdAt, config2!.createdAt, 'createdAt should be the same')
 
   await adapter2.close()
 })
@@ -340,13 +345,15 @@ test('HyperDBAdapter - Config dimension mismatch error', async (t) => {
     t.fail('Should have thrown EMBEDDING_DIMENSION_MISMATCH')
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, 'Error should be instance of QvacErrorRAG')
-    t.is(
-      error.code,
-      ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
-      'Error code should be EMBEDDING_DIMENSION_MISMATCH'
-    )
-    t.ok(error.message.includes('384'), 'Error message should mention stored dimension')
-    t.ok(error.message.includes('512'), 'Error message should mention provided dimension')
+    if (error instanceof QvacErrorRAG) {
+      t.is(
+        error.code,
+        ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
+        'Error code should be EMBEDDING_DIMENSION_MISMATCH'
+      )
+      t.ok(error.message.includes('384'), 'Error message should mention stored dimension')
+      t.ok(error.message.includes('512'), 'Error message should mention provided dimension')
+    }
   }
 
   await adapter2.close()
