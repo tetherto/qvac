@@ -307,6 +307,7 @@ jobs:
 
             echo "::group::SDK pod checks - $PKG"
             cd "$WS/$P_PATH"
+            if [ -f "$WS/.npmrc" ]; then cp "$WS/.npmrc" .npmrc; fi
 
             # Disallowed dependencies: no git URLs or dev/tmp versions on public
             # npm deps. @tetherto/* GPR mono prerelease pins (e.g. inference-mono

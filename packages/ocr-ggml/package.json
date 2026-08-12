@@ -1,7 +1,7 @@
 {
   "name": "@qvac/ocr-ggml",
   "version": "0.15.0",
-  "description": "GGML-backed OCR addon for qvac (EasyOCR pipeline on GGUF weights)",
+  "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -66,7 +66,8 @@
     "ocr",
     "ggml",
     "gguf",
-    "easyocr"
+    "easyocr",
+    "doctr"
   ],
   "license": "Apache-2.0",
   "bugs": "https://github.com/tetherto/qvac/issues",
@@ -75,8 +76,6 @@
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
-    "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
     "bare-subprocess": "^5.2.1",
@@ -95,7 +94,9 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.2",
-    "@qvac/logging": "^0.1.0"
+    "@qvac/logging": "^0.1.0",
+    "bare-fs": "^4.5.1",
+    "bare-path": "^3.0.0"
   },
   "exports": {
     "./package": "./package.json",
