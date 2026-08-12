@@ -48,7 +48,7 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   opts.reference_audio = cfg.referenceAudio;
   opts.prompt_text = cfg.promptText;
   opts.voice = cfg.voice;
-  opts.instruct_text = cfg.instruct;
+  opts.default_controls = toVoiceControls(cfg);
   if (!cfg.language.empty())
     opts.language = cfg.language;
   if (cfg.seed.has_value())
@@ -87,6 +87,16 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   // (n_gpu_layers > 0). Empty leaves ggml's default cache location.
   opts.opencl_cache_dir = cfg.openclCacheDir;
   return opts;
+}
+
+// Config -> engine conditioning. The values are validated by tts-cpp, which
+// owns the vocabulary; this is pure plumbing and must not drop a channel.
+tts_cpp::cosyvoice::VoiceControls toVoiceControls(const CosyvoiceConfig& cfg) {
+  tts_cpp::cosyvoice::VoiceControls controls;
+  controls.emotion = cfg.emotion;
+  controls.pace = cfg.pace;
+  controls.instruct_text = cfg.instruct;
+  return controls;
 }
 
 // The tts-cpp engine ignores output_sample_rate, so the addon resamples the
@@ -488,7 +498,8 @@ void CosyvoiceModel::cancel() const {
 }
 
 CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
-    const std::string& text, const ChunkCallback& onChunk) {
+    const std::string& text, const tts_cpp::cosyvoice::VoiceControls& controls,
+    const ChunkCallback& onChunk) {
   // Keep the engine (and enhancer/denoiser) alive for the whole call even if
   // reload() swaps new ones in concurrently — the replacements take effect on
   // the NEXT synthesize.
@@ -527,12 +538,13 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
     if (streaming) {
       result = engine->synthesize(
           text,
+          controls,
           StreamChunkPostProcessor{
               onChunk,
               makeStreamingEnhancer(enhancer, rates),
               streamedSamples});
     } else {
-      result = engine->synthesize(text);
+      result = engine->synthesize(text, controls);
     }
   } catch (const std::exception& e) {
     throw createTTSError(
@@ -601,7 +613,12 @@ std::any CosyvoiceModel::process(const std::any& input) {
   } guard{jobInProgress_};
 
   cancelRequested_.store(false, std::memory_order_relaxed);
-  SynthResult out = synthesize(anyInput->text, anyInput->chunkCallback);
+  // A per-call VoiceControls replaces the constructor's outright (it is not
+  // merged), so an empty one always gets back to the configured conditioning.
+  const tts_cpp::cosyvoice::VoiceControls controls =
+      anyInput->hasControls ? anyInput->controls : toVoiceControls(cfg_);
+  SynthResult out =
+      synthesize(anyInput->text, controls, anyInput->chunkCallback);
   // Streaming already published its chunks via chunkCallback -> OutputQueue;
   // returning the concatenated PCM here would duplicate as a final outputArray
   // event (matches ParlerModel::process).
