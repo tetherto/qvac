@@ -54,7 +54,7 @@ public:
       const float* vectors, int n, const uint64_t* ids,
       const std::string& deltaPath) noexcept;
 
-  // Returns 1 / 0 (removed / not present), negative on error.
+  // Returns GGML_VEC_INDEX_OK when removed, E_NOT_FOUND when absent.
   int remove(uint64_t id) noexcept;
 
   int removeLogged(uint64_t id, const std::string& deltaPath) noexcept;

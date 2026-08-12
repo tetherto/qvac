@@ -1171,11 +1171,14 @@ js_value_t* idx_remove(js_env_t* env, js_callback_info_t* info) {
   }
 
   const int rc = idx->remove(id);
-  if (rc < 0) {
+  if (rc == GGML_VEC_INDEX_E_NOT_FOUND) {
+    return make_boolean(env, false);
+  }
+  if (rc != GGML_VEC_INDEX_OK) {
     throw_status(env, rc);
     return nullptr;
   }
-  return make_boolean(env, rc == 1);
+  return make_boolean(env, true);
 }
 
 // idx_remove_logged(handle, id:bigint, deltaPath) -> boolean
@@ -1217,11 +1220,14 @@ js_value_t* idx_remove_logged(js_env_t* env, js_callback_info_t* info) {
   }
 
   const int rc = idx->removeLogged(id, delta_path);
-  if (rc < 0) {
+  if (rc == GGML_VEC_INDEX_E_NOT_FOUND) {
+    return make_boolean(env, false);
+  }
+  if (rc != GGML_VEC_INDEX_OK) {
     throw_status(env, rc);
     return nullptr;
   }
-  return make_boolean(env, rc == 1);
+  return make_boolean(env, true);
 }
 
 // idx_compact(handle) -> undefined

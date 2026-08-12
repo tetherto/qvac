@@ -20,6 +20,8 @@ inline const char* toString(int code) noexcept {
     return "InvalidArgument";
   case GGML_VEC_INDEX_E_DUPLICATE:
     return "DuplicateId";
+  case GGML_VEC_INDEX_E_NOT_FOUND:
+    return "NotFound";
   case GGML_VEC_INDEX_E_IO:
     return "IOError";
   case GGML_VEC_INDEX_E_BAD_MAGIC:
@@ -30,6 +32,8 @@ inline const char* toString(int code) noexcept {
     return "OutOfMemory";
   case GGML_VEC_INDEX_E_PARTIAL_COMPACT:
     return "PartialCompact";
+  case GGML_VEC_INDEX_E_NOT_DURABLE:
+    return "NotDurable";
   case GGML_VEC_INDEX_E_INTERNAL:
     return "InternalError";
   default:
