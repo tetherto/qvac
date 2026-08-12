@@ -1065,6 +1065,7 @@ class CancelRequestBroadKind(Enum):
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
+    world = "world"
     audiogen = "audiogen"
     tts = "tts"
     ocr = "ocr"
@@ -9292,6 +9293,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
     diffusion = "diffusion"
     upscale = "upscale"
     video = "video"
+    world = "world"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
@@ -9829,6 +9831,167 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
     ) = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    seed: Annotated[
+        int | None,
+        Field(description="Walk RNG seed.", ge=-9007199254740991, le=9007199254740991),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU threads for the session. -1 = auto-detect (default).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description='Per-module backend override, e.g. "diffusion=cuda0,vae=cuda1" to keep scene creation off the walk GPU on a multi-GPU host.',
+            min_length=1,
+        ),
+    ] = None
+    num_frame_per_block: Annotated[
+        int | None,
+        Field(
+            alias="numFramePerBlock",
+            description="Latent frames denoised per step. 0 = model default (3).",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    local_attn_size: Annotated[
+        int | None,
+        Field(
+            alias="localAttnSize",
+            description="History attention window in latent frames. 0 = engine default (8). With `kvCache` the engine validates this against the compiled KV ring and fails at load on an unsupported combination.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    offload_params_to_cpu: Annotated[
+        bool | None,
+        Field(
+            alias="offloadParamsToCpu",
+            description="Keep weights in CPU memory and offload during GPU compute.",
+        ),
+    ] = None
+    frame_jpeg_quality: Annotated[
+        int | None,
+        Field(
+            alias="frameJpegQuality",
+            description="Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at that quality on the standard scale (higher = better quality and larger frames). A block is roughly 14 MB of raw pixels, so 85 is a good choice whenever frames cross a process or network boundary.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    kv_cache: Annotated[
+        bool | None,
+        Field(
+            alias="kvCache",
+            description="Per-layer history KV cache (~3.7x fewer frame-passes per block). Costs ~1.2 GB more VRAM but keeps block times flat; without it they ramp from ~1.8 s to ~7.5 s as the recompute window fills.",
+        ),
+    ] = None
+    profile: Annotated[
+        bool | None, Field(description="Per-stage timing logs from the native session.")
+    ] = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -9934,7 +10097,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM; there is no delegated route for them.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -10075,6 +10238,27 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         Field(
             alias="embeddingsConnectorsModelSrc",
             description="Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
+        ),
+    ] = None
+    taehv_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc | None,
+        Field(
+            alias="taehvModelSrc",
+            description="taew2_2 streaming pixel decoder (`taew2_2_f16.gguf`) — required for mode: 'world'. Decodes each generated block's latents to RGB frames. Rejected in every other mode.",
+        ),
+    ] = None
+    scene_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc | None,
+        Field(
+            alias="sceneSrc",
+            description="Pre-built ABot-World scene pack (`.safetensors`) — mode: 'world' only. Supplying it loads the walk session eagerly at loadModel time, so a bad pack fails fast. Omit it to start with no world and build one with worldCreateScene({ ... }), in which case the session activates on the first worldStep. Scene packs are produced by worldCreateScene and are specific to the resolution they were created at.",
+        ),
+    ] = None
+    world: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigWorld | None,
+        Field(
+            description="ABot-World session tuning — mode: 'world' only, rejected in every other mode. Forwarded to the native session as-is.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigWorld",
         ),
     ] = None
     upscaler: Annotated[
@@ -13213,6 +13397,211 @@ class VideoStreamResponse(GeneratedBaseModel):
     ] = None
 
 
+class WorldSceneStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier of a model loaded with modelConfig.mode: 'world'.",
+        ),
+    ]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this scene creation. Note that scene creation cannot be interrupted — the engine exposes no abort hook — so cancelling it stops the SDK from yielding, but the encode runs to completion.",
+            min_length=1,
+        ),
+    ] = None
+    prompt: Annotated[
+        str,
+        Field(
+            description='Scene prompt, encoded verbatim by umT5-XXL. The reference pipeline prefixes prompts with "| unknown | ".',
+            min_length=1,
+        ),
+    ]
+    image: Annotated[
+        str,
+        Field(
+            description="Base64 PNG/JPEG bytes of the first frame. Any size — it is cover-scaled and center-cropped to width x height.",
+            min_length=1,
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
+    ]
+    width: Annotated[
+        int | None,
+        Field(
+            description="Scene width in pixels, a multiple of 32. Defaults to 832.",
+            gt=0,
+            le=9007199254740991,
+            multiple_of=32,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Scene height in pixels, a multiple of 32. Defaults to 480.",
+            gt=0,
+            le=9007199254740991,
+            multiple_of=32,
+        ),
+    ] = None
+    type: Literal["worldSceneStream"] = "worldSceneStream"
+
+
+class WorldSceneStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    scene_create_ms: Annotated[
+        float | None,
+        Field(
+            alias="sceneCreateMs",
+            description="Wall-clock time in milliseconds for the scene pack: loading the prompt and image encoders, encoding both, and writing the pack.",
+        ),
+    ] = None
+    width: Annotated[
+        float | None, Field(description="Scene width in pixels, baked into the pack.")
+    ] = None
+    height: Annotated[
+        float | None, Field(description="Scene height in pixels, baked into the pack.")
+    ] = None
+
+
+class WorldSceneStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["worldSceneStream"] = "worldSceneStream"
+    data: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the finished scene pack (~10 MB). Persist it and pass it back as modelConfig.sceneSrc to walk the same world again later."
+        ),
+    ] = None
+    done: bool | None = None
+    stats: Annotated[
+        WorldSceneStreamResponseStats | None,
+        Field(title="WorldSceneStreamResponseStats"),
+    ] = None
+
+
+class WorldStepStreamRequestKeysItem(Enum):
+    w = "W"
+    a = "A"
+    s = "S"
+    d = "D"
+    i = "I"
+    j = "J"
+    k = "K"
+    l = "L"
+
+
+class WorldStepStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier of a model loaded with modelConfig.mode: 'world'. The session activates on the first step when no sceneSrc was supplied at load.",
+        ),
+    ]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight block, for cancel(). Optional on the wire — the server generates one when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
+    keys: Annotated[
+        list[WorldStepStreamRequestKeysItem] | None,
+        Field(
+            description="Keys held for this block. WASD move, IJKL steer the camera; duplicates are collapsed. Omit or pass an empty array to idle."
+        ),
+    ] = None
+    type: Literal["worldStepStream"] = "worldStepStream"
+
+
+class WorldStepStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_load_ms: Annotated[
+        float | None,
+        Field(
+            alias="modelLoadMs",
+            description="Time in milliseconds spent loading the DiT, decoder and scene pack.",
+        ),
+    ] = None
+    step_ms: Annotated[
+        float | None,
+        Field(
+            alias="stepMs",
+            description="Generation time in milliseconds for this block, excluding frame encoding.",
+        ),
+    ] = None
+    total_step_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalStepMs",
+            description="Cumulative generation time in milliseconds across the session.",
+        ),
+    ] = None
+    total_steps: Annotated[
+        float | None,
+        Field(
+            alias="totalSteps",
+            description="Number of blocks generated so far in this session; resets when the session reloads.",
+        ),
+    ] = None
+    total_frames: Annotated[
+        float | None,
+        Field(
+            alias="totalFrames",
+            description="Cumulative frames delivered across the session.",
+        ),
+    ] = None
+    frames: Annotated[
+        float | None,
+        Field(
+            description="Frames delivered for this block — 9 for the first block after a load (decoder warmup), 12 thereafter at the default numFramePerBlock."
+        ),
+    ] = None
+    width: Annotated[float | None, Field(description="Frame width in pixels.")] = None
+    height: Annotated[float | None, Field(description="Frame height in pixels.")] = None
+    action_mask: Annotated[
+        float | None,
+        Field(
+            alias="actionMask",
+            description="The 8-bit key mask this block was generated under (bit 0..7 = W,A,S,D,I,J,K,L).",
+        ),
+    ] = None
+
+
+class WorldStepStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["worldStepStream"] = "worldStepStream"
+    data: Annotated[
+        str | None,
+        Field(
+            description="Base64 of one decoded frame — PNG, or JPEG when world.frameJpegQuality is 1..100."
+        ),
+    ] = None
+    frame_index: Annotated[
+        float | None,
+        Field(
+            alias="frameIndex",
+            description="Zero-based index of this frame within the block.",
+        ),
+    ] = None
+    done: bool | None = None
+    stats: Annotated[
+        WorldStepStreamResponseStats | None, Field(title="WorldStepStreamResponseStats")
+    ] = None
+
+
 class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     root: Annotated[
         CancelRequestRequest | CancelRequestBroad, Field(title="CancelRequest")
@@ -13340,6 +13729,8 @@ class Response(
         | UnloadModelResponse
         | UpscaleStreamResponse
         | VideoStreamResponse
+        | WorldSceneStreamResponse
+        | WorldStepStreamResponse
     ]
 ):
     root: Annotated[
@@ -13385,7 +13776,9 @@ class Response(
         | TranslateResponse
         | UnloadModelResponse
         | UpscaleStreamResponse
-        | VideoStreamResponse,
+        | VideoStreamResponse
+        | WorldSceneStreamResponse
+        | WorldStepStreamResponse,
         Field(
             description="Any response emitted by the server, including progress updates and error envelopes.",
             title="AnyResponse",
@@ -13440,6 +13833,8 @@ class Request(
         | UnloadModelRequest
         | UpscaleStreamRequest
         | VideoStreamRequest
+        | WorldSceneStreamRequest
+        | WorldStepStreamRequest
     ]
 ):
     root: Annotated[
@@ -13481,7 +13876,9 @@ class Request(
         | Request_6
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | VideoStreamRequest,
+        | VideoStreamRequest
+        | WorldSceneStreamRequest
+        | WorldStepStreamRequest,
         Field(
             description="Any request accepted by the server, in wire (pre-parse) shape.",
             title="AnyRequest",

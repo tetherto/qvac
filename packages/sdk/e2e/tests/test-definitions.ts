@@ -30,6 +30,7 @@ import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
 import { delegatedInferenceTests } from './delegated-inference-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
+import { worldTests } from './world-tests.js'
 import { audioGenTests } from './audio-gen-tests.js'
 import { finetuneTests } from './finetune-tests.js'
 import { lifecycleTests } from './lifecycle-tests.js'
@@ -306,6 +307,9 @@ export const tests = [
 
   // Diffusion tests
   ...diffusionTests,
+
+  // ABot-World interactive world sessions (desktop GPU only)
+  ...worldTests,
 
   // Audio generation tests (desktop-only; mobile skips via SkipExecutor)
   ...audioGenTests,
