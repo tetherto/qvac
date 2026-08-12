@@ -53,12 +53,19 @@ struct CosyvoiceConfig {
   std::string voice;
 
   /**
-   * Natural-language control instruction (CosyVoice3 instruct2): selects a
-   * Chinese dialect, emotion, speaking speed, volume, or style. The JS layer
-   * renders a structured `instruct` (e.g. { dialect: 'cantonese' }) into the
-   * trained instruction string ("请用广东话表达。") before it reaches here;
-   * the engine wraps it as "You are a helpful assistant. " + instruct +
-   * "<|endofprompt|>" and drops the LM prompt speech tokens. Empty = zero-shot.
+   * Canonical cross-engine conditioning (see tts-cpp/voice_controls.h). The
+   * engine maps these to the trained instructions; only "moderate" engages
+   * nothing, taking the zero-shot path.
+   */
+  std::string emotion;
+  std::string pace;
+
+  /**
+   * Raw instruction for the controls with no canonical vocabulary yet (dialect
+   * / volume / style). The JS layer renders a structured `instruct` (e.g.
+   * { dialect: 'cantonese' }) into the trained sentence ("请用广东话表达。")
+   * before it reaches here. CosyVoice3 takes one instruction per synthesis, so
+   * engaging this alongside emotion/pace throws.
    */
   std::string instruct;
 
