@@ -6,6 +6,17 @@ const QvacLogger = require("@qvac/logging");
 const infer_base_1 = require("@qvac/infer-base");
 const marian_1 = require("./marian");
 const indic_processor_1 = require("./third-party/indic-processor");
+/**
+ * Opus-MT-style target-language tokens prepended to the source text for
+ * specific Bergamot language pairs. The Firefox Translations en→pt model is a
+ * multi-variant export that expects an explicit `>>por<<` token selecting
+ * Portuguese output; without it the model can mistranslate or echo a variant
+ * token. The output side strips any echoed `>>xxx<<` token (see
+ * `_createStandardResponse`). Keyed by `"srcLang:dstLang"`.
+ */
+const BERGAMOT_TARGET_TOKEN_BY_PAIR = {
+    "en:pt": ">>por<<",
+};
 class QvacIndicTransResponse extends infer_base_1.QvacResponse {
     processor;
     dstLang;
@@ -93,9 +104,13 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         return this.state;
     }
     /**
-     * Loads the model. If already loaded, unloads first.
+     * Loads the model. If already loaded, unloads first. Rejects after
+     * `destroy()` — destruction is permanent; create a new instance instead.
      */
     async load() {
+        if (this.state.destroyed) {
+            throw new Error("Model has been destroyed. Create a new instance to load again.");
+        }
         if (this.state.configLoaded || this.state.weightsLoaded) {
             this.logger.info("Reload requested - unloading existing model first");
             await this.unload();
@@ -103,11 +118,26 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         await this._load();
     }
     /**
-     * Runs inference on the given input. Serialized — only one job at a time.
+     * Runs inference on the given input. Serialized through completion — the
+     * queue slot is held until the returned response settles, so a following
+     * `run()`/`runBatch()` cannot replace an in-flight job.
      * @param input - Text to translate
      */
     async run(input) {
-        return this._run(() => this._runInternal(input));
+        return new Promise((resolve, reject) => {
+            void this._run(async () => {
+                let response;
+                try {
+                    response = await this._runInternal(input);
+                }
+                catch (err) {
+                    reject(err instanceof Error ? err : new Error((0, marian_1.errorMessage)(err)));
+                    return;
+                }
+                resolve(response);
+                await response.await().catch(() => { });
+            });
+        });
     }
     /**
      * Unloads the model and frees resources.
@@ -193,6 +223,9 @@ const TranslationNmtcpp = class TranslationNmtcpp {
             };
         }
     }
+    _createAddon(configurationParams) {
+        return new marian_1.TranslationInterface(configurationParams, this._addonOutputCallback.bind(this), this.logger);
+    }
     async _load() {
         const otherConfig = { ...this._config };
         // Accept camelCase aliases for the GPU keys so the config object can
@@ -227,9 +260,25 @@ const TranslationNmtcpp = class TranslationNmtcpp {
             config: otherConfig,
         };
         this._configureBergamotModel(configurationParams);
-        this.addon = new marian_1.TranslationInterface(configurationParams, this._addonOutputCallback.bind(this), this.logger);
-        await this.addon.activate();
+        this.addon = this._createAddon(configurationParams);
+        try {
+            await this.addon.activate();
+        }
+        catch (err) {
+            // A failed activation must not leak the native instance or keep the
+            // global C++ → JS logger bridge registered; destroy() releases both.
+            try {
+                await this.addon.destroy();
+            }
+            catch (cleanupErr) {
+                this.logger.warn("translation-nmtcpp: cleanup after failed activation failed: " +
+                    (0, marian_1.errorMessage)(cleanupErr));
+            }
+            this.addon = null;
+            throw err;
+        }
         this.state.configLoaded = true;
+        this.state.weightsLoaded = true;
     }
     /**
      * Handles IndicTrans model translation
@@ -237,23 +286,29 @@ const TranslationNmtcpp = class TranslationNmtcpp {
     async _runIndicTrans(input) {
         const processor = new indic_processor_1.IndicProcessor();
         const [processedText] = processor.preprocessBatch([input], this._params.srcLang, this._params.dstLang);
-        await this.addon.runJob({
-            type: "text",
-            input: processedText,
-        });
         const response = new QvacIndicTransResponse(processor, this._params.dstLang, {
             cancelHandler: () => this.addon.cancel(),
         });
-        return this._job.startWith(response);
+        this._job.startWith(response);
+        try {
+            await this.addon.runJob({
+                type: "text",
+                input: processedText,
+            });
+        }
+        catch (err) {
+            this._job.fail(err);
+            throw err;
+        }
+        return response;
     }
     /**
-     * Prepares input text with language prefix if needed
+     * Prepends the Opus-MT-style target-language token when the active
+     * language pair requires one (see BERGAMOT_TARGET_TOKEN_BY_PAIR).
      */
     _prepareInputText(input) {
-        if (this._params.srcLang === "en" && this._params.dstLang === "pt") {
-            return `>>por<< ${input}`;
-        }
-        return input;
+        const targetToken = BERGAMOT_TARGET_TOKEN_BY_PAIR[`${this._params.srcLang}:${this._params.dstLang}`];
+        return targetToken ? `${targetToken} ${input}` : input;
     }
     /**
      * Creates a response with output post-processing for language prefixes
@@ -276,11 +331,21 @@ const TranslationNmtcpp = class TranslationNmtcpp {
      */
     async _runStandardTranslation(input) {
         const text = this._prepareInputText(input);
-        await this.addon.runJob({ type: "text", input: text });
         const response = this._createStandardResponse();
-        return this._job.startWith(response);
+        this._job.startWith(response);
+        try {
+            await this.addon.runJob({ type: "text", input: text });
+        }
+        catch (err) {
+            this._job.fail(err);
+            throw err;
+        }
+        return response;
     }
     async _runInternal(input) {
+        if (!this.addon) {
+            throw new Error("Model not loaded. Call load() first.");
+        }
         if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans) {
             return this._runIndicTrans(input);
         }
@@ -288,11 +353,16 @@ const TranslationNmtcpp = class TranslationNmtcpp {
     }
     /**
      * Translates multiple texts in a single batch for better performance.
+     * Serialized with `run()` through the same exclusive queue — the batch
+     * holds the queue slot until its results are delivered.
      *
      * @param texts - Array of texts to translate
      * @returns Array of translated texts (same order as input)
      */
     async runBatch(texts) {
+        return this._run(() => this._runBatchInternal(texts));
+    }
+    async _runBatchInternal(texts) {
         if (!this.addon) {
             throw new Error("Model not loaded. Call load() first.");
         }
@@ -308,9 +378,8 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         else {
             processedTexts = texts.map((text) => this._prepareInputText(text));
         }
-        await this.addon.runJob({ type: "sequences", input: processedTexts });
         const response = this._job.start();
-        return new Promise((resolve, reject) => {
+        const resultPromise = new Promise((resolve, reject) => {
             response
                 .onFinish((result) => {
                 const [batchResults] = result;
@@ -327,6 +396,14 @@ const TranslationNmtcpp = class TranslationNmtcpp {
                 reject(error);
             });
         });
+        try {
+            await this.addon.runJob({ type: "sequences", input: processedTexts });
+        }
+        catch (err) {
+            // Fails the active response; resultPromise rejects via its onError.
+            this._job.fail(err);
+        }
+        return resultPromise;
     }
     _addonOutputCallback(_addon, event, data, error) {
         const isStatsObject = typeof data === "object" &&
