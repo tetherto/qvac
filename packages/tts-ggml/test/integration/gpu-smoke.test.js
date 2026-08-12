@@ -703,7 +703,17 @@ test(
       )
       return
     }
-    const vendor = platform === 'android' ? await probeAndroidGpuVendor(t) : null
+    // Fail closed BEFORE loading CosyVoice: an inconclusive probe cannot
+    // pass, so synthesizing first would only burn Device Farm time and stack
+    // peak memory.
+    let vendor = null
+    if (platform === 'android') {
+      vendor = await probeAndroidGpuVendor(t)
+      if (vendor === null) {
+        failOrRelax(t, 'CosyVoice3/Android: GPU vendor probe inconclusive (failing closed)')
+        return
+      }
+    }
     const model = await loadCosyvoiceTTS({
       cosyvoiceModelDir: download.modelDir,
       useGPU: true
@@ -733,20 +743,13 @@ test(
         } else {
           t.pass('CosyVoice3/Adreno: resolved to OpenCL')
         }
-      } else if (vendor === 'mali') {
-        if (st.backendDevice !== 0 || st.gpuUnsupported !== 1) {
-          failOrRelax(
-            t,
-            `CosyVoice3/Mali: expected a policy CPU decline (backendDevice=0, gpuUnsupported=1), got backendDevice=${st.backendDevice} gpuUnsupported=${st.gpuUnsupported}`
-          )
-        } else {
-          t.pass('CosyVoice3/Mali: declined to CPU by policy')
-        }
-      } else {
+      } else if (st.backendDevice !== 0 || st.gpuUnsupported !== 1) {
         failOrRelax(
           t,
-          `CosyVoice3/Android: GPU vendor probe inconclusive (failing closed); backendDevice=${st.backendDevice} backendId=${st.backendId}`
+          `CosyVoice3/Mali: expected a policy CPU decline (backendDevice=0, gpuUnsupported=1), got backendDevice=${st.backendDevice} gpuUnsupported=${st.gpuUnsupported}`
         )
+      } else {
+        t.pass('CosyVoice3/Mali: declined to CPU by policy')
       }
       recordSmoke(t, 'cosyvoice3 gpu-smoke', result, wallMs)
     } finally {
