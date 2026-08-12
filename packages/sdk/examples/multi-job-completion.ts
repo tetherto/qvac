@@ -25,7 +25,14 @@
  *   bun run examples/multi-job-completion.ts
  */
 
-import { completion, cancel, loadModel, unloadModel, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
+import {
+  completion,
+  cancel,
+  loadModel,
+  unloadModel,
+  InferenceCancelledError,
+  LLAMA_3_2_1B_INST_Q4_0
+} from '@qvac/sdk'
 
 const PROMPTS = [
   { id: 'cherry', ask: 'Reply with only the word CHERRY.' },
@@ -78,7 +85,12 @@ try {
     const tps = stats?.tokensPerSecond?.toFixed(1) ?? 'n/a'
     console.log(`  ▸ ${id}: "${text}"  (own ${tps} tok/s)`)
   }
-  console.log(`\n▸ All 4 finished in ${elapsed} ms of wall-clock (decoded together, not serially).`)
+  // Report the engine's own measure of overlap rather than inferring it from
+  // wall-clock: avgConcurrentSeq > 1 means the addon decoded sequences together.
+  const peakConcurrent = Math.max(...outputs.map((o) => o.stats?.avgConcurrentSeq ?? 0))
+  console.log(
+    `\n▸ All 4 finished in ${elapsed} ms; engine avg concurrent sequences: ${peakConcurrent.toFixed(1)} (> 1 = decoded together).`
+  )
 
   // ---- Per-request cancel isolation. Fire two more; cancel only the first by
   // its requestId. The second must still complete. ----
@@ -96,17 +108,26 @@ try {
     stream: true
   })
 
+  // Wait for the doomed run to actually start streaming before cancelling, so
+  // the cancel hits the real per-job cancel path, not a pre-admission drop.
+  await doomed.events[Symbol.asyncIterator]().next()
+
   await cancel({ requestId: doomed.requestId })
 
-  let doomedOutcome = 'completed'
+  let doomedOutcome: string
   try {
     await doomed.final
-  } catch {
-    doomedOutcome = 'cancelled'
+    doomedOutcome = 'completed (cancel lost the race)'
+  } catch (err) {
+    // Count only a genuine cancellation; surface anything else as an error.
+    doomedOutcome =
+      err instanceof InferenceCancelledError ? 'cancelled' : `errored: ${String(err)}`
   }
   const survivorText = (await survivor.final).contentText.replace(/\s+/g, ' ').trim()
   console.log(`  ▸ cancelled run -> ${doomedOutcome}`)
-  console.log(`  ▸ peer run kept decoding -> "${survivorText}"`)
+  console.log(
+    `  ▸ peer run kept decoding -> "${survivorText}" (${survivorText.length > 0 ? 'produced output' : 'EMPTY — peer was affected'})`
+  )
 
   await unloadModel({ modelId, clearStorage: false })
   process.exit(0)
