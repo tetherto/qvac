@@ -360,7 +360,8 @@ startup). In your own app, call `createScene()` before `load()`.
 
 **3. Linux CUDA build fails linking the addon (relocation / fPIC errors).**
 The registry-provided ggml port was not picked up — verify that the configured
-QVAC registry is reachable and rerun `npm run build:cuda` (it regenerates the
+QVAC registry and current baseline are reachable, check the vcpkg resolution
+lines in the build log, and rerun `npm run build:cuda` (it regenerates the
 CMake tree). vcpkg fetch failures right before this usually mean `GH_TOKEN`
 is missing or expired.
 
