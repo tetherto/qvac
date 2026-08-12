@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <tts-cpp/supertonic/engine.h>
 
 #include "model-interface/supertonic/SupertonicConfig.hpp"
@@ -18,5 +20,11 @@ inline constexpr char VULKAN_PREWARM_TEXT[] = "The quick brown fox.";
 // overwrites a pre-warm text the caller already set.
 void applyVulkanPipelineCache(
     tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg);
+
+// Conditioning reaches supertonic through EngineOptions at construction, and
+// tts_cpp::supertonic::Engine::synthesize() takes text only. Reject a per-call
+// value instead of accepting one the engine will never see.
+void validateNoPerCallControls(
+    const std::string& emotion, const std::string& pace);
 
 } // namespace qvac::ttsggml::supertonic::detail
