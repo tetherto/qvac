@@ -11,6 +11,7 @@
   },
   "include": [
     "index.d.ts",
+    "process.d.ts",
     "test/types/**/*.ts"
   ]
 }

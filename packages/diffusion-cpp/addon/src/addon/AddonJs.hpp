@@ -17,8 +17,10 @@
 #include <picojson/picojson.h>
 
 #include "handlers/SdCtxHandlers.hpp"
+#include "handlers/WorldSessionHandlers.hpp"
 #include "model-interface/EsrganUpscalerModel.hpp"
 #include "model-interface/SdModel.hpp"
+#include "model-interface/WorldSessionModel.hpp"
 #include "utils/BackendLoader.hpp"
 #include "utils/BackendSelection.hpp"
 
@@ -293,6 +295,211 @@ inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
   }
 
   sdModel->load();
+
+  js_value_t* result = nullptr;
+  js_get_undefined(env, &result);
+  return result;
+}
+JSCATCH
+
+/**
+ * Create an ABot-World interactive walk-session instance. The session is a
+ * standalone model object (own DiT + taehv + scene pack); frames stream
+ * through the same string/typed-array output handlers as batch generation.
+ * Args: [0] jsHandle map, [1] files+config map, [2] outputCallback
+ */
+inline js_value_t*
+createWorldInstance(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  qvac_lib_inference_addon_sd::WorldSessionConfig config{};
+  config.ditModelPath = args.getMapEntry(1, "diffusionModelPath");
+  config.taehvPath = args.getMapEntry(1, "taehvPath");
+  config.scenePath = args.getMapEntry(1, "scenePath");
+
+  // config sub-object: flat string key/values (coerced in addon.js), routed
+  // through the validated handler map like every other instance constructor
+  // here - numeric booleans ("1"/"0") parse, bad values throw typed
+  // InvalidArgument instead of raw stoi errors or silent no-ops.
+  applyWorldSessionHandlers(config, args.getSubmap(1, "config"));
+
+  auto model = make_unique<WorldSessionModel>(std::move(config));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
+  outHandlers.add(make_shared<out_handl::JsTypedArrayOutputHandler<uint8_t>>());
+
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+
+  return JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+/**
+ * Run one walk step: generate the next block under the given action mask and
+ * stream its decoded frames as PNG byte arrays -- or JPEG when the session's
+ * frameJpegQuality is 1..100 -- (plus one progress JSON).
+ * Args: [0] instance handle, [1] { input: { type: 'text', data: paramsJson } }
+ * paramsJson: { "actionMask": <0..255> }
+ */
+inline js_value_t*
+runWorldStepJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto [type, jsInput] = JsInterface::getInput(args);
+  if (type != "text") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "runWorldStepJob expects a single text input with JSON params");
+  }
+  const string paramsJson = js::String(env, jsInput).as<std::string>(env);
+
+  picojson::value parsed;
+  const std::string parseErr = picojson::parse(parsed, paramsJson);
+  if (!parseErr.empty() || !parsed.is<picojson::object>()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "world step params must be a JSON object: " + parseErr);
+  }
+  double mask = 0;
+  const auto& obj = parsed.get<picojson::object>();
+  if (auto it = obj.find("actionMask");
+      it != obj.end() && it->second.is<double>()) {
+    mask = it->second.get<double>();
+  }
+  if (mask < 0 || mask > 255 || std::floor(mask) != mask) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "actionMask must be an integer in [0, 255]");
+  }
+
+  WorldSessionModel::WalkStepJob job;
+  job.actionMask = static_cast<uint32_t>(mask);
+  // Lifetime contract: identical to runJob above -- destroyInstance() joins
+  // the JobRunner before the AddonJs is freed.
+  job.progressCallback = [&instance](const std::string& progressJson) {
+    instance.addonCpp->outputQueue->queueResult(std::any(progressJson));
+  };
+  job.outputCallback = [&instance](const std::vector<uint8_t>& imageBytes) {
+    instance.addonCpp->outputQueue->queueResult(std::any(imageBytes));
+  };
+
+  return instance.runJob(std::any(std::move(job)));
+}
+JSCATCH
+
+/**
+ * Create a scene pack natively (umT5-XXL prompt encode + Wan2.2 VAE
+ * first-frame encode -> scene.safetensors). Standalone: does not require the
+ * session to be loaded; the pack is loaded later via `scenePath`.
+ * Args: [0] instance handle,
+ *       [1] { input: { type: 'text', data: paramsJson }, initImageBuffer }
+ * paramsJson: { prompt, width, height, t5Path, vaePath, outputPath }
+ */
+inline js_value_t*
+runWorldSceneJob(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto [type, jsInput] = JsInterface::getInput(args);
+  if (type != "text") {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "runWorldSceneJob expects a single text input with JSON params");
+  }
+  const string paramsJson = js::String(env, jsInput).as<std::string>(env);
+
+  picojson::value parsed;
+  const std::string parseErr = picojson::parse(parsed, paramsJson);
+  if (!parseErr.empty() || !parsed.is<picojson::object>()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene params must be a JSON object: " + parseErr);
+  }
+  const auto& obj = parsed.get<picojson::object>();
+  auto getString = [&obj](const char* key) -> std::string {
+    auto it = obj.find(key);
+    return (it != obj.end() && it->second.is<std::string>())
+               ? it->second.get<std::string>()
+               : std::string();
+  };
+  auto getInt = [&obj](const char* key, int fallback) -> int {
+    auto it = obj.find(key);
+    return (it != obj.end() && it->second.is<double>())
+               ? static_cast<int>(it->second.get<double>())
+               : fallback;
+  };
+
+  WorldSessionModel::SceneCreateJob job;
+  job.prompt = getString("prompt");
+  job.width = getInt("width", 832);
+  job.height = getInt("height", 480);
+  job.t5Path = getString("t5Path");
+  job.vaePath = getString("vaePath");
+  job.outputPath = getString("outputPath");
+  if (job.prompt.empty() || job.t5Path.empty() || job.vaePath.empty() ||
+      job.outputPath.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene params require prompt, t5Path, vaePath and outputPath");
+  }
+
+  auto inputObj = args.getJsObject(1, "inputObj");
+  auto imgBuf =
+      inputObj
+          .getOptionalPropertyAs<js::TypedArray<uint8_t>, std::vector<uint8_t>>(
+              env, "initImageBuffer");
+  if (!imgBuf.has_value() || imgBuf.value().empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "scene creation requires initImageBuffer (PNG/JPEG bytes)");
+  }
+  job.imageBytes = std::move(imgBuf.value());
+
+  job.progressCallback = [&instance](const std::string& progressJson) {
+    instance.addonCpp->outputQueue->queueResult(std::any(progressJson));
+  };
+
+  return instance.runJob(std::any(std::move(job)));
+}
+JSCATCH
+
+/**
+ * Load the walk session (DiT + taehv + scene). Mirrors activate()/
+ * activateUpscaler(): WorldSessionModel does not implement IModelAsyncLoad.
+ * Args: [0] instance handle
+ */
+inline js_value_t* activateWorld(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+
+  auto* worldModel =
+      dynamic_cast<WorldSessionModel*>(&instance.addonCpp->model.get());
+  if (worldModel == nullptr) {
+    throw StatusError(
+        general_error::InternalError,
+        "activateWorld: model is not a WorldSessionModel");
+  }
+
+  worldModel->load();
 
   js_value_t* result = nullptr;
   js_get_undefined(env, &result);

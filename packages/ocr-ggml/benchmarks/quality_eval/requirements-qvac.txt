@@ -1,0 +1,6 @@
+# Minimal deps for --no-reference runs (QVAC GGML pipelines only); the
+# EasyOCR / python-doctr baselines in requirements.txt stay Linux-only.
+click>=8.0.0
+tqdm>=4.65.0
+numpy>=1.20.0
+pillow>=9.0.0

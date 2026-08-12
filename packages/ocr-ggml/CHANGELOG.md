@@ -4,7 +4,7 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.16.0] - 2026-08-11
 
 ### Added
 
@@ -36,6 +36,11 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   time by the published entrypoints).
 - Examples and the README read `RuntimeStats` from `response.stats` instead of
   the `response.await()` result.
+
+### Pull Requests
+
+- [#3740](https://github.com/tetherto/qvac/pull/3740) - fix[api]: address
+  ocr-ggml package-review findings
 
 ## [0.15.0] - 2026-08-10
 

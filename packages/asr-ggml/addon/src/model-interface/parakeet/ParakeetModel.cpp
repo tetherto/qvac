@@ -247,6 +247,7 @@ buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
   eopts.n_threads = cfg.maxThreads > 0 ? cfg.maxThreads : 0;
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
   eopts.verbose = false;
+  eopts.language = cfg.language;
   // Compose the backends-scan dir from the host prebuilds root plus the
   // cmake-bare per-target subdir (BACKENDS_SUBDIR). Empty -> ggml's default
   // compile-time search path.
