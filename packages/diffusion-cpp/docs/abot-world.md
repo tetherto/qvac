@@ -135,9 +135,10 @@ npm run build:vulkan     # explicit Vulkan (the default on Windows/Linux)
 ```
 
 macOS builds default to Metal; Android to OpenCL+Vulkan. The engine
-(`stable-diffusion-cpp 2026-07-03#6`) and `ggml` resolve from the QVAC vcpkg
-registry; the only overlay left in this package is a one-flag local ggml
-patch needed for Linux CUDA builds.
+(`stable-diffusion-cpp >= 2026-07-03#6`) and `ggml` (>= `2026-07-03#4`,
+which builds with position-independent code so Linux CUDA `.bare` modules
+link) resolve entirely from the QVAC vcpkg registry — the package carries
+no overlay ports.
 
 ## Running the interactive demo
 
@@ -360,11 +361,12 @@ the page's **Generate a world** upload (or `ABOT_PROMPT` + `ABOT_IMAGE` at
 startup). In your own app, call `createScene()` before `load()`.
 
 **3. Linux CUDA build fails linking the addon (relocation / fPIC errors).**
-The package-local ggml overlay (`vcpkg/overlay-ports/ggml`, which only adds
-`CMAKE_POSITION_INDEPENDENT_CODE=ON`) was not picked up — verify the
-directory exists and rerun `npm run build:cuda` (it regenerates the CMake
-tree). vcpkg fetch failures right before this usually mean `GH_TOKEN` is
-missing or expired.
+The resolved `ggml` port is older than `2026-07-03#4`, the first registry
+version built with `CMAKE_POSITION_INDEPENDENT_CODE=ON` — check the vcpkg
+resolution lines in the build log and make sure `vcpkg-configuration.json`'s
+registry baseline is current, then rerun `npm run build:cuda` (it
+regenerates the CMake tree). vcpkg fetch failures right before this usually
+mean `GH_TOKEN` is missing or expired.
 
 **4. The walk stops and every further `step()` rejects.**
 A failed step is **terminal by design** — the native session's RNG/history

@@ -8259,6 +8259,72 @@
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder / synthesis half (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder / synthesis half (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "encoder", "multilingual", "gguf"],
+    "notes": "Only needed for voice cloning; text-only synthesis can omit this GGUF.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "encoder", "multilingual", "gguf"],
+    "notes": "Only needed for voice cloning; text-only synthesis can omit this GGUF.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
     "source": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "KAT-Coder V2.5 Dev 35B-A3B MoE coding model (bartowski GGUF)",
