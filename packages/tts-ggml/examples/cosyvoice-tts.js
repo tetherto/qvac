@@ -5,13 +5,16 @@
  *
  * Loads the Fun-CosyVoice3-0.5B model directory (Qwen2 speech LM + DiT flow +
  * CausalHiFT vocoder, plus the Qwen2 BPE tokenizer and a baked default voice)
- * and synthesizes a single utterance.  CPU-only (iteration 1); native 24 kHz.
+ * and synthesizes a single utterance.  Native 24 kHz. CPU by default; pass
+ * --gpu to opt into GPU offload (Metal on macOS/iOS, OpenCL/Adreno on
+ * Android; other hosts fall back to CPU).
  *
  * Usage:
- *   bare examples/cosyvoice-tts.js "text to synthesize" [modelDir]
+ *   bare examples/cosyvoice-tts.js [--gpu] "text to synthesize" [modelDir]
  *
  * Examples:
  *   bare examples/cosyvoice-tts.js "Hello from a fully on-device C++ pipeline."
+ *   bare examples/cosyvoice-tts.js --gpu "Real time on Apple silicon."
  *   bare examples/cosyvoice-tts.js "Peer to peer, local first." /path/to/cosyvoice3
  *
  * The model directory is produced by
@@ -34,11 +37,14 @@ const COSYVOICE_SAMPLE_RATE = 24000
 
 const argv = global.Bare ? global.Bare.argv : process.argv
 const env = proc.env || {}
-const textArg = argv[2]
-const modelDirArg = argv[3]
+const args = argv.slice(2)
+const useGPU = args.includes('--gpu')
+const positional = args.filter(a => a !== '--gpu')
+const textArg = positional[0]
+const modelDirArg = positional[1]
 
 if (!textArg || typeof textArg !== 'string' || textArg.trim().length === 0) {
-  console.error('Usage: cosyvoice-tts.js "<text to synthesize>" [modelDir]')
+  console.error('Usage: cosyvoice-tts.js [--gpu] "<text to synthesize>" [modelDir]')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
@@ -70,7 +76,7 @@ async function main () {
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: { cosyvoiceModelDir },
-    config: { language: 'en' },
+    config: { language: 'en', useGPU },
     logger: console,
     opts: { stats: true }
   })
@@ -96,7 +102,7 @@ async function main () {
     console.log('TTS finished!')
     if (response.stats) {
       const s = response.stats
-      console.log(`Inference stats: totalTime=${s.totalTime.toFixed(2)}s, realTimeFactor=${s.realTimeFactor.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`)
+      console.log(`Inference stats: totalTime=${s.totalTime.toFixed(2)}s, realTimeFactor=${s.realTimeFactor.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}, backendDevice=${s.backendDevice} backendId=${s.backendId}`)
     }
 
     console.log('\nWriting to .wav file...')

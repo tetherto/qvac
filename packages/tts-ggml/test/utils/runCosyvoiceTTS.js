@@ -10,7 +10,9 @@ const { createWavBuffer } = require('./wav-helper')
 // CosyVoice3 is native 24 kHz (Qwen2 speech LM + DiT flow + CausalHiFT vocoder).
 const COSYVOICE_SAMPLE_RATE = 24000
 
-async function loadCosyvoiceTTS(params = {}) {
+// Exported separately so the option mapping (useGPU / NO_GPU / nGpuLayers /
+// per-call controls) is unit-testable without constructing the native engine.
+function buildCosyvoiceLoadOptions(params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models', 'cosyvoice3'))
   const cosyvoiceModelDir = params.cosyvoiceModelDir || defaultModelDir
@@ -37,7 +39,11 @@ async function loadCosyvoiceTTS(params = {}) {
   // instruct2 control (emotion / dialect / speed / volume / style / raw string)
   // is a constructor-level option: the engine renders it once at construction.
   if (params.instruct !== undefined) options.instruct = params.instruct
+  return options
+}
 
+async function loadCosyvoiceTTS(params = {}) {
+  const options = buildCosyvoiceLoadOptions(params)
   const model = new TTSGgml(options)
   await model.load()
   return model
@@ -118,6 +124,7 @@ async function runCosyvoiceTTS(model, params = {}, expectation = {}) {
 }
 
 module.exports = {
+  buildCosyvoiceLoadOptions,
   loadCosyvoiceTTS,
   runCosyvoiceTTS,
   COSYVOICE_SAMPLE_RATE

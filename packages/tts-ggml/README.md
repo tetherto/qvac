@@ -748,7 +748,7 @@ Runnable demos under `examples/`:
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
-| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz; CPU, opt-in Metal / Android GPU). `bare examples/cosyvoice-tts.js "Hello"` |
+| `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz; CPU by default, `--gpu` opts into Metal / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello"` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for desktop Vulkan. `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 

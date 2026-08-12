@@ -636,11 +636,26 @@ for (const v of [
   )
 }
 
+// RELAX-aware failure for the vendor-specific assertions below, honoring the
+// file-level QVAC_TTS_GPU_SMOKE_RELAX contract like assertGpuBackend does.
+function failOrRelax(t, msg) {
+  if (RELAX) {
+    t.comment(`WARNING (relaxed): ${msg}`)
+    t.pass('completed (relaxed)')
+  } else {
+    t.fail(msg)
+  }
+}
+
 // On Android the assertion is vendor-aware so a policy CPU fallback cannot
 // mask an OpenCL-selection regression on supported Adreno hardware: a small
 // Supertonic probe (its allowlist engages the GPU on every Android vendor)
 // classifies the device — OpenCL(4) means Adreno, Vulkan(3) means
 // Mali/Xclipse. Returns null when the class cannot be determined.
+// KNOWN RESIDUAL: the probe shares the backend registry with the engine under
+// test, so an Adreno host whose OpenCL backend broke entirely would probe as
+// Vulkan and be classified Mali; closing that needs device metadata the
+// harness does not expose yet. An inconclusive probe fails closed.
 async function probeAndroidGpuVendor(t) {
   const download = await ensureSupertonic3Model({
     targetDir: path.join(getBaseDir(), 'models'),
@@ -671,9 +686,10 @@ async function probeAndroidGpuVendor(t) {
 // under QVAC-22775). On Android the allowlist takes OpenCL/Adreno only:
 // Adreno devices must resolve to OpenCL (backendId 4 — Vulkan would mean the
 // selection requirement regressed), Mali/Xclipse devices must decline by
-// policy (CPU with stats.gpuUnsupported set). The GPU leg requests the
-// backend via useGPU AND nGpuLayers together (they agree, so the conflict
-// guard accepts) so the helper's nGpuLayers forwarding is integration-covered.
+// policy (CPU with stats.gpuUnsupported set); an inconclusive vendor probe
+// fails closed. The helper's nGpuLayers forwarding is covered by a
+// helper-level unit test (cosyvoice3.inference.test.js), keeping this leg on
+// the primary useGPU path.
 test(
   'CosyVoice3 GPU smoke - useGPU=true must engage GPU on Apple/Android',
   { timeout: 600000, skip: NO_GPU || !isCosyvoiceGpuPlatform },
@@ -689,8 +705,7 @@ test(
     const vendor = platform === 'android' ? await probeAndroidGpuVendor(t) : null
     const model = await loadCosyvoiceTTS({
       cosyvoiceModelDir: download.modelDir,
-      useGPU: true,
-      nGpuLayers: 99
+      useGPU: true
     })
     try {
       const t0 = Date.now()
@@ -709,17 +724,79 @@ test(
       } else if (!st) {
         t.fail('CosyVoice3/GPU: no response.stats returned (cannot verify backend)')
       } else if (vendor === 'adreno') {
-        t.is(st.backendDevice, 1, 'CosyVoice3/Adreno: must resolve to the GPU')
-        t.is(st.backendId, 4, 'CosyVoice3/Adreno: must select OpenCL, not Vulkan')
+        if (st.backendDevice !== 1 || st.backendId !== 4) {
+          failOrRelax(
+            t,
+            `CosyVoice3/Adreno: expected OpenCL (backendDevice=1, backendId=4), got backendDevice=${st.backendDevice} backendId=${st.backendId}`
+          )
+        } else {
+          t.pass('CosyVoice3/Adreno: resolved to OpenCL')
+        }
       } else if (vendor === 'mali') {
-        t.is(st.backendDevice, 0, 'CosyVoice3/Mali: must decline to CPU by policy')
-        t.is(st.gpuUnsupported, 1, 'CosyVoice3/Mali: policy decline must set gpuUnsupported')
-      } else if (st.backendDevice === 1) {
-        t.is(st.backendId, 4, 'CosyVoice3/Android: a GPU resolution must be OpenCL')
+        if (st.backendDevice !== 0 || st.gpuUnsupported !== 1) {
+          failOrRelax(
+            t,
+            `CosyVoice3/Mali: expected a policy CPU decline (backendDevice=0, gpuUnsupported=1), got backendDevice=${st.backendDevice} gpuUnsupported=${st.gpuUnsupported}`
+          )
+        } else {
+          t.pass('CosyVoice3/Mali: declined to CPU by policy')
+        }
       } else {
-        t.is(st.gpuUnsupported, 1, 'CosyVoice3/Android: CPU fallback must be a policy decline')
+        failOrRelax(
+          t,
+          `CosyVoice3/Android: GPU vendor probe inconclusive (failing closed); backendDevice=${st.backendDevice} backendId=${st.backendId}`
+        )
       }
       recordSmoke(t, 'cosyvoice3 gpu-smoke', result, wallMs)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+// The documented Vulkan-host policy: a CosyVoice3 GPU request on a desktop
+// Vulkan platform must fall back to CPU and report it as an intentional
+// decline (gpuUnsupported), not silently run an unvalidated backend.
+test(
+  'CosyVoice3 GPU-decline smoke - Vulkan hosts must fall back to CPU by policy',
+  {
+    timeout: 600000,
+    skip: NO_GPU || (platform !== 'linux' && platform !== 'win32')
+  },
+  async (t) => {
+    const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
+    const download = await ensureCosyvoiceModel({ targetDir: modelsDir })
+    if (!download.success) {
+      t.fail(
+        'CosyVoice3 model files not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
+    const model = await loadCosyvoiceTTS({
+      cosyvoiceModelDir: download.modelDir,
+      useGPU: true
+    })
+    try {
+      const result = await runCosyvoiceTTS(
+        model,
+        { text: 'GPU decline check for the CosyVoice engine.' },
+        { minSamples: 10000 }
+      )
+      console.log(result.output)
+      t.ok(result.passed, 'CosyVoice3/decline produced expected sample count')
+      const st = result.data.stats
+      if (!st) {
+        t.fail('CosyVoice3/decline: no response.stats returned')
+      } else if (st.backendDevice !== 0 || st.gpuUnsupported !== 1) {
+        failOrRelax(
+          t,
+          `CosyVoice3/${platform}: expected a policy CPU decline (backendDevice=0, gpuUnsupported=1), got backendDevice=${st.backendDevice} backendId=${st.backendId} gpuUnsupported=${st.gpuUnsupported}`
+        )
+      } else {
+        t.pass(`CosyVoice3/${platform}: Vulkan host declined to CPU by policy`)
+      }
     } finally {
       try {
         await model.unload()
