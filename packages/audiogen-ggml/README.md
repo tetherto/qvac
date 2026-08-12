@@ -111,6 +111,50 @@ Anything you leave out is inferred: omit `bpm`/`keyscale`/`duration` and the LM
 picks them from the caption. `inferenceSteps` / `shift` are auto-tuned to the
 DiT you loaded (turbo vs sft), so you normally don't set them.
 
+### 3. Reference and cover audio
+
+`referenceAudio` conditions the generated timbre without changing the
+text-to-music task:
+
+```js
+const response = await gen.run('slow blues with warm electric guitar', {
+  lyrics: '[Instrumental]',
+  referenceAudio
+})
+```
+
+Use `cover-nofsq` to preserve the structure of source audio while applying a
+new caption and optional timbre reference:
+
+```js
+const response = await gen.run('orchestral arrangement with dramatic strings', {
+  lyrics: '[Instrumental]',
+  taskType: 'cover-nofsq',
+  sourceAudio,
+  referenceAudio,
+  audioCoverStrength: 1,
+  coverNoiseStrength: 0.75
+})
+```
+
+Both PCM inputs must be `Float32Array` values containing finite, normalized
+samples in interleaved stereo order (`L, R, L, R, ...`) at 48 kHz. The addon
+does not resample, convert channels, or normalize input PCM. Keep samples in
+the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
+`cover-nofsq` currently requires `audioCoverStrength: 1`;
+`coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
+full FSQ-based `cover` task is reserved but not implemented.
+
+See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
+cover example using raw stereo 48 kHz float PCM input.
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:cover
+```
+
 ### Turning PCM into a file
 
 The run streams raw PCM chunks. Concatenate them and encode to a file. The
@@ -191,8 +235,26 @@ runnable end-to-end script (`npm run example`).
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.
 
-**`run(caption, opts)`** returns a `QvacResponse`; `opts`: `lyrics`,
-`vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `duration`, `seed`.
+**`run(caption, opts)`** returns a `QvacResponse`.
+
+| Option | Meaning |
+|--------|---------|
+| `lyrics` | Lyrics text; use `[Instrumental]` for no vocals. |
+| `vocalLanguage` | Vocal language hint. |
+| `bpm` | Tempo in beats per minute. |
+| `keyscale` | Key and scale, such as `C minor`. |
+| `timesignature` | Time signature, such as `4/4`. |
+| `duration` | Target length in seconds; omit to let the LM decide. |
+| `seed` | RNG seed for reproducible generation. |
+| `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
+| `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
+| `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
+| `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
+| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
+| `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
+| `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 
 ## Models
 

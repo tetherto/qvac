@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-08-11
 
 ### Added
 
@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `getState().weightsLoaded` is set after a successful `load()`.
 - `load()` after `destroy()` now rejects — destruction is permanent.
 - `run()` before `load()` rejects with a clear "Model not loaded" error.
+
+### Pull Requests
+
+- [#3753](https://github.com/tetherto/qvac/pull/3753) - fix[api]: address
+  translation-nmtcpp package-review findings
 
 ## [10.0.0] - 2026-08-10
 
