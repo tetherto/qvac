@@ -48,7 +48,7 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   opts.reference_audio = cfg.referenceAudio;
   opts.prompt_text = cfg.promptText;
   opts.voice = cfg.voice;
-  opts.instruct_text = cfg.instruct;
+  opts.default_controls.instruct_text = cfg.instruct;
   if (!cfg.language.empty())
     opts.language = cfg.language;
   if (cfg.seed.has_value())
