@@ -16,7 +16,6 @@ on:
     paths:
       - "packages/fabric/**"
       - ".github/workflows/*fabric*.yml"
-      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
   workflow_call:
 
@@ -191,6 +190,61 @@ jobs:
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/fabric
 
+  detect-fabric-stack:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+    steps:
+      - name: Checkout repository (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      # New composite actions may not exist on default branch until the PR
+      # merges — overlay the PR revision for the action only (read-only git ops
+      # still run against the default-branch checkout above).
+      - name: Checkout detect-fabric-stack action (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: .github/actions/detect-fabric-stack
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: ./.github/actions/detect-fabric-stack
+
+  fabric-stack-matrix:
+    needs: [detect-fabric-stack]
+    if: needs.detect-fabric-stack.outputs.fabric_stack == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      consumers: ${{ steps.set.outputs.consumers }}
+    steps:
+      - name: Checkout fabric-consumers manifest (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: .github/fabric-consumers.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Read npm_runtime consumers
+        id: set
+        shell: bash
+        run: |
+          CONSUMERS=$(jq -c '.npm_runtime' .github/fabric-consumers.json)
+          echo "consumers=$CONSUMERS" >> "$GITHUB_OUTPUT"
+
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
@@ -216,10 +270,13 @@ jobs:
           workdir: packages/fabric
 
   prebuild-artifact-reuse:
-    if: needs.detect-native-changes.outputs.native_changed == 'false'
+    if: |
+      needs.detect-native-changes.outputs.native_changed == 'false' &&
+      needs.detect-fabric-stack.outputs.fabric_stack != 'true'
     needs:
       - fork-approval
       - detect-native-changes
+      - detect-fabric-stack
       - sanity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -292,6 +349,57 @@ jobs:
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
 
+  fabric-prebuilds-publish:
+    needs:
+      - fork-approval
+      - prebuild
+      - prebuild-artifact-reuse
+    if: |
+      always() &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download merged prebuilds bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds
+          path: fabric-prebuilds-staging
+
+      - name: Publish fabric-prebuilds for npm-runtime consumers
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
+
+  fabric-npm-consumer-smoke:
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - detect-fabric-stack
+      - fabric-stack-matrix
+      - fabric-prebuilds-publish
+    if: |
+      always() &&
+      needs.detect-fabric-stack.outputs.fabric_stack == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.fabric-prebuilds-publish.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: ${{ fromJson(needs.fabric-stack-matrix.outputs.consumers) }}
+    uses: ./.github/workflows/fabric-stack-npm-consumer-smoke.yml
+    secrets: inherit
+    with:
+      consumer: ${{ matrix.consumer }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
   publish-prebuild-status:
     # Posts qvac/prebuild-fabric for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
     needs: [prebuild, prebuild-artifact-reuse, ci-router]
@@ -334,10 +442,13 @@ jobs:
         ci-router,
         sanity-checks,
         cpp-lint,
+        detect-fabric-stack,
         detect-native-changes,
         prebuild-artifact-reuse,
         prebuild,
         prebuild-artifact-save,
+        fabric-prebuilds-publish,
+        fabric-npm-consumer-smoke,
       ]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
@@ -347,3 +458,4 @@ jobs:
       # label) don't produce a compiled artifact, and a native-unchanged PR reuses a
       # prior prebuild instead of rebuilding.
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      integration-tests-status: ${{ needs.fabric-npm-consumer-smoke.result == 'success' || needs.fabric-npm-consumer-smoke.result == 'skipped' }}

@@ -16,6 +16,8 @@ on:
     paths:
       - "packages/classification-ggml/**"
       - ".github/workflows/*classification-ggml*.yml"
+      - "packages/fabric/vcpkg.json"
+      - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
 
   workflow_call:
@@ -86,6 +88,64 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  detect-fabric-stack:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+    steps:
+      - name: Checkout repository (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Checkout detect-fabric-stack action (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: .github/actions/detect-fabric-stack
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: ./.github/actions/detect-fabric-stack
+
+  resolve-fabric-prebuilds:
+    if: needs.detect-fabric-stack.outputs.fabric_stack == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - detect-fabric-stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout wait-and-download action (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: .github/actions/wait-and-download-fabric-prebuilds
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Wait for fabric-prebuilds from on-pr-fabric
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        with:
+          github-token: ${{ github.token }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+      - name: Re-publish fabric-prebuilds for downstream jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
+
   sanity-checks:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     needs:
@@ -108,18 +168,24 @@ jobs:
           workdir: packages/classification-ggml
 
   cpp-tests:
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: |
+      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     needs:
       - fork-approval
       - authorize
       - sanity-checks
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     uses: ./.github/workflows/cpp-tests-classification.yml
     secrets: inherit
     with:
       workdir: packages/classification-ggml
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.fabric_stack == 'true' && 'fabric-prebuilds' || '' }}
 
   cpp-lint:
     if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -181,10 +247,13 @@ jobs:
           workdir: packages/classification-ggml
 
   prebuild-artifact-reuse:
-    if: needs.detect-native-changes.outputs.native_changed == 'false'
+    if: |
+      needs.detect-native-changes.outputs.native_changed == 'false' &&
+      needs.detect-fabric-stack.outputs.fabric_stack != 'true'
     needs:
       - fork-approval
       - detect-native-changes
+      - detect-fabric-stack
       - sanity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -221,18 +290,22 @@ jobs:
       - ci-router
       - sanity-checks
       - detect-native-changes
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
       - prebuild-artifact-reuse
     if: |
       always() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-classification-ggml.yml
     secrets: inherit
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.fabric_stack == 'true' && 'fabric-prebuilds' || '' }}
 
   prebuild-artifact-save:
     if: always() && needs.prebuild.result == 'success'
@@ -258,13 +331,20 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: always() && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: |
+      always() &&
+      needs.ci-router.outputs.run_desktop == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
       - fork-approval
       - authorize
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     permissions:
       contents: read
       packages: read
@@ -274,6 +354,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.fabric_stack == 'true' && 'fabric-prebuilds' || '' }}
 
   # Mobile integration tests are no longer run on PRs. They run on demand via
   # `integration-mobile-test-classification-ggml.yml` (workflow_dispatch), where
@@ -281,41 +362,6 @@ jobs:
   # label / ci-router `run_mobile` output are kept for a possible future revival
   # but no longer trigger anything here. (Benchmark / weekend / on-merge mobile
   # runs are unaffected — they call the mobile workflow directly.)
-
-  publish-prebuild-status:
-    # Posts qvac/prebuild-classification-ggml for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
-    needs: [prebuild, prebuild-artifact-reuse, ci-router]
-    if: always() && !cancelled() && github.event_name == 'pull_request_target'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      statuses: write
-    steps:
-      # Trusted base-branch checkout of only the prebuild-status scripts (never
-      # PR head code), so publish logic is a single, unit-tested source.
-      - name: Checkout prebuild-status scripts (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/scripts/prebuild-status
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
-      - name: Publish prebuild status for Merge Guard
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PREBUILD_RESULT: ${{ needs.prebuild.result }}
-          REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
-          # A skipped prebuild is only a pass when ci-router succeeded and chose
-          # not to build (no label); a skip from an upstream failure fails closed.
-          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
-          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
-          # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
-          # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          CONTEXT: qvac/prebuild-classification-ggml
-        run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
     needs:
@@ -326,6 +372,8 @@ jobs:
         ts-checks,
         cpp-lint,
         cpp-tests,
+        detect-fabric-stack,
+        resolve-fabric-prebuilds,
         detect-native-changes,
         prebuild-artifact-reuse,
         prebuild,
