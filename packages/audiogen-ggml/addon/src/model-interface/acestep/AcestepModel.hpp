@@ -51,6 +51,16 @@ public:
     std::string keyscale;       // optional, e.g. "C minor"
     std::string timesignature;  // optional, e.g. "4/4"
     float       duration = 0.0F;  // 0 => keep engine default / let LM decide
+    float lmTemperature = 0.85F;
+    float lmTopP = 0.9F;
+    int lmTopK = 0;
+    float lmCfgScale = 2.0F;
+    bool lmPhase1 = true;
+    bool dcwEnabled = true;
+    float dcwScaler = 0.05F;
+    float dcwHighScaler = 0.02F;
+    std::vector<int>
+        audioCodes; // non-empty => skip LM and synthesize these codes
   };
 
   explicit AcestepModel(AcestepConfig config);

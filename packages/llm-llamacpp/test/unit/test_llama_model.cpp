@@ -802,6 +802,36 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringTrue) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["no_mmap"] = "true";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_FALSE(model.getCommonParams().use_mmap);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["no_mmap"] = "false";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_TRUE(model.getCommonParams().use_mmap);
+}
+
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
@@ -1303,7 +1333,15 @@ TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
   if (backendDevice == 0.0) {
     EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
   } else {
-    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_ROW);
+    // Row-split requires split buffers from every GPU device the model is
+    // distributed over, and as of qvac-fabric v10069 only the SYCL backend
+    // provides them (CUDA moved tensor parallelism to LLAMA_SPLIT_MODE_TENSOR).
+    // None of the backends this addon ships qualify, so a requested 'row' is
+    // always degraded to 'layer'. Asserted unconditionally on purpose: this is
+    // the pin on the degrade itself, so it fails if the degrade stops working.
+    // If a split-buffer-capable backend is ever shipped, that failure is the
+    // intended signal to revisit this expectation.
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_LAYER);
   }
 }
 

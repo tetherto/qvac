@@ -75,6 +75,10 @@ endif()
   )
 
   list(APPEND ADDON_SOURCES
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/GenerationParamHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/FinetuneParamHandlers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
@@ -134,6 +138,8 @@ if(BUILD_CLI)
   # Cache management integration test with automatic model download
   add_executable(cli_tool
     ${PROJECT_SOURCE_DIR}/addon/src/cli/cli_tool.cc
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
@@ -142,6 +148,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp

@@ -365,6 +365,12 @@ export const PLUGIN_OCR = '@qvac/sdk/ggml-ocr/plugin' as const
 export const PLUGIN_DIFFUSION = '@qvac/sdk/sdcpp-generation/plugin' as const
 
 /**
+ * Music and audio generation plugin (GGML / ACE-Step).
+ * Provides: text-conditioned PCM audio generation.
+ */
+export const PLUGIN_AUDIOGEN = '@qvac/sdk/audiogen-ggml/plugin' as const
+
+/**
  * Vision-Language-Action plugin (ggml). Supports SmolVLA, π₀.₅ (pi05), and
  * GR00T, dispatched on the GGUF `general.architecture` key.
  * Provides: robot-action inference from one or more camera frames (2 for
@@ -397,6 +403,7 @@ export const SDK_DEFAULT_PLUGINS = [
   PLUGIN_TTS,
   PLUGIN_OCR,
   PLUGIN_DIFFUSION,
+  PLUGIN_AUDIOGEN,
   PLUGIN_VLA,
   PLUGIN_CLASSIFICATION
 ] as const
@@ -413,13 +420,16 @@ export const ADDON_LLM = '@qvac/llm-llamacpp' as const
 /** Native addon package for text embeddings (llama.cpp) */
 export const ADDON_EMBEDDING = '@qvac/embed-llamacpp' as const
 
-/** Native addon package for Whisper transcription (whisper.cpp) */
+/** Unified native addon package for Whisper and Parakeet transcription */
+export const ADDON_ASR = '@qvac/asr-ggml' as const
+
+/** Legacy native addon package for Whisper transcription (whisper.cpp) */
 export const ADDON_WHISPER = '@qvac/transcription-whispercpp' as const
 
 /** Native addon package for BCI neural-signal transcription (whisper.cpp) */
 export const ADDON_BCI = '@qvac/bci-whispercpp' as const
 
-/** Native addon package for Parakeet transcription (ONNX) */
+/** Legacy native addon package for Parakeet transcription */
 export const ADDON_PARAKEET = '@qvac/transcription-parakeet' as const
 
 /** Native addon package for NMT translation (nmt.cpp) */
@@ -433,6 +443,9 @@ export const ADDON_OCR = '@qvac/ocr-ggml' as const
 
 /** Native addon package for image generation (stable-diffusion.cpp) */
 export const ADDON_DIFFUSION = '@qvac/diffusion-cpp' as const
+
+/** Native addon package for music and audio generation (GGML / ACE-Step) */
+export const ADDON_AUDIOGEN = '@qvac/audiogen-ggml' as const
 
 /** Native addon package for vision-language-action inference (SmolVLA / π₀.₅ / GR00T on ggml) */
 export const ADDON_VLA = '@qvac/vla-ggml' as const

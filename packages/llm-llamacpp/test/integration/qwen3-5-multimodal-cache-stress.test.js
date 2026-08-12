@@ -39,6 +39,12 @@ const MIN_QWEN35_IMAGE_CACHE_TOKENS = 2880
 // early-EOS behaviour is size-specific. Both models + their mmproj are pinned in
 // models.manifest.json (ensureModelPath resolves the source from there; the
 // downloadUrl here is cosmetic).
+//
+// Only the 0.8b pair is mobile pre-staged — it is the default and the weekly
+// vlmPerfQwen35 shard already carries it. The 2b pair is an explicit local A/B
+// opt-in and is never selected on a Device Farm shard:
+// prestage-ignore: Qwen3.5-2B-Q8_0.gguf — opt-in via QVAC_QWEN35_MTMD_SIZE=2b only
+// prestage-ignore: mmproj-Qwen3.5-2B-F16.gguf — opt-in via QVAC_QWEN35_MTMD_SIZE=2b only
 const QWEN35_MTMD_SIZE = (process.env.QVAC_QWEN35_MTMD_SIZE || '0.8b').toLowerCase()
 
 const QWEN35_MODELS = {

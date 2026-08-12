@@ -45,5 +45,6 @@ export {
 export { suspend } from './suspend'
 export { resume } from './resume'
 export { state } from './state'
-export { vla, vlaHparams } from './vla'
+export { vla, vlaHparams, vlaSetEmbodiment } from './vla'
 export { vlaPreprocessImage, vlaPadState, VLA_DEFAULT_IMAGE_SIZE } from './vla-helpers'
+export { audioGen } from '@/client/api/audio-gen'

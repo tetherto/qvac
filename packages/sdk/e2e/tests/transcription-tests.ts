@@ -36,6 +36,19 @@ export const transcriptionShortWav = createTranscriptionTest(
   ['smoke']
 )
 
+export const transcriptionF32leQueueRecovery: TestDefinition = {
+  testId: 'transcription-f32le-queue-recovery',
+  params: {
+    audioFileName: 'transcription-short-wav.wav'
+  },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'transcription',
+    dependency: 'whisper',
+    estimatedDurationMs: 45000
+  }
+}
+
 export const transcriptionShortMp3 = createTranscriptionTest(
   'transcription-short-mp3',
   'transcription-short-mp3.mp3',
@@ -189,6 +202,7 @@ export const transcriptionMetadataStreaming: TestDefinition = {
 
 export const transcriptionTests = [
   transcriptionShortWav,
+  transcriptionF32leQueueRecovery,
   transcriptionShortMp3,
   transcriptionShortAac,
   transcriptionShortOgg,

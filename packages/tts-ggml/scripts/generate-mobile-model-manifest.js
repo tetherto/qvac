@@ -88,6 +88,25 @@ const Q8_MODELS = [
   )
 ]
 
+const FUNCTIONAL_MODELS = [
+  model(
+    'supertonic3-f16.gguf',
+    'qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f16.gguf'
+  ),
+  model(
+    'supertonic3-f32.gguf',
+    'qvac_models_compiled/ggml/supertonic/2026-06-10/supertonic3-f32.gguf'
+  ),
+  model(
+    'supertonic3-q8_0.gguf',
+    'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q8_0.gguf'
+  ),
+  model(
+    'supertonic3-q4_0.gguf',
+    'qvac_models_compiled/ggml/supertonic/2026-06-15/supertonic3-q4_0.gguf'
+  )
+]
+
 // LavaSR enhancer + denoiser are orthogonal to the engine quant (q4/q8): the
 // benchmark's `enhancer`/`denoiser=lavasr` rows layer them on any engine. Only
 // the published fp16 tier is pre-staged for mobile (the enhancer quant-tier
@@ -108,6 +127,52 @@ const LAVASR_MODELS = [
     'lavasr-denoiser-f16.gguf',
     'qvac_models_compiled/ggml/lavasr/2026-07-03/lavasr-denoiser-f16.gguf',
     'lavasr/lavasr-denoiser.gguf'
+  )
+]
+
+// CosyVoice3 consumes a whole directory (LLM + flow + hift GGUFs + tokenizer +
+// voice), so the whole group is staged under a `cosyvoice3/` subdir on device
+// (like LavaSR's `lavasr/` subdir) — the on-device resolver (ensureCosyvoiceModel)
+// scans <modelsDir>/cosyvoice3. Unlike the q4/q8 engines this group is quant-fixed
+// (the LLM is q8_0, flow/hift are f32), so the prestage cosyvoice branch ignores
+// the row's variant. `vocab.json`/`merges.txt` are plain S3 objects (not GGUFs)
+// but the same `model()` presign helper works. The registry file `voice-en.gguf`
+// is staged as `voice.gguf`, the name the engine's model_dir resolves. The date
+// below must match REGISTRY_DATE_COSYVOICE in test/utils/downloadModel.js (the
+// on-device resolver); generate-mobile-model-manifest.test.js pins it so a drift
+// fails there, since this Node script can't require that Bare-only module.
+const COSYVOICE_MODELS = [
+  model(
+    'cosyvoice3-llm-q8_0.gguf',
+    'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+    'cosyvoice3/cosyvoice3-llm-q8_0.gguf'
+  ),
+  model(
+    'cosyvoice3-flow-f32.gguf',
+    'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf',
+    'cosyvoice3/cosyvoice3-flow-f32.gguf'
+  ),
+  model(
+    'cosyvoice3-hift-f32.gguf',
+    'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-hift-f32.gguf',
+    'cosyvoice3/cosyvoice3-hift-f32.gguf'
+  ),
+  // Registry file is `voice-en.gguf`; the engine resolves `voice.gguf`, so the
+  // target keeps the on-device name ensureCosyvoiceModel expects.
+  model(
+    'voice-en.gguf',
+    'qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf',
+    'cosyvoice3/voice.gguf'
+  ),
+  model(
+    'vocab.json',
+    'qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json',
+    'cosyvoice3/vocab.json'
+  ),
+  model(
+    'merges.txt',
+    'qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt',
+    'cosyvoice3/merges.txt'
   )
 ]
 
@@ -144,7 +209,9 @@ function buildManifest(presign) {
   const manifest = {
     q4: Q4_MODELS.map(signOnce),
     q8: Q8_MODELS.map(signOnce),
+    functional: FUNCTIONAL_MODELS.map(signOnce),
     lavasr: LAVASR_MODELS.map(signOnce),
+    cosyvoice: COSYVOICE_MODELS.map(signOnce),
     quality: QUALITY_MODELS
   }
   return { manifest, signedCount: signed.size }
@@ -168,4 +235,12 @@ if (require.main === module) {
   main()
 }
 
-module.exports = { buildManifest, Q4_MODELS, Q8_MODELS, LAVASR_MODELS, QUALITY_MODELS }
+module.exports = {
+  buildManifest,
+  Q4_MODELS,
+  Q8_MODELS,
+  FUNCTIONAL_MODELS,
+  LAVASR_MODELS,
+  COSYVOICE_MODELS,
+  QUALITY_MODELS
+}

@@ -2,8 +2,63 @@ import { type QvacResponse } from "@qvac/infer-base";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
+declare const ENGINE_COSYVOICE3 = "cosyvoice3";
 declare const ENGINE_PARLER = "parler";
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_PARLER;
+declare const ENGINE_AUDIO8 = "audio8";
+declare const COSYVOICE_DIALECTS: {
+    readonly cantonese: "广东话";
+    readonly northeastern: "东北话";
+    readonly gansu: "甘肃话";
+    readonly guizhou: "贵州话";
+    readonly henan: "河南话";
+    readonly hubei: "湖北话";
+    readonly hunan: "湖南话";
+    readonly jiangxi: "江西话";
+    readonly minnan: "闽南话";
+    readonly ningxia: "宁夏话";
+    readonly shanxi: "山西话";
+    readonly shaanxi: "陕西话";
+    readonly shandong: "山东话";
+    readonly shanghai: "上海话";
+    readonly sichuan: "四川话";
+    readonly tianjin: "天津话";
+    readonly yunnan: "云南话";
+};
+declare const COSYVOICE_EMOTIONS: {
+    readonly happy: "请非常开心地说一句话。";
+    readonly sad: "请非常伤心地说一句话。";
+    readonly angry: "请非常生气地说一句话。";
+};
+declare const COSYVOICE_SPEEDS: {
+    readonly slow: "请用尽可能慢地语速说一句话。";
+    readonly fast: "请用尽可能快地语速说一句话。";
+};
+declare const COSYVOICE_VOLUMES: {
+    readonly loud: "Please say a sentence as loudly as possible.";
+    readonly soft: "Please say a sentence in a very soft voice.";
+};
+declare const COSYVOICE_STYLES: {
+    readonly peppa: "我想体验一下小猪佩奇风格，可以吗？";
+    readonly robot: "你可以尝试用机器人的方式解答吗？";
+};
+/**
+ * Structured CosyVoice3 control. Exactly one field takes effect per synthesis,
+ * resolved by precedence dialect > emotion > speed > volume > style. Pass a raw
+ * string instead for an arbitrary instruction (advanced escape hatch).
+ */
+interface CosyvoiceInstruct {
+    /** Chinese dialect; renders "请用{dialect}表达。". */
+    dialect?: keyof typeof COSYVOICE_DIALECTS;
+    /** Emotion. */
+    emotion?: keyof typeof COSYVOICE_EMOTIONS;
+    /** Speaking speed. */
+    speed?: keyof typeof COSYVOICE_SPEEDS;
+    /** Loudness. */
+    volume?: keyof typeof COSYVOICE_VOLUMES;
+    /** Playful style preset. */
+    style?: keyof typeof COSYVOICE_STYLES;
+}
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -34,6 +89,36 @@ interface TTSGgmlFiles {
     parlerModel?: string;
     parlerModelPath?: string;
     parler?: string;
+    /** Audio8 DualAR language model GGUF path. Overrides `modelDir`. */
+    audio8Lm?: string;
+    audio8LmPath?: string;
+    /** Audio8 codec synthesis half (codes to 44.1 kHz wav). Overrides `modelDir`. */
+    audio8CodecDecoder?: string;
+    audio8CodecDecoderPath?: string;
+    /**
+     * Audio8 codec analysis half (wav to codes). Only needed to clone a voice
+     * from a recording; a text-only deployment can leave it out.
+     */
+    audio8CodecEncoder?: string;
+    audio8CodecEncoderPath?: string;
+    /**
+     * CosyVoice3 model directory holding the sub-model GGUFs
+     * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
+     * `merges.txt`. Routes to the CosyVoice3 engine. Falls back to the shared
+     * `modelDir` when unset.
+     */
+    cosyvoiceModelDir?: string;
+    /** CosyVoice3 per-component GGUF paths (override discovery under the model dir). */
+    cosyvoiceLlmModel?: string;
+    cosyvoiceLlmModelPath?: string;
+    cosyvoiceFlowModel?: string;
+    cosyvoiceFlowModelPath?: string;
+    cosyvoiceHiftModel?: string;
+    cosyvoiceHiftModelPath?: string;
+    cosyvoiceS3tokModel?: string;
+    cosyvoiceS3tokModelPath?: string;
+    cosyvoiceCampplusModel?: string;
+    cosyvoiceCampplusModelPath?: string;
     /**
      * LavaSR enhancer GGUF: single-file Vocos bandwidth extension produced by
      * tts-cpp/scripts/convert-lavasr-enhancer-to-gguf.py. When supplied, output
@@ -69,20 +154,28 @@ interface TTSGgmlFiles {
     cangjieTsv?: string;
 }
 interface TTSGgmlRuntimeConfig {
-    /** Language code; default "en". Chatterbox MTL accepts es/fr/de/pt/it/zh/ja/ko/... */
+    /**
+     * Language code; default "en". Chatterbox MTL accepts
+     * es/fr/de/pt/it/zh/ja/ko/... CosyVoice3: reserved / not yet effective — the
+     * text-normalization frontend is not yet integrated, so it is accepted but
+     * not acted on.
+     */
     language?: string;
     /**
      * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
-     * available. Defaults to `false` for both engines. Honored on Apple,
-     * desktop, and Android, where tts-cpp selects the backend using its
-     * per-vendor allowlist.
+     * available. Defaults to `false`. Audio8 uses Vulkan on Linux and Windows;
+     * the other GPU-capable engines select a backend for the host platform.
      */
     useGPU?: boolean;
     /**
      * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
-     * native rate. Resamples the native output (24 kHz Chatterbox, 44.1 kHz
-     * Supertonic), or the 48 kHz LavaSR-enhanced signal, before emitting.
-     * `TTSOutputChunk.sampleRate` reports the resulting rate.
+     * native rate. Resamples the native output (24 kHz Chatterbox and
+     * CosyVoice3, 44.1 kHz Supertonic), or the 48 kHz LavaSR-enhanced signal,
+     * before emitting. `TTSOutputChunk.sampleRate` reports the resulting rate.
+     *
+     * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
+     * only accepted there when the LavaSR enhancer is active, because the
+     * enhancer's overlap-reprocess window resamples without chunk seams.
      */
     outputSampleRate?: number;
     backendsDir?: string;
@@ -128,15 +221,32 @@ interface ParlerDescriptionFields {
     reverb?: string;
     quality?: string;
 }
-interface TTSGgmlOptions extends ParlerDescriptionFields {
+/**
+ * Voice cloning reference. Audio8's codec encoder turns `referenceAudio` into
+ * codes and they are prepended to the prompt as the speaker's own history, so
+ * no speaker encoder and no enrolment step are involved. `referenceText` is
+ * required alongside it there: the model conditions on it as the turn the
+ * recording answers, and a wrong one degrades the clone. Accepted at
+ * construction, on `reload()`, and per call (Audio8 only).
+ */
+interface Audio8VoiceFields {
+    /**
+     * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3: reserved
+     * / not yet effective — zero-shot cloning needs the native S3 tokenizer +
+     * CAM++ (not ported yet), so the engine falls back to the baked voice.
+     * Audio8: the recording to clone, with `referenceText` alongside it.
+     */
+    referenceAudio?: string;
+    /** Audio8: what `referenceAudio` says. Required when cloning. */
+    referenceText?: string;
+}
+interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields {
     files?: TTSGgmlFiles;
     config?: TTSGgmlRuntimeConfig;
     logger?: object;
     lazySessionLoading?: boolean;
     /** Explicit engine selection. Auto-detected from `files` when omitted. */
     engine?: EngineType;
-    /** Chatterbox: voice-cloning reference audio path (wav). */
-    referenceAudio?: string;
     /** Chatterbox: directory of baked voice-conditioning tensors. */
     voiceDir?: string;
     /** RNG seed for Chatterbox CFM/SineGen or Supertonic latent generation. */
@@ -144,6 +254,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     /**
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
      * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
+     * Audio8: pass 99 to use Vulkan on Linux and Windows.
      */
     nGpuLayers?: number;
     /**
@@ -162,11 +273,27 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     kvCacheType?: "f32" | "f16" | "q8_0";
     /** Override `std::thread::hardware_concurrency()`. */
     threads?: number;
-    /** Chatterbox-only speech tokens per native streaming chunk. 0 disables. */
+    /**
+     * Chatterbox / CosyVoice3 speech tokens per native streaming chunk.
+     * 0 disables.
+     */
     streamChunkTokens?: number;
-    /** Chatterbox-only smaller first chunk for low first-audio-out latency. */
+    /**
+     * Chatterbox / CosyVoice3 smaller first chunk for low first-audio-out
+     * latency.
+     */
     streamFirstChunkTokens?: number;
-    /** Chatterbox-only CFM Euler step count. */
+    /**
+     * CosyVoice3-only: left-context speech tokens intended to be carried into each
+     * streaming chunk. Reserved / not yet effective — the pinned tts-cpp engine
+     * accepts the value but does not read it (true low-latency token2wav streaming
+     * is still reserved), so setting it currently has no effect.
+     */
+    streamLeftContextTokens?: number;
+    /**
+     * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet
+     * effective — the engine runs a fixed 10-step schedule and ignores this.
+     */
     cfmSteps?: number;
     /**
      * Chatterbox-only S3Gen classifier-free-guidance rate. The diffusion loop
@@ -175,7 +302,20 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
      * model's baked rate. Omit it to retain the baked rate.
      */
     cfgRate?: number;
-    /** Supertonic voice id baked into the GGUF, such as `F1` or `M1`. */
+    /** CosyVoice3: transcript of `referenceAudio` for zero-shot voice cloning (conditions the LM prompt). */
+    promptText?: string;
+    /**
+     * CosyVoice3: natural-language control (instruct2) — Chinese dialect, emotion,
+     * speed, volume, or style. Pass a structured object (e.g. `{ dialect:
+     * 'cantonese' }`, `{ emotion: 'happy' }`) which renders to the trained
+     * instruction, or a raw string for an arbitrary instruction. Applied on top of
+     * the selected voice's timbre; one control takes effect per synthesis.
+     */
+    instruct?: string | CosyvoiceInstruct;
+    /**
+     * Supertonic voice id baked into the GGUF, such as `F1` or `M1`. CosyVoice3:
+     * reserved / not yet effective — named-voice selection is not yet wired.
+     */
     voice?: string;
     /** Alias for `voice` for compatibility with `@qvac/tts-onnx`. */
     voiceName?: string;
@@ -195,14 +335,15 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     /**
      * LavaSR neural speech enhancement. Opt-in CPU/GGML bandwidth extension to
      * 48 kHz, enabled by a GGUF path here or through `files.lavasrEnhancer`.
-     * Works for both engines, including Chatterbox native chunk streaming.
+     * Works for every engine, including the native chunk streaming of
+     * Chatterbox, Parler and CosyVoice3.
      */
     enhancer?: LavaSREnhancerOptions;
     /**
      * LavaSR neural speech denoiser (UL-UNAS). Opt-in preprocessing that runs
      * before the enhancer and preserves the sample rate. Enabled by a GGUF path
-     * here or through `files.lavasrDenoiser`; rejected with Chatterbox native
-     * chunk streaming.
+     * here or through `files.lavasrDenoiser`; rejected with native chunk
+     * streaming (batch synthesis only).
      */
     denoiser?: LavaSRDenoiserOptions;
     /** Directory the addon scans for dynamically loaded ggml backends. */
@@ -221,14 +362,21 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
     /** Chatterbox MTL Cangjie TSV path for Chinese. */
     cangjieTsvPath?: string;
     /**
-     * Parler sampling / generation knobs; each unset defers to the GGUF's
-     * generation defaults (temperature 1.0, top-k 50, ~30 s max length).
+     * Parler and Audio8 sampling knobs; each unset defers to the engine's own
+     * defaults (Parler: temperature 1.0, top-k 50; Audio8: temperature 0.7,
+     * top-k 50, top-p 0.9). Audio8 filters by top-k/top-p on the raw logits and
+     * only then applies the temperature, following its reference.
      */
     temperature?: number;
     topK?: number;
     topP?: number;
-    /** Parler generation-length cap in decoder steps (~86/s); 0 = model default. */
+    /**
+     * Generation-length cap in decoder frames; 0 = engine default. Parler runs
+     * ~86 frames/s, Audio8 ~21.5.
+     */
     maxFrames?: number;
+    /** Audio8: take the argmax instead of sampling. */
+    greedy?: boolean;
     minNewTokens?: number;
     /** Parler prompt digit expansion (engine default: enabled). */
     normalizeNumbers?: boolean;
@@ -245,7 +393,8 @@ interface TTSOutputChunk {
     outputArray: ArrayBuffer;
     /**
      * Output sample rate. The native engine rate (24000 for Chatterbox,
-     * 44100 for Supertonic), or 48000 when the LavaSR enhancer is active.
+     * 44100 for Supertonic and Parler), or 48000 when the LavaSR enhancer is
+     * active.
      */
     sampleRate?: number;
 }
@@ -261,6 +410,11 @@ interface RuntimeStats {
     backendId?: number;
     /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
     gpuUnsupported?: number;
+    /**
+     * Audio8 only: codec frames generated, on a fixed 46 ms grid. This is the
+     * unit its `tokensPerSecond` counts, in batch and in streaming alike.
+     */
+    generatedFrames?: number;
 }
 interface SentenceStreamChunkMeta {
     chunkIndex?: number;
@@ -271,13 +425,13 @@ interface SentenceStreamChunkMeta {
      */
     isLast?: boolean;
 }
-interface SentenceStreamOptions extends ParlerDescriptionFields {
+interface SentenceStreamOptions extends ParlerDescriptionFields, Audio8VoiceFields {
     /** BCP-47 locale for `Intl.Segmenter` when available. */
     locale?: string;
     /** Maximum graphemes per chunk; defaults to 300, or 120 for Korean. */
     maxChunkScalars?: number;
 }
-interface RunStreamingOptions extends ParlerDescriptionFields {
+interface RunStreamingOptions extends ParlerDescriptionFields, Audio8VoiceFields {
     accumulateSentences?: boolean;
     sentenceDelimiter?: RegExp;
     sentenceDelimiterPreset?: SentenceDelimiterPreset;
@@ -286,7 +440,7 @@ interface RunStreamingOptions extends ParlerDescriptionFields {
 }
 /** Input accepted by `runStreaming`. */
 type TextStreamInput = string | string[] | Iterable<string> | AsyncIterable<string>;
-interface TTSRunInput extends ParlerDescriptionFields {
+interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields {
     type?: string;
     input: string;
     streamOutput?: boolean;
@@ -300,10 +454,10 @@ interface TTSRunInput extends ParlerDescriptionFields {
     signal?: AbortSignal;
 }
 /**
- * GGML-backed TTS via the `tts-cpp` library. Wraps both
- * `tts_cpp::chatterbox::Engine` and `tts_cpp::supertonic::Engine` behind a
- * single engine-agnostic JavaScript surface. Engine type is auto-detected
- * from `files` or selected explicitly with `engine`.
+ * GGML-backed TTS via the `tts-cpp` library. Wraps the chatterbox,
+ * supertonic, parler, cosyvoice3 and audio8 engines behind a single
+ * engine-agnostic JavaScript surface. Engine type is auto-detected from
+ * `files` or selected explicitly with `engine`.
  *
  * Owns a persistent native engine: model weights and voice-conditioning
  * tensors are loaded once by `load()` and reused by `run()`, `runStream()`,
@@ -315,7 +469,9 @@ declare class TTSGgml {
     };
     static readonly ENGINE_CHATTERBOX = "chatterbox";
     static readonly ENGINE_SUPERTONIC = "supertonic";
+    static readonly ENGINE_COSYVOICE3 = "cosyvoice3";
     static readonly ENGINE_PARLER = "parler";
+    static readonly ENGINE_AUDIO8 = "audio8";
     opts: object;
     exclusiveRun: boolean;
     logger: object;
@@ -333,6 +489,12 @@ declare class TTSGgml {
     private _supertonicModelPath?;
     private _t3ModelPath?;
     private _s3genModelPath?;
+    private _cosyvoiceModelDir?;
+    private _cosyvoiceLlmModelPath?;
+    private _cosyvoiceFlowModelPath?;
+    private _cosyvoiceHiftModelPath?;
+    private _cosyvoiceS3tokModelPath?;
+    private _cosyvoiceCampplusModelPath?;
     private _mecabDictPath?;
     private _cangjieTsvPath?;
     private _referenceAudio?;
@@ -344,8 +506,11 @@ declare class TTSGgml {
     private _threads?;
     private _streamChunkTokens?;
     private _streamFirstChunkTokens?;
+    private _streamLeftContextTokens?;
     private _cfmSteps?;
     private _cfgRate?;
+    private _promptText?;
+    private _instruct?;
     private _voice?;
     private _steps?;
     private _speed?;
@@ -356,6 +521,11 @@ declare class TTSGgml {
     private _openclCacheDir?;
     private _vulkanCacheDir?;
     private _parlerModelPath?;
+    private _audio8LmPath?;
+    private _audio8CodecDecoderPath?;
+    private _audio8CodecEncoderPath?;
+    private _referenceText?;
+    private _greedy?;
     private _description?;
     private _emotion?;
     private _pitch?;
@@ -372,9 +542,20 @@ declare class TTSGgml {
     private _normalizeNumbers?;
     constructor(options?: TTSGgmlOptions);
     private _resolveEngineAndModelPaths;
+    private _resolveAudio8ModelPaths;
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
+    private _requestsChunkStreaming;
     private _assertParlerOptionConsistency;
+    private _assertSamplerOptionSupport;
+    private _assertAudio8OptionConsistency;
+    /**
+     * A recording without its transcript is accepted by the model but degrades
+     * the clone silently, and a transcript alone has nothing to attach to, so
+     * both halves have to arrive together.
+     */
+    private _assertAudio8VoiceConsistent;
+    private _assertCosyvoiceOptionConsistency;
     /**
      * Extract + validate the per-call parler description/template fields from a
      * run input or streaming options. Returns undefined when none are present.
@@ -382,6 +563,20 @@ declare class TTSGgml {
      * free-text description.
      */
     private _resolveParlerJobFields;
+    /**
+     * The voice a per-call override actually synthesizes with. Mirrors
+     * Audio8Model::resolveVoice: a per-call recording replaces both halves, so
+     * it cannot inherit the configured transcript, which describes a different
+     * recording; a per-call transcript alone corrects the configured one.
+     */
+    private _mergeAudio8Voice;
+    /**
+     * Extract + validate the per-call Audio8 voice fields from a run input or
+     * streaming options. Returns undefined when none are present.
+     */
+    private _resolveAudio8JobFields;
+    /** The per-call fields of whichever engine is loaded, if any are set. */
+    private _resolveJobFields;
     getEngineType(): EngineType;
     getApiDefinition(): string;
     getState(): InferenceState;
@@ -412,14 +607,30 @@ declare class TTSGgml {
     private _normalizeTextStream;
     private _runTextStreamOrchestrator;
     private _sentenceStreamTextIterableDrive;
+    /**
+     * Audio8 reports `tokensPerSecond` as codec frames per second, so the
+     * streaming aggregate has to count frames too rather than characters.
+     */
+    private _pacesOnFrames;
     private _runStreamOrchestrator;
     private _sentenceStreamDriveBody;
     private _load;
     private _buildTtsParams;
+    private _buildCosyvoiceParams;
     private _buildChatterboxParams;
     private _buildSupertonicParams;
     private _buildParlerParams;
+    private _buildAudio8Params;
+    /** The knobs every engine in SAMPLING_ENGINES reads. */
+    private _assignSamplingParams;
+    /**
+     * Backend and output plumbing for the engines that take no `language`,
+     * where `_assignCommonNativeParams` would be the wrong shape.
+     */
+    private _assignBackendParams;
     private _assignCommonNativeParams;
+    /** LavaSR post-processing paths, shared by every engine that supports them. */
+    private _assignLavasrParams;
     private _createAddon;
     unload(): Promise<void>;
     destroy(): Promise<void>;
@@ -435,6 +646,27 @@ declare class TTSGgml {
     cancel(): Promise<void>;
     private _failAndClearActiveResponse;
     reload(newConfig?: Record<string, unknown>): Promise<void>;
+    /**
+     * The voice a reload lands on. Same rule as _mergeAudio8Voice and
+     * Audio8Model::resolveVoice: a new recording replaces both halves, because
+     * the configured transcript describes the recording being replaced. Reload
+     * reads `undefined` as "not supplied", so an explicit empty string reaches
+     * the guard instead of being ignored.
+     */
+    private _mergeAudio8ReloadVoice;
+    /**
+     * The knobs a reload lands on, merged the same way as the voice so the
+     * whole set can be checked before any of it is written.
+     */
+    private _mergeAudio8ReloadSampling;
+    private _applyAudio8Sampling;
+    /**
+     * Audio8 voice + sampling knobs are reloadable; they rebuild the engine's
+     * sampler and speaker history. Both merges are checked before either is
+     * written, so a rejected reload leaves the instance exactly as it was
+     * rather than half-moved onto the configuration that was refused.
+     */
+    private _applyAudio8Reload;
     static getModelKey(_params?: unknown): string;
     private _requireAddon;
     private _optionalAddon;
@@ -453,6 +685,7 @@ type NamespaceRunStreamingOptions = RunStreamingOptions;
 type NamespaceTextStreamInput = TextStreamInput;
 type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
+type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 declare namespace TTSGgml {
     type TTSGgmlFiles = NamespaceFiles;
     type TTSGgmlRuntimeConfig = NamespaceRuntimeConfig;
@@ -467,5 +700,6 @@ declare namespace TTSGgml {
     type TextStreamInput = NamespaceTextStreamInput;
     type TTSRunInput = NamespaceRunInput;
     type InferenceState = NamespaceInferenceState;
+    type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
 }
 export = TTSGgml;

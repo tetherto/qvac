@@ -227,9 +227,19 @@ test('transcribeStreamResponseSchema: validates response with text', (t) => {
 test('transcribeStreamResponseSchema: validates done response', (t) => {
   const result = transcribeStreamResponseSchema.safeParse({
     type: 'transcribeStream',
-    done: true
+    done: true,
+    stats: {
+      audioDuration: 1250,
+      realTimeFactor: 0.4
+    }
   })
   t.ok(result.success, 'done response is valid')
+  if (result.success) {
+    t.alike(result.data.stats, {
+      audioDuration: 1250,
+      realTimeFactor: 0.4
+    })
+  }
 })
 
 test('transcribeStreamResponseSchema: validates error response', (t) => {
@@ -436,6 +446,7 @@ test('duplex integration: session single-use iteration guard', async (t) => {
   })()
 
   const session: TranscribeStreamSession = {
+    stats: Promise.resolve(undefined),
     write() {},
     end() {},
     destroy() {},

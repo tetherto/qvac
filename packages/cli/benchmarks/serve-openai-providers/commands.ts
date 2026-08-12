@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { configPlaceholders, PLACEHOLDER_PREFIXES, promptById } from './config'
+import { captureOpenAiApiCoverage } from './coverage'
 import {
   appendRun,
   atomicWriteJson,
@@ -19,6 +20,7 @@ import type {
   BenchmarkConfig,
   ChatClient,
   GenerationConfig,
+  OpenAiApiCoverageSnapshot,
   PromptDoc,
   PromptsFile,
   ProviderConfig,
@@ -43,6 +45,7 @@ export type CommandFilesystem = {
 
 export type CommandDependencies = {
   createClient: (baseUrl: string, apiKey: string) => ChatClient
+  captureOpenAiCoverage: () => Promise<OpenAiApiCoverageSnapshot>
   execute: CommandExecutor
   clock: CommandClock
   fs: CommandFilesystem
@@ -70,6 +73,7 @@ function defaultCreateClient(baseUrl: string, apiKey: string): ChatClient {
 export function defaultDependencies(): CommandDependencies {
   return {
     createClient: defaultCreateClient,
+    captureOpenAiCoverage: captureOpenAiApiCoverage,
     execute: executeCommand,
     clock: {
       now: nowSeconds,
@@ -361,6 +365,26 @@ export async function cmdFull(
     const bad = configPlaceholders(config)
     if (bad.length > 0) {
       throw new Error(`replace placeholders before full benchmark: ${bad.join(', ')}`)
+    }
+    try {
+      raw.openai_api_coverage = await deps.captureOpenAiCoverage()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      raw.openai_api_coverage = {
+        status: 'unavailable',
+        captured_at: deps.clock.date().toISOString(),
+        errors: [`OpenAI API coverage capture failed unexpectedly: ${message}`]
+      }
+    }
+    deps.fs.writeJson(rawPath, raw)
+    if (raw.openai_api_coverage.status === 'unavailable') {
+      console.error(
+        `WARN OpenAI API coverage unavailable: ${raw.openai_api_coverage.errors.join('; ')}`
+      )
+    } else if (raw.openai_api_coverage.warnings.length > 0) {
+      console.error(
+        `WARN OpenAI API coverage degraded: ${raw.openai_api_coverage.warnings.join('; ')}`
+      )
     }
     raw.model_parity_evidence = await verifyModelParity(config)
     deps.fs.writeJson(rawPath, raw)
