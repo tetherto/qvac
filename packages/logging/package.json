@@ -1,16 +1,37 @@
 {
   "name": "@qvac/logging",
   "version": "0.1.1",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./constants": {
+      "types": "./dist/constants.d.ts",
+      "import": "./dist/constants.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "imports": {
+    "#env": {
+      "types": "./src/env.ts",
+      "bare": "bare-env",
+      "default": "./dist/env.js"
+    }
+  },
   "scripts": {
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "lint": "lunte",
     "lint:fix": "lunte --fix",
-    "test": "npm run lint && npm run format && npm run test:unit",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
-    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "build:test": "tsc -p test/tsconfig.build.json",
+    "test:unit": "npm run build:test && brittle-bare 'test/dist/test/unit/*.test.js'"
   },
   "author": "Tether",
   "license": "Apache-2.0",
@@ -21,31 +42,19 @@
   },
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
   "devDependencies": {
+    "@types/brittle": "^3.5.0",
+    "bare-process": "^4.5.0",
     "brittle": "^3.15.0",
     "lunte": "^1.8.1",
     "prettier": "^3.9.4",
-    "prettier-config-holepunch": "^2.0.0"
-  },
-  "imports": {
-    "./env": {
-      "bare": "bare-env",
-      "default": "./env.js"
-    }
-  },
-  "exports": {
-    ".": {
-      "types": "./index.d.ts",
-      "default": "./index.js"
-    },
-    "./constants": {
-      "types": "./constants.d.ts",
-      "default": "./constants.js"
-    },
-    "./constants.js": {
-      "types": "./constants.d.ts",
-      "default": "./constants.js"
-    }
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "bare-env": "^3.0.0"

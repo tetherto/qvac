@@ -7,10 +7,12 @@ export default [
     ignores: [
       'index.js',
       'video.js',
+      'world.js',
       'addon.js',
       'addonLogging.js',
       'index.d.ts',
       'video.d.ts',
+      'world.d.ts',
       'addon.d.ts',
       'addonLogging.d.ts',
       'build/**',
