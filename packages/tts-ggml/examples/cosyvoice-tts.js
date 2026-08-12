@@ -5,7 +5,9 @@
  *
  * Loads the Fun-CosyVoice3-0.5B model directory (Qwen2 speech LM + DiT flow +
  * CausalHiFT vocoder, plus the Qwen2 BPE tokenizer and a baked default voice)
- * and synthesizes a single utterance.  CPU-only (iteration 1); native 24 kHz.
+ * and synthesizes a single utterance.  Native 24 kHz. CPU by default; pass
+ * --gpu to opt into GPU offload (Metal on macOS/iOS, OpenCL/Adreno on
+ * Android; other hosts fall back to CPU).
  *
  * `emotion` is the cross-engine conditioning option: the same spelling works on
  * Parler (see parler-tts.js).  CosyVoice3 supports anger, happy, neutral and
@@ -13,10 +15,11 @@
  * synthesis, so combining emotion with pace or instruct throws.
  *
  * Usage:
- *   bare examples/cosyvoice-tts.js "text to synthesize" [emotion] [modelDir]
+ *   bare examples/cosyvoice-tts.js [--gpu] "text to synthesize" [emotion] [modelDir]
  *
  * Examples:
  *   bare examples/cosyvoice-tts.js "Hello from a fully on-device C++ pipeline."
+ *   bare examples/cosyvoice-tts.js --gpu "Real time on Apple silicon."
  *   bare examples/cosyvoice-tts.js "What a wonderful day." happy
  *   bare examples/cosyvoice-tts.js "Peer to peer, local first." sad /path/to/cosyvoice3
  *
@@ -40,12 +43,15 @@ const COSYVOICE_SAMPLE_RATE = 24000
 
 const argv = global.Bare ? global.Bare.argv : process.argv
 const env = proc.env || {}
-const textArg = argv[2]
-const emotionArg = argv[3]
-const modelDirArg = argv[4]
+const args = argv.slice(2)
+const useGPU = args.includes('--gpu')
+const positional = args.filter((a) => a !== '--gpu')
+const textArg = positional[0]
+const emotionArg = positional[1]
+const modelDirArg = positional[2]
 
 if (!textArg || typeof textArg !== 'string' || textArg.trim().length === 0) {
-  console.error('Usage: cosyvoice-tts.js "<text to synthesize>" [emotion] [modelDir]')
+  console.error('Usage: cosyvoice-tts.js [--gpu] "<text to synthesize>" [emotion] [modelDir]')
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
 }
@@ -77,7 +83,7 @@ async function main() {
   const model = new TTSGgml({
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: { cosyvoiceModelDir },
-    config: { language: 'en' },
+    config: { language: 'en', useGPU },
     ...(emotionArg ? { emotion: emotionArg } : {}),
     logger: console,
     opts: { stats: true }
@@ -105,7 +111,7 @@ async function main() {
     if (response.stats) {
       const s = response.stats
       console.log(
-        `Inference stats: totalTime=${s.totalTime.toFixed(2)}s, realTimeFactor=${s.realTimeFactor.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}`
+        `Inference stats: totalTime=${s.totalTime.toFixed(2)}s, realTimeFactor=${s.realTimeFactor.toFixed(3)}, audioDuration=${s.audioDurationMs}ms, totalSamples=${s.totalSamples}, backendDevice=${s.backendDevice} backendId=${s.backendId}`
       )
     }
 

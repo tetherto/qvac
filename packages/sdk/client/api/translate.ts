@@ -27,7 +27,7 @@ import {
  *   modelId: "modelId",
  *   text: "Hello world",
  *   from: "en",
- *   to: "es"
+ *   to: "es",
  *   modelType: "llm",
  * });
  *
@@ -40,7 +40,7 @@ import {
  *   modelId: "modelId",
  *   text: "Hello world",
  *   from: "en",
- *   to: "es"
+ *   to: "es",
  *   modelType: "llm",
  *   stream: false,
  * });
