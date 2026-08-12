@@ -133,6 +133,7 @@
   },
   "files": [
     "dist/**/*",
+    "!dist/models/update-models/**",
     "LICENSE",
     "NOTICE"
   ],
@@ -148,7 +149,9 @@
     "prepare": "npm run build",
     "build:test": "tsc -p test/tsconfig.build.json && tsc-alias -p test/tsconfig.alias.json",
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
-    "test:bare": "npm run test"
+    "test:bare": "npm run test",
+    "check-models": "bare ./dist/models/update-models/index.js --check",
+    "update-models": "bare ./dist/models/update-models/index.js"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -255,6 +258,7 @@
     "bare": "*",
     "bare-console": "*",
     "bare-stdio": "^1.0.3",
+    "bare-subprocess": "^6.1.0",
     "bare-timers": "*",
     "brittle": "^4.1.0",
     "lunte": "^1.8.4",

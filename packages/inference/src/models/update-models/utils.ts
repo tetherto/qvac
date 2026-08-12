@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { spawnSync } from 'bare-subprocess'
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
@@ -8,12 +8,10 @@ export function formatSize(bytes: number): string {
 }
 
 export function getCommitHash(short = false): string {
-  try {
-    const cmd = short ? 'git rev-parse --short HEAD' : 'git rev-parse HEAD'
-    return execSync(cmd, { encoding: 'utf-8' }).trim()
-  } catch (error) {
-    throw new Error('Git is required to generate history file', {
-      cause: error
-    })
+  const args = short ? ['rev-parse', '--short', 'HEAD'] : ['rev-parse', 'HEAD']
+  const result = spawnSync('git', args)
+  if (result.status !== 0 || !result.stdout) {
+    throw new Error('Git is required to generate history file')
   }
+  return result.stdout.toString('utf8').trim()
 }
