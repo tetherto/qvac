@@ -134,7 +134,10 @@ test('translate (LLM): cancelled while queued does not call model.run()', async 
 
   await ft[Symbol.asyncDispose]()
 
-  t.ok(caught instanceof InferenceCancelledError, 'queued translate rejects with InferenceCancelledError')
+  t.ok(
+    caught instanceof InferenceCancelledError,
+    'queued translate rejects with InferenceCancelledError'
+  )
   t.is(runCalls, 0, 'model.run() was NOT called')
 
   unregisterModel(modelId)

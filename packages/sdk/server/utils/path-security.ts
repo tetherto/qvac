@@ -1,10 +1,6 @@
 import path from 'bare-path'
 import { PathTraversalError } from '@/utils/errors-server'
-import {
-  sanitizePathComponent,
-  isSafeCacheKey,
-  checkPathWithinBase
-} from '@/utils/path-sanitize'
+import { sanitizePathComponent, isSafeCacheKey, checkPathWithinBase } from '@/utils/path-sanitize'
 
 // Re-export the bare-free helpers unchanged
 export { sanitizePathComponent, isSafeCacheKey } from '@/utils/path-sanitize'

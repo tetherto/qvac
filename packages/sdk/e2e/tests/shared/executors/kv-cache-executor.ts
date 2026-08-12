@@ -231,7 +231,13 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         }
         const lastTokenAt = Date.now()
         const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
-        return { text, avgConcurrentSeq: stats?.avgConcurrentSeq, useCache, firstTokenAt, lastTokenAt }
+        return {
+          text,
+          avgConcurrentSeq: stats?.avgConcurrentSeq,
+          useCache,
+          firstTokenAt,
+          lastTokenAt
+        }
       })()
     }
 

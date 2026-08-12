@@ -1,10 +1,6 @@
 import test from 'brittle'
 import { resolve, sep } from 'path'
-import {
-  sanitizePathComponent,
-  isSafeCacheKey,
-  checkPathWithinBase
-} from '@/utils/path-sanitize'
+import { sanitizePathComponent, isSafeCacheKey, checkPathWithinBase } from '@/utils/path-sanitize'
 
 // ============== isSafeCacheKey ==============
 
