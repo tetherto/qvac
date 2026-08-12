@@ -319,6 +319,10 @@ jobs:
       contents: read
       packages: read
       id-token: write
+      # `gh run list` / `gh run download` in the prebuilds step read another
+      # workflow's run + artifacts. PAT_TOKEN bypassed the permissions block;
+      # GITHUB_TOKEN is bounded by it, so the scope must be declared.
+      actions: read
 
     strategy:
       fail-fast: false

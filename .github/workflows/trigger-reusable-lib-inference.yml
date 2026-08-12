@@ -94,6 +94,10 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      # The step below writes an @tetherto GPR authToken into .npmrc. Nothing in
+      # packages/inference resolves that scope today, but GITHUB_TOKEN is bounded
+      # by this block, so declare the scope the config implies.
+      packages: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
