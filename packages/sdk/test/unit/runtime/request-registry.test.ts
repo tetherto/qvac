@@ -82,6 +82,24 @@ test('registry: cancel by requestId aborts only that signal', async (t) => {
   t.is(b.state, 'running')
 })
 
+test('registry: a same-tick duplicate requestId is rejected', async (t) => {
+  const r = createRequestRegistry()
+  // Two begins with the same id, neither awaited before the other starts.
+  const p1 = r.begin({ requestId: 'dup', kind: 'completion', modelId: 'm1' })
+  const p2 = r.begin({ requestId: 'dup', kind: 'completion', modelId: 'm1' })
+  const [a, b] = await Promise.allSettled([p1, p2])
+
+  const fulfilled = [a, b].filter((x) => x.status === 'fulfilled')
+  const rejected = [a, b].filter((x) => x.status === 'rejected')
+  t.is(fulfilled.length, 1, 'exactly one begin admitted')
+  t.is(rejected.length, 1, 'the duplicate was rejected')
+  t.ok(
+    rejected[0]?.status === 'rejected' && rejected[0].reason instanceof RequestIdConflictError,
+    'duplicate rejected with RequestIdConflictError'
+  )
+  if (fulfilled[0]?.status === 'fulfilled') await fulfilled[0].value[Symbol.asyncDispose]()
+})
+
 test('registry: cancel-before-begin does not wait for a saturated lane', async (t) => {
   const r = createRequestRegistry()
   // Holder saturates a single-slot lane and is held for the whole test.

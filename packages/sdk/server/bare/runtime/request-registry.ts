@@ -237,6 +237,13 @@ interface RegistryEntry {
   slotKey: string | undefined
   /** Held the lane as an exclusive writer; passed back to `releaseSlot`. */
   exclusive: boolean
+  /**
+   * Set synchronously the moment disposal starts. The scope reports
+   * `disposed === false` for the whole in-progress async unwind, so two
+   * concurrent `disposeEntry` calls would both pass that guard and release the
+   * slot twice; this flag makes the second return early.
+   */
+  disposing: boolean
 }
 
 /**
@@ -359,6 +366,13 @@ export function createRequestRegistry(options?: {
    * FIFO in O(1) without scanning every `KeyState`.
    */
   const waitersById = new Map<string, { key: string; waiter: SlotWaiter }>()
+  /**
+   * Ids reserved synchronously at `begin(...)` start and cleared once the entry
+   * lands in `entries` (or the begin throws). A same-tick second `begin(...)`
+   * with the same id runs before the first reaches `entries`/`waitersById`, so
+   * without this it would slip past the duplicate check and both would execute.
+   */
+  const reservedIds = new Set<string>()
 
   function logLifecycle(
     event: 'begin' | 'cancel' | 'end',
@@ -631,7 +645,8 @@ export function createRequestRegistry(options?: {
   }
 
   async function disposeEntry(entry: RegistryEntry, outcome: RequestOutcome): Promise<void> {
-    if (entry.scope.disposed) return
+    if (entry.scope.disposed || entry.disposing) return
+    entry.disposing = true
     entry.ctx.state = outcome
     entry.detachParent()
     logLifecycle('end', entry.ctx, Date.now() - entry.startedAt)
@@ -658,9 +673,16 @@ export function createRequestRegistry(options?: {
     // must be rejected against both maps — otherwise a second begin with the
     // same id would enqueue behind the first and overwrite its `waitersById`
     // index, leaving the original waiter unreachable by `cancel({ requestId })`.
-    if (entries.has(opts.requestId) || waitersById.has(opts.requestId)) {
+    if (
+      entries.has(opts.requestId) ||
+      waitersById.has(opts.requestId) ||
+      reservedIds.has(opts.requestId)
+    ) {
       throw new RequestIdConflictError(opts.requestId)
     }
+    // Reserve synchronously so a same-tick duplicate begin is rejected before
+    // this one reaches `entries`/`waitersById`. Cleared on every exit below.
+    reservedIds.add(opts.requestId)
 
     // A request cancelled BEFORE begin must not queue for a slot on a saturated
     // lane: consume its marker first and skip admission, so it resolves at once
@@ -674,7 +696,10 @@ export function createRequestRegistry(options?: {
     let slotKey: string | undefined
     let exclusive = false
     if (!preCancel) {
-      const acquired = await acquireSlot(opts)
+      const acquired = await acquireSlot(opts).catch((err: unknown) => {
+        reservedIds.delete(opts.requestId)
+        throw err
+      })
       slotKey = acquired.slotKey
       exclusive = acquired.exclusive
 
@@ -684,6 +709,7 @@ export function createRequestRegistry(options?: {
       // rather than stranding it on the conflicting throw.
       if (entries.has(opts.requestId)) {
         if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
+        reservedIds.delete(opts.requestId)
         throw new RequestIdConflictError(opts.requestId)
       }
 
@@ -732,9 +758,11 @@ export function createRequestRegistry(options?: {
       detachParent,
       startedAt: Date.now(),
       slotKey,
-      exclusive
+      exclusive,
+      disposing: false
     }
     entries.set(opts.requestId, entry)
+    reservedIds.delete(opts.requestId)
     logLifecycle('begin', ctx)
 
     return {
