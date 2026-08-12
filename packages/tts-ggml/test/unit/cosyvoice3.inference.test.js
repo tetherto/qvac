@@ -164,29 +164,54 @@ test('CosyVoice3: openclCacheDir forwards into the native configuration params',
   )
 })
 
-test('CosyVoice3: instruct renders structured control to the trained instruction', (t) => {
+test('CosyVoice3: instruct renders the controls with no canonical vocabulary', (t) => {
   const dialect = createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'cantonese' } } })
   t.is(dialect._buildTtsParams().instruct, '请用广东话表达。', 'dialect renders')
 
-  const emotion = createMockedCosyvoiceModel({ extra: { instruct: { emotion: 'happy' } } })
-  t.is(emotion._buildTtsParams().instruct, '请非常开心地说一句话。', 'emotion renders')
-
-  const speed = createMockedCosyvoiceModel({ extra: { instruct: { speed: 'slow' } } })
-  t.is(speed._buildTtsParams().instruct, '请用尽可能慢地语速说一句话。', 'speed renders')
+  const volume = createMockedCosyvoiceModel({ extra: { instruct: { volume: 'loud' } } })
+  t.ok(volume._buildTtsParams().instruct.includes('loudly'), 'volume renders')
 
   const raw = createMockedCosyvoiceModel({ extra: { instruct: '请用四川话表达。' } })
   t.is(raw._buildTtsParams().instruct, '请用四川话表达。', 'raw string passes through')
 
   const precedence = createMockedCosyvoiceModel({
-    extra: { instruct: { dialect: 'sichuan', emotion: 'sad' } }
+    extra: { instruct: { dialect: 'sichuan', volume: 'soft' } }
   })
-  t.is(precedence._buildTtsParams().instruct, '请用四川话表达。', 'dialect wins over emotion')
+  t.is(precedence._buildTtsParams().instruct, '请用四川话表达。', 'dialect wins over volume')
 
   const none = createMockedCosyvoiceModel({})
   t.absent(none._buildTtsParams().instruct, 'no instruct -> field absent')
 })
 
-test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
+test('CosyVoice3: emotion and pace are forwarded canonically, not pre-rendered', (t) => {
+  // The trained Chinese instructions live in tts-cpp now, so the addon must
+  // pass the canonical value through rather than render it here.
+  const happy = createMockedCosyvoiceModel({ extra: { emotion: 'happy' } })
+  t.is(happy._buildTtsParams().emotion, 'happy', 'emotion forwarded verbatim')
+  t.absent(happy._buildTtsParams().instruct, 'emotion does not populate instruct')
+
+  const slow = createMockedCosyvoiceModel({ extra: { pace: 'slow' } })
+  t.is(slow._buildTtsParams().pace, 'slow', 'pace forwarded verbatim')
+
+  const neutral = createMockedCosyvoiceModel({ extra: { emotion: 'neutral' } })
+  t.is(neutral._buildTtsParams().emotion, 'neutral', 'neutral is accepted')
+})
+
+// The determinism knobs the cosyvoice integration helper sets, pinned here
+// because the integration lane is the only other place that constructs with
+// them and it takes hours to tell you.
+test('CosyVoice3: seed is the determinism knob; greedy belongs to audio8', (t) => {
+  const seeded = createMockedCosyvoiceModel({ extra: { seed: 42 } })
+  t.is(seeded._buildTtsParams().seed, 42, 'seed reaches the native configurationParams')
+
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { greedy: true } }),
+    /audio8-only/,
+    'greedy is not a cosyvoice3 option'
+  )
+})
+
+test('CosyVoice3: unsupported emotions and instruct keys are rejected', (t) => {
   t.exception(
     () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'nope' } } }),
     /Valid dialects|Invalid CosyVoice instruct/,
@@ -196,6 +221,50 @@ test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
     () => createMockedCosyvoiceModel({ extra: { instruct: { dialekt: 'cantonese' } } }),
     /Invalid CosyVoice instruct key/,
     'unknown structured key throws instead of silently zero-shot'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { emotion: 'happy' } } }),
+    /Valid keys: dialect, volume, style/,
+    'emotion under instruct is rejected and points at the top-level option'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'angry' } }),
+    /invalid emotion/,
+    'the upstream spelling angry is not canonical'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'fear' } }),
+    /not supported by the cosyvoice3 engine/,
+    'an untrained emotion names the engine set'
+  )
+})
+
+test('CosyVoice3: one instruction per synthesis', (t) => {
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'happy', pace: 'fast' } }),
+    /one instruction per synthesis/,
+    'emotion + pace conflicts'
+  )
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        extra: { emotion: 'happy', instruct: { dialect: 'cantonese' } }
+      }),
+    /one instruction per synthesis/,
+    'emotion + instruct conflicts'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'neutral', pace: 'fast' } }),
+    /one instruction per synthesis/,
+    'neutral carries its own instruction, so it conflicts with a pace step too'
+  )
+  t.execution(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'happy', pace: 'moderate' } }),
+    'moderate disengages its channel so it does not conflict'
+  )
+  t.execution(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'neutral', pace: 'moderate' } }),
+    'neutral plus the disengaged pace is still one instruction'
   )
 })
 
@@ -256,12 +325,12 @@ test('CosyVoice3: undefined control fields are skipped, not malformed', (t) => {
   // A field explicitly set to undefined means "not selected", so it is skipped
   // and the next control by precedence takes effect (zero-shot when none do).
   const skipped = createMockedCosyvoiceModel({
-    extra: { instruct: { dialect: undefined, emotion: 'happy' } }
+    extra: { instruct: { dialect: undefined, volume: 'loud' } }
   })
   t.is(
     skipped._buildTtsParams().instruct,
-    '请非常开心地说一句话。',
-    'undefined dialect falls through to emotion'
+    'Please say a sentence as loudly as possible.',
+    'undefined dialect falls through to volume'
   )
 
   const empty = createMockedCosyvoiceModel({ extra: { instruct: { dialect: undefined } } })

@@ -949,6 +949,7 @@ const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
 const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
 const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
+const REGISTRY_PREFIX_INDIC = 'qvac_models_compiled/ggml/indic_conformer/2026-08-07'
 
 function _registryQ8(file) {
   return `${REGISTRY_PREFIX_Q8_0}/${file}`
@@ -961,6 +962,9 @@ function _registry20260701(file) {
 }
 function _registryStreaming(file) {
   return `${REGISTRY_PREFIX_STREAMING}/${file}`
+}
+function _registryIndic(file) {
+  return `${REGISTRY_PREFIX_INDIC}/${file}`
 }
 
 const MODEL_CONFIGS = {
@@ -1018,6 +1022,16 @@ const MODEL_CONFIGS = {
     f16RegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
+  },
+  indicConformer: {
+    file: 'indic-conformer-ctc.q8_0.gguf',
+    mobileFile: 'indic-conformer-ctc.q4_0.gguf',
+    f16File: 'indic-conformer-ctc.f16.gguf',
+    registryPath: _registryIndic('indic-conformer-ctc.q8_0.gguf'),
+    mobileRegistryPath: _registryIndic('indic-conformer-ctc.q4_0.gguf'),
+    f16RegistryPath: _registryIndic('indic-conformer-ctc.f16.gguf'),
+    minSize: 50 * 1024 * 1024,
+    url: null
   }
 }
 
@@ -1027,7 +1041,9 @@ const MODEL_CONFIGS = {
 // reports and distinct from v1 `sortformer`) while the config key stays
 // `sortformerStreaming`.
 const MODEL_TYPE_ALIASES = {
-  'sortformer-streaming': 'sortformerStreaming'
+  'sortformer-streaming': 'sortformerStreaming',
+  'indic-conformer': 'indicConformer',
+  indic: 'indicConformer'
 }
 
 // Resolve a caller-facing model-type token (which may be a kebab alias) to the
