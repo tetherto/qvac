@@ -696,10 +696,15 @@ export function createRequestRegistry(options?: {
     let slotKey: string | undefined
     let exclusive = false
     if (!preCancel) {
-      const acquired = await acquireSlot(opts).catch((err: unknown) => {
+      // Plain try/catch, not `.catch()`, so admission adds no extra microtask
+      // and observers still see the request registered on the same tick.
+      let acquired: { slotKey: string | undefined; exclusive: boolean }
+      try {
+        acquired = await acquireSlot(opts)
+      } catch (err) {
         reservedIds.delete(opts.requestId)
         throw err
-      })
+      }
       slotKey = acquired.slotKey
       exclusive = acquired.exclusive
 
