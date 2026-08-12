@@ -1,35 +1,48 @@
-'use strict'
+import test from 'brittle'
+import process from 'bare-process'
+import { QvacLogger, type LoggerInterface, type LogLevel } from '../../src/index.js'
+import { LOG_LEVELS, LEVEL_PRIORITIES, DEFAULT_LEVEL, ENV_LOG_LEVEL } from '../../src/constants.js'
 
-const test = require('brittle')
-const process = require('bare-process')
-const QvacLogger = require('../..')
-const { LOG_LEVELS, LEVEL_PRIORITIES, DEFAULT_LEVEL, ENV_LOG_LEVEL } = require('../../constants')
+interface Dummy {
+  logger: LoggerInterface
+  calls: Array<[string, unknown[]]>
+}
 
-function createDummy() {
-  const calls = []
-  const logger = {}
-  for (const m of ['error', 'warn', 'info', 'debug']) {
-    logger[m] = (...msgs) => calls.push([m, msgs])
+function createDummy(): Dummy {
+  const calls: Array<[string, unknown[]]> = []
+  const logger: LoggerInterface = {
+    error: (...msgs) => {
+      calls.push(['error', msgs])
+    },
+    warn: (...msgs) => {
+      calls.push(['warn', msgs])
+    },
+    info: (...msgs) => {
+      calls.push(['info', msgs])
+    },
+    debug: (...msgs) => {
+      calls.push(['debug', msgs])
+    }
   }
   return { logger, calls }
 }
 
-function createWithGetLevel(level) {
-  const { logger, calls } = createDummy()
-  logger.getLevel = () => level
-  return { logger, calls }
+function createWithGetLevel(level: string): Dummy {
+  const dummy = createDummy()
+  dummy.logger.getLevel = () => level
+  return dummy
 }
 
-function createWithLevelProp(level) {
-  const { logger, calls } = createDummy()
-  logger.level = level
-  return { logger, calls }
+function createWithLevelProp(level: string): Dummy {
+  const dummy = createDummy()
+  dummy.logger.level = level
+  return dummy
 }
 
-function createWithLevelFn(level) {
-  const { logger, calls } = createDummy()
-  logger.level = () => level
-  return { logger, calls }
+function createWithLevelFn(level: string): Dummy {
+  const dummy = createDummy()
+  dummy.logger.level = () => level
+  return dummy
 }
 
 // ––– Tests –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
@@ -98,12 +111,12 @@ test('getLevelReflects setLevel', (t) => {
 test('setLevel invalid → throws', (t) => {
   const { logger } = createDummy()
   const log = new QvacLogger(logger)
-  t.exception(() => log.setLevel('not-a-level'), /Invalid log level: not-a-level/)
+  t.exception(() => log.setLevel('not-a-level' as LogLevel), /Invalid log level: not-a-level/)
 })
 
 test('constructor rejects logger missing methods', (t) => {
   // omit one or more of error/warn/info/debug
-  t.exception(() => new QvacLogger({}), /Logger must implement method/)
+  t.exception(() => new QvacLogger({} as LoggerInterface), /Logger must implement method/)
 })
 
 test('per-level gating respects LEVEL_PRIORITIES', (t) => {
