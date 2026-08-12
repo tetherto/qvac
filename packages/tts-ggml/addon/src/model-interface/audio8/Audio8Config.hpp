@@ -38,9 +38,7 @@ struct Audio8Config {
    * codec's native 44100. The engine resamples, so no addon-side pass.
    */
   std::optional<int> outputSampleRate;
-  // GPU offload. The engine is CPU-only today and warns on a positive value;
-  // the knobs are here so callers do not have to special-case this engine.
-  // nGpuLayers wins; else useGpu true->99 / false->0.
+  /** GPU offload: nGpuLayers wins; otherwise useGpu maps true to all layers. */
   std::optional<int> nGpuLayers;
   std::optional<bool> useGpu;
   std::string backendsDir;

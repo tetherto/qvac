@@ -265,8 +265,6 @@ void Audio8Model::loadLocked() {
   backendName_ = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
-  // The engine is CPU-only today, so GPU intent always resolves to the CPU
-  // device; report it the way ParlerModel derives the same signal.
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
                             ? (*cfg_.nGpuLayers != 0)
                             : cfg_.useGpu.value_or(false);

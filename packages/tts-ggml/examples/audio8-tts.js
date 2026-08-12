@@ -22,6 +22,7 @@
  * Examples:
  *   bare examples/audio8-tts.js "Hello from a fully on-device pipeline."
  *   bare examples/audio8-tts.js "Cloned speech." voice.wav "What the recording says."
+ *   QVAC_TTS_AUDIO8_GPU=1 bare examples/audio8-tts.js "Vulkan synthesis."
  *
  * Expects the Audio8 GGUFs (audio8-lm-q8_0.gguf,
  * audio8-codec-decoder-q8_0.gguf, and, to clone,
@@ -31,11 +32,11 @@
  * (engines/tts/scripts/convert-audio8-{lm,codec}-to-gguf.py) until they are
  * published to the model registry.
  *
- * NOTE: Audio8 is CPU-only in this release; useGPU / nGpuLayers are accepted
- * and warn rather than failing.
+ * GPU offload uses Vulkan on Linux and Windows. CPU remains the default.
  */
 
 const path = require('bare-path')
+const proc = require('bare-process')
 const TTSGgml = require('../')
 const { createWav } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
@@ -72,6 +73,7 @@ function buildModel() {
     engine: TTSGgml.ENGINE_AUDIO8,
     files: { modelDir },
     ...voice,
+    config: { useGPU: proc.env.QVAC_TTS_AUDIO8_GPU === '1' },
     logger: console,
     opts: { stats: true }
   })
@@ -83,7 +85,8 @@ function reportStats(stats) {
     `Inference stats: totalTime=${stats.totalTime.toFixed(2)}s, ` +
       `framesPerSecond=${stats.tokensPerSecond.toFixed(2)}, ` +
       `realTimeFactor=${stats.realTimeFactor.toFixed(3)}, ` +
-      `audioDuration=${stats.audioDurationMs}ms, totalSamples=${stats.totalSamples}`
+      `audioDuration=${stats.audioDurationMs}ms, totalSamples=${stats.totalSamples}, ` +
+      `backendDevice=${stats.backendDevice}, backendId=${stats.backendId}`
   )
 }
 

@@ -105,6 +105,10 @@ public:
   explicit TempGguf(const char* name) : path_(lavasrStageDir() / name) {
     std::ofstream out(path_, std::ios::binary);
     out << STUB_CONTENTS;
+    out.close();
+    if (!out)
+      throw std::runtime_error(
+          "failed to stage the placeholder GGUF: " + path_.string());
   }
   ~TempGguf() {
     std::error_code ec;
@@ -172,6 +176,14 @@ TEST(CosyvoiceValidate, StreamingNonNativeOutputRateRejected) {
   cfg.streamChunkTokens = 25;
   cfg.outputSampleRate = 16000; // non-native while streaming
   EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+// The accept-path tests below are only meaningful if the placeholder really
+// reaches the disk; a silently failed write used to surface three tests later
+// as a "GGUF not found" rejection.
+TEST(CosyvoiceLavasrFixture, StagesAReadableFile) {
+  const TempGguf gguf("lavasr-fixture-probe.gguf");
+  EXPECT_TRUE(std::filesystem::exists(gguf.path()));
 }
 
 // The LavaSR enhancer resamples inside its overlap-reprocess window, so it

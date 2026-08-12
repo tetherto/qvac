@@ -7,7 +7,7 @@ v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), **CosyVoice3**
 (Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU with opt-in
 Android OpenCL/Adreno GPU offload), and **Audio8** (DualAR + neural
-codec, in-process voice cloning, CPU-only), plus optional
+codec, in-process voice cloning, desktop Vulkan), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 
@@ -21,7 +21,8 @@ Android `useGPU` flows through to `tts-cpp`, which picks the GPU
 backend per its own per-vendor allowlist (Adreno → OpenCL,
 Xclipse/Mali → Vulkan). Parler supports Apple/Metal and the validated
 Android paths, including Vulkan on ARM Mali (see
-[Backends & GPU acceleration](#backends--gpu-acceleration)).
+[Backends & GPU acceleration](#backends--gpu-acceleration)). Audio8 supports
+Vulkan offload on Linux and Windows.
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
 
@@ -62,7 +63,7 @@ obvious for each job.
 | Lowest RTF on phones / edge devices | `supertonic3-q4_0.gguf` (or `supertonic3-q8_0.gguf` for quality) | ~80 MB (`q4_0`) / ~126 MB (`q8_0`); 31 languages. Prefer v3 over v1/v2. |
 | English + voice cloning + low first-audio latency | `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` | Reference-wav / voice-profile cloning; native `streamChunkTokens` chunk streaming. Native 24 kHz. |
 | Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
-| Voice cloning at 44.1 kHz with nothing pre-baked | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Clones from a reference wav **and its transcript**, encoded in-process — no enrolment step, no voice profile. Whole-utterance only (no native chunk streaming); CPU-only. |
+| Voice cloning at 44.1 kHz with nothing pre-baked | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Clones from a reference wav **and its transcript**, encoded in-process — no enrolment step, no voice profile. Whole-utterance only (no native chunk streaming). |
 | Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
 | Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in Android OpenCL/Adreno GPU offload; native 24 kHz. |
 | Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
@@ -493,6 +494,10 @@ host's policy:
 > true` / `nGpuLayers > 0` offloads it there — pair it with `openclCacheDir` to
 > persist the compiled kernels — while on Metal/Vulkan hosts it falls back to
 > CPU until those backends are wired for its graph.
+>
+> Audio8 uses Vulkan only and is supported on Linux and Windows. A GPU request
+> on another platform, or in a build without Vulkan, falls back to CPU and sets
+> `response.stats.gpuUnsupported`.
 
 ### Android: dynamic backend loading
 
@@ -608,12 +613,11 @@ falls into.  `greedy: true` takes the argmax instead and ignores
 `temperature` / `topK` / `topP`; it is reproducible but noticeably flatter.
 `maxFrames` caps generation in codec frames (~21.5/s of audio).
 
-Audio8 is **CPU-only** in this release.  `useGPU` / `nGpuLayers` are accepted
-and warn rather than failing, so callers do not have to special-case the
-engine; `response.stats.gpuUnsupported` reports when GPU was asked for and
-the CPU ran it.  Expect a real-time factor slightly above 1 on a desktop CPU
-for text-only synthesis, plus a one-off encode when a new reference voice is
-enrolled.
+Audio8 runs on CPU by default. Set `config.useGPU: true` or `nGpuLayers: 99`
+to offload the language model and codec graphs to Vulkan on Linux and Windows.
+If Vulkan is unavailable, the engine falls back to CPU and sets
+`response.stats.gpuUnsupported`. Voice cloning uses the same backend and adds
+a one-off encode when a new reference recording is supplied.
 
 ## API overview
 
@@ -665,7 +669,7 @@ enrolled.
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan; CosyVoice3 offloads on Android OpenCL/Adreno only; Audio8 is CPU-only. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan; CosyVoice3 offloads on Android OpenCL/Adreno only; Audio8 uses desktop Vulkan on Linux/Windows. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
@@ -745,7 +749,7 @@ Runnable demos under `examples/`:
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
 | `cosyvoice-tts.js` | CosyVoice3 instruct-conditioned batch synth (24 kHz; CPU, opt-in Android GPU). `bare examples/cosyvoice-tts.js "Hello"` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
-| `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
+| `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for desktop Vulkan. `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any

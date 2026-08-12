@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Audio8 engine.** Fifth engine family under the same
   `TTSGgml` surface: a DualAR model (24-layer semantic transformer +
   4-layer acoustic head over 8 codebooks) with a DAC-style codec, native
-  44.1 kHz, CPU-only in this release. Detection via `engine: 'audio8'`,
+  44.1 kHz, and CPU execution by default. Detection via `engine: 'audio8'`,
   `files.audio8Lm` / `files.audio8CodecDecoder`, or a `modelDir` containing
   `audio8-lm[-<quant>].gguf` (q8_0 > f16 > q4_0 > f32 within a role). It
   ships as three GGUFs rather than one because they have different
@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runStream`/`runStreaming` options), and the engine caches the codes for
   the most recent reference, so repeating one across calls skips the
   encoder.
+- **Audio8 desktop Vulkan support.** `config.useGPU: true` or
+  `nGpuLayers: 99` now offloads the Audio8 language model and codec graphs to
+  Vulkan on Linux and Windows. Text-only synthesis and voice cloning use the
+  same selected backend; unavailable or unsupported GPU backends fall back to
+  CPU and report that through `response.stats.gpuUnsupported`.
 - **Audio8 sampling/generation knobs.** `temperature`, `topK`, `topP`,
   `maxFrames`, `greedy`, `seed`, `threads`, `config.outputSampleRate`
   (engine-side resample from the native 44.1 kHz), all optional with the

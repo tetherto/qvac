@@ -366,9 +366,8 @@ interface TTSGgmlRuntimeConfig {
   language?: string;
   /**
    * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
-   * available. Defaults to `false` for both engines. Honored on Apple,
-   * desktop, and Android, where tts-cpp selects the backend using its
-   * per-vendor allowlist.
+   * available. Defaults to `false`. Audio8 uses Vulkan on Linux and Windows;
+   * the other GPU-capable engines select a backend for the host platform.
    */
   useGPU?: boolean;
   /**
@@ -476,6 +475,7 @@ interface TTSGgmlOptions
   /**
    * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
    * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
+   * Audio8: pass 99 to use Vulkan on Linux and Windows.
    */
   nGpuLayers?: number;
   /**

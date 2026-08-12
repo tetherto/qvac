@@ -1,11 +1,5 @@
-// Constructor-validation tests for Audio8Model. Same shape as
-// test_parler_config.cpp: validateConfig is driven via the public
-// constructor, and the GGUF parse is deferred to load() so stub files are
-// enough to exercise every branch that does not touch weights.
-//
-// Real-GGUF round-trip is gated behind QVAC_TEST_AUDIO8_LM_GGUF.
-
 #include <atomic>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -19,15 +13,27 @@
 #include <gtest/gtest.h>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendUtils.hpp"
 #include "model-interface/audio8/Audio8Config.hpp"
 #include "model-interface/audio8/Audio8Model.hpp"
 
+using qvac::ttsggml::backendIdFromName;
+using qvac::ttsggml::kBackendDeviceGpu;
 using qvac::ttsggml::audio8::Audio8Config;
 using qvac::ttsggml::audio8::Audio8Model;
 using qvac_errors::StatusError;
 
 namespace {
 
+constexpr char AUDIO8_LM_ENV[] = "QVAC_TEST_AUDIO8_LM_GGUF";
+constexpr char AUDIO8_DECODER_ENV[] = "QVAC_TEST_AUDIO8_DECODER_GGUF";
+constexpr char AUDIO8_ENCODER_ENV[] = "QVAC_TEST_AUDIO8_ENCODER_GGUF";
+constexpr char AUDIO8_REFERENCE_WAV_ENV[] = "QVAC_TEST_AUDIO8_REFERENCE_WAV";
+constexpr char AUDIO8_REFERENCE_TEXT_ENV[] = "QVAC_TEST_AUDIO8_REFERENCE_TEXT";
+constexpr char AUDIO8_VULKAN_ENV[] = "QVAC_TEST_AUDIO8_VULKAN";
+constexpr char AUDIO8_BACKENDS_DIR_ENV[] = "QVAC_TEST_AUDIO8_BACKENDS_DIR";
+constexpr char VULKAN_BACKEND_NAME[] = "Vulkan";
+constexpr int REAL_GGUF_MAX_FRAMES = 16;
 constexpr const char* STUB_DIR_PREFIX = "qvac-tts-ggml-audio8-tests-";
 constexpr const char* STUB_CONTENTS = "stub";
 
@@ -105,6 +111,22 @@ void swapConfigsUntilStopped(
 Audio8Model::Output
 synthesizeOnce(Audio8Model& model, const Audio8Model::AnyInput& input) {
   return std::any_cast<Audio8Model::Output>(model.process(std::any(input)));
+}
+
+int64_t runtimeInt(const Audio8Model& model, const std::string& key) {
+  for (const auto& entry : model.runtimeStats()) {
+    if (entry.first == key)
+      return std::get<int64_t>(entry.second);
+  }
+  ADD_FAILURE() << "missing runtimeStats key: " << key;
+  return 0;
+}
+
+void expectVulkanBackend(const Audio8Model& model) {
+  EXPECT_EQ(runtimeInt(model, "backendDevice"), kBackendDeviceGpu);
+  EXPECT_EQ(
+      runtimeInt(model, "backendId"), backendIdFromName(VULKAN_BACKEND_NAME));
+  EXPECT_EQ(runtimeInt(model, "gpuUnsupported"), 0);
 }
 
 void readVoiceRepeatedly(const Audio8Model& model, int iterations) {
@@ -250,8 +272,6 @@ TEST(Audio8Validate, UseGpuNGpuLayersConflictRejected) {
 }
 
 TEST(Audio8Validate, GpuIntentAcceptedAtConstruction) {
-  // The engine is CPU-only today and warns rather than failing, so GPU intent
-  // must not be rejected here.
   auto cfg = minimallyValidStubConfig();
   cfg.useGpu = true;
   EXPECT_NO_THROW(Audio8Model{cfg});
@@ -401,8 +421,8 @@ TEST(Audio8Reload, RefusedReloadKeepsTheConfiguration) {
 }
 
 TEST(Audio8RealGguf, TextOnlySynthesisRoundTrip) {
-  const std::string lm = envOrEmpty("QVAC_TEST_AUDIO8_LM_GGUF");
-  const std::string decoder = envOrEmpty("QVAC_TEST_AUDIO8_DECODER_GGUF");
+  const std::string lm = envOrEmpty(AUDIO8_LM_ENV);
+  const std::string decoder = envOrEmpty(AUDIO8_DECODER_ENV);
   if (lm.empty() || decoder.empty()) {
     GTEST_SKIP() << "set QVAC_TEST_AUDIO8_LM_GGUF and "
                     "QVAC_TEST_AUDIO8_DECODER_GGUF to run this";
@@ -412,7 +432,7 @@ TEST(Audio8RealGguf, TextOnlySynthesisRoundTrip) {
   cfg.lmModelPath = lm;
   cfg.codecDecoderPath = decoder;
   cfg.greedy = true;
-  cfg.maxFrames = 16;
+  cfg.maxFrames = REAL_GGUF_MAX_FRAMES;
 
   Audio8Model model{cfg};
   ASSERT_NO_THROW(model.load());
@@ -426,12 +446,40 @@ TEST(Audio8RealGguf, TextOnlySynthesisRoundTrip) {
       model.sampleRate(), qvac::ttsggml::audio8::AUDIO8_NATIVE_SAMPLE_RATE);
 }
 
+TEST(Audio8RealGguf, VulkanTextOnlySynthesisRoundTrip) {
+  if (envOrEmpty(AUDIO8_VULKAN_ENV).empty()) {
+    GTEST_SKIP() << "set QVAC_TEST_AUDIO8_VULKAN to run this";
+  }
+  const std::string lm = envOrEmpty(AUDIO8_LM_ENV);
+  const std::string decoder = envOrEmpty(AUDIO8_DECODER_ENV);
+  if (lm.empty() || decoder.empty()) {
+    GTEST_SKIP() << "set QVAC_TEST_AUDIO8_LM_GGUF and "
+                    "QVAC_TEST_AUDIO8_DECODER_GGUF to run this";
+  }
+
+  Audio8Config cfg;
+  cfg.lmModelPath = lm;
+  cfg.codecDecoderPath = decoder;
+  cfg.greedy = true;
+  cfg.maxFrames = REAL_GGUF_MAX_FRAMES;
+  cfg.useGpu = true;
+  cfg.backendsDir = envOrEmpty(AUDIO8_BACKENDS_DIR_ENV);
+
+  Audio8Model model{cfg};
+  ASSERT_NO_THROW(model.load());
+
+  Audio8Model::AnyInput input;
+  input.text = "Hello from Audio eight on Vulkan.";
+  EXPECT_FALSE(synthesizeOnce(model, input).empty());
+  expectVulkanBackend(model);
+}
+
 TEST(Audio8RealGguf, CloningSynthesisRoundTrip) {
-  const std::string lm = envOrEmpty("QVAC_TEST_AUDIO8_LM_GGUF");
-  const std::string decoder = envOrEmpty("QVAC_TEST_AUDIO8_DECODER_GGUF");
-  const std::string encoder = envOrEmpty("QVAC_TEST_AUDIO8_ENCODER_GGUF");
-  const std::string wav = envOrEmpty("QVAC_TEST_AUDIO8_REFERENCE_WAV");
-  const std::string transcript = envOrEmpty("QVAC_TEST_AUDIO8_REFERENCE_TEXT");
+  const std::string lm = envOrEmpty(AUDIO8_LM_ENV);
+  const std::string decoder = envOrEmpty(AUDIO8_DECODER_ENV);
+  const std::string encoder = envOrEmpty(AUDIO8_ENCODER_ENV);
+  const std::string wav = envOrEmpty(AUDIO8_REFERENCE_WAV_ENV);
+  const std::string transcript = envOrEmpty(AUDIO8_REFERENCE_TEXT_ENV);
   if (lm.empty() || decoder.empty() || encoder.empty() || wav.empty() ||
       transcript.empty()) {
     GTEST_SKIP() << "set QVAC_TEST_AUDIO8_LM_GGUF, "
@@ -448,7 +496,12 @@ TEST(Audio8RealGguf, CloningSynthesisRoundTrip) {
   cfg.referenceAudio = wav;
   cfg.referenceText = transcript;
   cfg.greedy = true;
-  cfg.maxFrames = 16;
+  cfg.maxFrames = REAL_GGUF_MAX_FRAMES;
+  const bool useVulkan = !envOrEmpty(AUDIO8_VULKAN_ENV).empty();
+  if (useVulkan) {
+    cfg.useGpu = true;
+    cfg.backendsDir = envOrEmpty(AUDIO8_BACKENDS_DIR_ENV);
+  }
 
   Audio8Model model{cfg};
   ASSERT_NO_THROW(model.load());
@@ -457,6 +510,8 @@ TEST(Audio8RealGguf, CloningSynthesisRoundTrip) {
   input.text = "The reference recording decides how this sounds.";
   const auto cloned = synthesizeOnce(model, input);
   EXPECT_FALSE(cloned.empty());
+  if (useVulkan)
+    expectVulkanBackend(model);
   EXPECT_EQ(
       model.sampleRate(), qvac::ttsggml::audio8::AUDIO8_NATIVE_SAMPLE_RATE);
 
