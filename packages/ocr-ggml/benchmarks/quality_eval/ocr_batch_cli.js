@@ -7,7 +7,7 @@
  *   bare ocr_batch_cli.js --input <file> --output <file>
  *                         --detector <path> --recognizer <path>
  *                         [--pipeline easyocr|doctr] [--lang en]
- *                         [--backend cpu|vulkan]
+ *                         [--backend cpu|vulkan|metal]
  *
  * Input file: one image path per line
  * Output file: one JSON result per line (JSONL, same order as input)
@@ -15,6 +15,7 @@
  * Stderr markers (same protocol as ocr-onnx batch CLI):
  *   BATCH_START:<N>      emitted before model load
  *   MODEL_READY:<ms>     emitted after model load
+ *   BACKEND_DEVICE:<t>   resolved ggml device type (CPU/GPU/IGPU), after load
  *   PROGRESS:<i>/<N>     emitted after each image
  *   BATCH_DONE           emitted after all images written
  *   ERROR:<message>      emitted on fatal error
@@ -161,6 +162,9 @@ async function main() {
       const info = model.getBackendInfo()
       if (info) {
         console.error('BACKEND:' + (info.backendName || info.backendDevice || 'unknown'))
+        if (info.backendDevice) {
+          console.error('BACKEND_DEVICE:' + info.backendDevice)
+        }
       }
     }
 
