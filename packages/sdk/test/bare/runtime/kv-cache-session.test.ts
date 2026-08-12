@@ -801,6 +801,40 @@ test('kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for
   }
 })
 
+test('kv-cache-session: a keyed delete rejects an empty or traversal modelId before touching disk', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const turn = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'keep-me',
+      configHash,
+      primeIfMissing: async (p: string) => {
+        writeFakeCache(p)
+      }
+    })
+    fs.writeFileSync(turn.cachePath, 'bytes')
+
+    // An empty modelId collapses the target back to the whole key directory
+    // (wiping every model under it); a traversal form targets a sibling. Both
+    // must be rejected before any fs.rm runs.
+    for (const badModelId of ['', '../evil', 'a/b']) {
+      let caught: unknown = null
+      try {
+        await mod.deleteKvCacheState({ kvCacheKey: 'keep-me', modelId: badModelId })
+      } catch (err) {
+        caught = err
+      }
+      t.ok(caught instanceof Error, `modelId ${JSON.stringify(badModelId)} rejected`)
+    }
+
+    t.is(fs.existsSync(turn.cachePath), true, 'cache under the key survives the rejected deletes')
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: deleteKvCacheState({ all: true }) wipes everything', async (t) => {
   const { fs, mod, cleanup, writeFakeCache } = await loadSession()
   try {

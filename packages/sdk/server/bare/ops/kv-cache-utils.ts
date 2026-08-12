@@ -169,6 +169,10 @@ export async function deleteCache(
   // would resolve to the cache root and wipe every cache.
   assertSafeCacheKey(options.kvCacheKey, cacheDir)
   const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey)
+  // Same guard for modelId: an empty one collapses the target back to the whole
+  // key directory (wiping every model under it); a traversal form would target
+  // a sibling model. modelId is one path component on the write path too.
+  if (options.modelId !== undefined) assertSafeCacheKey(options.modelId, kvCacheDir)
   const targetDir =
     options.modelId !== undefined ? validateAndJoinPath(kvCacheDir, options.modelId) : kvCacheDir
 
