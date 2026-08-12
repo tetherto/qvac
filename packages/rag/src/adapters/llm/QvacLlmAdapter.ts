@@ -1,16 +1,12 @@
-'use strict'
+import { BaseLlmAdapter } from './BaseLlmAdapter.js'
+import { QvacErrorRAG, ERR_CODES } from '../../errors.js'
+import type { InferOpts, QvacLlmAddon, QvacResponse, SearchResult } from '../../types.js'
 
-const BaseLlmAdapter = require('./BaseLlmAdapter')
-const { QvacErrorRAG, ERR_CODES } = require('../../errors')
+// QVAC-based LLM adapter that wraps QVAC LLM instances.
+export class QvacLlmAdapter extends BaseLlmAdapter {
+  llm: QvacLlmAddon
 
-/**
- * QVAC-based LLM adapter that wraps QVAC LLM instances.
- */
-class QvacLlmAdapter extends BaseLlmAdapter {
-  /**
-   * @param {QvacLlmAddon} llm - The QVAC LLM instance
-   */
-  constructor(llm) {
+  constructor(llm: QvacLlmAddon) {
     super()
 
     if (!llm) {
@@ -28,15 +24,11 @@ class QvacLlmAdapter extends BaseLlmAdapter {
     this.llm = llm
   }
 
-  /**
-   * Run inference with the QVAC LLM using query and search results.
-   * @param {string} query - The user query
-   * @param {Array<SearchResult>} searchResults - Search results from the embedder
-   * @param {Object} [opts] - Additional options for the inference
-   * @returns {Promise<QvacResponse>} The generated response from QVAC
-   * @throws {QvacErrorRAG} If the QVAC LLM inference fails
-   */
-  async run(query, searchResults, opts = {}) {
+  override async run(
+    query: string,
+    searchResults: SearchResult[],
+    opts: InferOpts = {}
+  ): Promise<QvacResponse> {
     if (!query || typeof query !== 'string') {
       throw new QvacErrorRAG({
         code: ERR_CODES.INVALID_INPUT,
@@ -70,19 +62,16 @@ class QvacLlmAdapter extends BaseLlmAdapter {
     try {
       return await this.llm.run(messages, opts)
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
       throw new QvacErrorRAG({
         code: ERR_CODES.GENERATION_FAILED,
-        adds: `QVAC LLM inference failed: ${error.message}`,
-        cause: error
+        adds: `QVAC LLM inference failed: ${message}`,
+        cause: error instanceof Error ? error : undefined
       })
     }
   }
 
-  /**
-   * Update the QVAC LLM instance.
-   * @param {QvacLlmAddon} newQvacLlm - New QVAC LLM instance
-   */
-  updateLLM(newLLM) {
+  updateLLM(newLLM: QvacLlmAddon): void {
     if (!newLLM) {
       throw new QvacErrorRAG({
         code: ERR_CODES.LLM_REQUIRED,
@@ -98,5 +87,3 @@ class QvacLlmAdapter extends BaseLlmAdapter {
     this.llm = newLLM
   }
 }
-
-module.exports = QvacLlmAdapter

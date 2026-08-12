@@ -1,23 +1,37 @@
-'use strict'
+import { BaseLlmAdapter } from './BaseLlmAdapter.js'
+import { QvacErrorRAG, ERR_CODES } from '../../errors.js'
+import resolveFetch from '../../shims/resolve-fetch.js'
+import type { InferOpts, SearchResult } from '../../types.js'
 
-const BaseLlmAdapter = require('./BaseLlmAdapter')
-const { QvacErrorRAG, ERR_CODES } = require('../../errors')
-const resolveFetch = require('../../shims/resolve-fetch')
+export interface HttpConfig {
+  apiUrl: string
+  method?: string
+  headers?: Record<string, string>
+}
 
-/**
- * HTTP-based LLM adapter that can work with various HTTP LLM APIs.
- * Requires bare-fetch as an optional dependency for HTTP requests.
- */
-class HttpLlmAdapter extends BaseLlmAdapter {
-  /**
-   * @param {Object} httpConfig - Configuration for the LLM API
-   * @param {string} httpConfig.apiUrl - The API endpoint URL
-   * @param {string} [httpConfig.method='POST'] - HTTP method to use
-   * @param {Object} [httpConfig.headers={}] - HTTP headers to send
-   * @param {Function} requestBodyFormatter - Function that takes input(query & searchResults) and returns the request body
-   * @param {Function} responseBodyFormatter - Function that takes API response and returns the final result
-   */
-  constructor(httpConfig, requestBodyFormatter, responseBodyFormatter) {
+type RequestBodyFormatter = (query: string, searchResults: SearchResult[], opts?: object) => object
+type ResponseBodyFormatter = (response: unknown) => unknown
+
+// The subset of a fetch Response this adapter relies on.
+interface FetchResponse {
+  ok: boolean
+  status: number
+  text(): Promise<string>
+  json(): Promise<unknown>
+}
+
+// HTTP-based LLM adapter that can work with various HTTP LLM APIs. Requires a
+// fetch implementation (bare-fetch on Bare, global fetch elsewhere).
+export class HttpLlmAdapter extends BaseLlmAdapter {
+  httpConfig: HttpConfig & { method: string; headers: Record<string, string> }
+  requestBodyFormatter: RequestBodyFormatter
+  responseBodyFormatter: ResponseBodyFormatter
+
+  constructor(
+    httpConfig: HttpConfig,
+    requestBodyFormatter: RequestBodyFormatter,
+    responseBodyFormatter: ResponseBodyFormatter
+  ) {
     super()
 
     if (!httpConfig || typeof httpConfig !== 'object') {
@@ -60,14 +74,11 @@ class HttpLlmAdapter extends BaseLlmAdapter {
     this.responseBodyFormatter = responseBodyFormatter
   }
 
-  /**
-   * Run inference with the HTTP LLM API using query and search results.
-   * @param {string} query - The user query
-   * @param {Array<SearchResult>} searchResults - Search results from the embedder
-   * @param {InferOpts} [opts] - Additional options for the inference
-   * @returns {Promise<any>} The generated response (formatted by responseBodyFormatter)
-   */
-  async run(query, searchResults, opts = {}) {
+  override async run(
+    query: string,
+    searchResults: SearchResult[],
+    opts: InferOpts = {}
+  ): Promise<unknown> {
     try {
       const requestBody = this.requestBodyFormatter(query, searchResults, opts)
       if (!requestBody || typeof requestBody !== 'object') {
@@ -77,34 +88,28 @@ class HttpLlmAdapter extends BaseLlmAdapter {
         })
       }
       const response = await this._makeHttpRequest(requestBody)
-      const result = this.responseBodyFormatter(response)
-      return result
+      return this.responseBodyFormatter(response)
     } catch (error) {
       if (error instanceof QvacErrorRAG) {
         throw error
       }
+      const message = error instanceof Error ? error.message : String(error)
       throw new QvacErrorRAG({
         code: ERR_CODES.GENERATION_FAILED,
-        adds: `HTTP LLM request failed: ${error.message}`,
-        cause: error
+        adds: `HTTP LLM request failed: ${message}`,
+        cause: error instanceof Error ? error : undefined
       })
     }
   }
 
-  /**
-   * Make an HTTP request to the LLM API.
-   * @param {Object} requestBody - The request body to send
-   * @returns {Promise<Object>} The parsed response object
-   * @private
-   */
-  async _makeHttpRequest(requestBody) {
-    const fetch = resolveFetch()
+  private async _makeHttpRequest(requestBody: object): Promise<unknown> {
+    const fetch = await resolveFetch()
 
-    const response = await fetch(this.httpConfig.apiUrl, {
+    const response = (await fetch(this.httpConfig.apiUrl, {
       method: this.httpConfig.method,
       headers: this.httpConfig.headers,
       body: JSON.stringify(requestBody)
-    })
+    })) as FetchResponse
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -114,19 +119,11 @@ class HttpLlmAdapter extends BaseLlmAdapter {
     return response.json()
   }
 
-  /**
-   * Update the HTTP configuration.
-   * @param {Object} newHttpConfig - New HTTP configuration to merge
-   */
-  updateHttpConfig(newHttpConfig) {
+  updateHttpConfig(newHttpConfig: Partial<HttpConfig>): void {
     this.httpConfig = { ...this.httpConfig, ...newHttpConfig }
   }
 
-  /**
-   * Update the request body formatter function.
-   * @param {Function} newFormatter - New formatter function
-   */
-  updateRequestBodyFormatter(newFormatter) {
+  updateRequestBodyFormatter(newFormatter: RequestBodyFormatter): void {
     if (typeof newFormatter !== 'function') {
       throw new QvacErrorRAG({
         code: ERR_CODES.INVALID_INPUT,
@@ -136,11 +133,7 @@ class HttpLlmAdapter extends BaseLlmAdapter {
     this.requestBodyFormatter = newFormatter
   }
 
-  /**
-   * Update the response body formatter function.
-   * @param {Function} newFormatter - New formatter function
-   */
-  updateResponseBodyFormatter(newFormatter) {
+  updateResponseBodyFormatter(newFormatter: ResponseBodyFormatter): void {
     if (typeof newFormatter !== 'function') {
       throw new QvacErrorRAG({
         code: ERR_CODES.INVALID_INPUT,
@@ -150,5 +143,3 @@ class HttpLlmAdapter extends BaseLlmAdapter {
     this.responseBodyFormatter = newFormatter
   }
 }
-
-module.exports = HttpLlmAdapter

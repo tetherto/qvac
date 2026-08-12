@@ -1,10 +1,9 @@
-'use strict'
-
 const encoder = {
-  encode(str) {
-    const out = []
+  encode(str: string): Uint8Array {
+    const out: number[] = []
     for (let i = 0; i < str.length; i++) {
       const code = str.codePointAt(i)
+      if (code === undefined) break
       if (code > 0xffff) i++
       if (code <= 0x7f) {
         out.push(code)
@@ -26,7 +25,7 @@ const encoder = {
 }
 
 // Encode once and return both length and non-ASCII check
-const analyzeUtf8 = (s) => {
+function analyzeUtf8(s: string): { length: number; hasNonAscii: boolean } {
   const bytes = encoder.encode(s)
   let hasNonAscii = false
   for (let i = 0; i < bytes.length; i++) {
@@ -42,7 +41,7 @@ const SUPPORTS_UNICODE_PROPS = (() => {
     // eslint-disable-next-line prefer-regex-literals
     new RegExp('\\p{L}', 'u').test('a')
     return true
-  } catch (e) {
+  } catch {
     return false
   }
 })()
@@ -67,12 +66,12 @@ const NUMBERS_RE = SUPPORTS_UNICODE_PROPS
     new RegExp('^[\\p{N}]+$', 'u')
   : /^[0-9]+$/
 
-const isWhitespace = (s) => WHITESPACE_RE.test(s)
-const isLetters = (s) => LETTERS_RE.test(s)
-const isNumbers = (s) => NUMBERS_RE.test(s)
+const isWhitespace = (s: string): boolean => WHITESPACE_RE.test(s)
+const isLetters = (s: string): boolean => LETTERS_RE.test(s)
+const isNumbers = (s: string): boolean => NUMBERS_RE.test(s)
 
 // Basic URL detection
-const isURLish = (s) => {
+function isURLish(s: string): boolean {
   if (/^https?:\/\//i.test(s)) return true
   if (s.indexOf('://') !== -1) return true
   if (/\w\.\w/.test(s) && /[/;?#]/.test(s)) return true
@@ -83,12 +82,23 @@ const isURLish = (s) => {
 }
 
 // Check if this looks like markdown syntax
-const isMarkdownSyntax = (s) => {
+function isMarkdownSyntax(s: string): boolean {
   return /^(\*{1,2}|#{1,6}|\[|\]|\(|\)|-)$/.test(s)
 }
 
+interface TokenWeights {
+  lettersDivisor: number
+  numbersDivisor: number
+  symbolsDivisor: number
+  whitespaceDivisor: number
+  urlDivisor: number
+  markdownDivisor: number
+  nonAsciiPenalty: number
+  globalBias: number
+}
+
 // Token estimation weights calibrated for language model compatibility
-const DEFAULT_WEIGHTS = {
+const DEFAULT_WEIGHTS: TokenWeights = {
   lettersDivisor: 4.8, // Most words stay as single tokens
   numbersDivisor: 3.0, // Numbers get moderate splitting
   symbolsDivisor: 1.6, // Symbols split more but not always individual
@@ -99,35 +109,32 @@ const DEFAULT_WEIGHTS = {
   globalBias: 0.88 // Global adjustment factor
 }
 
-function estimateTokenCount(text, weights) {
+function divisorFor(seg: string, core: string, w: TokenWeights): number {
+  if (isWhitespace(seg)) return w.whitespaceDivisor
+  if (isMarkdownSyntax(core)) return w.markdownDivisor
+  if (isURLish(core)) return w.urlDivisor
+  if (isLetters(core)) {
+    // Adjust for word length - shorter words more likely to be single tokens
+    const lengthFactor = core.length <= 5 ? 1.2 : core.length <= 10 ? 1.0 : 0.9
+    return w.lettersDivisor * lengthFactor
+  }
+  if (isNumbers(core)) return w.numbersDivisor
+  return w.symbolsDivisor
+}
+
+export function estimateTokenCount(text: string, weights?: Partial<TokenWeights>): number {
   const w = { ...DEFAULT_WEIGHTS, ...weights }
   let tokens = 0
 
   PRETOKEN_RE.lastIndex = 0
-  let m
+  let m: RegExpExecArray | null
 
   while ((m = PRETOKEN_RE.exec(text)) !== null) {
     const seg = m[0]
     const core = seg.charAt(0) === ' ' ? seg.slice(1) : seg
 
     const utf8Info = analyzeUtf8(seg)
-
-    let divisor
-    if (isWhitespace(seg)) {
-      divisor = w.whitespaceDivisor
-    } else if (isMarkdownSyntax(core)) {
-      divisor = w.markdownDivisor
-    } else if (isURLish(core)) {
-      divisor = w.urlDivisor
-    } else if (isLetters(core)) {
-      // Adjust for word length - shorter words more likely to be single tokens
-      const lengthFactor = core.length <= 5 ? 1.2 : core.length <= 10 ? 1.0 : 0.9
-      divisor = w.lettersDivisor * lengthFactor
-    } else if (isNumbers(core)) {
-      divisor = w.numbersDivisor
-    } else {
-      divisor = w.symbolsDivisor
-    }
+    const divisor = divisorFor(seg, core, w)
 
     let est = Math.ceil(utf8Info.length / divisor)
     if (utf8Info.hasNonAscii) est = Math.ceil(est * w.nonAsciiPenalty)
@@ -138,36 +145,23 @@ function estimateTokenCount(text, weights) {
   return Math.round(tokens * w.globalBias)
 }
 
-function tokenizeText(text, weights) {
+export function tokenizeText(
+  text: string,
+  weights?: Partial<TokenWeights>
+): { tokens: Array<{ text: string; count: number }>; total: number } {
   const w = { ...DEFAULT_WEIGHTS, ...weights }
-  const tokens = []
+  const tokens: Array<{ text: string; count: number }> = []
   let total = 0
 
   PRETOKEN_RE.lastIndex = 0
-  let m
+  let m: RegExpExecArray | null
 
   while ((m = PRETOKEN_RE.exec(text)) !== null) {
     const seg = m[0]
     const core = seg.charAt(0) === ' ' ? seg.slice(1) : seg
 
     const utf8Info = analyzeUtf8(seg)
-
-    let divisor
-    if (isWhitespace(seg)) {
-      divisor = w.whitespaceDivisor
-    } else if (isMarkdownSyntax(core)) {
-      divisor = w.markdownDivisor
-    } else if (isURLish(core)) {
-      divisor = w.urlDivisor
-    } else if (isLetters(core)) {
-      // Adjust for word length - shorter words more likely to be single tokens
-      const lengthFactor = core.length <= 5 ? 1.2 : core.length <= 10 ? 1.0 : 0.9
-      divisor = w.lettersDivisor * lengthFactor
-    } else if (isNumbers(core)) {
-      divisor = w.numbersDivisor
-    } else {
-      divisor = w.symbolsDivisor
-    }
+    const divisor = divisorFor(seg, core, w)
 
     let est = Math.ceil(utf8Info.length / divisor)
     if (utf8Info.hasNonAscii) est = Math.ceil(est * w.nonAsciiPenalty)
@@ -178,9 +172,4 @@ function tokenizeText(text, weights) {
 
   total = Math.round(total * w.globalBias)
   return { tokens, total }
-}
-
-module.exports = {
-  tokenizeText,
-  estimateTokenCount
 }

@@ -1,38 +1,25 @@
-'use strict'
+import { QvacErrorRAG, ERR_CODES } from '../../errors.js'
+import type { BaseChunkOpts, Doc } from '../../types.js'
 
-const { QvacErrorRAG, ERR_CODES } = require('../../errors')
+// Abstract base class for text chunking implementations. Provides a common
+// interface for different chunking strategies.
+export abstract class BaseChunkAdapter {
+  opts: BaseChunkOpts
 
-/**
- * Abstract base class for text chunking implementations.
- * Provides a common interface for different chunking strategies.
- * @param {ChunkOpts} opts - The options for the chunker.
- */
-class BaseChunkAdapter {
-  constructor(opts = {}) {
+  constructor(opts: BaseChunkOpts = {}) {
     if (new.target === BaseChunkAdapter) {
       throw new QvacErrorRAG({ code: ERR_CODES.ABSTRACT_CLASS })
     }
     this.opts = opts
   }
 
-  /**
-   * Chunks text(s) into smaller pieces.
-   * @param {string|Array<string>} input - The text or array of texts to chunk.
-   * @param {ChunkOpts} opts - Chunking options specific to the implementation.
-   * @returns {Promise<Array<Doc>>} - Array of Docs.
-   * @throws {Error} - If chunking fails.
-   */
+  // Chunks text(s) into smaller pieces. Subclasses must override.
   // lunte-disable-next-line require-await
-  async chunkText(input, opts = {}) {
+  async chunkText(input: string | string[], opts: BaseChunkOpts = {}): Promise<Doc[]> {
     throw new QvacErrorRAG({ code: ERR_CODES.NOT_IMPLEMENTED })
   }
 
-  /**
-   * Validates the input for chunking.
-   * @param {string|Array<string>} input - The input to validate.
-   * @throws {Error} - If input is invalid.
-   */
-  validateInput(input) {
+  validateInput(input: string | string[]): void {
     if (!input) {
       throw new QvacErrorRAG({
         code: ERR_CODES.INVALID_INPUT,
@@ -77,24 +64,15 @@ class BaseChunkAdapter {
     }
   }
 
-  /**
-   * Updates the default options for this chunker instance.
-   * @param {ChunkOpts} opts - New options to merge with existing defaults.
-   */
-  updateOptions(opts = {}) {
+  // Merges new options into this chunker's defaults.
+  updateOptions(opts: BaseChunkOpts = {}): void {
     if (!this.opts) {
       this.opts = {}
     }
     this.opts = { ...this.opts, ...opts }
   }
 
-  /**
-   * Gets the current options for this chunker instance.
-   * @returns {ChunkOpts} - Current chunker options.
-   */
-  getOptions() {
+  getOptions(): BaseChunkOpts {
     return { ...this.opts }
   }
 }
-
-module.exports = BaseChunkAdapter

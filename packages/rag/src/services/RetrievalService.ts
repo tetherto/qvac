@@ -1,18 +1,26 @@
-'use strict'
+import { normalizeDocs } from '../utils/helper.js'
+import { QvacErrorRAG, ERR_CODES } from '../errors.js'
+import QvacLogger from '@qvac/logging'
+import type { LoggerInterface } from '@qvac/logging'
+import type { BaseDBAdapter } from '../adapters/database/BaseDBAdapter.js'
+import type { ChunkingService } from './core/ChunkingService.js'
+import type { EmbeddingService } from './core/EmbeddingService.js'
+import type { Doc, GenerateEmbeddingsOpts, SearchParams, SearchResult } from '../types.js'
 
-const { normalizeDocs } = require('../utils/helper')
-const { QvacErrorRAG, ERR_CODES } = require('../errors')
-const QvacLogger = require('@qvac/logging')
+interface RetrievalServiceConfig {
+  dbAdapter: BaseDBAdapter
+  chunkingService: ChunkingService
+  embeddingService: EmbeddingService
+  logger?: LoggerInterface
+}
 
-class RetrievalService {
-  /**
-   * @param {Object} config
-   * @param {BaseDBAdapter} config.dbAdapter - Database adapter for searching embeddings
-   * @param {ChunkingService} config.chunkingService - Service for chunking documents
-   * @param {EmbeddingService} config.embeddingService - Service for generating embeddings
-   * @param {Logger} [config.logger] - Optional logger instance
-   */
-  constructor({ dbAdapter, chunkingService, embeddingService, logger }) {
+export class RetrievalService {
+  dbAdapter: BaseDBAdapter
+  chunkingService: ChunkingService
+  embeddingService: EmbeddingService
+  logger: LoggerInterface
+
+  constructor({ dbAdapter, chunkingService, embeddingService, logger }: RetrievalServiceConfig) {
     if (!dbAdapter) throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_REQUIRED })
     if (!chunkingService) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_CHUNKER })
     if (!embeddingService) throw new QvacErrorRAG({ code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED })
@@ -23,30 +31,25 @@ class RetrievalService {
     this.logger = logger || new QvacLogger()
   }
 
-  /**
-   * Generate embeddings for a text.
-   * @param {string} text - The text to generate embeddings for.
-   * @returns {Promise<Array<number>>} The embeddings.
-   */
+  // Generate embeddings for a text.
   // lunte-disable-next-line require-await
-  async generateEmbeddings(text) {
+  async generateEmbeddings(text: string): Promise<number[]> {
     return this.embeddingService.generateEmbeddings(text)
   }
 
-  /**
-   * Generate embeddings for a set of documents.
-   * @param {string|Array<string>} docs - The documents to generate embeddings for.
-   * @param {GenerateEmbeddingsOpts} [opts] - Options for the embedding generation.
-   * @returns {Promise<{[key: string]: Array<number>}>} A map of document IDs to their embeddings.
-   */
-  async generateEmbeddingsForDocs(docs, opts = {}) {
+  // Generate embeddings for a set of documents, returning a map of document IDs
+  // to their embeddings.
+  async generateEmbeddingsForDocs(
+    docs: string | string[],
+    opts: GenerateEmbeddingsOpts = {}
+  ): Promise<{ [key: string]: number[] }> {
     const { signal, chunk = true, chunkOpts } = opts
 
     if (signal?.aborted) {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
 
-    let normalizedDocs = null
+    let normalizedDocs: Doc[] | null = null
     if (chunk) {
       normalizedDocs = await this.chunkingService.chunkText(docs, chunkOpts)
     } else {
@@ -62,13 +65,8 @@ class RetrievalService {
     return this.embeddingService.generateEmbeddingsForDocs(normalizedDocs, { signal })
   }
 
-  /**
-   * Search for documents based on a query string.
-   * @param {string} query - The search query.
-   * @param {Object} [params] - The parameters for the search.
-   * @returns {Promise<Array<SearchResult>>} An array of search results.
-   */
-  async search(query, params = {}) {
+  // Search for documents based on a query string.
+  async search(query: string, params: SearchParams = {}): Promise<SearchResult[]> {
     const { signal } = params
 
     if (signal?.aborted) {
@@ -97,5 +95,3 @@ class RetrievalService {
     return results
   }
 }
-
-module.exports = RetrievalService

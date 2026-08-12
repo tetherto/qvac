@@ -1,21 +1,35 @@
-'use strict'
-
-const { QvacErrorRAG, ERR_CODES } = require('../../errors')
-const {
+import { QvacErrorRAG, ERR_CODES } from '../../errors.js'
+import {
   embeddingInputSchema,
   singleEmbeddingSchema,
   batchEmbeddingSchema,
   docsArraySchema
-} = require('../../schemas/embedding')
-const QvacLogger = require('@qvac/logging')
+} from '../../schemas/embedding.js'
+import QvacLogger from '@qvac/logging'
+import type { LoggerInterface } from '@qvac/logging'
+import type { Doc, EmbeddingFunction, EmbeddingOpts } from '../../types.js'
 
-class EmbeddingService {
-  /**
-   * @param {Object} config
-   * @param {EmbeddingFunction} config.embeddingFunction - The embedding function
-   * @param {Logger} [config.logger] - Optional logger instance
-   */
-  constructor({ embeddingFunction, logger }) {
+interface ZodLikeError {
+  name: string
+  issues?: Array<{ message?: string }>
+}
+
+function isZodError(error: unknown): error is ZodLikeError {
+  return (
+    typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'ZodError'
+  )
+}
+
+interface EmbeddingServiceConfig {
+  embeddingFunction: EmbeddingFunction
+  logger?: LoggerInterface
+}
+
+export class EmbeddingService {
+  embeddingFunction: EmbeddingFunction
+  logger: LoggerInterface
+
+  constructor({ embeddingFunction, logger }: EmbeddingServiceConfig) {
     if (!embeddingFunction || typeof embeddingFunction !== 'function') {
       throw new QvacErrorRAG({
         code: ERR_CODES.EMBEDDING_FUNCTION_REQUIRED,
@@ -26,39 +40,37 @@ class EmbeddingService {
     this.logger = logger || new QvacLogger()
   }
 
-  /**
-   * Generate embeddings for text(s).
-   * Supports both single text and batch processing.
-   * @param {string|Array<string>} text - The text or array of texts to generate embeddings for.
-   * @returns {Promise<Array<number>|Array<Array<number>>>} The embeddings (single array for text, array of arrays for batch).
-   */
-  async generateEmbeddings(text) {
-    let validatedInput
+  // Generate embeddings for a single text or a batch of texts.
+  async generateEmbeddings(text: string): Promise<number[]>
+  async generateEmbeddings(text: string[]): Promise<number[][]>
+  async generateEmbeddings(text: string | string[]): Promise<number[] | number[][]> {
+    let validatedInput: string | string[]
     try {
       validatedInput = embeddingInputSchema.parse(text)
     } catch (error) {
-      if (error.name === 'ZodError') {
+      if (isZodError(error)) {
         const zodIssue = error.issues?.[0]
         throw new QvacErrorRAG({
           code: ERR_CODES.INVALID_INPUT,
           adds: `Input validation failed: ${zodIssue?.message || 'Invalid input'}`,
-          cause: error
+          cause: error instanceof Error ? error : undefined
         })
       }
       throw error
     }
 
-    let embeddings
+    let embeddings: number[] | number[][]
     try {
       embeddings = await this.embeddingFunction(validatedInput)
     } catch (error) {
       if (error instanceof QvacErrorRAG) {
         throw error
       }
+      const message = error instanceof Error ? error.message : String(error)
       throw new QvacErrorRAG({
         code: ERR_CODES.GENERATION_FAILED,
-        adds: `Failed to generate embeddings: ${error.message}`,
-        cause: error
+        adds: `Failed to generate embeddings: ${message}`,
+        cause: error instanceof Error ? error : undefined
       })
     }
 
@@ -69,12 +81,12 @@ class EmbeddingService {
         singleEmbeddingSchema.parse(embeddings)
       }
     } catch (error) {
-      if (error.name === 'ZodError') {
+      if (isZodError(error)) {
         const zodIssue = error.issues?.[0]
         throw new QvacErrorRAG({
           code: ERR_CODES.GENERATION_FAILED,
           adds: `Embedding function returned invalid output: ${zodIssue?.message || 'Invalid output format'}`,
-          cause: error
+          cause: error instanceof Error ? error : undefined
         })
       }
       throw error
@@ -83,25 +95,23 @@ class EmbeddingService {
     return embeddings
   }
 
-  /**
-   * Generate embeddings for multiple texts with IDs.
-   * Leverages the addon's automatic batch management for optimal performance.
-   * Note: Batch embedding is atomic - only reports start/end, not incremental progress.
-   * @param {Array<Doc>} docs - Array of documents with id and content.
-   * @param {EmbeddingOpts} [opts] - Options for embedding generation.
-   * @returns {Promise<{[key: string]: Array<number>}>} Map of document IDs to embeddings.
-   */
-  async generateEmbeddingsForDocs(docs, opts = {}) {
-    let validatedDocs
+  // Generate embeddings for multiple documents with IDs, returning a map of
+  // document IDs to embeddings. Batch embedding is atomic: it reports only
+  // start/end, not incremental progress.
+  async generateEmbeddingsForDocs(
+    docs: Doc[],
+    opts: EmbeddingOpts = {}
+  ): Promise<{ [key: string]: number[] }> {
+    let validatedDocs: Doc[]
     try {
       validatedDocs = docsArraySchema.parse(docs)
     } catch (error) {
-      if (error.name === 'ZodError') {
+      if (isZodError(error)) {
         const zodIssue = error.issues?.[0]
         throw new QvacErrorRAG({
           code: ERR_CODES.INVALID_INPUT,
           adds: `Document validation failed: ${zodIssue?.message || 'Invalid documents'}`,
-          cause: error
+          cause: error instanceof Error ? error : undefined
         })
       }
       throw error
@@ -119,37 +129,39 @@ class EmbeddingService {
 
     onProgress?.(0, validatedDocs.length)
 
-    let batchEmbeddings
+    let batchEmbeddings: number[] | number[][]
     try {
       batchEmbeddings = await this.embeddingFunction(allTexts)
     } catch (error) {
       if (error instanceof QvacErrorRAG) {
         throw error
       }
+      const message = error instanceof Error ? error.message : String(error)
       throw new QvacErrorRAG({
         code: ERR_CODES.GENERATION_FAILED,
-        adds: `Failed to generate batch embeddings: ${error.message}`,
-        cause: error
+        adds: `Failed to generate batch embeddings: ${message}`,
+        cause: error instanceof Error ? error : undefined
       })
     }
 
     try {
       batchEmbeddingSchema.parse(batchEmbeddings)
     } catch (error) {
-      if (error.name === 'ZodError') {
+      if (isZodError(error)) {
         const zodIssue = error.issues?.[0]
         throw new QvacErrorRAG({
           code: ERR_CODES.GENERATION_FAILED,
           adds: `Embedding function returned invalid batch output: ${zodIssue?.message || 'Invalid output format'}`,
-          cause: error
+          cause: error instanceof Error ? error : undefined
         })
       }
       throw error
     }
 
-    const embeddings = {}
+    const batch = batchEmbeddings as number[][]
+    const embeddings: { [key: string]: number[] } = {}
     validatedDocs.forEach((doc, idx) => {
-      embeddings[doc.id] = batchEmbeddings[idx]
+      embeddings[doc.id] = batch[idx]
     })
 
     this.logger.debug(`Embeddings generated: ${Object.keys(embeddings).length}`)
@@ -159,5 +171,3 @@ class EmbeddingService {
     return embeddings
   }
 }
-
-module.exports = EmbeddingService

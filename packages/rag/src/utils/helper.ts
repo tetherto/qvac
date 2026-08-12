@@ -1,17 +1,12 @@
-'use strict'
-
-const { QvacErrorRAG, ERR_CODES } = require('../errors')
+import { QvacErrorRAG, ERR_CODES } from '../errors.js'
+import type { Doc, PartialDoc } from '../types.js'
+import qvacCrypto from '#crypto'
 
 const UUID_BYTES = 16
 const BYTE_TO_HEX = Array.from({ length: 256 }, (_, i) => (i + 0x100).toString(16).slice(1))
 
-/**
- * Calculate the cosine similarity between two vectors.
- * @param {Array} a - The first vector.
- * @param {Array} b - The second vector.
- * @returns {number} - The cosine similarity between the two vectors.
- */
-function cosineSimilarity(a, b) {
+// Calculate the cosine similarity between two vectors.
+export function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0
   let normA = 0
   let normB = 0
@@ -25,13 +20,8 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
 
-/**
- * Calculate the text score between a query and a content.
- * @param {string} query - The query.
- * @param {string} content - The content.
- * @returns {number} - The text score between the query and the content.
- */
-function calculateTextScore(query, content) {
+// Calculate the lexical score between a query and a content string.
+export function calculateTextScore(query: string, content: string): number {
   const queryTerms = query.toLowerCase().split(/\s+/)
   const contentLower = content.toLowerCase()
   const exactMatches = queryTerms.filter((term) => contentLower.includes(term)).length
@@ -40,7 +30,7 @@ function calculateTextScore(query, content) {
     const pos = contentTerms.indexOf(term)
     if (pos !== -1) map.set(term, pos)
     return map
-  }, new Map())
+  }, new Map<string, number>())
   let proximityScore = 0
   if (positions.size > 1) {
     const posArray = Array.from(positions.values())
@@ -50,29 +40,27 @@ function calculateTextScore(query, content) {
   return (exactMatches / queryTerms.length) * 0.7 + proximityScore * 0.3
 }
 
-/**
- * Normalizes the documents input to ensure it's an array of documents.
- * Each document is expected to be an object with a `content` property.
- * If an element is a string, it is wrapped in an object as { content: <string> }
- * @param {Array<string|PartialDoc>} docs - The documents to normalize.
- * @returns {{normalizedDocs: Array<Doc>, droppedIndices: Array<number>}} An array of normalized documents and the indices of the dropped documents.
- */
-function normalizeDocs(docs) {
+// Normalizes the documents input to an array of documents, wrapping bare
+// strings as { content }. Returns the normalized docs and the dropped indices.
+export function normalizeDocs(docs: Array<string | PartialDoc>): {
+  normalizedDocs: Doc[]
+  droppedIndices: number[]
+} {
   if (!Array.isArray(docs)) throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT })
 
-  const seenIds = new Set()
-  const normalizedDocs = []
-  const droppedIndices = []
+  const seenIds = new Set<string>()
+  const normalizedDocs: Doc[] = []
+  const droppedIndices: number[] = []
 
   docs.forEach((rawDoc, idx) => {
-    const doc = typeof rawDoc === 'string' ? { content: rawDoc } : rawDoc
+    const doc: PartialDoc = typeof rawDoc === 'string' ? { content: rawDoc } : rawDoc
     if (!doc || !doc.content || (typeof doc.content === 'string' && doc.content.trim() === '')) {
       droppedIndices.push(idx)
       return
     }
     const id = doc.id || generateId()
     if (seenIds.has(id)) {
-      throw new QvacErrorRAG({ code: ERR_CODES.DUPLICATE_DOCUMENT_ID, adds: id })
+      throw new QvacErrorRAG({ code: ERR_CODES.DUPLICATE_DOCUMENT_ID, adds: [id] })
     }
     seenIds.add(id)
     normalizedDocs.push({ ...doc, id })
@@ -83,11 +71,8 @@ function normalizeDocs(docs) {
   }
 }
 
-/**
- * Generates a unique ID using UUID v4.
- * @returns {string} A unique identifier.
- */
-function generateId() {
+// Generates a unique ID using UUID v4.
+export function generateId(): string {
   const bytes = randomBytes(UUID_BYTES)
   bytes[6] = (bytes[6] & 0x0f) | 0x40
   bytes[8] = (bytes[8] & 0x3f) | 0x80
@@ -116,21 +101,21 @@ function generateId() {
   )
 }
 
-function randomBytes(size) {
+function randomBytes(size: number): Uint8Array {
   try {
-    const crypto = typeof globalThis !== 'undefined' ? globalThis.crypto : null
+    const crypto = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } })
+      .crypto
     if (crypto && typeof crypto.getRandomValues === 'function') {
       return crypto.getRandomValues(new Uint8Array(size))
     }
   } catch {}
 
   try {
-    const cryptoMod = require('#crypto')
-    if (cryptoMod && typeof cryptoMod.randomBytes === 'function') {
-      return toUint8Array(cryptoMod.randomBytes(size))
+    if (qvacCrypto && typeof qvacCrypto.randomBytes === 'function') {
+      return toUint8Array(qvacCrypto.randomBytes(size))
     }
-    if (cryptoMod && typeof cryptoMod.getRandomValues === 'function') {
-      return cryptoMod.getRandomValues(new Uint8Array(size))
+    if (qvacCrypto && typeof qvacCrypto.getRandomValues === 'function') {
+      return qvacCrypto.getRandomValues(new Uint8Array(size))
     }
   } catch {}
 
@@ -140,7 +125,7 @@ function randomBytes(size) {
   })
 }
 
-function toUint8Array(bytes) {
+function toUint8Array(bytes: Uint8Array | ArrayBuffer | ArrayBufferView | number[]): Uint8Array {
   if (bytes instanceof Uint8Array) return bytes
   if (typeof ArrayBuffer !== 'undefined' && bytes instanceof ArrayBuffer) {
     return new Uint8Array(bytes)
@@ -148,16 +133,11 @@ function toUint8Array(bytes) {
   if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(bytes)) {
     return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   }
-  return Uint8Array.from(bytes)
+  return Uint8Array.from(bytes as number[])
 }
 
-/**
- * Maintain min-heap property when adding elements.
- * @param {Array} heap - The heap array.
- * @param {number} index - The index of the element to heapify up.
- * @private
- */
-function heapifyUp(heap, index) {
+// Maintain min-heap property when adding elements.
+export function heapifyUp<T extends { similarity: number }>(heap: T[], index: number): void {
   while (index > 0) {
     const parentIndex = Math.floor((index - 1) / 2)
     if (heap[parentIndex].similarity <= heap[index].similarity) break
@@ -166,13 +146,8 @@ function heapifyUp(heap, index) {
   }
 }
 
-/**
- * Maintain min-heap property when removing elements.
- * @param {Array} heap - The heap array.
- * @param {number} index - The index of the element to heapify down.
- * @private
- */
-function heapifyDown(heap, index) {
+// Maintain min-heap property when removing elements.
+export function heapifyDown<T extends { similarity: number }>(heap: T[], index: number): void {
   const heapSize = heap.length
 
   while (true) {
@@ -191,14 +166,8 @@ function heapifyDown(heap, index) {
   }
 }
 
-/**
- * Reservoir sampling algorithm for efficient random sampling.
- * @param {Array} array - The array to sample from.
- * @param {number} sampleSize - The number of items to sample.
- * @returns {Array} A random sample of the specified size.
- * @private
- */
-function reservoirSample(array, sampleSize) {
+// Reservoir sampling for efficient random sampling of `sampleSize` items.
+export function reservoirSample<T>(array: T[], sampleSize: number): T[] {
   if (sampleSize >= array.length) {
     return array.slice()
   }
@@ -212,13 +181,18 @@ function reservoirSample(array, sampleSize) {
   return sample
 }
 
-/**
- * Creates an LRU (Least Recently Used) cache.
- * @param {number} maxSize - Maximum number of entries to cache.
- * @returns {Object} Cache object with get, set, has, delete, clear, and size methods.
- */
-function createLRUCache(maxSize) {
-  const cache = new Map()
+export interface LRUCache<K, V> {
+  get(key: K): V | undefined
+  set(key: K, value: V): void
+  has(key: K): boolean
+  delete(key: K): boolean
+  clear(): void
+  readonly size: number
+}
+
+// Creates an LRU (Least Recently Used) cache bounded to `maxSize` entries.
+export function createLRUCache<K, V>(maxSize: number): LRUCache<K, V> {
+  const cache = new Map<K, V>()
 
   return {
     get(key) {
@@ -226,7 +200,7 @@ function createLRUCache(maxSize) {
       // Move to end (most recently used)
       const value = cache.get(key)
       cache.delete(key)
-      cache.set(key, value)
+      cache.set(key, value as V)
       return value
     },
 
@@ -239,7 +213,7 @@ function createLRUCache(maxSize) {
       // Evict LRU (first entry) if over capacity
       if (cache.size > maxSize) {
         const lruKey = cache.keys().next().value
-        cache.delete(lruKey)
+        if (lruKey !== undefined) cache.delete(lruKey)
       }
     },
 
@@ -259,15 +233,4 @@ function createLRUCache(maxSize) {
       return cache.size
     }
   }
-}
-
-module.exports = {
-  cosineSimilarity,
-  calculateTextScore,
-  normalizeDocs,
-  generateId,
-  reservoirSample,
-  heapifyUp,
-  heapifyDown,
-  createLRUCache
 }

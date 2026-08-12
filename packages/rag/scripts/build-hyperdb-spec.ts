@@ -1,28 +1,19 @@
-const fs = require('bare-fs')
-const path = require('bare-path')
-const HyperDB = require('hyperdb/builder')
-const Hyperschema = require('hyperschema')
+import fs from 'bare-fs'
+import path from 'bare-path'
+import HyperDB from 'hyperdb/builder'
+import Hyperschema from 'hyperschema'
 
-const SCHEMA_DIR = path.join(
-  __dirname,
-  '..',
-  'src',
-  'adapters',
-  'database',
-  'hyperspec',
-  'hyperschema'
-)
-const DB_DIR = path.join(__dirname, '..', 'src', 'adapters', 'database', 'hyperspec', 'hyperdb')
+const scriptDir = path.dirname(new URL(import.meta.url).pathname)
+const packageRoot = path.join(scriptDir, '..')
+
+const SCHEMA_DIR = path.join(packageRoot, 'src', 'adapters', 'database', 'hyperspec', 'hyperschema')
+const DB_DIR = path.join(packageRoot, 'src', 'adapters', 'database', 'hyperspec', 'hyperdb')
 
 buildRAGSchema()
 buildRAGDatabase()
 
-/**
- * Builds the RAG schema specification using hyperschema
- * @param {string} [schemaDir] - Directory to save schema files
- * @returns {void}
- */
-function buildRAGSchema(schemaDir = SCHEMA_DIR) {
+// Builds the RAG schema specification using hyperschema.
+function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
   const schema = Hyperschema.from(schemaDir)
   const rag = schema.namespace('rag')
 
@@ -91,46 +82,17 @@ function buildRAGSchema(schemaDir = SCHEMA_DIR) {
   console.log('✅ RAG HyperDB schema generated successfully!')
 }
 
-/**
- * Builds the RAG database specification using hyperschema and hyperdb builder
- * @param {string} [schemaDir] - Directory containing schema files
- * @param {string} [dbDir] - Directory to save database files
- * @returns {void}
- */
-function buildRAGDatabase(schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
+// Builds the RAG database specification using hyperschema and the hyperdb builder.
+function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR) {
   const db = HyperDB.from(schemaDir, dbDir)
   const dbNs = db.namespace('rag')
 
   // Register collections
-  dbNs.collections.register({
-    name: 'documents',
-    schema: '@rag/documents',
-    key: ['id']
-  })
-
-  dbNs.collections.register({
-    name: 'vectors',
-    schema: '@rag/vectors',
-    key: ['docId']
-  })
-
-  dbNs.collections.register({
-    name: 'centroids',
-    schema: '@rag/centroids',
-    key: ['id']
-  })
-
-  dbNs.collections.register({
-    name: 'ivfBuckets',
-    schema: '@rag/ivfBuckets',
-    key: ['centroidId']
-  })
-
-  dbNs.collections.register({
-    name: 'config',
-    schema: '@rag/config',
-    key: ['key']
-  })
+  dbNs.collections.register({ name: 'documents', schema: '@rag/documents', key: ['id'] })
+  dbNs.collections.register({ name: 'vectors', schema: '@rag/vectors', key: ['docId'] })
+  dbNs.collections.register({ name: 'centroids', schema: '@rag/centroids', key: ['id'] })
+  dbNs.collections.register({ name: 'ivfBuckets', schema: '@rag/ivfBuckets', key: ['centroidId'] })
+  dbNs.collections.register({ name: 'config', schema: '@rag/config', key: ['key'] })
 
   // Register indexes
   dbNs.indexes.register({
@@ -145,16 +107,11 @@ function buildRAGDatabase(schemaDir = SCHEMA_DIR, dbDir = DB_DIR) {
   console.log('✅ RAG HyperDB specification built successfully!')
   console.log(`📁 Schema saved to: ${schemaDir}`)
   console.log(`📁 Database files saved to: ${dbDir}`)
-  console.log(
-    '\n📝 IMPORTANT: Generated hyperspec files have been manually converted to use dynamic imports'
-  )
-  console.log('   This prevents static dependency resolution when HyperDBAdapter is not used.')
-  console.log(
-    "   If you regenerate specs, you'll need to manually convert static requires to dynamic imports."
-  )
 }
 
-function removeUnusedRuntimeImport(indexPath) {
+// The hyperdb builder emits an unused `c` binding in its runtime import; drop it
+// so the generated spec lints cleanly.
+function removeUnusedRuntimeImport(indexPath: string) {
   const content = fs.readFileSync(indexPath, 'utf8')
   const updated = content.replace(
     "const { IndexEncoder, c, b4a } = require('hyperdb/runtime')",
