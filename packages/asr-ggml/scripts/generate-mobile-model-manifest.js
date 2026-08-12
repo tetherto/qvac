@@ -8,6 +8,7 @@ const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
 const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
 const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
+const REGISTRY_PREFIX_INDIC = 'qvac_models_compiled/ggml/indic_conformer/2026-08-07'
 const DEFAULT_EXPIRES_IN = '604800'
 
 const outputPath = path.resolve(__dirname, '../test/mobile/testAssets/model-manifest.json')
@@ -26,7 +27,8 @@ const MODELS = {
   sortformerQ8: model('sortformer-4spk-v1.q8_0.gguf', REGISTRY_PREFIX_Q8_0),
   sortformerF16: model('sortformer-4spk-v1.f16.gguf', REGISTRY_PREFIX_2026_07_01),
   sortformerStreamingQ4: model('diar_streaming_sortformer_4spk-v2.1.q4_0.gguf', REGISTRY_PREFIX_STREAMING),
-  sortformerStreamingQ8: model('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf', REGISTRY_PREFIX_STREAMING)
+  sortformerStreamingQ8: model('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf', REGISTRY_PREFIX_STREAMING),
+  indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC)
 }
 
 // Keyed by the mobile RUNNER FUNCTION NAME exported from
@@ -45,7 +47,12 @@ const MODELS = {
 // the device-side network fallback used by the whisper parent lane.
 const TEST_MODELS = {
   runParakeetAccuracyMultilangTest: [MODELS.tdtQ4],
-  runParakeetAddonMultimodelTest: [MODELS.ctcQ4, MODELS.eouQ4, MODELS.sortformerQ4],
+  runParakeetAddonMultimodelTest: [
+    MODELS.ctcQ4,
+    MODELS.eouQ4,
+    MODELS.sortformerQ4,
+    MODELS.indicConformerQ4
+  ],
   runParakeetColdStartTimingTest: [MODELS.tdtQ4],
   runParakeetCorruptedModelTest: [],
   runParakeetDuplexStreamingEouTest: [MODELS.eouQ4],
