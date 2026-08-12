@@ -8,6 +8,8 @@ const METRIC_EXTENSIONS = ['bleu', 'chrfpp', 'comet']
 const STAT_EXTENSIONS = METRIC_EXTENSIONS.concat(['time', 'perf'])
 const DEVICE_DIRS = ['cpu', 'gpu']
 const PAIR_RE = /^[a-z]{2,3}-[a-z]{2,3}$/
+const PLATFORM_RE = /-((?:linux|macos|windows)-(?:x64|arm64)(?:-gpu)?)$/
+const DEFAULT_PLATFORM = 'linux-x64'
 
 const METRIC_LABELS = {
   bleu: 'BLEU',
@@ -25,6 +27,7 @@ function parseArgs (argv) {
     datasets: null,
     metrics: null,
     device: 'cpu',
+    platforms: null,
     output: null,
     outputJson: null,
     help: false
@@ -38,6 +41,7 @@ function parseArgs (argv) {
       case '--datasets': args.datasets = argv[++i]; break
       case '--metrics': args.metrics = argv[++i]; break
       case '--device': args.device = argv[++i]; break
+      case '--platforms': args.platforms = argv[++i]; break
       case '--output': args.output = argv[++i]; break
       case '--output-json': args.outputJson = argv[++i]; break
       case '--help': case '-h': args.help = true; break
@@ -49,7 +53,7 @@ function parseArgs (argv) {
 function printHelp () {
   console.log('Usage: summarize-nmt-quality.js --dir <results-dir> ' +
     '[--pairs csv] [--translators csv] [--datasets csv] [--metrics csv] ' +
-    '[--device label] [--output file] [--output-json file]')
+    '[--device label] [--platforms csv] [--output file] [--output-json file]')
 }
 
 function splitCsv (value) {
@@ -62,6 +66,11 @@ function parsePairFromArtifactDir (name) {
   const tokens = stripped.split('-')
   if (tokens.length < 2 || !tokens[0] || !tokens[1]) return null
   return `${tokens[0]}-${tokens[1]}`
+}
+
+function parsePlatformFromArtifactDir (name) {
+  const match = PLATFORM_RE.exec(name)
+  return match ? match[1] : null
 }
 
 function parseResultFile (basename) {
@@ -81,20 +90,21 @@ function discoverPairRoots (dir) {
     if (!entry.isDirectory()) continue
     const entryPath = path.join(dir, entry.name)
     if (PAIR_RE.test(entry.name)) {
-      roots.push({ pair: entry.name, dir: entryPath })
+      roots.push({ pair: entry.name, dir: entryPath, platform: null })
       continue
     }
     if (!entry.name.startsWith('results-')) continue
+    const platform = parsePlatformFromArtifactDir(entry.name)
     const pairDirs = fs.readdirSync(entryPath, { withFileTypes: true })
       .filter(child => child.isDirectory() && PAIR_RE.test(child.name))
     if (pairDirs.length) {
       for (const child of pairDirs) {
-        roots.push({ pair: child.name, dir: path.join(entryPath, child.name) })
+        roots.push({ pair: child.name, dir: path.join(entryPath, child.name), platform })
       }
       continue
     }
     const pair = parsePairFromArtifactDir(entry.name)
-    if (pair) roots.push({ pair, dir: entryPath })
+    if (pair) roots.push({ pair, dir: entryPath, platform })
   }
   return roots
 }
@@ -128,7 +138,8 @@ function collectResults (dir) {
           translator: parsed.translator,
           ext: parsed.ext,
           value,
-          device: current.device
+          device: current.device,
+          platform: root.platform
         })
       }
     }
@@ -136,37 +147,47 @@ function collectResults (dir) {
   return records
 }
 
-function rowKey (pair, translator, device, dataset) {
-  return `${pair}|${translator}|${device}|${dataset}`
+function rowKey (pair, translator, platform, device, dataset) {
+  return `${pair}|${translator}|${platform}|${device}|${dataset}`
 }
 
-function buildRows (records, { device = 'cpu', pairs = [], translators = [], datasets = [] } = {}) {
+function buildRows (records, { device = 'cpu', platforms = [], pairs = [], translators = [], datasets = [] } = {}) {
   const rows = new Map()
+  const seedPlatforms = platforms.length ? platforms : [DEFAULT_PLATFORM]
+  const fallbackPlatform = seedPlatforms[0]
 
-  function ensureRow (pair, translator, dev, dataset) {
-    const key = rowKey(pair, translator, dev, dataset)
+  function ensureRow (pair, translator, platform, dev, dataset) {
+    const key = rowKey(pair, translator, platform, dev, dataset)
     if (!rows.has(key)) {
-      rows.set(key, { pair, translator, device: dev, dataset, stats: {} })
+      rows.set(key, { pair, translator, platform, device: dev, dataset, stats: {} })
     }
     return rows.get(key)
   }
 
   for (const pair of pairs) {
     for (const translator of translators) {
-      for (const dataset of datasets) {
-        ensureRow(pair, translator, device, dataset)
+      for (const platform of seedPlatforms) {
+        for (const dataset of datasets) {
+          ensureRow(pair, translator, platform, device, dataset)
+        }
       }
     }
   }
 
   for (const record of records) {
-    const row = ensureRow(record.pair, record.translator, record.device || device, record.dataset)
+    const row = ensureRow(
+      record.pair,
+      record.translator,
+      record.platform || fallbackPlatform,
+      record.device || device,
+      record.dataset)
     row.stats[record.ext] = record.value
   }
 
   return Array.from(rows.values()).sort((a, b) =>
     a.pair.localeCompare(b.pair) ||
     a.translator.localeCompare(b.translator) ||
+    a.platform.localeCompare(b.platform) ||
     a.device.localeCompare(b.device) ||
     a.dataset.localeCompare(b.dataset))
 }
@@ -191,23 +212,24 @@ function renderMarkdown (rows, { metrics = [] } = {}) {
     metrics.includes(ext) || rows.some(row => row.stats[ext] !== undefined))
   const columns = metricColumns.concat(['time', 'perf'])
 
-  lines.push('One row per model (language pair) x translator x device; scores per dataset.')
+  lines.push('One row per model (language pair) x translator x platform x device; scores per dataset.')
   lines.push('')
-  lines.push(`| Model | Translator | Device | Dataset | ${columns.map(ext => METRIC_LABELS[ext]).join(' | ')} |`)
-  lines.push(`|-------|------------|--------|---------|${columns.map(() => '-------:|').join('')}`)
+  lines.push(`| Model | Translator | Platform | Device | Dataset | ${columns.map(ext => METRIC_LABELS[ext]).join(' | ')} |`)
+  lines.push(`|-------|------------|----------|--------|---------|${columns.map(() => '-------:|').join('')}`)
 
   for (const row of rows) {
     const cells = columns.map(ext => formatStat(row.stats[ext], ext))
-    lines.push(`| ${row.pair} | ${row.translator} | ${row.device.toUpperCase()} | ${row.dataset} | ${cells.join(' | ')} |`)
+    lines.push(`| ${row.pair} | ${row.translator} | ${row.platform} | ${row.device.toUpperCase()} | ${row.dataset} | ${cells.join(' | ')} |`)
   }
 
   const models = new Set(rows.map(row => row.pair))
+  const platforms = Array.from(new Set(rows.map(row => row.platform))).sort()
   const devices = Array.from(new Set(rows.map(row => row.device.toUpperCase()))).sort()
   const missing = rows.filter(row => columns.every(ext => row.stats[ext] === undefined)).length
 
   lines.push('')
   lines.push('**Coverage:**')
-  lines.push(`- Rows: ${rows.length} (${models.size} model(s), ${devices.length} device type(s): ${devices.join(', ')})`)
+  lines.push(`- Rows: ${rows.length} (${models.size} model(s), ${platforms.length} platform(s): ${platforms.join(', ')}, ${devices.length} device type(s): ${devices.join(', ')})`)
   if (!devices.includes('GPU')) {
     lines.push('- GPU rows: none — this workflow only runs the Bergamot/intgemm CPU lane today; GPU rows will appear here once a GPU evaluation lane exists.')
   }
@@ -237,6 +259,7 @@ function main () {
 
   const rows = buildRows(records, {
     device: args.device,
+    platforms: splitCsv(args.platforms),
     pairs: splitCsv(args.pairs),
     translators: splitCsv(args.translators),
     datasets: splitCsv(args.datasets)
@@ -265,6 +288,7 @@ if (require.main === module) {
 
 module.exports = {
   parsePairFromArtifactDir,
+  parsePlatformFromArtifactDir,
   parseResultFile,
   collectResults,
   buildRows,
