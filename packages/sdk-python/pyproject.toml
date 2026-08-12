@@ -70,6 +70,12 @@ select = ["E", "F", "I", "UP"]
 # so it's pure noise on top of an already-formatted codebase.
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# Generated enum members mirror the wire contract verbatim; the ABot-World
+# walk-key enum ('W'..'L') snake-cases to a single-letter `l` member, which
+# trips the ambiguous-variable-name rule. Human-authored code keeps E741.
+"src/tetherto/qvac_sdk/_generated/**" = ["E741"]
+
 [tool.ruff.lint.isort]
 # Pin tetherto as first-party so import-section grouping is identical whether
 # the generator writes in place (src/tetherto/qvac_sdk/_generated) or into a
