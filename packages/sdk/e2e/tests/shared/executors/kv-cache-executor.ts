@@ -224,13 +224,24 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       } as never) as { tokenStream: AsyncIterable<string>; stats: Promise<unknown> }
       return (async () => {
         let text = ''
-        for await (const t of run.tokenStream) text += t
+        let firstTokenAt = 0
+        for await (const t of run.tokenStream) {
+          if (firstTokenAt === 0) firstTokenAt = Date.now()
+          text += t
+        }
+        const lastTokenAt = Date.now()
         const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
-        return { text, avgConcurrentSeq: stats?.avgConcurrentSeq }
+        return { text, avgConcurrentSeq: stats?.avgConcurrentSeq, useCache, firstTokenAt, lastTokenAt }
       })()
     }
 
-    let results: Array<{ text: string; avgConcurrentSeq?: number }>
+    let results: Array<{
+      text: string
+      avgConcurrentSeq?: number
+      useCache: boolean
+      firstTokenAt: number
+      lastTokenAt: number
+    }>
     try {
       results = await Promise.all([
         ...TOPICS.map((topic) => fire(`Tell me about ${topic} in detail.`, true)),
@@ -267,9 +278,25 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         output: `Plain completions starved behind auto-cache turns (engine avgConcurrentSeq ${plainSeq} <= 1)`
       }
     }
+
+    // Per-request proof, not just the epoch-wide metric: a plain request's token
+    // window must overlap an auto-cache request's, i.e. it produced tokens while a
+    // cached turn was still decoding rather than waiting for its lock to free.
+    const auto = results.filter((r) => r.useCache)
+    const plain = results.filter((r) => !r.useCache)
+    const overlaps = plain.some((p) =>
+      auto.some((a) => p.firstTokenAt < a.lastTokenAt && a.firstTokenAt < p.lastTokenAt)
+    )
+    if (!overlaps) {
+      return {
+        passed: false,
+        output: 'No plain completion produced tokens while an auto-cache turn was still decoding'
+      }
+    }
+
     return {
       passed: true,
-      output: `Auto-cache turns and plain completions both decode concurrently (avgConcurrentSeq auto=${autoSeq.toFixed(2)} plain=${plainSeq.toFixed(2)})`
+      output: `Auto-cache turns and plain completions both decode concurrently (avgConcurrentSeq auto=${autoSeq.toFixed(2)} plain=${plainSeq.toFixed(2)}, token windows overlap)`
     }
   }
 

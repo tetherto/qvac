@@ -706,9 +706,22 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
     )
     const survivor = mkBatch('survivor', params.survivorPredict, 'Reply with only the word MELON.')
 
-    // Wait for native admission (ids resolve) so the cancel hits cancelJob, not
-    // the cancel-before-begin path.
-    await Promise.all([doomed.ids, survivor.ids])
+    // Wait for a real streamed token from every prompt in both batches before
+    // cancelling. ids resolve before native sequence-slot admission, so waiting
+    // on ids alone can cancel a batch that is still queued or already finished;
+    // a first token proves every sequence is admitted and actively decoding, so
+    // the cancel exercises the per-group cancelJob path against live peers.
+    const firstToken = async (run: typeof doomed, id: string) => {
+      for await (const ev of run.byId(id).events) {
+        if (ev.type === 'contentDelta') return
+      }
+    }
+    await Promise.all([
+      firstToken(doomed, 'doomed-a'),
+      firstToken(doomed, 'doomed-b'),
+      firstToken(survivor, 'survivor-a'),
+      firstToken(survivor, 'survivor-b')
+    ])
     await cancel({ requestId: doomed.requestId })
 
     const doomedOutcome = await captureFinal(doomed.results)
@@ -742,6 +755,14 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       return {
         passed: false,
         output: `peer batch resolved but produced no content: ${JSON.stringify(results)}`
+      }
+    }
+    // Deterministic content, not just non-empty: the survivor prompts ask for the
+    // word MELON, so a peer that truly decoded through the doomed's cancel says so.
+    if (!results.every((r) => /melon/i.test(r.final.contentText))) {
+      return {
+        passed: false,
+        output: `peer batch produced content but not the expected deterministic output: ${JSON.stringify(results.map((r) => r.final.contentText))}`
       }
     }
 
