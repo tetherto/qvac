@@ -37,18 +37,25 @@ interface FinetuneCapableModel extends AnyModel {
   cancel(): Promise<void>
 }
 
-const finetuneRuntimeState = new Set<string>()
+// Ref-count, not a Set: with an exclusive writer a second finetune queues behind
+// the first, and both register before admission. A Set let the first's cleanup
+// clear the key while the second was still training, so getFinetuneState()
+// reported IDLE mid-run. Each call owns one ref and releases exactly one.
+const finetuneRuntimeState = new Map<string, number>()
 
 function getRunningFinetuneState(modelId: string) {
-  return finetuneRuntimeState.has(modelId)
+  return (finetuneRuntimeState.get(modelId) ?? 0) > 0
 }
 
 function registerRunningFinetune(modelId: string) {
-  finetuneRuntimeState.add(modelId)
+  finetuneRuntimeState.set(modelId, (finetuneRuntimeState.get(modelId) ?? 0) + 1)
 }
 
 export function clearFinetuneRuntimeState(modelId: string) {
-  finetuneRuntimeState.delete(modelId)
+  const count = finetuneRuntimeState.get(modelId)
+  if (count === undefined) return
+  if (count <= 1) finetuneRuntimeState.delete(modelId)
+  else finetuneRuntimeState.set(modelId, count - 1)
 }
 
 export function getFinetuneStateFromCheckpoints(options: FinetuneOptions): FinetuneStatus {
@@ -107,11 +114,9 @@ export async function startFinetune(
   const model = getModel(request.modelId) as FinetuneCapableModel
   validateExplicitFinetuneOperation(request)
 
-  // Mark RUNNING before the async begin() so an immediate getFinetuneState()
-  // poll observes RUNNING, not IDLE. register is a no-op when a finetune is
-  // already running on this model, so only clear on a failed begin() if this
-  // call actually set the flag.
-  const wasRunning = getRunningFinetuneState(request.modelId)
+  // Take a ref before the async begin() so an immediate getFinetuneState() poll
+  // observes RUNNING, not IDLE. This call owns exactly one ref and releases it
+  // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
 
   // Scope the run into the registry so cancel({ requestId }) and
@@ -124,7 +129,7 @@ export async function startFinetune(
       modelId: request.modelId
     })
     .catch((err: unknown) => {
-      if (!wasRunning) clearFinetuneRuntimeState(request.modelId)
+      clearFinetuneRuntimeState(request.modelId)
       throw err
     })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
