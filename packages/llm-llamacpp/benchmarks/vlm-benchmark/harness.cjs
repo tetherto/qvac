@@ -229,10 +229,21 @@ async function ensureBlob (blob) {
   return [plan.modelName, modelDir]
 }
 
-// Human-readable origin URL for the [VLMMETA] provenance marker.
+// Human-readable origin URL for the [VLMMETA] provenance marker. On this leg ensureBlob()
+// hands the name to ensureModel(), which fetches and sha256-verifies the manifest entry and
+// never looks at downloadUrl, so report the manifest's URL. Reporting the caller's would name
+// bytes that were never fetched: a json: spec can pair modelName Qwen3.5-0.8B-Q8_0.gguf with
+// any URL it likes, and the manifest bytes are what actually run.
 function displayUrl (blob) {
   const plan = resolveBlob(blob)
-  if (plan.downloadUrl) return plan.downloadUrl
+  if (plan.downloadUrl) {
+    try {
+      const entry = resolveModelEntry(plan.modelName)
+      return entry.urls[0]
+    } catch (_) {
+      return plan.downloadUrl
+    }
+  }
   const s = blob.source || {}
   return `registry:${s.source || ''}/${s.path || ''}`
 }
