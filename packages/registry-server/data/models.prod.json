@@ -8356,5 +8356,71 @@
     "licenseId": "MIT",
     "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
     "notes": "Q8_0 GGUF conversion of ai4bharat/indic-conformer"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M on-device vision-language model from QVAC.",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy"],
+    "notes": "Lossless against the FP32 reference. Pair with the mmproj-visionpsy-nano-460m-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M on-device vision-language model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy"],
+    "notes": "Imatrix-calibrated build, recommended size/quality trade-off for mobile. Pair with the mmproj-visionpsy-nano-460m-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for VisionPsy Nano 460M",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy"],
+    "notes": "Required by every VisionPsy Nano 460M variant.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M Flash low-latency vision-language model from QVAC.",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy", "flash"],
+    "notes": "Flash processes far fewer visual tokens than the base model for much faster time-to-first-token. Pair with the mmproj-visionpsy-nano-460m-flash-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M Flash low-latency vision-language model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy", "flash"],
+    "notes": "Imatrix-calibrated build, recommended size/quality trade-off for mobile. Pair with the mmproj-visionpsy-nano-460m-flash-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for VisionPsy Nano 460M Flash",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy", "flash"],
+    "notes": "Required by every VisionPsy Nano 460M Flash variant. Not interchangeable with the non-Flash projector.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
   }
 ]

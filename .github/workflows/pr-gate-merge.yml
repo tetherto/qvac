@@ -18,8 +18,15 @@ permissions:
   packages: read
 
 concurrency:
+  # Cancel a superseded in-flight run when a newer event (e.g. a prebuild
+  # label) arrives for the same PR. This gate only READS prebuild statuses (it
+  # no longer builds anything), so cancelling an older run is free and closes a
+  # race: a run started before the label uses a static freshness threshold and
+  # could otherwise trust a pre-label "skipped = success" while the newer
+  # labeled build is still running. Killing the older run leaves only the newer
+  # run, which waits for the real build.
   group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   fork-approval:
@@ -121,7 +128,7 @@ jobs:
       # Package dir names mostly match the filter/job key (packages/<key>),
       # except vla (packages/vla-ggml) - mapped explicitly here so
       # sanity-checks' workdir is always correct. Two outputs: a flat name
-      # list (for prebuilds-caller's `contains(...)` checks) and a
+      # list (intersected with PREBUILD_KEYS in verify-prebuilds) and a
       # name+path list (for the sanity-checks matrix's workdir).
       - name: Build package lists
         id: pkglist
@@ -162,20 +169,47 @@ jobs:
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ matrix.path }}
 
-  prebuilds-caller:
+  # Verifies prebuilds without triggering them. Each prebuild-bearing
+  # on-pr-<pkg>.yml posts a qvac/prebuild-<pkg> commit status on the PR head SHA
+  # and stamps its own run URL into the status target_url. A status is trusted
+  # only when the run that produced it is the on-pr-<pkg> workflow AND was
+  # triggered at/after this PR event (run.created_at >= pull_request.updated_at).
+  # That binds the status to a run from the current-or-newer event, so a
+  # superseded pre-label run's "skipped = success" cannot pass the gate just
+  # because its timestamp happens to post-date the label. The producing run is
+  # read by the id embedded in the status, so this never depends on the Actions
+  # API having listed the newest run for the SHA (no listing-lag window).
+  verify-prebuilds:
     needs: [authorize, changes, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/prebuilds-caller.yml
-    secrets: inherit
-    with:
-      changed-packages: ${{ needs.changes.outputs.packages || '[]' }}
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+      contents: read
+      statuses: read
+      actions: read
+    steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so verification logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify addon prebuild statuses on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
+          # Freshness threshold: the moment this PR event fired. The run that
+          # produced a trusted prebuild status must have been triggered at/after
+          # this (run.created_at >= PR_UPDATED_AT), which rejects statuses from
+          # runs of an earlier event (e.g. the pre-label opened/synchronize run).
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+        run: node .github/scripts/prebuild-status/verify.mjs
 
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
@@ -189,7 +223,15 @@ jobs:
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
   qvac-merge-guard:
-    needs: [authorize, changes, sanity-checks, prebuilds-caller, sdk-pod-checks]
+    needs:
+      [
+        fork-approval,
+        authorize,
+        changes,
+        sanity-checks,
+        verify-prebuilds,
+        sdk-pod-checks,
+      ]
     if: |
       always() && !cancelled() &&
       (needs.changes.result == 'success' || needs.changes.result == 'skipped')
@@ -198,6 +240,12 @@ jobs:
       packages: read
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped' }}
-      build-status: ${{ needs.prebuilds-caller.result == 'success' || needs.prebuilds-caller.result == 'skipped' }}
-      general-checks-status: ${{ needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped' }}
+      # A skipped gated job maps to success ONLY when the PR was actually
+      # authorized. Without this, an unapproved fork (fork-approval failed,
+      # authorize skipped, or authorize returned allowed=false) would skip
+      # sanity-checks / verify-prebuilds / sdk-pod-checks and their
+      # skipped=success would green the required check. Require the full
+      # authorization chain up front so those skips fail closed instead.
+      sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
+      build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
