@@ -26,7 +26,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Update `parakeet-cpp` to `2026-08-10#1` for Indic Conformer CTC language
+- Update `parakeet-cpp` to `2026-08-10#2` for Indic Conformer CTC language
   masking.
 
 ## [0.2.0] - 2026-08-06
