@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.BertInterface = void 0;
+exports.GGMLBert = exports.IdMapIndexFilter = exports.IdMapIndex = exports.BertInterface = void 0;
 exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
@@ -12,6 +12,46 @@ const addon_1 = require("./addon");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
+function loadIdMapIndex() {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
+    return require("./idMapIndex");
+}
+const LazyIdMapIndex = class {
+    constructor(options) {
+        return new (loadIdMapIndex())(options);
+    }
+    static load(path) {
+        return loadIdMapIndex().load(path);
+    }
+    static loadMmap(path) {
+        return loadIdMapIndex().loadMmap(path);
+    }
+    static loadWithDelta(snapshotPath, deltaPath) {
+        return loadIdMapIndex().loadWithDelta(snapshotPath, deltaPath);
+    }
+    static get Filter() {
+        return exports.IdMapIndexFilter;
+    }
+    static get IdMapIndex() {
+        return exports.IdMapIndex;
+    }
+    static get IdMapIndexFilter() {
+        return exports.IdMapIndexFilter;
+    }
+    static [Symbol.hasInstance](instance) {
+        return instance instanceof loadIdMapIndex();
+    }
+};
+const LazyIdMapIndexFilter = class {
+    constructor() {
+        throw new TypeError("IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()");
+    }
+    static [Symbol.hasInstance](instance) {
+        return instance instanceof loadIdMapIndex().IdMapIndexFilter;
+    }
+};
+exports.IdMapIndex = LazyIdMapIndex;
+exports.IdMapIndexFilter = LazyIdMapIndexFilter;
 /**
  * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
  * entry for single-file models. Matches the C++ shard-expansion contract
@@ -137,7 +177,10 @@ class GGMLBert {
             this._hasActiveResponse = false;
         });
         finalized.catch((err) => {
-            const detail = (err && typeof err === "object" && "message" in err && err.message) ||
+            const detail = (err &&
+                typeof err === "object" &&
+                "message" in err &&
+                err.message) ||
                 err;
             this.logger?.warn?.("Inference response rejected:", detail);
         });
@@ -206,4 +249,6 @@ const cjsExports = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
+cjsExports.IdMapIndex = exports.IdMapIndex;
+cjsExports.IdMapIndexFilter = exports.IdMapIndexFilter;
 module.exports = cjsExports;

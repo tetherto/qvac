@@ -18,15 +18,80 @@ import {
   type BertJobInput,
   type GGMLConfig,
 } from "./addon";
+import type ActualIdMapIndex from "./idMapIndex";
+import type { IdMapIndexFilter as ActualIdMapIndexFilter, IdMapIndexOptions } from "./idMapIndex";
 
-export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon } from "./addon";
+export type {
+  GGMLConfig,
+  NumericLike,
+  AddonConfigurationParams,
+  RuntimeStats,
+  Addon,
+} from "./addon";
+export type {
+  IdMapIndexBitWidth,
+  IdMapIndexOptions,
+  IdMapIndexSearchResult,
+  IdMapIndexStorage,
+} from "./idMapIndex";
 export { BertInterface } from "./addon";
 export type { QvacResponse };
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
-const RUN_BUSY_ERROR_MESSAGE =
-  "Cannot set new job: a job is already set or being processed";
+const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
+
+function loadIdMapIndex() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
+  return require("./idMapIndex") as typeof ActualIdMapIndex;
+}
+
+const LazyIdMapIndex = class {
+  constructor(options: IdMapIndexOptions) {
+    return new (loadIdMapIndex())(options);
+  }
+
+  static load(path: string) {
+    return loadIdMapIndex().load(path);
+  }
+
+  static loadMmap(path: string) {
+    return loadIdMapIndex().loadMmap(path);
+  }
+
+  static loadWithDelta(snapshotPath: string, deltaPath: string) {
+    return loadIdMapIndex().loadWithDelta(snapshotPath, deltaPath);
+  }
+
+  static get Filter() {
+    return IdMapIndexFilter;
+  }
+
+  static get IdMapIndex() {
+    return IdMapIndex;
+  }
+
+  static get IdMapIndexFilter() {
+    return IdMapIndexFilter;
+  }
+
+  static [Symbol.hasInstance](instance: object) {
+    return instance instanceof loadIdMapIndex();
+  }
+};
+
+const LazyIdMapIndexFilter = class {
+  private constructor() {
+    throw new TypeError("IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()");
+  }
+
+  static [Symbol.hasInstance](instance: object) {
+    return instance instanceof loadIdMapIndex().IdMapIndexFilter;
+  }
+};
+
+export const IdMapIndex = LazyIdMapIndex as unknown as typeof ActualIdMapIndex;
+export const IdMapIndexFilter = LazyIdMapIndexFilter as unknown as typeof ActualIdMapIndexFilter;
 
 export interface GGMLBertArgs {
   files: { model: string[] };
@@ -171,7 +236,10 @@ export class GGMLBert {
     });
     finalized.catch((err: unknown) => {
       const detail =
-        (err && typeof err === "object" && "message" in err && (err as { message?: unknown }).message) ||
+        (err &&
+          typeof err === "object" &&
+          "message" in err &&
+          (err as { message?: unknown }).message) ||
         err;
       this.logger?.warn?.("Inference response rejected:", detail);
     });
@@ -254,8 +322,12 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
+  IdMapIndex?: typeof IdMapIndex;
+  IdMapIndexFilter?: typeof IdMapIndexFilter;
 };
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
+cjsExports.IdMapIndex = IdMapIndex;
+cjsExports.IdMapIndexFilter = IdMapIndexFilter;
 module.exports = cjsExports;
