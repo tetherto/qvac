@@ -10,14 +10,15 @@ const { createWavBuffer } = require('./wav-helper')
 // CosyVoice3 is native 24 kHz (Qwen2 speech LM + DiT flow + CausalHiFT vocoder).
 const COSYVOICE_SAMPLE_RATE = 24000
 
-async function loadCosyvoiceTTS(params = {}) {
+// Exported separately so the option mapping (useGPU / NO_GPU / nGpuLayers /
+// per-call controls) is unit-testable without constructing the native engine.
+function buildCosyvoiceLoadOptions(params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models', 'cosyvoice3'))
   const cosyvoiceModelDir = params.cosyvoiceModelDir || defaultModelDir
 
   // Backend selection mirrors runParlerTTS: explicit useGPU wins, else honor the
-  // NO_GPU env (on-device runner forces cpu). CosyVoice3 is CPU-only today, but
-  // keep the same config surface so the helper reads identically to its siblings.
+  // NO_GPU env (on-device runner forces cpu). nGpuLayers is a top-level knob.
   const config = { language: params.language || 'en' }
   if (params.useGPU !== undefined) {
     config.useGPU = params.useGPU
@@ -34,6 +35,7 @@ async function loadCosyvoiceTTS(params = {}) {
     config,
     opts: { stats: true }
   }
+  if (params.nGpuLayers !== undefined) options.nGpuLayers = params.nGpuLayers
   // instruct2 control (dialect / volume / style / raw string) stays a
   // constructor-level option; emotion and pace are the cross-engine options and
   // also work on reload() and per call.
@@ -44,7 +46,11 @@ async function loadCosyvoiceTTS(params = {}) {
   // the logits, so without it a before/after diff measures the sampler rather
   // than the conditioning.
   if (params.seed !== undefined) options.seed = params.seed
+  return options
+}
 
+async function loadCosyvoiceTTS(params = {}) {
+  const options = buildCosyvoiceLoadOptions(params)
   const model = new TTSGgml(options)
   await model.load()
   return model
@@ -130,6 +136,7 @@ async function runCosyvoiceTTS(model, params = {}, expectation = {}) {
 }
 
 module.exports = {
+  buildCosyvoiceLoadOptions,
   loadCosyvoiceTTS,
   runCosyvoiceTTS,
   COSYVOICE_SAMPLE_RATE
