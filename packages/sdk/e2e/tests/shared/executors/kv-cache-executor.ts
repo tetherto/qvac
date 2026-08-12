@@ -35,6 +35,8 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
         test.testId === 'kv-cache-concurrent-same-key-auto'
       )
         return [test.testId, this.concurrentSameKey.bind(this)]
+      if (test.testId === 'kv-cache-auto-concurrency')
+        return [test.testId, this.autoCacheConcurrency.bind(this)]
       if (
         test.testId.startsWith('kv-cache-delete-') ||
         test.testId === 'kv-cache-hypercore-deletion'
@@ -200,6 +202,70 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     return {
       passed: true,
       output: `Same-key cached completions serialized (peak overlap ${peakOverlap}) and both succeeded`
+    }
+  }
+
+  // Different-history kvCache:true turns must decode concurrently with plain
+  // completions, not serialize or starve them; gates on engine avgConcurrentSeq.
+  async autoCacheConcurrency(
+    params: { generationParams?: Record<string, unknown> },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const TOPICS = ['oceans', 'mountains', 'deserts', 'forests']
+
+    const fire = (content: string, useCache: boolean) => {
+      const run = completion({
+        modelId,
+        history: [{ role: 'user', content }],
+        stream: true,
+        ...(useCache ? { kvCache: true } : {}),
+        ...(params.generationParams ? { generationParams: params.generationParams as never } : {})
+      } as never) as { tokenStream: AsyncIterable<string>; stats: Promise<unknown> }
+      return (async () => {
+        let text = ''
+        for await (const t of run.tokenStream) text += t
+        const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
+        return { text, avgConcurrentSeq: stats?.avgConcurrentSeq }
+      })()
+    }
+
+    let results: Array<{ text: string; avgConcurrentSeq?: number }>
+    try {
+      results = await Promise.all([
+        ...TOPICS.map((topic) => fire(`Tell me about ${topic} in detail.`, true)),
+        ...TOPICS.map((topic) => fire(`Name one fact about ${topic}.`, false))
+      ])
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Mixed auto-cache + plain completions threw: ${msg}` }
+    }
+
+    const empty = results.filter((r) => r.text.length === 0).length
+    if (empty > 0) {
+      return { passed: false, output: `${empty}/${results.length} completions produced no output` }
+    }
+
+    const maxSeq = (group: typeof results) =>
+      group.reduce<number>((m, r) => (typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m), 0)
+    const autoSeq = maxSeq(results.slice(0, TOPICS.length))
+    const plainSeq = maxSeq(results.slice(TOPICS.length))
+
+    if (autoSeq <= 1) {
+      return {
+        passed: false,
+        output: `Different-history auto-cache turns serialized (engine avgConcurrentSeq ${autoSeq} <= 1)`
+      }
+    }
+    if (plainSeq <= 1) {
+      return {
+        passed: false,
+        output: `Plain completions starved behind auto-cache turns (engine avgConcurrentSeq ${plainSeq} <= 1)`
+      }
+    }
+    return {
+      passed: true,
+      output: `Auto-cache turns and plain completions both decode concurrently (avgConcurrentSeq auto=${autoSeq.toFixed(2)} plain=${plainSeq.toFixed(2)})`
     }
   }
 

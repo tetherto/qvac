@@ -706,6 +706,9 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
     )
     const survivor = mkBatch('survivor', params.survivorPredict, 'Reply with only the word MELON.')
 
+    // Wait for native admission (ids resolve) so the cancel hits cancelJob, not
+    // the cancel-before-begin path.
+    await Promise.all([doomed.ids, survivor.ids])
     await cancel({ requestId: doomed.requestId })
 
     const doomedOutcome = await captureFinal(doomed.results)

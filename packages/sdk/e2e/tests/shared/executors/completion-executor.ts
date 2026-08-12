@@ -154,12 +154,9 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
   }
 
-  // Proves the model actually decodes several completions at once, not just
-  // that they all eventually resolve. Fires CONCURRENCY streamed completions
-  // against a parallel>1 model, times each request's first->last token, and
-  // asserts at least two decode intervals overlap. A serialized (parallel=1)
-  // model admits one at a time, so request N's first token only lands after
-  // request N-1's last — peak overlap would be 1 and this test would fail.
+  // Proves real simultaneous decoding on a parallel>1 model. Gates on engine
+  // avgConcurrentSeq > 1 — client interval overlap alone can't prove it, since
+  // transport buffering can make a serialized server's frames overlap client-side.
   async concurrentOverlap(
     params: CompletionTestParams,
     expectation: Expectation
@@ -180,7 +177,8 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
           if (start === 0) start = Date.now()
           text += token
         }
-        return { start, end: Date.now(), text }
+        const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
+        return { start, end: Date.now(), text, avgConcurrentSeq: stats?.avgConcurrentSeq }
       })
     )
 
@@ -205,12 +203,21 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
         output: `${empty}/${CONCURRENCY} concurrent completions produced no output`
       }
     }
-    if (peakOverlap < 2) {
+
+    const seqs = intervals.map((i) => i.avgConcurrentSeq)
+    const maxSeq = seqs.reduce<number>((m, s) => (typeof s === 'number' && s > m ? s : m), 0)
+    if (!seqs.some((s) => typeof s === 'number')) {
+      return {
+        passed: false,
+        output: 'Engine did not report avgConcurrentSeq; cannot prove native concurrency'
+      }
+    }
+    if (maxSeq <= 1) {
       return {
         passed: false,
         output:
-          `Expected concurrent decoding on a parallel>1 model; peak overlap was ` +
-          `${peakOverlap} (requests decoded serially)`
+          `Engine avgConcurrentSeq peaked at ${maxSeq} (<= 1): the backend decoded ` +
+          `serially, not concurrently. Client interval peak was ${peakOverlap}/${CONCURRENCY}.`
       }
     }
     const failed = intervals
@@ -222,7 +229,7 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
 
     return {
       passed: true,
-      output: `Concurrent decoding proven: peak ${peakOverlap}/${CONCURRENCY} overlapping on parallel:4`
+      output: `Concurrent decoding proven: engine avgConcurrentSeq peaked at ${maxSeq.toFixed(2)}, client interval peak ${peakOverlap}/${CONCURRENCY}`
     }
   }
 
