@@ -11,7 +11,9 @@ import {
   type EmbedStats,
   type TtsStats,
   type DiffusionStats,
-  type VideoStats
+  type VideoStats,
+  type WorldStats,
+  type WorldSceneStats
 } from '@/schemas'
 import { readModelExecutionMs } from '@/profiling/model-execution'
 import type { ProfilingEvent, ProfilingEventKind } from '@/profiling/types'
@@ -313,6 +315,34 @@ registerOperationMetrics<{ modelId?: string }, { stats?: VideoStats }>({
       gauges['totalVideoFrames'] = res.stats.totalVideoFrames
     if (res.stats.videoFrames !== undefined) gauges['videoFrames'] = res.stats.videoFrames
     if (res.stats.fps !== undefined) gauges['fps'] = res.stats.fps
+    return Object.keys(gauges).length > 0 ? gauges : undefined
+  }
+})
+
+registerOperationMetrics<{ modelId?: string }, { stats?: WorldStats }>({
+  op: 'worldStep',
+  kind: 'handler',
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    if (!res.stats) return undefined
+    const gauges: Record<string, number> = {}
+    if (res.stats.stepMs !== undefined) gauges['stepMs'] = res.stats.stepMs
+    if (res.stats.totalStepMs !== undefined) gauges['totalStepMs'] = res.stats.totalStepMs
+    if (res.stats.totalSteps !== undefined) gauges['totalSteps'] = res.stats.totalSteps
+    if (res.stats.totalFrames !== undefined) gauges['totalFrames'] = res.stats.totalFrames
+    if (res.stats.frames !== undefined) gauges['frames'] = res.stats.frames
+    return Object.keys(gauges).length > 0 ? gauges : undefined
+  }
+})
+
+registerOperationMetrics<{ modelId?: string }, { stats?: WorldSceneStats }>({
+  op: 'worldCreateScene',
+  kind: 'handler',
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    if (!res.stats) return undefined
+    const gauges: Record<string, number> = {}
+    if (res.stats.sceneCreateMs !== undefined) gauges['sceneCreateMs'] = res.stats.sceneCreateMs
     return Object.keys(gauges).length > 0 ? gauges : undefined
   }
 })

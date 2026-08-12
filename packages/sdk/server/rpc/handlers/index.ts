@@ -27,6 +27,8 @@ import { handleHeartbeat } from './heartbeat'
 import { handleDiffusionStream } from './diffusion-stream'
 import { handleVideoStream } from './video-stream'
 import { handleUpscaleStream } from './upscale-stream'
+import { handleWorldStep } from './world-step'
+import { handleWorldCreateScene } from './world-create-scene'
 import { handlePluginInvoke, handlePluginInvokeStream } from './plugin-invoke'
 import {
   handleModelRegistryList,
@@ -69,6 +71,8 @@ export const handlers = {
   diffusionStream: handleDiffusionStream,
   videoStream: handleVideoStream,
   upscaleStream: handleUpscaleStream,
+  worldStep: handleWorldStep,
+  worldCreateScene: handleWorldCreateScene,
   pluginInvoke: handlePluginInvoke,
   pluginInvokeStream: handlePluginInvokeStream,
   modelRegistryList: handleModelRegistryList,

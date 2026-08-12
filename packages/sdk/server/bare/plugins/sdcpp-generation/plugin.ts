@@ -7,6 +7,8 @@ import ImgStableDiffusion, {
   type VideoStableDiffusionArgs
 } from '@qvac/diffusion-cpp'
 import addonLogging from '@qvac/diffusion-cpp/addonLogging'
+import WorldStableDiffusion from '@qvac/diffusion-cpp/world'
+import type { WorldConfig } from '@qvac/diffusion-cpp/world'
 import {
   definePlugin,
   defineHandler,
@@ -17,6 +19,10 @@ import {
   videoStreamResponseSchema,
   upscaleRequestSchema,
   upscaleStreamResponseSchema,
+  worldStepRequestSchema,
+  worldStepStreamResponseSchema,
+  worldSceneRequestSchema,
+  worldSceneStreamResponseSchema,
   ModelType,
   ADDON_DIFFUSION,
   type CreateModelParams,
@@ -32,6 +38,12 @@ import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 import { diffusion } from './ops/diffusion'
 import { markLtxVideoModel, markMoeCapableVideoModel, video } from './ops/video'
 import { upscale } from './ops/upscale'
+import {
+  installDeferredWorldLoad,
+  markWorldModel,
+  worldCreateScene,
+  worldStep
+} from './ops/world'
 
 type DiffusionArtifactKey =
   | 'clipLModelPath'
@@ -45,6 +57,7 @@ type DiffusionArtifactKey =
   | 'audioVaeModelPath'
   | 'embeddingsConnectorsModelPath'
   | 'esrganModelPath'
+  | 'taehvModelPath'
 
 // Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
 // mapping. Used by both the diffusion-mode (post-generation upscaler) and the
@@ -124,6 +137,33 @@ export const diffusionPlugin = definePlugin({
       )
     }
 
+    // ABot-World walk sessions have their own layout: the primary model is
+    // the ABot DiT, `taehvModelSrc` is the streaming pixel decoder, and the
+    // `world` block carries the session config. Both are world-only, so a
+    // wrong combination fails loudly before any download.
+    if (cfg.taehvModelSrc && cfg.mode !== 'world') {
+      throw new ModelLoadFailedError(
+        "modelConfig.taehvModelSrc selects the ABot-World walk layout and requires mode: 'world'."
+      )
+    }
+    if (cfg.mode === 'world') {
+      if (!cfg.taehvModelSrc) {
+        throw new ModelLoadFailedError(
+          "modelConfig.taehvModelSrc is required in world mode. Provide the taehv (taew2.2) streaming pixel decoder before loading the walk session."
+        )
+      }
+      if (!cfg.world?.scenePack) {
+        throw new ModelLoadFailedError(
+          'modelConfig.world.scenePack is required in world mode: the absolute path the walk session loads its scene pack from (and worldCreateScene writes it to).'
+        )
+      }
+    }
+    if (cfg.world && cfg.mode !== 'world') {
+      throw new ModelLoadFailedError(
+        "modelConfig.world configures the ABot-World walk session and is only valid with mode: 'world'."
+      )
+    }
+
     // Standalone-upscaler mode never references auxiliary models: the primary
     // modelSrc IS the ESRGAN file. Skip resolution to avoid downloading
     // unused encoders/VAEs and to keep load fast.
@@ -142,6 +182,7 @@ export const diffusionPlugin = definePlugin({
       uncondModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
+      taehvModelSrc,
       upscaler,
       ...rest
     } = cfg
@@ -166,8 +207,9 @@ export const diffusionPlugin = definePlugin({
       )
     }
 
-    // Video jobs do not apply ESRGAN so we drop the whole `upscaler` object.
-    const effectiveUpscaler = cfg.mode === 'video' ? undefined : upscaler
+    // Video and world jobs do not apply ESRGAN so we drop the whole
+    // `upscaler` object.
+    const effectiveUpscaler = cfg.mode === 'video' || cfg.mode === 'world' ? undefined : upscaler
     const { model_src: esrganModelSrc, ...upscalerRuntime } = effectiveUpscaler ?? {}
     const runtimeConfig = {
       ...rest,
@@ -185,6 +227,7 @@ export const diffusionPlugin = definePlugin({
       uncondModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
+      taehvModelSrc,
       esrganModelSrc
     }
     const hasSources = Object.values(sources).some(Boolean)
@@ -205,6 +248,7 @@ export const diffusionPlugin = definePlugin({
       uncondModelPath,
       audioVaeModelPath,
       embeddingsConnectorsModelPath,
+      taehvModelPath,
       esrganModelPath
     ] = await Promise.all([
       clipLModelSrc ? resolve(clipLModelSrc) : undefined,
@@ -217,6 +261,7 @@ export const diffusionPlugin = definePlugin({
       uncondModelSrc ? resolve(uncondModelSrc) : undefined,
       audioVaeModelSrc ? resolve(audioVaeModelSrc) : undefined,
       embeddingsConnectorsModelSrc ? resolve(embeddingsConnectorsModelSrc) : undefined,
+      taehvModelSrc ? resolve(taehvModelSrc) : undefined,
       esrganModelSrc ? resolve(esrganModelSrc) : undefined
     ])
 
@@ -233,6 +278,7 @@ export const diffusionPlugin = definePlugin({
         ...(uncondModelPath && { uncondModelPath }),
         ...(audioVaeModelPath && { audioVaeModelPath }),
         ...(embeddingsConnectorsModelPath && { embeddingsConnectorsModelPath }),
+        ...(taehvModelPath && { taehvModelPath }),
         ...(esrganModelPath && { esrganModelPath })
       }
     }
@@ -280,6 +326,64 @@ export const diffusionPlugin = definePlugin({
         logger,
         opts: { stats: true }
       })
+      return { model }
+    }
+
+    if (config.mode === 'world') {
+      const taehvModelPath = artifacts?.['taehvModelPath']
+      if (!taehvModelPath) {
+        throw new ModelLoadFailedError(
+          'modelConfig.taehvModelSrc is required in world mode. ' +
+            'Provide the taehv (taew2.2) streaming pixel decoder before loading the walk session.'
+        )
+      }
+      const worldBlock = config.world
+      if (!worldBlock?.scenePack) {
+        throw new ModelLoadFailedError(
+          'modelConfig.world.scenePack is required in world mode: the absolute ' +
+            'path the walk session loads its scene pack from (and ' +
+            'worldCreateScene writes it to).'
+        )
+      }
+
+      // The world addon takes camelCase session keys; the SDK-facing `world`
+      // block uses this plugin's snake_case convention. Map explicitly so the
+      // schema and the addon contract can evolve independently.
+      const addonConfig: WorldConfig = {
+        ...(config.threads !== undefined && { threads: config.threads }),
+        ...(config.device === 'cpu' && { backend: 'cpu' }),
+        ...(worldBlock.seed !== undefined && { seed: worldBlock.seed }),
+        ...(worldBlock.kv_cache !== undefined && { kvCache: worldBlock.kv_cache }),
+        ...(worldBlock.num_frame_per_block !== undefined && {
+          numFramePerBlock: worldBlock.num_frame_per_block
+        }),
+        ...(worldBlock.local_attn_size !== undefined && {
+          localAttnSize: worldBlock.local_attn_size
+        }),
+        ...(worldBlock.frame_jpeg_quality !== undefined && {
+          frameJpegQuality: worldBlock.frame_jpeg_quality
+        })
+      }
+
+      const model = new WorldStableDiffusion({
+        files: {
+          model: modelPath,
+          taehv: taehvModelPath,
+          scene: worldBlock.scenePack
+        },
+        config: addonConfig,
+        logger,
+        opts: { stats: true }
+      })
+      markWorldModel(model, {
+        scenePath: worldBlock.scenePack,
+        ...(artifacts?.['t5XxlModelPath'] && { t5Path: artifacts['t5XxlModelPath'] }),
+        ...(artifacts?.['vaeModelPath'] && { vaePath: artifacts['vaeModelPath'] })
+      })
+      // The SDK loads models eagerly, but the walk session's native load
+      // needs the scene pack file, which worldCreateScene may only write
+      // later. Defer the native load until the pack exists.
+      installDeferredWorldLoad(model)
       return { model }
     }
 
@@ -425,6 +529,25 @@ export const diffusionPlugin = definePlugin({
       // back to soft-cancel.
       cancel: { scope: 'none' },
       handler: upscale
+    }),
+    worldStep: defineHandler({
+      requestSchema: worldStepRequestSchema,
+      responseSchema: worldStepStreamResponseSchema,
+      streaming: true,
+      // Cancel has block granularity: the engine finishes the current DiT
+      // block internally, remaining frame delivery stops and the step
+      // rejects with the typed Diffusion/Cancelled error.
+      cancel: { scope: 'model', hard: true },
+      handler: worldStep
+    }),
+    worldCreateScene: defineHandler({
+      requestSchema: worldSceneRequestSchema,
+      responseSchema: worldSceneStreamResponseSchema,
+      streaming: true,
+      // Scene creation is uninterruptible (the engine exposes no abort hook
+      // for the umT5 + VAE encode) — SDK falls back to soft-cancel.
+      cancel: { scope: 'none' },
+      handler: worldCreateScene
     })
   },
 

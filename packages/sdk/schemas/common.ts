@@ -57,7 +57,11 @@ import {
   videoStreamRequestSchema,
   videoStreamResponseSchema,
   upscaleStreamRequestSchema,
-  upscaleStreamResponseSchema
+  upscaleStreamResponseSchema,
+  worldStepStreamRequestSchema,
+  worldStepStreamResponseSchema,
+  worldSceneStreamRequestSchema,
+  worldSceneStreamResponseSchema
 } from './sdcpp-config'
 import {
   finetuneRequestSchema,
@@ -117,6 +121,8 @@ export const requestSchema = z.union([
   diffusionStreamRequestSchema,
   videoStreamRequestSchema,
   upscaleStreamRequestSchema,
+  worldStepStreamRequestSchema,
+  worldSceneStreamRequestSchema,
   finetuneRequestSchema,
   pluginInvokeRequestSchema,
   pluginInvokeStreamRequestSchema,
@@ -162,6 +168,8 @@ export const responseSchema = z.discriminatedUnion('type', [
   diffusionStreamResponseSchema,
   videoStreamResponseSchema,
   upscaleStreamResponseSchema,
+  worldStepStreamResponseSchema,
+  worldSceneStreamResponseSchema,
   finetuneResponseSchema,
   finetuneProgressResponseSchema,
   pluginInvokeResponseSchema,

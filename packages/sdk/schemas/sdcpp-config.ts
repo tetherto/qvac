@@ -49,7 +49,7 @@ const cacheModeSchema = z.enum([
 
 export const sdcppConfigSchema = z.object({
   mode: z
-    .enum(['diffusion', 'upscale', 'video'])
+    .enum(['diffusion', 'upscale', 'video', 'world'])
     .default('diffusion')
     .describe(
       'Operation mode for the diffusion plugin. ' +
@@ -65,10 +65,16 @@ export const sdcppConfigSchema = z.object({
         'via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for ' +
         'synchronized audio); otherwise the Wan layout is used (UMT5 text encoder ' +
         'via `t5XxlModelSrc` + VAE). ' +
+        "`'world'` builds an ABot-World interactive walk session (`WorldStableDiffusion`) " +
+        'from the primary model (the ABot DiT) plus `taehvModelSrc` (streaming pixel ' +
+        'decoder) and the `world` block, and exposes worldStep({ ... }) and ' +
+        'worldCreateScene({ ... }). ' +
         'On React Native, loading the video model on-device will likely fail ' +
         'because the video diffusion models currently ' +
         'shipped by the SDK are too large to load on typical mobile devices; ' +
-        'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.'
+        'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead. ' +
+        'The same applies to world mode, whose interactive walk additionally wants a ' +
+        'dedicated >= 20 GB-free GPU (see the @qvac/diffusion-cpp ABot-World guide).'
     ),
   threads: z.number().optional(),
   device: z.enum(['gpu', 'cpu']).optional(),
@@ -194,6 +200,65 @@ export const sdcppConfigSchema = z.object({
         'presence selects the LTX-2 video layout (Gemma text encoder via ' +
         '`llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead ' +
         'of the Wan layout.'
+    ),
+  taehvModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'taehv (taew2.2) streaming pixel decoder — required for ABot-World ' +
+        "(`mode: 'world'`) and only valid there. Decodes each generated walk " +
+        'block to RGB frames in real time.'
+    ),
+  world: z
+    .object({
+      scenePack: z
+        .string()
+        .regex(ABSOLUTE_PATH_PATTERN)
+        .describe(
+          'Absolute path of the scene pack (.safetensors) the walk session ' +
+            'loads. When the file does not exist yet, the session load is ' +
+            'deferred and worldCreateScene({ ... }) writes the pack to exactly ' +
+            'this path — the SDK never accepts output paths on a per-request ' +
+            'basis.'
+        ),
+      seed: z.number().int().optional().describe('Walk noise seed. Defaults to 42.'),
+      kv_cache: z
+        .boolean()
+        .optional()
+        .describe(
+          'Per-layer history KV cache — the main speed knob (~3.7x fewer ' +
+            'frame passes per block). The engine validates it against ' +
+            'local_attn_size at load and fails fast on a window the compiled ' +
+            'KV ring cannot hold.'
+        ),
+      num_frame_per_block: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe('Latent frames the DiT denoises per step. Defaults to the model value (3).'),
+      local_attn_size: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe('History attention window in latent frames. Defaults to the engine value (8).'),
+      frame_jpeg_quality: z
+        .number()
+        .int()
+        .min(0)
+        .max(100)
+        .optional()
+        .describe(
+          'Frame encoding: 0 (default) = lossless PNG; 1..100 = JPEG at that ' +
+            'quality on the standard JPEG scale (higher = better quality / ' +
+            'larger frames; 85 suits remote streaming).'
+        )
+    })
+    .strict()
+    .optional()
+    .describe(
+      "ABot-World walk-session configuration — required for `mode: 'world'`, " +
+        'ignored otherwise. `scenePack` is the only mandatory field.'
     ),
   upscaler: z
     .object({
@@ -925,5 +990,163 @@ export const upscaleStreamResponseSchema = z.object({
 export type UpscaleStreamResponse = z.infer<typeof upscaleStreamResponseSchema>
 
 export type UpscaleClientParams = Omit<UpscaleRequest, 'image'> & {
+  image: Uint8Array
+}
+
+// ============================================
+// ABot-World interactive walk (mode: "world")
+// ============================================
+
+const walkKeySchema = z
+  .enum(['W', 'A', 'S', 'D', 'I', 'J', 'K', 'L'])
+  .describe('One held walk key: W/A/S/D move, I/J/K/L look.')
+
+export const worldKeysSchema = z
+  .union([
+    z.array(walkKeySchema).max(8),
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(255)
+      .describe('Raw 8-bit action mask (bit 0..7 = W,A,S,D,I,J,K,L held).')
+  ])
+  .describe(
+    'Keys held during the generated block: an array of key names or a raw ' +
+      '8-bit action mask (the `ActionFlag` bit values of @qvac/diffusion-cpp/world). ' +
+      'Omit for an idle block.'
+  )
+
+export const worldStatsSchema = z.object({
+  modelLoadMs: z
+    .number()
+    .optional()
+    .describe('Time in milliseconds spent loading the walk session (DiT + taehv + scene pack).'),
+  stepMs: z.number().optional().describe('Native generation time of the most recent block.'),
+  totalStepMs: z
+    .number()
+    .optional()
+    .describe('Cumulative native generation time across all blocks of this session.'),
+  totalSteps: z.number().optional().describe('Number of blocks generated by this session.'),
+  totalFrames: z.number().optional().describe('Cumulative frames delivered by this session.'),
+  frames: z.number().optional().describe('Frames delivered for the most recent block.'),
+  width: z.number().optional().describe('Frame width in pixels.'),
+  height: z.number().optional().describe('Frame height in pixels.'),
+  actionMask: z
+    .number()
+    .optional()
+    .describe('The 8-bit action mask the most recent block was generated under.')
+})
+
+export type WorldStats = z.infer<typeof worldStatsSchema>
+
+export const worldSceneStatsSchema = z.object({
+  sceneCreateMs: z
+    .number()
+    .optional()
+    .describe('Wall-clock time in milliseconds spent creating the scene pack.'),
+  width: z.number().optional().describe('Scene width in pixels (baked into the pack).'),
+  height: z.number().optional().describe('Scene height in pixels (baked into the pack).')
+})
+
+export type WorldSceneStats = z.infer<typeof worldSceneStatsSchema>
+
+export const worldStepRequestSchema = z.object({
+  requestId: z
+    .string()
+    .optional()
+    .describe('Stable identifier for this in-flight step, usable with cancel().'),
+  modelId: z
+    .string()
+    .describe(
+      "The identifier of a model loaded with `modelType: 'diffusion'` and " +
+        "`modelConfig.mode: 'world'`."
+    ),
+  keys: worldKeysSchema.optional()
+})
+
+export type WorldStepRequest = z.input<typeof worldStepRequestSchema>
+
+export const worldStepStreamRequestSchema = worldStepRequestSchema.extend({
+  type: z.literal('worldStep')
+})
+
+export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema>
+
+export const worldStepStreamResponseSchema = z.object({
+  type: z.literal('worldStep'),
+  data: z
+    .string()
+    .optional()
+    .describe('Base64-encoded frame (PNG, or JPEG when the session uses frame_jpeg_quality).'),
+  outputIndex: z.number().optional(),
+  step: z.number().optional().describe('Session-cumulative block counter of the progress tick.'),
+  frames: z.number().optional().describe('Frames delivered for this block (progress tick).'),
+  elapsedMs: z.number().optional(),
+  done: z.boolean().optional(),
+  stats: worldStatsSchema.optional()
+})
+
+export type WorldStepStreamResponse = z.infer<typeof worldStepStreamResponseSchema>
+
+export const worldSceneRequestSchema = z.object({
+  requestId: z
+    .string()
+    .optional()
+    .describe('Stable identifier for this in-flight scene creation.'),
+  modelId: z
+    .string()
+    .describe(
+      "The identifier of a model loaded with `modelType: 'diffusion'`, " +
+        "`modelConfig.mode: 'world'`, `modelConfig.t5XxlModelSrc` and " +
+        '`modelConfig.vaeModelSrc`.'
+    ),
+  prompt: z
+    .string()
+    .min(1)
+    .describe(
+      'Scene description encoded by umT5-XXL. The reference pipeline prefixes ' +
+        "prompts with '| unknown |'; worldCreateScene does the same when the " +
+        'prefix is missing.'
+    ),
+  image: base64StringSchema.describe(
+    'Base64-encoded first-frame image (PNG/JPEG, any size — it is ' +
+      'cover-scaled and center-cropped to the scene dimensions).'
+  ),
+  width: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(32)
+    .optional()
+    .describe('Scene width in pixels (multiple of 32). Defaults to 832, the native resolution.'),
+  height: z
+    .number()
+    .int()
+    .positive()
+    .multipleOf(32)
+    .optional()
+    .describe('Scene height in pixels (multiple of 32). Defaults to 480, the native resolution.')
+})
+
+export type WorldSceneRequest = z.input<typeof worldSceneRequestSchema>
+
+export const worldSceneStreamRequestSchema = worldSceneRequestSchema.extend({
+  type: z.literal('worldCreateScene')
+})
+
+export type WorldSceneStreamRequest = z.input<typeof worldSceneStreamRequestSchema>
+
+export const worldSceneStreamResponseSchema = z.object({
+  type: z.literal('worldCreateScene'),
+  done: z.boolean().optional(),
+  stats: worldSceneStatsSchema.optional()
+})
+
+export type WorldSceneStreamResponse = z.infer<typeof worldSceneStreamResponseSchema>
+
+export type WorldStepClientParams = Omit<WorldStepRequest, 'requestId'>
+
+export type WorldSceneClientParams = Omit<WorldSceneRequest, 'requestId' | 'image'> & {
   image: Uint8Array
 }

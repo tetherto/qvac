@@ -34,6 +34,8 @@ import { handleCancelDelegated } from '@/server/rpc/handlers/cancel-delegated'
 import { handleDiffusionStream } from '@/server/rpc/handlers/diffusion-stream'
 import { handleVideoStream } from '@/server/rpc/handlers/video-stream'
 import { handleUpscaleStream } from '@/server/rpc/handlers/upscale-stream'
+import { handleWorldStep } from '@/server/rpc/handlers/world-step'
+import { handleWorldCreateScene } from '@/server/rpc/handlers/world-create-scene'
 import { handleClassify } from '@/server/rpc/handlers/classify'
 import { handleAudioGenStream } from '@/server/rpc/handlers/audio-gen-stream'
 import { handlePluginInvoke, handlePluginInvokeStream } from '@/server/rpc/handlers/plugin-invoke'
@@ -143,6 +145,8 @@ export const registry: Record<string, HandlerEntry> = {
   diffusionStream: { type: 'stream', handler: handleDiffusionStream },
   videoStream: { type: 'stream', handler: handleVideoStream },
   upscaleStream: { type: 'stream', handler: handleUpscaleStream },
+  worldStep: { type: 'stream', handler: handleWorldStep },
+  worldCreateScene: { type: 'stream', handler: handleWorldCreateScene },
   classify: { type: 'stream', handler: handleClassify },
   pluginInvokeStream: { type: 'stream', handler: handlePluginInvokeStream },
 

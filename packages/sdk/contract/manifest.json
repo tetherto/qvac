@@ -249,6 +249,18 @@
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/videoStream.request",
       "responseSchema": "schema.json#/$defs/videoStream.response"
+    },
+    {
+      "name": "worldCreateScene",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/worldCreateScene.request",
+      "responseSchema": "schema.json#/$defs/worldCreateScene.response"
+    },
+    {
+      "name": "worldStep",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/worldStep.request",
+      "responseSchema": "schema.json#/$defs/worldStep.response"
     }
   ]
 }

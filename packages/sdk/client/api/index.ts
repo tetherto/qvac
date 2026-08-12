@@ -37,6 +37,13 @@ export { classify } from './classify'
 export { video, type VideoProgressTick } from './video'
 export { upscale } from './upscale'
 export {
+  worldStep,
+  worldCreateScene,
+  type WorldProgressTick,
+  type WorldStepResult,
+  type WorldSceneResult
+} from './world'
+export {
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
