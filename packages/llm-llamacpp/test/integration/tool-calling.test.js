@@ -120,7 +120,7 @@ function clonePrompt() {
 function buildPrompt2(assistantOutput) {
   const prompt = clonePrompt()
   prompt.push({ role: 'assistant', content: assistantOutput })
-  prompt.push({ role: 'user', content: 'Search tv above $2000' })
+  prompt.push({ role: 'user', content: 'Search for TVs under $2000' })
   return prompt
 }
 
