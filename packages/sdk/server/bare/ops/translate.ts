@@ -113,14 +113,12 @@ export async function* translate(
   const fromLanguage = getLanguage(from)
   const toLanguage = getLanguage(to)
 
-  // Open a request-scoped lifecycle for both engine branches. LLM-
-  // translate inherits llamacpp-completion's `{ scope: "model",
-  // hard: true }` cancel surface; NMT-translate inherits nmtcpp's
-  // `{ scope: "none" }` — so the addon-cancel wiring below only
-  // engages on the LLM path. NMT cancel is purely soft: the loop
-  // exits on `signal.aborted`, scope unwinds, and the addon may run
-  // to completion in the background — acceptable because the result
-  // is dropped either way.
+  // Open a request-scoped lifecycle for both engine branches. The LLM
+  // path cancels only its own run response (wired below), so a peer
+  // completion on the same model keeps running; NMT-translate has no
+  // addon cancel — the loop exits on `signal.aborted`, scope unwinds,
+  // and the addon may run to completion in the background, which is
+  // fine because the result is dropped either way.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateServerRequestId(),
     kind: 'translate',
