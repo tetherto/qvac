@@ -1,19 +1,19 @@
 # Aggregated Benchmark Results
 
-This summary consolidates benchmarking results across all quantizations and speaker groups.
-
-The rows below are **whisper-engine** runs recorded before the whisper +
-parakeet merge; the `Model` column names the npm package that produced them
-(`@qvac/transcription-whispercpp`, now `@qvac/asr-ggml` with
-`engine: 'whisper'`) and is kept verbatim so the measurements stay
-attributable. Add an `Engine` column when the first parakeet rows land.
+This summary consolidates benchmarking results across model configurations.
+The Indic Conformer rows use the first 50 FLEURS test samples for each language
+on an AMD Ryzen 9 9950X3D CPU with four inference threads.
 
 Original Model: [Whisper-Tiny](https://huggingface.co/openai/whisper-tiny)
 
-| Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |
-|---------------|--------------|---------|-------|-----|-----|-----|---------|-------|
-| clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | - | 71.72 | 69.27 | Librispeech | Performed on GPU |
-| clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | ✓ | 62.30 | 57.87 | Librispeech | Performed on GPU |
+| Engine | Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |
+|--------|---------------|--------------|---------|-------|-----|-----|-----|---------|-------|
+| whisper | clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | - | 71.72 | 69.27 | LibriSpeech | Performed on GPU |
+| whisper | clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | ✓ | 62.30 | 57.87 | LibriSpeech | Performed on GPU |
+| parakeet | clean | q8_0 | 0.2.0 | indic-conformer-ctc | - | 5.37 | 2.97 | FLEURS Hindi | CPU, 50 samples |
+| parakeet | clean | q8_0 | 0.2.0 | indic-conformer-ctc | - | 10.81 | 6.07 | FLEURS Gujarati | CPU, 50 samples |
+| parakeet | clean | q8_0 | 0.2.0 | indic-conformer-ctc | - | 8.65 | 3.67 | FLEURS Kannada | CPU, 50 samples |
+| parakeet | clean | q8_0 | 0.2.0 | indic-conformer-ctc | - | 17.96 | 12.04 | FLEURS Tamil | CPU, 50 samples |
 
 ## Reference
 

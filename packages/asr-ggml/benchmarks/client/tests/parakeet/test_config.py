@@ -50,10 +50,20 @@ class TestDatasetConfig:
         assert config.dataset_type == DatasetType.FLEURS
         assert config.language == Language.MANDARIN_CHINESE
 
+    @pytest.mark.parametrize(
+        "language",
+        [Language.HINDI, Language.GUJARATI, Language.KANNADA, Language.TAMIL],
+    )
+    def test_indic_fleurs_languages(self, language):
+        config = DatasetConfig(
+            dataset_type=DatasetType.FLEURS,
+            language=language,
+        )
+        assert config.language == language
+
 
 class TestModelConfig:
     def test_default_model_type(self):
-        # Skip path validation for testing
         config = ModelConfig.model_construct(
             path="./models/test",
             model_type=ModelType.TDT
@@ -67,6 +77,28 @@ class TestModelConfig:
         )
         assert config.model_type == ModelType.CTC
 
+    def test_indic_conformer_requires_language(self, tmp_path):
+        model_path = tmp_path / "indic.gguf"
+        model_path.touch()
+
+        with pytest.raises(ValueError, match="requires a model language"):
+            ModelConfig(
+                path=str(model_path),
+                model_type=ModelType.INDIC_CONFORMER,
+            )
+
+    def test_indic_conformer_accepts_language(self, tmp_path):
+        model_path = tmp_path / "indic.gguf"
+        model_path.touch()
+
+        config = ModelConfig(
+            path=str(model_path),
+            model_type=ModelType.INDIC_CONFORMER,
+            language="hi",
+        )
+
+        assert config.language == "hi"
+
 
 class TestModelTypes:
     def test_all_model_types(self):
@@ -74,3 +106,4 @@ class TestModelTypes:
         assert ModelType.CTC.value == "ctc"
         assert ModelType.EOU.value == "eou"
         assert ModelType.SORTFORMER.value == "sortformer"
+        assert ModelType.INDIC_CONFORMER.value == "indic-conformer"
