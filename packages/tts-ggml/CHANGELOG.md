@@ -115,6 +115,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Public TypeScript and CommonJS API.** Audio chunks are now declared as
+  their runtime `Int16Array` type, enhancer backend fields are included in
+  `RuntimeStats`, invalid reload sample rates are rejected, and the package
+  root exposes `QvacErrorAddonTTSGgml` and `ERR_CODES` to named import
+  discovery.
+- **Published registry downloader.** The model download command now ships its
+  implementation and runtime registry client dependency.
 - **Audio8 native reload raced synthesis.** The reload path wrote the model's
   configuration from the reload task while a running job read the reference
   voice out of it, and swapped the configuration and the engine under separate
@@ -167,6 +174,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the ignored per-call `TTSRunInput.outputSampleRate`; configure output
+  resampling on the model instead. Added the stable
+  `@qvac/tts-ggml/text-stream-accumulator` helper subpath while retaining the
+  existing deep path.
 - **Parler streaming accepts `config.outputSampleRate` when the enhancer is
   active.** Parler natively streams at 44.1 kHz and rejected a different output
   rate while streaming, because the engine has no seam-free per-chunk resampler.

@@ -114,10 +114,10 @@ npm install @qvac/tts-ggml
 
 
 Requires [Bare](https://github.com/holepunchto/bare) `>=1.19.0`.
-Prebuilds are published for darwin-arm64, android-arm64, ios-arm64;
-Linux x64 / Windows prebuilds coming as demand warrants.  If your
-platform has no prebuild the package falls back to a local build via
-`bare-make` + `cmake-vcpkg` (see [Build from source](#build-from-source)).
+Prebuilds are published for Linux x64/arm64, macOS x64/arm64, Windows x64,
+Android arm64, iOS arm64 devices, and iOS x64/arm64 simulators. Unsupported
+targets must [build from source](#build-from-source); installation does not
+automatically compile a local addon.
 
 ## Model files
 
@@ -166,8 +166,19 @@ audio8-codec-decoder-q8_0.gguf   (~110 MB; also -f16 / -f32)
 audio8-codec-encoder-q8_0.gguf   (~120 MB; also -f16 / -f32; cloning only)
 ```
 
-The package converts these from upstream Resemble Chatterbox / Supertone
-checkpoints via a Python venv pipeline:
+Download the registry-published Chatterbox, Supertonic, and Parler models into
+`./models`:
+
+```bash
+npm run download-models:registry
+npm run download-models:registry -- --group chatterbox,supertonic3
+npm run download-models:registry -- --output /path/to/models
+```
+
+CosyVoice3 and Audio8 are not currently included in that registry command.
+Stage their layouts shown above from local converted artifacts. The package
+converts upstream Chatterbox, Supertonic, and Parler checkpoints via a Python
+venv pipeline:
 
 ```bash
 npm run setup-models   # creates ./venv, installs requirements.txt, runs convert-models.sh
@@ -245,6 +256,18 @@ await response.onUpdate(data => {
   // data.sentenceChunk  — the sentence text that produced this audio
 }).await()
 ```
+
+`runStreaming(textStream, options)` accepts a string, string array, iterable,
+or async iterable. Async iterables default to `accumulateSentences: true` so
+streamed fragments are buffered until a sentence delimiter is reached; strings,
+arrays, and synchronous iterables default to one synthesis job per item. Set
+`accumulateSentences` explicitly to override that behavior. Choose
+`sentenceDelimiterPreset: 'latin'`,
+`'multilingual'`, or `'cjk'`, or provide `sentenceDelimiter: RegExp`.
+`maxBufferScalars` bounds buffered text and forces a flush when reached;
+`flushAfterMs` flushes text that has remained incomplete for that duration.
+Parler description fields and Audio8 `referenceAudio` / `referenceText` may
+also be supplied in the options and remain fixed for the response.
 
 Full runnable demo (with streaming playback):
 `bare examples/chatterbox-sentence-stream-tts.js`
@@ -692,7 +715,7 @@ a one-off encode when a new reference recording is supplied.
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
 | `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
-| `nCtx`                    | number     | 4096       | Cap on the T3 context (prompt + generated speech tokens; 25 tokens ≈ 1 s of audio).  The KV cache is allocated up-front at this length, so it directly bounds memory: the Turbo GGUF's native `n_ctx=8196` would cost ~1.6 GB of f32 KV vs ~390 MB at the defaults (4096 + `f16`).  Pass `0` to use the GGUF's full context |
+| `nCtx`                    | number     | 4096       | Chatterbox T3 context limit for the prompt plus generated speech tokens (25 tokens ≈ 1 s of audio). The KV cache is allocated up front at this length, so the 4096-token default directly bounds memory. Pass `0` to use the GGUF metadata value |
 | `kvCacheType`             | string     | `f16`      | T3 KV-cache dtype: `f32` \| `f16` \| `q8_0`.  `f16` (~50% of f32) is the safe cross-backend default.  `q8_0` stores the cache at ~27% of f32 and decodes 20-30% faster on Metal, but only works on backends with a q8_0 CONT op (CPU, CUDA) — it hard-aborts the multilingual model on Metal, so it is opt-in.  Turbo greedy decoding is byte-identical across all three (upstream-validated).  Pass `f32` for bit-exact pre-quantisation behaviour |
 | `threads`                 | number     | hw.concurrency capped at 4 | |
 | `streamChunkTokens`       | number     | 0          | **>0 enables native chunk streaming** |
@@ -748,7 +771,10 @@ a one-off encode when a new reference recording is supplied.
   above, but the options read more naturally for the "split this long
   string" use case.
 - `model.runStreaming(textStream, opts)` → streaming input + streaming
-  output (see [Sentence streaming](#sentence-streaming--runstreamingasynciter)).
+  output. `opts` accepts `accumulateSentences`, `sentenceDelimiter`,
+  `sentenceDelimiterPreset`, `maxBufferScalars`, `flushAfterMs`, Parler
+  description fields, and Audio8 reference fields (see
+  [Sentence streaming](#sentence-streaming--runstreamingasynciter)).
 
 ### Response shape
 
@@ -776,6 +802,39 @@ response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 
 response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
 ```
+
+### Text helpers
+
+The sentence splitter is available from
+`@qvac/tts-ggml/text-chunker` as `splitTtsText`. The incremental sentence
+buffer is available from `@qvac/tts-ggml/text-stream-accumulator` as
+`accumulateTextStream`. The existing
+`@qvac/tts-ggml/lib/textStreamAccumulator.js` deep path remains supported.
+
+### Errors
+
+`QvacErrorAddonTTSGgml` and `ERR_CODES` are exported from the package root:
+
+```js
+const {
+  QvacErrorAddonTTSGgml,
+  ERR_CODES
+} = require('@qvac/tts-ggml')
+```
+
+| Code | Name |
+|---:|---|
+| 13001 | `FAILED_TO_ACTIVATE` |
+| 13002 | `FAILED_TO_APPEND` |
+| 13003 | `FAILED_TO_GET_STATUS` |
+| 13004 | `FAILED_TO_PAUSE` |
+| 13005 | `FAILED_TO_CANCEL` |
+| 13006 | `FAILED_TO_DESTROY` |
+| 13007 | `FAILED_TO_UNLOAD` |
+| 13008 | `FAILED_TO_LOAD` |
+| 13009 | `FAILED_TO_RELOAD` |
+| 13010 | `FAILED_TO_STOP` |
+| 13011 | `JOB_ALREADY_RUNNING` |
 
 ## Examples
 
@@ -877,10 +936,6 @@ upstream checkpoints into the four / five expected GGUF files).
 **`VoiceEncoder forward failed`** when passing `referenceAudio`** —
 the reference wav is likely < 5 s of clean speech.  Make it longer
 (10–15 s gives the best similarity).
-
-**Crash on process exit with Metal's `[rsets->data count] == 0`
-assertion** — you're running on a build *before* the `s3gen_unload()`
-teardown fix; bump the `tts-cpp` port to `>= 2026-04-21` port-version.
 
 **Slower-than-expected RTF on darwin** — set `config: { useGPU: true }`
 (the default is now CPU; see [Constructor](#constructor--new-ttsggmloptions)

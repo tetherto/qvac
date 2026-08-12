@@ -1,4 +1,5 @@
 import { type QvacResponse } from "@qvac/infer-base";
+import * as errorModule from "./lib/error";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
@@ -163,9 +164,10 @@ interface TTSGgmlRuntimeConfig {
     useGPU?: boolean;
     /**
      * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
-     * native rate. Resamples the native output (24 kHz Chatterbox and
-     * CosyVoice3, 44.1 kHz Supertonic), or the 48 kHz LavaSR-enhanced signal,
-     * before emitting. `TTSOutputChunk.sampleRate` reports the resulting rate.
+     * native rate. Resamples the native output (24 kHz for Chatterbox and
+     * CosyVoice3; 44.1 kHz for Supertonic, Parler, and Audio8), or the 48 kHz
+     * LavaSR-enhanced signal, before emitting. `TTSOutputChunk.sampleRate`
+     * reports the resulting rate.
      *
      * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
      * only accepted there when the LavaSR enhancer is active, because the
@@ -401,12 +403,12 @@ interface InferenceState {
     destroyed: boolean;
 }
 interface TTSOutputChunk {
-    /** PCM audio payload. Kept as `ArrayBuffer` for public API compatibility. */
-    outputArray: ArrayBuffer;
+    /** Signed 16-bit mono PCM audio payload. */
+    outputArray: Int16Array;
     /**
-     * Output sample rate. The native engine rate (24000 for Chatterbox,
-     * 44100 for Supertonic and Parler), or 48000 when the LavaSR enhancer is
-     * active.
+     * Output sample rate. The native engine rate (24000 for Chatterbox and
+     * CosyVoice3; 44100 for Supertonic, Parler, and Audio8), or 48000 when the
+     * LavaSR enhancer is active.
      */
     sampleRate?: number;
 }
@@ -420,6 +422,10 @@ interface RuntimeStats {
     backendDevice?: number;
     /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other GPU. */
     backendId?: number;
+    /** LavaSR enhancer compute device. -1 = not loaded, 0 = CPU, 1 = GPU. */
+    enhancerBackendDevice?: number;
+    /** LavaSR enhancer backend code, using the same values as `backendId`. */
+    enhancerBackendId?: number;
     /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
     gpuUnsupported?: number;
     /**
@@ -458,7 +464,6 @@ interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSCon
     streamOutput?: boolean;
     locale?: string;
     maxChunkScalars?: number;
-    outputSampleRate?: number;
     /**
      * Cancels non-streaming `run()`. An already-aborted signal rejects without
      * native dispatch. Ignored by all streaming paths.
@@ -723,6 +728,8 @@ type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
 type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 declare namespace TTSGgml {
+    export import QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
+    export import ERR_CODES = errorModule.ERR_CODES;
     type TTSGgmlFiles = NamespaceFiles;
     type TTSGgmlRuntimeConfig = NamespaceRuntimeConfig;
     type TTSGgmlOptions = NamespaceOptions;
