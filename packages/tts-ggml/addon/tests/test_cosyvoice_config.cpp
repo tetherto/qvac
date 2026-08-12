@@ -34,6 +34,7 @@ using qvac::ttsggml::cosyvoice::resampleBatchOutput;
 using qvac::ttsggml::cosyvoice::resolveEmittedAudio;
 using qvac::ttsggml::cosyvoice::streamingRequested;
 using qvac::ttsggml::cosyvoice::toEngineOptions;
+using qvac::ttsggml::cosyvoice::toVoiceControls;
 using qvac_errors::StatusError;
 
 namespace {
@@ -124,6 +125,26 @@ private:
 };
 
 } // namespace
+
+// Conditioning plumbing. The vocabulary itself lives in tts-cpp (and is pinned
+// by its own test-voice-controls / test-cosyvoice-instruct); what matters here
+// is that every channel survives the config -> engine hop.
+TEST(CosyvoiceControls, ConfigMapsEveryChannel) {
+  CosyvoiceConfig cfg;
+  cfg.emotion = "happy";
+  cfg.pace = "slow";
+  cfg.instruct = "请用广东话表达。";
+  const auto controls = toVoiceControls(cfg);
+  EXPECT_EQ(controls.emotion, "happy");
+  EXPECT_EQ(controls.pace, "slow");
+  EXPECT_EQ(controls.instruct_text, "请用广东话表达。");
+  EXPECT_FALSE(controls.empty());
+}
+
+TEST(CosyvoiceControls, DefaultConfigIsUnconditioned) {
+  const auto controls = toVoiceControls(CosyvoiceConfig{});
+  EXPECT_TRUE(controls.empty());
+}
 
 TEST(CosyvoiceValidate, EmptyConfigRejected) {
   CosyvoiceConfig cfg;
