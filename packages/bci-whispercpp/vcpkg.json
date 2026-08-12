@@ -11,18 +11,31 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["opencl", "vulkan"],
+      "name": "speech-cpp",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "opencl",
+        "vulkan"
+      ],
       "platform": "android"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["vulkan"],
+      "name": "speech-cpp",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "vulkan"
+      ],
       "platform": "!(osx | ios | android)"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["metal"],
+      "name": "speech-cpp",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "metal"
+      ],
       "platform": "osx | ios"
     }
   ],
@@ -33,12 +46,5 @@
         "gtest"
       ]
     }
-  },
-  "overrides": [
-    {
-      "name": "whisper-cpp",
-      "version": "1.9.1",
-      "port-version": 7
-    }
-  ]
+  }
 }
