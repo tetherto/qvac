@@ -76,6 +76,32 @@ export interface GenerateOptions {
     dcwHighScaler?: number;
     /** Frozen ACE-Step semantic codes; when present, skips the LM stage. */
     audioCodes?: Int32Array;
+    /**
+     * Optional timbre reference: interleaved stereo float PCM at 48 kHz.
+     * Empty / omitted keeps the engine's canonical silence reference.
+     */
+    referenceAudio?: Float32Array;
+    /**
+     * Source / cover audio (same layout as `referenceAudio`). Required when
+     * `taskType` is `"cover"` or `"cover-nofsq"`.
+     */
+    sourceAudio?: Float32Array;
+    /**
+     * Task discriminator. Supported today: `"text2music"` (default) |
+     * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
+     * in the engine yet.
+     */
+    taskType?: 'text2music' | 'cover' | 'cover-nofsq';
+    /**
+     * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
+     * Values < 1 are rejected by the engine until context switching lands.
+     */
+    audioCoverStrength?: number;
+    /**
+     * Blend initial DiT noise toward clean source latents (0..1). 0 = pure noise;
+     * 1 ≈ source latent. Default 0.
+     */
+    coverNoiseStrength?: number;
 }
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
 export interface AudiogenProgress {

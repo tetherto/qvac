@@ -554,6 +554,8 @@ interface TTSGgmlOptions
    * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
    * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
    * Audio8: pass 99 to use Vulkan on Linux and Windows.
+   * CosyVoice3: pass 99 to offload on Metal (macOS / iOS) or OpenCL/Adreno
+   * (Android); other hosts fall back to CPU by policy.
    */
   nGpuLayers?: number;
   /**

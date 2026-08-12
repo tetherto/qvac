@@ -44,6 +44,37 @@ function requireFiniteNumber(value, name, integer = false) {
 function optionalFiniteNumber(value, name, integer = false) {
     return value === undefined ? undefined : requireFiniteNumber(value, name, integer);
 }
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq']);
+function optionalTaskType(value) {
+    if (value === undefined)
+        return undefined;
+    if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
+        throw new Error('audiogen-ggml: taskType must be one of text2music|cover|cover-nofsq');
+    }
+    return value;
+}
+function requireFinitePcm(value, name) {
+    for (const sample of value) {
+        if (!Number.isFinite(sample)) {
+            throw new Error(`audiogen-ggml: ${name} must contain only finite samples`);
+        }
+    }
+}
+function optionalStereoPcm(value, name) {
+    if (value === undefined)
+        return undefined;
+    if (!(value instanceof Float32Array)) {
+        throw new Error(`audiogen-ggml: ${name} must be a Float32Array`);
+    }
+    if ((value.length & 1) !== 0) {
+        throw new Error(`audiogen-ggml: ${name} must be interleaved stereo`);
+    }
+    requireFinitePcm(value, name);
+    return value;
+}
+function isCoverTask(taskType) {
+    return taskType === 'cover' || taskType === 'cover-nofsq';
+}
 /**
  * GGML-backed music generation via the ACE-Step engine. Owns a persistent
  * native engine: the four model stages are loaded once by `load()` and reused
@@ -141,6 +172,12 @@ class AudioGen {
         if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
             throw new Error('audiogen-ggml: audioCodes must be an Int32Array');
         }
+        const taskType = optionalTaskType(opts.taskType);
+        const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio');
+        const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio');
+        if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+            throw new Error(`audiogen-ggml: taskType '${taskType}' requires sourceAudio`);
+        }
         const response = this._job.start();
         try {
             await this._requireAddon().runJob({
@@ -161,7 +198,12 @@ class AudioGen {
                 dcwEnabled: opts.dcwEnabled,
                 dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
                 dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
-                audioCodes: opts.audioCodes
+                audioCodes: opts.audioCodes,
+                referenceAudio,
+                sourceAudio,
+                taskType,
+                audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
+                coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
             });
         }
         catch (error) {

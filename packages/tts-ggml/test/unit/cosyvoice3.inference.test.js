@@ -121,6 +121,39 @@ test('CosyVoice3: ttsParams shape forwards dir/language/streaming/cfm/promptText
   t.absent(params.supertonicModelPath, 'no supertonic fields leaked')
 })
 
+test('CosyVoice3: runCosyvoiceTTS helper forwards GPU options into TTSGgml options', (t) => {
+  const { buildCosyvoiceLoadOptions } = require('../utils/runCosyvoiceTTS')
+
+  const layers = buildCosyvoiceLoadOptions({ nGpuLayers: 99 })
+  t.is(layers.nGpuLayers, 99, 'helper forwards nGpuLayers as a top-level option')
+
+  const gpu = buildCosyvoiceLoadOptions({ useGPU: true })
+  t.is(gpu.config.useGPU, true, 'helper forwards useGPU into config (explicit wins over NO_GPU)')
+  t.absent(gpu.nGpuLayers, 'no nGpuLayers unless requested')
+
+  const none = buildCosyvoiceLoadOptions({})
+  t.absent(none.nGpuLayers, 'omitted nGpuLayers stays omitted')
+})
+
+test('CosyVoice3: GPU options forward to params (useGPU / nGpuLayers)', (t) => {
+  const gpu = createMockedCosyvoiceModel({ extra: { config: { language: 'en', useGPU: true } } })
+  t.is(gpu._buildTtsParams().useGPU, true, 'useGPU:true forwards to params')
+
+  const layers = createMockedCosyvoiceModel({
+    extra: { config: { language: 'en' }, nGpuLayers: 99 }
+  })
+  t.is(layers._buildTtsParams().nGpuLayers, 99, 'nGpuLayers forwards to params')
+
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        extra: { config: { language: 'en', useGPU: false }, nGpuLayers: 99 }
+      }),
+    /conflicts/,
+    'useGPU:false + nGpuLayers:99 conflict rejects'
+  )
+})
+
 test('CosyVoice3: per-component model paths forward to params', (t) => {
   const model = createMockedCosyvoiceModel({
     files: {

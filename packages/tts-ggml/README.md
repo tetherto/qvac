@@ -6,8 +6,8 @@ GGML library.  Wraps multiple engines under one package: **Chatterbox**
 v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), **CosyVoice3**
 (Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU with opt-in
-Android OpenCL/Adreno GPU offload), and **Audio8** (DualAR + neural
-codec, in-process voice cloning, desktop Vulkan), plus optional
+Metal on Apple and OpenCL/Adreno GPU offload on Android), and **Audio8**
+(DualAR + neural codec, in-process voice cloning, desktop Vulkan), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 
@@ -65,7 +65,7 @@ obvious for each job.
 | Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
 | Voice cloning at 44.1 kHz with nothing pre-baked | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Clones from a reference wav **and its transcript**, encoded in-process — no enrolment step, no voice profile. Whole-utterance only (no native chunk streaming). |
 | Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
-| Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in Android OpenCL/Adreno GPU offload; native 24 kHz. |
+| Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in GPU offload (Metal on Apple, OpenCL/Adreno on Android); native 24 kHz. |
 | Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
 | Voice cloning with noisy input audio | Any engine above + `lavasr-denoiser.gguf` | Post-process (batch path); cleans before optional enhancement. See [Speech enhancement (LavaSR)](#speech-enhancement-lavasr). |
 | 48 kHz bandwidth-extended output | Any engine above + `lavasr-enhancer.gguf` | Post-process, not a TTS engine. Optional `lavasr-denoiser.gguf` first (batch path). |
@@ -149,7 +149,7 @@ parler-large-v1-q8_0.gguf  (~2.8 GB; also -q6_k)
 parler-indic-q8_0.gguf     (~1.3 GB; also -f16 / -f32; 21 Indic languages)
 
 # CosyVoice3 (FunAudioLLM/CosyVoice; Qwen2 speech LM + DiT flow + CausalHiFT;
-# 24 kHz, CPU with opt-in Android GPU) — a model DIRECTORY (default
+# 24 kHz, CPU with opt-in Metal / Android GPU) — a model DIRECTORY (default
 # models/cosyvoice3/), auto-detected
 # from the cosyvoice3-llm-*.gguf file
 cosyvoice3/
@@ -490,10 +490,11 @@ host's policy:
 > strict on Apple and Android; desktop Vulkan remains outside that test until
 > dedicated Linux and Windows validation is available.
 >
-> CosyVoice3's GPU path is currently OpenCL/Adreno (Android) only. `useGPU:
-> true` / `nGpuLayers > 0` offloads it there — pair it with `openclCacheDir` to
-> persist the compiled kernels — while on Metal/Vulkan hosts it falls back to
-> CPU until those backends are wired for its graph.
+> CosyVoice3's GPU path covers Metal (macOS / iOS) and OpenCL/Adreno
+> (Android). `useGPU: true` / `nGpuLayers > 0` offloads there — on Android,
+> pair it with `openclCacheDir` to persist the compiled kernels — while
+> Vulkan hosts fall back to CPU until that backend is parity-gated for its
+> graph.
 >
 > Audio8 uses Vulkan only and is supported on Linux and Windows. A GPU request
 > on another platform, or in a build without Vulkan, falls back to CPU and sets
@@ -628,7 +629,7 @@ zero-shot on the baked voice.  Other CosyVoice3-only options: `promptText`
 (reference transcript for the baked voice); `streamLeftContextTokens` is
 reserved / not yet effective (the pinned engine accepts but does not read it).
 CosyVoice3 emits native **24 kHz** and runs on **CPU** by default; GPU offload
-is opt-in via `useGPU` / `nGpuLayers` and is currently implemented on Android's
+is opt-in via `useGPU` / `nGpuLayers` on Metal (Apple) and Android's
 OpenCL/Adreno path (`openclCacheDir` persists its compiled-kernel cache), with
 other hosts falling back to CPU.
 
@@ -718,7 +719,7 @@ a one-off encode when a new reference recording is supplied.
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan; CosyVoice3 offloads on Android OpenCL/Adreno only; Audio8 uses desktop Vulkan on Linux/Windows. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / Vulkan / CUDA / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal and Android/ARM Mali Vulkan; CosyVoice3 offloads on Apple/Metal and Android OpenCL/Adreno; Audio8 uses desktop Vulkan on Linux/Windows. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), and — when an enhancer is active — `enhancerBackendDevice` / `enhancerBackendId` |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
@@ -796,7 +797,7 @@ Runnable demos under `examples/`:
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
-| `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU, opt-in Android GPU). `bare examples/cosyvoice-tts.js "Hello" happy` |
+| `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU by default, `--gpu` opts into Metal / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello" happy` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for desktop Vulkan. `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 
