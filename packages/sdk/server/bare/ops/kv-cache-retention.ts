@@ -1,6 +1,6 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getKVCacheDir } from '@/server/utils'
+import { getKVCacheDir, isSafeCacheKey } from '@/server/utils'
 import { getServerLogger } from '@/logging'
 
 const logger = getServerLogger()
@@ -28,6 +28,9 @@ function getAutoCacheMarkerPath(cacheKey: string) {
 }
 
 export async function markAutoCacheKey(cacheKey: string) {
+  // An unsafe key would place the marker outside the cache root (the marker
+  // path joins the raw key), so skip it rather than write out of bounds.
+  if (!isSafeCacheKey(cacheKey)) return
   try {
     await fsPromises.writeFile(getAutoCacheMarkerPath(cacheKey), '')
   } catch (error) {
@@ -38,6 +41,7 @@ export async function markAutoCacheKey(cacheKey: string) {
 }
 
 export async function removeAutoCacheMarker(cacheKey: string) {
+  if (!isSafeCacheKey(cacheKey)) return
   try {
     await fsPromises.unlink(getAutoCacheMarkerPath(cacheKey))
   } catch {
@@ -46,6 +50,7 @@ export async function removeAutoCacheMarker(cacheKey: string) {
 }
 
 export async function removeAutoCacheMarkerIfMissing(cacheKey: string) {
+  if (!isSafeCacheKey(cacheKey)) return
   try {
     await fsPromises.access(path.join(getKVCacheDir(), cacheKey))
   } catch {

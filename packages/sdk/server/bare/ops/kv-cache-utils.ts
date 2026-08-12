@@ -3,6 +3,7 @@ import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import {
   type CacheMessage,
+  assertSafeCacheKey,
   getAutoCacheLookupHistory,
   getKVCacheDir,
   validateAndJoinPath
@@ -164,6 +165,9 @@ export async function deleteCache(
     return cacheDir
   }
 
+  // Reject empty/dot/traversal keys before building any path: an empty key
+  // would resolve to the cache root and wipe every cache.
+  assertSafeCacheKey(options.kvCacheKey, cacheDir)
   const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey)
   const targetDir =
     options.modelId !== undefined ? validateAndJoinPath(kvCacheDir, options.modelId) : kvCacheDir

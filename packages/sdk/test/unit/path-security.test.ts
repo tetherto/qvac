@@ -1,6 +1,29 @@
 import test from 'brittle'
 import { resolve, sep } from 'path'
-import { sanitizePathComponent, checkPathWithinBase } from '@/utils/path-sanitize'
+import {
+  sanitizePathComponent,
+  isSafeCacheKey,
+  checkPathWithinBase
+} from '@/utils/path-sanitize'
+
+// ============== isSafeCacheKey ==============
+
+test('isSafeCacheKey: accepts plain single-component keys', (t) => {
+  t.ok(isSafeCacheKey('session-a'))
+  t.ok(isSafeCacheKey('a1b2c3d4e5f60718'))
+  t.ok(isSafeCacheKey('MyCache_1'))
+})
+
+test('isSafeCacheKey: rejects empty, dot, absolute, traversal, and separators', (t) => {
+  t.absent(isSafeCacheKey(''), 'empty would resolve a delete to the cache root')
+  t.absent(isSafeCacheKey('   '))
+  t.absent(isSafeCacheKey('.'))
+  t.absent(isSafeCacheKey('..'))
+  t.absent(isSafeCacheKey('../../etc/passwd'))
+  t.absent(isSafeCacheKey('/etc/passwd'))
+  t.absent(isSafeCacheKey('a/b'))
+  t.absent(isSafeCacheKey('a\\b'))
+})
 
 // ============== sanitizePathComponent ==============
 
