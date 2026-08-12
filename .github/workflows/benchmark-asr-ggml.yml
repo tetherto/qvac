@@ -1032,3 +1032,66 @@ jobs:
             echo "❌ **Results file not found**" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: asr-accuracy-results-${{ matrix.model_variant }}
+          path: ${{ env.WORKDIR }}/benchmarks/results
+          if-no-files-found: error
+
+  summarize:
+    needs:
+      - benchmark
+    if: always() && needs.benchmark.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.inputs.repository || github.repository }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: asr-accuracy-results-*
+          path: ${{ env.WORKDIR }}/benchmarks/results
+          merge-multiple: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install benchmark client dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        run: poetry install --no-cache
+
+      - name: Generate consolidated summary
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        env:
+          BENCHMARK_ENGINE: ${{ github.event.inputs.engine }}
+        run: |
+          if [ "$BENCHMARK_ENGINE" = "parakeet" ]; then
+            poetry run python -c "from src.parakeet.utils import generate_summary; generate_summary()"
+          else
+            poetry run python -c "from src.whisper.utils import generate_summary; generate_summary()"
+          fi
+          cat ../results/results_summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated summary
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: asr-accuracy-summary
+          path: ${{ env.WORKDIR }}/benchmarks/results/results_summary.md
+          if-no-files-found: error
