@@ -13,6 +13,7 @@ addon
 *.d.ts
 index.js
 video.js
+world.js
 addon.js
 addonLogging.js
 src
