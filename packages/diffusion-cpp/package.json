@@ -10,6 +10,7 @@
     "build:vulkan": "npm run build:ts && bare-make generate && bare-make build && bare-make install",
     "build:cuda": "npm run build:ts && bare-make generate -D SD_CUDA=ON && bare-make build && bare-make install",
     "example": "bare examples/load-model.js",
+    "walk:world": "bare examples/world-walk-server.js",
     "generate": "bare examples/generate-image.js",
     "generate:sd2": "bare examples/generate-image-sd2.js",
     "generate:esrgan": "bare examples/generate-image-esrgan-upscale.js",
@@ -24,7 +25,7 @@
     "test:ltx": "npm run build:ts && bare test/integration/generate-video-ltx.test.js --exit",
     "generate:img2vid": "bare examples/img2vid-wan.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js video.js addon.js addonLogging.js index.d.ts video.d.ts addon.d.ts addonLogging.d.ts",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.js video.js world.js addon.js addonLogging.js index.d.ts video.d.ts world.d.ts addon.d.ts addonLogging.d.ts",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy sd prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy sd prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy sd prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
     "lint": "npm run lint:js && npm run lint:ts",
     "lint:fix": "npm run lint:js:fix && npm run lint:ts:fix",
@@ -66,6 +67,7 @@
     "binding.js",
     "index.js",
     "video.js",
+    "world.js",
     "addon.js",
     "addon.d.ts",
     "addonLogging.js",
@@ -73,6 +75,7 @@
     "prebuilds",
     "index.d.ts",
     "video.d.ts",
+    "world.d.ts",
     "LICENSE",
     "NOTICE"
   ],
@@ -86,11 +89,13 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
+    "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
     "bare-fs": "^4.5.1",
     "bare-os": "^3.7.1",
     "bare-process": "^4.2.2",
+    "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
     "brittle": "^3.19.1",
     "cmake-bare": "^1.7.5",
@@ -123,6 +128,10 @@
       "types": "./video.d.ts",
       "default": "./video.js"
     },
+    "./world": {
+      "types": "./world.d.ts",
+      "default": "./world.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
@@ -130,7 +139,8 @@
     "./addonLogging.js": "./addonLogging.js",
     "./addon.js": "./addon.js",
     "./binding.js": "./binding.js",
-    "./video.js": "./video.js"
+    "./video.js": "./video.js",
+    "./world.js": "./world.js"
   },
   "types": "index.d.ts"
 }

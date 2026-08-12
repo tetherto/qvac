@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `TranslationResponse` public type: `run()` resolves with the streaming
+  response surface plus a typed `stats` property (`RuntimeStats`).
+- `QvacErrorAddonMarian` and `ERR_CODES` are exported through a supported
+  public path: `@qvac/translation-nmtcpp/lib/error`.
+
+### Changed
+
+- Inference is serialized through completion: `run()` holds its
+  exclusive-queue slot until the returned response settles, and `runBatch()`
+  goes through the same queue — a new job can no longer replace an active
+  response mid-flight.
+- The en→pt `>>por<<` handling moved into a named per-language-pair
+  target-token table with documentation on why that pair needs the
+  Opus-MT-style token.
+- The native binding is resolved lazily on first use, so the package can be
+  imported (for types, error codes, or the model fetchers) without a
+  prebuild present.
+- Documentation overhaul: batch translation documented for both backends,
+  obsolete `params.mode` removed, cancellation documented accurately, new
+  Model Registry / pivot-translation / API Reference sections (with
+  `RuntimeStats` units and error codes), broken links and development
+  instructions fixed, `docs/` architecture material refreshed and linked.
+
+### Fixed
+
+- A failed `activate()` during `load()` now destroys the just-created native
+  instance and releases the logger bridge instead of leaking both.
+- `getState().weightsLoaded` is set after a successful `load()`.
+- `load()` after `destroy()` now rejects — destruction is permanent.
+- `run()` before `load()` rejects with a clear "Model not loaded" error.
+
 ## [10.0.0] - 2026-08-10
 
 ### Changed
@@ -28,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - chore[notask]:
   test addon-cpp 1.3.3 across consumers
 
 ## [8.3.1] - 2026-08-03
@@ -74,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3468](https://github.com/tetherto/qvac/pull/3468) - QVAC-22177 chore: migrate translation-nmtcpp wrapper to TypeScript
+- [#3468](https://github.com/tetherto/qvac/pull/3468) - chore: migrate translation-nmtcpp wrapper to TypeScript
 
 ## [8.2.1] - 2026-07-30
 
@@ -99,13 +134,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3036](https://github.com/tetherto/qvac/pull/3036) - QVAC-22385 rebase qvac-fabric to b9840 (9840.0.0)
+- [#3036](https://github.com/tetherto/qvac/pull/3036) - rebase qvac-fabric to b9840 (9840.0.0)
 
 ## [8.0.0] - 2026-07-14
 
 ### Fixed
 
-- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix, QVAC-21544 follow-up).
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.4` (JsLogger concurrent-env ownership hardening fix).
 
 ## [7.2.2] - 2026-07-08
 
@@ -117,7 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, QVAC-21544, tetherto/qvac#2932).
+- Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.3` (JsLogger teardown / re-`setLogger` crash fix, tetherto/qvac#2932).
 
 ## [7.2.0] - 2026-07-07
 
@@ -139,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3067](https://github.com/tetherto/qvac/pull/3067) - QVAC-21361 feat[api]: bump qvac-fabric to 9341.1.3 across consumers
+- [#3067](https://github.com/tetherto/qvac/pull/3067) - feat[api]: bump qvac-fabric to 9341.1.3 across consumers
 
 ## [6.3.1] - 2026-07-01
 
@@ -155,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Pull Requests
 
-- [#2839](https://github.com/tetherto/qvac/pull/2839) - QVAC-19119 feat[api]: bump qvac-fabric to 9341.1.0 (translation-nmtcpp)
+- [#2839](https://github.com/tetherto/qvac/pull/2839) - feat[api]: bump qvac-fabric to 9341.1.0 (translation-nmtcpp)
 
 ## [6.2.1] - 2026-06-22
 
@@ -170,7 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Pull Requests
 
-- [#2722](https://github.com/tetherto/qvac/pull/2722) - QVAC-21100: Switch to static C/C++ windows runtimes
+- [#2722](https://github.com/tetherto/qvac/pull/2722) - Switch to static C/C++ windows runtimes
 
 ## [6.2.0] - 2026-06-22
 
@@ -180,7 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Pull Requests
 
-- [#2733](https://github.com/tetherto/qvac/pull/2733) - QVAC-20827 feat[api]: GGML_BACKEND_DL desktop backends (Vulkan) across fabric consumers
+- [#2733](https://github.com/tetherto/qvac/pull/2733) - feat[api]: GGML_BACKEND_DL desktop backends (Vulkan) across fabric consumers
 
 ## [6.1.0] - 2026-06-18
 

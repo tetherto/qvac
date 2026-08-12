@@ -26,6 +26,7 @@ add_executable(
   test_stb_image_security.cpp
   test_wan_video.cpp
   test_avi_writer.cpp
+  test_world_session.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendLoader.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/EsrganUpscaler.cpp
@@ -36,10 +37,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/VideoModelCapabilities.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/EsrganUpscalerModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/SdModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/WorldSessionModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdGenHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/SdVidGenHandlers.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/handlers/WorldSessionHandlers.cpp
 )
 
 target_compile_options(
