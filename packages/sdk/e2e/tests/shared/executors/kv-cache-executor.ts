@@ -247,7 +247,11 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     }
 
     const maxSeq = (group: typeof results) =>
-      group.reduce<number>((m, r) => (typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m), 0)
+      group.reduce<number>(
+        (m, r) =>
+          typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m,
+        0
+      )
     const autoSeq = maxSeq(results.slice(0, TOPICS.length))
     const plainSeq = maxSeq(results.slice(TOPICS.length))
 

@@ -151,7 +151,11 @@ test('kv-cache-session: a second same-key turn waits for the first to release it
       })
 
     await new Promise((resolve) => setTimeout(resolve, 20))
-    t.is(secondResolved, false, 'the second same-key turn is blocked while the first holds the lock')
+    t.is(
+      secondResolved,
+      false,
+      'the second same-key turn is blocked while the first holds the lock'
+    )
 
     await session.commitTurn(first, { kind: 'static', messageCount: 2 })
     const second = await secondPromise
@@ -255,12 +259,23 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
     }
 
     // First turn holds the lock and is never committed during the wait.
-    const first = await session.beginTurn({ kind: 'custom', customKey: 'k', configHash, primeIfMissing })
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'k',
+      configHash,
+      primeIfMissing
+    })
 
     const controller = new AbortController()
     let rejected = false
     const secondPromise = session
-      .beginTurn({ kind: 'custom', customKey: 'k', configHash, primeIfMissing, signal: controller.signal })
+      .beginTurn({
+        kind: 'custom',
+        customKey: 'k',
+        configHash,
+        primeIfMissing,
+        signal: controller.signal
+      })
       .then(
         () => 'resolved',
         () => {
@@ -282,7 +297,12 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
 
     // Lock is uncorrupted: a later turn still acquires after the holder releases.
     await session.commitTurn(first, { kind: 'static', messageCount: 1 })
-    const third = await session.beginTurn({ kind: 'custom', customKey: 'k', configHash, primeIfMissing })
+    const third = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'k',
+      configHash,
+      primeIfMissing
+    })
     t.ok(third, 'a later turn acquires the lock after the cancelled waiter dropped')
     await session.commitTurn(third, { kind: 'static', messageCount: 1 })
   } finally {

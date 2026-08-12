@@ -1307,7 +1307,12 @@ test('policy: completion and batchCompletion share one lane and run concurrently
 const RW_LANE = 'llamacppCompletion'
 function rwRegistry() {
   const r = createRequestRegistry()
-  r.policy({ kind: 'completion', maxConcurrentPerModel: 2, onOverflow: 'queue', sharedSlotGroup: RW_LANE })
+  r.policy({
+    kind: 'completion',
+    maxConcurrentPerModel: 2,
+    onOverflow: 'queue',
+    sharedSlotGroup: RW_LANE
+  })
   r.policy({
     kind: 'finetune',
     maxConcurrentPerModel: 1,
@@ -1438,12 +1443,14 @@ test('exclusive: cancelling a queued writer releases the readers stacked behind 
 test('exclusive: cancelAll rejects a queued writer and its trailing readers', async (t) => {
   const r = rwRegistry()
   const holder = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
-  const ftP = r
-    .begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' })
-    .then(() => 'resolved' as const, (err) => err)
-  const c2P = r
-    .begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' })
-    .then(() => 'resolved' as const, (err) => err)
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' }).then(
+    () => 'resolved' as const,
+    (err) => err
+  )
+  const c2P = r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' }).then(
+    () => 'resolved' as const,
+    (err) => err
+  )
   await settle()
 
   await r.cancelAll('modelUnload')

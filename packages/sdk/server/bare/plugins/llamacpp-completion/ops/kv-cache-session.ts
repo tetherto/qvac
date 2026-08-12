@@ -96,10 +96,7 @@ function releaseCachePathWriteLock(key: string): void {
 }
 
 // Returns the release fn. Aborting while queued rejects and removes the waiter.
-async function acquireCachePathWriteLock(
-  key: string,
-  signal?: AbortSignal
-): Promise<() => void> {
+async function acquireCachePathWriteLock(key: string, signal?: AbortSignal): Promise<() => void> {
   let lock = cachePathLocks.get(key)
   if (!lock) {
     lock = { held: false, waiters: [] }
