@@ -1,6 +1,7 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { unregisterModel } from '@/server/bare/registry/model-registry'
+import { getRequestRegistry } from '@/server/bare/runtime'
 import { unregisterAllLoggingStreams } from '@/server/bare/registry/logging-stream-registry'
 import { clearFinetuneRuntimeState } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
 import { unregisterAddonLogger, getServerLogger } from '@/logging'
@@ -18,6 +19,11 @@ export async function unloadModel(params: UnloadModelParams) {
   if (!entry) {
     throw new ModelNotLoadedError(modelId)
   }
+
+  // Cancel every in-flight and queued request for this model before tearing it
+  // down, so a queued op can't be admitted and start decoding against a model
+  // object that is about to be unloaded.
+  getRequestRegistry().cancel({ modelId })
 
   clearFinetuneRuntimeState(modelId)
 
