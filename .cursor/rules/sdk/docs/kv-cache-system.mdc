@@ -99,7 +99,7 @@ Anonymous caches created by `kvCache: true` are tracked with internal marker met
 - Least-recently-used auto caches are removed when their total size exceeds 512 MiB on React Native or 4 GiB on other runtimes.
 - Cache paths used by active turns are excluded from eviction.
 
-Named string-key caches are not inferred from their directory names, are not subject to automatic retention, and remain caller-managed through `deleteCache()`. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.
+Named string-key caches are not inferred from their directory names and remain caller-managed through `deleteCache()`. Retention acts only on cache directories that carry an auto-cache marker, and a marker is written only on an auto (`kvCache: true`) turn — a purely named cache never gets one. The one exception: a named key chosen to exactly equal a generated auto key (16 lowercase hex characters) resolves to the *same* directory as that auto cache, so it shares the auto cache's lock and its retention. Avoid that shape for named keys you want to manage independently. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.
 
 ## Key Implementation Files
 
