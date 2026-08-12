@@ -659,7 +659,7 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.41.0
+  @qvac/llm-llamacpp@0.39.4
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.0
   @qvac/ocr-ggml@0.13.1
