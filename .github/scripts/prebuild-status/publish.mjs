@@ -2,7 +2,8 @@
 // verify-prebuilds. Run by on-pr-<pkg>.yml `publish-prebuild-status`.
 //
 // Env:
-//   GH_TOKEN, REPO, HEAD_SHA, CONTEXT, RUN_URL, PREBUILD_RESULT, REUSE_HIT
+//   GH_TOKEN, REPO, HEAD_SHA, CONTEXT, RUN_URL, PREBUILD_RESULT, REUSE_HIT,
+//   CI_ROUTER_RESULT, RUN_PREBUILDS
 import { execFileSync } from 'node:child_process'
 import { resolvePublishState } from './lib.mjs'
 
@@ -21,7 +22,12 @@ function main() {
     return 1
   }
 
-  const state = resolvePublishState(process.env.PREBUILD_RESULT, process.env.REUSE_HIT)
+  const state = resolvePublishState(
+    process.env.PREBUILD_RESULT,
+    process.env.REUSE_HIT,
+    process.env.CI_ROUTER_RESULT,
+    process.env.RUN_PREBUILDS,
+  )
 
   execFileSync(
     'gh',
