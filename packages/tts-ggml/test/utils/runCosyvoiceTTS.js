@@ -34,9 +34,16 @@ async function loadCosyvoiceTTS(params = {}) {
     config,
     opts: { stats: true }
   }
-  // instruct2 control (emotion / dialect / speed / volume / style / raw string)
-  // is a constructor-level option: the engine renders it once at construction.
+  // instruct2 control (dialect / volume / style / raw string) stays a
+  // constructor-level option; emotion and pace are the cross-engine options and
+  // also work on reload() and per call.
   if (params.instruct !== undefined) options.instruct = params.instruct
+  if (params.emotion !== undefined) options.emotion = params.emotion
+  if (params.pace !== undefined) options.pace = params.pace
+  // Pinning the seed is what makes two runs comparable: sampling is chaotic in
+  // the logits, so without it a before/after diff measures the sampler rather
+  // than the conditioning.
+  if (params.seed !== undefined) options.seed = params.seed
 
   const model = new TTSGgml(options)
   await model.load()
@@ -57,7 +64,12 @@ async function runCosyvoiceTTS(model, params = {}, expectation = {}) {
   try {
     let outputArray = []
     let reportedSampleRate = null
-    const response = await model.run({ input: params.text, type: 'text' })
+    const response = await model.run({
+      input: params.text,
+      type: 'text',
+      ...(params.perCallEmotion !== undefined ? { emotion: params.perCallEmotion } : {}),
+      ...(params.perCallPace !== undefined ? { pace: params.perCallPace } : {})
+    })
 
     await response
       .onUpdate((data) => {
