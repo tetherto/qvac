@@ -27,3 +27,4 @@ cpp-test-results.xml
 .clang-format
 .clang-tidy
 .valgrind.supp
+vcpkg_installed/
