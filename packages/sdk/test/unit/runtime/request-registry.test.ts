@@ -1117,8 +1117,9 @@ test('queue: cancelAll drains queued waiters so no begin() promise hangs', async
 // A loaded model's real slot count is its own `parallel`, which varies per
 // model — so the completionStream handler passes it as
 // `begin({ maxConcurrentPerModel })` instead of baking one number into the
-// per-kind policy. A per-request `slotGroup` puts a subset of a kind (disk
-// KV-cache completions) on its own serialized lane while the rest go N-way.
+// per-kind policy. Disk-KV-cache completions ride the same lane and serialize
+// same-file writes per cache path inside the KV-cache session, so admission
+// stays uniform across cached and plain completions.
 // -----------------------------------------------------------------------------
 
 test('policy: per-request maxConcurrentPerModel overrides the kind default and admits N-way', async (t) => {
@@ -1200,53 +1201,54 @@ test('policy: per-request maxConcurrentPerModel is scoped per model', async (t) 
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
 })
 
-test('policy: a per-request slotGroup serializes a subset onto its own lane while the rest go N-way', async (t) => {
+test('policy: a cached completion shares the lane and counts toward the cap (no bypass)', async (t) => {
   const r = createRequestRegistry()
-  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+  const sharedSlotGroup = 'llamacppCompletion'
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue', sharedSlotGroup })
 
-  // Plain completions go N-way on the default lane; disk-KV-cache completions
-  // are pinned to a cap-1 lane so they never decode concurrently with each
-  // other and corrupt shared on-disk cache state.
-  const plain = (id: string) => ({
+  // A cached completion is admitted exactly like a plain one now — no separate
+  // slotGroup lane — so it counts toward `parallel` and keeps its FCFS place
+  // instead of jumping the queue. Same-file write safety lives in the KV-cache
+  // session, not here.
+  const opts = (id: string) => ({
     requestId: id,
     kind: 'completion' as const,
     modelId: 'm1',
-    maxConcurrentPerModel: 3
-  })
-  const cached = (id: string) => ({
-    requestId: id,
-    kind: 'completion' as const,
-    modelId: 'm1',
-    maxConcurrentPerModel: 1,
-    slotGroup: 'cached'
+    maxConcurrentPerModel: 2
   })
 
-  const plain1 = await r.begin(plain('p-1'))
-  const cached1 = await r.begin(cached('c-1'))
-  t.is(r.list().length, 2, 'a plain and a cached completion run on separate lanes at once')
+  const p1 = await r.begin(opts('p-1'))
+  const p2 = await r.begin(opts('p-2'))
+  t.is(r.list().length, 2, 'two completions fill the shared lane at cap=2')
 
-  const plain2 = await r.begin(plain('p-2'))
-  t.is(r.list().length, 3, 'the N-way lane keeps admitting plain completions')
-
-  let cached2Resolved = false
-  const cached2 = r.begin(cached('c-2')).then((ctx) => {
-    cached2Resolved = true
+  let p3Resolved = false
+  const p3 = r.begin(opts('p-3')).then((ctx) => {
+    p3Resolved = true
+    return ctx
+  })
+  // A "cached" completion fired after p3 — identical admission opts, so it must
+  // queue behind p3 rather than bypass the cap onto a private lane.
+  let cachedResolved = false
+  const cached = r.begin(opts('c-1')).then((ctx) => {
+    cachedResolved = true
     return ctx
   })
   await settle()
-  t.is(
-    cached2Resolved,
-    false,
-    'the second cached completion queues behind the first on the cap-1 cache lane'
-  )
+  t.is(p3Resolved, false, 'the third request queues once the lane is at cap')
+  t.is(cachedResolved, false, 'the cached completion does NOT bypass the cap or jump the queue')
 
-  await cached1[Symbol.asyncDispose]()
-  const cached2ctx = await cached2
-  t.is(cached2Resolved, true, 'freeing the cache lane admits the queued cached completion')
+  await p1[Symbol.asyncDispose]()
+  const p3ctx = await p3
+  t.is(p3Resolved, true, 'freeing a slot admits p3 first (FCFS preserved)')
+  await settle()
+  t.is(cachedResolved, false, 'freeing one slot admits exactly one waiter, not the cached one too')
 
-  await plain1[Symbol.asyncDispose]()
-  await plain2[Symbol.asyncDispose]()
-  await cached2ctx[Symbol.asyncDispose]()
+  await p2[Symbol.asyncDispose]()
+  const cachedCtx = await cached
+  t.is(cachedResolved, true, 'the cached completion is admitted only after its FCFS turn')
+
+  await p3ctx[Symbol.asyncDispose]()
+  await cachedCtx[Symbol.asyncDispose]()
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
 })
 

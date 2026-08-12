@@ -123,6 +123,93 @@ test('kv-cache-session: beginTurn primes the cache on first use, reuses on secon
   }
 })
 
+test('kv-cache-session: a second same-key turn waits for the first to release its write lock', async (t) => {
+  const { mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const primeIfMissing = async (cachePath: string) => {
+      writeFakeCache(cachePath)
+    }
+
+    // First turn primes the cache and holds the write lock until it commits.
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'lock-a',
+      configHash,
+      primeIfMissing
+    })
+
+    // A second turn on the SAME key must block on the write lock — it cannot
+    // observe or rewrite the same cache file while the first turn owns it.
+    let secondResolved = false
+    const secondPromise = session
+      .beginTurn({ kind: 'custom', customKey: 'lock-a', configHash, primeIfMissing })
+      .then((handle) => {
+        secondResolved = true
+        return handle
+      })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    t.is(secondResolved, false, 'the second same-key turn is blocked while the first holds the lock')
+
+    await session.commitTurn(first, { kind: 'static', messageCount: 2 })
+    const second = await secondPromise
+    t.is(secondResolved, true, 'committing the first turn releases the lock and admits the second')
+
+    // A third same-key turn still acquires cleanly — the lock map didn't leak a
+    // stuck tail behind the drained turns.
+    await session.commitTurn(second, { kind: 'static', messageCount: 2 })
+    const third = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'lock-a',
+      configHash,
+      primeIfMissing
+    })
+    t.ok(third, 'a later same-key turn acquires the lock after the queue drains')
+    await session.commitTurn(third, { kind: 'static', messageCount: 2 })
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: turns on different cache keys do not block each other', async (t) => {
+  const { mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const primeIfMissing = async (cachePath: string) => {
+      writeFakeCache(cachePath)
+    }
+
+    // First turn holds the write lock for key `lock-x`.
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'lock-x',
+      configHash,
+      primeIfMissing
+    })
+
+    // A turn on a DIFFERENT key locks a different path, so it must proceed
+    // without waiting for the first — this is the concurrency the fix preserves.
+    let otherResolved = false
+    const otherPromise = session
+      .beginTurn({ kind: 'custom', customKey: 'lock-y', configHash, primeIfMissing })
+      .then((handle) => {
+        otherResolved = true
+        return handle
+      })
+
+    const other = await otherPromise
+    t.is(otherResolved, true, 'a different-key turn runs concurrently, not blocked by lock-x')
+
+    await session.commitTurn(first, { kind: 'static', messageCount: 1 })
+    await session.commitTurn(other, { kind: 'static', messageCount: 1 })
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: commitTurn records the new saved count and suppresses rollback', async (t) => {
   const { fs, mod, cleanup, writeFakeCache } = await loadSession()
   try {

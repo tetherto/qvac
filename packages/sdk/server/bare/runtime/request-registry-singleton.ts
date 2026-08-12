@@ -17,12 +17,10 @@ import {
 let registry: RequestRegistry | null = null
 
 // completion + batchCompletion share one lane: singles and batches compete for
-// the model's `parallel` slots first-come-first-serve.
+// the model's `parallel` slots first-come-first-serve. Disk-KV-cache turns ride
+// the same lane and serialise same-file writes per cache path in the KV-cache
+// session, so they never need a separate admission group.
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
-
-// Concurrent disk-KV-cache turns would corrupt shared on-disk cache state, so on
-// N-way models the handler serializes them on this dedicated cap-1 lane.
-export const LLAMACPP_COMPLETION_CACHED_SLOT_GROUP = 'llamacppCompletionCached'
 
 function installDefaultPolicies(r: RequestRegistry): void {
   // Cap is the model's `parallel`, passed per request by the handlers; the value

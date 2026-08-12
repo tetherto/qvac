@@ -9,8 +9,7 @@ export type {
 
 export {
   createRequestRegistry,
-  getRequestRegistry,
-  LLAMACPP_COMPLETION_CACHED_SLOT_GROUP
+  getRequestRegistry
 } from '@/server/bare/runtime/request-registry-singleton'
 export type {
   BeginOpts,

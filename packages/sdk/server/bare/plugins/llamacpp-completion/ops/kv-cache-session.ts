@@ -77,6 +77,33 @@ let lastAutoCacheSweepMs = 0
 let autoCacheSweepInFlight: Promise<void> | null = null
 let cacheStateLockTail = Promise.resolve()
 
+// Write locks that serialise turns which would otherwise clobber each other's
+// cache state, keyed by a string the callers agree on. The custom path keys on
+// the cache file path, so only genuine same-file turns serialise and different
+// keys decode concurrently. The auto path keys on `auto:<modelId>`, serialising
+// all of a model's history-derived turns because each picks its own key and
+// rewrites it on commit. Neither is an admission lane — the model's `parallel`
+// cap still governs how many turns decode at once.
+const cachePathWriteLockTails = new Map<string, Promise<void>>()
+
+async function acquireCachePathWriteLock(cachePath: string): Promise<() => void> {
+  const previous = cachePathWriteLockTails.get(cachePath) ?? Promise.resolve()
+  let resolveCurrent = () => {}
+  const current = new Promise<void>((resolve) => {
+    resolveCurrent = resolve
+  })
+  cachePathWriteLockTails.set(cachePath, current)
+  await previous
+  return () => {
+    // Drop the entry only while this holder is still the tail, so a waiter
+    // that already chained on `current` keeps the map alive for its turn.
+    if (cachePathWriteLockTails.get(cachePath) === current) {
+      cachePathWriteLockTails.delete(cachePath)
+    }
+    resolveCurrent()
+  }
+}
+
 function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
   return `${modelId}:${configHash}:${cacheKey}`
 }
@@ -289,6 +316,8 @@ interface InternalTurnState {
   cachePath: string
   registryKey: string
   autoCacheKey?: string
+  /** Releases this turn's per-cache-path write lock; idempotent. */
+  releaseWriteLock: () => void
   /** Flipped by `commitTurn`; consulted at the top of `rollback`. */
   committed: boolean
   /** Flipped at the end of `rollback`; protects against double-rollback. */
@@ -313,7 +342,12 @@ export function createKvCacheSession(
   // the reference; the module-scoped maps above survive.
   const turnState = new WeakMap<TurnHandle, InternalTurnState>()
 
-  function makeHandle(cachePath: string, registryKey: string, autoCacheKey?: string): TurnHandle {
+  function makeHandle(
+    cachePath: string,
+    registryKey: string,
+    autoCacheKey?: string,
+    releaseWriteLock: () => void = () => {}
+  ): TurnHandle {
     const handle: TurnHandle = {
       cachePath,
       savedCount: cachedMessageCounts.get(cachePath) ?? 0
@@ -322,6 +356,7 @@ export function createKvCacheSession(
       cachePath,
       registryKey,
       ...(autoCacheKey !== undefined && { autoCacheKey }),
+      releaseWriteLock,
       committed: false,
       rolledBack: false
     })
@@ -332,7 +367,11 @@ export function createKvCacheSession(
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
     const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
-    const handle = makeHandle(cachePath, registryKey)
+    // Held across the whole turn (decode + commit/rollback) so a same-key
+    // peer can't interleave writes to this cache file. Released on commit,
+    // rollback, or the error path below.
+    const releaseWriteLock = await acquireCachePathWriteLock(cachePath)
+    const handle = makeHandle(cachePath, registryKey, undefined, releaseWriteLock)
 
     try {
       // In-memory registry check first — the addon defers disk writes, so
@@ -360,6 +399,7 @@ export function createKvCacheSession(
       return handle
     } catch (error) {
       releaseCachePath(cachePath)
+      releaseWriteLock()
       throw error
     }
   }
@@ -370,19 +410,36 @@ export function createKvCacheSession(
     // internally. The post-response key (used after a successful turn)
     // is computed by the caller and passed to `commitTurn` as
     // `targetCachePath`.
-    const setup = await withCacheStateLock(async () => {
-      const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
-      const cacheInfo =
-        existingCache ?? (await getCurrentCacheInfo(modelId, input.configHash, input.history))
-      const registryKey = initRegistryKey(modelId, input.configHash, cacheInfo.cacheKey)
-      return {
-        cacheExists: existingCache !== null,
-        cachePath: cacheInfo.cachePath,
-        cacheKey: cacheInfo.cacheKey,
-        registryKey,
-        handle: makeHandle(cacheInfo.cachePath, registryKey, cacheInfo.cacheKey)
-      }
-    })
+    // Serialize auto-cache turns on this model before the cache lookup, so a
+    // concurrent same-history turn sees the committed result instead of racing
+    // to re-prime a cache the peer just wrote and renamed. The auto path picks
+    // its own cache key from history and rewrites it on commit, so — unlike the
+    // caller-supplied custom key — two turns can't safely interleave any part
+    // of that lifecycle. Keyed per model (not per path) because the path isn't
+    // known until the lookup runs, and acquired before `withCacheStateLock`,
+    // never under it, so the rename in `commitTurn` can't deadlock against a
+    // waiting peer.
+    const releaseWriteLock = await acquireCachePathWriteLock(`auto:${modelId}`)
+
+    let setup
+    try {
+      setup = await withCacheStateLock(async () => {
+        const existingCache = await findMatchingCache(modelId, input.configHash, input.history)
+        const cacheInfo =
+          existingCache ?? (await getCurrentCacheInfo(modelId, input.configHash, input.history))
+        const registryKey = initRegistryKey(modelId, input.configHash, cacheInfo.cacheKey)
+        return {
+          cacheExists: existingCache !== null,
+          cachePath: cacheInfo.cachePath,
+          cacheKey: cacheInfo.cacheKey,
+          registryKey,
+          handle: makeHandle(cacheInfo.cachePath, registryKey, cacheInfo.cacheKey, releaseWriteLock)
+        }
+      })
+    } catch (error) {
+      releaseWriteLock()
+      throw error
+    }
 
     const { cacheExists, cachePath, cacheKey, registryKey, handle } = setup
     logCacheStatus('auto', cacheExists)
@@ -399,6 +456,7 @@ export function createKvCacheSession(
       releaseCachePath(cachePath)
       await pruneEmptyCacheDirectories(cachePath)
       await removeAutoCacheMarkerIfMissing(cacheKey)
+      releaseWriteLock()
       throw error
     }
   }
@@ -433,6 +491,7 @@ export function createKvCacheSession(
       }
       state.committed = true
       releaseCachePath(state.cachePath)
+      state.releaseWriteLock()
       return
     }
 
@@ -485,6 +544,7 @@ export function createKvCacheSession(
     // paths.
     state.committed = true
     releaseCachePath(state.cachePath)
+    state.releaseWriteLock()
     scheduleAutoCacheSweep(logger)
   }
 
@@ -515,6 +575,7 @@ export function createKvCacheSession(
     cachedMessageCounts.delete(state.cachePath)
     releaseCachePath(state.cachePath)
     state.rolledBack = true
+    state.releaseWriteLock()
     if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
   }
 
@@ -760,6 +821,7 @@ export const __kvCacheSessionTestHooks = {
     lastAutoCacheSweepMs = 0
     autoCacheSweepInFlight = null
     cacheStateLockTail = Promise.resolve()
+    cachePathWriteLockTails.clear()
   },
   waitForAutoCacheSweepForTest(): Promise<void> {
     return autoCacheSweepInFlight ?? Promise.resolve()

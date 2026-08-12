@@ -39,14 +39,6 @@ export interface BeginOpts {
    * value below 1 is floored to 1.
    */
   maxConcurrentPerModel?: number
-  /**
-   * Per-request override of the admission lane. Defaults to the policy's
-   * `sharedSlotGroup` or the kind. Routes a subset of one kind onto its own
-   * serialized lane without a new `RequestKind` — e.g. disk-KV-cache
-   * completions serialize so concurrent turns can't corrupt a shared on-disk
-   * cache file, while plain completions of the same kind stay concurrent.
-   */
-  slotGroup?: string
 }
 
 export interface CancelByRequestId {
@@ -486,10 +478,9 @@ export function createRequestRegistry(options?: {
     if (opts.parentSignal?.aborted) return { slotKey: undefined }
 
     const modelId = opts.modelId
-    // Lane precedence: per-request override (e.g. a serialized KV-cache
-    // lane) → the policy's shared group → the kind itself. A shared lane
-    // lets unrelated kinds contend for one slot pool per model.
-    const key = slotKey(opts.slotGroup ?? policy.slotGroup ?? opts.kind, modelId)
+    // Lane precedence: the policy's shared group → the kind itself. A shared
+    // lane lets unrelated kinds contend for one slot pool per model.
+    const key = slotKey(policy.slotGroup ?? opts.kind, modelId)
     let st = keyStates.get(key)
     if (!st) {
       st = { active: 0, waiters: [] }

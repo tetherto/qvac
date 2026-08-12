@@ -36,11 +36,7 @@ import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { getModelConfig } from '@/server/bare/registry/model-registry'
 import { createCompletionNormalizer } from '@/server/utils/completion-normalizer'
 import { detectToolDialect } from '@/server/utils/tool-integration'
-import {
-  getRequestRegistry,
-  withRequestContext,
-  LLAMACPP_COMPLETION_CACHED_SLOT_GROUP
-} from '@/server/bare/runtime'
+import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 import { getServerLogger } from '@/logging'
 import { ContextOverflowError } from '@/utils/errors-server'
@@ -375,17 +371,16 @@ export const llmPlugin = definePlugin({
         // Falls back to a server-generated id if the client (e.g. an
         // older release) didn't send one.
         // Admit up to the model's `parallel` jobs; the surplus queues FCFS. A
-        // single-slot model keeps admitting one at a time, unchanged.
-        // Disk-KV-cache turns on an N-way model go to a cap-1 lane so same-file
-        // turns can't corrupt state (they only run at parallel > 1).
+        // single-slot model keeps admitting one at a time, unchanged. Disk-KV-
+        // cache turns share this lane too, so they count toward `parallel` and
+        // hold their FCFS place; same-file writes serialise per cache path
+        // inside the KV-cache session, not by a separate admission lane.
         const parallel = getModelParallel(modelCfg as { parallel?: number })
-        const useCachedLane = Boolean(request.kvCache) && parallel > 1
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: 'completion',
           modelId: request.modelId,
-          maxConcurrentPerModel: useCachedLane ? 1 : parallel,
-          ...(useCachedLane && { slotGroup: LLAMACPP_COMPLETION_CACHED_SLOT_GROUP })
+          maxConcurrentPerModel: parallel
         })
 
         const requestLogger = withRequestContext(getServerLogger(), ctx)
