@@ -159,7 +159,9 @@ interface TTSGgmlRuntimeConfig {
     /**
      * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
      * available. Defaults to `false`. Audio8 uses Vulkan on Linux and Windows;
-     * the other GPU-capable engines select a backend for the host platform.
+     * CosyVoice3 selects Metal on Apple, Vulkan on desktop Linux / Windows, and
+     * OpenCL/Adreno on Android (Mali / Xclipse decline to CPU); the other
+     * GPU-capable engines select a backend for the host platform.
      */
     useGPU?: boolean;
     /**
@@ -267,8 +269,9 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
      * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
      * Audio8: pass 99 to use Vulkan on Linux and Windows.
-     * CosyVoice3: pass 99 to offload on Metal (macOS / iOS) or OpenCL/Adreno
-     * (Android); other hosts fall back to CPU by policy.
+     * CosyVoice3: pass 99 to offload on Metal (macOS / iOS), Vulkan (desktop
+     * Linux / Windows), or OpenCL/Adreno (Android); other hosts fall back to
+     * CPU by policy.
      */
     nGpuLayers?: number;
     /**

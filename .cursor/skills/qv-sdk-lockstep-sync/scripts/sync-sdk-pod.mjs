@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 /**
- * Mirror @qvac/sdk → @qvac/bare-sdk package metadata to prevent drift
- * between the two lockstep-released packages.
+ * Stamp the @qvac/inference version anchor across the SDK pod and mirror
+ * @qvac/sdk → @qvac/bare-sdk package metadata, so a release cut ships one
+ * shared version on every lockstep-released package.
  *
- * Mirrors:
- *   - version
- *   - shared dependencies entries (sdk → bare-sdk, version range)
+ * @qvac/inference is the sole version anchor. sdk and bare-sdk (here) follow
+ * it; sdk-python follows via generate.py (which reads sdk's version).
+ *
+ * Stamps the anchor version into:
+ *   - packages/sdk/package.json      (sdk follows inference)
+ *   - packages/bare-sdk/package.json (bare-sdk follows inference)
+ *
+ * Mirrors @qvac/sdk → @qvac/bare-sdk:
+ *   - shared dependencies entries (version range)
  *   - shared optionalDependencies entries (only existing ones, no adds)
  *   - shared peerDependencies entries (only existing ones, no adds)
  *
@@ -26,14 +33,15 @@
  *     devDependencies, peerDependenciesMeta. These intentionally diverge.
  *
  * Run from monorepo root (prefer /qv-sdk-lockstep-sync for the full client set):
- *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs           # apply
- *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs --dry-run # preview
- *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs --check   # exit 1 if drift
+ *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs           # apply
+ *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs --dry-run # preview
+ *   node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs --check   # exit 1 if drift
  *
- * NOTE: This script only updates bare-sdk's package.json. After running it:
+ * NOTE: This script updates sdk's and bare-sdk's package.json. After running it:
  *   1. Run `cd packages/bare-sdk && bun run check:deps-vs-sdk` to verify clean.
  *   2. Run `qv-notice-generate bare-sdk` to refresh bare-sdk's NOTICE.
- *   3. Review staged changes and commit.
+ *   3. Regenerate sdk-python (`generate.py`) so its SDK_VERSION follows.
+ *   4. Review staged changes and commit.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -43,6 +51,7 @@ import { PLUGIN_ADDONS } from "../../../../packages/bare-sdk/scripts/plugin-addo
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..", "..", "..");
+const inferencePkgPath = path.join(repoRoot, "packages", "inference", "package.json");
 const sdkPkgPath = path.join(repoRoot, "packages", "sdk", "package.json");
 const bareSdkPkgPath = path.join(repoRoot, "packages", "bare-sdk", "package.json");
 
@@ -63,23 +72,33 @@ function writePkg(filePath, pkg) {
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + "\n");
 }
 
+const inferencePkg = readPkg(inferencePkgPath);
 const sdkPkg = readPkg(sdkPkgPath);
 const bareSdkPkg = readPkg(bareSdkPkgPath);
 
+// @qvac/inference is the version anchor for the whole SDK pod.
+const anchorVersion = inferencePkg.version;
+
+let sdkDirty = false;
 const changes = [];
 
-// 1. Version
-if (bareSdkPkg.version !== sdkPkg.version) {
+// 1. Version — sdk and bare-sdk both follow the @qvac/inference anchor.
+if (sdkPkg.version !== anchorVersion) {
+  changes.push({ kind: "version", field: "version (sdk)", from: sdkPkg.version, to: anchorVersion });
+  sdkPkg.version = anchorVersion;
+  sdkDirty = true;
+}
+if (bareSdkPkg.version !== anchorVersion) {
   changes.push({
     kind: "version",
-    field: "version",
+    field: "version (bare-sdk)",
     from: bareSdkPkg.version,
-    to: sdkPkg.version,
+    to: anchorVersion,
   });
-  bareSdkPkg.version = sdkPkg.version;
+  bareSdkPkg.version = anchorVersion;
 }
 
-// 2. Dependency fields — add and update
+// 2. Dependency fields — add and update (sdk → bare-sdk)
 for (const field of DEP_FIELDS) {
   const sdkDeps = sdkPkg[field] ?? {};
   const bareDeps = bareSdkPkg[field] ?? {};
@@ -138,14 +157,14 @@ for (const name of Object.keys(bareDepsForPrune)) {
 }
 
 if (changes.length === 0) {
-  console.log("[sync-bare-sdk] OK: no drift between @qvac/sdk and @qvac/bare-sdk.");
+  console.log(`[sync-sdk-pod] OK: sdk and bare-sdk both at the @qvac/inference anchor (${anchorVersion}).`);
   process.exit(0);
 }
 
 const summary = changes
   .map((c) => {
     if (c.kind === "version") {
-      return `  version: ${c.from} → ${c.to}`;
+      return `  ${c.field}: ${c.from} → ${c.to} (anchor @qvac/inference@${anchorVersion})`;
     }
     if (c.kind === "add") {
       return `  + ${c.field}."${c.name}": "${c.to}"`;
@@ -158,23 +177,28 @@ const summary = changes
   .join("\n");
 
 if (checkMode) {
-  console.error(`[sync-bare-sdk] FAIL: drift detected (${changes.length} change(s)):`);
+  console.error(`[sync-sdk-pod] FAIL: drift detected (${changes.length} change(s)):`);
   console.error(summary);
-  console.error("\nFix: run `node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs`");
+  console.error("\nFix: run `node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs`");
   process.exit(1);
 }
 
-console.log(`[sync-bare-sdk] ${dryRun ? "DRY RUN" : "APPLY"}: ${changes.length} change(s):`);
+console.log(`[sync-sdk-pod] ${dryRun ? "DRY RUN" : "APPLY"}: ${changes.length} change(s):`);
 console.log(summary);
 
 if (dryRun) {
-  console.log("\n[sync-bare-sdk] (no files written; rerun without --dry-run to apply)");
+  console.log("\n[sync-sdk-pod] (no files written; rerun without --dry-run to apply)");
   process.exit(0);
 }
 
+if (sdkDirty) {
+  writePkg(sdkPkgPath, sdkPkg);
+  console.log("\n[sync-sdk-pod] wrote packages/sdk/package.json");
+}
 writePkg(bareSdkPkgPath, bareSdkPkg);
-console.log("\n[sync-bare-sdk] wrote packages/bare-sdk/package.json");
-console.log("[sync-bare-sdk] next steps:");
+console.log("[sync-sdk-pod] wrote packages/bare-sdk/package.json");
+console.log("[sync-sdk-pod] next steps:");
 console.log("  1. cd packages/bare-sdk && bun run check:deps-vs-sdk");
 console.log("  2. source .env && node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk");
-console.log("  3. review staged changes and commit");
+console.log("  3. regenerate sdk-python so SDK_VERSION follows (packages/sdk-python/scripts/generate.py)");
+console.log("  4. review staged changes and commit");

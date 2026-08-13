@@ -1,0 +1,200 @@
+# Build the self-contained per-platform `tetherto-qvac-sdk` wheels (thin client +
+# bundled Bare runtime + built @qvac/sdk worker + pruned native prebuilds) and
+# attach them to a GitHub release as assets, for a turnkey
+#   pip install tetherto-qvac-sdk -f <release expanded_assets URL>
+# install that needs no separately-provisioned worker.
+#
+# These wheels are far too large for PyPI (each ~hundreds of MB of native
+# prebuilds); the thin `py3-none-any` wheel + sdist still go to PyPI via
+# publish-sdk.yml. Both triggers below share one build:
+#   - workflow_dispatch: build + attach to a chosen existing release tag (manual
+#     backfill / re-run / single-platform fix). Builds from `github.sha` (not the
+#     tag) so pre-tooling tags don't die on argparse; SDK_VERSION must still
+#     match the target tag.
+#   - workflow_call: invoked by publish-sdk.yml after a release is created,
+#     passing the published version.
+#
+# Only the platforms with genuine in-repo runtime validation ship: darwin-arm64,
+# linux-x64, win32-x64 (SDK e2e) and linux-arm64 (per-addon integration tests).
+# darwin-x64 is omitted until its uncovered addons gain an Intel-mac inference leg.
+name: Build sdk-python fat wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach wheels to (e.g. sdk-v0.17.0)"
+        required: true
+        type: string
+      platforms:
+        description: "Subset to build: 'all' or comma-separated labels (darwin-arm64,linux-x64,linux-arm64,win32-x64)"
+        required: false
+        default: "all"
+        type: string
+      create_release:
+        description: "Create a draft release for the tag if none exists"
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      version:
+        description: "Published version; the release tag is sdk-v<version>"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: Resolve tag and matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # ensure-release (create_release path)
+    outputs:
+      tag: ${{ steps.compute.outputs.tag }}
+      matrix: ${{ steps.compute.outputs.matrix }}
+    steps:
+      - name: Compute tag and platform matrix
+        id: compute
+        shell: bash
+        env:
+          IN_VERSION: ${{ inputs.version }}
+          IN_TAG: ${{ inputs.tag }}
+          IN_PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          if [ -n "${IN_VERSION:-}" ]; then
+            tag="sdk-v${IN_VERSION}"
+          else
+            tag="${IN_TAG:-}"
+          fi
+          if [ -z "$tag" ]; then
+            echo "::error::no tag resolved (need workflow_call version or dispatch tag)"
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          platforms="${IN_PLATFORMS:-all}"
+          [ -z "$platforms" ] && platforms="all"
+          all='[
+            {"label":"darwin-arm64","os":"macos-15","platform":"macosx_11_0_arm64"},
+            {"label":"linux-x64","os":"ubuntu-22.04","platform":"manylinux_2_35_x86_64"},
+            {"label":"linux-arm64","os":"ubuntu-22.04-arm","platform":"manylinux_2_35_aarch64"},
+            {"label":"win32-x64","os":"windows-2025","platform":"win_amd64"}
+          ]'
+          if [ "$platforms" = "all" ]; then
+            matrix=$(echo "$all" | jq -c '{include: .}')
+          else
+            matrix=$(echo "$all" | jq -c --arg p "$platforms" \
+              '{include: [ .[] | select(($p | split(",")) | index(.label)) ]}')
+          fi
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}"
+          echo "matrix=${matrix}"
+
+      - name: Check out workflow revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # Build from this workflow's revision; attach assets to the release tag.
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify version lockstep with the tag
+        shell: bash
+        env:
+          TAG: ${{ steps.compute.outputs.tag }}
+        run: |
+          set -euo pipefail
+          py_ver=$(sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p' \
+            packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py)
+          tag_ver="${TAG#sdk-v}"
+          if [ -z "$py_ver" ]; then
+            echo "::error::could not parse SDK_VERSION at ${GITHUB_SHA}"
+            exit 1
+          fi
+          if [ "$py_ver" != "$tag_ver" ]; then
+            echo "::error::tetherto-qvac-sdk ${py_ver} at ${GITHUB_SHA} != tag version ${tag_ver}"
+            exit 1
+          fi
+          echo "OK: tetherto-qvac-sdk ${py_ver} matches ${TAG}"
+
+      - name: Ensure release exists
+        if: ${{ inputs.create_release == true }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.compute.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "${{ github.repository }}" \
+              --draft --title "$TAG" --notes "Self-contained tetherto-qvac-sdk wheels."
+          fi
+
+  build:
+    name: fat wheel (${{ matrix.label }})
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: write # gh release upload
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      - name: Check out workflow revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Install build tooling
+        shell: bash
+        run: python -m pip install --upgrade pip build
+
+      # All-public @qvac deps, no auth: bun install in ../sdk fetches the addon
+      # packages (with their published native prebuilds) and builds the worker.
+      - name: Build worker
+        shell: bash
+        run: python scripts/build_worker.py
+
+      - name: Build fat wheel
+        shell: bash
+        env:
+          WHEEL_PLATFORM: ${{ matrix.platform }}
+        run: python scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
+
+      - name: Upload wheel to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.setup.outputs.tag }}
+        run: gh release upload "$TAG" dist/*.whl --repo "${{ github.repository }}" --clobber
+
+      - name: Upload wheel as build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fat-wheel-${{ matrix.label }}
+          path: packages/sdk-python/dist/*.whl
+          if-no-files-found: error
+          retention-days: 14

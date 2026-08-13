@@ -52,9 +52,12 @@ const isApple = platform === 'darwin' || platform === 'ios'
 // Parler GPU coverage is validated on Apple and the Android Device Farm.
 // Keep desktop Vulkan out until dedicated Linux/Windows runs prove it there.
 const isParlerGpuPlatform = isApple || platform === 'android'
-// CosyVoice3's tts-cpp allowlist is Metal (Apple) + OpenCL/Adreno (Android);
-// Vulkan hosts are declined by policy, so the strict GPU leg skips them.
-const isCosyvoiceGpuPlatform = isApple || platform === 'android'
+// CosyVoice3's tts-cpp allowlist is Metal (Apple), OpenCL/Adreno (Android),
+// and Vulkan on desktop hosts, so the strict GPU leg runs everywhere the
+// desktop and mobile GPU runners exist. On Android the engine keeps its
+// Metal-or-OpenCL requirement (Mali and Xclipse decline to CPU).
+const isCosyvoiceGpuPlatform =
+  isApple || platform === 'android' || platform === 'linux' || platform === 'win32'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
@@ -682,17 +685,17 @@ async function probeAndroidGpuVendor(t) {
   }
 }
 
-// CosyVoice3 smoke. The GPU leg is strict on Apple (Metal is on the tts-cpp
-// validated-backend allowlist). On Android the allowlist takes OpenCL/Adreno
-// only:
-// Adreno devices must resolve to OpenCL (backendId 4 — Vulkan would mean the
-// selection requirement regressed), Mali/Xclipse devices must decline by
-// policy (CPU with stats.gpuUnsupported set); an inconclusive vendor probe
-// fails closed. The helper's nGpuLayers forwarding is covered by a
-// helper-level unit test (cosyvoice3.inference.test.js), keeping this leg on
-// the primary useGPU path.
+// CosyVoice3 smoke. The GPU leg is strict on Apple (Metal) and on desktop
+// linux/win32 (Vulkan), both on the tts-cpp validated-backend allowlist. On
+// Android the allowlist takes OpenCL/Adreno only:
+// Adreno devices must resolve to OpenCL (backendId 4 — Vulkan there would
+// mean the selection requirement regressed), Mali/Xclipse devices must
+// decline by policy (CPU with stats.gpuUnsupported set); an inconclusive
+// vendor probe fails closed. The helper's nGpuLayers forwarding is covered
+// by a helper-level unit test (cosyvoice3.inference.test.js), keeping this
+// leg on the primary useGPU path.
 test(
-  'CosyVoice3 GPU smoke - useGPU=true must engage GPU on Apple/Android',
+  'CosyVoice3 GPU smoke - useGPU=true must engage GPU on Apple/desktop/Android',
   { timeout: 600000, skip: NO_GPU || !isCosyvoiceGpuPlatform },
   async (t) => {
     const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
@@ -752,55 +755,6 @@ test(
         t.pass('CosyVoice3/Mali: declined to CPU by policy')
       }
       recordSmoke(t, 'cosyvoice3 gpu-smoke', result, wallMs)
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
-)
-
-// The documented Vulkan-host policy: a CosyVoice3 GPU request on a desktop
-// Vulkan platform must fall back to CPU and report it as an intentional
-// decline (gpuUnsupported), not silently run an unvalidated backend.
-test(
-  'CosyVoice3 GPU-decline smoke - Vulkan hosts must fall back to CPU by policy',
-  {
-    timeout: 600000,
-    skip: NO_GPU || (platform !== 'linux' && platform !== 'win32')
-  },
-  async (t) => {
-    const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
-    const download = await ensureCosyvoiceModel({ targetDir: modelsDir })
-    if (!download.success) {
-      t.fail(
-        'CosyVoice3 model files not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-    const model = await loadCosyvoiceTTS({
-      cosyvoiceModelDir: download.modelDir,
-      useGPU: true
-    })
-    try {
-      const result = await runCosyvoiceTTS(
-        model,
-        { text: 'GPU decline check for the CosyVoice engine.' },
-        { minSamples: 10000 }
-      )
-      console.log(result.output)
-      t.ok(result.passed, 'CosyVoice3/decline produced expected sample count')
-      const st = result.data.stats
-      if (!st) {
-        t.fail('CosyVoice3/decline: no response.stats returned')
-      } else if (st.backendDevice !== 0 || st.gpuUnsupported !== 1) {
-        failOrRelax(
-          t,
-          `CosyVoice3/${platform}: expected a policy CPU decline (backendDevice=0, gpuUnsupported=1), got backendDevice=${st.backendDevice} backendId=${st.backendId} gpuUnsupported=${st.gpuUnsupported}`
-        )
-      } else {
-        t.pass(`CosyVoice3/${platform}: Vulkan host declined to CPU by policy`)
-      }
     } finally {
       try {
         await model.unload()
