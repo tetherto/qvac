@@ -228,3 +228,4 @@ native prebuild (`BARE_MODULE qvac_asr_ggml`), and one public class —
   low-level addon wrapper). Same reasoning: use `ASRGgml`.
 - The `TranscriptionWhispercpp` and `TranscriptionParakeet` classes. The
   default export is `ASRGgml`.
+
