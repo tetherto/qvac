@@ -83,16 +83,8 @@ type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
 type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
 const cachePathLocks = new Map<string, CacheLock>()
 
-// Case-fold the lock-map key so case-only path variants (e.g. "Session" vs
-// "session"), which name the SAME file on case-insensitive filesystems (default
-// macOS/Windows), share one lock. Over-locks case-only variants on case-sensitive
-// filesystems, which is safe.
-function lockKeyFor(cachePath: string): string {
-  return cachePath.toLowerCase()
-}
-
-function releaseCachePathWriteLock(lockKey: string): void {
-  const lock = cachePathLocks.get(lockKey)
+function releaseCachePathWriteLock(cachePath: string): void {
+  const lock = cachePathLocks.get(cachePath)
   if (!lock) return
   const next = lock.waiters.shift()
   if (next) {
@@ -100,7 +92,7 @@ function releaseCachePathWriteLock(lockKey: string): void {
     return
   }
   lock.held = false
-  cachePathLocks.delete(lockKey)
+  cachePathLocks.delete(cachePath)
 }
 
 // Returns the release fn. Aborting while queued rejects and removes the waiter.
@@ -108,15 +100,14 @@ async function acquireCachePathWriteLock(
   cachePath: string,
   signal?: AbortSignal
 ): Promise<() => void> {
-  const lockKey = lockKeyFor(cachePath)
-  let lock = cachePathLocks.get(lockKey)
+  let lock = cachePathLocks.get(cachePath)
   if (!lock) {
     lock = { held: false, waiters: [] }
-    cachePathLocks.set(lockKey, lock)
+    cachePathLocks.set(cachePath, lock)
   }
   if (!lock.held) {
     lock.held = true
-    return () => releaseCachePathWriteLock(lockKey)
+    return () => releaseCachePathWriteLock(cachePath)
   }
 
   await new Promise<void>((resolve, reject) => {
@@ -141,7 +132,7 @@ async function acquireCachePathWriteLock(
     signal?.addEventListener('abort', onAbort, { once: true })
   })
 
-  return () => releaseCachePathWriteLock(lockKey)
+  return () => releaseCachePathWriteLock(cachePath)
 }
 
 function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
