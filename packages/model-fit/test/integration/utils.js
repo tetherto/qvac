@@ -46,7 +46,7 @@ function urlHost(url) {
   }
 }
 
-async function downloadFileOnce(url, dest, opts = {}) {
+function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let resolved = false

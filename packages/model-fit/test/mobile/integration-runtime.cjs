@@ -36,6 +36,7 @@ if (typeof Bare !== 'undefined' && typeof Bare.on === 'function') {
   })
 }
 
+// lunte-disable-next-line no-unused-vars
 async function runIntegrationModule(relativeModulePath, options = {}) {
   const modulePath = path.join(__dirname, relativeModulePath)
 
