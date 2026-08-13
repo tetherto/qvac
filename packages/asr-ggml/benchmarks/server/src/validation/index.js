@@ -32,14 +32,23 @@ const WhisperInferenceArgsSchema = z.object({
 // Parakeet branch
 // ---------------------------------------------------------------------------
 
-const ParakeetConfigSchema = z.object({
-  modelType: z.enum(['tdt', 'ctc', 'eou', 'sortformer']).optional().default('tdt'),
-  maxThreads: z.number().int().positive().optional().default(4),
-  useGPU: z.boolean().optional().default(false),
-  captionEnabled: z.boolean().optional().default(false),
-  timestampsEnabled: z.boolean().optional().default(true),
-  seed: z.number().int().optional().default(-1)
-})
+const ParakeetConfigSchema = z
+  .object({
+    modelType: z
+      .enum(['tdt', 'ctc', 'eou', 'sortformer', 'indic-conformer'])
+      .optional()
+      .default('tdt'),
+    language: z.string().min(1).optional(),
+    maxThreads: z.number().int().positive().optional().default(4),
+    useGPU: z.boolean().optional().default(false),
+    captionEnabled: z.boolean().optional().default(false),
+    timestampsEnabled: z.boolean().optional().default(true),
+    seed: z.number().int().optional().default(-1)
+  })
+  .refine((config) => config.modelType !== 'indic-conformer' || config.language, {
+    message: 'Indic Conformer requires a language',
+    path: ['language']
+  })
 
 const ParakeetRunConfigSchema = z.object({
   path: z.string().min(1, 'Model path is required'),
