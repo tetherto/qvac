@@ -26,8 +26,14 @@ const MODELS = {
   sortformerQ4: model('sortformer-4spk-v1.q4_0.gguf', REGISTRY_PREFIX_Q4_0),
   sortformerQ8: model('sortformer-4spk-v1.q8_0.gguf', REGISTRY_PREFIX_Q8_0),
   sortformerF16: model('sortformer-4spk-v1.f16.gguf', REGISTRY_PREFIX_2026_07_01),
-  sortformerStreamingQ4: model('diar_streaming_sortformer_4spk-v2.1.q4_0.gguf', REGISTRY_PREFIX_STREAMING),
-  sortformerStreamingQ8: model('diar_streaming_sortformer_4spk-v2.1.q8_0.gguf', REGISTRY_PREFIX_STREAMING),
+  sortformerStreamingQ4: model(
+    'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf',
+    REGISTRY_PREFIX_STREAMING
+  ),
+  sortformerStreamingQ8: model(
+    'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
+    REGISTRY_PREFIX_STREAMING
+  ),
   indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC)
 }
 
@@ -64,10 +70,24 @@ const TEST_MODELS = {
   runParakeetMobilePerfCtcGpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
   runParakeetMobilePerfEouCpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
   runParakeetMobilePerfEouGpuTest: [MODELS.eouQ4, MODELS.eouQ8, MODELS.eouF16],
-  runParakeetMobilePerfSortformerCpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
-  runParakeetMobilePerfSortformerGpuTest: [MODELS.sortformerQ4, MODELS.sortformerQ8, MODELS.sortformerF16],
-  runParakeetMobilePerfSortformerStreamingCpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
-  runParakeetMobilePerfSortformerStreamingGpuTest: [MODELS.sortformerStreamingQ4, MODELS.sortformerStreamingQ8],
+  runParakeetMobilePerfSortformerCpuTest: [
+    MODELS.sortformerQ4,
+    MODELS.sortformerQ8,
+    MODELS.sortformerF16
+  ],
+  runParakeetMobilePerfSortformerGpuTest: [
+    MODELS.sortformerQ4,
+    MODELS.sortformerQ8,
+    MODELS.sortformerF16
+  ],
+  runParakeetMobilePerfSortformerStreamingCpuTest: [
+    MODELS.sortformerStreamingQ4,
+    MODELS.sortformerStreamingQ8
+  ],
+  runParakeetMobilePerfSortformerStreamingGpuTest: [
+    MODELS.sortformerStreamingQ4,
+    MODELS.sortformerStreamingQ8
+  ],
   runParakeetMobilePerfTdtCpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
   runParakeetMobilePerfTdtGpuTest: [MODELS.tdtQ4, MODELS.tdtQ8, MODELS.tdtF16],
   runParakeetModelFileValidationTest: [MODELS.tdtQ4],
@@ -76,23 +96,21 @@ const TEST_MODELS = {
   runParakeetSortformerStreamingAliasTest: []
 }
 
-function model (name, prefix) {
+function model(name, prefix) {
   return { name, s3Key: `${prefix}/${name}` }
 }
 
-function presignModel (bucket, entry, expiresIn) {
-  const url = execFileSync('aws', [
-    's3',
-    'presign',
-    `s3://${bucket}/${entry.s3Key}`,
-    '--expires-in',
-    expiresIn
-  ], { encoding: 'utf8' }).trim()
+function presignModel(bucket, entry, expiresIn) {
+  const url = execFileSync(
+    'aws',
+    ['s3', 'presign', `s3://${bucket}/${entry.s3Key}`, '--expires-in', expiresIn],
+    { encoding: 'utf8' }
+  ).trim()
 
   return { name: entry.name, url }
 }
 
-function main () {
+function main() {
   const bucket = process.env.MODEL_S3_BUCKET
   if (!bucket) {
     throw new Error('MODEL_S3_BUCKET env var is required')

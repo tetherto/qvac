@@ -33,7 +33,8 @@ const moduleLogger = getEngineLogger()
 /**
  * Coordinates five KV-cache state layers:
  *
- * 1. `cachedMessageCounts` — saved message boundaries.
+ * 1. `cachedPrefixes` — saved message boundaries, and whether a tool
+ *    block was rendered into them.
  * 2. `initializedCaches` — caches primed in this process.
  * 3. On-disk `.bin` files written by the addon.
  * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
@@ -47,16 +48,29 @@ const moduleLogger = getEngineLogger()
 // ----- module-scoped state. The session is the single mutation point
 // for the in-memory KV-cache bookkeeping. -----
 
+/** What the kv-cache file at a given path is known to hold. */
+interface CachedPrefix {
+  /** Number of chat messages the file on disk is known to cover. */
+  messages: number
+  /**
+   * Whether a static tool block was rendered into that prefix. Tracked
+   * rather than inferred from `messages`, because a committed turn is not
+   * proof that its tool block reached the model: the addon drops tools and
+   * still returns a usable prompt when the chat template rejects them.
+   */
+  toolBlock: boolean
+}
+
 /**
- * Number of chat messages the kv-cache file on disk is known to cover,
- * keyed by cache path. Written by `commitTurn`, read by `getSavedCount`,
- * deleted by `rollback` / `delete` / `dropStaleSavedCount`. The same
- * INVARIANT that existed in `kv-cache-state.ts` still holds: an entry is
- * present only when the corresponding `.bin` file is considered
- * trustworthy. Cancelled or zero-token turns must remove the entry so
- * the next-turn slice doesn't read a stale boundary.
+ * What the kv-cache file on disk is known to cover, keyed by cache path.
+ * Written by `commitTurn`, read by `getSavedCount`, deleted by `rollback` /
+ * `delete` / `dropStaleSavedCount`. The same INVARIANT that existed in
+ * `kv-cache-state.ts` still holds: an entry is present only when the
+ * corresponding `.bin` file is considered trustworthy. Cancelled or
+ * zero-token turns must remove the entry so the next-turn slice doesn't read
+ * a stale boundary.
  */
-const cachedMessageCounts = new Map<string, number>()
+const cachedPrefixes = new Map<string, CachedPrefix>()
 
 /**
  * In-memory registry of caches initialized this session. The addon
@@ -193,6 +207,12 @@ export interface TurnHandle {
    * to pick the message tail for the next addon call.
    */
   readonly savedCount: number
+  /**
+   * Whether the cached prefix already holds a rendered static tool block, so
+   * this turn can leave it out of its payload. False on a fresh prime and
+   * whenever the previous turn couldn't confirm the block reached the model.
+   */
+  readonly toolBlockCached: boolean
 }
 
 export interface BeginCustomTurnInput {
@@ -202,10 +222,11 @@ export interface BeginCustomTurnInput {
   /** Hash of system prompt + (static) tool names. */
   configHash: string
   /**
-   * Prime the cache by sending system prompt + (static) tools to the
-   * addon. Called when the cache doesn't exist in-memory OR on disk.
-   * Kept as an injected closure so this module has no dependency on the
-   * model registry / addon — the handler closes over `model` and tools.
+   * Prime the cache by sending the system prompt to the addon. Tools are not
+   * primed — a prefix with no user turn is not a renderable conversation for
+   * every template — so they travel with a turn instead. Called when the cache
+   * doesn't exist in-memory OR on disk. Kept as an injected closure so this
+   * module has no dependency on the model registry / addon.
    */
   primeIfMissing: (cachePath: string) => Promise<void>
 }
@@ -222,18 +243,27 @@ export interface BeginAutoTurnInput {
 
 export type BeginTurnInput = BeginCustomTurnInput | BeginAutoTurnInput
 
-export interface StaticCommitResult {
+/**
+ * Whether the committed prefix holds a rendered static tool block. The
+ * handler owns this because only it knows whether the payload carried the
+ * block and whether the message list was one the template renders tools for.
+ */
+interface ToolBlockCommit {
+  toolBlockCached: boolean
+}
+
+export interface StaticCommitResult extends ToolBlockCommit {
   kind: 'static'
   /** `history.length + 1` — recorded at the turn's current `cachePath`. */
   messageCount: number
 }
 
-export interface AutoRenameCommitResult {
+export interface AutoRenameCommitResult extends ToolBlockCommit {
   kind: 'autoRename'
   /**
    * Destination path the addon's pre-response cache file should be
    * renamed to (computed from `cacheMessages + responseText`). The
-   * stale entry at the source path is dropped from `cachedMessageCounts`
+   * stale entry at the source path is dropped from `cachedPrefixes`
    * and the new count is recorded at this target path.
    */
   targetCachePath: string
@@ -266,7 +296,7 @@ export interface KvCacheSession {
   /**
    * Roll back an in-flight turn — atomically deletes the on-disk cache
    * file, clears the in-memory `initializedCaches` entry, forgets the
-   * `cachedMessageCounts` entry, releases the active-path ref, and
+   * `cachedPrefixes` entry, releases the active-path ref, and
    * removes orphaned marker metadata. Idempotent: a turn that has
    * already been committed or rolled back is a no-op on subsequent
    * calls. Handlers register this via `ctx.scope.defer(...)` so it
@@ -314,9 +344,11 @@ export function createKvCacheSession(
   const turnState = new WeakMap<TurnHandle, InternalTurnState>()
 
   function makeHandle(cachePath: string, registryKey: string, autoCacheKey?: string): TurnHandle {
+    const cached = cachedPrefixes.get(cachePath)
     const handle: TurnHandle = {
       cachePath,
-      savedCount: cachedMessageCounts.get(cachePath) ?? 0
+      savedCount: cached?.messages ?? 0,
+      toolBlockCached: cached?.toolBlock ?? false
     }
     turnState.set(handle, {
       cachePath,
@@ -424,7 +456,11 @@ export function createKvCacheSession(
       // at the same path. Verify the file persisted (the addon
       // currently swallows save errors — see TODO in
       // `verifySaveAndRecord`) and record the new boundary.
-      const ok = await verifySaveAndRecord(state.cachePath, result.messageCount)
+      const ok = await verifySaveAndRecord(
+        state.cachePath,
+        result.messageCount,
+        result.toolBlockCached
+      )
       if (!ok) {
         // The expected save didn't land — treat the turn as a rollback
         // so the next turn re-primes cleanly.
@@ -458,7 +494,7 @@ export function createKvCacheSession(
       if (sourceCacheKey !== undefined) {
         await removeAutoCacheMarkerIfMissing(sourceCacheKey)
       }
-      cachedMessageCounts.delete(sourceCachePath)
+      cachedPrefixes.delete(sourceCachePath)
       initializedCaches.delete(state.registryKey)
       return true
     })
@@ -471,7 +507,11 @@ export function createKvCacheSession(
       return
     }
 
-    const ok = await verifySaveAndRecord(result.targetCachePath, result.messageCount)
+    const ok = await verifySaveAndRecord(
+      result.targetCachePath,
+      result.messageCount,
+      result.toolBlockCached
+    )
     if (!ok) {
       // Rename succeeded but the file isn't where we expected. Roll
       // back via the target path instead of the (now-empty) source.
@@ -512,7 +552,7 @@ export function createKvCacheSession(
       await removeAutoCacheMarkerIfMissing(state.autoCacheKey)
     }
     initializedCaches.delete(state.registryKey)
-    cachedMessageCounts.delete(state.cachePath)
+    cachedPrefixes.delete(state.cachePath)
     releaseCachePath(state.cachePath)
     state.rolledBack = true
     if (state.autoCacheKey !== undefined) scheduleAutoCacheSweep(logger)
@@ -521,7 +561,7 @@ export function createKvCacheSession(
   function dropStaleSavedCount(turn: TurnHandle): void {
     const state = turnState.get(turn)
     if (!state) return
-    cachedMessageCounts.delete(state.cachePath)
+    cachedPrefixes.delete(state.cachePath)
   }
 
   return {
@@ -550,7 +590,7 @@ export function createKvCacheSession(
  * Layers cleared, in order:
  *   1. On-disk: `deleteCache(...)` removes the matching directory
  *      tree (or wipes and recreates the root for `all: true`).
- *   2. `cachedMessageCounts`: prefix-cleanup by the removed directory
+ *   2. `cachedPrefixes`: prefix-cleanup by the removed directory
  *      so any per-cache count under the deleted tree is forgotten.
  *   3. `initializedCaches`: scope clear by `(kvCacheKey[, modelId])`,
  *      matching the on-disk scope.
@@ -569,7 +609,7 @@ export async function deleteKvCacheState(
 ): Promise<void> {
   if ('all' in target) {
     const removed = await deleteCacheUtil({ all: true })
-    cachedMessageCounts.clear()
+    cachedPrefixes.clear()
     initializedCaches.clear()
     // `removed` is the kv-cache root dir; surfaces it for ops
     // visibility but isn't part of the contract.
@@ -587,7 +627,7 @@ export async function deleteKvCacheState(
 
   // Prefix-cleanup the in-memory counts. The on-disk directory tree
   // is `{kvCacheRoot}/{kvCacheKey}[/{modelId}]/`, so every entry in
-  // `cachedMessageCounts` whose key is the removed directory itself
+  // `cachedPrefixes` whose key is the removed directory itself
   // or sits beneath it must go.
   clearCachedMessageCountsByPrefix(removedPath, path.sep)
 
@@ -672,13 +712,17 @@ async function verifyPrimedFile(cachePath: string, logger: Logger): Promise<void
  * false), drop the `access()` probe and wrap the `model.run()` call in
  * a real try/catch that forwards the error.
  */
-async function verifySaveAndRecord(cachePath: string, messageCount: number): Promise<boolean> {
+async function verifySaveAndRecord(
+  cachePath: string,
+  messageCount: number,
+  toolBlockCached: boolean
+): Promise<boolean> {
   try {
     await fsPromises.access(cachePath)
-    cachedMessageCounts.set(cachePath, messageCount)
+    cachedPrefixes.set(cachePath, { messages: messageCount, toolBlock: toolBlockCached })
     return true
   } catch (err) {
-    cachedMessageCounts.delete(cachePath)
+    cachedPrefixes.delete(cachePath)
     logCacheSaveError(cachePath, err)
     return false
   }
@@ -686,16 +730,16 @@ async function verifySaveAndRecord(cachePath: string, messageCount: number): Pro
 
 function clearCachedMessageCountsByPrefix(prefix: string, sep: string): void {
   if (!prefix) {
-    cachedMessageCounts.clear()
+    cachedPrefixes.clear()
     return
   }
-  for (const key of cachedMessageCounts.keys()) {
+  for (const key of cachedPrefixes.keys()) {
     if (key === prefix) {
-      cachedMessageCounts.delete(key)
+      cachedPrefixes.delete(key)
       continue
     }
     if (!key.startsWith(prefix + sep)) continue
-    cachedMessageCounts.delete(key)
+    cachedPrefixes.delete(key)
   }
 }
 
@@ -736,10 +780,13 @@ function clearInitializedCachesByScope(scope: {
  */
 export const __kvCacheSessionTestHooks = {
   getSavedCount(cachePath: string): number | undefined {
-    return cachedMessageCounts.get(cachePath)
+    return cachedPrefixes.get(cachePath)?.messages
   },
   setSavedCountForTest(cachePath: string, count: number): void {
-    cachedMessageCounts.set(cachePath, count)
+    cachedPrefixes.set(cachePath, { messages: count, toolBlock: false })
+  },
+  getToolBlockCachedForTest(cachePath: string): boolean {
+    return cachedPrefixes.get(cachePath)?.toolBlock ?? false
   },
   hasInitializedKey(modelId: string, configHash: string, cacheKey: string): boolean {
     return initializedCaches.has(initRegistryKey(modelId, configHash, cacheKey))
@@ -754,7 +801,7 @@ export const __kvCacheSessionTestHooks = {
     lastAutoCacheSweepMs = value
   },
   resetForTest(): void {
-    cachedMessageCounts.clear()
+    cachedPrefixes.clear()
     initializedCaches.clear()
     activeCachePaths.clear()
     lastAutoCacheSweepMs = 0
