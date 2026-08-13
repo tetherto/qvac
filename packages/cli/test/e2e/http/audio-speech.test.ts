@@ -5,7 +5,7 @@ import { assertError, JSON_HEADERS, assertStatusAndError } from '../helpers/http
 import { probeFfmpegAvailable } from '../../../src/serve/lib/video-transcode.js'
 
 describe('serve: speech validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('invalid JSON returns 400', async () => {
     const res = await server().inject({
@@ -113,7 +113,7 @@ describe('serve: speech auth', () => {
 })
 
 describe('serve: audio discovery', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('GET /v1/audio/models returns empty list when no speech models loaded', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/audio/models' })
