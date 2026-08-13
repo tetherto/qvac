@@ -1,4 +1,6 @@
-import { rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { chmod, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -6,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { RUNNER_POLL_INTERVAL_MS } from '../defaults.js'
 import {
   ensureDirSync,
+  ensureManagedServesDir,
   liveConsumers,
   managedServesDir,
   removeRecord,
@@ -23,12 +26,38 @@ import type { SpawnedServe } from './serve-process.js'
 
 export interface RunnerParams {
   readonly fleetKey: string
+  readonly apiKey: string
   readonly configPath: string
   readonly port: number
   readonly host: string
   readonly idleTimeoutMs: number
   readonly startTimeoutMs: number
   readonly serveBinPath?: string
+}
+
+export async function writeRunnerParamsFile(params: RunnerParams): Promise<string> {
+  await ensureManagedServesDir()
+  const filename = `${params.fleetKey}.${process.pid}.${randomBytes(8).toString('hex')}.runner-params.json`
+  const path = join(managedServesDir(), filename)
+  await writeFile(path, JSON.stringify(params), {
+    encoding: 'utf8',
+    flag: 'wx',
+    mode: 0o600
+  })
+  await chmod(path, 0o600)
+  return path
+}
+
+export function readRunnerParamsFile(path: string): RunnerParams {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as RunnerParams
+  } finally {
+    try {
+      unlinkSync(path)
+    } catch {
+      // best-effort
+    }
+  }
 }
 
 function errorPath(fleetKey: string): string {
@@ -62,13 +91,14 @@ function cleanup(fleetKey: string, configPath: string): void {
 }
 
 export async function runRunner(params: RunnerParams): Promise<void> {
-  const { fleetKey, configPath, port, host, idleTimeoutMs, startTimeoutMs } = params
+  const { fleetKey, apiKey, configPath, port, host, idleTimeoutMs, startTimeoutMs } = params
 
   ensureDirSync()
 
   let spawned: SpawnedServe
   try {
     spawned = await spawnServe({
+      apiKey,
       configPath,
       port,
       host,
@@ -91,6 +121,7 @@ export async function runRunner(params: RunnerParams): Promise<void> {
 
   writeRecordSync({
     fleetKey,
+    apiKey,
     servePid,
     runnerPid: process.pid,
     port,
@@ -157,27 +188,23 @@ export async function runRunner(params: RunnerParams): Promise<void> {
   timer.unref()
 }
 
-function parseArgs(argv: string[]): RunnerParams {
-  return JSON.parse(argv[2] ?? '{}') as RunnerParams
-}
-
 // Run only when invoked as a script (the spawned subprocess), not when imported
 // by the client or a test.
 const invokedDirectly =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
 
 if (invokedDirectly) {
-  void runRunner(parseArgs(process.argv))
+  void runRunner(readRunnerParamsFile(process.argv[2] ?? ''))
 }
 
 // Resolve the runner module's own path + the command needed to execute it,
 // transparently handling both compiled (`dist/.../runner.js` under Node) and
 // dev (`src/.../runner.ts` under tsx) layouts so the client can spawn us.
-export function runnerSpawnSpec(): { command: string; args: string[] } {
+export function runnerSpawnSpec(paramsPath: string): { command: string; args: string[] } {
   const here = fileURLToPath(import.meta.url)
   if (!here.endsWith('.ts')) {
     // Production: a compiled `.js` runs directly under Node.
-    return { command: process.execPath, args: [here] }
+    return { command: process.execPath, args: [here, paramsPath] }
   }
   // Dev/test: run the `.ts` through tsx's CLI. We invoke the resolved CLI entry
   // via `node <tsx-cli> <runner.ts>` rather than `node --import tsx` so it works
@@ -187,5 +214,5 @@ export function runnerSpawnSpec(): { command: string; args: string[] } {
   const pkg = require(pkgJson) as { bin?: string | Record<string, string> }
   const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.['tsx']
   if (binRel === undefined) throw new Error('Unable to resolve tsx CLI for managed-mode dev runner')
-  return { command: process.execPath, args: [join(dirname(pkgJson), binRel), here] }
+  return { command: process.execPath, args: [join(dirname(pkgJson), binRel), here, paramsPath] }
 }
