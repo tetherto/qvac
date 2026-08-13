@@ -80,16 +80,22 @@ export function translate(
 
   if (params.stream) {
     const tokenStream = (async function* () {
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === 'translate') {
-          const streamResponse = translateResponseSchema.parse(response)
-          if (!streamResponse.done) {
-            yield streamResponse.token
-          } else {
-            stats = streamResponse.stats
-            statsResolver(stats)
+      try {
+        for await (const response of streamRpc(request, options)) {
+          if (response.type === 'translate') {
+            const streamResponse = translateResponseSchema.parse(response)
+            if (!streamResponse.done) {
+              yield streamResponse.token
+            } else {
+              stats = streamResponse.stats
+              statsResolver(stats)
+            }
           }
         }
+      } finally {
+        // Settle stats even if the stream ended early (cancel) or errored, so
+        // `await handle.stats` can't hang. Idempotent if already resolved.
+        statsResolver(stats)
       }
     })()
 
@@ -109,15 +115,21 @@ export function translate(
     const textPromise = (async () => {
       let buffer = ''
 
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === 'translate') {
-          const streamResponse = translateResponseSchema.parse(response)
-          buffer += streamResponse.token
-          if (streamResponse.done) {
-            stats = streamResponse.stats
-            statsResolver(stats)
+      try {
+        for await (const response of streamRpc(request, options)) {
+          if (response.type === 'translate') {
+            const streamResponse = translateResponseSchema.parse(response)
+            buffer += streamResponse.token
+            if (streamResponse.done) {
+              stats = streamResponse.stats
+              statsResolver(stats)
+            }
           }
         }
+      } finally {
+        // Settle stats even if the stream ended early (cancel) or errored, so
+        // `await handle.stats` can't hang. Idempotent if already resolved.
+        statsResolver(stats)
       }
 
       return buffer
