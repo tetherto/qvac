@@ -1,4 +1,5 @@
 import { type QvacResponse } from "@qvac/infer-base";
+import * as errorModule from "./lib/error";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
@@ -158,14 +159,17 @@ interface TTSGgmlRuntimeConfig {
     /**
      * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
      * available. Defaults to `false`. Audio8 uses Vulkan on Linux and Windows;
-     * the other GPU-capable engines select a backend for the host platform.
+     * CosyVoice3 selects Metal on Apple, Vulkan on desktop Linux / Windows, and
+     * OpenCL/Adreno on Android (Mali / Xclipse decline to CPU); the other
+     * GPU-capable engines select a backend for the host platform.
      */
     useGPU?: boolean;
     /**
      * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
-     * native rate. Resamples the native output (24 kHz Chatterbox and
-     * CosyVoice3, 44.1 kHz Supertonic), or the 48 kHz LavaSR-enhanced signal,
-     * before emitting. `TTSOutputChunk.sampleRate` reports the resulting rate.
+     * native rate. Resamples the native output (24 kHz for Chatterbox and
+     * CosyVoice3; 44.1 kHz for Supertonic, Parler, and Audio8), or the 48 kHz
+     * LavaSR-enhanced signal, before emitting. `TTSOutputChunk.sampleRate`
+     * reports the resulting rate.
      *
      * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
      * only accepted there when the LavaSR enhancer is active, because the
@@ -265,8 +269,9 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
      * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
      * Audio8: pass 99 to use Vulkan on Linux and Windows.
-     * CosyVoice3: pass 99 to offload on Metal (macOS / iOS) or OpenCL/Adreno
-     * (Android); other hosts fall back to CPU by policy.
+     * CosyVoice3: pass 99 to offload on Metal (macOS / iOS), Vulkan (desktop
+     * Linux / Windows), or OpenCL/Adreno (Android); other hosts fall back to
+     * CPU by policy.
      */
     nGpuLayers?: number;
     /**
@@ -401,12 +406,12 @@ interface InferenceState {
     destroyed: boolean;
 }
 interface TTSOutputChunk {
-    /** PCM audio payload. Kept as `ArrayBuffer` for public API compatibility. */
-    outputArray: ArrayBuffer;
+    /** Signed 16-bit mono PCM audio payload. */
+    outputArray: Int16Array;
     /**
-     * Output sample rate. The native engine rate (24000 for Chatterbox,
-     * 44100 for Supertonic and Parler), or 48000 when the LavaSR enhancer is
-     * active.
+     * Output sample rate. The native engine rate (24000 for Chatterbox and
+     * CosyVoice3; 44100 for Supertonic, Parler, and Audio8), or 48000 when the
+     * LavaSR enhancer is active.
      */
     sampleRate?: number;
 }
@@ -420,6 +425,10 @@ interface RuntimeStats {
     backendDevice?: number;
     /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other GPU. */
     backendId?: number;
+    /** LavaSR enhancer compute device. -1 = not loaded, 0 = CPU, 1 = GPU. */
+    enhancerBackendDevice?: number;
+    /** LavaSR enhancer backend code, using the same values as `backendId`. */
+    enhancerBackendId?: number;
     /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
     gpuUnsupported?: number;
     /**
@@ -458,7 +467,6 @@ interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSCon
     streamOutput?: boolean;
     locale?: string;
     maxChunkScalars?: number;
-    outputSampleRate?: number;
     /**
      * Cancels non-streaming `run()`. An already-aborted signal rejects without
      * native dispatch. Ignored by all streaming paths.
@@ -723,6 +731,8 @@ type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
 type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 declare namespace TTSGgml {
+    export import QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
+    export import ERR_CODES = errorModule.ERR_CODES;
     type TTSGgmlFiles = NamespaceFiles;
     type TTSGgmlRuntimeConfig = NamespaceRuntimeConfig;
     type TTSGgmlOptions = NamespaceOptions;

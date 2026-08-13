@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.0] - 2026-08-10
+## [0.1.0] - 2026-08-12
 
 ### Added
 
@@ -42,6 +42,30 @@
   projection was actually made against. Zero registered devices now returns
   `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
   be read as a detection result.
+- `@qvac/model-fit/process`, a boundary for running a projection in a child that
+  can be thrown away. The subpath exports a versioned NDJSON codec
+  (`encodeFitProcessRequest`, `parseFitProcessResponse`) and resolves a private
+  one-shot runner to spawn with a Bare executable. It exists because the crash
+  paths above terminate whoever calls the fitter, so the only way to survive
+  them is to ask the question from a process that is expendable. Spawning and
+  supervision are deliberately left to the caller.
+- The runner answers with one line on stdout, and that line rather than the exit
+  code is the result: `completed` for a projection, `invocation-error` for a
+  request that threw or never reached the fitter, and no line at all when native
+  code aborted. A missing or unparseable line is a failure whatever the status —
+  exit 0 does not prove delivery, and exit 2 arrives both with and without a
+  response. The outcome table in the README is the full contract.
+- The addon is loaded only once a request has parsed, so a malformed or oversized
+  request costs a spawn and never backend registration. The runner imposes no
+  timeout of its own; bounding and cancelling the child is the supervisor's job.
+- Two platform constraints a supervisor has to honour. On Windows the child's
+  stdio must be created as overlapped pipes (`stdio: ['overlapped', ...]`), or
+  the runner — itself a libuv program handed synchronous handles — never
+  observes the request and hangs with no output and no diagnostic; the flag is a
+  no-op elsewhere, so set it unconditionally. On darwin a cold child recompiles
+  the embedded Metal library during backend discovery, which costs roughly ten
+  seconds against a quarter of a second on linux and Windows, so a deadline must
+  be sized for discovery rather than for the projection.
 
 ### Changed
 

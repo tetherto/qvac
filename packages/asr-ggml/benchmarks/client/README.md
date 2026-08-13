@@ -17,7 +17,7 @@ metrics.
   - [Google FLEURS](https://huggingface.co/datasets/google/fleurs) multilingual dataset integration
   - Common Voice manifests (Arabic dialect benchmarks, whisper engine)
 - Whisper: 11 languages, WER / CER / AraDiaWER metrics, VAD support
-- Parakeet: tdt / ctc / eou / sortformer model types, WER / CER metrics
+- Parakeet: TDT, CTC, EOU, Sortformer, and Indic Conformer model types with WER / CER metrics
 - Configurable batch processing
 
 ## Installation
@@ -72,6 +72,7 @@ Shipped configs:
 | `config-parakeet-ctc.yaml` | parakeet | CTC |
 | `config-parakeet-eou.yaml` | parakeet | EOU (streaming) |
 | `config-parakeet-sortformer.yaml` | parakeet | Sortformer diarization |
+| `config-parakeet-indic-conformer.yaml` | parakeet | Indic Conformer on Hindi FLEURS |
 
 Common structure (whisper example):
 
@@ -103,7 +104,8 @@ model:
 The parakeet `model` block differs: `path` points at a single `.gguf`
 checkpoint (the addon auto-detects the model type from GGUF metadata) and
 carries `model_type`, `max_threads`, `use_gpu`, `caption_enabled`,
-`timestamps_enabled` instead of the VAD/language keys.
+and `timestamps_enabled`. Indic Conformer also requires a two-letter
+`language` identifier such as `hi`.
 
 ### Configuration Details
 
@@ -119,8 +121,8 @@ carries `model_type`, `max_threads`, `use_gpu`, `caption_enabled`,
     `common_voice` with `common_voice_manifest`)
   - `speaker_group`: LibriSpeech speaker subset (`clean`, `other`, `all`)
   - `language`: Dataset language (English, French, German, Spanish, Italian,
-    Portuguese, Mandarin Chinese, Russian, Japanese, Czech; whisper also
-    supports Arabic)
+    Portuguese, Hindi, Gujarati, Kannada, Tamil, Mandarin Chinese, Russian,
+    Japanese, Czech; whisper also supports Arabic)
   - `max_samples`: Maximum number of samples to process (0 = unlimited)
 
 - **Metrics**: `wer.enabled`, `cer.enabled`, and (whisper, Arabic only)
@@ -131,9 +133,9 @@ carries `model_type`, `max_threads`, `use_gpu`, `caption_enabled`,
   `streaming_chunk_size`
 
 - **Model (parakeet)**: `path` (`.gguf` file), `sample_rate`, `audio_format`,
-  `model_type` (`tdt`/`ctc`/`eou`/`sortformer`), `max_threads`, `use_gpu`,
-  `caption_enabled`, `timestamps_enabled`, `streaming`,
-  `streaming_chunk_size`
+  `model_type` (`tdt`/`ctc`/`eou`/`sortformer`/`indic-conformer`),
+  `language` (required by Indic Conformer), `max_threads`, `use_gpu`,
+  `caption_enabled`, `timestamps_enabled`, `streaming`, `streaming_chunk_size`
 
 ## Output
 
