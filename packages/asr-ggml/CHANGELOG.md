@@ -16,8 +16,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Fixed
 
-- Publish runnable examples with corrected Parakeet helper imports and
-  positional Whisper quickstart arguments.
+- Publish a dependency-clean Whisper quickstart with positional audio, model,
+  and VAD model arguments.
 
 ## [0.3.0] - 2026-08-12
 

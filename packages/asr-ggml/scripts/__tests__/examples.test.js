@@ -11,13 +11,7 @@ const examplesRoot = path.join(packageRoot, 'examples')
 const relativeImportPattern = /require\(['"](\.[^'"]+)['"]\)/g
 
 const expectedScripts = {
-  'example:whisper:live': 'bare examples/example.live-transcription.js',
-  'example:whisper:chunking': 'bare examples/example.audio-ctx-chunking.js',
-  'example:whisper:reload': 'bare examples/example.reload.js',
-  'example:whisper:decoder': 'bare examples/example.decoder.js',
-  'example:parakeet:indic': 'bare examples/parakeet-indic-conformer-transcribe.js',
-  'example:parakeet:mic-diarize-aosc': 'bare examples/parakeet-live-mic-diarized-aosc.js',
-  'example:parakeet:decode': 'bare examples/parakeet-decode-audio.js'
+  'example:whisper': 'bare examples/quickstart.js'
 }
 
 function getExampleFiles() {
@@ -47,11 +41,11 @@ test('all example relative imports resolve', () => {
   getExampleFiles().forEach(assertRelativeImportsResolve)
 })
 
-test('all documented example scripts are runnable package scripts', () => {
+test('published example scripts target shipped examples', () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
   assert.deepEqual(
     Object.fromEntries(
-      Object.keys(expectedScripts).map((name) => [name, packageJson.scripts[name]])
+      Object.entries(packageJson.scripts).filter(([name]) => name.startsWith('example:'))
     ),
     expectedScripts
   )

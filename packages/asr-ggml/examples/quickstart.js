@@ -2,7 +2,6 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
-const process = require('bare-process')
 const ASRGgml = require('../index.js')
 const binding = require('../binding.js')
 const { parseQuickstartArguments } = require('./quickstart-arguments.js')
@@ -14,7 +13,7 @@ binding.setLogger((priority, message) => {
 })
 
 async function main() {
-  const { audioPath, modelPath, vadModelPath } = parseQuickstartArguments(process.argv.slice(2))
+  const { audioPath, modelPath, vadModelPath } = parseQuickstartArguments(Bare.argv.slice(2))
 
   const modelsDir = path.join(__dirname, '..', 'models')
   const audioFilePath = audioPath || path.join(__dirname, 'samples', 'sample.raw')
@@ -23,17 +22,20 @@ async function main() {
 
   if (!fs.existsSync(audioFilePath)) {
     console.error(`Audio file not found at ${audioFilePath}. Provide it as the first argument.`)
-    process.exit(1)
+    Bare.exit(1)
+    return
   }
   if (!fs.existsSync(modelFilePath)) {
     console.error(`Model file not found at ${modelFilePath}. Provide it as the second argument.`)
-    process.exit(1)
+    Bare.exit(1)
+    return
   }
   if (!fs.existsSync(vadModelFilePath)) {
     console.error(
       `VAD model file not found at ${vadModelFilePath}. Provide it as the third argument.`
     )
-    process.exit(1)
+    Bare.exit(1)
+    return
   }
 
   const constructorArgs = {
@@ -107,5 +109,5 @@ async function main() {
 main().catch((err) => {
   console.error(err)
   binding.releaseLogger()
-  process.exit(1)
+  Bare.exit(1)
 })

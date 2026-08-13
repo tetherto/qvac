@@ -7,10 +7,13 @@ const path = require('node:path')
 const process = require('node:process')
 const test = require('node:test')
 const { spawnSync } = require('node:child_process')
-const { gunzipSync } = require('node:zlib')
+const { pathToFileURL } = require('node:url')
 
 const packageRoot = path.resolve(__dirname, '..', '..')
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const expectedVersion = JSON.parse(
+  fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')
+).version
 const requiredFiles = [
   'package.json',
   'index.js',
@@ -25,87 +28,10 @@ const requiredFiles = [
   'addonLogging.js',
   'addonLogging.d.ts',
   'test-support.js',
-  'test-support.d.ts'
+  'test-support.d.ts',
+  'examples/quickstart.js',
+  'examples/quickstart-arguments.js'
 ]
-
-function readTarString(buffer, start, length) {
-  return buffer
-    .subarray(start, start + length)
-    .toString('utf8')
-    .replace(/\0.*$/s, '')
-}
-
-function readTarSize(buffer, offset) {
-  const value = readTarString(buffer, offset + 124, 12).trim()
-  return value ? Number.parseInt(value, 8) : 0
-}
-
-function writeTarEntry(root, name, type, content) {
-  if (!name.startsWith('package/')) return
-  const relativePath = name.slice('package/'.length)
-  const targetPath = path.resolve(root, relativePath)
-  assert.ok(targetPath.startsWith(`${path.resolve(root)}${path.sep}`))
-  if (type === '5') {
-    fs.mkdirSync(targetPath, { recursive: true })
-    return
-  }
-  if (type !== '' && type !== '0') return
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
-  fs.writeFileSync(targetPath, content)
-}
-
-function extractTarball(tarballPath, destination) {
-  const archive = gunzipSync(fs.readFileSync(tarballPath))
-  let offset = 0
-  while (offset + 512 <= archive.length) {
-    const name = readTarString(archive, offset, 100)
-    if (!name) return
-    const size = readTarSize(archive, offset)
-    const type = readTarString(archive, offset + 156, 1)
-    const contentStart = offset + 512
-    writeTarEntry(destination, name, type, archive.subarray(contentStart, contentStart + size))
-    offset = contentStart + Math.ceil(size / 512) * 512
-  }
-}
-
-function createRuntimeProbe(probePath, packedRoot) {
-  const source = `
-const assert = require('node:assert/strict')
-const Module = require('node:module')
-const path = require('node:path')
-const { pathToFileURL } = require('node:url')
-const replacements = new Map([
-  ['bare-events', require('node:events')],
-  ['bare-fs', require('node:fs')],
-  ['bare-os', require('node:os')],
-  ['bare-path', path],
-  ['bare-process', process]
-])
-const originalLoad = Module._load
-Module._load = function (request, parent, isMain) {
-  if (replacements.has(request)) return replacements.get(request)
-  return originalLoad(request, parent, isMain)
-}
-const originalLoader = Module._extensions['.js']
-Module._extensions['.js'] = function (module, filename) {
-  if (filename === path.join(${JSON.stringify(packedRoot)}, 'binding.js')) {
-    module.exports = {}
-    return
-  }
-  originalLoader(module, filename)
-}
-const cjs = require(${JSON.stringify(packedRoot)})
-assert.equal(typeof cjs, 'function')
-assert.equal(cjs.getModelKey(), 'asr-ggml')
-import(pathToFileURL(path.join(${JSON.stringify(packedRoot)}, 'index.js')).href).then((esm) => {
-  assert.equal(esm.default, cjs)
-}).catch((error) => {
-  console.error(error)
-  process.exitCode = 1
-})
-`
-  fs.writeFileSync(probePath, source)
-}
 
 function assertExportTargetsExist(packageJson, packedFiles) {
   const targets = Object.values(packageJson.exports).flatMap((entry) =>
@@ -121,6 +47,69 @@ function assertExampleTargetsExist(packageJson, packedFiles) {
   commands.forEach((command) => {
     const target = command.split(/\s+/)[1]
     assert.ok(packedFiles.has(target), target)
+  })
+}
+
+function installTarball(consumerRoot, tarballPath) {
+  fs.writeFileSync(
+    path.join(consumerRoot, 'package.json'),
+    `${JSON.stringify({ name: 'asr-package-consumer', private: true }, null, 2)}\n`
+  )
+  const result = spawnSync(
+    npmCommand,
+    [
+      'install',
+      '--ignore-scripts',
+      '--omit=dev',
+      '--no-audit',
+      '--no-fund',
+      '--no-package-lock',
+      tarballPath
+    ],
+    { cwd: consumerRoot, encoding: 'utf8' }
+  )
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
+}
+
+function createEsmResolutionProbe(probePath, installedRoot) {
+  const packageUrl = pathToFileURL(`${installedRoot}${path.sep}`).href
+  const source = `
+import assert from 'node:assert/strict'
+
+assert.equal(import.meta.resolve('@qvac/asr-ggml'), new URL('index.js', '${packageUrl}').href)
+assert.equal(
+  import.meta.resolve('@qvac/asr-ggml/addonLogging'),
+  new URL('addonLogging.js', '${packageUrl}').href
+)
+`
+  fs.writeFileSync(probePath, source)
+}
+
+function createCjsResolutionProbe(probePath, installedRoot) {
+  const source = `
+const assert = require('node:assert/strict')
+
+assert.equal(require.resolve('@qvac/asr-ggml'), ${JSON.stringify(path.join(installedRoot, 'index.js'))})
+assert.equal(
+  require.resolve('@qvac/asr-ggml/addonLogging'),
+  ${JSON.stringify(path.join(installedRoot, 'addonLogging.js'))}
+)
+`
+  fs.writeFileSync(probePath, source)
+}
+
+function assertConsumerResolvesExports(consumerRoot, installedRoot) {
+  const probes = [
+    [path.join(consumerRoot, 'resolution-probe.cjs'), createCjsResolutionProbe],
+    [path.join(consumerRoot, 'resolution-probe.mjs'), createEsmResolutionProbe]
+  ]
+  probes.forEach(([probePath, createProbe]) => {
+    createProbe(probePath, installedRoot)
+    const result = spawnSync(process.execPath, [probePath], {
+      cwd: consumerRoot,
+      encoding: 'utf8'
+    })
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
   })
 }
 
@@ -146,24 +135,21 @@ test('packed tarball preserves the public package contract', () => {
       false
     )
 
-    const packedRoot = path.join(temporaryRoot, 'package')
-    extractTarball(path.join(temporaryRoot, packed.filename), packedRoot)
-    const packageJson = JSON.parse(fs.readFileSync(path.join(packedRoot, 'package.json'), 'utf8'))
-    assert.equal(packageJson.version, '0.3.0')
+    const consumerRoot = path.join(temporaryRoot, 'consumer')
+    fs.mkdirSync(consumerRoot)
+    installTarball(consumerRoot, path.join(temporaryRoot, packed.filename))
+
+    const installedRoot = path.join(consumerRoot, 'node_modules', '@qvac', 'asr-ggml')
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(installedRoot, 'package.json'), 'utf8')
+    )
+    assert.equal(packageJson.version, expectedVersion)
     assertExportTargetsExist(packageJson, packedFiles)
     assertExampleTargetsExist(packageJson, packedFiles)
-
-    const probePath = path.join(temporaryRoot, 'runtime-probe.cjs')
-    createRuntimeProbe(probePath, packedRoot)
-    const runtimeResult = spawnSync(process.execPath, [probePath], {
-      cwd: temporaryRoot,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        NODE_PATH: path.join(packageRoot, 'node_modules')
-      }
-    })
-    assert.equal(runtimeResult.status, 0, `${runtimeResult.stdout}${runtimeResult.stderr}`)
+    requiredFiles.forEach((filePath) =>
+      assert.ok(fs.existsSync(path.join(installedRoot, filePath)), filePath)
+    )
+    assertConsumerResolvesExports(consumerRoot, installedRoot)
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }

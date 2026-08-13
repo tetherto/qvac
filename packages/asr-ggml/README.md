@@ -636,7 +636,8 @@ correctness, streaming, validation, and lifecycle behavior. Accuracy,
 long-audio, cold-start, GPU, and C++ suites stay explicit because they need
 specialized models, hardware, timing conditions, or toolchains:
 `test:integration:accuracy`, `test:integration:long`,
-`test:integration:cold-start`, `test:integration:gpu`, and `test:cpp`.
+`test:integration:cold-start`, `test:integration:gpu` (Whisper),
+`test:integration:parakeet:gpu`, and `test:cpp`.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.
@@ -679,26 +680,30 @@ workflow. Aggregated historical results:
 Whisper:
 
 - [`examples/quickstart.js`](examples/quickstart.js) — basic transcription (`npm run example:whisper -- [audioPath] [modelPath] [vadModelPath]`)
-- [`examples/example.streaming-vad.js`](examples/example.streaming-vad.js) — VAD-segmented `runStreaming()` (`npm run example:whisper:streaming-vad`)
-- [`examples/example.mic-conversation.js`](examples/example.mic-conversation.js) — mic capture with VAD state and end-of-turn events (`npm run example:whisper:mic`)
-- [`examples/example.live-transcription.js`](examples/example.live-transcription.js) — small chunks into one long-lived job (`npm run example:whisper:live`)
-- [`examples/example.audio-ctx-chunking.js`](examples/example.audio-ctx-chunking.js) — long recordings via per-chunk `reload()` (`npm run example:whisper:chunking`)
-- [`examples/example.reload.js`](examples/example.reload.js) — reloading with a different language/temperature (`npm run example:whisper:reload`)
-- [`examples/example.decoder.js`](examples/example.decoder.js) — the FFmpeg decoder standalone (`npm run example:whisper:decoder`)
+- [`examples/example.streaming-vad.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.streaming-vad.js) — VAD-segmented `runStreaming()`
+- [`examples/example.mic-conversation.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.mic-conversation.js) — mic capture with VAD state and end-of-turn events
+- [`examples/example.live-transcription.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.live-transcription.js) — small chunks into one long-lived job
+- [`examples/example.audio-ctx-chunking.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.audio-ctx-chunking.js) — long recordings via per-chunk `reload()`
+- [`examples/example.reload.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.reload.js) — reloading with a different language/temperature
+- [`examples/example.decoder.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.decoder.js) — the FFmpeg decoder standalone
 
 Parakeet:
 
-- [`examples/parakeet-transcribe.js`](examples/parakeet-transcribe.js) — CTC, TDT, EOU, or Sortformer transcription (`npm run example:parakeet`)
-- [`examples/parakeet-indic-conformer-transcribe.js`](examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option (`npm run example:parakeet:indic`)
-- [`examples/parakeet-diarized-transcribe.js`](examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
-- [`examples/parakeet-live-mic.js`](examples/parakeet-live-mic.js) — live mic via the duplex streaming session
-- [`examples/parakeet-live-mic-diarized.js`](examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
-- [`examples/parakeet-live-mic-diarized-aosc.js`](examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags (`npm run example:parakeet:mic-diarize-aosc`)
-- [`examples/parakeet-decode-audio.js`](examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container (`npm run example:parakeet:decode`)
+- [`examples/parakeet-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribe.js) — CTC, TDT, EOU, or Sortformer transcription
+- [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
+- [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
+- [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
+- [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
+- [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
+- [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+
+The npm tarball includes the dependency-clean Whisper quickstart. The other
+examples are repository examples; run them from a source checkout with
+`bare packages/asr-ggml/examples/<script>.js`.
 
 The live-mic examples capture the default input device via `sox -d`
 (`brew install sox` / `apt install sox` / `choco install sox`). With
-`npm run example:* -- ...`, keep the `--` separator or npm eats the flags.
+`npm run example:whisper -- ...`, keep the `--` separator or npm eats the flags.
 
 ## Documentation
 
