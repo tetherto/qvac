@@ -216,16 +216,13 @@ export interface RequestRegistry {
   drainAll(): Promise<void>
 
   /**
-   * Cancel every active request for a model (optionally narrowed by kind) and
-   * resolve only once each has fully disposed — native context freed and slot
-   * released. Queued waiters are aborted too but not awaited, since they never
-   * held a slot or touched the model. Used by model unload so the model object
-   * isn't freed while a request is still mid-teardown against it.
+   * Cancel every request for a model and wait for each to fully dispose (native
+   * context freed, slot released) before running `teardown` with an admission
+   * barrier held — any begin for the model starts aborted — then lift it. Used
+   * by model unload so the model object isn't freed while a request is still
+   * mid-teardown, and no new request goes active against it during teardown.
    */
-  cancelAndDrain(modelId: string, kind?: RequestKind): Promise<void>
-
-  /** Lift the barrier raised by `cancelAndDrain(modelId)` once teardown is done. */
-  endModelDrain(modelId: string): void
+  withModelDraining(modelId: string, teardown: () => Promise<void>): Promise<void>
 
   /**
    * Mark a request finished and dispose its scope. Equivalent to
@@ -967,40 +964,37 @@ export function createRequestRegistry(options?: {
     return Promise.all(draining).then(() => {})
   }
 
-  function endModelDrain(modelId: string): void {
-    drainingModels.delete(modelId)
-  }
-
-  async function cancelAndDrain(modelId: string, kind?: RequestKind): Promise<void> {
-    // Raise the barrier so a begin still suspended in admission can't go active
-    // after we return. Model-wide, so only the unfiltered (whole-model) form.
-    if (kind === undefined) drainingModels.add(modelId)
-    // Abort every matching active request and collect its disposal promise, so
-    // we can wait for each handler's scope to fully unwind (native context
-    // freed, slot released) before the caller tears the model down. Snapshot
-    // the disposals before awaiting — `disposeEntry` mutates `entries`.
-    const draining: Array<Promise<void>> = []
-    for (const entry of entries.values()) {
-      if (entry.ctx.modelId !== modelId) continue
-      if (kind && entry.ctx.kind !== kind) continue
-      cancelEntry(entry, 'modelUnload')
-      draining.push(entry.disposed)
+  // Cancel and drain every request for a model, then run `teardown` with the
+  // admission barrier held — any begin for the model (including one still
+  // suspended in admission) starts aborted — lifting it afterward. Scoped so the
+  // barrier can't be left raised.
+  async function withModelDraining(modelId: string, teardown: () => Promise<void>): Promise<void> {
+    drainingModels.add(modelId)
+    try {
+      // Abort each active request and collect its disposal promise, so we wait
+      // for every handler's scope to fully unwind (native context freed, slot
+      // released) before teardown. Snapshot first — `disposeEntry` mutates
+      // `entries`.
+      const draining: Array<Promise<void>> = []
+      for (const entry of entries.values()) {
+        if (entry.ctx.modelId !== modelId) continue
+        cancelEntry(entry, 'modelUnload')
+        draining.push(entry.disposed)
+      }
+      // Requests already mid-disposal are out of `entries` but may still be
+      // tearing down natively — wait for them too.
+      for (const entry of disposingEntries) {
+        if (entry.ctx.modelId === modelId) draining.push(entry.disposed)
+      }
+      // Queued waiters never held a slot, so just abort their begins.
+      for (const { key, waiter } of Array.from(waitersById.values())) {
+        if (waiter.modelId === modelId) cancelQueuedWaiterGracefully(key, waiter, 'modelUnload')
+      }
+      await Promise.all(draining)
+      await teardown()
+    } finally {
+      drainingModels.delete(modelId)
     }
-    // Requests already mid-disposal are out of `entries` but may still be tearing
-    // down natively — wait for them too.
-    for (const entry of disposingEntries) {
-      if (entry.ctx.modelId !== modelId) continue
-      if (kind && entry.ctx.kind !== kind) continue
-      draining.push(entry.disposed)
-    }
-    // Queued waiters never held a slot or touched the model, so there's nothing
-    // native to drain — just resolve their begins into aborted contexts.
-    for (const { key, waiter } of Array.from(waitersById.values())) {
-      if (waiter.modelId !== modelId) continue
-      if (kind && waiter.kind !== kind) continue
-      cancelQueuedWaiterGracefully(key, waiter, 'modelUnload')
-    }
-    await Promise.all(draining)
   }
 
   async function end(requestId: string, outcome: RequestOutcome): Promise<void> {
@@ -1020,8 +1014,7 @@ export function createRequestRegistry(options?: {
     cancel,
     cancelAll,
     drainAll,
-    cancelAndDrain,
-    endModelDrain,
+    withModelDraining,
     end,
     policy,
     // Test-only: lets the registry race tests assert the bound

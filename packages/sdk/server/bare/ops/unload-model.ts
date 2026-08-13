@@ -20,12 +20,10 @@ export async function unloadModel(params: UnloadModelParams) {
     throw new ModelNotLoadedError(modelId)
   }
 
-  const registry = getRequestRegistry()
-  try {
-    // Cancel and drain the model's requests, holding the admission barrier
-    // through teardown so nothing goes active against a model being freed.
-    await registry.cancelAndDrain(modelId)
-
+  // Cancel and drain the model's requests, then tear down under the admission
+  // barrier so nothing goes active against a model being freed. The barrier is
+  // lifted for us when this resolves.
+  await getRequestRegistry().withModelDraining(modelId, async () => {
     clearFinetuneRuntimeState(modelId)
 
     if (!entry.isDelegated) {
@@ -57,8 +55,5 @@ export async function unloadModel(params: UnloadModelParams) {
     unregisterAllLoggingStreams(modelId)
 
     logger.info(`Model ${modelId} unloaded`)
-  } finally {
-    // Lift the barrier so a later reload admits normally.
-    registry.endModelDrain(modelId)
-  }
+  })
 }

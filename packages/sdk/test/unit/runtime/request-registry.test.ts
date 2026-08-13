@@ -1506,7 +1506,7 @@ test('exclusive: cancelAll rejects a queued writer and its trailing readers', as
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after cancelAll teardown')
 })
 
-test('cancelAndDrain: waits for an active request to finish disposing, and aborts a queued one', async (t) => {
+test('withModelDraining: waits for an active request to finish disposing before teardown, and aborts a queued one', async (t) => {
   const r = createRequestRegistry()
   r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
 
@@ -1543,21 +1543,27 @@ test('cancelAndDrain: waits for an active request to finish disposing, and abort
   await settle()
   t.is(queuedResolved, false, 'second request queued behind the active one')
 
-  let drainDone = false
-  const drainP = r.cancelAndDrain('m1').then(() => {
-    drainDone = true
-  })
+  let teardownRan = false
+  let done = false
+  const p = r
+    .withModelDraining('m1', async () => {
+      teardownRan = true
+    })
+    .then(() => {
+      done = true
+    })
   await settle()
 
-  // Abort has fired and disposal has started, but the gated cleanup has not
-  // finished, so the drain must still be pending.
+  // The drain runs before teardown, and can't finish while the active request's
+  // gated cleanup is still pending.
   t.is(cleanupRan, false, 'deferred cleanup still blocked')
-  t.is(drainDone, false, 'drain waits while the active request is mid-teardown')
+  t.is(teardownRan, false, 'teardown waits for the drain')
+  t.is(done, false, 'withModelDraining still pending')
 
   releaseCleanup()
-  await drainP
+  await p
   t.is(cleanupRan, true, 'deferred cleanup completed')
-  t.is(drainDone, true, 'drain resolved only after disposal finished')
+  t.is(teardownRan, true, 'teardown ran after the drain')
   t.is(r.get('active'), null, 'active request disposed and removed')
 
   // The queued request was resolved into an aborted context, not left hanging.
@@ -1567,27 +1573,27 @@ test('cancelAndDrain: waits for an active request to finish disposing, and abort
   t.is(r.list().length, 0, 'no entries remain once the queued request unwinds')
 })
 
-test('cancelAndDrain: raises an admission barrier until endModelDrain', async (t) => {
+test('withModelDraining: holds an admission barrier during teardown, lifts it after', async (t) => {
   const r = createRequestRegistry()
   r.policy({ kind: 'completion', maxConcurrentPerModel: 2, onOverflow: 'queue' })
 
-  // No active requests — cancelAndDrain still engages the barrier and keeps it.
-  await r.cancelAndDrain('m1')
+  let duringAborted: boolean | undefined
+  await r.withModelDraining('m1', async () => {
+    // Inside teardown the barrier is up: a begin for the model starts aborted,
+    // so it can't go active against a model being freed (closes the admission gap).
+    const during = await r.begin({ requestId: 'during', kind: 'completion', modelId: 'm1' })
+    duringAborted = during.signal.aborted
+    await during[Symbol.asyncDispose]()
+  })
+  t.is(duringAborted, true, 'begin during teardown is aborted')
 
-  // A begin during teardown starts aborted, so it can't go active against the
-  // model being freed (this closes the reserve/acquire gap).
-  const during = await r.begin({ requestId: 'during', kind: 'completion', modelId: 'm1' })
-  t.is(during.signal.aborted, true, 'begin while the model is draining is aborted')
-  await during[Symbol.asyncDispose]()
-
-  // Barrier lifts on endModelDrain: a later reload admits normally.
-  r.endModelDrain('m1')
+  // Barrier lifted once teardown resolves: a later reload admits normally.
   const reload = await r.begin({ requestId: 'reload', kind: 'completion', modelId: 'm1' })
-  t.is(reload.signal.aborted, false, 'begin after endModelDrain admits normally')
+  t.is(reload.signal.aborted, false, 'begin after teardown admits normally')
   await reload[Symbol.asyncDispose]()
 })
 
-test('cancelAndDrain: waits for a request whose disposal already started', async (t) => {
+test('withModelDraining: waits for a request whose disposal already started', async (t) => {
   const r = createRequestRegistry()
   const ctx = await r.begin({ requestId: 'a', kind: 'completion', modelId: 'm1' })
 
@@ -1607,18 +1613,20 @@ test('cancelAndDrain: waits for a request whose disposal already started', async
   await settle()
   t.is(r.get('a'), null, 'entry left `entries` when disposal started')
 
-  let drainDone = false
-  const drainP = r.cancelAndDrain('m1').then(() => {
-    drainDone = true
-  })
+  let done = false
+  const p = r
+    .withModelDraining('m1', async () => {})
+    .then(() => {
+      done = true
+    })
   await settle()
-  t.is(drainDone, false, 'drain waits for the in-flight disposal it cannot see in entries')
+  t.is(done, false, 'drain waits for the in-flight disposal it cannot see in entries')
 
   releaseCleanup()
   await disposeP
-  await drainP
+  await p
   t.is(cleanupDone, true, 'gated cleanup finished')
-  t.is(drainDone, true, 'drain resolved only after the in-flight disposal completed')
+  t.is(done, true, 'resolved only after the in-flight disposal completed')
 })
 
 test('cancelAll + drainAll: waits for cancelled requests to finish tearing down', async (t) => {
