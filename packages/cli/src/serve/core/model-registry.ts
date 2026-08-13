@@ -31,6 +31,9 @@ export interface ServeConfig {
    * `response_format=url`. Trailing slash is stripped on parse.
    */
   publicBaseUrl: string | null
+  cors: {
+    origins: string[]
+  }
   openai: OpenAIServeOptions
 }
 
