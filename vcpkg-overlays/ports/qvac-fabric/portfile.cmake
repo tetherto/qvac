@@ -4,8 +4,8 @@ vcpkg_from_github(
   # QVAC-23075 rollout Phase A: validate the 7 consumers against the VisionPsy fabric
   # branch head before the tag exists. A branch SHA, not v${VERSION}, on purpose.
   # Replaced by the published tag at the registry publish, so this overlay is temporary.
-  REF 7a6425a3add96f2598110a5953786866c9d49e0c
-  SHA512 0296d40e7663452dff2da62e4d9f509b018a989a7aa4231711eb4219dba0d878c8a9cb296a85de8d87b6d8e6b188f943bd8ca6df5ed696297d115557afe9579d
+  REF 8be2131e27d5589667db9c7f780fc1a9ef20869a
+  SHA512 e08658709630fd574bf6a463b06c81f73953e228737b505d41d3d5ccc4609793712da922ca47ab6ac42b20df8f0e9e562a364649ecb5fd9f82bbf0a70f11b24a
   HEAD_REF main
 )
 
