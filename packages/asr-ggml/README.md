@@ -698,8 +698,24 @@ Parakeet:
 - [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
 
 The npm tarball includes the dependency-clean Whisper quickstart. The other
-examples are repository examples; run them from a source checkout with
-`bare packages/asr-ggml/examples/<script>.js`.
+examples are repository examples. Run their matching commands from a source
+checkout:
+
+```bash
+npm run example:whisper:streaming-vad
+npm run example:whisper:mic
+npm run example:whisper:live-transcription
+npm run example:whisper:audio-ctx-chunking
+npm run example:whisper:reload
+npm run example:whisper:decoder
+npm run example:parakeet
+npm run example:parakeet:indic-conformer
+npm run example:parakeet:diarize
+npm run example:parakeet:mic
+npm run example:parakeet:mic-diarize
+npm run example:parakeet:mic-diarize-aosc
+npm run example:parakeet:decode-audio
+```
 
 The live-mic examples capture the default input device via `sox -d`
 (`brew install sox` / `apt install sox` / `choco install sox`). With

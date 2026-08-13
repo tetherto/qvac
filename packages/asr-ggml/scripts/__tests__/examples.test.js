@@ -11,7 +11,21 @@ const examplesRoot = path.join(packageRoot, 'examples')
 const relativeImportPattern = /require\(['"](\.[^'"]+)['"]\)/g
 
 const expectedScripts = {
-  'example:whisper': 'bare examples/quickstart.js'
+  'example:whisper': 'bare examples/quickstart.js',
+  'example:whisper:streaming-vad': 'bare examples/example.streaming-vad.js',
+  'example:whisper:mic': 'bare examples/example.mic-conversation.js',
+  'example:whisper:live-transcription': 'bare examples/example.live-transcription.js',
+  'example:whisper:audio-ctx-chunking': 'bare examples/example.audio-ctx-chunking.js',
+  'example:whisper:reload': 'bare examples/example.reload.js',
+  'example:whisper:decoder': 'bare examples/example.decoder.js',
+  'example:parakeet': 'bare examples/parakeet-transcribe.js',
+  'example:parakeet:indic-conformer': 'bare examples/parakeet-indic-conformer-transcribe.js',
+  'example:parakeet:diarize': 'bare examples/parakeet-diarized-transcribe.js',
+  'example:parakeet:mic': 'bare examples/parakeet-live-mic.js',
+  'example:parakeet:mic-diarize': 'bare examples/parakeet-live-mic-diarized.js',
+  'example:parakeet:mic-diarize-aosc':
+    'bare examples/parakeet-live-mic-diarized-aosc.js',
+  'example:parakeet:decode-audio': 'bare examples/parakeet-decode-audio.js'
 }
 
 function getExampleFiles() {
@@ -41,7 +55,7 @@ test('all example relative imports resolve', () => {
   getExampleFiles().forEach(assertRelativeImportsResolve)
 })
 
-test('published example scripts target shipped examples', () => {
+test('package scripts cover every runnable example', () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
   assert.deepEqual(
     Object.fromEntries(

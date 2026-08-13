@@ -14,6 +14,7 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const expectedVersion = JSON.parse(
   fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')
 ).version
+const publishedExampleScripts = ['example:whisper']
 const requiredFiles = [
   'package.json',
   'index.js',
@@ -41,9 +42,7 @@ function assertExportTargetsExist(packageJson, packedFiles) {
 }
 
 function assertExampleTargetsExist(packageJson, packedFiles) {
-  const commands = Object.entries(packageJson.scripts)
-    .filter(([name]) => name.startsWith('example:'))
-    .map(([, command]) => command)
+  const commands = publishedExampleScripts.map((name) => packageJson.scripts[name])
   commands.forEach((command) => {
     const target = command.split(/\s+/)[1]
     assert.ok(packedFiles.has(target), target)
