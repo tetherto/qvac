@@ -48,8 +48,11 @@ const FORCE_EXIT_GRACE_MS = 3_000
 // A native op that ignores cancel would leave runCleanup's drainAll() /
 // unloadAllModels() awaiting forever, so the direct worker arms this deadline
 // BEFORE cleanup (not just after Bare.exit) and force-kills if the whole
-// shutdown overruns it. Longer than the exit grace since cleanup does real work.
-const CLEANUP_DEADLINE_MS = 10_000
+// shutdown overruns it. A genuine hang never completes, so this only needs to
+// clear the slowest HEALTHY cleanup (swarm/download/registry closes that had no
+// timeout before this) — kept generous so it never force-kills a slow-but-fine
+// shutdown, only a wedged one.
+const CLEANUP_DEADLINE_MS = 30_000
 
 // Arm a self-SIGKILL after `deadlineMs`. Unref'd so it never keeps a healthy
 // process alive; fires only if a shutdown phase wedges on a blocked native
