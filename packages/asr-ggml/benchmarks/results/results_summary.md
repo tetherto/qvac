@@ -1,19 +1,31 @@
 # Aggregated Benchmark Results
 
-This summary consolidates benchmarking results across all quantizations and speaker groups.
+This summary consolidates benchmarking results across all model configurations.
 
-The rows below are **whisper-engine** runs recorded before the whisper +
-parakeet merge; the `Model` column names the npm package that produced them
-(`@qvac/transcription-whispercpp`, now `@qvac/asr-ggml` with
-`engine: 'whisper'`) and is kept verbatim so the measurements stay
-attributable. Add an `Engine` column when the first parakeet rows land.
-
-Original Model: [Whisper-Tiny](https://huggingface.co/openai/whisper-tiny)
-
-| Speaker group | Quantization | Version | Model | VAD | WER | CER | Dataset | Notes |
-|---------------|--------------|---------|-------|-----|-----|-----|---------|-------|
-| clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | - | 71.72 | 69.27 | Librispeech | Performed on GPU |
-| clean | whispercpp | 3.1.1 | @qvac/transcription-whispercpp | ✓ | 62.30 | 57.87 | Librispeech | Performed on GPU |
+| Model | Type | Language | Speaker Group | GPU | Mode | WER | CER | Dataset | Notes |
+|-------|------|----------|---------------|-----|------|-----|-----|---------|-------|
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | gujarati | clean | - | batch | 10.81 | 6.07 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | gujarati | clean | ✓ | batch | 10.81 | 6.07 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | hindi | clean | - | batch | 5.37 | 2.97 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | hindi | clean | ✓ | batch | 5.43 | 2.97 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | kannada | clean | - | batch | 8.65 | 3.67 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | kannada | clean | ✓ | batch | 8.65 | 3.67 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | tamil | clean | - | batch | 17.96 | 12.04 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| indic-conformer-ctc.q8_0.gguf | indic-conformer | tamil | clean | ✓ | batch | 17.96 | 12.04 | Fleurs | Model type: indic-conformer, Threads: 4 |
+| parakeet-ctc-0.6b.f16.gguf | ctc | english | clean | - | batch | 1.51 | 0.65 | Librispeech | Model type: ctc, Threads: 4 |
+| parakeet-ctc-0.6b.f16.gguf | ctc | english | clean | - | streaming | 1.51 | 0.65 | Librispeech | Model type: ctc, Threads: 4 |
+| parakeet-ctc-0.6b.f16.gguf | ctc | english | clean | ✓ | batch | 1.51 | 0.65 | Librispeech | Model type: ctc, Threads: 4 |
+| parakeet-eou-120m-v1.f16.gguf | eou | english | clean | - | batch | 3.01 | 1.46 | Librispeech | Model type: eou, Threads: 4 |
+| parakeet-eou-120m-v1.f16.gguf | eou | english | clean | - | streaming | 3.01 | 1.46 | Librispeech | Model type: eou, Threads: 4 |
+| parakeet-eou-120m-v1.f16.gguf | eou | english | clean | ✓ | streaming | 3.01 | 1.46 | Librispeech | Model type: eou, Threads: 4 |
+| parakeet-tdt-0.6b-v3.f16.gguf | tdt | french | clean | - | batch | 5.20 | 2.19 | Fleurs | Model type: tdt, Threads: 4 |
+| parakeet-tdt-0.6b-v3.f16.gguf | tdt | german | clean | - | batch | 4.61 | 1.40 | Fleurs | Model type: tdt, Threads: 4 |
+| parakeet-tdt-0.6b-v3.f16.gguf | tdt | spanish | clean | - | batch | 3.18 | 1.19 | Fleurs | Model type: tdt, Threads: 4 |
+| parakeet-tdt-0.6b-v3.f16.gguf | tdt | english | clean | - | batch | 2.26 | 0.77 | Librispeech | Model type: tdt, Threads: 4 |
+| parakeet-tdt-0.6b-v3.f16.gguf | tdt | english | clean | - | streaming | 2.26 | 0.77 | Librispeech | Model type: tdt, Threads: 4 |
+| parakeet-tdt-0.6b-v3.f16.gguf | tdt | english | clean | ✓ | batch | 2.26 | 0.77 | Librispeech | Model type: tdt, Threads: 4 |
+| sortformer-4spk-v1.f16.gguf | sortformer | english | clean | - | batch |  |  | Librispeech | Model type: sortformer, Threads: 4 |
+| sortformer-4spk-v1.f16.gguf | sortformer | english | clean | ✓ | batch |  |  | Librispeech | Model type: sortformer, Threads: 4 |
 
 ## Reference
 
@@ -53,15 +65,11 @@ The speaker group is a classification introduced by the LibriSpeech authors, who
 | other         | Speakers with **higher WER** |
 | all           | Full corpus: both *clean* and *other* segments combined. |
 
-### VAD (Voice Activity Detection)
+### Model Types
 
-VAD is a technique used to identify and separate speech from non-speech segments in audio. It is often used in speech recognition systems to improve accuracy by reducing the impact of background noise and other non-speech sounds.
-
-Addon: internal
-
-Version: 
-
-| VAD | Description |
-|-----|-------------|
-| ✓   | VAD is enabled |
-| -   | VAD is disabled |
+| Model Type | Description |
+|------------|-------------|
+| tdt        | Token-and-Duration Transducer (default) |
+| ctc        | Connectionist Temporal Classification |
+| eou        | End-of-Utterance detection |
+| sortformer | Sortformer architecture |

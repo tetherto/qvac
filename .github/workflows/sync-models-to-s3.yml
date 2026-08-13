@@ -1,0 +1,189 @@
+name: Sync Models to S3 (mobile)
+
+# Mirror model objects into the Device-Farm-local US bucket so mobile e2e tests
+# stage models from the same region as the devices (us-west-2) instead of the
+# cross-region EU bucket or HuggingFace.
+#
+# This is the S3 twin of the desktop cache warmer (.github/actions/cache-models/
+# warm-models.mjs): a run only copies what's missing, so it is a cheap no-op once
+# the bucket is populated. Objects are copied server-side (bucket-to-bucket), so
+# the payload never travels through the runner.
+#
+# Scope (today): the qvac_models_compiled/ prefix, which is where every S3-native
+# mobile addon (tts-ggml, ocr-ggml, asr-ggml, vla-ggml, translation-nmtcpp)
+# resolves its GGUFs. HuggingFace-only addons (llm-llamacpp, embed-llamacpp,
+# diffusion-cpp) are mirrored in a later, manifest-driven step.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_bucket:
+        description: "Source S3 bucket (existing, EU)"
+        type: string
+        required: false
+        default: "tether-ai-dev"
+      dest_bucket:
+        description: "Destination S3 bucket (Device-Farm-local, US)"
+        type: string
+        required: false
+        default: "tether-ai-dev-us"
+      prefix:
+        description: "Key prefix to mirror"
+        type: string
+        required: false
+        default: "qvac_models_compiled/"
+      dryrun:
+        description: "Preview only: list what would copy, copy nothing"
+        type: boolean
+        required: false
+        default: true
+  schedule:
+    # Weekly top-up so newly published compiled models land in the US bucket
+    # without a manual trigger. Sunday 02:00 UTC.
+    - cron: "0 2 * * 0"
+
+concurrency:
+  group: sync-models-to-s3
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Mirror models EU -> US
+    # Self-hosted Linux runner: the first full seed of an empty destination
+    # bucket can copy tens of GB cross-region and would risk the 6h cap on a
+    # GitHub-hosted runner. Self-hosted has no such job cap, so we can give the
+    # bulk copy plenty of headroom. This job only shells out to the AWS CLI
+    # (no checkout / build / GPU), so a plain CPU runner is enough.
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    # Generous ceiling for the initial bulk mirror; steady-state runs finish in
+    # seconds because --size-only makes an already-populated bucket a no-op.
+    timeout-minutes: 360
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      SOURCE_BUCKET: ${{ github.event.inputs.source_bucket || 'tether-ai-dev' }}
+      DEST_BUCKET: ${{ github.event.inputs.dest_bucket || 'tether-ai-dev-us' }}
+      PREFIX: ${{ github.event.inputs.prefix || 'qvac_models_compiled/' }}
+      # Scheduled runs always perform the copy; manual runs honor the input and
+      # default to a dry run for safety. Explicit string comparison (rather than
+      # `|| 'true'`) so that an explicit dryrun=false on manual dispatch is
+      # respected as a live sync instead of falling back to dry run.
+      DRYRUN: ${{ github.event_name != 'schedule' && github.event.inputs.dryrun != 'false' }}
+      SOURCE_REGION: eu-central-1
+      DEST_REGION: us-west-2
+    steps:
+      - name: Validate bucket and prefix inputs
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Defense-in-depth: constrain the free-form dispatch inputs before any
+          # AWS call. Buckets are allowlisted to the intended EU source / US
+          # destination, and the prefix is restricted to a safe character set
+          # (no quotes, whitespace, $, backticks, or `..` traversal). This keeps
+          # a privileged dispatcher from pointing the mirror at an unintended
+          # bucket or widening its scope, even though inputs already flow via
+          # env: and are used only inside quoted arguments.
+          ALLOWED_BUCKETS="tether-ai-dev tether-ai-dev-us"
+
+          for name in SOURCE_BUCKET DEST_BUCKET; do
+            value="${!name}"
+            ok=false
+            for allowed in ${ALLOWED_BUCKETS}; do
+              if [ "${value}" = "${allowed}" ]; then
+                ok=true
+                break
+              fi
+            done
+            if [ "${ok}" != "true" ]; then
+              echo "::error::${name}='${value}' is not in the allowlist (${ALLOWED_BUCKETS})."
+              exit 1
+            fi
+          done
+
+          if ! [[ "${PREFIX}" =~ ^[A-Za-z0-9/._-]+$ ]]; then
+            echo "::error::PREFIX='${PREFIX}' contains disallowed characters (allowed: A-Z a-z 0-9 / . _ -)."
+            exit 1
+          fi
+          if [[ "${PREFIX}" == *".."* ]]; then
+            echo "::error::PREFIX='${PREFIX}' must not contain '..'."
+            exit 1
+          fi
+
+          echo "Inputs validated: ${SOURCE_BUCKET} -> ${DEST_BUCKET}, prefix '${PREFIX}'."
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-2
+          # Credential lifetime (capped by the role's MaxSessionDuration, 7200s /
+          # 2h) is the real ceiling here, not the job timeout. Company policy
+          # keeps MaxSessionDuration fixed, so we deliberately do NOT rely on a
+          # longer session. Instead the mirror below is fully resumable: each
+          # pass is missing-only, so if a large first seed can't fit in one 2h
+          # window it simply finishes on the next scheduled/dispatch run.
+          role-duration-seconds: 7200
+
+      - name: Mirror prefix (server-side, missing-only, resumable)
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "Source:      s3://${SOURCE_BUCKET}/${PREFIX} (${SOURCE_REGION})"
+          echo "Destination: s3://${DEST_BUCKET}/${PREFIX} (${DEST_REGION})"
+          echo "Dry run:     ${DRYRUN}"
+
+          # --size-only: model objects are content-addressed by dated key, so a
+          # matching size means identical bytes; this avoids re-copying on clock
+          # skew and makes an already-populated bucket a fast no-op.
+          run_sync() {
+            aws s3 sync \
+              "s3://${SOURCE_BUCKET}/${PREFIX}" \
+              "s3://${DEST_BUCKET}/${PREFIX}" \
+              --source-region "${SOURCE_REGION}" \
+              --region "${DEST_REGION}" \
+              --size-only \
+              --no-progress \
+              "$@"
+          }
+
+          if [ "${DRYRUN}" = "true" ]; then
+            if run_sync --dryrun; then
+              echo "Done. (dry run: true)"
+              exit 0
+            fi
+            echo "Dry run failed (permission, missing bucket, or network error)."
+            exit 1
+          fi
+
+          # Resumable loop: because every pass is missing-only, re-running the
+          # sync is safe and idempotent. `aws s3 sync` exits 0 only after it has
+          # copied every missing object, so a single successful pass means the
+          # mirror is complete (whether or not it had anything to copy). We only
+          # retry on a non-zero exit (transient S3/network error or an expired
+          # credential window), backing off between attempts. Anything still
+          # missing when the credentials finally expire is picked up by the next
+          # scheduled/dispatch run.
+          MAX_ATTEMPTS=8
+          completed=false
+          for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
+            echo "=== sync attempt ${attempt}/${MAX_ATTEMPTS} ==="
+
+            if run_sync; then
+              echo "Sync completed successfully; mirror is up to date."
+              completed=true
+              break
+            fi
+
+            echo "Attempt ${attempt} failed (transient error or credential window ended); backing off before retry."
+            sleep 30
+          done
+
+          if [ "${completed}" != "true" ]; then
+            echo "Mirror did not fully complete within this run's credential window."
+            echo "This is expected for a large first seed: the next scheduled/dispatch run resumes where this one stopped (missing-only)."
+            exit 1
+          fi
+
+          echo "Done. (dry run: false)"
