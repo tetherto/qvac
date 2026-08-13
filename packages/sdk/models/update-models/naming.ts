@@ -480,14 +480,9 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     const versionHint = versionMatch ? `V${versionMatch[1]!}` : ''
     const speakerHint = speakerMatch ? speakerMatch[1]! : ''
 
-    const nameParts = [
-      family,
-      variant,
-      paramsHint,
-      speakerHint,
-      versionHint,
-      quantization
-    ].filter((p) => p && p !== '')
+    const nameParts = [family, variant, paramsHint, speakerHint, versionHint, quantization].filter(
+      (p) => p && p !== ''
+    )
     return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
   }
 

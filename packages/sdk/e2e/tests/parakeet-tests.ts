@@ -1,10 +1,7 @@
 import type { TestDefinition } from '@tetherto/qvac-test-suite'
 
 type ParakeetDependency =
-  | 'parakeet-tdt'
-  | 'parakeet-ctc'
-  | 'parakeet-sortformer'
-  | 'parakeet-indic-conformer'
+  'parakeet-tdt' | 'parakeet-ctc' | 'parakeet-sortformer' | 'parakeet-indic-conformer'
 
 const createParakeetTest = (
   testId: string,
