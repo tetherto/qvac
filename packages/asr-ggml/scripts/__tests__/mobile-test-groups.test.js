@@ -70,9 +70,6 @@ test('every shard runner has an explicit model or model-free manifest entry', ()
       sorted(Object.keys(WHISPER_TEST_MODEL_NAMES)),
       sorted(groups[platform]['whisper-perf'])
     )
-    assert.deepEqual(
-      sorted(Object.keys(TEST_MODELS)),
-      sorted(groups[platform]['parakeet-perf'])
-    )
+    assert.deepEqual(sorted(Object.keys(TEST_MODELS)), sorted(groups[platform]['parakeet-perf']))
   }
 })
