@@ -71,7 +71,7 @@ on:
       device-farm-timeout:
         description: "Device Farm run timeout (minutes)"
         type: number
-        default: 90
+        default: 120
       device-farm-start-timeout:
         description: "Wait for Device Farm run to start (minutes)"
         type: number
@@ -120,7 +120,7 @@ on:
         default: 1200
       device-farm-timeout:
         type: number
-        default: 90
+        default: 120
       device-farm-start-timeout:
         type: number
         default: 15
@@ -322,7 +322,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
@@ -347,7 +347,7 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
