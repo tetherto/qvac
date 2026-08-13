@@ -19,6 +19,8 @@ test('isSafeCacheKey: rejects empty, dot, absolute, traversal, and separators', 
   t.absent(isSafeCacheKey('/etc/passwd'))
   t.absent(isSafeCacheKey('a/b'))
   t.absent(isSafeCacheKey('a\\b'))
+  t.absent(isSafeCacheKey('a\0b'), 'null byte rejected as a predicate, not thrown')
+  t.absent(isSafeCacheKey('a%00b'))
 })
 
 // ============== sanitizePathComponent ==============

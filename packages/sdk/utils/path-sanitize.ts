@@ -18,6 +18,9 @@
 export function isSafeCacheKey(cacheKey: string): boolean {
   if (typeof cacheKey !== 'string' || cacheKey.trim() === '') return false
   if (cacheKey === '.' || cacheKey === '..') return false
+  // A null byte is unsafe; reject here so this stays a predicate and doesn't let
+  // `sanitizePathComponent` throw a generic Error out of `assertSafeCacheKey`.
+  if (cacheKey.includes('\0') || cacheKey.includes('%00')) return false
   // A key must be a single component: no separators (which would split it
   // across directories or, in the raw marker path, escape the cache root).
   if (cacheKey.includes('/') || cacheKey.includes('\\')) return false
