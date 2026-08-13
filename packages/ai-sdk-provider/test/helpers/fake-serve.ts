@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { isProcessAlive, readAllRecords, removeRecord } from '../../src/managed/registry.js'
 
-// A stand-in for `qvac serve openai`: parses `--port`/`--host`, then behaves
+// A stand-in for `qvac serve openai`: parses its managed launch options, then behaves
 // per FAKE_SERVE_BEHAVIOR. Lets the managed-mode tests drive every supervisor
 // path (healthy, timeout, crash, SIGKILL escalation) without @qvac/cli or real
 // models. Spawned verbatim through `serveBinPath`, so it relies on a POSIX
@@ -15,6 +15,7 @@ const args = process.argv.slice(2)
 function arg (name) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
 const port = Number(arg('--port'))
 const host = arg('--host') || '127.0.0.1'
+const apiKey = arg('--api-key')
 const behavior = process.env.FAKE_SERVE_BEHAVIOR || 'healthy'
 
 if (behavior === 'exit-immediately') { console.error('fake serve boom'); process.exit(3) }
@@ -32,6 +33,11 @@ if (behavior === 'spawn-stubborn-worker') {
 
 const server = http.createServer((req, res) => {
   if (req.url && req.url.indexOf('/v1/models') === 0) {
+    if (!apiKey || req.headers.authorization !== 'Bearer ' + apiKey) {
+      res.statusCode = 401
+      res.end('unauthorized')
+      return
+    }
     if (behavior === 'unhealthy') { res.statusCode = 503; res.end('not ready'); return }
     res.statusCode = 200
     res.setHeader('content-type', 'application/json')

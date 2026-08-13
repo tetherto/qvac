@@ -11,7 +11,6 @@
     "providers": {
       "qvac": {
         "baseUrl": "http://127.0.0.1:11434/v1",
-        "apiKey": "custom-local",
         "api": "openai-completions",
         "models": [
           {
@@ -179,7 +178,10 @@
       },
       "apiKey": {
         "type": "string",
-        "description": "Optional API key marker for local OpenAI-compatible requests."
+        "minLength": 32,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{31,127}$",
+        "description": "Optional base64url bearer key to materialize into the private QVAC key file."
       },
       "qvacCommand": {
         "type": "string",
