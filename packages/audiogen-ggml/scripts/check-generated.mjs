@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
@@ -22,7 +23,7 @@ const handwrittenPaths = [
   'test/'
 ]
 
-function run (command, args, options = {}) {
+function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: packageRoot,
     encoding: 'utf8',
@@ -32,17 +33,16 @@ function run (command, args, options = {}) {
   return result
 }
 
-function walk (directory) {
+function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name)
     return entry.isDirectory() ? walk(entryPath) : [entryPath]
   })
 }
 
-function isHandwritten (filePath) {
+function isHandwritten(filePath) {
   return handwrittenPaths.some(
-    (handwrittenPath) =>
-      filePath === handwrittenPath || filePath.startsWith(handwrittenPath)
+    (handwrittenPath) => filePath === handwrittenPath || filePath.startsWith(handwrittenPath)
   )
 }
 
@@ -69,31 +69,49 @@ const trackedGeneratedOutputs = trackedResult.stdout
 
 const generatedOutputs = [...new Set([...expectedOutputs, ...trackedGeneratedOutputs])].sort()
 
-for (const outputPath of generatedOutputs) {
-  fs.rmSync(path.join(packageRoot, outputPath), { force: true })
+function snapshotOutputs(snapshotRoot) {
+  for (const outputPath of generatedOutputs) {
+    const sourcePath = path.join(packageRoot, outputPath)
+    if (!fs.existsSync(sourcePath)) continue
+    const snapshotPath = path.join(snapshotRoot, outputPath)
+    fs.mkdirSync(path.dirname(snapshotPath), { recursive: true })
+    fs.copyFileSync(sourcePath, snapshotPath)
+  }
 }
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const buildResult = run(npmCommand, ['run', 'build:ts'], { stdio: 'inherit' })
-if (buildResult.status !== 0) process.exit(buildResult.status ?? 1)
-
-const statusResult = run('git', [
-  'status',
-  '--short',
-  '--untracked-files=all',
-  '--',
-  ...generatedOutputs
-])
-if (statusResult.status !== 0) {
-  process.stderr.write(statusResult.stderr)
-  process.exit(statusResult.status ?? 1)
+function changedOutputs(snapshotRoot) {
+  return generatedOutputs.filter((outputPath) => {
+    const snapshotPath = path.join(snapshotRoot, outputPath)
+    const generatedPath = path.join(packageRoot, outputPath)
+    if (!fs.existsSync(snapshotPath) || !fs.existsSync(generatedPath)) return true
+    return !fs.readFileSync(snapshotPath).equals(fs.readFileSync(generatedPath))
+  })
 }
 
-if (statusResult.stdout) {
-  console.error('Generated wrapper files are stale or incomplete:')
-  process.stderr.write(statusResult.stdout)
-  console.error('Run `npm run build:ts` and commit the generated changes.')
-  process.exit(1)
+function staleOutputs() {
+  const expected = new Set(expectedOutputs)
+  return trackedGeneratedOutputs.filter((outputPath) => !expected.has(outputPath))
 }
 
-console.log('Generated wrapper files are up to date.')
+const snapshotRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'audiogen-generated-'))
+try {
+  snapshotOutputs(snapshotRoot)
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const buildResult = run(npmCommand, ['run', 'build:ts'], { stdio: 'inherit' })
+  if (buildResult.status !== 0) process.exit(buildResult.status ?? 1)
+
+  const changed = changedOutputs(snapshotRoot)
+  const stale = staleOutputs()
+  if (changed.length > 0 || stale.length > 0) {
+    console.error('Generated wrapper files are stale or incomplete:')
+    for (const outputPath of [...new Set([...changed, ...stale])].sort()) {
+      console.error(`  ${outputPath}`)
+    }
+    console.error('Run `npm run build:ts` and include the generated changes.')
+    process.exitCode = 1
+  } else {
+    console.log('Generated wrapper files are up to date.')
+  }
+} finally {
+  fs.rmSync(snapshotRoot, { recursive: true, force: true })
+}
