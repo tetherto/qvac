@@ -112,6 +112,28 @@ jobs:
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
+      # PILOT (QVAC-23466): seed diffusion's HF/github models into the
+      # Device-Farm-local US bucket if missing, then presign them, BEFORE the
+      # build. Idempotent once seeded.
+      - name: Seed & presign diffusion models (US bucket)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/diffusion/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          hf-token: ${{ secrets.HF_TOKEN }}
+          output-map: ${{ runner.temp }}/diffusion-url-map.json
+
+      # Diffusion downloads models ON-DEVICE from the manifest bundled into the
+      # app, so the US URLs must be baked into models.manifest.json before the
+      # build (unlike LLM, which stages host-side at pre_test time).
+      - name: Repoint diffusion manifest to US bucket
+        env:
+          MANIFEST_PATH: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
+          URL_MAP: ${{ runner.temp }}/diffusion-url-map.json
+        run: |
+          node ./.github/actions/run-mobile-integration-tests/seed-and-presign-models/rewrite-manifest-urls.mjs
+
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app

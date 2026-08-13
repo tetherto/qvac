@@ -38,10 +38,23 @@ function benchmarkModelsByTest() {
   )
 }
 
+// Optional URL override map (QVAC-23466 pilot): when PRESTAGE_URL_MAP points to a
+// JSON file of { "<model>": "<presigned-us-bucket-url>" }, staged models are
+// pulled from the Device-Farm-local US bucket instead of huggingface.co. Absent
+// or empty => unchanged HF behaviour for every existing caller.
+function loadUrlOverrideMap() {
+  const mapPath = process.env.PRESTAGE_URL_MAP
+  if (!mapPath) return null
+  const raw = JSON.parse(fs.readFileSync(mapPath, 'utf8'))
+  return raw && typeof raw === 'object' ? raw : null
+}
+
 function resolvePinnedManifest(mobileManifest, integrationManifest) {
   if (!integrationManifest || !integrationManifest.models) {
     throw new Error('[prestage] integration model manifest has no models')
   }
+
+  const overrideMap = loadUrlOverrideMap()
 
   // Benchmark shard sources construct model names dynamically, so the static
   // mobile-manifest extractor cannot see them. Derive all 70 grep-name mappings
@@ -52,6 +65,12 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
     Object.entries(modelsByTest).map(([testName, models]) => [
       testName,
       models.map(({ name }) => {
+        // Prefer the presigned US-bucket URL when provided. It is already an
+        // https URL to a same-region S3 object (not a HF /resolve/ URL), so the
+        // HF-only shape check below is intentionally bypassed for overrides.
+        if (overrideMap && typeof overrideMap[name] === 'string') {
+          return { name, url: overrideMap[name] }
+        }
         const entry = integrationManifest.models[name]
         const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
         if (
