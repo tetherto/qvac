@@ -763,3 +763,16 @@ jobs:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/sdk"
+
+  # Build the self-contained per-platform tetherto-qvac-sdk wheels and attach
+  # them to the sdk-v<version> release the job above just created, for a turnkey
+  # `pip install ... -f <release>` with no separate worker. Runs after the
+  # release exists; the same workflow is dispatchable by hand for backfills.
+  attach-fat-wheels:
+    needs: [publish-release, publish-npm]
+    if: ${{ needs.publish-npm.outputs.published_version != '' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-sdk-python-fat-wheels.yml
+    with:
+      version: ${{ needs.publish-npm.outputs.published_version }}
