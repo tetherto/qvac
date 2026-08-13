@@ -107,7 +107,7 @@ try {
     console.log('  graphicsApi:', backend.graphicsApi ?? '(not reported)')
     console.log('  fallback:', backend.fallback?.reason ?? '(none)')
   } else {
-    console.log('  (expected: current built-in plugins do not attach backend diagnostics yet)')
+    console.log('  (no backend diagnostics reported for this operation)')
   }
 
   console.log('\n▸ Profiler JSON (structure)')

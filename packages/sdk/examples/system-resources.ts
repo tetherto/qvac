@@ -1,14 +1,8 @@
-import { getSystemResources } from '@qvac/sdk'
+import { getSystemResources, type ResourceMetric } from '@qvac/sdk'
 
+// Zod-inferred responses permit an explicit undefined reason with exactOptionalPropertyTypes.
 type Metric<T> =
-  | {
-      status: 'supported'
-      value: T
-      provenance: {
-        source: string
-        scope?: 'system' | 'process' | 'device' | 'budget' | 'shared-system' | undefined
-      }
-    }
+  | ResourceMetric<T>
   | {
       status: 'unavailable' | 'unverified' | 'failed'
       reason?: string | undefined
