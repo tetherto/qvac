@@ -137,12 +137,20 @@ jobs:
           # --size-only: model objects are content-addressed by dated key, so a
           # matching size means identical bytes; this avoids re-copying on clock
           # skew and makes an already-populated bucket a fast no-op.
+          #
+          # --copy-props metadata-directive: by default `aws s3 sync` also copies
+          # each object's tag set, which needs s3:GetObjectTagging on the source
+          # (and s3:PutObjectTagging on the dest). The OIDC role is not granted
+          # those, so the default sync fails every copy with AccessDenied on
+          # GetObjectTagging. We only need the bytes + system metadata here, so
+          # skip tag propagation entirely.
           run_sync() {
             aws s3 sync \
               "s3://${SOURCE_BUCKET}/${PREFIX}" \
               "s3://${DEST_BUCKET}/${PREFIX}" \
               --source-region "${SOURCE_REGION}" \
               --region "${DEST_REGION}" \
+              --copy-props metadata-directive \
               --size-only \
               --no-progress \
               "$@"
