@@ -722,6 +722,18 @@ export function createRequestRegistry(options?: {
   }
 
   async function begin(opts: BeginOpts): Promise<ManagedRequestContext> {
+    // Terminal worker shutdown: reject outright rather than admit. The worker is
+    // exiting and unloadAllModels is about to free every model; a handler that
+    // calls model.run() without checking the signal (e.g. the diffusion op) must
+    // not proceed, so an aborted context is not enough — nothing may begin.
+    if (shuttingDown) {
+      throw new RequestRejectedByPolicyError(
+        opts.requestId,
+        opts.kind,
+        opts.modelId ?? '',
+        'worker is shutting down'
+      )
+    }
     // A request id is reserved for its whole lifecycle, including the time
     // it spends *queued* for an admission slot. `waitersById` holds the
     // still-queued begins (they aren't in `entries` yet), so a duplicate id
@@ -778,14 +790,25 @@ export function createRequestRegistry(options?: {
       preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
 
-    // A begin arriving while its model is being torn down, or while the whole
-    // worker is shutting down, starts aborted — no native work against a model
-    // about to be freed.
-    const drainReason = shuttingDown
-      ? 'shutdown'
-      : opts.modelId !== undefined && drainingModels.has(opts.modelId)
-        ? 'modelUnload'
-        : undefined
+    // Terminal shutdown that began WHILE this begin was queued for a slot:
+    // reject the same way, handing the just-acquired slot back first. Catches a
+    // begin already past the pre-admission check above when cancelAll('shutdown')
+    // ran during acquireSlot.
+    if (shuttingDown) {
+      if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
+      reservedIds.delete(opts.requestId)
+      throw new RequestRejectedByPolicyError(
+        opts.requestId,
+        opts.kind,
+        opts.modelId ?? '',
+        'worker is shutting down'
+      )
+    }
+
+    // A begin arriving while its model is being torn down starts aborted — no
+    // native work against a model about to be freed.
+    const drainReason =
+      opts.modelId !== undefined && drainingModels.has(opts.modelId) ? 'modelUnload' : undefined
 
     const controller = new AbortController()
     const scope = createDisposableScope()

@@ -385,13 +385,14 @@ test('registry: a begin racing withModelDraining starts aborted (drain barrier, 
   t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
 })
 
-test('registry: a begin racing worker shutdown (cancelAll+drainAll) starts aborted', async (t) => {
+test('registry: a begin racing worker shutdown (cancelAll+drainAll) is rejected', async (t) => {
   // Worker shutdown is cancelAll('shutdown') + drainAll(), which sweep
   // `entries`/`waiters`/`disposingEntries` but not a begin still in the
-  // reservation gap (reserved id, suspended on acquireSlot). Without a
-  // worker-wide shutdown barrier that begin() re-checks after slot acquisition,
-  // such a begin registers an UNaborted active request and drainAll() returns
-  // before it lands, so unloadAllModels frees models under a live request.
+  // reservation gap (reserved id, suspended on acquireSlot). Returning an
+  // aborted context is not enough: a handler that calls model.run() without
+  // checking the signal (the diffusion op does exactly that) would touch a model
+  // unloadAllModels is freeing. So a begin racing terminal shutdown is REJECTED
+  // rather than admitted, both when shutdown starts mid-admission and after.
   const r = createRequestRegistry()
 
   const racing = r.begin({
@@ -404,14 +405,23 @@ test('registry: a begin racing worker shutdown (cancelAll+drainAll) starts abort
   r.cancelAll('shutdown')
   await r.drainAll()
 
-  await using ctx = await racing
-  t.is(ctx.signal.aborted, true, 'a begin racing worker shutdown starts aborted')
-  t.is(
-    String((ctx.signal as { reason?: unknown }).reason),
-    'shutdown',
-    'aborted for shutdown, not left running against a worker freeing its models'
+  await t.exception(
+    async () => {
+      await racing
+    },
+    RequestRejectedByPolicyError,
+    'a begin racing worker shutdown is rejected, not admitted'
   )
-  t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
+  t.is(r.get('race'), null, 'no live entry left behind for the racing begin')
+
+  // A begin issued after shutdown is likewise rejected up front.
+  await t.exception(
+    async () => {
+      await r.begin({ requestId: 'after', kind: 'completion', modelId: 'm' })
+    },
+    RequestRejectedByPolicyError,
+    'a begin issued after shutdown is rejected'
+  )
 })
 
 test('registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly', async (t) => {
