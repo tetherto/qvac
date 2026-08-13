@@ -119,18 +119,13 @@ try {
   await cancel({ requestId: doomed.requestId })
 
   let doomedOutcome: string
-  let doomedErrored = false
+  let doomedCancelled = false
   try {
     await doomed.final
     doomedOutcome = 'completed (cancel lost the race)'
   } catch (err) {
-    if (err instanceof InferenceCancelledError) {
-      doomedOutcome = 'cancelled'
-    } else {
-      // A peer cancel must never surface the cancelled run as a generic error.
-      doomedOutcome = `errored: ${String(err)}`
-      doomedErrored = true
-    }
+    doomedCancelled = err instanceof InferenceCancelledError
+    doomedOutcome = doomedCancelled ? 'cancelled' : `errored: ${String(err)}`
   }
   const survivorText = (await survivor.final).contentText.replace(/\s+/g, ' ').trim()
   const survivorSaidMelon = /MELON/i.test(survivorText)
@@ -139,11 +134,11 @@ try {
 
   await unloadModel({ modelId, clearStorage: false })
 
-  // The isolation claim only holds if the cancelled run didn't error out and
-  // the peer still produced its deterministic answer.
-  if (doomedErrored || !survivorSaidMelon) {
+  // A zero exit must prove BOTH typed cancellation and survivor isolation: the
+  // doomed run cancelled (not completed or errored), and the peer still answered.
+  if (!doomedCancelled || !survivorSaidMelon) {
     console.error(
-      `✖ cancel isolation not demonstrated (doomedErrored=${doomedErrored}, survivorSaidMelon=${survivorSaidMelon})`
+      `✖ cancel isolation not demonstrated (doomedCancelled=${doomedCancelled}, survivorSaidMelon=${survivorSaidMelon})`
     )
     process.exit(1)
   }
