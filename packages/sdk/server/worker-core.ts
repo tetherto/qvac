@@ -6,6 +6,7 @@ import { initEnv, getValidatedEnv } from '@/server/env'
 import { closeAllRagInstances } from '@/server/bare/rag-hyperdb'
 import { cleanupDownloads } from '@/server/rpc/handlers/load-model/download-manager'
 import { unloadAllModels } from '@/server/bare/registry/model-registry'
+import { getRequestRegistry } from '@/server/bare/runtime'
 import { closeRegistryClient } from '@/server/bare/registry/registry-client'
 import {
   clearAllLoggingStreams,
@@ -152,6 +153,11 @@ async function runCleanup(): Promise<void> {
   cleanupRan = true
   destroyWorkerResourceCollector()
   clearRegistries()
+  // Cancel and drain every in-flight request before freeing models, so nothing
+  // is still decoding against a model unloadAllModels is about to destroy.
+  const registry = getRequestRegistry()
+  await registry.cancelAll('shutdown')
+  await registry.drainAll()
   await Promise.allSettled([
     destroySwarm(),
     closeAllRagInstances(),

@@ -1586,3 +1586,76 @@ test('cancelAndDrain: raises an admission barrier until endModelDrain', async (t
   t.is(reload.signal.aborted, false, 'begin after endModelDrain admits normally')
   await reload[Symbol.asyncDispose]()
 })
+
+test('cancelAndDrain: waits for a request whose disposal already started', async (t) => {
+  const r = createRequestRegistry()
+  const ctx = await r.begin({ requestId: 'a', kind: 'completion', modelId: 'm1' })
+
+  let releaseCleanup = () => {}
+  const gate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve
+  })
+  let cleanupDone = false
+  ctx.scope.defer(async () => {
+    await gate
+    cleanupDone = true
+  })
+
+  // Start disposal but gate its cleanup: this removes the entry from `entries`
+  // (so the drain's scan can't see it) while it is still tearing down.
+  const disposeP = ctx[Symbol.asyncDispose]()
+  await settle()
+  t.is(r.get('a'), null, 'entry left `entries` when disposal started')
+
+  let drainDone = false
+  const drainP = r.cancelAndDrain('m1').then(() => {
+    drainDone = true
+  })
+  await settle()
+  t.is(drainDone, false, 'drain waits for the in-flight disposal it cannot see in entries')
+
+  releaseCleanup()
+  await disposeP
+  await drainP
+  t.is(cleanupDone, true, 'gated cleanup finished')
+  t.is(drainDone, true, 'drain resolved only after the in-flight disposal completed')
+})
+
+test('drainAll + shutdown: waits for teardown and aborts later begins', async (t) => {
+  const r = createRequestRegistry()
+  const a = await r.begin({ requestId: 'a', kind: 'completion', modelId: 'm1' })
+
+  let releaseA = () => {}
+  const gateA = new Promise<void>((resolve) => {
+    releaseA = resolve
+  })
+  a.scope.defer(async () => {
+    await gateA
+  })
+  a.signal.addEventListener(
+    'abort',
+    () => {
+      void a[Symbol.asyncDispose]()
+    },
+    { once: true }
+  )
+
+  await r.cancelAll('shutdown')
+  await settle()
+
+  let drainDone = false
+  const drainP = r.drainAll().then(() => {
+    drainDone = true
+  })
+  await settle()
+  t.is(drainDone, false, 'drainAll waits while the request tears down')
+
+  releaseA()
+  await drainP
+  t.is(drainDone, true, 'drainAll resolved after teardown')
+
+  // The global shutdown barrier aborts any later begin.
+  const after = await r.begin({ requestId: 'after', kind: 'completion', modelId: 'm1' })
+  t.is(after.signal.aborted, true, 'begin after shutdown is aborted')
+  await after[Symbol.asyncDispose]()
+})

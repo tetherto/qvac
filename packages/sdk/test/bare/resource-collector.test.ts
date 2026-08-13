@@ -8,6 +8,7 @@ import {
 } from '@/server/bare/resources/worker-collector'
 import { registerPlugin } from '@/server/plugins'
 import { cleanupForTerminate } from '@/server/worker-core'
+import { getRequestRegistry } from '@/server/bare/runtime'
 import type { QvacPlugin } from '@/schemas/plugin'
 import { getSystemResourcesResponseSchema } from '@/schemas/system-resources'
 import { handleGetSystemResources } from '@/server/rpc/handlers/get-system-resources'
@@ -72,6 +73,9 @@ test('releases native contexts during worker cleanup', async (t) => {
 
   t.execution(() => collector.getCapabilities())
   await cleanupForTerminate()
+  // cleanupForTerminate drains the shared registry singleton and raises its
+  // permanent shutdown barrier; clear it so later tests in the suite can admit.
+  ;(getRequestRegistry() as unknown as { __clearTeardownState: () => void }).__clearTeardownState()
   t.is(getWorkerResourceCollector(), undefined)
   t.execution(() => destroyWorkerResourceCollector())
 })

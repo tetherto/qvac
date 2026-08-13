@@ -209,6 +209,13 @@ export interface RequestRegistry {
   cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void>
 
   /**
+   * Wait for every active and in-flight-disposing request to fully unwind.
+   * Call after `cancelAll('shutdown')` so worker teardown frees models only
+   * once native cleanup is complete.
+   */
+  drainAll(): Promise<void>
+
+  /**
    * Cancel every active request for a model (optionally narrowed by kind) and
    * resolve only once each has fully disposed — native context freed and slot
    * released. Queued waiters are aborted too but not awaited, since they never
@@ -403,6 +410,13 @@ export function createRequestRegistry(options?: {
   // Models being torn down: a begin(...) for one starts aborted. The barrier
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
+  // Entries whose disposal has started but not finished. disposeEntry removes
+  // from `entries` before unwinding, so a drain must consult this too or it
+  // would return while a request is still tearing down natively.
+  const disposingEntries = new Set<RegistryEntry>()
+  // Set once by cancelAll('shutdown'): the whole worker is going away, so every
+  // begin(...) from here on starts aborted.
+  let shuttingDown = false
 
   function logLifecycle(
     event: 'begin' | 'cancel' | 'end',
@@ -684,6 +698,7 @@ export function createRequestRegistry(options?: {
   async function disposeEntry(entry: RegistryEntry, outcome: RequestOutcome): Promise<void> {
     if (entry.scope.disposed || entry.disposing) return
     entry.disposing = true
+    disposingEntries.add(entry)
     entry.ctx.state = outcome
     entry.detachParent()
     logLifecycle('end', entry.ctx, Date.now() - entry.startedAt)
@@ -700,6 +715,7 @@ export function createRequestRegistry(options?: {
       // guarantees the slot is freed even if a deferred cleanup throws,
       // otherwise a throwing teardown would strand the queue forever.
       if (entry.slotKey !== undefined) releaseSlot(entry.slotKey, entry.exclusive)
+      disposingEntries.delete(entry)
       // Signal any `cancelAndDrain` waiting on this request that its native
       // teardown is complete.
       entry.resolveDisposed()
@@ -763,9 +779,10 @@ export function createRequestRegistry(options?: {
       preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
 
-    // A begin for a model being torn down starts aborted — no native work
-    // against a model about to be freed.
-    const abortForModelDrain = opts.modelId !== undefined && drainingModels.has(opts.modelId)
+    // A begin for a model being torn down (or during worker shutdown) starts
+    // aborted — no native work against a model about to be freed.
+    const abortForModelDrain =
+      shuttingDown || (opts.modelId !== undefined && drainingModels.has(opts.modelId))
 
     const controller = new AbortController()
     const scope = createDisposableScope()
@@ -918,6 +935,9 @@ export function createRequestRegistry(options?: {
   }
 
   function cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void> {
+    // On shutdown, raise the barrier for every model so an in-flight begin can't
+    // go active while the worker tears everything down.
+    if (reason === 'shutdown') shuttingDown = true
     for (const entry of entries.values()) {
       cancelEntry(entry, reason)
     }
@@ -939,11 +959,19 @@ export function createRequestRegistry(options?: {
         )
       )
     }
-    // The interface returns Promise<void> so we can later make this an
-    // async sweep that awaits per-handler scope unwinding (e.g. join on
-    // the disposers). Today every handler unwinds on its own dispose
-    // path, so the function only needs to fire-and-forget the abort.
+    // Fire-and-forget the abort; callers that must wait for native teardown
+    // (worker shutdown) follow with `drainAll()`.
     return Promise.resolve()
+  }
+
+  // Wait for every active and in-flight-disposing request to fully unwind. Call
+  // after cancelAll('shutdown') so the worker frees models only once native
+  // teardown is done.
+  function drainAll(): Promise<void> {
+    const draining: Array<Promise<void>> = []
+    for (const entry of entries.values()) draining.push(entry.disposed)
+    for (const entry of disposingEntries) draining.push(entry.disposed)
+    return Promise.all(draining).then(() => {})
   }
 
   function endModelDrain(modelId: string): void {
@@ -963,6 +991,13 @@ export function createRequestRegistry(options?: {
       if (entry.ctx.modelId !== modelId) continue
       if (kind && entry.ctx.kind !== kind) continue
       cancelEntry(entry, 'modelUnload')
+      draining.push(entry.disposed)
+    }
+    // Requests already mid-disposal are out of `entries` but may still be tearing
+    // down natively — wait for them too.
+    for (const entry of disposingEntries) {
+      if (entry.ctx.modelId !== modelId) continue
+      if (kind && entry.ctx.kind !== kind) continue
       draining.push(entry.disposed)
     }
     // Queued waiters never held a slot or touched the model, so there's nothing
@@ -991,6 +1026,7 @@ export function createRequestRegistry(options?: {
     list,
     cancel,
     cancelAll,
+    drainAll,
     cancelAndDrain,
     endModelDrain,
     end,
@@ -1004,10 +1040,19 @@ export function createRequestRegistry(options?: {
     // Test-only: the number of live per-`(kind, modelId)` admission
     // states. Lets the queue tests assert the map empties on drain /
     // dispose (no `KeyState` leak). Also off the public interface.
-    __keyStateSize: () => keyStates.size
+    __keyStateSize: () => keyStates.size,
+    // Test-only: clear the teardown barriers. The bare suite shares one
+    // singleton, so a test that drives worker shutdown must undo the permanent
+    // barrier or later tests can't admit.
+    __clearTeardownState: () => {
+      shuttingDown = false
+      drainingModels.clear()
+      disposingEntries.clear()
+    }
   } as RequestRegistry & {
     __cancelBeforeBeginSize: () => number
     __keyStateSize: () => number
+    __clearTeardownState: () => void
   }
 }
 
