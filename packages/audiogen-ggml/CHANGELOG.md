@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Treat `destroy()` as terminal. Replace `await gen.destroy(); await gen.load()`
+  with a newly constructed `AudioGen` instance before calling `load()`.
+- Remove internal integration tests, mobile tests, and test utilities from the
+  published package.
+
 ### Added
 
 - Expose ACE-Step reference/source audio and cover task controls through the
@@ -18,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Pixel 9a instead of silently accepting a CPU fallback.
 - Expose ACE-Step LM sampling controls, Haar DCW parameters, and optional frozen
   semantic codes through the JavaScript API for reproducible quality comparisons.
+- Export structured AudioGen errors with a CommonJS-compatible error runtime and
+  serialize overlapping runs through response settlement.
+- Ship the model downloader as `qvac-audiogen-download-models`.
 
 ### Changed
 
@@ -25,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference-audio support from the official registry.
 - Bump `audiogen-cpp` to `2026-08-10`, enabling official sampler-side Haar DCW
   by default and using the validated LM decoding policy on Metal and Vulkan.
+- Cancel and settle active responses before unload or destroy, and reject native
+  admission failures consistently.
+- Exclude internal integration and mobile test utilities from the published
+  package and include the downloader runtime dependency.
 
 ## [0.2.0] - 2026-08-06
 
@@ -35,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Pull Requests
 
-- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - chore:
   test addon-cpp 1.3.3 across consumers
 
 ## [0.1.1] - 2026-08-03
