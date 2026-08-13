@@ -125,8 +125,12 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
   }
 
   async stepBeforeScene(_params: WorldParams, expectation: Expectation): Promise<TestResult> {
-    // Loaded without sceneSrc, so activation is deferred and there is no world
-    // to walk until worldCreateScene runs.
+    // Evict first: the resource is shared, so an earlier test in the batch may
+    // already have built a world on this model, and stepping would then
+    // legitimately succeed. Unloading deletes the managed pack, so the reload
+    // below is a genuinely world-less session — which is the precondition this
+    // test is actually about.
+    await this.resources.evict(RESOURCE)
     const modelId = await this.resources.ensureLoaded(RESOURCE)
     try {
       await worldStep({ modelId, keys: ['W'] }).frames
