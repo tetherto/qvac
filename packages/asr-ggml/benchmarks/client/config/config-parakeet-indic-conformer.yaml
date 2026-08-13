@@ -1,0 +1,27 @@
+engine: "parakeet"
+server:
+  url: "http://localhost:8080/run"
+  timeout: 60
+  batch_size: 10
+  lib: "@qvac/asr-ggml"
+dataset:
+  dataset_type: "fleurs"
+  speaker_group: "clean"
+  language: "hindi"
+  max_samples: 0
+wer:
+  enabled: true
+cer:
+  enabled: true
+model:
+  path: "./models/indic-conformer-ctc.q8_0.gguf"
+  sample_rate: 16000
+  audio_format: "s16le"
+  model_type: "indic-conformer"
+  language: "hi"
+  max_threads: 4
+  use_gpu: false
+  caption_enabled: false
+  timestamps_enabled: true
+  streaming: false
+  streaming_chunk_size: 64000
