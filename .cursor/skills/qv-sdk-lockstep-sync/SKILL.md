@@ -34,13 +34,12 @@ cli / ai-sdk-provider / plugins).
 | sdk-python | `tetherto-qvac-sdk` | Follows via generated client (`SDK_VERSION` stamped from sdk) |
 
 `bare-sdk` and `sdk-python` don't get their own changelog — their history lives
-in `packages/sdk/CHANGELOG.md`. The anchor, `@qvac/inference`, maintains its own
-`packages/inference/CHANGELOG.md` by hand (edited per release).
+in `packages/sdk/CHANGELOG.md`. Commits under `packages/inference` are scanned
+into that changelog as well.
 
 ## What it does NOT do
 
-- Does not open release PRs or publish (see `publish-sdk.yml` +
-  `trigger-reusable-lib-inference.yml` + gitflow).
+- Does not open release PRs or publish (see `publish-sdk.yml` + gitflow).
 - Does not sync agent-stack packages (`/qv-agent-stack-sync`).
 - Does not auto-commit.
 - Does not run in CI. CI enforces the aligned version at release
@@ -131,6 +130,5 @@ with `--no-sync` on the parent skill.
 - bare-sdk drift check: `packages/bare-sdk/scripts/check-deps-vs-sdk.mjs`
 - Python generator: `packages/sdk-python/scripts/generate.py`
 - Notice generator: `.cursor/skills/qv-notice-generate/SKILL.md`
-- Publish: `.github/workflows/publish-sdk.yml` (npm + PyPI),
-  `.github/workflows/trigger-reusable-lib-inference.yml` (inference)
+- Publish: `.github/workflows/publish-sdk.yml`
 - Changelog / PR skills: `qv-sdk-changelog`, `qv-sdk-pr-create`
