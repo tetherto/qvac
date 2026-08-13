@@ -3,9 +3,7 @@ import type { NmtStats } from '@/server/bare/types/addon-responses'
 
 export const NMT_SECONDS_TO_MS = 1000
 
-export function buildNmtTranslationStats(
-  stats: Partial<NmtStats> | undefined
-): TranslationStats {
+export function buildNmtTranslationStats(stats: Partial<NmtStats> | undefined): TranslationStats {
   return {
     ...(stats?.totalTime !== undefined && { totalTime: stats.totalTime * NMT_SECONDS_TO_MS }),
     ...(stats?.totalTokens !== undefined && { totalTokens: stats.totalTokens }),
