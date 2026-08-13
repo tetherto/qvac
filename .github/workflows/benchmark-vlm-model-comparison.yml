@@ -690,7 +690,10 @@ jobs:
           # Hardcoding the qwen registry filenames here made every several-sources run
           # measure qwen even when matrix_models asked for something else.
           node resolve-cli-model.cjs > cli-model.env
-          cat cli-model.env
+          # Everything except the URLs, which a json: spec can point at a presigned S3 link
+          # whose signature is in the query string. Names, origins and sources still print,
+          # so the log still says what ran and where it came from.
+          grep -v '_URL=' cli-model.env
           . ./cli-model.env
           LLM="$MODEL_DIR/$LLM_NAME"
           MMPROJ="$MODEL_DIR/$MMPROJ_NAME"
