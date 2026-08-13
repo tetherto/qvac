@@ -63,7 +63,7 @@ Consequences for release changelog / metadata PRs:
 5. Generate title: `TICKET prefix[tags]: subject`
 6. Fill template sections based on changes
 7. Validate tag requirements ([bc]/[api]/[mod])
-8. **If diff touches `packages/sdk/package.json` version or dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
+8. **If diff touches the `version` of `packages/inference` / `packages/sdk` / `packages/bare-sdk`, or sdk's dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
 9. Output complete PR description
 10. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
@@ -166,15 +166,15 @@ gh pr view --repo tetherto/qvac BRANCH --web
 
 ## SDK Lockstep Client Sync Trigger
 
-**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) touches `packages/sdk/package.json` and modifies one of: `version`, `dependencies`, `optionalDependencies`, `peerDependencies`.
+**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) modifies the `version` of `packages/inference/package.json`, `packages/sdk/package.json`, or `packages/bare-sdk/package.json` (`@qvac/inference` is the anchor that drives the pod version), or sdk's `dependencies` / `optionalDependencies` / `peerDependencies`.
 
-When triggered, prompt the user to run `qv-sdk-lockstep-sync` so lockstep clients stay aligned in the same commit/PR: `@qvac/bare-sdk` (package.json + NOTICE) and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`). Letting them drift creates work for the next `release-sdk-*` cut.
+When triggered, prompt the user to run `qv-sdk-lockstep-sync` so the pod stays aligned in the same commit/PR: `@qvac/sdk` + `@qvac/bare-sdk` (package.json + NOTICE) stamped to the inference anchor, and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`). Letting them drift creates work for the next `release-*` cut.
 
 ### Steps (after Step 7 of Workflow above)
 
 1. Detect the trigger condition by inspecting the diff:
-   - `git diff <base>...<head-remote>/<branch> -- packages/sdk/package.json` (or vs local `HEAD`) shows changes
-   - Changes touch the `version` line OR any `dependencies` / `optionalDependencies` / `peerDependencies` block
+   - `git diff <base>...<head-remote>/<branch> -- packages/inference/package.json packages/sdk/package.json packages/bare-sdk/package.json` (or vs local `HEAD`) shows changes
+   - Changes touch a `version` line (inference / sdk / bare-sdk) OR sdk's `dependencies` / `optionalDependencies` / `peerDependencies` block
 2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-lockstep-sync` for bare-sdk + sdk-python?" [Yes / No (skip)]
 3. If yes, read `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` and follow it inline.
 4. Verify: `cd packages/bare-sdk && bun run check:deps-vs-sdk` and `packages/sdk-python` `generate.py --check` — both must pass.
@@ -249,7 +249,7 @@ Before outputting the PR description, verify:
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
-- [ ] If diff touches `packages/sdk/package.json` deps/version, `qv-sdk-lockstep-sync` ran (or `--no-sync` was set with a reminder emitted), and bare-sdk + sdk-python checks pass
+- [ ] If diff touches the `version` of inference / sdk / bare-sdk (or sdk's deps), `qv-sdk-lockstep-sync` ran (or `--no-sync` was set with a reminder emitted), and bare-sdk + sdk-python checks pass
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
