@@ -235,7 +235,10 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     // concurrency coverage it never exercised.
     const firstBlock = await running.frames.catch(() => [] as Uint8Array[])
     if (firstBlock.length === 0) {
-      return { passed: false, output: 'the first step delivered no frames, so it never held the slot' }
+      return {
+        passed: false,
+        output: 'the first step delivered no frames, so it never held the slot'
+      }
     }
     return overlap
   }
