@@ -168,7 +168,9 @@ def test_resolve_command_uses_managed_worker_cache(monkeypatch, tmp_path) -> Non
     assert (
         Path(bare)
         .as_posix()
-        .endswith(f"bare-runtime-{_bare_runtime_package_suffix()}/bin/bare")
+        .endswith(
+            f"bare-runtime-{_bare_runtime_package_suffix()}/bin/{_bare_executable_name()}"
+        )
     )
 
 
