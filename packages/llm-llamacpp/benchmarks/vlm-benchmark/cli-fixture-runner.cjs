@@ -16,6 +16,7 @@ const fs = require('fs')
 const path = require('path')
 const { runOnceCli } = require('./cli-case-runner')
 const { parseStdoutMetrics } = require('./stdout-parser')
+const { parseCliArgs } = require('./cli-args.cjs')
 const fixture = require('./fixture.data.cjs')
 
 function arg (name, def) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : def }
@@ -25,7 +26,7 @@ const LLM = arg('llm')
 const MMPROJ = arg('mmproj')
 // Space-separated extra flags for the CLI, from the catalog entry's `cliArgs`. Empty for
 // every model that does not need one.
-const EXTRA_ARGS = String(arg('extra-args', '') || '').split(/\s+/).filter(Boolean)
+const EXTRA_ARGS = parseCliArgs(arg('extra-args', ''))
 const BACKEND = arg('backend', 'cpu')
 // Context size for the run, from the spec the addon leg also uses (catalog ctx_size,
 // a json: spec's, or @ctx=N on a URL pair). Both engines must see the same one.

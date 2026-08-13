@@ -11,6 +11,7 @@
 // error out if the blob is not already on disk.
 
 const { parseModels } = require('./models.cjs')
+const { serializeCliArgs } = require('./cli-args.cjs')
 const config = require('./config.cjs')
 
 const hfUrl = (s) => `https://huggingface.co/${s.repo}/resolve/${s.sha}/${s.file}`
@@ -65,5 +66,5 @@ console.log([
   sh('MMPROJ_SOURCE', sourceKind(spec.mmproj)),
   // Model-specific flags for the fabric CLI only: these are fork additions, so passing
   // them to upstream-cli would abort it on an unknown argument.
-  sh('CLI_EXTRA_ARGS', (spec.cliArgs || []).join(' '))
+  sh('CLI_EXTRA_ARGS', serializeCliArgs(spec.cliArgs))
 ].join('\n'))
