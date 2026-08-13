@@ -217,6 +217,9 @@ export interface RequestRegistry {
    */
   cancelAndDrain(modelId: string, kind?: RequestKind): Promise<void>
 
+  /** Lift the barrier raised by `cancelAndDrain(modelId)` once teardown is done. */
+  endModelDrain(modelId: string): void
+
   /**
    * Mark a request finished and dispose its scope. Equivalent to
    * `await ctx[Symbol.asyncDispose]()` with an explicit outcome.
@@ -397,6 +400,9 @@ export function createRequestRegistry(options?: {
    * without this it would slip past the duplicate check and both would execute.
    */
   const reservedIds = new Set<string>()
+  // Models being torn down: a begin(...) for one starts aborted. The barrier
+  // half of cancelAndDrain — catches begins its scan can't see yet.
+  const drainingModels = new Set<string>()
 
   function logLifecycle(
     event: 'begin' | 'cancel' | 'end',
@@ -757,10 +763,16 @@ export function createRequestRegistry(options?: {
       preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
 
+    // A begin for a model being torn down starts aborted — no native work
+    // against a model about to be freed.
+    const abortForModelDrain = opts.modelId !== undefined && drainingModels.has(opts.modelId)
+
     const controller = new AbortController()
     const scope = createDisposableScope()
     if (preCancel) {
       controller.abort(preCancel.reason)
+    } else if (abortForModelDrain) {
+      controller.abort('modelUnload')
     }
 
     let detachParent = () => {}
@@ -787,7 +799,8 @@ export function createRequestRegistry(options?: {
       // already aborted at begin time. Both branches abort the
       // controller above, so without this guard observers would see a
       // momentarily-`running` context with an already-aborted signal.
-      state: preCancel || opts.parentSignal?.aborted ? 'cancelling' : 'running'
+      state:
+        preCancel || abortForModelDrain || opts.parentSignal?.aborted ? 'cancelling' : 'running'
     }
 
     let resolveDisposed: () => void = () => {}
@@ -933,7 +946,14 @@ export function createRequestRegistry(options?: {
     return Promise.resolve()
   }
 
+  function endModelDrain(modelId: string): void {
+    drainingModels.delete(modelId)
+  }
+
   async function cancelAndDrain(modelId: string, kind?: RequestKind): Promise<void> {
+    // Raise the barrier so a begin still suspended in admission can't go active
+    // after we return. Model-wide, so only the unfiltered (whole-model) form.
+    if (kind === undefined) drainingModels.add(modelId)
     // Abort every matching active request and collect its disposal promise, so
     // we can wait for each handler's scope to fully unwind (native context
     // freed, slot released) before the caller tears the model down. Snapshot
@@ -972,6 +992,7 @@ export function createRequestRegistry(options?: {
     cancel,
     cancelAll,
     cancelAndDrain,
+    endModelDrain,
     end,
     policy,
     // Test-only: lets the registry race tests assert the bound

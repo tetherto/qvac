@@ -20,41 +20,45 @@ export async function unloadModel(params: UnloadModelParams) {
     throw new ModelNotLoadedError(modelId)
   }
 
-  // Cancel every in-flight and queued request for this model AND wait for the
-  // active ones to fully dispose (native context freed, slot released) before
-  // tearing the model down, so nothing is still decoding against a model object
-  // that is about to be unloaded.
-  await getRequestRegistry().cancelAndDrain(modelId)
+  const registry = getRequestRegistry()
+  try {
+    // Cancel and drain the model's requests, holding the admission barrier
+    // through teardown so nothing goes active against a model being freed.
+    await registry.cancelAndDrain(modelId)
 
-  clearFinetuneRuntimeState(modelId)
+    clearFinetuneRuntimeState(modelId)
 
-  if (!entry.isDelegated) {
-    if (entry.local.model.unload) {
-      await entry.local.model.unload()
-    }
+    if (!entry.isDelegated) {
+      if (entry.local.model.unload) {
+        await entry.local.model.unload()
+      }
 
-    if (clearStorage && entry.local.path) {
-      const modelPath = entry.local.path
-      const modelFileName = path.basename(modelPath)
-      const shardInfo = detectShardedModel(modelFileName)
+      if (clearStorage && entry.local.path) {
+        const modelPath = entry.local.path
+        const modelFileName = path.basename(modelPath)
+        const shardInfo = detectShardedModel(modelFileName)
 
-      if (shardInfo.isSharded) {
-        const shardDir = path.dirname(modelPath)
-        await fsPromises.rm(shardDir, { recursive: true, force: true })
-        logger.info(`Sharded model storage cleared: ${shardDir}`)
-      } else {
-        const target = getClearStorageTarget(modelPath)
-        await fsPromises.rm(target.path, {
-          recursive: target.kind === 'directory',
-          force: true
-        })
-        logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
+        if (shardInfo.isSharded) {
+          const shardDir = path.dirname(modelPath)
+          await fsPromises.rm(shardDir, { recursive: true, force: true })
+          logger.info(`Sharded model storage cleared: ${shardDir}`)
+        } else {
+          const target = getClearStorageTarget(modelPath)
+          await fsPromises.rm(target.path, {
+            recursive: target.kind === 'directory',
+            force: true
+          })
+          logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
+        }
       }
     }
+
+    unregisterAddonLogger(modelId)
+    unregisterAllLoggingStreams(modelId)
+
+    logger.info(`Model ${modelId} unloaded`)
+  } finally {
+    // Lift the barrier so a later reload admits normally.
+    registry.endModelDrain(modelId)
   }
-
-  unregisterAddonLogger(modelId)
-  unregisterAllLoggingStreams(modelId)
-
-  logger.info(`Model ${modelId} unloaded`)
 }

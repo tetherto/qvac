@@ -1566,3 +1566,23 @@ test('cancelAndDrain: waits for an active request to finish disposing, and abort
   await queued[Symbol.asyncDispose]()
   t.is(r.list().length, 0, 'no entries remain once the queued request unwinds')
 })
+
+test('cancelAndDrain: raises an admission barrier until endModelDrain', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 2, onOverflow: 'queue' })
+
+  // No active requests — cancelAndDrain still engages the barrier and keeps it.
+  await r.cancelAndDrain('m1')
+
+  // A begin during teardown starts aborted, so it can't go active against the
+  // model being freed (this closes the reserve/acquire gap).
+  const during = await r.begin({ requestId: 'during', kind: 'completion', modelId: 'm1' })
+  t.is(during.signal.aborted, true, 'begin while the model is draining is aborted')
+  await during[Symbol.asyncDispose]()
+
+  // Barrier lifts on endModelDrain: a later reload admits normally.
+  r.endModelDrain('m1')
+  const reload = await r.begin({ requestId: 'reload', kind: 'completion', modelId: 'm1' })
+  t.is(reload.signal.aborted, false, 'begin after endModelDrain admits normally')
+  await reload[Symbol.asyncDispose]()
+})
