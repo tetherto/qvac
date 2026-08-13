@@ -22,6 +22,7 @@ import {
 } from '@/utils/errors-server'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
+import { getModelParallel } from '@/server/utils'
 import { getServerLogger } from '@/logging'
 
 export function getLanguage(code: string | undefined): string {
@@ -126,7 +127,7 @@ export async function* translate(
     // LLM translate joins the completion lane (its cap = the model's own
     // `parallel`); NMT passes no cap and stays ungated on its own model.
     ...(isLlm && {
-      maxConcurrentPerModel: Number((entry.local.config as { parallel?: number }).parallel) || 1
+      maxConcurrentPerModel: getModelParallel(entry.local.config as { parallel?: number })
     })
   })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
@@ -142,11 +143,10 @@ export async function* translate(
     })
   }
   if (isLlm) {
-    const onAbort = () => cancelActive()
-    ctx.signal.addEventListener('abort', onAbort, { once: true })
-    if (ctx.signal.aborted) onAbort()
+    ctx.signal.addEventListener('abort', cancelActive, { once: true })
+    if (ctx.signal.aborted) cancelActive()
     ctx.scope.defer(() => {
-      ctx.signal.removeEventListener('abort', onAbort)
+      ctx.signal.removeEventListener('abort', cancelActive)
       activeResponse = null
     })
   }

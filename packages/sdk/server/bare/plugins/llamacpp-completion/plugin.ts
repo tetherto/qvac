@@ -26,7 +26,7 @@ import {
   type LlmConfigInput
 } from '@/schemas'
 import { createStreamLogger, registerAddonLogger } from '@/logging'
-import { getFirstShardPath } from '@/server/utils'
+import { getFirstShardPath, getModelParallel } from '@/server/utils'
 import { completion } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stream'
 import { batchCompletion } from '@/server/bare/plugins/llamacpp-completion/ops/batch-completion-stream'
 import { finetune } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
@@ -48,14 +48,6 @@ import { stoppedByLength } from '@/server/bare/plugins/llamacpp-completion/ops/c
 import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
-
-// The model's concurrent sequence slots. Missing / 0 / NaN all mean single-slot.
-function getModelParallel(config: { parallel?: number | undefined }) {
-  // `parallel` is a slot count; floor to a finite integer >= 1 so a fractional
-  // value can't over-admit (the addon already validates this at load).
-  const n = Math.floor(Number(config.parallel))
-  return Number.isFinite(n) && n >= 1 ? n : 1
-}
 
 function createLlmModel(
   modelId: string,
