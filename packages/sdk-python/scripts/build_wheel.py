@@ -148,8 +148,11 @@ def stage_bundle(sdk_dir: Path) -> None:
     # dependency closure ships (dev deps like electron would balloon the
     # wheel by gigabytes); native prebuilds ride inside each package's
     # prebuilds/ dir, pruned to this host by _stage_ignore.
+    # Resolve npm explicitly: on Windows it is `npm.cmd`, which subprocess can't
+    # launch from the bare name "npm" (WinError 2) without shell resolution.
+    npm = shutil.which("npm") or "npm"
     listing = subprocess.run(
-        ["npm", "ls", "--omit=dev", "--parseable", "--all"],
+        [npm, "ls", "--omit=dev", "--parseable", "--all"],
         cwd=sdk_dir,
         capture_output=True,
         text=True,

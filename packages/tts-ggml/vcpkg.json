@@ -9,8 +9,32 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "tts-cpp",
-      "version>=": "2026-08-12#1"
+      "name": "speech-cpp",
+      "default-features": false,
+      "features": [
+        "tts",
+        "metal"
+      ],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "speech-cpp",
+      "default-features": false,
+      "features": [
+        "tts",
+        "vulkan",
+        "opencl"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "default-features": false,
+      "features": [
+        "tts",
+        "vulkan"
+      ],
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {
@@ -24,8 +48,12 @@
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [
         {
-          "name": "tts-cpp",
-          "features": ["vulkan"]
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "vulkan"
+          ],
+          "platform": "!(osx | ios)"
         }
       ]
     }
