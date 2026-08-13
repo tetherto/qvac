@@ -153,6 +153,11 @@ export async function* translate(
 
   // Check if input is an array and model type is NMT
   if (Array.isArray(text) && canonicalModelType === ModelType.nmtcppTranslation) {
+    // A cancel that landed before native work (e.g. the model is being unloaded)
+    // must not start the batch. Bail before runBatch, dropping the result.
+    if (ctx.signal.aborted) {
+      return { modelExecutionMs: 0 }
+    }
     // Use runBatch for batch processing
     const modelStart = nowMs()
     const translations = await (model as unknown as TranslationNmtcpp).runBatch(text)
@@ -194,11 +199,13 @@ export async function* translate(
           }
         ]
 
-  // A queued LLM translate cancelled before admission must not call run(): it
-  // could decode against an exclusive finetune holding the lane. Surface the
-  // cancellation instead of running and returning truncated output.
-  if (isLlm && ctx.signal.aborted) {
-    throw new InferenceCancelledError(ctx.requestId)
+  // A translate cancelled before native work (queued-cancel, or the model being
+  // unloaded) must not call run(): LLM could decode against an exclusive finetune
+  // holding the lane, and either engine would run against a model being torn
+  // down. LLM surfaces the cancellation; NMT bails early (soft-cancel, dropped).
+  if (ctx.signal.aborted) {
+    if (isLlm) throw new InferenceCancelledError(ctx.requestId)
+    return { modelExecutionMs: 0 }
   }
 
   const modelStart = nowMs()

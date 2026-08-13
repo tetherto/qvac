@@ -142,3 +142,61 @@ test('translate (LLM): cancelled while queued does not call model.run()', async 
 
   unregisterModel(modelId)
 })
+
+test('translate (NMT): does no native work for a model under the unload barrier', async (t) => {
+  const [{ registerModel, unregisterModel }, { ModelType }, { translate }, { getRequestRegistry }] =
+    await Promise.all([
+      import('@/server/bare/registry/model-registry'),
+      import('@/schemas'),
+      import('@/server/bare/ops/translate'),
+      import('@/server/bare/runtime')
+    ])
+
+  let runBatchCalls = 0
+  let runCalls = 0
+  const model = {
+    runBatch: async (texts: string[]) => {
+      runBatchCalls++
+      return texts.map(() => 'x')
+    },
+    run: async () => {
+      runCalls++
+      return {}
+    }
+  }
+
+  const modelId = makeId('nmt-drain')
+  registerModel(modelId, {
+    model: model as never,
+    path: '/tmp/nmt.bin',
+    config: {},
+    modelType: ModelType.nmtcppTranslation
+  } as never)
+
+  // Engage the unload barrier: any begin for this model now starts aborted, so
+  // the NMT handler must bail before runBatch/run rather than decode against a
+  // model being torn down.
+  await getRequestRegistry().cancelAndDrain(modelId)
+
+  const gen = translate(
+    {
+      modelId,
+      modelType: ModelType.nmtcppTranslation,
+      text: ['the river is calm', 'the sky is clear'],
+      from: 'English',
+      to: 'Spanish',
+      stream: true
+    } as never,
+    makeId('nmt')
+  )
+  for (;;) {
+    const next = await gen.next()
+    if (next.done) break
+  }
+
+  t.is(runBatchCalls, 0, 'NMT runBatch was NOT called under the barrier')
+  t.is(runCalls, 0, 'NMT run was NOT called under the barrier')
+
+  getRequestRegistry().endModelDrain(modelId)
+  unregisterModel(modelId)
+})
