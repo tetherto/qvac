@@ -8,6 +8,7 @@ on:
       - feature-*
       - tmp-*
     paths:
+      - "packages/inference/**"
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
       - "packages/sdk-python/**"
@@ -24,6 +25,7 @@ on:
       - tmp-*
       - main
     paths:
+      - "packages/inference/**"
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
       - "packages/sdk-python/**"
@@ -127,32 +129,40 @@ jobs:
         run: |
           git fetch origin ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify sdk / bare-sdk / python version lockstep
+      - name: Verify inference / sdk / bare-sdk / python version lockstep
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # pull_request_target pins the working tree to base.sha; read manifests
-          # from the PR head SHA so a missed bare-sdk or python bump fails pre-merge
-          # (pr-checks-sdk-python.yml may not run on an sdk-only version bump).
+          # from the PR head SHA so a missed sdk / bare-sdk / python bump fails
+          # pre-merge (pr-checks-sdk-python.yml may not run on an engine-only bump).
+          #
+          # @qvac/inference is the sole version anchor: sdk, bare-sdk and
+          # sdk-python must all match it. Run /qv-sdk-lockstep-sync to align.
           set -euo pipefail
           REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
+          INF_VER=$(git show "${REF}":packages/inference/package.json | jq -r .version)
           SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
           BARE_VER=$(git show "${REF}":packages/bare-sdk/package.json | jq -r .version)
           PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
-          if [ "$SDK_VER" != "$BARE_VER" ]; then
-            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs @qvac/bare-sdk@$BARE_VER at ${REF}. Both packages must share the same version (lockstep release). Bump both packages together in the release branch."
-            exit 1
-          fi
           if [ -z "$PY_VER" ]; then
             echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
             exit 1
           fi
-          if [ "$PY_VER" != "$SDK_VER" ]; then
-            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+          if [ "$SDK_VER" != "$INF_VER" ]; then
+            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs anchor @qvac/inference@$INF_VER at ${REF}. sdk must match the inference anchor. Run /qv-sdk-lockstep-sync before release."
             exit 1
           fi
-          echo "OK: @qvac/sdk, @qvac/bare-sdk, and tetherto-qvac-sdk all at $SDK_VER (verified at ${REF})"
+          if [ "$BARE_VER" != "$INF_VER" ]; then
+            echo "::error title=Version mismatch::@qvac/bare-sdk@$BARE_VER vs anchor @qvac/inference@$INF_VER at ${REF}. bare-sdk must match the inference anchor. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          if [ "$PY_VER" != "$INF_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs anchor @qvac/inference@$INF_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+            exit 1
+          fi
+          echo "OK: @qvac/inference, @qvac/sdk, @qvac/bare-sdk, and tetherto-qvac-sdk all at $INF_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -378,24 +388,26 @@ jobs:
       - name: Build
         run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
 
-      - name: Verify version lockstep with @qvac/sdk
+      - name: Verify version lockstep with @qvac/inference
         working-directory: ${{ github.workspace }}
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # @qvac/inference is the sole version anchor. This job can run
+          # standalone (publish_pypi_only), so check python against the anchor.
           set -euo pipefail
           REF="${PR_HEAD_SHA:-${GITHUB_SHA}}"
-          SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
+          INF_VER=$(git show "${REF}":packages/inference/package.json | jq -r .version)
           PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ -z "$PY_VER" ]; then
             echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
             exit 1
           fi
-          if [ "$PY_VER" != "$SDK_VER" ]; then
-            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+          if [ "$PY_VER" != "$INF_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs anchor @qvac/inference@$INF_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
             exit 1
           fi
-          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER (verified at ${REF})"
+          echo "OK: tetherto-qvac-sdk and @qvac/inference both at $INF_VER (verified at ${REF})"
 
       - name: Check metadata
         run: .venv/bin/twine check dist/*
