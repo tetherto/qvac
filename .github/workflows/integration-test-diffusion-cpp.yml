@@ -99,7 +99,7 @@ jobs:
       WORKDIR: packages/diffusion-cpp
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
       # The macos-26-xlarge Darwin arm64 leg exposes Apple Paravirtual Metal, whose
-      # unsupported MUL_MAT path aborts the FLUX2 fusion test. Keep this
+      # unsupported MUL_MAT path aborts the FLUX2 integration tests. Keep this
       # opt-out matrix-scoped so compatible Metal runners keep FLUX2 coverage.
       SKIP_FLUX2_FUSION: ${{ matrix.skip_flux2_fusion || 'false' }}
       # Enables the LTX-2.3 video smoke test to download its (lightest-quant)
