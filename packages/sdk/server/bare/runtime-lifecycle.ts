@@ -83,6 +83,13 @@ export function getLifecycleState(): LifecycleState {
   return state
 }
 
+// Terminal: entered when the worker starts tearing down. `assertLifecycleAllowed`
+// then rejects new operation requests (only suspend/resume/state stay allowed),
+// so nothing new admits against models that are about to be unloaded.
+export function markShuttingDown(): void {
+  state = 'shuttingDown'
+}
+
 export function assertLifecycleAllowed(request: Request): void {
   if (state === 'active' || LIFECYCLE_ALLOWED_TYPES.has(request.type)) return
 

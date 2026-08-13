@@ -11,6 +11,7 @@ import {
   getRegisteredResourceCounts,
   resetLifecycleState,
   assertLifecycleAllowed,
+  markShuttingDown,
   onResume
 } from '@/server/bare/runtime-lifecycle'
 import type { Request } from '@/schemas'
@@ -364,6 +365,22 @@ test('gate allows only lifecycle ops and blocks representative requests when sus
   t.exception(() => assertLifecycleAllowed(fakeRequest('getModelInfo')))
   t.exception(() => assertLifecycleAllowed(fakeRequest('completionStream')))
   t.exception(() => assertLifecycleAllowed(fakeRequest('transcribeStream')))
+})
+
+test('gate blocks operation requests once shutting down', (t) => {
+  // Repro: without this, a request arriving during worker cleanup would admit
+  // and start native work against a model that unloadAllModels is about to free.
+  resetLifecycleState()
+  markShuttingDown()
+  t.is(getLifecycleState(), 'shuttingDown')
+
+  t.execution(() => assertLifecycleAllowed(fakeRequest('state')), 'state still allowed')
+  t.exception(
+    () => assertLifecycleAllowed(fakeRequest('completionStream')),
+    'operation request blocked during shutdown'
+  )
+  t.exception(() => assertLifecycleAllowed(fakeRequest('translate')))
+  resetLifecycleState()
 })
 
 test('gate error includes request type and lifecycle state', async (t) => {
