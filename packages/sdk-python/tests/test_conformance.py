@@ -17,7 +17,7 @@ import os
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
 import tetherto.qvac_sdk.models as models
 from tetherto.qvac_sdk import cancel, completion, load_model, translate, unload_model
@@ -36,7 +36,6 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "sdk"),
 )
-WORKER_PATH = os.path.join(SDK_DIR, "dist", "server", "worker.js")
 CASES_PATH = os.path.join(SDK_DIR, "e2e", "conformance", "cases.json")
 
 

@@ -153,19 +153,29 @@ export declare class AudioGen {
     static readonly ENGINE_ACESTEP = "acestep";
     addon: AudioGenInterface | null;
     private readonly _job;
+    private readonly _runExclusive;
     private readonly _configuration;
     private readonly _logger;
+    private _lifecycleRevision;
+    private _destroyed;
+    private _cancelPromise;
+    private _cancellingResponse;
     constructor(options?: AudioGenOptions);
     /** Create the native engine and load every stage GGUF. Idempotent. */
     load(): Promise<void>;
+    private _load;
     /**
      * Generate music from a text prompt. Returns a `QvacResponse` that streams
      * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
      */
     run(caption: string, opts?: GenerateOptions): Promise<QvacResponse<AudiogenOutputChunk>>;
+    private _admitAndWait;
+    private _createJobData;
     cancel(): Promise<void>;
+    private _cancelActiveResponse;
     unload(): Promise<void>;
     destroy(): Promise<void>;
+    private _stop;
     /**
      * Encode interleaved Int16 PCM into one or more output formats. Pass a single
      * format for one file, or an array to produce several at once (input order).
@@ -177,9 +187,12 @@ export declare class AudioGen {
     private _createAddon;
     private _addonOutputCallback;
     private _requireAddon;
+    private _lifecycleError;
+    private _failedCancelError;
 }
 export { REGISTRY_SOURCE, REGISTRY_PREFIX, FIXED_MODELS, DIT_VARIANTS, DEFAULT_DIT_VARIANT, ditVariants, ditFilename, registryPath, modelFilenames, modelManifest, modelSources, resolveDitModelPath, allRegistryPaths } from './models';
 export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOptions } from './models';
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
+export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

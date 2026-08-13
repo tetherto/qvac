@@ -18,8 +18,8 @@ inline constexpr int kCosyvoiceNativeSampleRate = 24000;
  * {@link CosyvoiceModel::load} and drives the real CosyVoice3 engine end to
  * end: Qwen2.5 LM (text -> speech tokens) -> DiT conditional-flow-matching
  * (tokens -> mel) -> CausalHiFT vocoder (mel -> 24 kHz PCM), on CPU or, when
- * nGpuLayers/useGpu request it, tts-cpp's GPU path (Metal on Apple,
- * OpenCL/Adreno on Android). Some fields
+ * nGpuLayers/useGpu request it, tts-cpp's GPU path (Metal on Apple, Vulkan on
+ * desktop Linux/Windows, OpenCL/Adreno on Android). Some fields
  * below are plumbed for API stability but are not yet acted on by the engine;
  * those are flagged "reserved / not yet effective" individually.
  */
@@ -82,15 +82,16 @@ struct CosyvoiceConfig {
   std::optional<int> threads;
   /**
    * Layers to move to the GPU backend. 0 keeps CPU; >0 selects tts-cpp's GPU
-   * path — Metal on Apple, OpenCL/Adreno on Android — falling back to CPU
-   * where no allowlisted GPU device is usable. Forwarded to
-   * EngineOptions::n_gpu_layers.
+   * path — Metal on Apple, Vulkan on desktop Linux/Windows, OpenCL/Adreno on
+   * Android — falling back to CPU where no allowlisted GPU device is usable.
+   * Forwarded to EngineOptions::n_gpu_layers.
    */
   std::optional<int> nGpuLayers;
   /**
    * Tri-state GPU intent (mirrors ChatterboxConfig::useGpu). true offloads all
-   * layers, false pins CPU; the engine honors it on the Metal and
-   * OpenCL/Adreno GPU paths and falls back to CPU otherwise. Conflicts with
+   * layers, false pins CPU; the engine honors it on the Metal, desktop
+   * Vulkan, and OpenCL/Adreno GPU paths and falls back to CPU otherwise.
+   * Conflicts with
    * nGpuLayers (true + 0, or false + !=0) are rejected by
    * CosyvoiceModel::validateConfig.
    */

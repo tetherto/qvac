@@ -132,17 +132,41 @@ To create a client, you can use any OpenAI-compatible AI SDK provider, such as [
 
 ## CLI
 
+Relevant options are summarized below; run `qvac serve openai --help` for the exact generated help output.
+
+| Option | Summary |
+| --- | --- |
+| `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
+| `-p, --port <number>` | Port to listen on (default: `11434`) |
+| `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
+| `--model <alias>` | Model alias to preload (repeatable; must be in config) |
+| `--api-key <key>` | Require Bearer token authentication |
+| `--api-key-file <path>` | Read the Bearer token from a file instead of argv |
+| `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
+| `--cors` | Validate that an explicit trusted origin is configured |
+| `--cors-origin <origin>` | Add a trusted CORS origin (repeatable; no wildcard) |
+| `--public-base-url <url>` | Externally reachable origin required for image `response_format=url` |
+| `--docs` | Mount Swagger UI at `/docs` and add same-port loopback CORS origins (requires a fixed `--port`) |
+| `-v, --verbose` | Detailed output |
+
+### CORS
+
+CORS is disabled unless trusted origins are supplied through repeatable `--cors-origin` flags or `serve.cors.origins` in `qvac.config.*`, or `--docs` adds its same-port loopback defaults. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. Wildcard (`*`) access is not supported.
+
+```bash
+qvac serve openai \
+  --cors-origin https://app.example.com \
+  --cors-origin http://localhost:3000
 ```
-qvac serve openai [options]
-  -c, --config <path>          Config file path (default: auto-detect qvac.config.*)
-  -p, --port <number>          Port to listen on (default: 11434)
-  -H, --host <address>         Host to bind to (default: 127.0.0.1)
-  --model <alias>              Model alias to preload (repeatable, must be in config)
-  --api-key <key>              Require Bearer token authentication
-  --cors                       Enable CORS headers
-  --docs                       Mount Swagger UI at /docs (auto-enables CORS)
-  --public-base-url <url>      Externally reachable origin (required for image response_format=url)
-  -v, --verbose                Detailed output
+
+The legacy `--cors` flag is retained as a compatibility validation switch, but it does not enable CORS by itself. It requires at least one explicit origin from `--cors-origin` or `serve.cors.origins`; otherwise startup fails. `--cors --docs` also fails without an explicit origin because the docs defaults are added only after this validation. Existing scripts can migrate as follows:
+
+```bash
+# Before
+qvac serve openai --cors
+
+# After
+qvac serve openai --cors --cors-origin https://app.example.com
 ```
 
 ## API
@@ -1289,6 +1313,14 @@ curl http://localhost:11434/v1/models \
 
 Requests without a valid token receive a `401` response.
 
+Bearer authentication does not apply to the introspection routes: `/openapi.json`, `/docs`, and every path under `/docs/` remain public even when `--api-key` is set. `/docs` and `/docs/*` exist only when `--docs` is enabled; `/openapi.json` is always available.
+
+A non-loopback `--host` requires authentication: without `--api-key` or `--api-key-file` the server refuses to start. Pass `--allow-unauthenticated` to accept the risk and start anyway, which downgrades the refusal to a warning.
+
+<Callout type="warn">
+Do not enable `--docs` on a non-loopback bind unless public introspection is acceptable. The Swagger UI and its assets remain unauthenticated, and `/openapi.json` is public on every bind even when API authentication is enabled.
+</Callout>
+
 <Callout type="warn">
 **`--api-key` and image `response_format=url`:** browsers do not attach `Authorization` headers to `<img src="...">` requests, so URLs returned by `/v1/images/generations` and `/v1/images/edits` cannot render directly when bearer auth is enabled. Either run the server without `--api-key` for URL mode, or have the client fetch the bytes itself (with the `Authorization` header) and re-host them. The simpler workaround is to use `response_format=b64_json` instead.
 </Callout>
@@ -1316,7 +1348,9 @@ qvac serve openai --docs
 open http://localhost:11434/docs
 ```
 
-`--docs` automatically enables CORS so the Swagger UI's "Try it out" button works (the spec's `servers` URL rarely matches the browser origin — for example, `localhost` vs `127.0.0.1`, or a port-forwarded host). Servers started without `--docs` still need `--cors` to opt in explicitly.
+`--docs` adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins to CORS so a locally opened Swagger UI can use "Try it out." When the configured `--host` is itself loopback, its same-port origin is added too. It does not trust a bound non-loopback host, a port-forwarded origin, or arbitrary websites. Add each additional browser origin with `--cors-origin` or `serve.cors.origins`.
+
+Because those origins are derived from the configured port, `--docs` requires a fixed port: `--docs --port 0` fails startup with a `Serve Options Error` rather than binding an ephemeral port whose `http://localhost:0` origins no browser can match. Pick a port, or drop `--docs` and read the always-available `/openapi.json`.
 
 #### Emit the spec without starting the server
 
