@@ -229,3 +229,4 @@ native prebuild (`BARE_MODULE qvac_asr_ggml`), and one public class —
 - The `TranscriptionWhispercpp` and `TranscriptionParakeet` classes. The
   default export is `ASRGgml`.
 
+

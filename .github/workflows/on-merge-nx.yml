@@ -463,6 +463,7 @@ jobs:
   # and can't have an inline debug step, so echo the received value here.
   debug-gate-output:
     needs: [detect, post-build-gate]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
