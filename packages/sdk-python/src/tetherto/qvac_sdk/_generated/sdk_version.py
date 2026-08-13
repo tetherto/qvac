@@ -5,6 +5,6 @@ connects to must be this version. Sourced from packages/sdk/package.json.
 
 from __future__ import annotations
 
-SDK_VERSION = "0.16.0"
+SDK_VERSION = "0.17.0"
 
 __all__ = ["SDK_VERSION"]

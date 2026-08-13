@@ -70,7 +70,7 @@ jobs:
       # Per-runner GPU toggle (mirrors integration-test-tts-ggml.yml): GPU
       # runners (qvac-*-gpu) leave no_gpu unset so the gpu-smoke runs and
       # asserts the GPU backend; CPU-only runners set no_gpu:'true' to skip it.
-      # The arm64 macOS leg runs on the self-hosted qvac-macos26-arm64-gpu
+      # The arm64 macOS leg runs on the GitHub-hosted macos-26
       # runner, which has a real Metal GPU and so exercises the Metal backend
       # (hosted macs' Paravirtual Metal device crashed ggml's encoder, which is
       # why macOS was previously CPU-only). bci ships a Vulkan desktop build
@@ -116,7 +116,7 @@ jobs:
             benchmark_matrix_json: >-
               [{"useGPU":false,"backendHint":"cpu"}]
           - os: macos-26
-            runner: qvac-macos26-arm64-gpu
+            runner: macos-26
             platform: darwin
             arch: arm64
             benchmark_matrix_json: >-

@@ -17,6 +17,8 @@
 #include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
+#include "model-interface/EnhancerLoader.hpp"
+#include "model-interface/audio8/Audio8Model.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
@@ -26,6 +28,7 @@ namespace qvac::ttsggml::addon_js {
 
 namespace js = qvac_lib_inference_addon_cpp::js;
 
+using audio8::Audio8Model;
 using chatterbox::ChatterboxModel;
 using cosyvoice::CosyvoiceModel;
 using parler::ParlerModel;
@@ -101,8 +104,6 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   //      enhancer) — always the final emitted rate when set;
   //   2. 48000 when the LavaSR enhancer is active (it always emits 48 kHz);
   //   3. the engine's native rate.
-  constexpr int kLavasrEnhancedSampleRate = 48000;
-
   if (engineType == EngineType::Supertonic) {
     auto cfg = adapter.buildSupertonicConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
@@ -114,25 +115,35 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     model = std::move(stm);
   } else if (engineType == EngineType::Cosyvoice) {
     auto cfg = adapter.buildCosyvoiceConfig(configurationParams, env);
+    const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto cvm = make_unique<CosyvoiceModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : cvm->sampleRate(); // native 24 kHz
+    sampleRate = outSr > 0 ? outSr
+                           : (enhanced ? kLavasrEnhancedSampleRate
+                                       : cvm->sampleRate()); // native 24 kHz
     model = std::move(cvm);
   } else if (engineType == EngineType::Parler) {
     auto cfg = adapter.buildParlerConfig(configurationParams, env);
+    const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
     auto ptm = make_unique<ParlerModel>(std::move(cfg));
-    sampleRate = outSr > 0 ? outSr : ptm->sampleRate();
+    sampleRate =
+        outSr > 0 ? outSr
+                  : (enhanced ? kLavasrEnhancedSampleRate : ptm->sampleRate());
     model = std::move(ptm);
+  } else if (engineType == EngineType::Audio8) {
+    auto cfg = adapter.buildAudio8Config(configurationParams, env);
+    auto atm = make_unique<Audio8Model>(std::move(cfg));
+    sampleRate = audio8::emittedSampleRate(atm->config(), atm->sampleRate());
+    model = std::move(atm);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
     const int outSr = cfg.outputSampleRate.value_or(0);
-    sampleRate =
-        outSr > 0
-            ? outSr
-            : (enhanced ? kLavasrEnhancedSampleRate
-                        : chatterbox::kChatterboxNativeSampleRate);
+    sampleRate = outSr > 0
+                     ? outSr
+                     : (enhanced ? kLavasrEnhancedSampleRate
+                                 : chatterbox::kChatterboxNativeSampleRate);
     model = make_unique<ChatterboxModel>(std::move(cfg));
   }
 
@@ -162,9 +173,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
-  if (auto* st = dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
+  if (dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
     SupertonicModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    // Supertonic conditions the engine at construction, so per-call emotion /
+    // pace on the job object is rejected rather than silently dropped here.
+    JSAdapter adapter;
+    adapter.assertNoPerCallSupertonicControls(
+        args.getJsObject(1, "inputObj"), env);
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -177,12 +193,29 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     // token2wav low-latency streaming is reserved in tts-cpp).
     CosyvoiceModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    // Per-call conditioning rides as siblings of `input` on the job object,
+    // exactly as Parler's description fields do below.
+    JSAdapter adapter;
+    modelInput.controls =
+        adapter.readVoiceControls(args.getJsObject(1, "inputObj"), env);
+    modelInput.hasControls = !modelInput.controls.empty();
     auto outputQueue = instance.addonCpp->outputQueue;
     modelInput.chunkCallback =
         [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
           StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
           outputQueue->queueResult(std::any(std::move(chunk)));
         };
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
+  if (dynamic_cast<Audio8Model*>(&instance.addonCpp->model.get())) {
+    Audio8Model::AnyInput modelInput;
+    modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    // Per-call referenceAudio/referenceText are siblings of `input` on the job
+    // object; all-empty means "use the constructor config".
+    JSAdapter adapter;
+    modelInput.voice =
+        adapter.readAudio8Voice(args.getJsObject(1, "inputObj"), env);
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -275,6 +308,21 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
           }
           cvm->setConfig(std::move(newCfg));
           cvm->reload();
+        });
+  }
+
+  if (dynamic_cast<Audio8Model*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildAudio8Config(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* atm = dynamic_cast<Audio8Model*>(&addonCpp->model.get());
+          if (atm == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not an Audio8Model");
+          }
+          atm->reloadWith(std::move(newCfg));
         });
   }
 

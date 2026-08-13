@@ -52,6 +52,7 @@ export {
   state,
   vla,
   vlaHparams,
+  vlaSetEmbodiment,
   vlaPreprocessImage,
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
@@ -80,6 +81,7 @@ export {
   type BatchCompletionRun,
   type BatchPrompt,
   type EmbedStats,
+  type TranscribeStats,
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
@@ -130,6 +132,11 @@ export {
   type ResourceMetric,
   type GraphicsDriver,
   type GraphicsDriverCapabilities,
+  type BackendProbeResult,
+  type BackendDevice,
+  type BackendDriver,
+  type BackendFallback,
+  type InferenceBackendDiagnostics,
   type CPUResourceCapabilities,
   type GPUResourceCapabilities,
   type SystemResourceCapabilities,
@@ -168,6 +175,8 @@ export {
   type VlaConfig,
   type VlaClientRunParams,
   type VlaClientRunResult,
+  type VlaEmbodimentSelection,
+  type VlaEmbodimentSelector,
   type VlaHparams,
   type VlaStats,
   definePlugin,
@@ -261,5 +270,11 @@ export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler } from './profiling'
-export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'
+export { profiler, attachBackendDiagnostics } from './profiling'
+export type {
+  ProfilerRuntimeOptions,
+  ProfilerExport,
+  ProfilingEvent,
+  ProfilerGPUResourceGauge,
+  ProfilerResourceGauge
+} from './profiling'

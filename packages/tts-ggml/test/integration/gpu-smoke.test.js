@@ -1,6 +1,6 @@
 'use strict'
 
-// GPU smoke tests for both tts-ggml engines (chatterbox + supertonic).
+// GPU smoke tests for the tts-ggml engines.
 //
 // Mirrors transcription-parakeet/test/integration/gpu-smoke.test.js's
 // strict-on-CPU policy: a useGPU=true request that resolves to the CPU
@@ -18,9 +18,8 @@
 //
 // The strict gate uses `response.stats.backendDevice` (0=CPU, 1=GPU)
 // and `response.stats.backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan,
-// 4=OpenCL, 99=other), both surfaced by ChatterboxModel +
-// SupertonicModel after Engine::backend_device() / backend_name() were
-// added in tts-cpp.
+// 4=OpenCL, 99=other), surfaced by the native engine wrappers after
+// Engine::backend_device() / backend_name() were added in tts-cpp.
 
 const fs = require('bare-fs')
 const os = require('bare-os')
@@ -35,22 +34,30 @@ const {
 } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
+const { loadCosyvoiceTTS, runCosyvoiceTTS } = require('../utils/runCosyvoiceTTS')
 const {
   ensureChatterboxModels,
   ensureChatterboxMtlModels,
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
-  ensureParlerModel
+  ensureParlerModel,
+  ensureCosyvoiceModel
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-// Parler's only validated GPU backend is Metal (Apple); it has no vulkan/opencl/
-// cuda kernels yet, so its GPU smoke is gated to Apple — every other platform
-// runs Parler on CPU (covered by the unconditional CPU smoke below).
 const isApple = platform === 'darwin' || platform === 'ios'
+// Parler GPU coverage is validated on Apple and the Android Device Farm.
+// Keep desktop Vulkan out until dedicated Linux/Windows runs prove it there.
+const isParlerGpuPlatform = isApple || platform === 'android'
+// CosyVoice3's tts-cpp allowlist is Metal (Apple), OpenCL/Adreno (Android),
+// and Vulkan on desktop hosts, so the strict GPU leg runs everywhere the
+// desktop and mobile GPU runners exist. On Android the engine keeps its
+// Metal-or-OpenCL requirement (Mali and Xclipse decline to CPU).
+const isCosyvoiceGpuPlatform =
+  isApple || platform === 'android' || platform === 'linux' || platform === 'win32'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 
@@ -540,17 +547,16 @@ test(
 )
 
 // Parler smoke over the two mobile-target variants (mini + indic, q8). The GPU
-// leg is gated to Apple: Metal is Parler's only validated GPU backend, so it
-// runs on darwin/ios GPU runners and the iOS Device Farm where useGPU=true must
-// engage Metal (backendId=1). The CPU leg runs everywhere and locks the
-// explicit-CPU contract in. Both are strict assertions.
+// leg is strict on Apple (Metal) and Android (the vendor-selected Vulkan or
+// OpenCL backend), the platforms covered by this test's CI. useGPU=true maps
+// to nGpuLayers=99 in ParlerModel. The CPU leg runs everywhere.
 for (const v of [
   { variant: 'mini', label: 'mini q8' },
   { variant: 'indic', label: 'indic q8', optional: true }
 ]) {
   test(
-    `Parler GPU smoke (${v.label}) - useGPU=true must engage the Metal backend on Apple`,
-    { timeout: 600000, skip: NO_GPU || !isApple },
+    `Parler GPU smoke (${v.label}) - useGPU=true must engage GPU on Apple/Android`,
+    { timeout: 600000, skip: NO_GPU || !isParlerGpuPlatform },
     async (t) => {
       const modelsDir = path.join(getBaseDir(), 'models')
       const download = await ensureParlerModel({ targetDir: modelsDir, variant: v.variant })
@@ -632,3 +638,164 @@ for (const v of [
     }
   )
 }
+
+// RELAX-aware failure for the vendor-specific assertions below, honoring the
+// file-level QVAC_TTS_GPU_SMOKE_RELAX contract like assertGpuBackend does.
+function failOrRelax(t, msg) {
+  if (RELAX) {
+    t.comment(`WARNING (relaxed): ${msg}`)
+    t.pass('completed (relaxed)')
+  } else {
+    t.fail(msg)
+  }
+}
+
+// On Android the assertion is vendor-aware so a policy CPU fallback cannot
+// mask an OpenCL-selection regression on supported Adreno hardware: a small
+// Supertonic probe (its allowlist engages the GPU on every Android vendor)
+// classifies the device — OpenCL(4) means Adreno, Vulkan(3) means
+// Mali/Xclipse. Returns null when the class cannot be determined.
+// KNOWN RESIDUAL: the probe shares the backend registry with the engine under
+// test, so an Adreno host whose OpenCL backend broke entirely would probe as
+// Vulkan and be classified Mali; closing that needs device metadata the
+// harness does not expose yet. An inconclusive probe fails closed.
+async function probeAndroidGpuVendor(t) {
+  const download = await ensureSupertonic3Model({
+    targetDir: path.join(getBaseDir(), 'models'),
+    quant: 'q4_0'
+  })
+  if (!download || !download.success) return null
+  const model = await loadSupertonicTTS({
+    supertonicModelPath: download.path,
+    language: 'en',
+    voice: 'F1',
+    useGPU: true
+  })
+  try {
+    const result = await runSupertonicTTS(model, { text: 'Probe.' }, {})
+    const st = (result.data && result.data.stats) || {}
+    t.comment(`vendor probe: backendDevice=${st.backendDevice} backendId=${st.backendId}`)
+    if (st.backendDevice === 1 && st.backendId === 4) return 'adreno'
+    if (st.backendDevice === 1 && st.backendId === 3) return 'mali'
+    return null
+  } finally {
+    try {
+      await model.unload()
+    } catch (_e) {}
+  }
+}
+
+// CosyVoice3 smoke. The GPU leg is strict on Apple (Metal) and on desktop
+// linux/win32 (Vulkan), both on the tts-cpp validated-backend allowlist. On
+// Android the allowlist takes OpenCL/Adreno only:
+// Adreno devices must resolve to OpenCL (backendId 4 — Vulkan there would
+// mean the selection requirement regressed), Mali/Xclipse devices must
+// decline by policy (CPU with stats.gpuUnsupported set); an inconclusive
+// vendor probe fails closed. The helper's nGpuLayers forwarding is covered
+// by a helper-level unit test (cosyvoice3.inference.test.js), keeping this
+// leg on the primary useGPU path.
+test(
+  'CosyVoice3 GPU smoke - useGPU=true must engage GPU on Apple/desktop/Android',
+  { timeout: 600000, skip: NO_GPU || !isCosyvoiceGpuPlatform },
+  async (t) => {
+    const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
+    const download = await ensureCosyvoiceModel({ targetDir: modelsDir })
+    if (!download.success) {
+      t.fail(
+        'CosyVoice3 model files not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
+    // Fail closed BEFORE loading CosyVoice: an inconclusive probe cannot
+    // pass, so synthesizing first would only burn Device Farm time and stack
+    // peak memory.
+    let vendor = null
+    if (platform === 'android') {
+      vendor = await probeAndroidGpuVendor(t)
+      if (vendor === null) {
+        failOrRelax(t, 'CosyVoice3/Android: GPU vendor probe inconclusive (failing closed)')
+        return
+      }
+    }
+    const model = await loadCosyvoiceTTS({
+      cosyvoiceModelDir: download.modelDir,
+      useGPU: true
+    })
+    try {
+      const t0 = Date.now()
+      const result = await runCosyvoiceTTS(
+        model,
+        { text: 'GPU smoke check for the CosyVoice engine.' },
+        { minSamples: 10000 }
+      )
+      const wallMs = Date.now() - t0
+      console.log(result.output)
+      t.ok(result.passed, 'CosyVoice3/GPU produced expected sample count')
+      t.ok(result.data.sampleCount > 0, 'CosyVoice3/GPU produced audio')
+      const st = result.data.stats
+      if (platform !== 'android') {
+        assertGpuBackend(t, 'CosyVoice3', st)
+      } else if (!st) {
+        t.fail('CosyVoice3/GPU: no response.stats returned (cannot verify backend)')
+      } else if (vendor === 'adreno') {
+        if (st.backendDevice !== 1 || st.backendId !== 4) {
+          failOrRelax(
+            t,
+            `CosyVoice3/Adreno: expected OpenCL (backendDevice=1, backendId=4), got backendDevice=${st.backendDevice} backendId=${st.backendId}`
+          )
+        } else {
+          t.pass('CosyVoice3/Adreno: resolved to OpenCL')
+        }
+      } else if (st.backendDevice !== 0 || st.gpuUnsupported !== 1) {
+        failOrRelax(
+          t,
+          `CosyVoice3/Mali: expected a policy CPU decline (backendDevice=0, gpuUnsupported=1), got backendDevice=${st.backendDevice} gpuUnsupported=${st.gpuUnsupported}`
+        )
+      } else {
+        t.pass('CosyVoice3/Mali: declined to CPU by policy')
+      }
+      recordSmoke(t, 'cosyvoice3 gpu-smoke', result, wallMs)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+test(
+  'CosyVoice3 CPU smoke - useGPU=false must run on the CPU backend',
+  { timeout: 600000 },
+  async (t) => {
+    const modelsDir = path.join(getBaseDir(), 'models', 'cosyvoice3')
+    const download = await ensureCosyvoiceModel({ targetDir: modelsDir })
+    if (!download.success) {
+      t.fail(
+        'CosyVoice3 model files not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
+    const model = await loadCosyvoiceTTS({
+      cosyvoiceModelDir: download.modelDir,
+      useGPU: false
+    })
+    try {
+      const t0 = Date.now()
+      const result = await runCosyvoiceTTS(
+        model,
+        { text: 'CPU smoke check for the CosyVoice engine.' },
+        { minSamples: 10000 }
+      )
+      const wallMs = Date.now() - t0
+      console.log(result.output)
+      t.ok(result.passed, 'CosyVoice3/CPU produced expected sample count')
+      t.ok(result.data.sampleCount > 0, 'CosyVoice3/CPU produced audio')
+      assertCpuBackend(t, 'CosyVoice3', result.data.stats)
+      recordSmoke(t, 'cosyvoice3 cpu-smoke', result, wallMs)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)

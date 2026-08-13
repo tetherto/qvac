@@ -5,6 +5,7 @@ import {
   isEnabled,
   shouldProfile,
   shouldIncludeServerBreakdown,
+  shouldIncludeResourceGauges,
   record,
   getAggregates,
   getRecentEvents
@@ -173,6 +174,22 @@ test('profiler: shouldIncludeServerBreakdown per-call > runtime > default', (t) 
   disable()
   enable({ includeServerBreakdown: false })
   t.is(shouldIncludeServerBreakdown({ includeServerBreakdown: true }), true, 'per-call enable wins')
+})
+
+test('profiler: resource gauges are opt-in with per-call precedence', (t) => {
+  reset()
+  t.is(shouldIncludeResourceGauges(), false, 'disabled by default')
+
+  enable({ includeResourceGauges: true })
+  t.is(shouldIncludeResourceGauges(), true, 'runtime option enables resource gauges')
+  t.is(
+    shouldIncludeResourceGauges({ includeResourceGauges: false }),
+    false,
+    'per-call disable wins'
+  )
+
+  enable({ includeResourceGauges: false })
+  t.is(shouldIncludeResourceGauges({ includeResourceGauges: true }), true, 'per-call enable wins')
 })
 
 // =============================================================================

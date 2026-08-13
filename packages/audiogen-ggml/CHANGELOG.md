@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Treat `destroy()` as terminal. Replace `await gen.destroy(); await gen.load()`
+  with a newly constructed `AudioGen` instance before calling `load()`.
+- Remove internal integration tests, mobile tests, and test utilities from the
+  published package.
+
 ### Added
 
 - RTF (Real-Time Factor) benchmark for the ACE-Step engine, measuring
@@ -41,6 +48,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can now fetch its own inputs with `--workflow` / `--runs`, folding the last six
   sweeps into one table instead of only reading a directory staged by the run it
   belongs to. Each row keeps the run id of the sweep it came from.
+- Expose ACE-Step reference/source audio and cover task controls through the
+  JavaScript API (`referenceAudio`, `sourceAudio`, `taskType`,
+  `audioCoverStrength`, `coverNoiseStrength`) and forward them to audiogen-cpp.
+- Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
+  `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
+  produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
+  Pixel 9a instead of silently accepting a CPU fallback.
+- Expose ACE-Step LM sampling controls, Haar DCW parameters, and optional frozen
+  semantic codes through the JavaScript API for reproducible quality comparisons.
+- Export structured AudioGen errors with a CommonJS-compatible error runtime and
+  serialize overlapping runs through response settlement.
+- Ship the model downloader as `qvac-audiogen-download-models`.
+
+### Changed
+
+- Bump `audiogen-cpp` to `2026-08-11` so native builds pick up cover-nofsq and
+  reference-audio support from the official registry.
+- Bump `audiogen-cpp` to `2026-08-10`, enabling official sampler-side Haar DCW
+  by default and using the validated LM decoding policy on Metal and Vulkan.
+- Cancel and settle active responses before unload or destroy, and reject native
+  admission failures consistently.
+- Exclude internal integration and mobile test utilities from the published
+  package and include the downloader runtime dependency.
 
 ### Fixed
 
@@ -59,6 +89,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile rows report the GitHub run id in the `Run` column. They previously
   carried the shared extractor's per-workflow `run_number`, which sat in the same
   column as the desktop run ids and could not be resolved to a run.
+
+## [0.2.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - chore:
+  test addon-cpp 1.3.3 across consumers
 
 ## [0.1.1] - 2026-08-03
 

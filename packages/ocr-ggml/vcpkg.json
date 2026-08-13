@@ -20,7 +20,7 @@
     {
       "name": "qvac-fabric",
       "default-features": false,
-      "version>=": "9840.1.1",
+      "version>=": "10069.0.0",
       "features": [
         "gpu-backends"
       ]

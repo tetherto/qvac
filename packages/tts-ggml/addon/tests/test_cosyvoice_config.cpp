@@ -11,25 +11,38 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <tts-cpp/cosyvoice/engine.h>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendUtils.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 
+using qvac::ttsggml::kOffloadAllGpuLayers;
 using qvac::ttsggml::cosyvoice::CosyvoiceConfig;
 using qvac::ttsggml::cosyvoice::CosyvoiceModel;
 using qvac::ttsggml::cosyvoice::resampleBatchOutput;
+using qvac::ttsggml::cosyvoice::resolveEmittedAudio;
 using qvac::ttsggml::cosyvoice::streamingRequested;
+using qvac::ttsggml::cosyvoice::toEngineOptions;
+using qvac::ttsggml::cosyvoice::toVoiceControls;
 using qvac_errors::StatusError;
 
 namespace {
+
+constexpr const char* MODEL_DIR_PREFIX = "qvac-tts-ggml-cosyvoice-tests-";
+constexpr const char* LAVASR_DIR_PREFIX = "qvac-tts-ggml-cosyvoice-lavasr-";
+constexpr const char* SETCFG_DIR_PREFIX = "qvac-tts-ggml-cosyvoice-setcfg-";
+constexpr const char* STUB_CONTENTS = "not-a-real-gguf";
 
 std::string envOrEmpty(const char* name) {
   if (const char* v = std::getenv(name))
@@ -37,14 +50,40 @@ std::string envOrEmpty(const char* name) {
   return "";
 }
 
+// The directory names carry entropy because CI shares one /tmp across parallel
+// runners: under a fixed name one job's cleanup deletes the stubs another job
+// is still reading, and a directory created by the first job can be unwritable
+// by the rest, which silently drops every later stub write.
+std::filesystem::path createScratchDir(const char* prefix) {
+  std::random_device entropy;
+  auto dir = std::filesystem::temp_directory_path() /
+             (std::string(prefix) + std::to_string(entropy()));
+  std::filesystem::create_directories(dir);
+  return dir;
+}
+
+class ScratchDir {
+public:
+  explicit ScratchDir(const char* prefix) : path_(createScratchDir(prefix)) {}
+  ~ScratchDir() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+  ScratchDir(const ScratchDir&) = delete;
+  ScratchDir& operator=(const ScratchDir&) = delete;
+
+  const std::filesystem::path& path() const { return path_; }
+
+private:
+  std::filesystem::path path_;
+};
+
 // A directory that exists but holds no CosyVoice3 weights: construction (which
 // only validates the directory exists) succeeds, but load() must fail because
 // the engine can't resolve the LM/flow/HiFT/voice/tokenizer components.
-std::filesystem::path emptyModelDir() {
-  auto dir =
-      std::filesystem::temp_directory_path() / "qvac-tts-ggml-cosyvoice-tests";
-  std::filesystem::create_directories(dir);
-  return dir;
+const std::filesystem::path& emptyModelDir() {
+  static const ScratchDir dir(MODEL_DIR_PREFIX);
+  return dir.path();
 }
 
 CosyvoiceConfig configWithExistingDir() {
@@ -53,7 +92,59 @@ CosyvoiceConfig configWithExistingDir() {
   return cfg;
 }
 
+// Placeholder LavaSR GGUFs are staged outside the model dir so the latter keeps
+// matching the "holds no weights" contract above.
+const std::filesystem::path& lavasrStageDir() {
+  static const ScratchDir dir(LAVASR_DIR_PREFIX);
+  return dir.path();
+}
+
+// validateConfig only checks for presence, so a weightless file is enough to
+// exercise the accept path; an actual Enhancer::load happens later, in load().
+class TempGguf {
+public:
+  explicit TempGguf(const char* name) : path_(lavasrStageDir() / name) {
+    std::ofstream out(path_, std::ios::binary);
+    out << STUB_CONTENTS;
+    out.close();
+    if (!out)
+      throw std::runtime_error(
+          "failed to stage the placeholder GGUF: " + path_.string());
+  }
+  ~TempGguf() {
+    std::error_code ec;
+    std::filesystem::remove(path_, ec);
+  }
+  TempGguf(const TempGguf&) = delete;
+  TempGguf& operator=(const TempGguf&) = delete;
+
+  std::string path() const { return path_.string(); }
+
+private:
+  std::filesystem::path path_;
+};
+
 } // namespace
+
+// Conditioning plumbing. The vocabulary itself lives in tts-cpp (and is pinned
+// by its own test-voice-controls / test-cosyvoice-instruct); what matters here
+// is that every channel survives the config -> engine hop.
+TEST(CosyvoiceControls, ConfigMapsEveryChannel) {
+  CosyvoiceConfig cfg;
+  cfg.emotion = "happy";
+  cfg.pace = "slow";
+  cfg.instruct = "请用广东话表达。";
+  const auto controls = toVoiceControls(cfg);
+  EXPECT_EQ(controls.emotion, "happy");
+  EXPECT_EQ(controls.pace, "slow");
+  EXPECT_EQ(controls.instruct_text, "请用广东话表达。");
+  EXPECT_FALSE(controls.empty());
+}
+
+TEST(CosyvoiceControls, DefaultConfigIsUnconditioned) {
+  const auto controls = toVoiceControls(CosyvoiceConfig{});
+  EXPECT_TRUE(controls.empty());
+}
 
 TEST(CosyvoiceValidate, EmptyConfigRejected) {
   CosyvoiceConfig cfg;
@@ -85,6 +176,16 @@ TEST(CosyvoiceValidate, UseGpuNGpuLayersConflictRejected) {
   EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
 }
 
+TEST(CosyvoiceValidate, UseGpuTrueAcceptedAtConstruction) {
+  // GPU intent is honored where tts-cpp's allowlist engages (Metal on Apple,
+  // Vulkan on desktop Linux/Windows, OpenCL/Adreno on Android; others fall
+  // back to CPU). Construction must NOT
+  // reject useGpu=true -- model loading is deferred to load().
+  auto cfg = configWithExistingDir();
+  cfg.useGpu = true;
+  EXPECT_NO_THROW(CosyvoiceModel{cfg});
+}
+
 TEST(CosyvoiceValidate, NegativeStreamTokensRejected) {
   auto base = configWithExistingDir();
 
@@ -108,6 +209,62 @@ TEST(CosyvoiceValidate, StreamingNonNativeOutputRateRejected) {
   EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
 }
 
+// The accept-path tests below are only meaningful if the placeholder really
+// reaches the disk; a silently failed write used to surface three tests later
+// as a "GGUF not found" rejection.
+TEST(CosyvoiceLavasrFixture, StagesAReadableFile) {
+  const TempGguf gguf("lavasr-fixture-probe.gguf");
+  EXPECT_TRUE(std::filesystem::exists(gguf.path()));
+}
+
+// The LavaSR enhancer resamples inside its overlap-reprocess window, so it
+// lifts the streaming native-rate restriction above.
+TEST(CosyvoiceValidate, StreamingNonNativeOutputRateAcceptedWithEnhancer) {
+  const TempGguf enhancer("lavasr-enhancer.gguf");
+  auto cfg = configWithExistingDir();
+  cfg.streamChunkTokens = 25;
+  cfg.outputSampleRate = 16000;
+  cfg.enhancerGgufPath = enhancer.path();
+  EXPECT_NO_THROW(CosyvoiceModel{cfg});
+}
+
+TEST(CosyvoiceValidate, NonexistentEnhancerGgufRejected) {
+  auto cfg = configWithExistingDir();
+  cfg.enhancerGgufPath = "/definitely/does/not/exist/lavasr-enhancer.gguf";
+  EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+TEST(CosyvoiceValidate, NonexistentDenoiserGgufRejected) {
+  auto cfg = configWithExistingDir();
+  cfg.denoiserGgufPath = "/definitely/does/not/exist/lavasr-denoiser.gguf";
+  EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+}
+
+TEST(CosyvoiceValidate, EnhancerAcceptedForBatchAndStreaming) {
+  const TempGguf enhancer("lavasr-enhancer.gguf");
+  auto base = configWithExistingDir();
+  base.enhancerGgufPath = enhancer.path();
+
+  EXPECT_NO_THROW(CosyvoiceModel{base});
+
+  auto streaming = base;
+  streaming.streamChunkTokens = 25;
+  EXPECT_NO_THROW(CosyvoiceModel{streaming});
+}
+
+// The UL-UNAS denoiser is one-shot in tts-cpp, so it stays batch-only until a
+// stateful streaming denoiser lands.
+TEST(CosyvoiceValidate, DenoiserAcceptedForBatchButRejectedWhileStreaming) {
+  const TempGguf denoiser("lavasr-denoiser.gguf");
+  auto batch = configWithExistingDir();
+  batch.denoiserGgufPath = denoiser.path();
+  EXPECT_NO_THROW(CosyvoiceModel{batch});
+
+  auto streaming = batch;
+  streaming.streamChunkTokens = 25;
+  EXPECT_THROW(CosyvoiceModel{streaming}, StatusError);
+}
+
 // Ungated coverage of the wasStreaming decision (the double-emit fix):
 // streaming requires BOTH streamChunkTokens>0 and a chunk sink. No weights
 // needed.
@@ -123,6 +280,78 @@ TEST(CosyvoiceStreaming, StreamingRequestedContract) {
   CosyvoiceConfig cfgZeroChunks;
   cfgZeroChunks.streamChunkTokens = 0;
   EXPECT_FALSE(streamingRequested(cfgZeroChunks, true));
+}
+
+// Only the streaming+enhancer path diverges from the engine's SynthesisResult,
+// and getting it wrong misreports stats without failing anything, so pin all
+// four combinations.
+TEST(CosyvoiceStreaming, EmittedAudioFollowsWhatTheCallerReceived) {
+  constexpr std::size_t kStreamed = 96000;
+  constexpr std::size_t kBatch = 48000;
+  constexpr int kFinalRate = 16000;
+  constexpr int kBatchRate = 24000;
+
+  const auto batchPlain = resolveEmittedAudio(
+      false, false, kFinalRate, kStreamed, kBatch, kBatchRate);
+  EXPECT_EQ(batchPlain.samples, kBatch);
+  EXPECT_EQ(batchPlain.sampleRate, kBatchRate);
+
+  // Batch enhancement rewrites SynthesisResult in place, so the batch rate is
+  // already the emitted one and the enhancer flag changes nothing.
+  const auto batchEnhanced =
+      resolveEmittedAudio(false, true, kFinalRate, kStreamed, kBatch, 48000);
+  EXPECT_EQ(batchEnhanced.samples, kBatch);
+  EXPECT_EQ(batchEnhanced.sampleRate, 48000);
+
+  const auto streamPlain = resolveEmittedAudio(
+      true, false, kFinalRate, kStreamed, kBatch, kBatchRate);
+  EXPECT_EQ(streamPlain.samples, kStreamed);
+  EXPECT_EQ(streamPlain.sampleRate, kBatchRate)
+      << "unenhanced streaming emits at the engine's native rate";
+
+  const auto streamEnhanced = resolveEmittedAudio(
+      true, true, kFinalRate, kStreamed, kBatch, kBatchRate);
+  EXPECT_EQ(streamEnhanced.samples, kStreamed);
+  EXPECT_EQ(streamEnhanced.sampleRate, kFinalRate)
+      << "the enhanced stream is emitted at the enhancer's final rate, not the "
+         "native rate the SynthesisResult still reports";
+}
+
+// toEngineOptions is the addon's whole GPU/OpenCL contract with tts-cpp, so pin
+// the forwarding directly (no weights needed). openclCacheDir is dropped for
+// the entire process without this plumbing (silent kernel recompilation on
+// Android).
+TEST(CosyvoiceEngineOptions, ForwardsOpenclCacheDir) {
+  CosyvoiceConfig cfg;
+  cfg.openclCacheDir = "/var/cache/qvac/opencl";
+  EXPECT_EQ(toEngineOptions(cfg).opencl_cache_dir, "/var/cache/qvac/opencl");
+}
+
+TEST(CosyvoiceEngineOptions, OpenclCacheDirDefaultsEmpty) {
+  EXPECT_TRUE(toEngineOptions(CosyvoiceConfig{}).opencl_cache_dir.empty());
+}
+
+TEST(CosyvoiceEngineOptions, DefaultsToCpu) {
+  EXPECT_EQ(toEngineOptions(CosyvoiceConfig{}).n_gpu_layers, 0);
+}
+
+TEST(CosyvoiceEngineOptions, UseGpuTrueOffloadsAllLayers) {
+  CosyvoiceConfig cfg;
+  cfg.useGpu = true;
+  EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, kOffloadAllGpuLayers);
+}
+
+TEST(CosyvoiceEngineOptions, UseGpuFalsePinsCpu) {
+  CosyvoiceConfig cfg;
+  cfg.useGpu = false;
+  EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, 0);
+}
+
+TEST(CosyvoiceEngineOptions, ExplicitNGpuLayersWinsOverUseGpu) {
+  CosyvoiceConfig cfg;
+  cfg.nGpuLayers = 12;
+  cfg.useGpu = true;
+  EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, 12);
 }
 
 TEST(CosyvoiceValidate, ConfigDefaultsAreCpuFriendly) {
@@ -204,13 +433,11 @@ TEST(CosyvoiceResample, NoopWhenOutputRateMatchesOrUnset) {
 // validateConfig). A valid modelDir lets the ctor succeed without loading
 // weights; a subsequent invalid setConfig must throw and leave cfg_ untouched.
 TEST(CosyvoiceSetConfig, RejectsInvalidConfigAndKeepsPrevious) {
-  const auto dir = std::filesystem::temp_directory_path() /
-                   "qvac-tts-ggml-cosyvoice-setcfg-test";
-  std::filesystem::remove_all(dir);
-  std::filesystem::create_directories(dir);
+  const ScratchDir scratch(SETCFG_DIR_PREFIX);
+  const std::string dir = scratch.path().string();
 
   CosyvoiceConfig good;
-  good.modelDir = dir.string();
+  good.modelDir = dir;
   CosyvoiceModel model(good);
   EXPECT_FALSE(model.config().streamChunkTokens.has_value());
 
@@ -219,10 +446,8 @@ TEST(CosyvoiceSetConfig, RejectsInvalidConfigAndKeepsPrevious) {
   EXPECT_THROW(model.setConfig(bad), StatusError);
 
   // The rejected setConfig must not have mutated cfg_.
-  EXPECT_EQ(model.config().modelDir, dir.string());
+  EXPECT_EQ(model.config().modelDir, dir);
   EXPECT_FALSE(model.config().streamChunkTokens.has_value());
-
-  std::filesystem::remove_all(dir);
 }
 
 // ---- Real-GGUF round-trips (opt-in) -------------------------------------
@@ -290,4 +515,25 @@ TEST(CosyvoiceRealGguf, StreamingDeliversChunks) {
   // event). The returned std::any is empty.
   EXPECT_FALSE(out.has_value())
       << "streaming process() returns no batch buffer";
+}
+
+// The enhancer loads after the engine, so a failure there must not leave the
+// model looking loaded: isLoaded() reads engine_ alone, and loadLocked()
+// returns early when it is set, which would turn the retry into a no-op that
+// silently synthesizes unenhanced audio.
+TEST(CosyvoiceRealGguf, FailedEnhancerLoadLeavesModelUnloaded) {
+  const auto dir = envOrEmpty("QVAC_TEST_COSYVOICE_MODEL_DIR");
+  if (dir.empty())
+    GTEST_SKIP() << "Set QVAC_TEST_COSYVOICE_MODEL_DIR to enable.";
+
+  TempGguf invalidEnhancer("cosyvoice-invalid-enhancer.gguf");
+  CosyvoiceConfig cfg;
+  cfg.modelDir = dir;
+  cfg.enhancerGgufPath = invalidEnhancer.path();
+  CosyvoiceModel m(cfg);
+
+  EXPECT_ANY_THROW(m.load());
+  EXPECT_FALSE(m.isLoaded()) << "a half-loaded model must not report loaded";
+  EXPECT_ANY_THROW(m.load()) << "the retry must fail rather than no-op";
+  EXPECT_FALSE(m.isLoaded());
 }

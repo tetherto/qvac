@@ -4,8 +4,9 @@ description: |
 
   Always runs, even on monitor failure (so crashes get full forensic data).
   Refreshes AWS credentials, downloads only the essential artifacts from
-  Device Farm (Customer_Artifacts.zip + Logcat), extracts bare_console.log,
-  test-results.json, logcat_full.txt, and perf markers, then uploads:
+  Device Farm (Customer_Artifacts.zip + Logcat + test-spec output), extracts
+  bare_console.log, test-results.json, logcat_full.txt, host-phase diagnostics,
+  and perf markers, then uploads:
     - console-logs-<addon>-<platform>
     - perf-report-<addon>-<platform> (only when enables-perf=true)
 
@@ -84,9 +85,10 @@ runs:
           [ -n "$_arn" ] && RUN_ARNS+=("$_arn")
         done < <(echo "$RUN_ARNS_JSON" | jq -r '.[]')
 
-        # QVAC-19368: only download Customer Artifacts + Logcat. Skip TCP dump
-        # (up to 624MB), screenshots, videos, XML, install logs — nobody uses
-        # them and they dominated the download time.
+        # QVAC-19368: only download Customer Artifacts + Logcat + host-side
+        # test-spec output. Skip TCP dump (up to 624MB), screenshots, videos,
+        # XML, and install logs. Test-spec output is small and is required to
+        # diagnose install/pre_test failures that occur before the app starts.
         download_artifact() {
           local dest_dir="$1" art_json
           art_json=$(echo "$2" | base64 -d)
@@ -98,11 +100,12 @@ runs:
           if [ "$PLATFORM" = "Android" ] && [ "$ext" = "mp4" ]; then
             return
           fi
-          # Filter: only Customer Artifacts (bare_console, test-results, perf,
-          # logcat_full) and Logcat (C++ logs). Device Farm names the zip
-          # "Customer Artifacts" (with space).
+          # Filter: Customer Artifacts (bare_console, test-results, perf,
+          # logcat_full), Logcat (C++ logs), and Device Farm's host command
+          # output. AWS has used both "Test spec output" and "Standard Output"
+          # labels, so accept both spellings.
           case "$name" in
-            *Customer*Artifact*|*Logcat*|*logcat*) ;;
+            *Customer*Artifact*|*Logcat*|*logcat*|*Test*spec*output*|*Test*Spec*Output*|*Standard*Output*|*standard*output*) ;;
             *) return ;;
           esac
           local safe_name
@@ -173,12 +176,16 @@ runs:
         mkdir -p "$CONSOLE_DIR"
         # Artifacts live under <LOG_DIR>/<run_device>/<suite>/.  Use the
         # job-level dir (grandparent) as the device label for extracted files.
-        find "$LOG_DIR" -type f \( -iname "Logcat.*" -o -iname "*Customer_Artifacts.zip" \) | while read -r f; do
+        find "$LOG_DIR" -type f \( -iname "Logcat.*" -o -iname "*Customer_Artifacts.zip" -o -iname "*test*spec*output*" -o -iname "*standard*output*" \) | while read -r f; do
           fname=$(basename "$f")
           device=$(basename "$(dirname "$(dirname "$f")")")
           if echo "$fname" | grep -qiE "Logcat\."; then
             cp "$f" "$CONSOLE_DIR/${device}_${fname}"
             echo "  Console log: ${device}_${fname}"
+          fi
+          if echo "$fname" | grep -qiE "(test.*spec.*output|standard.*output)"; then
+            cp "$f" "$CONSOLE_DIR/${device}_${fname}"
+            echo "  Host phase log: ${device}_${fname}"
           fi
           if echo "$fname" | grep -qiE "Customer_Artifacts\.zip$"; then
             tmpdir=$(mktemp -d)

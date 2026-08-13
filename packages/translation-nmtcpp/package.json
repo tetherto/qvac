@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "8.3.1",
+  "version": "0.8.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -114,6 +114,10 @@
     "./marian": {
       "types": "./marian.d.ts",
       "default": "./marian.js"
+    },
+    "./lib/error": {
+      "types": "./lib/error.d.ts",
+      "default": "./lib/error.js"
     },
     "./lib/bergamot-model-fetcher": {
       "types": "./lib/bergamot-model-fetcher.d.ts",

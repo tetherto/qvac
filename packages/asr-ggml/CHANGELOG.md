@@ -12,6 +12,42 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md).
 
+## [0.3.0] - 2026-08-12
+
+### Added
+
+- **Choosing a model guide.** README documents which specific Whisper `.bin` or
+  Parakeet `.gguf` to pick per use case (default TDT, EOU, CTC, Sortformer
+  offline vs streaming, Whisper turbo/small for language breadth / translation).
+- **`parakeetConfig.language`.** Optional multilingual CTC language id (e.g.
+  `"hi"`, `"ta"`) forwarded to `EngineOptions::language`. Required for Indic
+  Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on
+  monolingual CTC.
+
+### Changed
+
+- Update `parakeet-cpp` to `2026-08-10#2` for Indic Conformer CTC language
+  masking.
+
+### Pull Requests
+
+- [#3702](https://github.com/tetherto/qvac/pull/3702) - QVAC-23279 feat[asr-ggml]:
+  Indic Conformer CTC language support and fork registry pin
+- [#3674](https://github.com/tetherto/qvac/pull/3674) - QVAC-22512 doc: add speech
+  model choice guides for TTS and ASR
+
+## [0.2.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
 ## [0.1.1] - 2026-08-03
 
 ### Changed
