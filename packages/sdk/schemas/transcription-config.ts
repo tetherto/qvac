@@ -116,6 +116,12 @@ export const parakeetRuntimeConfigSchema = z.object({
   streamingEnergyVad: z.boolean().optional(),
   streamingLeftContextMs: z.number().int().nonnegative().optional(),
   streamingRightLookaheadMs: z.number().int().nonnegative().optional(),
+  /**
+   * Multilingual CTC language id (e.g. `"hi"`, `"ta"`). Required for Indic
+   * Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on
+   * monolingual CTC such as English `parakeet-ctc-0.6b`.
+   */
+  language: z.string().optional(),
 
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) =========
   // Auto-enabled when the loaded GGUF carries
@@ -131,10 +137,10 @@ export const parakeetRuntimeConfigSchema = z.object({
   openclCacheDir: z.string().optional()
 })
 
-// Parakeet's load-time config currently has no fields beyond the
-// runtime knobs (single GGUF model is supplied via the top-level
-// `modelSrc` of `loadModel`). The alias is retained so consumers can
-// keep importing `ParakeetConfig` / `parakeetConfigSchema`.
+// Parakeet's load-time config is the runtime knobs (single GGUF model is
+// supplied via the top-level `modelSrc` of `loadModel`). The alias is
+// retained so consumers can keep importing `ParakeetConfig` /
+// `parakeetConfigSchema`.
 export const parakeetConfigSchema = parakeetRuntimeConfigSchema
 
 export type ParakeetRuntimeConfig = z.infer<typeof parakeetRuntimeConfigSchema>

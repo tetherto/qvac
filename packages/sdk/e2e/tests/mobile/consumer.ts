@@ -549,6 +549,10 @@ export const executor = createExecutor({
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
     new SkipExecutor(
+      /^parakeet-indic-conformer-/,
+      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
+    ),
+    new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
     ),

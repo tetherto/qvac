@@ -505,6 +505,10 @@ export const executor = createExecutor({
       /^vla-/,
       'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
     ),
+    new SkipExecutor(
+      /^parakeet-indic-conformer-/,
+      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on Electron'
+    ),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
