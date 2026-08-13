@@ -6,6 +6,10 @@ Release Date: 2026-08-13
 
 - Self-contained per-platform `tetherto-qvac-sdk` wheels via GitHub release assets (thin wheels remain on PyPI). (see PR [#3754](https://github.com/tetherto/qvac/pull/3754))
 
+## 🐞 Bug Fixes
+
+- Fix Windows fat-wheel builds (`npm` → `npm.cmd` via `shutil.which`) and schedule `bare-rpc` `OutgoingStream.destroy` so peer STREAM DESTROY closes the stream. (see PR [#3832](https://github.com/tetherto/qvac/pull/3832))
+
 ## 📘 Docs
 
 - Make embedded Python examples standalone. (see PR [#3724](https://github.com/tetherto/qvac/pull/3724))
