@@ -24,7 +24,7 @@
 // credentials directly — it just shells out to the AWS CLI.
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync, statSync, rmSync, mkdtempSync } from 'node:fs'
+import { readFileSync, writeFileSync, statSync, rmSync, mkdtempSync, openSync, readSync, closeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -103,8 +103,19 @@ function download(url, dest) {
 }
 
 function sha256(file) {
+  // Chunked read: model files reach ~11 GB, and readFileSync throws
+  // ERR_FS_FILE_TOO_LARGE past the 2 GiB Buffer cap, so hash incrementally.
   const hash = createHash('sha256')
-  hash.update(readFileSync(file))
+  const fd = openSync(file, 'r')
+  try {
+    const buf = Buffer.allocUnsafe(8 * 1024 * 1024)
+    let bytesRead
+    while ((bytesRead = readSync(fd, buf, 0, buf.length, null)) > 0) {
+      hash.update(bytesRead === buf.length ? buf : buf.subarray(0, bytesRead))
+    }
+  } finally {
+    closeSync(fd)
+  }
   return hash.digest('hex').toLowerCase()
 }
 
