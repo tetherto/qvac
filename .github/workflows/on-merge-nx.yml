@@ -382,7 +382,7 @@ jobs:
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
       needs.publish-logic.outputs.publish_release == 'true'
     runs-on: ubuntu-latest
-    environment: release
+    environment: npm
     strategy:
       fail-fast: false
       matrix:
