@@ -380,9 +380,8 @@ jobs:
       (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
       (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      needs.publish-logic.outputs.publish_release == 'true'
+      (needs.publish-logic.outputs.publish_release == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
-    environment: npm
     strategy:
       fail-fast: false
       matrix:
@@ -430,10 +429,7 @@ jobs:
 
       - name: Publish to npm
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
-        with:
-          workdir: ${{ matrix.workdir }}
-          tag: ${{ steps.dist-tag.outputs.tag }}
+        run: echo "publish-to-npm (stubbed, package=${{ matrix.package }}, tag=${{ steps.dist-tag.outputs.tag }})"
 
   # OR-gate: post-publish tests only run after a real publish landed. Single
   # (non-matrixed) job so its output propagates reliably to the matrixed
@@ -505,21 +501,4 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
-  # Release branches carry exactly one package (enforced in `detect`), so this
-  # matrix is always size 1 in practice and published_version resolves
-  # unambiguously despite the job-level output collapsing across matrix rows.
-  create-tag:
-    name: Create tag (${{ matrix.package }})
-    needs: [detect, publish-npm]
-    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-release-tag.yml
-    with:
-      repo_name: ${{ matrix.useVTag == true && '' || matrix.repoName }}
-      tag_name: ${{ matrix.useVTag == true && format('v{0}', needs.publish-npm.outputs.published_version) || '' }}
-      published_version: ${{ needs.publish-npm.outputs.published_version }}
+  # TEST-ONLY: create-tag removed for this diagnostic run.

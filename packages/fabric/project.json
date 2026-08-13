@@ -44,20 +44,6 @@
         "command": "pnpm run lint",
         "cwd": "packages/fabric"
       }
-    },
-    "on-merge": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by on-merge-nx.yml'",
-        "cwd": "packages/fabric",
-        "ci": {
-          "buildStep": "none",
-          "nameTransform": "none",
-          "installToken": "PAT_TOKEN",
-          "repoName": "fabric",
-          "testGateMode": "none"
-        }
-      }
     }
   },
   "implicitDependencies": [
