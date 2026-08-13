@@ -13,8 +13,6 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from _common import print_progress
-
 from tetherto.qvac_sdk import (
     Client,
     DownloadAssetRequest,
@@ -28,6 +26,17 @@ from tetherto.qvac_sdk import (
 from tetherto.qvac_sdk.models import WHISPER_TINY
 
 MB = 1024 * 1024
+
+
+def print_progress(p) -> None:
+    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    line = (
+        f"▸ Downloading {p.percentage:.0f}% "
+        f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
+    )
+    print(line, end="\r" if sys.stderr.isatty() else "\n", file=sys.stderr)
+    if p.percentage >= 100:
+        print(file=sys.stderr)
 
 
 def print_status(info, label) -> None:

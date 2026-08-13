@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 import io
-import os
 import threading
 import wave
 from typing import Any
@@ -16,16 +15,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk.client import WorkerNotFoundError
 from tetherto.qvac_sdk.notebook import EmbedFailedError, SyncClient
-
-SDK_DIR = os.environ.get(
-    "QVAC_POC_SDK_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "..", "sdk"),
-)
-WORKER_PATH = os.path.join(SDK_DIR, "dist", "server", "worker.js")
 
 
 class FakeTransport:
