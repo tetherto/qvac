@@ -40,6 +40,7 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -369,6 +370,12 @@ resources.define('parakeet-ctc', {
   config: {}
 })
 
+resources.define('parakeet-indic-conformer', {
+  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  type: 'parakeet-transcription',
+  config: { language: 'hi' }
+})
+
 resources.define('parakeet-sortformer', {
   constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
@@ -504,10 +511,6 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^vla-/,
       'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^parakeet-indic-conformer-/,
-      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on Electron'
     ),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
