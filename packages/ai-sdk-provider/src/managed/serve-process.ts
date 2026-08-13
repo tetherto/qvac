@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -50,6 +51,73 @@ export function allocateFreePort(host: string): Promise<number> {
 interface ServeCommand {
   readonly command: string
   readonly baseArgs: readonly string[]
+}
+
+// First `@qvac/cli` able to take the key from a file instead of argv.
+const MIN_CLI_VERSION_API_KEY_FILE = '0.11.0'
+
+function isAtLeast(version: string, minimum: string): boolean {
+  const parts = (value: string): number[] =>
+    (value.split('-')[0] ?? '').split('.').map((part) => Number.parseInt(part, 10) || 0)
+  const actual = parts(version)
+  const wanted = parts(minimum)
+  for (let i = 0; i < 3; i += 1) {
+    const left = actual[i] ?? 0
+    const right = wanted[i] ?? 0
+    if (left !== right) return left > right
+  }
+  return true
+}
+
+export function resolveCliVersion(): string | undefined {
+  const require = createRequire(import.meta.url)
+  try {
+    const pkg = require(require.resolve('@qvac/cli/package.json')) as { version?: string }
+    if (typeof pkg.version === 'string') return pkg.version
+  } catch {
+    // Same `exports` restriction as resolveServeCommand: walk up from the main
+    // entry instead of asking the resolver for a subpath it refuses to expose.
+  }
+  try {
+    let dir = dirname(require.resolve('@qvac/cli'))
+    for (let depth = 0; depth < 8; depth += 1) {
+      try {
+        const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+          name?: string
+          version?: string
+        }
+        if (pkg.name === '@qvac/cli' && typeof pkg.version === 'string') return pkg.version
+      } catch {
+        // Not this level; keep walking.
+      }
+      const parent = dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  } catch {
+    // CLI not installed at all; the caller already handles that.
+  }
+  return undefined
+}
+
+// An older CLI would reject `--api-key-file` outright and never start, so the
+// argv form stays the fallback. A custom `serveBinPath` is unknowable, so it is
+// treated as unsupported rather than optimistically broken.
+export function cliSupportsApiKeyFile(serveBinPath?: string): boolean {
+  if (serveBinPath !== undefined && serveBinPath.length > 0) return false
+  const version = resolveCliVersion()
+  return version !== undefined && isAtLeast(version, MIN_CLI_VERSION_API_KEY_FILE)
+}
+
+// Keeps the credential out of argv, which /proc publishes to every local account
+// on Linux. Lives beside the synthesized config so it is reaped with it.
+export function writeApiKeyFile(configPath: string, apiKey: string): string {
+  const path = join(dirname(configPath), 'serve-api-key')
+  writeFileSync(path, apiKey, { mode: 0o600 })
+  // `mode` is masked by umask on create and ignored when the file already
+  // exists, so the permission has to be stated outright.
+  chmodSync(path, 0o600)
+  return path
 }
 
 // Resolve how to launch the serve. An explicit `serveBinPath` is spawned
@@ -103,13 +171,14 @@ function attachOutputTail(child: ChildProcess, maxChars = 4000): () => string {
 }
 
 async function waitForHealth(params: {
+  apiKey: string
   child: ChildProcess
   baseURL: string
   timeoutMs: number
   fetchImpl: typeof fetch
   getTail: () => string
 }): Promise<void> {
-  const { child, baseURL, timeoutMs, fetchImpl, getTail } = params
+  const { apiKey, child, baseURL, timeoutMs, fetchImpl, getTail } = params
   const healthUrl = `${baseURL}/models`
   const deadline = Date.now() + timeoutMs
 
@@ -142,7 +211,10 @@ async function waitForHealth(params: {
       const controller = new AbortController()
       const attemptTimer = setTimeout(() => controller.abort(), 2000)
       try {
-        const res = await fetchImpl(healthUrl, { signal: controller.signal })
+        const res = await fetchImpl(healthUrl, {
+          headers: { authorization: `Bearer ${apiKey}` },
+          signal: controller.signal
+        })
         if (res.ok) return
       } finally {
         clearTimeout(attemptTimer)
@@ -159,6 +231,7 @@ async function waitForHealth(params: {
 }
 
 export interface SpawnServeOptions {
+  readonly apiKey: string
   readonly configPath: string
   readonly port: number
   readonly host?: string
@@ -185,6 +258,10 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
   const { command, baseArgs } = resolveServeCommand(options.serveBinPath)
   const baseURL = `http://${host}:${options.port}/v1`
 
+  const credentialArgs = cliSupportsApiKeyFile(options.serveBinPath)
+    ? ['--api-key-file', writeApiKeyFile(options.configPath, options.apiKey)]
+    : ['--api-key', options.apiKey]
+
   const args = [
     ...baseArgs,
     'serve',
@@ -194,7 +271,8 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
     '--port',
     String(options.port),
     '--host',
-    host
+    host,
+    ...credentialArgs
   ]
 
   // `detached: true` makes the serve its own process-group leader (pgid == pid).
@@ -216,7 +294,14 @@ export async function spawnServe(options: SpawnServeOptions): Promise<SpawnedSer
   }
 
   try {
-    await waitForHealth({ child, baseURL, timeoutMs: startTimeoutMs, fetchImpl, getTail })
+    await waitForHealth({
+      apiKey: options.apiKey,
+      child,
+      baseURL,
+      timeoutMs: startTimeoutMs,
+      fetchImpl,
+      getTail
+    })
   } catch (err) {
     await stopServe(child).catch(() => {})
     throw err

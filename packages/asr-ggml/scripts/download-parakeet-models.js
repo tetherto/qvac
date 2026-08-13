@@ -56,7 +56,7 @@ const MODELS = {
   }
 }
 
-function filenameAt (date, filename) {
+function filenameAt(date, filename) {
   return {
     filename,
     registryPath: `qvac_models_compiled/ggml/parakeet/${date}/${filename}`,
@@ -64,7 +64,7 @@ function filenameAt (date, filename) {
   }
 }
 
-function filenameAtIndic (date, filename) {
+function filenameAtIndic(date, filename) {
   return {
     filename,
     registryPath: `qvac_models_compiled/ggml/indic_conformer/${date}/${filename}`,
@@ -72,7 +72,7 @@ function filenameAtIndic (date, filename) {
   }
 }
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const args = { type: 'all', quant: 'q8_0', output: OUT_DIR }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
@@ -95,7 +95,7 @@ function parseArgs (argv) {
   return args
 }
 
-function printUsage () {
+function printUsage() {
   console.log(`Usage: node scripts/download-parakeet-models.js [--type <T>] [--quant <Q>] [--output <DIR>]
 
 Download Parakeet GGUFs from the QVAC model registry into ./models/.
@@ -110,7 +110,7 @@ Flags:
 `)
 }
 
-function selectVariants (type, quant) {
+function selectVariants(type, quant) {
   const types = type === 'all' ? ALL_TYPES : [type]
   const selected = []
   for (const t of types) {
@@ -126,7 +126,7 @@ function selectVariants (type, quant) {
   return selected
 }
 
-async function downloadOne (client, variant, outputDir) {
+async function downloadOne(client, variant, outputDir) {
   const dest = path.join(outputDir, variant.filename)
   if (fs.existsSync(dest)) {
     console.log(`  ✓ ${variant.filename} (already present)`)
@@ -141,7 +141,7 @@ async function downloadOne (client, variant, outputDir) {
   return { ok: true, path: dest, cached: false }
 }
 
-async function downloadAll (variants, outputDir) {
+async function downloadAll(variants, outputDir) {
   fs.mkdirSync(outputDir, { recursive: true })
   const client = new QVACRegistryClient()
   let failures = 0
@@ -156,14 +156,19 @@ async function downloadAll (variants, outputDir) {
       }
     }
   } finally {
-    try { await client.close() } catch (_) {}
+    try {
+      await client.close()
+    } catch (_) {}
   }
   return failures
 }
 
-async function main () {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
-  if (args.help) { printUsage(); return }
+  if (args.help) {
+    printUsage()
+    return
+  }
 
   const variants = selectVariants(args.type, args.quant)
   if (variants.length === 0) {
@@ -180,7 +185,7 @@ async function main () {
   console.log('Done.')
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err && err.message ? err.message : err)
   process.exit(1)
 })
