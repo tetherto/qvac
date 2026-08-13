@@ -123,6 +123,11 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           hf-token: ${{ secrets.HF_TOKEN }}
           output-map: ${{ runner.temp }}/diffusion-url-map.json
+          # Only the models a phone actually downloads: nearly every diffusion
+          # image/video test is `skip = isMobile || noGpu`, so on-device only the
+          # SD v2.1 loader/api tests (and the tiny ESRGAN asset) fetch a model.
+          # Everything else keeps its HF fallback in the rewritten manifest.
+          model-names: stable-diffusion-v2-1-Q8_0.gguf,RealESRGAN_x4plus_anime_6B.pth
 
       # Diffusion downloads models ON-DEVICE from the manifest bundled into the
       # app, so the US URLs must be baked into models.manifest.json before the

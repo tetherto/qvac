@@ -45,6 +45,14 @@ const AWS_REGION = env('AWS_REGION', 'us-west-2')
 const OUTPUT_MAP = env('OUTPUT_MAP')
 const EXPIRES_IN = env('EXPIRES_IN', '7200')
 const HF_TOKEN = process.env.HF_TOKEN || ''
+// Optional allowlist: only seed/presign these model names (the subset a mobile
+// run actually stages). Empty => every model in the manifest. This keeps the
+// seed from mirroring desktop-only giants (e.g. 25GB LLM builds or diffusion
+// video models) that no phone test ever downloads.
+const MODEL_NAMES = (process.env.MODEL_NAMES || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
 
 function s3Key(name) {
   return `${S3_PREFIX}${name}`
@@ -154,8 +162,15 @@ function main() {
   if (!manifest || !manifest.models) {
     throw new Error(`[seed] manifest ${MANIFEST_PATH} has no models object`)
   }
-  const names = Object.keys(manifest.models)
-  console.log(`[seed] ${names.length} model(s) from ${MANIFEST_PATH}`)
+  let names = Object.keys(manifest.models)
+  if (MODEL_NAMES.length > 0) {
+    const missing = MODEL_NAMES.filter((n) => !manifest.models[n])
+    if (missing.length) {
+      throw new Error(`[seed] MODEL_NAMES not in manifest: ${missing.join(', ')}`)
+    }
+    names = MODEL_NAMES
+  }
+  console.log(`[seed] ${names.length} model(s) to seed (manifest has ${Object.keys(manifest.models).length})`)
   console.log(`[seed] destination s3://${S3_BUCKET}/${S3_PREFIX} (${AWS_REGION})`)
 
   const workDir = mkdtempSync(join(tmpdir(), 'seed-models-'))

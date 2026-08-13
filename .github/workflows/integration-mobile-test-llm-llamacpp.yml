@@ -279,6 +279,19 @@ jobs:
           npm run test:mobile:generate
           echo "bootstrapped: staged files + regenerated mobile test list"
 
+      # PILOT (QVAC-23466): compute exactly the models this addon stages on
+      # mobile (union of the mobile manifest + benchmark matrix), so the seed
+      # mirrors only that ~26GB subset and skips desktop-only giants (e.g. the
+      # 19-25GB builds that live in the integration manifest but never ship to a
+      # phone).
+      - name: Compute LLM mobile model set
+        id: mobileset
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          NAMES=$(node -e "const {resolvePinnedManifest}=require('./scripts/generate-prestage-block.js');const fs=require('fs');const mob=JSON.parse(fs.readFileSync('test/mobile/model-manifest.json','utf8'));const integ=JSON.parse(fs.readFileSync('test/integration/models.manifest.json','utf8'));const r=resolvePinnedManifest(mob,integ);const s=new Set();for(const a of Object.values(r))for(const e of a)s.add(e.name);process.stdout.write([...s].join(','))")
+          echo "names=$NAMES" >> "$GITHUB_OUTPUT"
+          echo "LLM mobile model set: $NAMES"
+
       # PILOT (QVAC-23466): seed this addon's HF models into the Device-Farm-local
       # US bucket if missing, then presign them, BEFORE the build. Writes a
       # name -> presigned-URL map that the prestage steps below consume so the
@@ -292,6 +305,7 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           hf-token: ${{ secrets.HF_TOKEN }}
           output-map: ${{ runner.temp }}/llm-url-map.json
+          model-names: ${{ steps.mobileset.outputs.names }}
 
       - name: Build mobile app
         id: build

@@ -30,6 +30,10 @@ inputs:
   output-map:
     description: "Path to write the name -> presigned-URL JSON map"
     required: true
+  model-names:
+    description: "Optional comma-separated allowlist of model names to seed (the mobile subset). Empty = every model in the manifest."
+    required: false
+    default: ""
   expires-in:
     description: "Presigned-URL lifetime in seconds (effective TTL capped by the STS session)"
     required: false
@@ -97,6 +101,7 @@ runs:
         S3_PREFIX: ${{ inputs.s3-prefix }}
         AWS_REGION: ${{ inputs.aws-region }}
         OUTPUT_MAP: ${{ inputs.output-map }}
+        MODEL_NAMES: ${{ inputs.model-names }}
         EXPIRES_IN: ${{ inputs.expires-in }}
         HF_TOKEN: ${{ inputs.hf-token }}
       run: |
