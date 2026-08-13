@@ -45,20 +45,25 @@ const logger = getServerLogger()
 // guarantee bounded shutdown time.
 const FORCE_EXIT_GRACE_MS = 3_000
 
-function scheduleForceExit(): void {
+// A native op that ignores cancel would leave runCleanup's drainAll() /
+// unloadAllModels() awaiting forever, so the direct worker arms this deadline
+// BEFORE cleanup (not just after Bare.exit) and force-kills if the whole
+// shutdown overruns it. Longer than the exit grace since cleanup does real work.
+const CLEANUP_DEADLINE_MS = 10_000
+
+// Arm a self-SIGKILL after `deadlineMs`. Unref'd so it never keeps a healthy
+// process alive; fires only if a shutdown phase wedges on a blocked native
+// handle or an op that never honors its abort.
+function armForceKill(deadlineMs: number, message: string): void {
   const timer: unknown = setTimeout(() => {
-    logger.error(
-      `Bare.exit did not terminate the worker within ${FORCE_EXIT_GRACE_MS}ms — ` +
-        `force-killing self (likely blocked native handle)`
-    )
+    logger.error(message)
     try {
       os.kill(os.pid(), 'SIGKILL')
     } catch {
       // best-effort — if SIGKILL itself fails, there's nothing more to do
     }
-  }, FORCE_EXIT_GRACE_MS)
-  // Don't let the safety-net timer keep the process alive on the happy
-  // path. Bare returns an object (not a number) from setTimeout.
+  }, deadlineMs)
+  // Bare returns an object (not a number) from setTimeout.
   if (timer && typeof timer === 'object' && 'unref' in timer) {
     ;(timer as { unref: () => void }).unref()
   }
@@ -214,6 +219,17 @@ export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason)
   }
   logger.info(messages[reason])
 
+  // Arm the cleanup watchdog BEFORE runCleanup: its drainAll()/unloadAllModels()
+  // await native teardown with no timeout of their own, so a wedged native op
+  // would hang the worker forever without this. Safe here (this path owns the
+  // process and exits it) but NOT in cleanupForTerminate, which shares the host
+  // process on mobile where a SIGKILL would take down the whole app.
+  armForceKill(
+    CLEANUP_DEADLINE_MS,
+    `Worker shutdown cleanup did not finish within ${CLEANUP_DEADLINE_MS}ms — ` +
+      `force-killing self (likely a native op ignoring cancel)`
+  )
+
   try {
     // Idempotent: if cleanupForTerminate already ran, this is a no-op.
     await runCleanup()
@@ -224,7 +240,11 @@ export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason)
 
   releaseWorkerLock()
 
-  scheduleForceExit()
+  armForceKill(
+    FORCE_EXIT_GRACE_MS,
+    `Bare.exit did not terminate the worker within ${FORCE_EXIT_GRACE_MS}ms — ` +
+      `force-killing self (likely blocked native handle)`
+  )
 
   const isGraceful = reason === 'signal' || reason === 'rpc-close'
   Bare.exit(isGraceful ? 0 : 1)
