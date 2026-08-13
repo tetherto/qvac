@@ -669,7 +669,7 @@ jobs:
     needs: [build, wait-device-farm-running]
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
