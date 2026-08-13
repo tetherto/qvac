@@ -1857,38 +1857,6 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(iter);
   }
 
-  // The dynamic tools ("tools_compact") feature has been removed. A lingering
-  // false-equivalent value is harmless and remains an ignored tombstone, but
-  // accepting `true` would let older SDK/inference dynamic-cache slicing run
-  // without the addon-side anchor/trim behavior it assumes.
-  for (const std::string& key : {"tools_compact", "tools-compact"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      std::string value = it->second;
-      std::transform(
-          value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::tolower(ch));
-          });
-      if (value == "true") {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "[LlamaModel] `%s=true` is no longer supported; dynamic tools "
-                "KV-cache compaction has been removed. Remove this option and "
-                "use static tool placement.\n",
-                key.c_str()));
-      }
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[LlamaModel] `%s` is deprecated and no longer supported; "
-              "ignoring it\n",
-              key.c_str()));
-      configFilemap.erase(it);
-    }
-  }
-
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
   auto hIt = configFilemap.find("split-mode");
   auto uIt = configFilemap.find("split_mode");
