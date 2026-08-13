@@ -103,7 +103,8 @@ test('kv-cache-session: beginTurn primes the cache on first use, reuses on secon
 
     await session.commitTurn(firstTurn, {
       kind: 'static',
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     const secondTurn = await session.beginTurn({
@@ -157,13 +158,13 @@ test('kv-cache-session: a second same-key turn waits for the first to release it
       'the second same-key turn is blocked while the first holds the lock'
     )
 
-    await session.commitTurn(first, { kind: 'static', messageCount: 2 })
+    await session.commitTurn(first, { kind: 'static', messageCount: 2, toolBlockCached: false })
     const second = await secondPromise
     t.is(secondResolved, true, 'committing the first turn releases the lock and admits the second')
 
     // A third same-key turn still acquires cleanly — the lock map didn't leak a
     // stuck tail behind the drained turns.
-    await session.commitTurn(second, { kind: 'static', messageCount: 2 })
+    await session.commitTurn(second, { kind: 'static', messageCount: 2, toolBlockCached: false })
     const third = await session.beginTurn({
       kind: 'custom',
       customKey: 'lock-a',
@@ -171,7 +172,7 @@ test('kv-cache-session: a second same-key turn waits for the first to release it
       primeIfMissing
     })
     t.ok(third, 'a later same-key turn acquires the lock after the queue drains')
-    await session.commitTurn(third, { kind: 'static', messageCount: 2 })
+    await session.commitTurn(third, { kind: 'static', messageCount: 2, toolBlockCached: false })
   } finally {
     cleanup()
   }
@@ -207,8 +208,8 @@ test('kv-cache-session: turns on different cache keys do not block each other', 
     const other = await otherPromise
     t.is(otherResolved, true, 'a different-key turn runs concurrently, not blocked by lock-x')
 
-    await session.commitTurn(first, { kind: 'static', messageCount: 1 })
-    await session.commitTurn(other, { kind: 'static', messageCount: 1 })
+    await session.commitTurn(first, { kind: 'static', messageCount: 1, toolBlockCached: false })
+    await session.commitTurn(other, { kind: 'static', messageCount: 1, toolBlockCached: false })
   } finally {
     cleanup()
   }
@@ -242,7 +243,7 @@ test('kv-cache-session: an auto turn and a custom key that resolve to the same f
     await session.rollback(autoTurn)
     const custom = await customPromise
     t.is(customResolved, true, 'releasing the auto turn admits the aliasing custom turn')
-    await session.commitTurn(custom, { kind: 'static', messageCount: 1 })
+    await session.commitTurn(custom, { kind: 'static', messageCount: 1, toolBlockCached: false })
   } finally {
     cleanup()
   }
@@ -296,7 +297,7 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
     t.is(rejected, true, 'wait rejected')
 
     // Lock is uncorrupted: a later turn still acquires after the holder releases.
-    await session.commitTurn(first, { kind: 'static', messageCount: 1 })
+    await session.commitTurn(first, { kind: 'static', messageCount: 1, toolBlockCached: false })
     const third = await session.beginTurn({
       kind: 'custom',
       customKey: 'k',
@@ -304,7 +305,7 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
       primeIfMissing
     })
     t.ok(third, 'a later turn acquires the lock after the cancelled waiter dropped')
-    await session.commitTurn(third, { kind: 'static', messageCount: 1 })
+    await session.commitTurn(third, { kind: 'static', messageCount: 1, toolBlockCached: false })
   } finally {
     cleanup()
   }
@@ -331,7 +332,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
     // Simulate that the addon wrote the file.
     fs.writeFileSync(turn.cachePath, 'fake-cache-bytes')
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 7 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 7, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
@@ -424,7 +425,8 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
     await session.commitTurn(turn, {
       kind: 'autoRename',
       targetCachePath: target.cachePath,
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     t.is(fs.existsSync(turn.cachePath), false, 'source file moved')
@@ -466,7 +468,8 @@ test('kv-cache-session: an auto turn cancelled before commit does not persist to
     await session.commitTurn(turn, {
       kind: 'autoRename',
       targetCachePath: target.cachePath,
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     t.is(fs.existsSync(target.cachePath), false, 'cancelled turn did not persist to the target')
@@ -1023,7 +1026,7 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
     // error where the file was removed externally.
     fs.unlinkSync(turn.cachePath)
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 5 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 5, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),

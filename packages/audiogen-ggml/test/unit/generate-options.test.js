@@ -10,7 +10,7 @@ function createHarness() {
     runJob(data) {
       received = data
       gen._addonOutputCallback(null, null, { totalTimeMs: 0 }, null)
-      return Promise.resolve()
+      return Promise.resolve(true)
     },
     cancel: () => Promise.resolve(),
     destroyInstance: () => Promise.resolve()
