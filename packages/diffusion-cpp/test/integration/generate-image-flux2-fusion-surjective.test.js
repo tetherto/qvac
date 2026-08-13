@@ -7,6 +7,7 @@ const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
 
+const { getFlux2Skip } = require('./flux2-gate')
 const proc = require('bare-process')
 
 const platform = detectPlatform()
@@ -14,38 +15,8 @@ const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-const skipFlux2Fusion = proc.env && proc.env.SKIP_FLUX2_FUSION === 'true'
-const isAppleParavirtualCi =
-  os.platform() === 'darwin' &&
-  os.arch() === 'arm64' &&
-  proc.env &&
-  proc.env.GITHUB_ACTIONS === 'true' &&
-  proc.env.RUNNER_ENVIRONMENT === 'github-hosted'
+const skip = getFlux2Skip({ label: 'FLUX2 fusion surjective', isMobile, noGpu })
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
-const skip = isMobile || noGpu || skipFlux2Fusion || isAppleParavirtualCi
-
-console.log(
-  '[FLUX2 fusion surjective] Platform:',
-  os.platform(),
-  'Arch:',
-  os.arch(),
-  'NO_GPU:',
-  noGpu,
-  'SKIP_FLUX2_FUSION:',
-  skipFlux2Fusion,
-  'RUNNER_ENVIRONMENT:',
-  proc.env && proc.env.RUNNER_ENVIRONMENT,
-  'Apple Paravirtual CI:',
-  isAppleParavirtualCi,
-  '→ Skip:',
-  skip
-)
-if (skipFlux2Fusion || isAppleParavirtualCi) {
-  console.log(
-    '[FLUX2 fusion surjective] Skipped: Apple Paravirtual Metal does not support the ' +
-      'MUL_MAT operation required by this test (workflow/runtime-scoped capability gate).'
-  )
-}
 
 const FLUX2_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf'
