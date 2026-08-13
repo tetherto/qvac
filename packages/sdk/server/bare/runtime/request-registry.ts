@@ -414,9 +414,6 @@ export function createRequestRegistry(options?: {
   // from `entries` before unwinding, so a drain must consult this too or it
   // would return while a request is still tearing down natively.
   const disposingEntries = new Set<RegistryEntry>()
-  // Set once by cancelAll('shutdown'): the whole worker is going away, so every
-  // begin(...) from here on starts aborted.
-  let shuttingDown = false
 
   function logLifecycle(
     event: 'begin' | 'cancel' | 'end',
@@ -779,10 +776,9 @@ export function createRequestRegistry(options?: {
       preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
 
-    // A begin for a model being torn down (or during worker shutdown) starts
-    // aborted — no native work against a model about to be freed.
-    const abortForModelDrain =
-      shuttingDown || (opts.modelId !== undefined && drainingModels.has(opts.modelId))
+    // A begin for a model being torn down starts aborted — no native work
+    // against a model about to be freed.
+    const abortForModelDrain = opts.modelId !== undefined && drainingModels.has(opts.modelId)
 
     const controller = new AbortController()
     const scope = createDisposableScope()
@@ -935,9 +931,6 @@ export function createRequestRegistry(options?: {
   }
 
   function cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void> {
-    // On shutdown, raise the barrier for every model so an in-flight begin can't
-    // go active while the worker tears everything down.
-    if (reason === 'shutdown') shuttingDown = true
     for (const entry of entries.values()) {
       cancelEntry(entry, reason)
     }
@@ -1040,19 +1033,10 @@ export function createRequestRegistry(options?: {
     // Test-only: the number of live per-`(kind, modelId)` admission
     // states. Lets the queue tests assert the map empties on drain /
     // dispose (no `KeyState` leak). Also off the public interface.
-    __keyStateSize: () => keyStates.size,
-    // Test-only: clear the teardown barriers. The bare suite shares one
-    // singleton, so a test that drives worker shutdown must undo the permanent
-    // barrier or later tests can't admit.
-    __clearTeardownState: () => {
-      shuttingDown = false
-      drainingModels.clear()
-      disposingEntries.clear()
-    }
+    __keyStateSize: () => keyStates.size
   } as RequestRegistry & {
     __cancelBeforeBeginSize: () => number
     __keyStateSize: () => number
-    __clearTeardownState: () => void
   }
 }
 

@@ -1621,7 +1621,7 @@ test('cancelAndDrain: waits for a request whose disposal already started', async
   t.is(drainDone, true, 'drain resolved only after the in-flight disposal completed')
 })
 
-test('drainAll + shutdown: waits for teardown and aborts later begins', async (t) => {
+test('cancelAll + drainAll: waits for cancelled requests to finish tearing down', async (t) => {
   const r = createRequestRegistry()
   const a = await r.begin({ requestId: 'a', kind: 'completion', modelId: 'm1' })
 
@@ -1652,10 +1652,5 @@ test('drainAll + shutdown: waits for teardown and aborts later begins', async (t
 
   releaseA()
   await drainP
-  t.is(drainDone, true, 'drainAll resolved after teardown')
-
-  // The global shutdown barrier aborts any later begin.
-  const after = await r.begin({ requestId: 'after', kind: 'completion', modelId: 'm1' })
-  t.is(after.signal.aborted, true, 'begin after shutdown is aborted')
-  await after[Symbol.asyncDispose]()
+  t.is(drainDone, true, 'drainAll resolved only after teardown finished')
 })
