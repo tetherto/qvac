@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$1" = "api" ]; then
+  case "$2" in
+    */actions/workflows/*/runs*)
+      printf '%s\n' '4242'
+      ;;
+    */actions/runs/4242/artifacts)
+      printf '%s\n' 'fabric-prebuilds'
+      ;;
+    *)
+      printf 'Unexpected gh api URL: %s\n' "$2" >&2
+      exit 1
+      ;;
+  esac
+  exit 0
+fi
+
+if [ "$1" = "run" ] && [ "$2" = "download" ]; then
+  shift 2
+  download_dir=
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--dir" ]; then
+      download_dir="$2"
+      shift 2
+      continue
+    fi
+    shift
+  done
+
+  if [ -z "$download_dir" ]; then
+    printf '%s\n' 'Missing --dir in gh run download' >&2
+    exit 1
+  fi
+
+  mkdir -p "$download_dir"
+  touch "$download_dir/mock-download-complete"
+  exit 0
+fi
+
+printf 'Unexpected gh invocation: %s\n' "$*" >&2
+exit 1

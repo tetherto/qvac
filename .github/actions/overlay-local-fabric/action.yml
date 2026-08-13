@@ -89,6 +89,7 @@ runs:
               exit 1
             fi
             dest_plat="$dest_root/${plat_key}"
+            rm -rf "$dest_plat"
             mkdir -p "$dest_plat"
             cp -r "$plat_dir/." "$dest_plat/"
             return
@@ -101,6 +102,7 @@ runs:
               include|share) continue ;;
             esac
             dest_plat="$dest_root/$base"
+            rm -rf "$dest_plat"
             mkdir -p "$dest_plat"
             cp -r "$plat_dir/." "$dest_plat/"
           done

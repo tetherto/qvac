@@ -1,7 +1,7 @@
 name: 'Detect fabric stack'
 description: >
   Read-only detection for fabric-stack PRs. Sets fabric_stack=true when the
-  event delta touches the qvac-fabric overlay port or packages/fabric vcpkg
+  full PR diff touches the qvac-fabric overlay port or packages/fabric vcpkg
   manifests. Used to disable stale prebuild reuse and to wire npm-runtime
   consumers to PR-built @qvac/fabric prebuilds.
 
@@ -18,10 +18,9 @@ runs:
       shell: bash
       env:
         EVENT_NAME: ${{ github.event_name }}
-        EVENT_ACTION: ${{ github.event.action }}
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        BEFORE_SHA: ${{ github.event.before }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         HEAD_REF: ${{ github.event.pull_request.head.ref }}
       run: |
@@ -54,29 +53,17 @@ runs:
           exit 0
         fi
 
-        DIFF_FROM="$HEAD_SHA"
-        if [ "$EVENT_ACTION" = "opened" ]; then
-          DIFF_FROM="$BASE_SHA"
-        elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "$HEAD_SHA" ]; then
-          DIFF_FROM="$BEFORE_SHA"
-          if ! git fetch origin "$BEFORE_SHA" --depth=1 2>/dev/null; then
-            if [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
-              git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=50 2>/dev/null || true
-            fi
-            if ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
-              echo "::warning::BEFORE_SHA ($BEFORE_SHA) unreachable — falling back to base..head diff"
-              DIFF_FROM="$BASE_SHA"
+        if [ -n "$BASE_SHA" ] && ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+          if ! git fetch origin "$BASE_SHA" --depth=1 2>/dev/null; then
+            if [ -n "$BASE_REPO" ]; then
+              git fetch "https://github.com/${BASE_REPO}.git" "$BASE_SHA" --depth=1 2>/dev/null || true
             fi
           fi
         fi
 
-        if [ -n "$DIFF_FROM" ] && ! git cat-file -e "$DIFF_FROM" 2>/dev/null; then
-          git fetch origin "$DIFF_FROM" --depth=1 2>/dev/null || true
-        fi
-
         STACK=false
-        if [ -n "$DIFF_FROM" ] && [ -n "$HEAD_SHA" ]; then
-          DIFF_FILES=$(git diff --name-only "$DIFF_FROM" "$HEAD_SHA" -- 2>&1) || {
+        if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
+          DIFF_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- 2>&1) || {
             echo "::warning::git diff failed — treating as fabric-stack"
             echo "fabric_stack=true" >> "$GITHUB_OUTPUT"
             exit 0

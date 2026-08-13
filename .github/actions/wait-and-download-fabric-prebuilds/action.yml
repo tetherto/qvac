@@ -55,6 +55,11 @@ runs:
         RUN_ID: ${{ github.run_id }}
       run: |
         set -euo pipefail
+        if [ -z "$HEAD_SHA" ]; then
+          echo "::error::head-sha must not be empty"
+          exit 1
+        fi
+
         mkdir -p "$DOWNLOAD_DIR"
         deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
         found=false
