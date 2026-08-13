@@ -63,18 +63,21 @@ jobs:
   policy-tests:
     name: policy-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The job's own work is ~10s; the budget exists almost entirely to absorb
+    # checkout latency, which is not ours to control — the same --depth=1 fetch
+    # of this repo has been observed at both 7s and 97s. A cap this close to
+    # external variance buys nothing and turns a slow morning into a red main.
+    timeout-minutes: 10
     permissions:
       contents: read
+      # Reads the changed-file list from the pull request files API.
+      pull-requests: read
     steps:
       - name: Checkout PR code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          # Full history is required for the base..head diff below; the default
-          # shallow clone has no base commit. `blob:none` keeps that cheap —
-          # `git diff --name-only` only needs commits and trees.
-          fetch-depth: 0
-          filter: blob:none
+          # Default shallow fetch: the changed-file list comes from the PR files
+          # API below, so this job needs no history beyond the checked-out tree.
           persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -95,20 +98,30 @@ jobs:
         id: changed-workflows
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          # Keep the diff and the filter as separate commands: a failing `git diff`
-          # must abort the step, while `rg` exiting 1 on "no workflow files changed"
-          # is a legitimate outcome. Folding both into one `... || true` pipeline
-          # silently reported count=0 and skipped the whole gate.
+          # The PR files API is the exact changed set, so this needs no local
+          # history and the checkout stays shallow. The previous `git diff
+          # base...head` required fetch-depth: 0, whose blob backfill stalled the
+          # checkout for ~2 minutes of this job's 5-minute budget on push runs.
+          # It also read a `base.sha` that GitHub leaves stale, which inflated the
+          # scope with files the PR never touched.
           #
-          # --diff-filter=ACMRT drops deletions: actionlint aborts the entire run
+          # `status != removed` drops deletions: actionlint aborts its entire run
           # (reporting nothing at all) if any path on its command line is missing,
           # so a PR that deletes a workflow would otherwise lint nothing and pass.
-          git diff --name-only --diff-filter=ACMRT "$BASE_SHA...$HEAD_SHA" \
+          gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate \
+            --jq '.[] | select(.status != "removed") | .filename' \
             > "$RUNNER_TEMP/changed-all.txt"
+          # The endpoint hard-caps at 3000 files. Truncation would silently shrink
+          # the lint scope, so refuse to report a pass we cannot stand behind.
+          if [ "$(wc -l < "$RUNNER_TEMP/changed-all.txt" | tr -d ' ')" -ge 3000 ]; then
+            echo "::error title=PR too large to scope automatically::The pull request files API truncates at 3000 files; run actionlint over the changed workflows manually."
+            exit 1
+          fi
           # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and
           # a blanket `|| true` turned that `command not found` into count=0 —
           # the gate reported success while linting nothing. grep exits 1 for

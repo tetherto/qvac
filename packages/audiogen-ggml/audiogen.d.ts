@@ -43,6 +43,11 @@ export interface AudioGenJobData {
     dcwScaler?: number;
     dcwHighScaler?: number;
     audioCodes?: Int32Array;
+    referenceAudio?: Float32Array;
+    sourceAudio?: Float32Array;
+    taskType?: string;
+    audioCoverStrength?: number;
+    coverNoiseStrength?: number;
 }
 /** Native output event: (handle, event, data, error). */
 export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unknown, error: unknown) => void;

@@ -61,6 +61,10 @@ def _bare_runtime_package_suffix() -> str:
     return f"{_PLATFORM_MAP[system]}-{_ARCH_MAP[machine]}"
 
 
+def _bare_executable_name() -> str:
+    return "bare.exe" if os.name == "nt" else "bare"
+
+
 def _derive_from_sdk_root(
     sdk_root: Path, worker_path: str | None, bare_path: str | None
 ) -> tuple[str, str]:
@@ -73,7 +77,7 @@ def _derive_from_sdk_root(
         / "node_modules"
         / f"bare-runtime-{_bare_runtime_package_suffix()}"
         / "bin"
-        / "bare"
+        / _bare_executable_name()
     )
     return resolved_bare, resolved_worker
 
@@ -135,7 +139,7 @@ def _resolve_command(
     # wheel needs no explicit paths, env, or sdk checkout at all.
     bundle = Path(__file__).parent / "_bundle"
     bundled_worker = bundle / "worker" / "dist" / "server" / "worker.js"
-    bundled_bare = bundle / "runtime" / "bare"
+    bundled_bare = bundle / "runtime" / _bare_executable_name()
     if bundled_worker.exists() and bundled_bare.exists():
         return (
             bare_path or str(bundled_bare),
