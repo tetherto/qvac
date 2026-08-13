@@ -4,6 +4,11 @@ import test from 'node:test'
 import { synthesizeServeConfig } from '../src/managed/config-synthesizer.js'
 import { computeFleetKey } from '../src/managed/fleet-key.js'
 
+test('authenticated managed fleets do not share the legacy unauthenticated namespace', () => {
+  const config = synthesizeServeConfig(['QWEN3_600M_INST_Q4'])
+  assert.notEqual(computeFleetKey(config, '127.0.0.1'), '2d868fd2b3b53192')
+})
+
 test('fleet key is stable and independent of model declaration order', () => {
   const a = synthesizeServeConfig(['QWEN3_600M_INST_Q4', 'GPT_OSS_20B_INST_Q4_K_M'])
   const b = synthesizeServeConfig(['GPT_OSS_20B_INST_Q4_K_M', 'QWEN3_600M_INST_Q4'])

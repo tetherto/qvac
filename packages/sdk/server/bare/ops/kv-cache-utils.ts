@@ -35,8 +35,10 @@ function getToolNamesForHash(tools: unknown): string[] {
     .sort()
 }
 
-// Cache hash based on system prompt + tool names
-// Different tools = different cache (tools anchored in first message, protected from n_discarded)
+// Cache hash based on system prompt + tool names.
+// Callers pass tools only when the tool block is written into the cache and
+// left there (static placement), so a different tool set gets its own cache
+// instead of reusing a prefix that holds the old block.
 export function generateConfigHash(systemPrompt: string | null, tools?: unknown): string {
   const hash = crypto.createHash('sha-256')
   const toolNames = getToolNamesForHash(tools)

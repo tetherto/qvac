@@ -9,12 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CosyVoice3 Vulkan GPU offload (Linux / Windows).** `useGPU: true` /
+  `nGpuLayers > 0` now engages tts-cpp's Vulkan backend for CosyVoice3 on
+  desktop hosts (previously a policy CPU fallback). Requires `tts-cpp` >=
+  2026-08-12#1, which admits desktop Vulkan to the engine's validated-backend
+  requirement with per-stage GPU parity gates (greedy LM trajectories are
+  bit-identical to CPU on Vulkan, including q8_0 weights). Android keeps the
+  Metal-or-OpenCL requirement, so Mali / Xclipse devices still decline to CPU.
 - **CosyVoice3 Metal GPU offload (macOS / iOS).** `useGPU: true` /
   `nGpuLayers > 0` now engages tts-cpp's Metal backend for CosyVoice3 on Apple
   hosts (previously Android OpenCL/Adreno only; Metal hosts fell back to CPU).
   Requires `tts-cpp` >= 2026-08-12, which widens the engine's validated-backend
-  allowlist to Metal + OpenCL with per-stage GPU parity gates. Vulkan hosts
-  still fall back to CPU.
+  allowlist to Metal + OpenCL with per-stage GPU parity gates.
 - **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
   directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
   dialects, description-conditioned English), with a capability matrix and
@@ -115,6 +121,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Public TypeScript and CommonJS API.** Audio chunks are now declared as
+  their runtime `Int16Array` type, enhancer backend fields are included in
+  `RuntimeStats`, invalid reload sample rates are rejected, and the package
+  root exposes `QvacErrorAddonTTSGgml` and `ERR_CODES` to named import
+  discovery.
+- **Published registry downloader.** The model download command now ships its
+  implementation and runtime registry client dependency.
 - **Audio8 native reload raced synthesis.** The reload path wrote the model's
   configuration from the reload task while a running job read the reference
   voice out of it, and swapped the configuration and the engine under separate
@@ -167,6 +180,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the ignored per-call `TTSRunInput.outputSampleRate`; configure output
+  resampling on the model instead. Added the stable
+  `@qvac/tts-ggml/text-stream-accumulator` helper subpath while retaining the
+  existing deep path.
 - **Parler streaming accepts `config.outputSampleRate` when the enhancer is
   active.** Parler natively streams at 44.1 kHz and rejected a different output
   rate while streaming, because the engine has no seam-free per-chunk resampler.

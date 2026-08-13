@@ -1,6 +1,7 @@
 import type { ModelConstant } from '@qvac/sdk'
 import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from './aliases/sdcpp-video.js'
+import { normalizeCorsOrigin } from './cors.js'
 import { resolveNestedModelSrcConstants } from './resolve-nested-model-src.js'
 import { loadModelConstants } from './sdk-constants.js'
 
@@ -33,6 +34,9 @@ interface RawServeConfig {
   serve?: {
     models?: Record<string, string | ConstantModelEntry | ExplicitModelEntry>
     publicBaseUrl?: string
+    cors?: {
+      origins?: unknown
+    }
     openai?: RawOpenAIOptions
   }
 }
@@ -68,6 +72,7 @@ interface ExplicitModelEntry {
 interface CLIServeOptions {
   model?: string | string[] | undefined
   publicBaseUrl?: string | undefined
+  corsOrigins?: string[] | undefined
 }
 
 export function parseServeConfig(
@@ -103,13 +108,31 @@ export function parseServeConfig(
   }
 
   const publicBaseUrl = normalizePublicBaseUrl(cliOptions.publicBaseUrl ?? serve.publicBaseUrl)
+  const corsOrigins = parseCorsOrigins(serve.cors?.origins, cliOptions.corsOrigins)
 
   return {
     models,
     defaults: resolveDefaults(models),
     publicBaseUrl,
+    cors: { origins: corsOrigins },
     openai: parseOpenAIOptions(serve.openai)
   }
+}
+
+function parseCorsOrigins(configured: unknown, cliOrigins: string[] | undefined): string[] {
+  if (configured !== undefined && !Array.isArray(configured)) {
+    throw new Error('serve.cors.origins must be an array of HTTP(S) origins')
+  }
+
+  const origins = [...(configured ?? []), ...(cliOrigins ?? [])] as unknown[]
+  const normalized = origins.map((origin, index) => {
+    if (typeof origin !== 'string') {
+      throw new Error(`serve.cors.origins[${index}] must be a string`)
+    }
+    return normalizeCorsOrigin(origin)
+  })
+
+  return [...new Set(normalized)]
 }
 
 function normalizePublicBaseUrl(raw: string | undefined): string | null {
