@@ -63,20 +63,14 @@ test('finetune: cancelled while queued does not call model.cancel() or model.fin
   unregisterModel(modelId)
 })
 
-test('translate (LLM): cancelled while queued does not call model.run()', async (t) => {
-  const [
-    { registerModel, unregisterModel },
-    { ModelType },
-    { translate },
-    { getRequestRegistry },
-    { InferenceCancelledError }
-  ] = await Promise.all([
-    import('@/server/bare/registry/model-registry'),
-    import('@/schemas'),
-    import('@/server/bare/ops/translate'),
-    import('@/server/bare/runtime'),
-    import('@/utils/errors-server')
-  ])
+test('translate (LLM): cancelled while queued soft-cancels without calling model.run()', async (t) => {
+  const [{ registerModel, unregisterModel }, { ModelType }, { translate }, { getRequestRegistry }] =
+    await Promise.all([
+      import('@/server/bare/registry/model-registry'),
+      import('@/schemas'),
+      import('@/server/bare/ops/translate'),
+      import('@/server/bare/runtime')
+    ])
 
   let runCalls = 0
   const model = {
@@ -134,10 +128,9 @@ test('translate (LLM): cancelled while queued does not call model.run()', async 
 
   await ft[Symbol.asyncDispose]()
 
-  t.ok(
-    caught instanceof InferenceCancelledError,
-    'queued translate rejects with InferenceCancelledError'
-  )
+  // Soft-cancel: it returns without output and does NOT throw a server-side
+  // InferenceCancelledError (which would cross the RPC as a generic error).
+  t.is(caught, null, 'queued translate soft-cancels, does not throw')
   t.is(runCalls, 0, 'model.run() was NOT called')
 
   unregisterModel(modelId)

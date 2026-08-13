@@ -14,7 +14,6 @@ import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/server/bare/types/addon-responses'
 import {
-  InferenceCancelledError,
   ModelIsDelegatedError,
   ModelNotFoundError,
   ModelTypeMismatchError,
@@ -202,9 +201,10 @@ export async function* translate(
   // A translate cancelled before native work (queued-cancel, or the model being
   // unloaded) must not call run(): LLM could decode against an exclusive finetune
   // holding the lane, and either engine would run against a model being torn
-  // down. LLM surfaces the cancellation; NMT bails early (soft-cancel, dropped).
+  // down. Bail with an empty soft-cancel result for both engines — the server
+  // never throws InferenceCancelledError (that error is client-constructed and
+  // would cross the RPC as a generic error).
   if (ctx.signal.aborted) {
-    if (isLlm) throw new InferenceCancelledError(ctx.requestId)
     return { modelExecutionMs: 0 }
   }
 
