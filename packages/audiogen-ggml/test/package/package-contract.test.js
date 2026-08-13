@@ -9,9 +9,10 @@ const test = require('brittle')
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const COMMAND_NAME = 'qvac-audiogen-download-models'
 const DOWNLOADER_PATH = 'scripts/download-audiogen-ggml-models.js'
-const ERROR_VERSION = '0.1.1'
-const REGISTRY_CLIENT_VERSION = '^0.6.1'
+const REPOSITORY_DOWNLOAD_COMMAND =
+  'node scripts/download-audiogen-ggml-models.js --output ./models'
 const IS_WINDOWS = process.platform === 'win32'
+const NPM_COMMAND = IS_WINDOWS ? 'npm.cmd' : 'npm'
 const REQUIRED_PATHS = [
   'package/index.js',
   'package/index.d.ts',
@@ -63,12 +64,20 @@ function runDownloaderWithoutOutput(downloaderPath, cwd) {
   return spawnSync(command, args, { cwd, encoding: 'utf8' })
 }
 
+function runDownloaderWithoutRegistryClient(downloaderPath, cwd) {
+  const outputPath = path.join(cwd, 'models')
+  return spawnSync(process.execPath, [downloaderPath, '--output', outputPath], {
+    cwd,
+    encoding: 'utf8'
+  })
+}
+
 test('published package contains only consumer contract files', (t) => {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'audiogen-pack-'))
   t.teardown(() => fs.rmSync(temporaryDirectory, { recursive: true, force: true }))
 
   const packOutput = run(
-    'npm',
+    NPM_COMMAND,
     ['pack', '--ignore-scripts', '--json', '--pack-destination', temporaryDirectory],
     PACKAGE_ROOT
   )
@@ -86,14 +95,17 @@ test('published package contains only consumer contract files', (t) => {
   )
   t.is(packedPackage.bin[COMMAND_NAME], DOWNLOADER_PATH, 'package exposes downloader bin')
   t.is(
-    packedPackage.dependencies['@qvac/error'],
-    ERROR_VERSION,
-    'package pins the CommonJS-compatible error runtime'
+    packedPackage.scripts['download-models:registry'],
+    REPOSITORY_DOWNLOAD_COMMAND,
+    'repository downloader targets the integration model cache'
   )
-  t.is(
+  t.absent(
     packedPackage.dependencies['@qvac/registry-client'],
-    REGISTRY_CLIENT_VERSION,
-    'package ships the downloader runtime dependency'
+    'package does not install the optional downloader runtime for every consumer'
+  )
+  t.ok(
+    packedPackage.peerDependenciesMeta['@qvac/registry-client'].optional,
+    'package marks the downloader runtime as an optional peer'
   )
   const downloaderPath = path.join(packedPackageRoot, DOWNLOADER_PATH)
   const help = runDownloader(downloaderPath, packedPackageRoot)
@@ -102,4 +114,13 @@ test('published package contains only consumer contract files', (t) => {
   const missingOutput = runDownloaderWithoutOutput(downloaderPath, packedPackageRoot)
   t.is(missingOutput.status, 1, 'downloader rejects a missing output directory')
   t.ok(missingOutput.stderr.includes('--output is required'), 'downloader reports required output')
+  const missingRegistryClient = runDownloaderWithoutRegistryClient(
+    downloaderPath,
+    packedPackageRoot
+  )
+  t.is(missingRegistryClient.status, 1, 'downloader rejects a missing optional registry client')
+  t.ok(
+    missingRegistryClient.stderr.includes('Install @qvac/registry-client'),
+    'downloader explains how to install its optional runtime'
+  )
 })

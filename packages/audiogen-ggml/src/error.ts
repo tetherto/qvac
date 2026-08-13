@@ -12,8 +12,13 @@ const { name, version } = require('./package.json') as {
   version: string
 }
 
+export const ERR_CODE_RANGE = Object.freeze({
+  start: 31001,
+  end: 32000
+})
+
 export const ERR_CODES = Object.freeze({
-  INVALID_INPUT: 31001,
+  INVALID_INPUT: ERR_CODE_RANGE.start,
   NOT_LOADED: 31002,
   CANCELLED: 31003,
   MODEL_UNLOADED: 31004,

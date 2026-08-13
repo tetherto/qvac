@@ -27,7 +27,7 @@
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "format": "prettier --write \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/*.{js,mjs}\" \"test/**/*.js\"",
-    "download-models:registry": "node scripts/download-audiogen-ggml-models.js"
+    "download-models:registry": "node scripts/download-audiogen-ggml-models.js --output ./models"
   },
   "exports": {
     "./package": "./package.json",
@@ -70,6 +70,7 @@
     "ggml"
   ],
   "devDependencies": {
+    "@qvac/registry-client": "^0.6.1",
     "bare-process": "^4.2.2",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
@@ -84,14 +85,21 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/error": "0.1.1",
+    "@qvac/error": "^0.1.1",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
-    "@qvac/registry-client": "^0.6.1",
     "bare-ffmpeg": "^1.4.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0"
+  },
+  "peerDependencies": {
+    "@qvac/registry-client": "^0.6.1"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/registry-client": {
+      "optional": true
+    }
   },
   "types": "index.d.ts"
 }

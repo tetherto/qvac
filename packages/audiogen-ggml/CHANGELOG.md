@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Treat `destroy()` as terminal. Replace `await gen.destroy(); await gen.load()`
+  with a newly constructed `AudioGen` instance before calling `load()`.
+- Remove internal integration tests, mobile tests, and test utilities from the
+  published package.
+
 ### Added
 
 - Expose ACE-Step reference/source audio and cover task controls through the

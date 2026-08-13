@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const { AudioGen, ERR_CODES, QvacErrorAudioGen } = require('../../index.js')
+const { AudioGen, ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } = require('../../index.js')
 
 function deferred() {
   let resolve
@@ -113,6 +113,14 @@ test('cancel settles the active response', async (t) => {
   t.is(await errorCode(response.await()), ERR_CODES.CANCELLED)
 })
 
+test('cancel on an idle instance does not invoke native cancellation', async (t) => {
+  const { gen, cancelCalls } = createHarness(() => Promise.resolve(true))
+
+  await gen.cancel()
+
+  t.is(cancelCalls(), 0)
+})
+
 test('cancel holds the next admission until native cancellation finishes', async (t) => {
   const cancellation = deferred()
   let admissions = 0
@@ -191,6 +199,27 @@ test('unload cancels and fails an active response before destruction', async (t)
   t.is(await errorCode(response.await()), ERR_CODES.MODEL_UNLOADED)
   t.is(destroyCalls(), 1)
   t.is(gen.addon, null)
+})
+
+test('unload settles an active response when native destruction fails', async (t) => {
+  const { gen } = createHarness(() => Promise.resolve(true))
+  gen.addon.destroyInstance = () => Promise.reject(new Error('destroy failure'))
+  const response = await gen.run('destroy failure')
+
+  t.is(await errorCode(gen.unload()), ERR_CODES.FAILED_TO_DESTROY)
+  t.is(gen.addon, null)
+  t.is(await errorCode(response.await()), ERR_CODES.MODEL_UNLOADED)
+})
+
+test('cancellation failure takes precedence when destruction also fails', async (t) => {
+  const { gen } = createHarness(() => Promise.resolve(true))
+  gen.addon.cancel = () => Promise.reject(new Error('cancel failure'))
+  gen.addon.destroyInstance = () => Promise.reject(new Error('destroy failure'))
+  const response = await gen.run('stop failures')
+
+  t.is(await errorCode(gen.unload()), ERR_CODES.FAILED_TO_CANCEL)
+  t.is(gen.addon, null)
+  t.is(await errorCode(response.await()), ERR_CODES.MODEL_UNLOADED)
 })
 
 test('unload invalidates an in-flight load and destroys its addon once', async (t) => {
@@ -317,4 +346,5 @@ test('public errors are exported from the package root', (t) => {
   t.ok(error instanceof Error)
   t.is(error.code, ERR_CODES.INVALID_INPUT)
   t.ok(error.message.includes('bad value'))
+  t.alike(ERR_CODE_RANGE, { start: 31001, end: 32000 })
 })

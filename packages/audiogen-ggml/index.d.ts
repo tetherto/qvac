@@ -194,5 +194,5 @@ export { REGISTRY_SOURCE, REGISTRY_PREFIX, FIXED_MODELS, DIT_VARIANTS, DEFAULT_D
 export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOptions } from './models';
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
-export { ERR_CODES, QvacErrorAudioGen } from './error';
+export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

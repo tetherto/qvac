@@ -7,9 +7,6 @@ import { fileURLToPath } from 'node:url'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sourceRoot = path.join(packageRoot, 'src')
-// Paths whose *.js / *.d.ts are authored by hand (not emitted by tsc) and must
-// be left untouched by the generated-file check. `lib/` holds the hand-written
-// audio-format helper + its declaration (it uses Node Buffer and is kept as JS).
 const handwrittenPaths = [
   'addon/',
   'binding.js',
@@ -79,6 +76,23 @@ function snapshotOutputs(snapshotRoot) {
   }
 }
 
+function removeOutputs() {
+  for (const outputPath of generatedOutputs) {
+    fs.rmSync(path.join(packageRoot, outputPath), { force: true })
+  }
+}
+
+function restoreOutputs(snapshotRoot) {
+  for (const outputPath of generatedOutputs) {
+    const generatedPath = path.join(packageRoot, outputPath)
+    const snapshotPath = path.join(snapshotRoot, outputPath)
+    fs.rmSync(generatedPath, { force: true })
+    if (!fs.existsSync(snapshotPath)) continue
+    fs.mkdirSync(path.dirname(generatedPath), { recursive: true })
+    fs.copyFileSync(snapshotPath, generatedPath)
+  }
+}
+
 function changedOutputs(snapshotRoot) {
   return generatedOutputs.filter((outputPath) => {
     const snapshotPath = path.join(snapshotRoot, outputPath)
@@ -96,22 +110,26 @@ function staleOutputs() {
 const snapshotRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'audiogen-generated-'))
 try {
   snapshotOutputs(snapshotRoot)
+  removeOutputs()
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const buildResult = run(npmCommand, ['run', 'build:ts'], { stdio: 'inherit' })
-  if (buildResult.status !== 0) process.exit(buildResult.status ?? 1)
-
-  const changed = changedOutputs(snapshotRoot)
-  const stale = staleOutputs()
-  if (changed.length > 0 || stale.length > 0) {
-    console.error('Generated wrapper files are stale or incomplete:')
-    for (const outputPath of [...new Set([...changed, ...stale])].sort()) {
-      console.error(`  ${outputPath}`)
-    }
-    console.error('Run `npm run build:ts` and include the generated changes.')
-    process.exitCode = 1
+  if (buildResult.status !== 0) {
+    process.exitCode = buildResult.status ?? 1
   } else {
-    console.log('Generated wrapper files are up to date.')
+    const changed = changedOutputs(snapshotRoot)
+    const stale = staleOutputs()
+    if (changed.length > 0 || stale.length > 0) {
+      console.error('Generated wrapper files are stale or incomplete:')
+      for (const outputPath of [...new Set([...changed, ...stale])].sort()) {
+        console.error(`  ${outputPath}`)
+      }
+      console.error('Run `npm run build:ts` and include the generated changes.')
+      process.exitCode = 1
+    } else {
+      console.log('Generated wrapper files are up to date.')
+    }
   }
 } finally {
+  restoreOutputs(snapshotRoot)
   fs.rmSync(snapshotRoot, { recursive: true, force: true })
 }

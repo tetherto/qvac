@@ -11,7 +11,7 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.QvacErrorAudioGen = exports.ERR_CODES = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.ENGINE_ACESTEP = void 0;
+exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.ENGINE_ACESTEP = void 0;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 const QvacLogger = require("@qvac/logging");
@@ -344,19 +344,22 @@ class AudioGen {
                     throw cancellationFailure;
                 return;
             }
+            let destructionFailure = null;
             try {
                 await addon.destroyInstance();
             }
             catch (error) {
-                throw new error_1.QvacErrorAudioGen({
+                destructionFailure = new error_1.QvacErrorAudioGen({
                     code: error_1.ERR_CODES.FAILED_TO_DESTROY,
                     adds: errorMessage(error),
                     cause: error instanceof Error ? error : undefined
                 });
             }
-            this._logger.debug('audiogen-ggml: engine unloaded');
             if (cancellationFailure)
                 throw cancellationFailure;
+            if (destructionFailure)
+                throw destructionFailure;
+            this._logger.debug('audiogen-ggml: engine unloaded');
         });
     }
     static encode(pcm, formats, opts) {
@@ -452,5 +455,6 @@ Object.defineProperty(exports, "encodePcm", { enumerable: true, get: function ()
 Object.defineProperty(exports, "pcmToWav", { enumerable: true, get: function () { return audio_format_2.pcmToWav; } });
 Object.defineProperty(exports, "OUTPUT_FORMATS", { enumerable: true, get: function () { return audio_format_2.SUPPORTED_FORMATS; } });
 var error_2 = require("./error");
+Object.defineProperty(exports, "ERR_CODE_RANGE", { enumerable: true, get: function () { return error_2.ERR_CODE_RANGE; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_2.ERR_CODES; } });
 Object.defineProperty(exports, "QvacErrorAudioGen", { enumerable: true, get: function () { return error_2.QvacErrorAudioGen; } });

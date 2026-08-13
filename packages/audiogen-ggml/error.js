@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ERR_CODES = exports.QvacErrorAudioGen = void 0;
+exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.QvacErrorAudioGen = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- @qvac/error exposes a CommonJS export shape. */
 const QvacError = require("@qvac/error");
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -10,8 +10,12 @@ class QvacErrorAudioGen extends QvacErrorBase {
 exports.QvacErrorAudioGen = QvacErrorAudioGen;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- package metadata is read from the package root at runtime.
 const { name, version } = require('./package.json');
+exports.ERR_CODE_RANGE = Object.freeze({
+    start: 31001,
+    end: 32000
+});
 exports.ERR_CODES = Object.freeze({
-    INVALID_INPUT: 31001,
+    INVALID_INPUT: exports.ERR_CODE_RANGE.start,
     NOT_LOADED: 31002,
     CANCELLED: 31003,
     MODEL_UNLOADED: 31004,

@@ -550,17 +550,19 @@ export class AudioGen {
         if (cancellationFailure) throw cancellationFailure
         return
       }
+      let destructionFailure: QvacErrorAudioGen | null = null
       try {
         await addon.destroyInstance()
       } catch (error) {
-        throw new QvacErrorAudioGen({
+        destructionFailure = new QvacErrorAudioGen({
           code: ERR_CODES.FAILED_TO_DESTROY,
           adds: errorMessage(error),
           cause: error instanceof Error ? error : undefined
         })
       }
-      this._logger.debug('audiogen-ggml: engine unloaded')
       if (cancellationFailure) throw cancellationFailure
+      if (destructionFailure) throw destructionFailure
+      this._logger.debug('audiogen-ggml: engine unloaded')
     })
   }
 
@@ -684,7 +686,7 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
-export { ERR_CODES, QvacErrorAudioGen } from './error'
+export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'
 
 export type {
   AudioGenConfigurationParams,

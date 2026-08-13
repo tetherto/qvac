@@ -173,7 +173,8 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
 
 Convert each `Int16Array` view to bytes using its `byteOffset` and `byteLength`,
 concatenate the byte chunks, then encode them. Do not pass the entire backing
-buffer because a typed array can be a smaller view into it.
+buffer because a typed array can be a smaller view into it. This snippet
+continues with the `response` returned by `gen.run()` in the Usage example.
 
 ```js
 const { AudioGen } = require('@qvac/audiogen-ggml')
@@ -300,10 +301,11 @@ Downloading the GGUFs is the caller's job (the qvac SDK's `resolveModelPath`, a
 download script, etc.) — the addon only ever receives a local path. `models.js`
 is the single source of truth for the registry paths and the `ditVariant` enum.
 
-Install the package, then download a selected model set into a directory owned
-by your application:
+Install the optional registry client used by the downloader, then download a
+selected model set into a directory owned by your application:
 
 ```bash
+npm install @qvac/registry-client
 npx qvac-audiogen-download-models --output ./models/audiogen --variant turbo-q4
 ```
 

@@ -2,6 +2,10 @@ import QvacError = require('@qvac/error');
 declare const QvacErrorBase: typeof QvacError.QvacErrorBase;
 export declare class QvacErrorAudioGen extends QvacErrorBase {
 }
+export declare const ERR_CODE_RANGE: Readonly<{
+    start: 31001;
+    end: 32000;
+}>;
 export declare const ERR_CODES: Readonly<{
     INVALID_INPUT: 31001;
     NOT_LOADED: 31002;

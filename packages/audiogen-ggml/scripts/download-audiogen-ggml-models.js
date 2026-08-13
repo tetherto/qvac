@@ -103,6 +103,17 @@ async function downloadPaths(client, registryPaths, outputDir) {
   }
 }
 
+function createRegistryClient() {
+  try {
+    const { QVACRegistryClient } = require('@qvac/registry-client')
+    return new QVACRegistryClient()
+  } catch (error) {
+    throw new Error('Install @qvac/registry-client to download AudioGen models', {
+      cause: error
+    })
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help) return usage()
@@ -112,8 +123,7 @@ async function main() {
   fs.mkdirSync(args.output, { recursive: true })
 
   console.log(`Downloading ACE-Step GGUFs (variant: ${args.variant}) into ${args.output}`)
-  const { QVACRegistryClient } = require('@qvac/registry-client')
-  const client = new QVACRegistryClient()
+  const client = createRegistryClient()
   await client.ready()
   try {
     await downloadPaths(client, paths, args.output)
