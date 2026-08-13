@@ -473,7 +473,9 @@ export const llmPlugin = definePlugin({
                 done: true,
                 events: normalizer.finish({ stopReason: 'cancelled' as const })
               },
-              0
+              // The error path has no model execution time to report; omit it
+              // rather than claim 0.
+              undefined
             )
             return
           }
