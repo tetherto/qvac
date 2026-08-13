@@ -13,9 +13,8 @@ export interface FitConfig {
    * Path to the GGUF weights file.
    *
    * Must be absolute; a relative path throws. It would otherwise resolve
-   * against the process working directory, which nothing in a worklet
-   * controls, so the same call could name a different file — or no file — from
-   * one launch to the next.
+   * against the process working directory, so the same call could name a
+   * different file — or no file — from one launch to the next.
    */
   modelPath: string
   /**
@@ -265,9 +264,9 @@ function validateRelationships (config: FitConfig): void {
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
- * This is a synchronous, blocking native call. It is designed to run in its own
- * short-lived worklet so that any backend/driver instability during probing
- * stays isolated from the inference worker.
+ * This is a synchronous, blocking in-process native call. Callers that need
+ * isolation should use `@qvac/model-fit/process` to run it in a disposable
+ * Bare subprocess.
  *
  * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of
@@ -286,12 +285,8 @@ export function fitParams (config: FitConfig): FitResult {
   if (typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
     throw new TypeError('model-fit: config.modelPath must be a non-empty string')
   }
-  // A relative path resolves against the process working directory, which
-  // nothing in a worklet controls and which the caller cannot rely on — the
-  // same call would then succeed or fail depending on where the host was
-  // launched. The API already documents this field as absolute; enforce it
-  // rather than leaving it to be discovered at the native fopen. Mirrors
-  // `backendsDir`, and `files.model` in @qvac/embed-llamacpp.
+  // A relative path depends on the process working directory, so enforce the
+  // documented absolute-path contract before the native fopen.
   if (!path.isAbsolute(config.modelPath)) {
     throw new TypeError(`model-fit: config.modelPath must be an absolute path, got '${config.modelPath}'`)
   }

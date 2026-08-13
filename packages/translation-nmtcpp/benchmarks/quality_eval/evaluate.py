@@ -187,12 +187,16 @@ def download_dataset(data_dir, dataset_name="flores-devtest"):
 
     if config["type"] == "flores":
         # Download Flores200 dataset
-        url = "https://tinyurl.com/flores200dataset"
+        url = "https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz"
 
-        # Download and extract
+        # Download and extract with stdlib tools; wget/tar binaries are not
+        # available on the Windows benchmark runners.
+        import tarfile
+        import urllib.request
         tarball = data_dir_path / f"{config['folder']}.tar.gz"
-        subprocess.run(["wget", "-O", str(tarball), url], check=True)
-        subprocess.run(["tar", "-xzf", str(tarball), "-C", str(data_dir)], check=True)
+        urllib.request.urlretrieve(url, tarball)
+        with tarfile.open(tarball, "r:gz") as archive:
+            archive.extractall(data_dir)
         tarball.unlink()  # Remove tarball after extraction
     elif config["type"] == "json":
         # Download JSON dataset from S3
@@ -333,10 +337,13 @@ def translate_file(translator, src_lang, trg_lang, input_file, output_file, use_
     # Get translator script path
     script_dir = Path(__file__).parent / "translators"
 
+    # sys.executable rather than a bare "python3": the stdlib-only qvac
+    # wrappers must stay runnable from venvs and on Windows runners where
+    # no python3 shim exists on PATH.
     if translator == "qvac":
-        cmd = ["python3", str(script_dir / "qvac.py")]
+        cmd = [sys.executable, str(script_dir / "qvac.py")]
     elif translator == "qvac_bergamot":
-        cmd = ["python3", str(script_dir / "qvac_bergamot.py")]
+        cmd = [sys.executable, str(script_dir / "qvac_bergamot.py")]
     elif translator == "opusmt":
         cmd = ["python3", str(script_dir / "opusmt.py")]
     elif translator == "google":
