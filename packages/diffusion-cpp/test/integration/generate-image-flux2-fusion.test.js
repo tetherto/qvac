@@ -14,8 +14,28 @@ const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
+const skipFlux2Fusion = proc.env && proc.env.SKIP_FLUX2_FUSION === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
-const skip = isMobile || noGpu
+const skip = isMobile || noGpu || skipFlux2Fusion
+
+console.log(
+  '[FLUX2 fusion] Platform:',
+  os.platform(),
+  'Arch:',
+  os.arch(),
+  'NO_GPU:',
+  noGpu,
+  'SKIP_FLUX2_FUSION:',
+  skipFlux2Fusion,
+  '→ Skip:',
+  skip
+)
+if (skipFlux2Fusion) {
+  console.log(
+    '[FLUX2 fusion] Skipped: Apple Paravirtual Metal does not support the '
+    + 'MUL_MAT operation required by this test (workflow-scoped capability gate).'
+  )
+}
 
 const FLUX2_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf'
