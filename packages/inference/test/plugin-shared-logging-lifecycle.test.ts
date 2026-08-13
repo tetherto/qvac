@@ -7,10 +7,7 @@ import {
   registerAddonLogger,
   unregisterAddonLogger
 } from '@/logging'
-import {
-  clearAllLoggingStreams,
-  registerLoggingStream
-} from '@/runtime/logging-stream-registry'
+import { clearAllLoggingStreams, registerLoggingStream } from '@/runtime/logging-stream-registry'
 import { ADDON_ASR, ModelType } from '@/schemas'
 
 interface MockLoggingModule {
