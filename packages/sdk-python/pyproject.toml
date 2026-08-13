@@ -76,6 +76,13 @@ select = ["E", "F", "I", "UP"]
 # so it's pure noise on top of an already-formatted codebase.
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# The generated enums mirror wire values verbatim, so the walk-key enum has a
+# member named `l` (keyboard "L"). E741 is a readability rule for hand-written
+# identifiers; the name is fixed by the RPC contract and cannot be renamed here.
+# Scoped to the generated tree so E741 still applies to code we write.
+"src/tetherto/qvac_sdk/_generated/**" = ["E741"]
+
 [tool.ruff.lint.isort]
 # Pin tetherto as first-party so import-section grouping is identical whether
 # the generator writes in place (src/tetherto/qvac_sdk/_generated) or into a
