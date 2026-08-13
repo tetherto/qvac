@@ -13,6 +13,7 @@ import { ocrConfigSchema } from '@/schemas/ocr'
 import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { vlaConfigSchema } from '@/schemas/vla'
 import { classificationConfigSchema } from '@/schemas/classification'
+import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
 export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.llamacppCompletion]: 'llm',
@@ -25,6 +26,7 @@ export const CANONICAL_TO_ALIAS: Record<CanonicalModelType, string> = {
   [ModelType.ttsGgml]: 'tts',
   [ModelType.ggmlOcr]: 'ocr',
   [ModelType.sdcppGeneration]: 'diffusion',
+  [ModelType.audiogenGgml]: 'audiogen',
   [ModelType.ggmlVla]: 'vla',
   [ModelType.ggmlClassification]: 'classification'
 }
@@ -37,6 +39,7 @@ export const MODEL_CONFIG_SCHEMAS: Partial<Record<CanonicalModelType, ZodSchema>
   [ModelType.parakeetTranscription]: parakeetRuntimeConfigSchema.passthrough(),
   [ModelType.ggmlOcr]: ocrConfigSchema,
   [ModelType.sdcppGeneration]: sdcppConfigSchema,
+  [ModelType.audiogenGgml]: audioGenConfigSchema,
   [ModelType.ggmlVla]: vlaConfigSchema,
   [ModelType.ggmlClassification]: classificationConfigSchema
 }

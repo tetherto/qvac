@@ -5,7 +5,6 @@ import type { FilesV4, SpeechModelV4, TranscriptionModelV4 } from '@ai-sdk/provi
 // `'external'` so existing v1 callers (which never passed `mode`) keep the
 // exact same behaviour.
 interface QvacCommonOptions {
-  readonly apiKey?: string
   readonly headers?: Record<string, string>
   readonly fetch?: typeof fetch
 }
@@ -16,6 +15,7 @@ interface QvacCommonOptions {
 export interface QvacExternalOptions extends QvacCommonOptions {
   readonly mode?: 'external'
   readonly baseURL?: string
+  readonly apiKey?: string
 }
 
 // A model to load in managed mode. A bare string is shorthand for `{ name }`.
@@ -43,7 +43,9 @@ export interface QvacManagedModel {
 // Managed mode: the provider synthesizes an ephemeral `qvac.config.json` from
 // the requested model list, spawns `qvac serve openai` on a free port,
 // health-checks it, and tears the process down on host exit. `createQvac`
-// returns a `Promise<ManagedQvacProvider>` in this mode.
+// returns a `Promise<ManagedQvacProvider>` in this mode. Managed mode generates
+// and owns the serve API key; caller headers and custom fetch wrappers receive
+// authenticated requests but cannot replace managed authorization.
 export interface QvacManagedOptions extends QvacCommonOptions {
   readonly mode: 'managed'
   // Models to load. A bare string is an SDK model-constant name (e.g.
@@ -101,6 +103,11 @@ export type QvacProvider = OpenAICompatibleProvider & {
 // teardown handle. Implements `AsyncDisposable` so callers can use
 // `await using qvac = await createQvac({ mode: 'managed', ... })`.
 export interface ManagedQvacProvider extends QvacProvider {
+  // API key for the live managed serve. Treat it as secret material and read it
+  // fresh after recovery because a replacement serve receives a new key. The
+  // property is deliberately non-enumerable, so spreads and object dumps of the
+  // provider do not carry it.
+  readonly apiKey: string
   // Base URL of the live serve, including the `/v1` suffix. Read it fresh after
   // recovery: if the serve crashes and is respawned on a new port, this getter
   // reflects the new origin (handy for re-pointing an external client).

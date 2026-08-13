@@ -140,6 +140,25 @@ sampling. Enabling gauges adds one CPU query and one query per GPU to each
 profiled operation's response path. If the worker resource collector is not
 initialized, the event omits the resource block.
 
+## Streaming transcription statistics
+
+Whisper and Parakeet duplex transcription sessions expose terminal engine
+statistics after their event iterator completes:
+
+```ts
+const session = await transcribeStream({ modelId })
+
+for await (const text of session) {
+  process.stdout.write(text)
+}
+
+const stats = await session.stats
+console.log(stats?.audioDuration, stats?.realTimeFactor)
+```
+
+`session.stats` resolves to `undefined` when the engine does not report
+statistics.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
