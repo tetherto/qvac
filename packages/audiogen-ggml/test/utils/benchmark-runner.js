@@ -1,10 +1,5 @@
 'use strict'
 
-// Runtime-agnostic core of the ACE-Step RTF benchmark, shared by the desktop
-// (brittle) and on-device (Device Farm) harnesses so neither can drift from the
-// other. Metrics, environment variables and determinism guarantees are
-// documented in benchmarks/RTF-BENCHMARKS.md.
-
 const os = require('bare-os')
 const path = require('bare-path')
 const fs = require('bare-fs')
@@ -47,21 +42,13 @@ const DEVICE_ENV_FILE = 'qvacPerfConfig.txt'
 const DEFAULT_DURATION_S = 15
 const DEFAULT_WARMUP_RUNS = 1
 const DEFAULT_DESKTOP_RUNS = 3
-// One fewer measured run on device: a Device Farm slot is time-boxed and an
-// ACE-Step render is minutes even on the turbo schedule.
 const DEFAULT_MOBILE_RUNS = 2
 
-// Fixed so the LM sees the same conditioning on every device; RTF must vary
-// with hardware, not with a re-rolled seed.
 const BENCHMARK_SEED = 42
 const INSTRUMENTAL_LYRICS = '[Instrumental]'
 
-// Device Farm log sinks truncate long lines, so the canonical record is also
-// emitted in fragments that extract-from-log.js reassembles.
 const PERF_CHUNK_SIZE = 400
 
-// Comparable prompt length keeps the per-run token count, and therefore RTF,
-// comparable across iterations.
 const CAPTIONS = [
   'lo-fi hip hop, mellow piano, soft vinyl crackle, rainy night',
   'upbeat pop rock, driving electric guitars, punchy drums, catchy hook',
@@ -105,8 +92,6 @@ function getEnvFloat(name, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-// Undefined rather than a default, so the engine keeps its own per-DiT choice
-// (step count and shift differ between the turbo and sft schedules).
 function getOptionalPositiveInteger(name) {
   const parsed = Number.parseInt(getEnv(name), 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
@@ -170,9 +155,6 @@ function deviceEnvCandidates() {
   return candidates
 }
 
-// Mobile CI has no workflow env on the device: the per-row configuration arrives
-// as a pushed file, so it must be injected before any setting is read. Desktop
-// has no such file and this is a no-op.
 let deviceEnvLoaded = false
 
 function loadDeviceEnvOnce() {
@@ -217,9 +199,7 @@ function collectFilesSizeBytes(files) {
     try {
       const stat = fs.statSync(file)
       if (stat.isFile()) total += Number(stat.size) || 0
-    } catch {
-      // A stage may be absent when the fetch soft-failed; size is best-effort.
-    }
+    } catch {}
   }
   return total
 }
@@ -385,8 +365,6 @@ function buildReport({ settings, backend, summary, runs, warmupRuns }) {
   }
 }
 
-// The mobile sandbox may refuse the write, and mobile numbers travel out through
-// the log markers instead, so a failed write must not fail the run.
 function writeRtfArtifact(settings, report) {
   const dir = resultsDir()
   try {
@@ -502,9 +480,6 @@ async function measureEngine(gen, settings, loadContext) {
   return { warmupRuns, runs, summary, unloaded: unload.unloaded }
 }
 
-// Measuring reclaimed RSS requires the engine to be gone, so it is normally
-// destroyed before this resolves. The returned `destroy` is the retry for the
-// throwing paths and for an unload that failed.
 async function runRtfBenchmark(settings, { ensureModels = ensureModelsOrThrow } = {}) {
   const backend = resolveBackend(platform, settings.useGPU, settings.backendHint)
   logHeader(settings, backend)
@@ -530,9 +505,7 @@ async function runRtfBenchmark(settings, { ensureModels = ensureModelsOrThrow } 
     destroyed = true
     try {
       await gen.destroy()
-    } catch {
-      // Already torn down by the measured path.
-    }
+    } catch {}
   }
 
   try {

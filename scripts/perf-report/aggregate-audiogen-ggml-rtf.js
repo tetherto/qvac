@@ -1,10 +1,6 @@
 #!/usr/bin/env node
 'use strict'
 
-// Folds the desktop, mobile and manual ACE-Step RTF artifacts into one findings
-// table. Input shapes, backend coverage and usage are documented in
-// packages/audiogen-ggml/benchmarks/RTF-BENCHMARKS.md.
-
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -15,12 +11,7 @@ const ENGINE = 'acestep'
 const ADDON = 'audiogen-ggml'
 const CANONICAL_SCHEMA_VERSION = '1.0'
 
-// Backends the default audiogen-cpp cascade can reach on CI hardware. Anything
-// missing from a run is called out under the table so a gap is visible rather
-// than silently absent.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal']
-// `other-gpu` is what the report builder emits for a ggml backend id it has no
-// name for; it must round-trip rather than be relabelled as the platform default.
 const VALID_BACKENDS = [
   'cpu',
   'gpu',
@@ -38,8 +29,6 @@ const DEFAULT_DIT_VARIANT = 'turbo-q4'
 const DEFAULT_MANUAL_DIR = 'packages/audiogen-ggml/benchmarks/manual-results'
 const BYTES_PER_MB = 1024 * 1024
 
-// The desktop and mobile lanes upload under different names; naming both keeps
-// the fetch off the multi-megabyte prebuild artifacts sharing the run.
 const ARTIFACT_PATTERNS = ['rtf-results-audiogen-ggml-*', 'perf-report-audiogen-ggml-*']
 const DEFAULT_FETCH_RUNS = 6
 
@@ -122,8 +111,6 @@ function formatMaybeInteger (value) {
   return String(Math.round(Number(value)))
 }
 
-// audiogen-cpp resolves Metal on darwin/ios and Vulkan on linux/win32/android.
-// An explicit hint (a manual CUDA/OpenCL drop, say) always wins.
 function normalizeBackend (platformName, useGPU, backendHint) {
   const hint = String(backendHint || '').toLowerCase()
   if (hint && hint !== 'gpu' && hint !== 'mobile-accelerated') return hint
@@ -142,15 +129,10 @@ function normalizeBackend (platformName, useGPU, backendHint) {
   }
 }
 
-// The provider column must agree with the backend that actually ran, so a GPU
-// request that fell back to CPU is not reported as GPU work.
 function providerForBackend (backend) {
   return backend === 'cpu' ? 'cpu' : 'gpu'
 }
 
-// A GPU request the runtime could not honour still renders audio and still
-// produces a row. Keeping the requested backend is what separates that row from
-// a genuine CPU run on the same device and variant.
 function requestedBackendOfResult (result, platformFamily, observedBackend) {
   const hint = result.requested_backend
   if (!hint) return observedBackend
@@ -180,9 +162,6 @@ function isDesktopArtifact (report) {
   return Boolean(report && report.engine === ENGINE && report.summary && report.model)
 }
 
-// Canonical labels are built by the benchmark as
-// `[CPU|GPU] acestep <ditVariant> <backend>`; the tail is matched by meaning
-// rather than position so an extra token cannot shift the columns.
 function parseCanonicalTestLabel (testLabel) {
   const matched = String(testLabel || '')
     .trim()
@@ -366,9 +345,6 @@ function meanRtfProblem (record) {
   return null
 }
 
-// A hand-authored drop is the one input nobody validates upstream. A value
-// outside its allowlist is rejected rather than coerced, because silently
-// reporting an unknown variant as turbo-q4 would publish a wrong number.
 function manualRecordProblems (record) {
   if (!isPlainObject(record)) return ['not a JSON object']
   const problems = []
@@ -380,8 +356,6 @@ function manualRecordProblems (record) {
   return problems.filter(Boolean)
 }
 
-// Hand-authored drops are flat by design: a human filling in a template should
-// not have to reproduce the benchmark's nested summary shape.
 function normalizeManualRecord (record, sourceFile) {
   const platformFamily = String(record.platformFamily || record.platformName || '').toLowerCase()
   const useGPU = Boolean(record.useGPU || record.gpu === 'gpu')
@@ -434,9 +408,6 @@ function isBenchmarkArtifactName (file) {
   return /^rtf-benchmark-.*\.json$/.test(base) || base === 'performance-report.json'
 }
 
-// `gh run download` stages each run under a directory named for its id, so a
-// fetch spanning several runs can still attribute every mobile row even though
-// one --run-id cannot cover them all.
 function runIdForFile (file, inputDir, explicitRunId) {
   if (explicitRunId) return explicitRunId
   const [head] = path.relative(inputDir, file).split(path.sep)
@@ -458,8 +429,6 @@ function loadArtifactRecords (inputDir, runId) {
   return records
 }
 
-// Returns an array so a canonical drop can expand to several rows, and an empty
-// array when the item is unusable.
 function manualItemToRecords (item, file) {
   if (isDesktopArtifact(item)) {
     return [{ ...normalizeDesktopRecord(item, file), source: 'manual' }]
@@ -476,8 +445,6 @@ function manualItemToRecords (item, file) {
   return [normalizeManualRecord(item, file)]
 }
 
-// `records` is only honoured when it is actually a list; anything else would
-// otherwise be spread or iterated into a crash.
 function manualItemsOf (payload) {
   if (Array.isArray(payload)) return payload
   if (isPlainObject(payload) && Array.isArray(payload.records)) return payload.records
@@ -513,9 +480,6 @@ function recordKey (record) {
   ].join('::')
 }
 
-// Same-platform runners emit identically named artifacts, so the summarize job
-// downloads them into per-artifact subdirectories and this keeps the first of
-// any true duplicate rather than letting one clobber the others.
 function dedupeRecords (records) {
   const byKey = new Map()
   for (const record of records) {
