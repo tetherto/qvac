@@ -1,0 +1,365 @@
+import test from 'brittle'
+import { llmPlugin } from '@/server/bare/plugins/llamacpp-completion/plugin'
+import {
+  clearRegistry,
+  registerModel,
+  unregisterModel,
+  type AnyModel
+} from '@/server/bare/registry/model-registry'
+import { ModelType } from '@/schemas'
+
+// -----------------------------------------------------------------------------
+// Tool definitions must reach the model on every kv-cache path.
+//
+// The primed prefix is rendered on its own, so it can only contain a message
+// list that every chat template accepts. A system message plus tool
+// definitions is not such a list: Qwen3.5 raises
+// `No user query found in messages.` because its tool block is anchored on the
+// last user query, and the addon answers a template failure by re-rendering
+// without Jinja — which silently drops the tools. Static mode then never
+// resent them, on the assumption they were already cached, so the model
+// received no tools at all and answered in prose.
+//
+// These tests pin the split that avoids it — nothing but the system prompt
+// goes into the prefix, and the tools travel with a turn — plus the three ways
+// "the block is already cached" can be wrong: a changed tool set, a turn whose
+// message list the template won't render tools for, and a sliding context
+// window that can evict the block.
+//
+// Requires the Bare runtime (the plugin pulls in the N-API addon at import).
+// -----------------------------------------------------------------------------
+
+type LooseHandler = (request: unknown) => AsyncGenerator<unknown, unknown, unknown>
+
+type RecordedCall = {
+  messages: { role?: string; type?: string; name?: string }[]
+  prefill: boolean
+}
+
+type ToolDef = {
+  type: string
+  name: string
+  description: string
+  parameters: unknown
+}
+
+type HistoryEntry = { role: string; content: string; attachments: never[] }
+
+function makeTool(name: string): ToolDef {
+  return {
+    type: 'function',
+    name,
+    description: `Invoke ${name}.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        base: { type: 'integer', description: 'base' },
+        height: { type: 'integer', description: 'height' }
+      },
+      required: ['base', 'height']
+    }
+  }
+}
+
+const areaTool = makeTool('calculate_triangle_area')
+
+function isToolEntry(entry: { type?: string }): boolean {
+  return entry.type === 'function'
+}
+
+function toolNames(call: RecordedCall): (string | undefined)[] {
+  return call.messages.filter(isToolEntry).map((msg) => msg.name)
+}
+
+function user(content: string): HistoryEntry {
+  return { role: 'user', content, attachments: [] }
+}
+
+function assistant(content: string): HistoryEntry {
+  return { role: 'assistant', content, attachments: [] }
+}
+
+function system(content: string): HistoryEntry {
+  return { role: 'system', content, attachments: [] }
+}
+
+async function setIsolatedHome(): Promise<void> {
+  const fs = await import('bare-fs')
+  const os = await import('bare-os')
+  const path = await import('bare-path')
+  const { default: env } = await import('bare-env')
+  env['HOME'] = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-kvcache-tools-'))
+}
+
+// The session refuses to continue unless the prime left a non-empty cache
+// file behind, so the stand-in addon has to produce one.
+async function writeCacheFile(cachePath: string): Promise<void> {
+  const fs = await import('bare-fs')
+  const path = await import('bare-path')
+  fs.mkdirSync(path.dirname(cachePath), { recursive: true })
+  fs.writeFileSync(cachePath, 'primed')
+}
+
+/**
+ * Stand-in for the addon that records every payload it is handed and reports
+ * a cache file for whatever key it was told to save under.
+ */
+function registerRecordingModel(
+  modelId: string,
+  calls: RecordedCall[],
+  config: Record<string, unknown> = { tools: true }
+): void {
+  registerModel(modelId, {
+    model: {
+      run(
+        prompt: unknown,
+        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+      ) {
+        calls.push({
+          messages: prompt as RecordedCall['messages'],
+          prefill: opts?.prefill === true
+        })
+        const written =
+          opts?.saveCacheToDisk === true && opts.cacheKey !== undefined
+            ? writeCacheFile(opts.cacheKey)
+            : Promise.resolve()
+        return {
+          iterate: async function* () {
+            await written
+            yield 'The area is 25 square units.'
+          },
+          await: () => written,
+          stats: {}
+        }
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config,
+    modelType: ModelType.llamacppCompletion
+  })
+}
+
+function completer(modelId: string, kvCacheKey: string) {
+  const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+  let request = 0
+  return async (history: HistoryEntry[], tools?: ToolDef[]): Promise<void> => {
+    request += 1
+    const gen = handler({
+      modelId,
+      requestId: `${modelId}-${request}`,
+      history,
+      stream: true,
+      kvCache: kvCacheKey,
+      ...(tools ? { tools } : {})
+    })
+    for await (const _ of gen) void _
+  }
+}
+
+test('completion: kv-cache keeps tools out of the prefix and sends them with the turn', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tools-regression-key')
+  await complete(
+    [user('Find the area of a triangle with a base of 10 and height of 5.')],
+    [areaTool]
+  )
+
+  const primeCalls = calls.filter((call) => call.prefill)
+  const turnCalls = calls.filter((call) => !call.prefill)
+
+  t.is(primeCalls.length, 1, 'the prefix was primed once')
+  t.absent(
+    primeCalls[0]!.messages.some(isToolEntry),
+    'the primed prefix carries no tool definitions'
+  )
+  t.alike(
+    primeCalls[0]!.messages.map((msg) => msg.role),
+    ['system'],
+    'the primed prefix is the system prompt alone'
+  )
+
+  t.is(turnCalls.length, 1, 'the turn reached the model once')
+  t.alike(
+    toolNames(turnCalls[0]!),
+    ['calculate_triangle_area'],
+    'the turn carries the tool definition'
+  )
+  t.ok(
+    turnCalls[0]!.messages.some((msg) => msg.role === 'user'),
+    'the turn carries the user message the template anchors tools on'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// Static placement never trims the tool block back out of the cache, so a
+// block that travels on every turn leaves one copy per turn and grows the
+// prefix with the conversation. It only needs to enter the cache once.
+test('completion: kv-cache sends the tool block once, not on every warm turn', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-multiturn-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tools-multiturn-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  const reply = assistant('The area is 25 square units.')
+  const second = user('And with base 4 height 3?')
+
+  await complete([first], [areaTool])
+  await complete([first, reply, second], [areaTool])
+
+  const primeCalls = calls.filter((call) => call.prefill)
+  const turnCalls = calls.filter((call) => !call.prefill)
+
+  t.is(primeCalls.length, 1, 'the prefix was primed once across both turns')
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+
+  t.alike(
+    toolNames(turnCalls[0]!),
+    ['calculate_triangle_area'],
+    'the first turn writes the tool block into the cache'
+  )
+  t.absent(
+    turnCalls[1]!.messages.some(isToolEntry),
+    'the warm turn does not append a second copy of the tool block'
+  )
+  t.alike(
+    turnCalls[1]!.messages.map((msg) => msg.role),
+    ['user'],
+    'the warm turn sends only the unsaved tail'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The send-once gate must not key off the turn's saved count, which records
+// that history was committed — not that this tool block is the one in the
+// cache. A tool set that shows up after a tools-free turn, or changes
+// mid-session, must still reach the model: it keys into its own cache through
+// `configHash`, which primes fresh and so passes the gate.
+test('completion: kv-cache sends a tool set that appears late or changes', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-changing-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tools-changing-key')
+  const turn1 = [user('Hello, no tools yet.')]
+  const turn2 = [...turn1, assistant('Hi.'), user('Area of a triangle, base 10 height 5?')]
+  const turn3 = [...turn2, assistant('25.'), user('And its perimeter?')]
+
+  await complete(turn1)
+  await complete(turn2, [areaTool])
+  await complete(turn3, [areaTool, makeTool('calculate_perimeter')])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+
+  t.absent(
+    turnCalls[0]!.messages.some(isToolEntry),
+    'the tools-free turn carries no tool definitions'
+  )
+  t.alike(
+    toolNames(turnCalls[1]!),
+    ['calculate_triangle_area'],
+    'a tool set that appears after a tools-free turn still reaches the model'
+  )
+  t.alike(
+    toolNames(turnCalls[2]!),
+    ['calculate_triangle_area', 'calculate_perimeter'],
+    'a changed tool set reaches the model instead of reusing the cached block'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// Sending the block is not the same as the model seeing it. When the payload
+// has no user message, Qwen-family templates raise and the addon re-renders
+// with the tools stripped, returning a usable prompt and no error. Treating
+// that turn as "the block is cached now" loses tools for the whole session.
+test('completion: kv-cache resends the tool block after a turn that could not render it', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-unrendered-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tools-unrendered-key')
+  // An assistant-continuation seed: no user turn anywhere for the template to
+  // anchor its tool block on.
+  const seeded = [system('You are helpful.'), assistant('Shall I continue?')]
+  await complete(seeded, [areaTool])
+  await complete([...seeded, assistant('Continuing.'), user('Area, base 10 height 5?')], [areaTool])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+
+  t.alike(
+    toolNames(turnCalls[0]!),
+    ['calculate_triangle_area'],
+    'the tool block travels with the first turn even though it cannot render'
+  )
+  t.absent(
+    turnCalls[0]!.messages.some((msg) => msg.role === 'user'),
+    'that first payload has no user message to anchor the block on'
+  )
+  t.alike(
+    toolNames(turnCalls[1]!),
+    ['calculate_triangle_area'],
+    'the next turn resends the block instead of trusting the unrendered one'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// With `n_discarded > 0` the addon may slide its context window, and the
+// discard region opens exactly where a static tool block sits — the protected
+// prefix ends at the primed system prompt, and the clamp that would guard the
+// block only runs in dynamic mode. While the block can be evicted it has to
+// travel with every turn.
+test('completion: kv-cache resends the tool block when the context window can slide', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-sliding-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, { tools: true, n_discarded: 64 })
+
+  const complete = completer(modelId, 'tools-sliding-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first], [areaTool])
+  await complete([first, assistant('25.'), user('And base 4 height 3?')], [areaTool])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+
+  t.alike(
+    toolNames(turnCalls[0]!),
+    ['calculate_triangle_area'],
+    'the first turn carries the tool block'
+  )
+  t.alike(
+    toolNames(turnCalls[1]!),
+    ['calculate_triangle_area'],
+    'the warm turn carries it again because a slide may have evicted it'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
