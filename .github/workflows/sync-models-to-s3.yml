@@ -113,26 +113,60 @@ jobs:
 
           echo "Inputs validated: ${SOURCE_BUCKET} -> ${DEST_BUCKET}, prefix '${PREFIX}'."
 
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-          # Credential lifetime (capped by the role's MaxSessionDuration, 7200s /
-          # 2h) is the real ceiling here, not the job timeout. Company policy
-          # keeps MaxSessionDuration fixed, so we deliberately do NOT rely on a
-          # longer session. Instead the mirror below is fully resumable: each
-          # pass is missing-only, so if a large first seed can't fit in one 2h
-          # window it simply finishes on the next scheduled/dispatch run.
-          role-duration-seconds: 7200
-
-      - name: Mirror prefix (server-side, missing-only, resumable)
+      - name: Mirror prefix (server-side, missing-only, auto-refreshing creds)
         shell: bash
+        env:
+          OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
         run: |
           set -uo pipefail
           echo "Source:      s3://${SOURCE_BUCKET}/${PREFIX} (${SOURCE_REGION})"
           echo "Destination: s3://${DEST_BUCKET}/${PREFIX} (${DEST_REGION})"
           echo "Dry run:     ${DRYRUN}"
+
+          # --- Auto-refreshing AWS credentials --------------------------------
+          # Company policy caps a single STS session at MaxSessionDuration (2h),
+          # so a multi-hour first seed would die mid-copy when a static token
+          # expires. Instead of a static token we hand the AWS CLI a
+          # `credential_process` helper: botocore invokes it on demand and
+          # re-invokes it automatically as the temporary credentials near expiry,
+          # transparently rolling a single long `aws s3 sync` onto a fresh 2h STS
+          # session for as long as the job runs -- no MaxSessionDuration change.
+          # The helper mints a fresh GitHub OIDC JWT (the request token is valid
+          # for the whole job) and exchanges it via assume-role-with-web-identity,
+          # which itself needs no pre-existing AWS credentials.
+          CRED_HELPER="${RUNNER_TEMP}/oidc-cred-process.sh"
+          cat > "${CRED_HELPER}" <<'HELPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          JWT=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
+          # Isolate this bootstrap call from the credential_process profile itself
+          # so the CLI does not recurse back into this helper.
+          CREDS=$(AWS_PROFILE= AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null \
+            aws sts assume-role-with-web-identity \
+              --role-arn "${OIDC_ROLE_ARN}" \
+              --role-session-name sync-models-to-s3 \
+              --web-identity-token "${JWT}" \
+              --duration-seconds 7200 \
+              --region "${STS_REGION}" \
+              --output json)
+          echo "${CREDS}" | jq '{Version:1, AccessKeyId:.Credentials.AccessKeyId, SecretAccessKey:.Credentials.SecretAccessKey, SessionToken:.Credentials.SessionToken, Expiration:.Credentials.Expiration}'
+          HELPER
+          chmod +x "${CRED_HELPER}"
+
+          # Exported so botocore's credential_process subprocess inherits them.
+          export OIDC_ROLE_ARN
+          export STS_REGION="${DEST_REGION}"
+
+          export AWS_CONFIG_FILE="${RUNNER_TEMP}/aws-config"
+          cat > "${AWS_CONFIG_FILE}" <<CONFIG
+          [profile sync]
+          credential_process = ${CRED_HELPER}
+          CONFIG
+          export AWS_PROFILE=sync
+          # Ensure no stale static creds shadow the auto-refreshing profile.
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          # --------------------------------------------------------------------
 
           # --size-only: model objects are content-addressed by dated key, so a
           # matching size means identical bytes; this avoids re-copying on clock
@@ -165,14 +199,11 @@ jobs:
             exit 1
           fi
 
-          # Resumable loop: because every pass is missing-only, re-running the
-          # sync is safe and idempotent. `aws s3 sync` exits 0 only after it has
-          # copied every missing object, so a single successful pass means the
-          # mirror is complete (whether or not it had anything to copy). We only
-          # retry on a non-zero exit (transient S3/network error or an expired
-          # credential window), backing off between attempts. Anything still
-          # missing when the credentials finally expire is picked up by the next
-          # scheduled/dispatch run.
+          # With auto-refreshing credentials a single pass should copy the whole
+          # seed however long it takes. `aws s3 sync` exits 0 only after every
+          # missing object is copied, so one successful pass means the mirror is
+          # complete. The bounded retry is now only a safety net for transient
+          # S3/network errors; each pass is missing-only, so retries are cheap.
           MAX_ATTEMPTS=8
           completed=false
           for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
@@ -184,13 +215,13 @@ jobs:
               break
             fi
 
-            echo "Attempt ${attempt} failed (transient error or credential window ended); backing off before retry."
+            echo "Attempt ${attempt} failed (transient error); backing off before retry."
             sleep 30
           done
 
           if [ "${completed}" != "true" ]; then
-            echo "Mirror did not fully complete within this run's credential window."
-            echo "This is expected for a large first seed: the next scheduled/dispatch run resumes where this one stopped (missing-only)."
+            echo "Mirror did not complete after ${MAX_ATTEMPTS} attempts."
+            echo "Re-dispatch to resume (missing-only)."
             exit 1
           fi
 
