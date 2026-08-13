@@ -156,6 +156,12 @@ export function createBaseLogger(
 
   registerLogger(logger)
 
+  // `registerLogger` hands the new logger the process-wide level, which would
+  // otherwise silently defeat a level this caller asked for by name.
+  if (options?.level !== undefined) {
+    logger.setLevel(options.level)
+  }
+
   return logger
 }
 

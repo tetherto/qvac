@@ -1,6 +1,7 @@
 import test from 'brittle'
 import { getClientLogger } from '@/logging/client-logger'
 import { createBaseLogger } from '@/logging/base-logger'
+import { setGlobalLogLevel } from '@/logging/registry'
 import { logLevelSchema } from '@/schemas/logging-stream'
 
 test('logLevelSchema: accepts off alongside the standard levels', (t) => {
@@ -87,4 +88,23 @@ test('level off: silences console, stream, and transports together', (t) => {
   t.is(printed, 0, 'nothing printed to console at off')
   t.alike(streamed, [], 'stream callback receives nothing at off')
   t.alike(transported, [], 'transports receive nothing at off')
+})
+
+test('an explicit level outranks a process-wide level set beforehand', (t) => {
+  // 'info' is the built-in default, so leaving it set does not change the level
+  // any later logger resolves to.
+  setGlobalLogLevel('info')
+
+  const transported: string[] = []
+  const logger = createBaseLogger('test:precedence', {
+    level: 'off',
+    enableConsole: false,
+    transports: [(_l, _n, message) => transported.push(message)]
+  })
+
+  logger.error('e')
+  logger.info('i')
+
+  t.is(logger.getLevel(), 'off', 'the global level does not replace the requested one')
+  t.alike(transported, [], 'nothing is emitted at off')
 })
