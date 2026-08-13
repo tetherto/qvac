@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CosyVoice3 Metal GPU offload (macOS / iOS).** `useGPU: true` /
+  `nGpuLayers > 0` now engages tts-cpp's Metal backend for CosyVoice3 on Apple
+  hosts (previously Android OpenCL/Adreno only; Metal hosts fell back to CPU).
+  Requires `tts-cpp` >= 2026-08-12, which widens the engine's validated-backend
+  allowlist to Metal + OpenCL with per-stage GPU parity gates. Vulkan hosts
+  still fall back to CPU.
 - **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
   directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
   dialects, description-conditioned English), with a capability matrix and
@@ -32,8 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
   vocoder (24 kHz), on CPU with opt-in Android OpenCL/Adreno GPU offload.
-  Instruct2 control (dialect / emotion / speed / volume / style) via the
-  `instruct` option.
+  Dialect / volume / style control via the `instruct` option; emotion and
+  speaking rate use the cross-engine `emotion` / `pace` options below.
 - **LavaSR enhancer + denoiser for CosyVoice3.** `files.lavasrEnhancer` /
   `enhancer` now bandwidth-extend CosyVoice3's native 24 kHz output to 48 kHz,
   on both batch synthesis and native chunk streaming (seam-free). The
@@ -75,8 +81,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads "parler/audio8-only". `response.stats.tokensPerSecond` counts codec
   frames per second on this engine, not characters per second.
 
+### Changed
+
+- **Unified emotion and pace across engines.** `emotion` and `pace` now mean the
+  same thing on every engine that supports them, and are set the same way: the
+  constructor and `reload()` on all of them, plus per call on Parler and
+  CosyVoice3. The vocabulary is owned by tts-cpp and each engine declares the
+  subset it supports, so an unsupported value throws naming that engine's set
+  instead of being silently ignored. Parler keeps all 12 emotions and its
+  existing behaviour is unchanged; CosyVoice3 gains `emotion` (anger, happy,
+  neutral, sad), `pace`, and the per-call / `reload()` channels it did not have
+  before; Supertonic gains `pace` (mapped onto its duration multiplier, relative
+  to the model's own default, so `moderate` is a no-op). Supertonic conditions
+  its engine at construction, so its `pace` belongs in the constructor or
+  `reload({ pace })` and a per-call one throws instead of being dropped.
+
+  `reload()` is atomic: a rejected configuration leaves the instance exactly as
+  it was, so a later partial reload is never validated against values the
+  caller never accepted.
+
+  Breaking for CosyVoice3 callers: `instruct: { emotion }` and
+  `instruct: { speed }` are removed in favour of the top-level `emotion` /
+  `pace`, and the emotion value is spelled `anger`, not `angry`. `instruct`
+  keeps `dialect` / `volume` / `style` and the raw-string escape hatch.
+  CosyVoice3 is trained on one instruction per synthesis, so engaging two
+  controls now throws instead of silently resolving by precedence.
+
+  `speed` is unchanged: it remains the exact rate multiplier on Chatterbox and
+  Supertonic.
+
+  The vocabulary itself is owned by `tts-cpp` `2026-08-10#1`, already the
+  package's floor.
+
 ### Fixed
 
+- **Public TypeScript and CommonJS API.** Audio chunks are now declared as
+  their runtime `Int16Array` type, enhancer backend fields are included in
+  `RuntimeStats`, invalid reload sample rates are rejected, and the package
+  root exposes `QvacErrorAddonTTSGgml` and `ERR_CODES` to named import
+  discovery.
+- **Published registry downloader.** The model download command now ships its
+  implementation and runtime registry client dependency.
 - **Audio8 native reload raced synthesis.** The reload path wrote the model's
   configuration from the reload task while a running job read the reference
   voice out of it, and swapped the configuration and the engine under separate
@@ -129,6 +174,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the ignored per-call `TTSRunInput.outputSampleRate`; configure output
+  resampling on the model instead. Added the stable
+  `@qvac/tts-ggml/text-stream-accumulator` helper subpath while retaining the
+  existing deep path.
 - **Parler streaming accepts `config.outputSampleRate` when the enhancer is
   active.** Parler natively streams at 44.1 kHz and rejected a different output
   rate while streaming, because the engine has no seam-free per-chunk resampler.
