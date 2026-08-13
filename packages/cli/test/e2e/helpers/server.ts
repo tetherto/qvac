@@ -13,6 +13,7 @@ export interface CreateServerOptions {
   config?: unknown
   apiKey?: string
   cors?: boolean
+  corsOrigins?: string[]
   publicBaseUrl?: string
   docs?: boolean
   model?: string[]
@@ -27,6 +28,7 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     quiet: true,
     ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
     ...(opts.cors !== undefined ? { cors: opts.cors } : {}),
+    ...(opts.corsOrigins !== undefined ? { corsOrigins: opts.corsOrigins } : {}),
     ...(opts.publicBaseUrl !== undefined ? { publicBaseUrl: opts.publicBaseUrl } : {}),
     ...(opts.docs !== undefined ? { docs: opts.docs } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
