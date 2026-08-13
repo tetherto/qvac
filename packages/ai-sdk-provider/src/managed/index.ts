@@ -1,10 +1,9 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdir, open, readFile, rm, stat } from 'node:fs/promises'
+import { open, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import {
-  DEFAULT_API_KEY,
   DEFAULT_HEADERS,
   DEFAULT_SERVE_HOST,
   DEFAULT_SERVE_IDLE_TIMEOUT_MS,
@@ -20,6 +19,7 @@ import { ServeSpawnFailedError, ServeStartTimeoutError } from './errors.js'
 import { computeFleetKey } from './fleet-key.js'
 import {
   addConsumer,
+  ensureManagedServesDir,
   findReusableServe,
   healthCheck,
   isProcessAlive,
@@ -29,10 +29,12 @@ import {
   removeConsumer,
   sweepServes
 } from './registry.js'
-import { runnerSpawnSpec } from './runner.js'
+import { runnerSpawnSpec, writeRunnerParamsFile } from './runner.js'
+import type { RunnerParams } from './runner.js'
 import { allocateFreePort } from './serve-process.js'
 
 interface Resolved {
+  readonly apiKey: string
   readonly baseURL: string
   readonly servePid: number
   readonly port: number
@@ -85,9 +87,9 @@ async function lockOlderThan(key: string, ms: number): Promise<boolean> {
 // is a fallback only for a lock whose owner pid we can't read.
 // Exported for tests; not part of the package's public surface.
 export async function tryLock(key: string): Promise<boolean> {
-  await mkdir(managedServesDir(), { recursive: true })
+  await ensureManagedServesDir()
   try {
-    const fh = await open(lockPath(key), 'wx')
+    const fh = await open(lockPath(key), 'wx', 0o600)
     await fh.writeFile(String(process.pid))
     await fh.close()
     return true
@@ -124,8 +126,13 @@ async function waitForHealthyRecord(
 ): Promise<Resolved | undefined> {
   while (Date.now() < untilMs) {
     const rec = await readRecord(fleetKey)
-    if (rec !== undefined && (await healthCheck(rec.baseURL, fetchImpl))) {
-      return { baseURL: rec.baseURL, servePid: rec.servePid, port: rec.port }
+    if (rec !== undefined && (await healthCheck(rec.baseURL, rec.apiKey, fetchImpl))) {
+      return {
+        apiKey: rec.apiKey,
+        baseURL: rec.baseURL,
+        servePid: rec.servePid,
+        port: rec.port
+      }
     }
     if ((await readErrorFile(fleetKey)) !== undefined) return undefined
     await delay(SERVE_HEALTH_POLL_INTERVAL_MS)
@@ -133,20 +140,19 @@ async function waitForHealthyRecord(
   return undefined
 }
 
-function spawnRunner(params: {
-  fleetKey: string
-  configPath: string
-  port: number
-  host: string
-  idleTimeoutMs: number
-  startTimeoutMs: number
-  serveBinPath?: string
-}): void {
-  const { command, args } = runnerSpawnSpec()
-  const child = spawn(command, [...args, JSON.stringify(params)], {
+async function spawnRunner(params: RunnerParams): Promise<void> {
+  const paramsPath = await writeRunnerParamsFile(params)
+  const { command, args } = runnerSpawnSpec(paramsPath)
+  const child = spawn(command, args, {
     detached: true,
     stdio: process.env['QVAC_MANAGED_DEBUG'] !== undefined ? 'inherit' : 'ignore',
     env: process.env
+  })
+  child.once('error', () => {
+    void rm(paramsPath, { force: true })
+  })
+  child.once('exit', () => {
+    void rm(paramsPath, { force: true })
   })
   // Fully detach: the runner outlives us so the serve can be shared and reaped
   // on its own idle schedule rather than dying with this client.
@@ -207,7 +213,12 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
       const existing = await findReusableServe(fleetKey, fetchImpl)
       if (existing !== undefined) {
         await addConsumer(fleetKey, consumerId)
-        return { baseURL: existing.baseURL, servePid: existing.servePid, port: existing.port }
+        return {
+          apiKey: existing.apiKey,
+          baseURL: existing.baseURL,
+          servePid: existing.servePid,
+          port: existing.port
+        }
       }
     }
 
@@ -222,15 +233,22 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
           if (reuse) {
             const again = await findReusableServe(fleetKey, fetchImpl)
             if (again !== undefined) {
-              return { baseURL: again.baseURL, servePid: again.servePid, port: again.port }
+              return {
+                apiKey: again.apiKey,
+                baseURL: again.baseURL,
+                servePid: again.servePid,
+                port: again.port
+              }
             }
           }
           const port = options.servePort ?? (await allocateFreePort(host))
+          const apiKey = randomBytes(32).toString('base64url')
           const ephemeral = await writeEphemeralConfig(options.models)
           await rm(errorPath(fleetKey), { force: true }).catch(() => {})
 
-          spawnRunner({
+          await spawnRunner({
             fleetKey,
+            apiKey,
             configPath: ephemeral.configPath,
             port,
             host,
@@ -278,7 +296,12 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
   }
   // Mutable live coordinates — updated on every respawn so the public getters
   // (and the fetch retarget) always describe the serve actually in use.
-  const live = { baseURL: first.baseURL, port: first.port, servePid: first.servePid }
+  const live = {
+    apiKey: first.apiKey,
+    baseURL: first.baseURL,
+    port: first.port,
+    servePid: first.servePid
+  }
 
   // Set by close(); read by the fetch path so a request that loses the race with
   // close() never silently re-resolves (re-adding a consumer / spawning a runner
@@ -302,7 +325,10 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
   // serve by re-resolving and retrying once. After close() we never re-resolve.
   const wrappedFetch: typeof fetch = async (input, init) => {
     try {
-      return await baseFetch(retargetUrl(input, live.baseURL), init as RequestInit)
+      return await baseFetch(
+        retargetUrl(input, live.baseURL),
+        withManagedAuthorization(input, init, live.apiKey)
+      )
     } catch (err) {
       if (closed || !isRetryableConnError(err)) throw err
       const resolved = await reresolve()
@@ -314,17 +340,21 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
         removeConsumer(fleetKey, consumerId)
         throw err
       }
+      live.apiKey = resolved.apiKey
       live.baseURL = resolved.baseURL
       live.port = resolved.port
       live.servePid = resolved.servePid
-      return baseFetch(retargetUrl(input, live.baseURL), init as RequestInit)
+      return baseFetch(
+        retargetUrl(input, live.baseURL),
+        withManagedAuthorization(input, init, live.apiKey)
+      )
     }
   }
 
   const headers = { ...DEFAULT_HEADERS, ...options.headers }
   const base = createExternalQvac({
     baseURL: live.baseURL,
-    apiKey: options.apiKey ?? DEFAULT_API_KEY,
+    apiKey: live.apiKey,
     headers,
     fetch: wrappedFetch
   })
@@ -350,7 +380,11 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
 
   // Expose the coordinates as getters over `live` so they keep reflecting the
   // real serve after a crash-recovery respawn moves it to a new port/pid.
+  // `apiKey` is secret material: hiding it from enumeration keeps it out of
+  // spreads, `Object.keys`, and inspector/serializer output, and locking the
+  // descriptor stops it being swapped for an attacker-chosen value.
   Object.defineProperties(base, {
+    apiKey: { get: () => live.apiKey, enumerable: false, configurable: false },
     baseURL: { get: () => live.baseURL, enumerable: true, configurable: true },
     port: { get: () => live.port, enumerable: true, configurable: true },
     pid: { get: () => live.servePid, enumerable: true, configurable: true }
@@ -358,6 +392,18 @@ export async function startManagedQvac(options: QvacManagedOptions): Promise<Man
   const managed = Object.assign(base, { close, [Symbol.asyncDispose]: close })
 
   return managed as ManagedQvacProvider
+}
+
+function withManagedAuthorization(
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1],
+  apiKey: string
+): RequestInit {
+  const headers = new Headers(
+    init?.headers ?? (input instanceof Request ? input.headers : undefined)
+  )
+  headers.set('authorization', `Bearer ${apiKey}`)
+  return { ...init, headers }
 }
 
 // Swap the origin (scheme + host + port) of a request URL to the live serve's,
