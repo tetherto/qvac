@@ -350,6 +350,41 @@ test('registry: same-tick cancel-before-begin retroactively aborts the later beg
   )
 })
 
+test('registry: a begin racing withModelDraining starts aborted (drain barrier, not a one-time snapshot)', async (t) => {
+  // Deep-review HIGH: begin() reserves its id then awaits acquireSlot, so the
+  // RegistryEntry lands a microtask after reservation. A drain that only
+  // snapshotted `entries` would miss such a begin and let it register an
+  // unaborted active request against a model being torn down. withModelDraining
+  // holds `drainingModels` across teardown, and begin() re-checks it AFTER slot
+  // acquisition, so a same-tick begin in the reservation gap starts aborted.
+  const r = createRequestRegistry()
+
+  // Start the begin but do NOT await it: it reserves 'race' and suspends on
+  // acquireSlot with an immediately-available slot.
+  const racing = r.begin({
+    requestId: 'race',
+    kind: 'completion',
+    modelId: 'm',
+    maxConcurrentPerModel: 1
+  })
+
+  // Drain the model to teardown while that begin is mid-admission.
+  let teardownRan = false
+  await r.withModelDraining('m', async () => {
+    teardownRan = true
+  })
+
+  await using ctx = await racing
+  t.is(teardownRan, true, 'teardown ran')
+  t.is(ctx.signal.aborted, true, 'the racing begin starts aborted, not a live unaborted request')
+  t.is(
+    String((ctx.signal as { reason?: unknown }).reason),
+    'modelUnload',
+    'aborted for model unload, not left running against a torn-down model'
+  )
+  t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
+})
+
 test('registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly', async (t) => {
   // The Stop-button race close consumes its entry on the matching
   // `begin(...)`. In practice ids are UUIDv4 and never reused, but a
