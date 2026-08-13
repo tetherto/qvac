@@ -9,12 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CosyVoice3 Vulkan GPU offload (Linux / Windows).** `useGPU: true` /
+  `nGpuLayers > 0` now engages tts-cpp's Vulkan backend for CosyVoice3 on
+  desktop hosts (previously a policy CPU fallback). Requires `tts-cpp` >=
+  2026-08-12#1, which admits desktop Vulkan to the engine's validated-backend
+  requirement with per-stage GPU parity gates (greedy LM trajectories are
+  bit-identical to CPU on Vulkan, including q8_0 weights). Android keeps the
+  Metal-or-OpenCL requirement, so Mali / Xclipse devices still decline to CPU.
 - **CosyVoice3 Metal GPU offload (macOS / iOS).** `useGPU: true` /
   `nGpuLayers > 0` now engages tts-cpp's Metal backend for CosyVoice3 on Apple
   hosts (previously Android OpenCL/Adreno only; Metal hosts fell back to CPU).
   Requires `tts-cpp` >= 2026-08-12, which widens the engine's validated-backend
-  allowlist to Metal + OpenCL with per-stage GPU parity gates. Vulkan hosts
-  still fall back to CPU.
+  allowlist to Metal + OpenCL with per-stage GPU parity gates.
 - **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
   directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
   dialects, description-conditioned English), with a capability matrix and

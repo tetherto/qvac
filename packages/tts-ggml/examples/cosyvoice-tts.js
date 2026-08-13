@@ -6,8 +6,8 @@
  * Loads the Fun-CosyVoice3-0.5B model directory (Qwen2 speech LM + DiT flow +
  * CausalHiFT vocoder, plus the Qwen2 BPE tokenizer and a baked default voice)
  * and synthesizes a single utterance.  Native 24 kHz. CPU by default; pass
- * --gpu to opt into GPU offload (Metal on macOS/iOS, OpenCL/Adreno on
- * Android; other hosts fall back to CPU).
+ * --gpu to opt into GPU offload (Metal on macOS/iOS, Vulkan on Linux/Windows,
+ * OpenCL/Adreno on Android; other hosts fall back to CPU).
  *
  * `emotion` is the cross-engine conditioning option: the same spelling works on
  * Parler (see parler-tts.js).  CosyVoice3 supports anger, happy, neutral and
