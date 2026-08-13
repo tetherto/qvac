@@ -25,7 +25,7 @@ test('FLUX2 fusion gate targets only the Apple Paravirtual matrix leg', () => {
     '          - os: mac-mini-m4',
     '            platform: darwin',
     '            arch: arm64',
-    '            runner: mac-mini-m4-gpu',
+    '            runner: macos-26-xlarge',
     "            ltx: 'true'",
     "            skip_flux2_fusion: 'true'"
   ].join('\n')
