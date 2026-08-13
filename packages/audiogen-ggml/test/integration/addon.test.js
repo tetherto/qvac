@@ -4,7 +4,7 @@
 // ACE-Step GGUFs from the registry, load the native engine, generate music, and
 // assert on the streamed PCM + progress + stats. Needs the native prebuild and
 // the (multi-GB) models on disk, so CI provisions both before running this;
-// locally, run `npm run download-models:registry` first.
+// locally, run `npm run download-models:registry -- --output ./models` first.
 
 const test = require('brittle')
 const path = require('bare-path')
@@ -74,7 +74,7 @@ test(
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
       t.fail(
-        'ACE-Step models unavailable — run `npm run download-models:registry` (or set AUDIOGEN_GGML_LOCAL_MODELS_DIR).'
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models` (or set AUDIOGEN_GGML_LOCAL_MODELS_DIR).'
       )
       return
     }
@@ -119,7 +119,9 @@ test(
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
-      t.fail('ACE-Step models unavailable — run `npm run download-models:registry`.')
+      t.fail(
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models`.'
+      )
       return
     }
 
@@ -178,7 +180,9 @@ test(
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
-      t.fail('ACE-Step models unavailable — run `npm run download-models:registry`.')
+      t.fail(
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models`.'
+      )
       return
     }
 
@@ -224,7 +228,9 @@ test(
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
-      t.fail('ACE-Step models unavailable — run `npm run download-models:registry`.')
+      t.fail(
+        'ACE-Step models unavailable — run `npm run download-models:registry -- --output ./models`.'
+      )
       return
     }
 
