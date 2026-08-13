@@ -35,6 +35,9 @@ Values marked with `<placeholders>` should be replaced with your actual values.
   ],
   "bareRuntimeVersion": "<x.y.z>",
   "serve": {
+    "cors": {
+      "origins": ["https://app.example.com"]
+    },
     "models": {
       "<model_alias>": {
         "model": "<SDK_MODEL_CONSTANT>",
@@ -107,7 +110,31 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 | --- | --- | --- | --- | --- |
 | `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
 | `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
+| `cors` | Browser origins trusted to make cross-origin requests. See [`CorsOptions`](#corsoptions). | `CorsOptions` | No | — |
 | `openai` | OpenAI-adapter–specific options. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
+
+#### `CorsOptions`
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `origins` | Exact HTTP(S) origins allowed by CORS, such as `"https://app.example.com"`. Values cannot include credentials, a path, query, or fragment. Wildcard (`"*"`) is not allowed. CLI `--cors-origin` values are added to this list. | `string[]` | No | `[]` |
+
+Configure every browser origin explicitly:
+
+```json
+{
+  "serve": {
+    "cors": {
+      "origins": [
+        "https://app.example.com",
+        "http://localhost:3000"
+      ]
+    }
+  }
+}
+```
+
+Configuring one or more origins enables CORS. `--docs` also enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when it is itself loopback. The legacy `--cors` flag is a compatibility validation switch: it does not enable CORS by itself and fails unless `--cors-origin` or `serve.cors.origins` supplies at least one explicit origin. `--cors --docs` still needs an explicit origin because the docs defaults do not satisfy that validation.
 
 #### `ModelEntry`
 

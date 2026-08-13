@@ -52,6 +52,12 @@ packages = ["src/tetherto"]
 # self-contained wheel actually carries it. Harmless when absent (thin wheel).
 artifacts = ["src/tetherto/qvac_sdk/_bundle/**"]
 
+# hatch_build.py stamps a `py3-none-<plat>` tag on the fat (bundled) wheel when
+# QVAC_WHEEL_PLAT is set by scripts/build_wheel.py. Inert for the default thin
+# build, which stays pure `py3-none-any`.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
