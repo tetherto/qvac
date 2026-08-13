@@ -9,7 +9,8 @@ export type {
 
 export {
   createRequestRegistry,
-  getRequestRegistry
+  getRequestRegistry,
+  __resetRequestRegistrySingletonForTest
 } from '@/server/bare/runtime/request-registry-singleton'
 export type {
   BeginOpts,

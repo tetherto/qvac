@@ -407,6 +407,11 @@ export function createRequestRegistry(options?: {
   // Models being torn down: a begin(...) for one starts aborted. The barrier
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
+  // Worker-wide teardown: once cancelAll('shutdown') runs, every begin(...)
+  // starts aborted regardless of model. The drainingModels barrier's shutdown
+  // twin — catches a begin still in the reservation gap that cancelAll/drainAll
+  // sweep past. Terminal for the instance (the worker is exiting).
+  let shuttingDown = false
   // Entries whose disposal has started but not finished. disposeEntry removes
   // from `entries` before unwinding, so a drain must consult this too or it
   // would return while a request is still tearing down natively.
@@ -773,16 +778,21 @@ export function createRequestRegistry(options?: {
       preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
 
-    // A begin for a model being torn down starts aborted — no native work
-    // against a model about to be freed.
-    const abortForModelDrain = opts.modelId !== undefined && drainingModels.has(opts.modelId)
+    // A begin arriving while its model is being torn down, or while the whole
+    // worker is shutting down, starts aborted — no native work against a model
+    // about to be freed.
+    const drainReason = shuttingDown
+      ? 'shutdown'
+      : opts.modelId !== undefined && drainingModels.has(opts.modelId)
+        ? 'modelUnload'
+        : undefined
 
     const controller = new AbortController()
     const scope = createDisposableScope()
     if (preCancel) {
       controller.abort(preCancel.reason)
-    } else if (abortForModelDrain) {
-      controller.abort('modelUnload')
+    } else if (drainReason) {
+      controller.abort(drainReason)
     }
 
     let detachParent = () => {}
@@ -809,8 +819,7 @@ export function createRequestRegistry(options?: {
       // already aborted at begin time. Both branches abort the
       // controller above, so without this guard observers would see a
       // momentarily-`running` context with an already-aborted signal.
-      state:
-        preCancel || abortForModelDrain || opts.parentSignal?.aborted ? 'cancelling' : 'running'
+      state: preCancel || drainReason || opts.parentSignal?.aborted ? 'cancelling' : 'running'
     }
 
     let resolveDisposed: () => void = () => {}
@@ -928,6 +937,9 @@ export function createRequestRegistry(options?: {
   }
 
   function cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void> {
+    // Worker teardown: raise the barrier so a begin still suspended in admission
+    // starts aborted instead of registering under models about to be freed.
+    if (reason === 'shutdown') shuttingDown = true
     for (const entry of entries.values()) {
       cancelEntry(entry, reason)
     }

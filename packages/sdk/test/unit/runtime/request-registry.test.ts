@@ -351,8 +351,8 @@ test('registry: same-tick cancel-before-begin retroactively aborts the later beg
 })
 
 test('registry: a begin racing withModelDraining starts aborted (drain barrier, not a one-time snapshot)', async (t) => {
-  // Deep-review HIGH: begin() reserves its id then awaits acquireSlot, so the
-  // RegistryEntry lands a microtask after reservation. A drain that only
+  // begin() reserves its id then awaits acquireSlot, so the RegistryEntry lands
+  // a microtask after reservation. A drain that only
   // snapshotted `entries` would miss such a begin and let it register an
   // unaborted active request against a model being torn down. withModelDraining
   // holds `drainingModels` across teardown, and begin() re-checks it AFTER slot
@@ -381,6 +381,35 @@ test('registry: a begin racing withModelDraining starts aborted (drain barrier, 
     String((ctx.signal as { reason?: unknown }).reason),
     'modelUnload',
     'aborted for model unload, not left running against a torn-down model'
+  )
+  t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
+})
+
+test('registry: a begin racing worker shutdown (cancelAll+drainAll) starts aborted', async (t) => {
+  // Worker shutdown is cancelAll('shutdown') + drainAll(), which sweep
+  // `entries`/`waiters`/`disposingEntries` but not a begin still in the
+  // reservation gap (reserved id, suspended on acquireSlot). Without a
+  // worker-wide shutdown barrier that begin() re-checks after slot acquisition,
+  // such a begin registers an UNaborted active request and drainAll() returns
+  // before it lands, so unloadAllModels frees models under a live request.
+  const r = createRequestRegistry()
+
+  const racing = r.begin({
+    requestId: 'race',
+    kind: 'completion',
+    modelId: 'm',
+    maxConcurrentPerModel: 1
+  })
+
+  r.cancelAll('shutdown')
+  await r.drainAll()
+
+  await using ctx = await racing
+  t.is(ctx.signal.aborted, true, 'a begin racing worker shutdown starts aborted')
+  t.is(
+    String((ctx.signal as { reason?: unknown }).reason),
+    'shutdown',
+    'aborted for shutdown, not left running against a worker freeing its models'
   )
   t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
 })
