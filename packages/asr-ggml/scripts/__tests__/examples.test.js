@@ -9,30 +9,33 @@ const { parseQuickstartArguments, USAGE } = require('../../examples/quickstart-a
 const packageRoot = path.resolve(__dirname, '..', '..')
 const examplesRoot = path.join(packageRoot, 'examples')
 const relativeImportPattern = /require\(['"](\.[^'"]+)['"]\)/g
-
-const expectedScripts = {
-  'example:whisper': 'bare examples/quickstart.js',
-  'example:whisper:streaming-vad': 'bare examples/example.streaming-vad.js',
-  'example:whisper:mic': 'bare examples/example.mic-conversation.js',
-  'example:whisper:live-transcription': 'bare examples/example.live-transcription.js',
-  'example:whisper:audio-ctx-chunking': 'bare examples/example.audio-ctx-chunking.js',
-  'example:whisper:reload': 'bare examples/example.reload.js',
-  'example:whisper:decoder': 'bare examples/example.decoder.js',
-  'example:parakeet': 'bare examples/parakeet-transcribe.js',
-  'example:parakeet:indic-conformer': 'bare examples/parakeet-indic-conformer-transcribe.js',
-  'example:parakeet:diarize': 'bare examples/parakeet-diarized-transcribe.js',
-  'example:parakeet:mic': 'bare examples/parakeet-live-mic.js',
-  'example:parakeet:mic-diarize': 'bare examples/parakeet-live-mic-diarized.js',
-  'example:parakeet:mic-diarize-aosc':
-    'bare examples/parakeet-live-mic-diarized-aosc.js',
-  'example:parakeet:decode-audio': 'bare examples/parakeet-decode-audio.js'
-}
+const helperFiles = new Set([
+  'constants.js',
+  'ffmpeg.js',
+  'parakeet-utils.js',
+  'quickstart-arguments.js'
+])
 
 function getExampleFiles() {
   return fs
     .readdirSync(examplesRoot)
     .filter((fileName) => fileName.endsWith('.js'))
     .map((fileName) => path.join(examplesRoot, fileName))
+}
+
+function getRunnableExampleTargets() {
+  return getExampleFiles()
+    .map((filePath) => path.basename(filePath))
+    .filter((fileName) => !helperFiles.has(fileName))
+    .map((fileName) => `examples/${fileName}`)
+    .sort()
+}
+
+function getScriptTargets(scripts) {
+  return Object.entries(scripts)
+    .filter(([name]) => name.startsWith('example:'))
+    .map(([, command]) => command.split(/\s+/)[1])
+    .sort()
 }
 
 function getRelativeImports(filePath) {
@@ -57,12 +60,7 @@ test('all example relative imports resolve', () => {
 
 test('package scripts cover every runnable example', () => {
   const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
-  assert.deepEqual(
-    Object.fromEntries(
-      Object.entries(packageJson.scripts).filter(([name]) => name.startsWith('example:'))
-    ),
-    expectedScripts
-  )
+  assert.deepEqual(getScriptTargets(packageJson.scripts), getRunnableExampleTargets())
 })
 
 test('quickstart parses audio, model, and VAD paths in positional order', () => {

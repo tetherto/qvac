@@ -396,10 +396,10 @@ const config = {
 }
 ```
 
-**The authoritative vocabulary is the whitelist in
-[`configChecker.d.ts`](engines/whisper/configChecker.d.ts).**
-It accepts a curated subset of `whisper_full_params` (decoder strategy,
-thresholds, timestamps, VAD, prompts) plus the public `vad_params` sub-object.
+The public Whisper keys, including `vad_params`, are declared by
+[`WhisperConfig`](engines/whisper/driver.d.ts). The constructor accepts a
+curated subset of `whisper_full_params` covering decoder strategy, thresholds,
+timestamps, VAD, and prompts.
 `WhisperDriver` maps `vad_params` to the native `vadParams` object; callers
 must not pass `vadParams`. Any key outside the list throws from the constructor. `contextParams` accepts only
 `model`, `use_gpu`, `flash_attn`, `gpu_device`; `miscConfig` only
@@ -638,6 +638,8 @@ specialized models, hardware, timing conditions, or toolchains:
 `test:integration:accuracy`, `test:integration:long`,
 `test:integration:cold-start`, `test:integration:gpu` (Whisper),
 `test:integration:parakeet:gpu`, and `test:cpp`.
+The Parakeet GPU command is manual; ASR CI keeps
+`test:integration:gpu` Whisper-only.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.
@@ -716,6 +718,10 @@ npm run example:parakeet:mic-diarize
 npm run example:parakeet:mic-diarize-aosc
 npm run example:parakeet:decode-audio
 ```
+
+The published quickstart uses the Bare global for arguments and exit handling
+so it does not require the repository-only `bare-process` development
+dependency.
 
 The live-mic examples capture the default input device via `sox -d`
 (`brew install sox` / `apt install sox` / `choco install sox`). With

@@ -18,6 +18,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 - Publish a dependency-clean Whisper quickstart with positional audio, model,
   and VAD model arguments.
+- Correct public documentation for Whisper VAD naming, engine-specific status
+  codes, the `speech-cpp` umbrella dependency, and backend device value types.
 
 ## [0.3.0] - 2026-08-12
 

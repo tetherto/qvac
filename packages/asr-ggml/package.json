@@ -8,10 +8,10 @@
   },
   "scripts": {
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\" && lunte \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\"",
+    "lint:js": "prettier --check \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\" && lunte \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"examples/**/*.js\" \"test/**/*.js\" \"binding.js\"",
+    "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
@@ -21,11 +21,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
     "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
-    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:prestage",
-    "test:prestage": "node --test scripts/__tests__/examples.test.js scripts/__tests__/generate-prestage-block.test.js scripts/__tests__/generated-artifacts.test.js scripts/__tests__/mobile-test-groups.test.js scripts/__tests__/package-scripts.test.js",
+    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:prestage && npm run test:package",
+    "test:prestage": "node --test scripts/__tests__/*.test.js",
     "test:integration": "npm run test:integration:whisper && npm run test:integration:parakeet",
-    "test:integration:whisper": "npm run build:ts && brittle-bare test/integration/addon.test.js test/integration/multiple-transcriptions.test.js test/integration/live-stream-simulation.test.js test/integration/corrupted-model.test.js test/integration/model-file-validation.test.js",
-    "test:integration:parakeet:generate": "brittle -r test/integration/all.js test/integration/parakeet-addon-multimodel.test.js test/integration/parakeet-duplex-streaming.test.js test/integration/parakeet-duplex-streaming-eou.test.js test/integration/parakeet-eou-streaming.test.js test/integration/parakeet-sortformer-aosc-streaming.test.js test/integration/parakeet-sortformer-streaming-alias.test.js test/integration/parakeet-multiple-transcriptions.test.js test/integration/parakeet-corrupted-model.test.js test/integration/parakeet-model-file-validation.test.js",
+    "test:integration:whisper": "npm run build:ts && brittle-bare test/integration/addon.test.js test/integration/multiple-transcriptions.test.js test/integration/audio-ctx-chunking.test.js test/integration/live-stream-simulation.test.js test/integration/corrupted-model.test.js test/integration/model-file-validation.test.js",
+    "test:integration:parakeet:generate": "brittle -r test/integration/all.js test/integration/parakeet-addon-multimodel.test.js test/integration/parakeet-duplex-streaming.test.js test/integration/parakeet-duplex-streaming-eou.test.js test/integration/parakeet-eou-streaming.test.js test/integration/parakeet-live-stream-simulation.test.js test/integration/parakeet-sortformer-aosc-streaming.test.js test/integration/parakeet-sortformer-streaming-alias.test.js test/integration/parakeet-multiple-transcriptions.test.js test/integration/parakeet-corrupted-model.test.js test/integration/parakeet-model-file-validation.test.js",
     "test:integration:parakeet": "npm run build:ts && npm run test:integration:parakeet:generate && bash test/integration/parakeet-run-tests.sh",
     "test:integration:long": "npm run build:ts && brittle-bare test/integration/**/longES.test.js",
     "test:integration:multiple": "npm run build:ts && brittle-bare test/integration/**/multiple-transcriptions.test.js",
@@ -55,8 +55,8 @@
     "coverage:cpp:summary": "cd build/addon/tests && llvm-cov report ./asr_ggml_tests --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/addon/tests/ && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./asr_ggml_tests -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./asr_ggml_tests -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
-    "test:package": "npm run build:ts && node --test scripts/__tests__/package-contract.test.js",
-    "test:all": "npm run lint:js && npm run lint:ts && npm run typecheck && npm run test:dts && npm run check:generated && npm run test:unit && npm run test:package && npm run test:integration",
+    "test:package": "npm run build:ts && node --test test/package/**/*.test.js",
+    "test:all": "npm run lint && npm run test:unit && npm run test:integration",
     "test": "npm run test:all",
     "download-models": "./scripts/download-models.sh",
     "download-models:parakeet": "bash scripts/parakeet-download-models.sh",
@@ -180,6 +180,10 @@
       "eslint --fix"
     ],
     "{examples,test}/**/*.js": [
+      "prettier --write",
+      "lunte"
+    ],
+    "scripts/**/*.{js,mjs}": [
       "prettier --write",
       "lunte"
     ],

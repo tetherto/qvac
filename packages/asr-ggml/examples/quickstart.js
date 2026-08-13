@@ -50,7 +50,6 @@ async function main() {
     engine: 'whisper',
     whisperConfig: {
       audio_format: 's16le',
-      vad_model_path: vadModelFilePath,
       vad_params: {
         threshold: 0.35,
         min_speech_duration_ms: 200,

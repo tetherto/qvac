@@ -26,6 +26,27 @@ function getGeneratedOutputs(root) {
     })
 }
 
+function copyPath(sourceRoot, destinationRoot, relativePath) {
+  const sourcePath = path.join(sourceRoot, relativePath)
+  const destinationPath = path.join(destinationRoot, relativePath)
+  fs.mkdirSync(path.dirname(destinationPath), { recursive: true })
+  fs.cpSync(sourcePath, destinationPath, { recursive: true })
+}
+
+function prepareTemporaryPackage(temporaryPackage) {
+  const generatedOutputs = getGeneratedOutputs(packageRoot)
+  const requiredPaths = [
+    'package.json',
+    'tsconfig.json',
+    'tsconfig.build.json',
+    'src',
+    'scripts/check-generated.mjs',
+    ...generatedOutputs
+  ]
+  requiredPaths.forEach((relativePath) => copyPath(packageRoot, temporaryPackage, relativePath))
+  return generatedOutputs
+}
+
 function initializeRepository(directory) {
   for (const args of [['init'], ['add', '.']]) {
     const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' })
@@ -61,10 +82,7 @@ test('a failed generated-artifact check preserves committed outputs', () => {
   const temporaryPackage = path.join(temporaryRoot, 'asr-ggml')
 
   try {
-    fs.cpSync(packageRoot, temporaryPackage, {
-      recursive: true,
-      filter: (source) => source !== path.join(packageRoot, 'node_modules')
-    })
+    const generatedOutputs = prepareTemporaryPackage(temporaryPackage)
     fs.symlinkSync(
       path.join(packageRoot, 'node_modules'),
       path.join(temporaryPackage, 'node_modules'),
@@ -72,7 +90,6 @@ test('a failed generated-artifact check preserves committed outputs', () => {
     )
     initializeRepository(temporaryPackage)
 
-    const generatedOutputs = getGeneratedOutputs(temporaryPackage)
     const snapshots = snapshotOutputs(temporaryPackage, generatedOutputs)
     const configPath = path.join(temporaryPackage, 'tsconfig.build.json')
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
