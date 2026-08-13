@@ -81,6 +81,7 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
           DISPATCH_PKG: ${{ inputs.package }}
           CHANGED: ${{ steps.filter.outputs.changes }}
         run: |
@@ -90,6 +91,38 @@ jobs:
           else
             packages="${CHANGED:-[]}"
           fi
+
+          # Identity gate: a release-* branch is named release-<package>-x.y.z
+          # and must publish EXACTLY that package — checked against what this
+          # push/dispatch actually selected, before anything builds. Hard
+          # fail on any mismatch (wrong package, extra package, zero
+          # packages, malformed branch name, unknown package). Closes the gap
+          # in release-merge-guard: its package-identity check is a warning
+          # only (it hard-fails on version/changelog instead), so a
+          # same-versioned sibling lib with its own CHANGELOG touched in a
+          # later push on the SAME release branch could otherwise pass the
+          # guard and publish under someone else's release line. Applies to
+          # both push and workflow_dispatch.
+          if [[ "$REF_NAME" == release-* ]]; then
+            if [[ "$REF_NAME" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              branch_pkg="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Invalid release branch name — expected release-<package>-x.y.z, actual: ${REF_NAME}"
+              exit 1
+            fi
+
+            if [ ! -f "packages/${branch_pkg}/package.json" ]; then
+              echo "::error::release branch names package '${branch_pkg}' but packages/${branch_pkg}/package.json does not exist"
+              exit 1
+            fi
+
+            matches_branch_pkg=$(echo "$packages" | jq --arg p "$branch_pkg" '. == [$p]')
+            if [ "$matches_branch_pkg" != "true" ]; then
+              echo "::error::release-${branch_pkg}-* must publish exactly packages/${branch_pkg}/**; this run selected: ${packages}. No package reaches npm publish unless it is the sole package matching this release branch's name."
+              exit 1
+            fi
+          fi
+
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
   publish-logic:
