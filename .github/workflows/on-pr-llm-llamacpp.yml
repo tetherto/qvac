@@ -32,7 +32,7 @@ jobs:
       ref: ${{ github.sha }}
       platforms: Android
       test_groups: '[{"name":"ocrUnlimited","grep":"runOcrUnlimitedTest"}]'
-      device_model: S25 Ultra
+      device_model: Samsung Galaxy S25 Ultra
       device_manufacturer: Samsung
       device_model_operator: EQUALS
       job_timeout_minutes: 180
