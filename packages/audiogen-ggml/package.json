@@ -12,6 +12,7 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
+    "example:cover": "bare examples/generate-cover.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
@@ -20,11 +21,11 @@
     "test:integration": "npm run build:ts && brittle-bare test/integration/**/*.test.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\" && lunte \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
+    "lint:js": "prettier --check \"binding.js\" \"examples/generate-cover.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\" && lunte \"binding.js\" \"examples/generate-cover.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
-    "format": "prettier --write \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
+    "format": "prettier --write \"binding.js\" \"examples/generate-cover.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
     "download-models:registry": "node scripts/download-audiogen-ggml-models.js"
   },
   "exports": {

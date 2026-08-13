@@ -168,7 +168,7 @@ Smoke is a hard gate: all three providers must return streaming usage, non-empty
 
 ## CI dispatch (`benchmark-live`)
 
-The live sweep runs on the self-hosted `qvac-macos26-arm64-gpu` runner and is
+The live sweep runs on the GitHub-hosted `macos-26` runner and is
 protected end to end. Configure the following **before** dispatching, or the run
 will fail closed.
 
