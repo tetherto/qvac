@@ -55,7 +55,7 @@
     "coverage:cpp:summary": "cd build/addon/tests && llvm-cov report ./asr_ggml_tests --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/addon/tests/ && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./asr_ggml_tests -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./asr_ggml_tests -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run test:cpp:run && npm run coverage:cpp:report",
-    "test:package": "npm run build:ts && node --test test/package/**/*.test.js",
+    "test:package": "npm run build:ts && node --test test/package/*.test.js",
     "test:all": "npm run lint && npm run test:unit && npm run test:integration",
     "test": "npm run test:all",
     "download-models": "./scripts/download-models.sh",

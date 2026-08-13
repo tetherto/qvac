@@ -109,7 +109,7 @@ async function main() {
       if (hasIntegrity) {
         const res = await verify(dest, entry)
         if (res.ok) {
-          console.log(`  ✓ ${name}: present + verified — skip`)
+          console.log(`  OK ${name}: present + verified — skip`)
           skipped++
           continue
         }
@@ -117,7 +117,7 @@ async function main() {
         rmSync(dest, { force: true })
       } else if (statSync(dest).size > 0) {
         console.log(
-          `  ✓ ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`
+          `  OK ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`
         )
         skipped++
         continue
@@ -139,7 +139,7 @@ async function main() {
       }
     }
     const { size } = statSync(dest)
-    console.log(`  ✓ ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
+    console.log(`  OK ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
     staged++
   }
 
