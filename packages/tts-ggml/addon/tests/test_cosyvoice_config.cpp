@@ -178,7 +178,8 @@ TEST(CosyvoiceValidate, UseGpuNGpuLayersConflictRejected) {
 
 TEST(CosyvoiceValidate, UseGpuTrueAcceptedAtConstruction) {
   // GPU intent is honored where tts-cpp's allowlist engages (Metal on Apple,
-  // OpenCL/Adreno on Android; others fall back to CPU). Construction must NOT
+  // Vulkan on desktop Linux/Windows, OpenCL/Adreno on Android; others fall
+  // back to CPU). Construction must NOT
   // reject useGpu=true -- model loading is deferred to load().
   auto cfg = configWithExistingDir();
   cfg.useGpu = true;
