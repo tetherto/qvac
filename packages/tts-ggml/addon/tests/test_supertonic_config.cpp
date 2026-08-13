@@ -20,6 +20,7 @@
 using qvac::ttsggml::supertonic::SupertonicConfig;
 using qvac::ttsggml::supertonic::SupertonicModel;
 using qvac::ttsggml::supertonic::detail::applyVulkanPipelineCache;
+using qvac::ttsggml::supertonic::detail::validateNoPerCallControls;
 using qvac::ttsggml::supertonic::detail::VULKAN_PIPELINE_CACHE_DIR_ENV;
 using qvac::ttsggml::supertonic::detail::VULKAN_PREWARM_TEXT;
 using qvac_errors::StatusError;
@@ -203,6 +204,31 @@ TEST(SupertonicVulkanCache, DoesNotOverwriteCallerPrewarm) {
   EXPECT_EQ(
       opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
   EXPECT_EQ(opts.prewarm_text, "caller sentence");
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Per-call conditioning: supertonic takes it at construction only.
+// ─────────────────────────────────────────────────────────────────────
+
+TEST(SupertonicPerCallControls, EmptyControlsAccepted) {
+  EXPECT_NO_THROW(validateNoPerCallControls("", ""));
+}
+
+TEST(SupertonicPerCallControls, PaceRejected) {
+  EXPECT_THROW(validateNoPerCallControls("", "fast"), StatusError);
+}
+
+TEST(SupertonicPerCallControls, EmotionRejected) {
+  EXPECT_THROW(validateNoPerCallControls("happy", ""), StatusError);
+}
+
+TEST(SupertonicPerCallControls, MessageNamesTheRejectedChannel) {
+  try {
+    validateNoPerCallControls("", "slow");
+    FAIL() << "expected a per-call pace to be rejected";
+  } catch (const StatusError& e) {
+    EXPECT_NE(std::string(e.what()).find("pace"), std::string::npos);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────

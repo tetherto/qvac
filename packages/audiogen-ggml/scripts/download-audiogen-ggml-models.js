@@ -1,24 +1,8 @@
 #!/usr/bin/env node
 'use strict'
 
-// App-side model downloader for @qvac/audiogen-ggml.
-//
-// The addon itself never downloads — it takes local file paths. This script
-// plays the role the app/SDK plays: it resolves the ACE-Step GGUFs from the
-// QVAC model registry (over hyperdrive, via @qvac/registry-client) into a local
-// folder, so you can then point the addon at that folder (`modelDir`).
-//
-// Registry paths and the DiT-variant enum come from the addon's own manifest
-// (models.js), so this stays in sync with what the addon expects.
-//
-//   node scripts/download-audiogen-ggml-models.js --output <dir> [--variant turbo-q4|turbo-q8|sft|all]
-//
-// Only the four stages of the chosen DiT variant are fetched (the three fixed
-// stages + that DiT); use --variant all to fetch every DiT variant too.
-
 const fs = require('fs')
 const path = require('path')
-const { QVACRegistryClient } = require('@qvac/registry-client')
 const {
   REGISTRY_SOURCE,
   DEFAULT_DIT_VARIANT,
@@ -27,14 +11,14 @@ const {
   allRegistryPaths
 } = require('../models.js')
 
-// Default download target: the package's own `models/` dir. Mirrors
-// download-tts-ggml-models.js so `npm run download-models:registry` (no args)
-// works both locally and in CI, which then points the integration tests at
-// ./models. An explicit --output overrides it.
-const OUT_DIR = path.resolve(__dirname, '..', 'models')
+const DOWNLOAD_TIMEOUT_MS = 1800000
+const BYTE_UNIT = 1024
+const PERCENT_SCALE = 100
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB']
+const COMMAND_NAME = 'qvac-audiogen-download-models'
 
 function parseArgs(argv) {
-  const args = { output: OUT_DIR, variant: DEFAULT_DIT_VARIANT }
+  const args = { output: undefined, variant: DEFAULT_DIT_VARIANT }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const next = argv[i + 1]
@@ -60,34 +44,31 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  console.log(`Usage: node scripts/download-audiogen-ggml-models.js --output <dir> [--variant <v>]
+  console.log(`Usage: ${COMMAND_NAME} --output <dir> [--variant <v>]
 
 Download the ACE-Step GGUFs from the QVAC model registry into <dir>.
 
-  --output, -o   <dir>                              (default: ./models)
+  --output, -o   <dir>                              required
   --variant, -v  ${ditVariants().join('|')}|all   (default: ${DEFAULT_DIT_VARIANT})
   --help, -h
 `)
 }
 
-// Registry paths to fetch for the requested variant (3 fixed + its DiT), or
-// everything for "all".
 function pathsFor(variant) {
   if (variant === 'all') return allRegistryPaths()
-  const m = modelManifest(variant) // throws on an unknown variant
+  const m = modelManifest(variant)
   return [m.textEnc, m.lm, m.dit, m.vae]
 }
 
 function humanBytes(n) {
   if (n === null || n === undefined) return '?'
-  const u = ['B', 'KB', 'MB', 'GB']
   let i = 0
   let v = n
-  while (v >= 1024 && i < u.length - 1) {
-    v /= 1024
+  while (v >= BYTE_UNIT && i < BYTE_UNITS.length - 1) {
+    v /= BYTE_UNIT
     i++
   }
-  return `${v.toFixed(1)} ${u[i]}`
+  return `${v.toFixed(1)} ${BYTE_UNITS[i]}`
 }
 
 async function downloadOne(client, registryPath, outputDir) {
@@ -101,10 +82,10 @@ async function downloadOne(client, registryPath, outputDir) {
   let lastPct = -1
   await client.downloadModel(registryPath, REGISTRY_SOURCE, {
     outputFile: dest,
-    timeout: 1800000,
+    timeout: DOWNLOAD_TIMEOUT_MS,
     onProgress: ({ downloaded, total }) => {
       if (!total) return
-      const pct = Math.floor((downloaded / total) * 100)
+      const pct = Math.floor((downloaded / total) * PERCENT_SCALE)
       if (pct !== lastPct) {
         lastPct = pct
         process.stdout.write(
@@ -116,18 +97,36 @@ async function downloadOne(client, registryPath, outputDir) {
   process.stdout.write(`\r  [ok] ${name} (downloaded)                              \n`)
 }
 
+async function downloadPaths(client, registryPaths, outputDir) {
+  for (const registryPath of registryPaths) {
+    await downloadOne(client, registryPath, outputDir)
+  }
+}
+
+function createRegistryClient() {
+  try {
+    const { QVACRegistryClient } = require('@qvac/registry-client')
+    return new QVACRegistryClient()
+  } catch (error) {
+    throw new Error('Install @qvac/registry-client to download AudioGen models', {
+      cause: error
+    })
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.help) return usage()
+  if (!args.output) throw new Error('--output is required')
 
   const paths = pathsFor(args.variant)
   fs.mkdirSync(args.output, { recursive: true })
 
   console.log(`Downloading ACE-Step GGUFs (variant: ${args.variant}) into ${args.output}`)
-  const client = new QVACRegistryClient()
+  const client = createRegistryClient()
   await client.ready()
   try {
-    for (const p of paths) await downloadOne(client, p, args.output)
+    await downloadPaths(client, paths, args.output)
   } finally {
     try {
       await client.close()
