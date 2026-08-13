@@ -479,7 +479,9 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ needs.resolve-framework.outputs.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # qvac-test-addon-mobile is private: GITHUB_TOKEN is scoped to this repo
+          # and cannot clone it. Migrate to the qvac-ci app token, not GITHUB_TOKEN.
+          token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: false
           path: test-framework
 
