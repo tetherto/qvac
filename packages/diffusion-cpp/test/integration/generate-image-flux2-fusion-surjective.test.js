@@ -7,7 +7,6 @@ const binding = require('../../binding')
 const ImgStableDiffusion = require('../../index')
 const { ensureModel, detectPlatform, setupJsLogger, isPng, safeTest } = require('./utils')
 
-const { getFlux2Skip } = require('./flux2-gate')
 const proc = require('bare-process')
 
 const platform = detectPlatform()
@@ -15,8 +14,8 @@ const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-const skip = getFlux2Skip({ label: 'FLUX2 fusion surjective', isMobile, noGpu })
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+const skip = isMobile || noGpu
 
 const FLUX2_MODEL = {
   name: 'flux-2-klein-4b-Q8_0.gguf'
