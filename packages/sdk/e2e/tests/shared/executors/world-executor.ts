@@ -8,6 +8,8 @@ import {
 } from '@tetherto/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
+  SCENE_HEIGHT,
+  SCENE_WIDTH,
   worldTests,
   worldCancelThenReload,
   worldConcurrentStepRejected,
@@ -84,12 +86,29 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
 
   async createScene(params: WorldParams, expectation: Expectation): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded(RESOURCE)
-    const scene = await this.createWorld(
+    const width = params['width'] as number
+    const height = params['height'] as number
+    const run = worldCreateScene({
       modelId,
-      params,
-      params['width'] as number,
-      params['height'] as number
-    )
+      prompt: SCENE_PROMPT,
+      image: await this.firstFrame(params),
+      width,
+      height
+    })
+    const scene = await run.scene
+    const stats = await run.stats
+
+    // The stats the profiler reports for this op, so a server that stopped
+    // emitting them fails here rather than silently degrading telemetry.
+    if (!stats?.sceneCreateMs || stats.sceneCreateMs <= 0) {
+      return { passed: false, output: `sceneCreateMs was ${stats?.sceneCreateMs}` }
+    }
+    if (stats.width !== width || stats.height !== height) {
+      return {
+        passed: false,
+        output: `scene reports ${stats.width}x${stats.height}, requested ${width}x${height}`
+      }
+    }
     return ValidationHelpers.validate(scene, expectation)
   }
 
@@ -119,8 +138,19 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     await this.createWorld(modelId, params)
 
     await worldStep({ modelId, keys: ['W'] }).frames
-    // Idle: an empty key array must be accepted and still generate a block.
-    const frames = await worldStep({ modelId, keys: params['keys'] as string[] }).frames
+    // Idle: an empty key array must be accepted AND reach the engine as mask 0.
+    // Without the mask check a silent coercion to some default key set would
+    // still produce 12 frames and pass.
+    const run = worldStep({ modelId, keys: params['keys'] as string[] })
+    const frames = await run.frames
+    const stats = await run.stats
+    const expectedMask = params['expectedActionMask'] as number | undefined
+    if (expectedMask !== undefined && stats?.actionMask !== expectedMask) {
+      return {
+        passed: false,
+        output: `actionMask was ${stats?.actionMask}, expected ${expectedMask}`
+      }
+    }
     return ValidationHelpers.validate(frames, expectation)
   }
 
@@ -181,19 +211,33 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     await this.createWorld(modelId, params)
 
     const running = worldStep({ modelId, keys: params['keys'] as string[] })
+
+    // Issue the overlap immediately. Waiting for a frame first would defeat the
+    // test: world generates the whole block before emitting any frame, so by
+    // the time one arrives the job is finishing and the slot is free — the
+    // overlap would then be admitted legitimately.
+    let overlap: TestResult
     try {
       // One job per model: the second is refused rather than queued, so a live
       // key loop cannot build a backlog of stale presses.
       await worldStep({ modelId, keys: ['S'] }).frames
-      return { passed: false, output: 'an overlapping step was admitted' }
+      overlap = { passed: false, output: 'an overlapping step was admitted' }
     } catch (error) {
-      return ValidationHelpers.validate(
+      overlap = ValidationHelpers.validate(
         error instanceof Error ? error.message : String(error),
         expectation
       )
-    } finally {
-      await running.frames.catch(() => {})
     }
+
+    // Admission is proven after the fact instead: the first step must have run
+    // a full block. Without this the overlap could have been refused for an
+    // unrelated reason (an absent world, say) and this would report
+    // concurrency coverage it never exercised.
+    const firstBlock = await running.frames.catch(() => [] as Uint8Array[])
+    if (firstBlock.length === 0) {
+      return { passed: false, output: 'the first step delivered no frames, so it never held the slot' }
+    }
+    return overlap
   }
 
   async cancelThenReload(params: WorldParams, expectation: Expectation): Promise<TestResult> {
@@ -201,19 +245,32 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     await this.createWorld(modelId, params)
 
     const inFlight = worldStep({ modelId, keys: params['keys'] as string[] })
-    setTimeout(() => {
-      void cancel({ requestId: inFlight.requestId })
+    const timer = setTimeout(() => {
+      cancel({ requestId: inFlight.requestId }).catch(() => {})
     }, 1500)
 
-    // Either outcome is correct: the engine cannot abort mid-block, so a cancel
-    // arriving after the block finished legitimately resolves. What must hold
-    // is that the session recovers.
-    await inFlight.frames.catch(() => undefined)
+    // Either outcome is correct — the engine cannot abort mid-block, so a
+    // cancel landing after the block finished legitimately resolves — but they
+    // are distinguishable, so assert which one happened rather than discarding
+    // both. A rejection for any OTHER reason is a real failure.
+    let cancelOutcome = 'resolved'
+    await inFlight.frames.catch((error: unknown) => {
+      cancelOutcome = error instanceof Error ? error.message : String(error)
+    })
+    clearTimeout(timer)
+    if (cancelOutcome !== 'resolved' && !/cancel/i.test(cancelOutcome)) {
+      return {
+        passed: false,
+        output: `in-flight step failed for a non-cancel reason: ${cancelOutcome}`
+      }
+    }
 
     await this.resources.evict(RESOURCE)
     const reloaded = await this.resources.ensureLoaded(RESOURCE)
     await this.createWorld(reloaded, params)
     const frames = await worldStep({ modelId: reloaded, keys: ['W'] }).frames
-    return ValidationHelpers.validate(frames, expectation)
+    const result = ValidationHelpers.validate(frames, expectation)
+    // Surface which branch ran so the report shows whether the cancel landed.
+    return { ...result, output: `${result.output} [in-flight step: ${cancelOutcome}]` }
   }
 }

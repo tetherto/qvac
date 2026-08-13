@@ -341,7 +341,7 @@ registerOperationMetrics<{ modelId?: string }, { stats?: WorldSceneStats }>({
   kind: 'handler',
   getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
   fromFinalChunk: (res) => {
-    if (!res.stats?.sceneCreateMs) return undefined
+    if (res.stats?.sceneCreateMs === undefined) return undefined
     return { sceneCreateMs: res.stats.sceneCreateMs }
   }
 })
