@@ -64,26 +64,6 @@ function scheduleForceExit(): void {
   }
 }
 
-// Non-fatal slow-cleanup signal. runCleanup awaits swarm / download / registry
-// closes (and the request drain) with no proven upper bound, so a fixed FATAL
-// deadline before cleanup would SIGKILL a slow-but-healthy shutdown. Warn
-// instead, so a wedged native op or a genuinely slow close is visible in logs;
-// the post-Bare.exit grace above still bounds the exit itself. Unref'd so it
-// never keeps the process alive — on the happy path the worker exits first.
-const SLOW_CLEANUP_WARN_MS = 30_000
-
-function warnIfSlowCleanup(): void {
-  const timer: unknown = setTimeout(() => {
-    logger.warn(
-      `Worker shutdown cleanup still running after ${SLOW_CLEANUP_WARN_MS}ms — ` +
-        `possible wedged native op or slow close`
-    )
-  }, SLOW_CLEANUP_WARN_MS)
-  if (timer && typeof timer === 'object' && 'unref' in timer) {
-    ;(timer as { unref: () => void }).unref()
-  }
-}
-
 export function initializeWorkerCore(): { hasRPCConfig: boolean } {
   if (coreInitialized) {
     const validatedEnv = getValidatedEnv()
@@ -233,8 +213,6 @@ export async function shutdownBareDirectWorker(reason: BareDirectShutdownReason)
     'ipc-disconnect': '🔌 Parent IPC disconnected, cleaning up...'
   }
   logger.info(messages[reason])
-
-  warnIfSlowCleanup()
 
   try {
     // Idempotent: if cleanupForTerminate already ran, this is a no-op.
