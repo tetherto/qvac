@@ -83,8 +83,19 @@ type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
 type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
 const cachePathLocks = new Map<string, CacheLock>()
 
-function releaseCachePathWriteLock(cachePath: string): void {
-  const lock = cachePathLocks.get(cachePath)
+// Case-fold the lock-map key so case-only path variants (e.g. "Session" vs
+// "session"), which name the SAME file on case-insensitive filesystems (default
+// macOS/Windows), serialise on one lock and can't interleave writes. Over-locks
+// case-only variants on case-sensitive filesystems, which is safe. NOTE: the
+// other per-path bookkeeping (activeCachePaths, cachedMessageCounts, retention)
+// stays case-sensitive, so case-only key variants are otherwise unsupported —
+// see the KV-cache system doc.
+function lockKeyFor(cachePath: string): string {
+  return cachePath.toLowerCase()
+}
+
+function releaseCachePathWriteLock(lockKey: string): void {
+  const lock = cachePathLocks.get(lockKey)
   if (!lock) return
   const next = lock.waiters.shift()
   if (next) {
@@ -92,7 +103,7 @@ function releaseCachePathWriteLock(cachePath: string): void {
     return
   }
   lock.held = false
-  cachePathLocks.delete(cachePath)
+  cachePathLocks.delete(lockKey)
 }
 
 // Returns the release fn. Aborting while queued rejects and removes the waiter.
@@ -100,14 +111,15 @@ async function acquireCachePathWriteLock(
   cachePath: string,
   signal?: AbortSignal
 ): Promise<() => void> {
-  let lock = cachePathLocks.get(cachePath)
+  const lockKey = lockKeyFor(cachePath)
+  let lock = cachePathLocks.get(lockKey)
   if (!lock) {
     lock = { held: false, waiters: [] }
-    cachePathLocks.set(cachePath, lock)
+    cachePathLocks.set(lockKey, lock)
   }
   if (!lock.held) {
     lock.held = true
-    return () => releaseCachePathWriteLock(cachePath)
+    return () => releaseCachePathWriteLock(lockKey)
   }
 
   await new Promise<void>((resolve, reject) => {
@@ -132,7 +144,7 @@ async function acquireCachePathWriteLock(
     signal?.addEventListener('abort', onAbort, { once: true })
   })
 
-  return () => releaseCachePathWriteLock(cachePath)
+  return () => releaseCachePathWriteLock(lockKey)
 }
 
 function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
