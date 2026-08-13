@@ -10,13 +10,40 @@ const packageDir = path.resolve(path.dirname(scriptPath), '..')
 const integrationDir = path.join(packageDir, 'test', 'integration')
 const brittleCli = require.resolve('brittle/bin/node.js')
 
-export function getFlux2SkipReason({
+const modelFamilyPatterns = new Map([
+  ['flux2', /(?:^|[-_])flux2(?:[-_.]|$)/i],
+  ['ideogram', /(?:^|[-_])ideogram(?:[-_.]|$)/i]
+])
+const githubHostedDarwinArm64Exclusions = ['flux2', 'ideogram']
+
+function parseExcludedModelFamilies(value = '') {
+  const families = [
+    ...new Set(
+      value
+        .split(',')
+        .map((family) => family.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  ]
+  const unknownFamilies = families.filter((family) => !modelFamilyPatterns.has(family))
+
+  if (unknownFamilies.length > 0) {
+    throw new Error(`Unknown diffusion model families: ${unknownFamilies.join(', ')}`)
+  }
+
+  return families
+}
+
+export function getModelFamilyExclusions({
   env = process.env,
   platform = process.platform,
   arch = process.arch
 } = {}) {
-  if (env.SKIP_FLUX2 === 'true') {
-    return 'SKIP_FLUX2=true'
+  const families = new Set(parseExcludedModelFamilies(env.SKIP_DIFFUSION_MODELS))
+  const reasons = []
+
+  if (families.size > 0) {
+    reasons.push(`SKIP_DIFFUSION_MODELS=${[...families].join(',')}`)
   }
 
   if (
@@ -25,26 +52,36 @@ export function getFlux2SkipReason({
     platform === 'darwin' &&
     arch === 'arm64'
   ) {
-    return 'GitHub-hosted Darwin arm64 runner'
+    for (const family of githubHostedDarwinArm64Exclusions) families.add(family)
+    reasons.push('GitHub-hosted Darwin arm64 runner')
   }
 
-  return null
+  return {
+    families: [...families],
+    reason: reasons.length > 0 ? reasons.join('; ') : null
+  }
 }
 
 export function selectIntegrationTests(testFiles, runtime = {}) {
-  const reason = getFlux2SkipReason(runtime)
+  const { families, reason } = getModelFamilyExclusions(runtime)
   const selected = []
   const skipped = []
+  const skippedByFamily = []
 
   for (const testFile of testFiles) {
-    if (reason && /flux2/i.test(path.basename(testFile))) {
+    const family = families.find((candidate) =>
+      modelFamilyPatterns.get(candidate).test(path.basename(testFile))
+    )
+
+    if (family) {
       skipped.push(testFile)
+      skippedByFamily.push({ family, testFile })
     } else {
       selected.push(testFile)
     }
   }
 
-  return { reason, selected, skipped }
+  return { families, reason, selected, skipped, skippedByFamily }
 }
 
 export function generateIntegrationTests() {
@@ -55,8 +92,14 @@ export function generateIntegrationTests() {
     .map((file) => path.posix.join('test', 'integration', file))
   const selection = selectIntegrationTests(testFiles)
 
-  for (const testFile of selection.skipped) {
-    console.log(`[integration-selector] Skipping ${testFile}: ${selection.reason}`)
+  if (selection.families.length > 0) {
+    console.log(
+      `[integration-selector] Excluded model families: ${selection.families.join(', ')} (${selection.reason})`
+    )
+  }
+
+  for (const { family, testFile } of selection.skippedByFamily) {
+    console.log(`[integration-selector] Excluded ${testFile} (model family: ${family})`)
   }
 
   const result = spawnSync(
