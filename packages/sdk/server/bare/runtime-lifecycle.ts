@@ -91,6 +91,12 @@ export function markShuttingDown(): void {
 }
 
 export function assertLifecycleAllowed(request: Request): void {
+  // Shutting down is terminal: allow only `state`. suspend/resume would otherwise
+  // move the runtime back out of the terminal state and let new work admit.
+  if (state === 'shuttingDown') {
+    if (request.type === 'state') return
+    throw new LifecycleOperationBlockedError(request.type, state)
+  }
   if (state === 'active' || LIFECYCLE_ALLOWED_TYPES.has(request.type)) return
 
   throw new LifecycleOperationBlockedError(request.type, state)
@@ -133,6 +139,7 @@ async function runPhase<T>(
 }
 
 export async function suspendRuntime(): Promise<void> {
+  if (state === 'shuttingDown') return // terminal — cannot transition out
   if (state === 'suspended') return
 
   if (state === 'suspending' && transitionPromise) return transitionPromise
@@ -188,6 +195,7 @@ export async function suspendRuntime(): Promise<void> {
 }
 
 export async function resumeRuntime(): Promise<void> {
+  if (state === 'shuttingDown') return // terminal — cannot transition out
   if (state === 'active') return
 
   if (state === 'resuming' && transitionPromise) return transitionPromise

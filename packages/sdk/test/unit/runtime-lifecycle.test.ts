@@ -383,6 +383,25 @@ test('gate blocks operation requests once shutting down', (t) => {
   resetLifecycleState()
 })
 
+test('shutdown is terminal: suspend/resume cannot revert it', async (t) => {
+  resetLifecycleState()
+  markShuttingDown()
+
+  // Only `state` is allowed; suspend/resume are blocked so they can't move the
+  // runtime back out of the terminal state and let new work admit.
+  t.exception(() => assertLifecycleAllowed(fakeRequest('resume')), 'resume blocked during shutdown')
+  t.exception(
+    () => assertLifecycleAllowed(fakeRequest('suspend')),
+    'suspend blocked during shutdown'
+  )
+
+  // Even a direct call must not leave the terminal state.
+  await resumeRuntime()
+  t.is(getLifecycleState(), 'shuttingDown', 'still shutting down after resumeRuntime()')
+
+  resetLifecycleState()
+})
+
 test('gate error includes request type and lifecycle state', async (t) => {
   const log: string[] = []
   setup(log)
