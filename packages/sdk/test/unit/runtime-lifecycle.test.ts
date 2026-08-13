@@ -402,6 +402,22 @@ test('shutdown is terminal: suspend/resume cannot revert it', async (t) => {
   resetLifecycleState()
 })
 
+test('shutdown during an in-flight transition is not overwritten', async (t) => {
+  const log: string[] = []
+  setup(log, { delayMs: 30 })
+  await suspendRuntime()
+
+  // Resume is in flight (its transition callback will try to set `active`);
+  // shutting down mid-flight must win.
+  const resumeP = resumeRuntime()
+  await delay(5)
+  markShuttingDown()
+  await resumeP
+
+  t.is(getLifecycleState(), 'shuttingDown', 'in-flight resume did not overwrite shutdown')
+  resetLifecycleState()
+})
+
 test('gate error includes request type and lifecycle state', async (t) => {
   const log: string[] = []
   setup(log)

@@ -177,14 +177,18 @@ export async function suspendRuntime(): Promise<void> {
     )
   })()
     .then(() => {
+      // If shutdown began mid-transition, that terminal state wins.
+      if (state === 'shuttingDown') return
       state = 'suspended'
       logger.info('⏸️ Runtime suspended')
     })
     .catch((error: unknown) => {
       // Partial failure: commit to target so recovery resume() can repair
       // instead of leaving state as "suspending" which blocks all future calls.
-      state = 'suspended'
-      logger.error('⏸️ Runtime suspend partially failed, state committed for recovery')
+      if (state !== 'shuttingDown') {
+        state = 'suspended'
+        logger.error('⏸️ Runtime suspend partially failed, state committed for recovery')
+      }
       throw error
     })
     .finally(() => {
@@ -232,13 +236,18 @@ export async function resumeRuntime(): Promise<void> {
     )
   })()
     .then(() => {
+      // If shutdown began mid-transition, that terminal state wins — don't
+      // resume or fire onResume listeners into a worker that's tearing down.
+      if (state === 'shuttingDown') return
       state = 'active'
       logger.info('▶️ Runtime resumed')
       notifyResume()
     })
     .catch((error: unknown) => {
-      state = 'suspended'
-      logger.error('▶️ Runtime resume partially failed, staying suspended for retry')
+      if (state !== 'shuttingDown') {
+        state = 'suspended'
+        logger.error('▶️ Runtime resume partially failed, staying suspended for retry')
+      }
       throw error
     })
     .finally(() => {
