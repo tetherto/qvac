@@ -1,0 +1,87 @@
+name: 'Wait and download fabric-prebuilds'
+description: >
+  Polls the on-pr-fabric workflow for a fabric-prebuilds artifact on the current
+  PR head SHA, then downloads it into the runner workspace. Used by npm-runtime
+  consumer workflows that run in parallel with on-pr-fabric.
+
+inputs:
+  github-token:
+    description: 'Token with actions:read'
+    required: true
+  head-sha:
+    description: 'PR head SHA to match'
+    required: true
+  workflow-file:
+    description: 'Workflow file that publishes fabric-prebuilds'
+    required: false
+    default: 'on-pr-fabric.yml'
+  artifact-name:
+    description: 'Artifact name to download'
+    required: false
+    default: 'fabric-prebuilds'
+  download-dir:
+    description: 'Directory to extract the artifact into'
+    required: false
+    default: 'fabric-prebuilds-staging'
+  timeout-minutes:
+    description: 'Maximum time to wait for the artifact'
+    required: false
+    default: '120'
+  poll-seconds:
+    description: 'Seconds between poll attempts'
+    required: false
+    default: '60'
+
+outputs:
+  source-run-id:
+    description: 'Workflow run id the artifact was downloaded from'
+    value: ${{ steps.wait.outputs.source_run_id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for fabric-prebuilds artifact
+      id: wait
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        WORKFLOW_FILE: ${{ inputs.workflow-file }}
+        ARTIFACT: ${{ inputs.artifact-name }}
+        DOWNLOAD_DIR: ${{ inputs.download-dir }}
+        TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+        POLL_SECONDS: ${{ inputs.poll-seconds }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$DOWNLOAD_DIR"
+        deadline=$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))
+        found=false
+
+        while [ "$(date +%s)" -lt "$deadline" ]; do
+          RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?head_sha=${HEAD_SHA}&per_page=20" \
+            --jq '.workflow_runs[] | select(.conclusion=="success" or .conclusion=="in_progress") | .id' 2>/dev/null || true)
+          for rid in $RUNS; do
+            [ "$rid" = "$RUN_ID" ] && continue
+            NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
+              --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
+            if echo "$NAMES" | grep -qx "$ARTIFACT"; then
+              echo "Found $ARTIFACT in run $rid — downloading"
+              rm -rf "$DOWNLOAD_DIR"
+              mkdir -p "$DOWNLOAD_DIR"
+              if gh run download "$rid" --repo "$REPO" --name "$ARTIFACT" --dir "$DOWNLOAD_DIR"; then
+                echo "source_run_id=$rid" >> "$GITHUB_OUTPUT"
+                found=true
+                break 2
+              fi
+            fi
+          done
+          echo "fabric-prebuilds not ready yet — retrying in ${POLL_SECONDS}s"
+          sleep "$POLL_SECONDS"
+        done
+
+        if [ "$found" != "true" ]; then
+          echo "::error::Timed out waiting for $ARTIFACT from $WORKFLOW_FILE on head $HEAD_SHA"
+          exit 1
+        fi
