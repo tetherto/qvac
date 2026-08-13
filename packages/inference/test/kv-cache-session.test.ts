@@ -77,6 +77,57 @@ async function loadSession() {
   return { fs, path, mod, utils, retention, cleanup, writeFakeCache }
 }
 
+test('generateConfigHash: includes complete canonical tool definitions', async (t) => {
+  const { mod, cleanup } = await loadSession()
+  try {
+    const calculator = {
+      type: 'function',
+      name: 'calculator',
+      description: 'Performs arithmetic',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: { type: 'string', enum: ['add', 'subtract'] },
+          value: { type: 'number' }
+        },
+        required: ['operation', 'value']
+      }
+    }
+    const changedSchema = {
+      ...calculator,
+      parameters: {
+        ...calculator.parameters,
+        properties: {
+          ...calculator.parameters.properties,
+          operation: { type: 'string', enum: ['multiply', 'divide'] }
+        }
+      }
+    }
+    const reorderedKeys = {
+      parameters: {
+        required: ['operation', 'value'],
+        properties: {
+          value: { type: 'number' },
+          operation: { enum: ['add', 'subtract'], type: 'string' }
+        },
+        type: 'object'
+      },
+      description: 'Performs arithmetic',
+      name: 'calculator',
+      type: 'function'
+    }
+
+    const originalHash = mod.generateConfigHash('system prompt', [calculator])
+    const changedHash = mod.generateConfigHash('system prompt', [changedSchema])
+    const reorderedHash = mod.generateConfigHash('system prompt', [reorderedKeys])
+
+    t.not(originalHash, changedHash, 'same-named tools with different schemas use different caches')
+    t.is(originalHash, reorderedHash, 'object-key insertion order does not affect cache identity')
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: beginTurn primes the cache on first use, reuses on second', async (t) => {
   const { mod, cleanup, writeFakeCache } = await loadSession()
   try {

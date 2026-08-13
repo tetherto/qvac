@@ -8,12 +8,10 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
-  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
-  type ToolCallWithCall,
-  type ToolsMode
+  type ToolCallWithCall
 } from '@/schemas/tools'
 export * from '@/schemas/delegate'
 export * from '@/schemas/model-ops'
