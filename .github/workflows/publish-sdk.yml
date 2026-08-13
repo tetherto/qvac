@@ -345,10 +345,7 @@ jobs:
 
   build-inference:
     name: Build @qvac/inference
-    needs:
-      - fork-approval
-      - authorize
-    if: needs.authorize.outputs.allowed == 'true'
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
