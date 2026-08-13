@@ -118,3 +118,70 @@ export declare class EsrganUpscalerInterface {
     runJob(imageBytes: Uint8Array, params: Record<string, unknown>): Promise<boolean>;
     unload(): Promise<void>;
 }
+export interface WorldConfigurationParams {
+    diffusionModelPath: string;
+    taehvPath: string;
+    scenePath: string;
+    config?: AddonConfig;
+}
+export type WorldOutputCallback = (addon: WorldSessionInterface, event: unknown, data: unknown, error: unknown) => void;
+export interface WorldSceneJobParams {
+    prompt: string;
+    width: number;
+    height: number;
+    t5Path: string;
+    vaePath: string;
+    outputPath: string;
+}
+export interface WorldBinding {
+    createWorldInstance(owner: WorldSessionInterface, configurationParams: WorldConfigurationParams, outputCallback: WorldOutputCallback): object;
+    activateWorld(handle: unknown): void;
+    cancel(handle: unknown): Promise<void>;
+    runWorldStepJob(handle: unknown, input: NativeJobArgs): Promise<boolean>;
+    runWorldSceneJob(handle: unknown, input: NativeJobArgs): Promise<boolean>;
+    destroyInstance(handle: unknown): void;
+}
+/**
+ * Named bits for the walk action mask (WASD move, IJKL look camera).
+ * Combine with bitwise OR: `ActionFlag.W | ActionFlag.L`. Values mirror
+ * `KEY_ORDER` in world.ts and the native `ActionFlag` enum in
+ * WorldSessionModel.hpp (pinned there by test_world_session.cpp and here
+ * by the unit matrix).
+ */
+export declare enum ActionFlag {
+    None = 0,
+    W = 1,
+    A = 2,
+    S = 4,
+    D = 8,
+    I = 16,
+    J = 32,
+    K = 64,
+    L = 128
+}
+/**
+ * JavaScript wrapper around the native ABot-World walk-session addon. The
+ * session is a standalone model object (own DiT + taehv decoder + scene
+ * pack); frames stream through the same string/typed-array output handlers
+ * as batch generation.
+ */
+export declare class WorldSessionInterface {
+    private readonly _binding;
+    private _handle;
+    constructor(binding: WorldBinding, configurationParams: WorldConfigurationParams, outputCallback: WorldOutputCallback);
+    activate(): Promise<void>;
+    cancel(): Promise<void>;
+    /**
+     * Generate the next block under an 8-key action mask — a bitwise OR of
+     * `ActionFlag` values (bit 0..7 = W,A,S,D,I,J,K,L held).
+     * @returns true if the job was accepted, false if busy
+     */
+    runStep(actionMask: ActionFlag | number): Promise<boolean>;
+    /**
+     * Create a scene pack natively (umT5 prompt encode + Wan2.2 VAE first-frame
+     * encode). Standalone: works before/without activate().
+     * @returns true if the job was accepted, false if busy
+     */
+    runSceneCreate(params: WorldSceneJobParams, imageBytes: Uint8Array): Promise<boolean>;
+    unload(): Promise<void>;
+}

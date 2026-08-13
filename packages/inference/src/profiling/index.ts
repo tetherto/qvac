@@ -100,14 +100,16 @@ export type {
   AggregatedStats,
   ProfilingEventKind
 } from '@/profiling/types'
-export type { ProfilerMode } from '@/schemas/index'
+export type { ProfilerMode, ProfilerGPUResourceGauge, ProfilerResourceGauge } from '@/schemas/index'
 export { nowMs } from '@/profiling/clock'
+export { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 export {
   enable,
   disable,
   record,
   shouldProfile,
   shouldIncludeServerBreakdown,
+  shouldIncludeResourceGauges,
   generateId,
   isEnabled,
   getAggregates,
@@ -120,6 +122,7 @@ export { recordEvent, clearAggregator } from '@/profiling/aggregator'
 export { exportJSON, exportTable, exportSummary } from '@/profiling/exporters'
 export {
   createProfilingMeta,
+  createDelegatedProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,

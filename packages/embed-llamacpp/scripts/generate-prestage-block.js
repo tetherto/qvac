@@ -8,13 +8,14 @@
 // test/integration/models.manifest.json is staged. The device-side pickup lives
 // in test/integration/utils.js.
 //
-// Run `node scripts/generate-prestage-block.js` and paste the output under
-// `extra-pre-test-commands:` (indented), or wire it via a workflow step (see
-// integration-mobile-test-embed-llamacpp.yml).
+// Run `node scripts/generate-prestage-block.js [android|ios]` and paste the
+// output under `extra-pre-test-commands:` (indented), or wire it via a workflow
+// step (see integration-mobile-test-embed-llamacpp.yml).
 const fs = require('fs')
 const path = require('path')
 
 const manifestPath = path.resolve(__dirname, '../test/integration/models.manifest.json')
+const IOS_BUNDLE_ID = 'io.tether.test.qvac'
 
 function modelsFromManifest(manifest) {
   if (!manifest || !manifest.models) {
@@ -36,7 +37,7 @@ function modelsFromManifest(manifest) {
 }
 
 // Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
-function buildScript(models) {
+function buildAndroidScript(models) {
   const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
@@ -56,7 +57,41 @@ adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
 }
 
+function buildIosScript(models) {
+  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+  return `set -e
+export PATH="$HOME/.local/bin:$PATH"
+unset SUDO_UID SUDO_GID
+BID=${IOS_BUNDLE_ID}
+echo "[prestage] installing pymobiledevice3..."
+python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
+pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
+mkdir -p /tmp/prestage
+stage() {
+  NAME="$1"; URL="$2"
+  echo "[prestage] staging $NAME"
+  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
+  if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
+  printf '%s\\n' "$PUSH_OUT"
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
+    echo "[prestage] FATAL: push of $NAME failed (rc=$PUSH_RC; see AFC error above)"; exit 1
+  fi
+  echo "[prestage] pushed $NAME -> Documents/$NAME"
+  rm -f "/tmp/prestage/$NAME"
+}
+${stageCalls}
+echo "[prestage] done"`
+}
+
+function buildScript(models, platform = 'android') {
+  const p = String(platform).toLowerCase()
+  if (p === 'ios') return buildIosScript(models)
+  if (p === 'android') return buildAndroidScript(models)
+  throw new Error(`[prestage] unknown platform "${platform}" (expected 'android' or 'ios')`)
+}
+
 function main() {
+  const platform = process.argv[2] || 'android'
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   const models = modelsFromManifest(manifest)
   if (models.length === 0) {
@@ -68,7 +103,7 @@ function main() {
   )
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
-  const body = buildScript(models)
+  const body = buildScript(models, platform)
     .split('\n')
     .map((l) => '  ' + l)
     .join('\n')
@@ -77,4 +112,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { modelsFromManifest, buildScript }
+module.exports = { modelsFromManifest, buildScript, IOS_BUNDLE_ID }

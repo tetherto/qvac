@@ -1,7 +1,7 @@
 # Architecture Documentation
 
-**Package:** `@qvac/translation-nmtcpp` v2.1.1
-**Stack:** JavaScript, C++20, GGML, Bergamot, Bare Runtime, CMake, vcpkg  
+**Package:** `@qvac/translation-nmtcpp`
+**Stack:** TypeScript/JavaScript, C++20, GGML, Bergamot, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
 ---
@@ -29,8 +29,7 @@
 
 ### Technical Debt
 - [Legacy "Marian" Naming](#1-legacy-marian-naming)
-- [Whisper.cpp as Indirect GGML Provider](#2-whispercpp-as-indirect-ggml-provider)
-- [Overlay Ports Instead of Registry](#3-overlay-ports-instead-of-registry)
+- [Native Backend Supply Chain](#2-native-backend-supply-chain)
 
 ---
 
@@ -69,8 +68,8 @@ Offline neural machine translation for QVAC-powered applications (mobile and des
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.5#1): C++ addon framework
-- @qvac/infer-base (^0.4.0): `createJobHandler`, `exclusiveRunQueue`, QvacResponse
+- inference-addon-cpp: C++ addon framework
+- @qvac/infer-base: `createJobHandler`, `exclusiveRunQueue`, QvacResponse
 - ggml (vcpkg): Tensor computation and GPU backends
 - sentencepiece (vcpkg): Subword tokenization
 - bergamot-translator (vcpkg, optional): Mozilla Bergamot translation engine
@@ -130,7 +129,7 @@ graph TB
 
 | Package | Type | Version | Purpose |
 |---------|------|---------|---------|
-| @qvac/infer-base | Framework | ^0.4.0 | `createJobHandler`, `exclusiveRunQueue`, QvacResponse |
+| @qvac/infer-base | Framework | (see package.json) | `createJobHandler`, `exclusiveRunQueue`, QvacResponse |
 | @qvac/logging | Runtime | ^0.1.0 | Logger bridge for JS and native logs |
 | @qvac/registry-client | Dev/example | ^0.4.0 | Optional model distribution examples, not runtime loading |
 | inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework (`AddonJs`/`AddonCpp`, runJob, cancel) |
@@ -162,13 +161,15 @@ graph TB
 classDiagram
     class TranslationNmtcpp {
         +ModelTypes$ : Object
-        +constructor(args, config)
-        +load(close?, reportProgressCallback?) Promise~void~
-        +run(input: string) Promise~QvacResponse~
+        +constructor(args)
+        +load() Promise~void~
+        +run(input: string) Promise~TranslationResponse~
         +runBatch(texts: string[]) Promise~string[]~
+        +getState() InferenceClientState
         +getActiveBackendName() string
         +getActiveBackendDescription() string
         +unload() Promise~void~
+        +destroy() Promise~void~
     }
 
     class ModelTypes {
@@ -691,4 +692,4 @@ Use addon-cpp's `AddonJs` / `AddonCpp` pattern, which provides a single-job runn
 **Related Document:**
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 
-**Last Updated:** 2026-05-07
+**Last Updated:** 2026-08-10

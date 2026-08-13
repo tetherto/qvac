@@ -16,6 +16,7 @@ import { nowMs, generateProfileId } from '@/profiling/clock'
 import { getModelEntry, updateModelConfig } from '@/runtime/model-registry'
 import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/utils/index'
 import { buildDownloadProfilingFields } from '@/handlers/load-model/types'
+import { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
@@ -215,6 +216,8 @@ export async function handleLoadModel(
         gauges: Object.keys(gauges).length > 0 ? gauges : undefined,
         tags: Object.keys(tags).length > 0 ? tags : undefined
       }
+      const backend = readBackendDiagnostics(loadResult)
+      if (backend) operationEvent.backend = backend
 
       ;(response as LoadModelResponse & { [OPERATION_EVENT_KEY]?: OperationEvent })[
         OPERATION_EVENT_KEY

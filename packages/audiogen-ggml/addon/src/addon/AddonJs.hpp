@@ -1,14 +1,15 @@
 #pragma once
 
 #include <any>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <js.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -16,6 +17,7 @@
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <js.h>
 
 #include "js-interface/JSAdapter.hpp"
 #include "model-interface/acestep/AcestepModel.hpp"
@@ -25,6 +27,40 @@ namespace qvac::audiogenggml::addon_js {
 namespace js = qvac_lib_inference_addon_cpp::js;
 
 using acestep::AcestepModel;
+
+inline std::vector<int>
+copyAudioCodes(js_env_t* env, js::TypedArray<int32_t> array) {
+  int32_t* data = nullptr;
+  size_t len = 0;
+  if (js_get_typedarray_info(
+          env,
+          array,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
+    throw std::runtime_error("audioCodes must be an Int32Array");
+  }
+  return {data, data + len};
+}
+
+inline std::vector<float>
+copyFloat32Pcm(js_env_t* env, js::TypedArray<float> array, const char* name) {
+  float* data = nullptr;
+  size_t len = 0;
+  if (js_get_typedarray_info(
+          env,
+          array,
+          nullptr,
+          reinterpret_cast<void**>(&data),
+          &len,
+          nullptr,
+          nullptr) != 0) {
+    throw std::runtime_error(std::string(name) + " must be a Float32Array");
+  }
+  return {data, data + len};
+}
 
 // Emits the generated track as interleaved stereo Int16 + sample rate, mirror
 // of ttsggml::JsAudioOutputHandler. The rate/channels are sourced from the model
@@ -126,8 +162,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         "Unknown input type: " + type);
   }
 
-  // The caption is the primary text input; lyrics/seed/language/bpm/keyscale/
-  // timesignature/duration are read as optional per-call overrides from the
+  // The caption is the primary text input. Generation metadata, LM sampler
+  // controls and optional frozen semantic codes are per-call overrides on the
   // same job object the framework hands us at arg index 1.
   auto jobObj = args.getJsObject(1, "inputObj");
   auto optStr = [&](const char* key) -> std::optional<std::string> {
@@ -143,6 +179,16 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
     return std::nullopt;
   };
+  auto optBool = [&](const char* key) -> std::optional<bool> {
+    js_value_t* raw = jobObj.getProperty(env, key);
+    if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+      return std::nullopt;
+    }
+    if (js::is<js::Boolean>(env, raw)) {
+      return js::Boolean{env, raw}.as<bool>(env);
+    }
+    return std::nullopt;
+  };
 
   AcestepModel::AnyInput modelInput;
   modelInput.caption = js::String(env, jsInput).as<std::string>(env);
@@ -153,6 +199,40 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   if (auto v = optNum("seed")) modelInput.seed = static_cast<long long>(*v);
   if (auto v = optNum("bpm")) modelInput.bpm = static_cast<int>(*v);
   if (auto v = optNum("duration")) modelInput.duration = static_cast<float>(*v);
+  if (auto v = optNum("lmTemperature"))
+    modelInput.lmTemperature = static_cast<float>(*v);
+  if (auto v = optNum("lmTopP"))
+    modelInput.lmTopP = static_cast<float>(*v);
+  if (auto v = optNum("lmTopK"))
+    modelInput.lmTopK = static_cast<int>(*v);
+  if (auto v = optNum("lmCfgScale"))
+    modelInput.lmCfgScale = static_cast<float>(*v);
+  if (auto v = optBool("lmPhase1"))
+    modelInput.lmPhase1 = *v;
+  if (auto v = optBool("dcwEnabled"))
+    modelInput.dcwEnabled = *v;
+  if (auto v = optNum("dcwScaler"))
+    modelInput.dcwScaler = static_cast<float>(*v);
+  if (auto v = optNum("dcwHighScaler"))
+    modelInput.dcwHighScaler = static_cast<float>(*v);
+  if (auto codes = jobObj.getOptionalProperty<js::TypedArray<int32_t>>(
+          env, "audioCodes")) {
+    modelInput.audioCodes = copyAudioCodes(env, *codes);
+  }
+  if (auto ref = jobObj.getOptionalProperty<js::TypedArray<float>>(
+          env, "referenceAudio")) {
+    modelInput.referenceAudio = copyFloat32Pcm(env, *ref, "referenceAudio");
+  }
+  if (auto src = jobObj.getOptionalProperty<js::TypedArray<float>>(
+          env, "sourceAudio")) {
+    modelInput.sourceAudio = copyFloat32Pcm(env, *src, "sourceAudio");
+  }
+  if (auto v = optStr("taskType"))
+    modelInput.taskType = *v;
+  if (auto v = optNum("audioCoverStrength"))
+    modelInput.audioCoverStrength = static_cast<float>(*v);
+  if (auto v = optNum("coverNoiseStrength"))
+    modelInput.coverNoiseStrength = static_cast<float>(*v);
   return instance.runJob(std::any(std::move(modelInput)));
 }
 JSCATCH
