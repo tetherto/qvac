@@ -32,8 +32,8 @@ console.log(
 )
 if (skipFlux2Fusion) {
   console.log(
-    '[FLUX2 fusion] Skipped: Apple Paravirtual Metal does not support the '
-    + 'MUL_MAT operation required by this test (workflow-scoped capability gate).'
+    '[FLUX2 fusion] Skipped: Apple Paravirtual Metal does not support the ' +
+      'MUL_MAT operation required by this test (workflow-scoped capability gate).'
   )
 }
 

@@ -36,10 +36,7 @@ test('FLUX2 fusion gate targets only the Apple Paravirtual matrix leg', () => {
     1,
     'the opt-out must not broaden to another matrix leg'
   )
-  assert.match(
-    workflow,
-    /SKIP_FLUX2_FUSION: \$\{\{ matrix\.skip_flux2_fusion \|\| 'false' \}\}/
-  )
+  assert.match(workflow, /SKIP_FLUX2_FUSION: \$\{\{ matrix\.skip_flux2_fusion \|\| 'false' \}\}/)
 })
 
 test('only the fusion integration test consumes the workflow gate', () => {
