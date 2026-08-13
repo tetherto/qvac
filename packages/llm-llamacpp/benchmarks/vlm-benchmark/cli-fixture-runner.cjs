@@ -30,7 +30,12 @@ const EXTRA_ARGS = parseCliArgs(arg('extra-args', ''))
 const BACKEND = arg('backend', 'cpu')
 // Context size for the run, from the spec the addon leg also uses (catalog ctx_size,
 // a json: spec's, or @ctx=N on a URL pair). Both engines must see the same one.
-const CTX_SIZE = parseInt(arg('ctx-size', '4096'), 10) || 4096
+// 0 is a real value here, not a missing one: it means "let the engine pick the model
+// default", and the addon leg keeps it (LlamaModel.cpp guards on n_ctx != 0). Falling back
+// on it would put the two legs on different context sizes, which is what this flag exists
+// to prevent, so only a non-number falls back.
+const CTX_SIZE_ARG = parseInt(arg('ctx-size', '4096'), 10)
+const CTX_SIZE = Number.isNaN(CTX_SIZE_ARG) ? 4096 : CTX_SIZE_ARG
 const SAMPLES = parseInt(arg('samples', '3'), 10)
 const REPEATS = parseInt(arg('repeats', '3'), 10)
 const TASKS = (arg('tasks', '') || '').split(',').map(s => s.trim()).filter(Boolean)
