@@ -4,7 +4,7 @@ import { useServer } from '../helpers/server.js'
 import { assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: models endpoint', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('GET /v1/models returns empty list', async () => {
     const res = await server().inject({ method: 'GET', url: '/v1/models' })
