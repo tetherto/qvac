@@ -456,7 +456,19 @@ jobs:
              [ "${{ needs.publish-gpr.result }}" = "success" ]; then
             should="true"
           fi
+          echo "computed should_run_tests=$should"
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
+
+  # TEST-ONLY diagnostic: post-publish-integration/mobile are `uses:` calls
+  # and can't have an inline debug step, so echo the received value here.
+  debug-gate-output:
+    needs: [detect, post-build-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "post-integration-rows=${{ needs.detect.outputs.post-integration-rows }}"
+          echo "post-mobile-rows=${{ needs.detect.outputs.post-mobile-rows }}"
+          echo "received should_run_tests=${{ needs.post-build-gate.outputs.should_run_tests }}"
 
   post-publish-integration:
     name: Post-publish integration (${{ matrix.package }})
