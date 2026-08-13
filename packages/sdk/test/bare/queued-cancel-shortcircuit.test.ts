@@ -168,13 +168,14 @@ test('translate (NMT): does no native work for a model under the unload barrier'
 
   // Under the unload barrier any begin for this model starts aborted, so the NMT
   // handler must bail before runBatch/run rather than decode against a model
-  // being torn down. Run the translate inside the barrier (the teardown phase).
-  await getRequestRegistry().withModelDraining(modelId, async () => {
+  // being torn down. Exercise BOTH native paths inside the barrier: an array
+  // input (runBatch) and a scalar input (run), so each assertion is meaningful.
+  const drainTranslate = async (text: string | string[]) => {
     const gen = translate(
       {
         modelId,
         modelType: ModelType.nmtcppTranslation,
-        text: ['the river is calm', 'the sky is clear'],
+        text,
         from: 'English',
         to: 'Spanish',
         stream: true
@@ -185,10 +186,14 @@ test('translate (NMT): does no native work for a model under the unload barrier'
       const next = await gen.next()
       if (next.done) break
     }
+  }
+  await getRequestRegistry().withModelDraining(modelId, async () => {
+    await drainTranslate(['the river is calm', 'the sky is clear'])
+    await drainTranslate('the river is calm')
   })
 
-  t.is(runBatchCalls, 0, 'NMT runBatch was NOT called under the barrier')
-  t.is(runCalls, 0, 'NMT run was NOT called under the barrier')
+  t.is(runBatchCalls, 0, 'NMT runBatch (array path) was NOT called under the barrier')
+  t.is(runCalls, 0, 'NMT run (scalar path) was NOT called under the barrier')
 
   unregisterModel(modelId)
 })
