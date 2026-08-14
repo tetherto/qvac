@@ -454,7 +454,13 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
   }
 
   async toolsSequentialSave(
-    params: { cacheKey: string; tools: unknown[]; messages: string[]; stream: boolean },
+    params: {
+      cacheKey: string
+      tools: unknown[]
+      messages: string[]
+      stream: boolean
+      generationParams?: Record<string, unknown>
+    },
     expectation: Expectation
   ): Promise<TestResult> {
     let toolsModelId = await this.resources.ensureLoaded('tools')
@@ -489,7 +495,8 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
           history: [...history],
           stream: true,
           kvCache: params.cacheKey,
-          tools: params.tools as never
+          tools: params.tools as never,
+          ...(params.generationParams && { generationParams: params.generationParams })
         })
 
         let response = ''

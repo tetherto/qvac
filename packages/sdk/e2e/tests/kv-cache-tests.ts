@@ -252,7 +252,8 @@ export const kvCacheToolsSequentialSave: TestDefinition = {
       }
     ],
     messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
-    stream: true
+    stream: true,
+    generationParams: { temp: 0, top_k: 1, seed: 42 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 90000 }
