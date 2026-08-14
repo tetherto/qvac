@@ -141,11 +141,22 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Configure AWS credentials for Android model pre-stage
+        if: matrix.platform == 'Android'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-duration-seconds: 7200
+
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/${{ inputs.workdir || 'packages/audiogen-ggml' }}
         shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_PRESIGN_EXPIRES_IN: '7200'
         run: |
           node scripts/generate-mobile-prestage-block.js \
             android "${{ matrix.dit_variant || 'turbo-q4' }}" \
