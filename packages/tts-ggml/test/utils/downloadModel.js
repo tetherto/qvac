@@ -1396,7 +1396,7 @@ async function ensureCosyvoiceModel(options = {}) {
 // deliberately SEPARATE tier from COSYVOICE_FILES: hasAllGgufsIn is
 // all-or-nothing, so folding these in would invalidate every existing staged
 // CosyVoice3 dir and force the ~300 MB download on tests that never clone.
-const REGISTRY_DATE_COSYVOICE_CLONE = '2026-08-13'
+const REGISTRY_DATE_COSYVOICE_CLONE = '2026-08-14'
 const COSYVOICE_CLONE_REGISTRY_PREFIX = `qvac_models_compiled/ggml/cosy_voice/${REGISTRY_DATE_COSYVOICE_CLONE}`
 
 const COSYVOICE_CLONE_FILES = [

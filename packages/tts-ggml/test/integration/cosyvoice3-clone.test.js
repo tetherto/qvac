@@ -30,7 +30,7 @@ const MODEL_MISSING =
   'cosy_voice/2026-07-23 files locally or run with registry access.'
 const CLONE_MODELS_MISSING =
   'CosyVoice3 cloning GGUFs not available - registry fetch failed. Stage the ' +
-  'cosy_voice/2026-08-13 s3tok + campplus files locally or run with registry access.'
+  'cosy_voice/2026-08-14 s3tok + campplus files locally or run with registry access.'
 
 // jfk.wav (11 s English) is the repo's canonical cloning reference; its
 // verbatim transcript makes the zero-shot leg faithful to the contract.
