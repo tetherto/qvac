@@ -229,6 +229,76 @@ test('world scene op: the model slot is held until uninterruptible work settles'
   })
 })
 
+test('world scene op: a dispatch that never starts leaves no staged file behind', async function (t) {
+  const fs = await import('bare-fs')
+  const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+  const driver = makeResponse([])
+
+  // The native side can write a partial pack and then fail, so the guard has to
+  // wrap the dispatch itself — not just the stream that follows it.
+  const failing = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => driver.response,
+    createScene: async () => {
+      throw new Error('native scene dispatch failed')
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(failing, async ({ modelId, session }) => {
+    fs.writeFileSync(session.stagingScenePath, 'a partial pack the native side left')
+
+    const stream = worldCreateScene({
+      modelId,
+      requestId: makeId('req'),
+      prompt: 'a scene',
+      image: Buffer.from('image').toString('base64')
+    })
+
+    await t.exception(
+      stream.next(),
+      /native scene dispatch failed/,
+      'the failure reaches the caller'
+    )
+    t.absent(
+      fs.existsSync(session.stagingScenePath),
+      'the staged file is dropped rather than left for the next run to promote'
+    )
+  })
+})
+
+test('world scene op: abandoning the generator drops the staged file', async function (t) {
+  const fs = await import('bare-fs')
+  const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+  const driver = makeResponse([])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ modelId, session }) => {
+    fs.writeFileSync(session.stagingScenePath, 'a generation in progress')
+
+    const stream = worldCreateScene({
+      modelId,
+      requestId: makeId('req'),
+      prompt: 'a scene',
+      image: Buffer.from('image').toString('base64')
+    })
+    const pending = stream.next()
+
+    // A consumer walking away unwinds as a RETURN completion, so a `catch` never
+    // sees it — only a `finally` does. That is the path this covers.
+    const returning = stream.return(undefined)
+    driver.releaseStream()
+    driver.settleJob()
+    await returning.catch(() => {})
+    await pending.catch(() => {})
+
+    t.absent(
+      fs.existsSync(session.stagingScenePath),
+      'an abandoned generation does not leave its staged pack on disk'
+    )
+  })
+})
+
 test('world session: teardown waits for a job that is still being admitted', async function (t) {
   const driver = makeResponse([])
   let nativeUnloaded = false

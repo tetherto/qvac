@@ -260,7 +260,15 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
       // rather than pointed at — unconditionally, so changing sceneSrc between
       // loads of the same modelId cannot leave a stale world in place.
       if (seedScenePath) {
-        await fsPromises.copyFile(seedScenePath, files.scene)
+        try {
+          await fsPromises.copyFile(seedScenePath, files.scene)
+        } catch (error) {
+          // A copy that died partway leaves a truncated pack that `hasScene()`
+          // would happily treat as a world. Drop it so the failure is the load
+          // error, not a corrupt world discovered on the first step.
+          await removeIfPresent(files.scene)
+          throw error
+        }
       }
       if (!hasScene()) {
         logger.info(
@@ -489,48 +497,62 @@ export async function* worldCreateScene(
   // Generated into a staging file and promoted only on success: a failed
   // generation must leave the caller with the world they already had, not with
   // a model that has none.
-  const response = await session.run(() =>
-    session.createScene({
-      prompt: request.prompt,
-      image: Buffer.from(request.image, 'base64'),
-      t5,
-      vae,
-      output: session.stagingScenePath,
-      ...(request.width !== undefined && { width: request.width }),
-      ...(request.height !== undefined && { height: request.height })
-    })
-  )
+  //
+  // Every exit that is not a completed promotion drops the staged file, which
+  // takes three shapes and needs all three covered. A `catch` alone misses the
+  // consumer abandoning the generator — that unwinds as a return completion, so
+  // `finally` runs and `catch` does not. A `finally` alone cannot tell success
+  // from failure. Hence the flag. The native side can leave a partial file
+  // behind on a dispatch rejection too, so the dispatch sits inside the guard
+  // rather than in front of it.
+  let promoted = false
+  let response: SceneResponseWithStats & { iterate(): AsyncIterable<unknown> }
+  let scene: Buffer
 
   try {
-    // The completion payload carries the pack's absolute path on this machine
-    // and a timing already reported by stats.sceneCreateMs, so nothing from the
-    // stream is forwarded — the caller may be a remote peer and has no business
-    // knowing our filesystem layout.
-    for await (const chunk of response.iterate()) {
-      void chunk
+    response = (await session.run(() =>
+      session.createScene({
+        prompt: request.prompt,
+        image: Buffer.from(request.image, 'base64'),
+        t5,
+        vae,
+        output: session.stagingScenePath,
+        ...(request.width !== undefined && { width: request.width }),
+        ...(request.height !== undefined && { height: request.height })
+      })
+    )) as unknown as SceneResponseWithStats & { iterate(): AsyncIterable<unknown> }
+
+    try {
+      // The completion payload carries the pack's absolute path on this machine
+      // and a timing already reported by stats.sceneCreateMs, so nothing from
+      // the stream is forwarded — the caller may be a remote peer and has no
+      // business knowing our filesystem layout.
+      for await (const chunk of response.iterate()) {
+        void chunk
+      }
+    } finally {
+      // Scene creation takes no abort predicate, so cancelling or disconnecting
+      // stops delivery but not the encode. This runs even when the consumer
+      // abandons the generator, and it sits inside the `await using ctx` scope —
+      // so the model's concurrency slot is held until the native job is really
+      // done. Releasing it earlier would admit the next request into a session
+      // that is still busy.
+      await session.settle()
     }
-  } catch (error) {
-    await session.discardStagedScene()
-    throw error
+
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(ctx.requestId)
+    }
+
+    scene = await session.promoteStagedScene()
+    promoted = true
   } finally {
-    // Scene creation takes no abort predicate, so cancelling or disconnecting
-    // stops delivery but not the encode. This runs even when the consumer
-    // abandons the generator, and it sits inside the `await using ctx` scope —
-    // so the model's concurrency slot is held until the native job is really
-    // done. Releasing it earlier would admit the next request into a session
-    // that is still busy.
-    await session.settle()
+    if (!promoted) await session.discardStagedScene()
   }
 
-  if (ctx.signal.aborted) {
-    await session.discardStagedScene()
-    throw new InferenceCancelledError(ctx.requestId)
-  }
-
-  const scene = await session.promoteStagedScene()
   requestLogger.info(`World scene pack created for ${request.modelId} (${scene.length} bytes)`)
 
-  const { stats } = response as unknown as SceneResponseWithStats
+  const { stats } = response as SceneResponseWithStats
   yield {
     type: 'worldSceneStream',
     data: Buffer.from(scene).toString('base64'),
