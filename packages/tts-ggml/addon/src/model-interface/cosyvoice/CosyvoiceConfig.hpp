@@ -42,14 +42,15 @@ struct CosyvoiceConfig {
   std::string campplusModelPath; // CAM++ speaker encoder
 
   /**
-   * Zero-shot / cross-lingual voice cloning. referenceAudio: mono recording
-   * of the target speaker (0.5-30 s hard limits); the engine tokenizes it,
-   * extracts the speaker embedding and prompt mel at load, replacing the
-   * baked voice, and THROWS when the cloning GGUFs are missing or the audio
-   * is unusable (no silent fallback). promptText selects the mode: the
-   * verbatim transcript = zero-shot, empty = cross-lingual (timbre only).
-   * Without referenceAudio, promptText still overrides the baked voice's
-   * transcript metadata.
+   * Zero-shot / cross-lingual voice cloning. referenceAudio: recording of
+   * the target speaker (0.5-30 s hard limits; multichannel input is
+   * downmixed to mono); the engine tokenizes it, extracts the speaker
+   * embedding and prompt mel at load, replacing the baked voice, and THROWS
+   * when the cloning GGUFs are missing or the audio is unusable (no silent
+   * fallback). promptText selects the mode: the verbatim transcript =
+   * zero-shot, empty = cross-lingual (timbre only). Without referenceAudio,
+   * promptText still overrides the baked voice's transcript metadata. The
+   * clone is fixed at construction (reload does not re-apply it).
    */
   std::string referenceAudio;
   std::string promptText;

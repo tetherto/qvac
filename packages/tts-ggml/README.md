@@ -385,18 +385,22 @@ frontends.  At `load()` the native front-end tokenizes the recording
 mel, and replaces the baked default voice; the one-time bake costs about a
 second of CPU for a short clip.
 
+Zero-shot — transcript given, so the LM is prompted with the transcript and
+the reference's speech tokens (best fidelity in the reference's language):
+
 ```js
-// zero-shot: transcript given — the LM is prompted with the transcript and
-// the reference's speech tokens (best fidelity in the reference's language)
 const model = new TTSGgml({
   engine: TTSGgml.ENGINE_COSYVOICE3,
   files: { cosyvoiceModelDir: './models/cosyvoice3' },
   referenceAudio: './voices/me.wav',
   promptText: 'Exactly what the recording says, verbatim.'
 })
+```
 
-// cross-lingual: no transcript — timbre-only conditioning through the flow
-// (best when synthesizing a different language than the reference)
+Cross-lingual — no transcript, timbre-only conditioning through the flow
+(best when synthesizing a different language than the reference):
+
+```js
 const model = new TTSGgml({
   engine: TTSGgml.ENGINE_COSYVOICE3,
   files: { cosyvoiceModelDir: './models/cosyvoice3' },
@@ -404,18 +408,24 @@ const model = new TTSGgml({
 })
 ```
 
-The recording must be mono, between 0.5 and 30 s (hard limits; 5-15 s of
-clean speech clones most reliably), with finite samples.  Cloning needs the
-two add-on GGUFs — `cosyvoice3-s3tok-*.gguf` (speech tokenizer, f16 or
-q8_0) and `cosyvoice3-campplus-*.gguf` (speaker encoder) — auto-discovered
-under `files.cosyvoiceModelDir` by those name prefixes, or passed explicitly
-as `files.cosyvoiceS3tokModel` / `files.cosyvoiceCampplusModel`.  They are
+`examples/cosyvoice-tts.js` demonstrates both modes end to end
+(`--reference-audio` / `--prompt-text`).
+
+The recording must be 0.5-30 s (hard limits; 5-15 s of clean speech clones
+most reliably) with finite samples; multichannel input is downmixed to mono
+by the engine.  Cloning needs the two add-on GGUFs —
+`cosyvoice3-s3tok-*.gguf` (speech tokenizer, f16 or q8_0) and
+`cosyvoice3-campplus-*.gguf` (speaker encoder) — auto-discovered under
+`files.cosyvoiceModelDir` by those name prefixes, or passed explicitly as
+`files.cosyvoiceS3tokModel` / `files.cosyvoiceCampplusModel`.  They are
 required **only** when `referenceAudio` is set; every failure (missing
 GGUFs, unreadable or out-of-range audio) rejects the load rather than
 silently keeping the baked voice.  `instruct` composes with a cloned voice:
 the instruction drives dialect/style while the clone supplies the timbre.
-Unlike Audio8 there is no per-call reference — switching voices means a
-`reload()`.
+The clone is fixed for the life of the instance: there is no per-call
+reference (unlike Audio8), and `reload()` does **not** re-apply
+`referenceAudio` / `promptText` — switching voices means constructing a new
+instance.
 
 ## Speech enhancement (LavaSR)
 

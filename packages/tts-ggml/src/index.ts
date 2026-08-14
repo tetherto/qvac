@@ -524,15 +524,18 @@ interface ParlerDescriptionFields {
 interface Audio8VoiceFields {
   /**
    * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3:
-   * zero-shot / cross-lingual cloning reference (mono, 0.5-30 s hard limits,
-   * 5-15 s of clean speech recommended) — the native front-end tokenizes it
-   * (speech_tokenizer_v3), extracts the CAM++ speaker embedding and prompt
-   * mel at load, replacing the baked voice; requires the
-   * `cosyvoiceS3tokModel` + `cosyvoiceCampplusModel` files and fails the
-   * load (never silently falls back) when they are missing or the audio is
-   * unusable. Pair with `promptText` (the verbatim transcript) for zero-shot
-   * or omit it for cross-lingual. Audio8: the recording to clone, with
-   * `referenceText` alongside it.
+   * zero-shot / cross-lingual cloning reference (0.5-30 s hard limits,
+   * 5-15 s of clean speech recommended; multichannel input is downmixed to
+   * mono) — the native front-end tokenizes it (speech_tokenizer_v3),
+   * extracts the CAM++ speaker embedding and prompt mel at load, replacing
+   * the baked voice; requires the `cosyvoiceS3tokModel` +
+   * `cosyvoiceCampplusModel` files and fails the load (never silently falls
+   * back) when they are missing or the audio is unusable. Pair with
+   * `promptText` (the verbatim transcript) for zero-shot or omit it for
+   * cross-lingual. The clone is fixed for the instance's lifetime:
+   * `reload()` does not re-apply it — switching voices means a new
+   * instance. Audio8: the recording to clone, with `referenceText`
+   * alongside it.
    */
   referenceAudio?: string;
   /** Audio8: what `referenceAudio` says. Required when cloning. */

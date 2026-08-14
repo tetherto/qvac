@@ -1447,7 +1447,11 @@ async function ensureCosyvoiceCloneModels(options = {}) {
   }
 
   for (const dir of candidateDirs) {
-    if (hasAllGgufsIn(dir, COSYVOICE_CLONE_FILES)) {
+    // A usable dir must hold the BASE set alongside the cloning add-on: the
+    // returned modelDir feeds the engine's whole-directory discovery, so a
+    // clone-only cache with the base staged elsewhere would resolve the
+    // cloning GGUFs and then fail on the LM/flow/hift.
+    if (hasAllGgufsIn(dir, COSYVOICE_CLONE_FILES) && hasAllGgufsIn(dir, COSYVOICE_FILES)) {
       console.log(` ✓ using CosyVoice3 cloning GGUFs at ${dir}`)
       return { success: true, modelDir: dir, targetDir: dir }
     }

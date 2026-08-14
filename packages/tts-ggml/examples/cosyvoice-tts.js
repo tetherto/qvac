@@ -53,36 +53,34 @@ const { setLogger, releaseLogger } = require('../addonLogging')
 
 const COSYVOICE_SAMPLE_RATE = 24000
 
+const { parseCloneArgs } = require('./parse-clone-args')
+
 const argv = global.Bare ? global.Bare.argv : process.argv
 const env = proc.env || {}
-const args = argv.slice(2)
-const useGPU = args.includes('--gpu')
-let refAudioArg
-let promptTextArg
-const positional = []
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--gpu') continue
-  if (args[i] === '--reference-audio' && i + 1 < args.length) {
-    refAudioArg = args[++i]
-    continue
-  }
-  if (args[i] === '--prompt-text' && i + 1 < args.length) {
-    promptTextArg = args[++i]
-    continue
-  }
-  positional.push(args[i])
-}
-const textArg = positional[0]
-const emotionArg = positional[1]
-const modelDirArg = positional[2]
 
-if (!textArg || typeof textArg !== 'string' || textArg.trim().length === 0) {
+function usageExit(reason) {
+  if (reason) console.error(`cosyvoice-tts.js: ${reason}`)
   console.error(
     'Usage: cosyvoice-tts.js [--gpu] [--reference-audio REF.wav] ' +
       '[--prompt-text "transcript"] "<text to synthesize>" [emotion] [modelDir]'
   )
   if (global.Bare) global.Bare.exit(1)
   else process.exit(1)
+}
+
+let parsed
+try {
+  parsed = parseCloneArgs(argv.slice(2))
+} catch (e) {
+  usageExit(e.message)
+}
+const { useGPU, refAudio: refAudioArg, promptText: promptTextArg, positional } = parsed
+const textArg = positional[0]
+const emotionArg = positional[1]
+const modelDirArg = positional[2]
+
+if (!textArg || typeof textArg !== 'string' || textArg.trim().length === 0) {
+  usageExit()
 }
 
 if (refAudioArg && !fs.existsSync(refAudioArg)) {

@@ -1,14 +1,19 @@
 'use strict'
 
-// CosyVoice3 zero-shot / cross-lingual voice-cloning integration smoke.
+// CosyVoice3 zero-shot / cross-lingual voice-cloning integration coverage.
 // Mirrors cosyvoice3.test.js (download model -> build TTSGgml -> run ->
-// assert) plus the cloning add-on tier: the reference wav is baked into the
-// voice at load by the native front-end (speech_tokenizer_v3 + CAM++ +
-// prompt mel), promptText selects zero-shot vs cross-lingual, and a clone
-// request without the add-on GGUFs must fail the construction loudly rather
-// than silently using the baked voice.  Text is kept SHORT to bound CPU
-// LM-decode time in CI.
+// assert) plus the cloning add-on tier, with the assertions tied to cloning
+// actually happening rather than audio merely existing: sampling is seeded,
+// so with one pinned seed and one shared text the baked, zero-shot and
+// cross-lingual runs are each deterministic — a wrapper that silently kept
+// the baked voice would reproduce the baked waveform exactly, and a mode
+// regression would collapse zero-shot and cross-lingual into one trajectory.
+// Both are asserted as pairwise waveform inequality.  Fail-closed is covered
+// on both layers: the JS consistency assert (no way to resolve the cloning
+// GGUFs) and the native load (base model dir present, cloning GGUFs absent).
+// Text is kept SHORT to bound CPU LM-decode time in CI.
 
+const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 const test = require('brittle')
@@ -38,6 +43,11 @@ const JFK_TRANSCRIPT =
   'And so my fellow Americans ask not what your country can do for you, ' +
   'ask what you can do for your country.'
 
+// One text + one seed across the baked / zero-shot / cross-lingual runs, so
+// the pairwise comparisons isolate the conditioning rather than the sampler.
+const CLONE_TEXT = 'Cloning now runs fully on device.'
+const CLONE_SEED = 1986
+
 async function ensureCloneReadyModelDir(t) {
   const baseDir = getBaseDir()
   const targetDir = path.join(baseDir, 'models', 'cosyvoice3')
@@ -54,63 +64,86 @@ async function ensureCloneReadyModelDir(t) {
   return clone.modelDir
 }
 
+function samplesDiffer(a, b) {
+  if (!a || !b) return false
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return true
+  }
+  return false
+}
+
+async function synthOnce(t, loadParams, label) {
+  const model = await loadCosyvoiceTTS({ ...loadParams, seed: CLONE_SEED })
+  try {
+    const result = await runCosyvoiceTTS(
+      model,
+      { text: CLONE_TEXT },
+      { minSamples: 1, minDurationMs: 1, maxDurationMs: 300000 }
+    )
+    console.log(result.output)
+    t.ok(result.passed, `${label} synth passes expectations`)
+    t.ok(result.data.sampleCount > 0, `${label} produced audio`)
+    return result.data
+  } finally {
+    try {
+      await model.unload()
+    } catch (_e) {}
+  }
+}
+
+// Captured by the zero-shot test, compared against by the cross-lingual test
+// (brittle runs the file's tests sequentially).
+let zeroShotSamples = null
+
 test(
-  'CosyVoice3 cloning (ggml): zero-shot (reference + transcript) synthesizes',
+  'CosyVoice3 cloning (ggml): zero-shot differs from the baked voice at the same seed',
   { timeout: 900000 },
   async (t) => {
     const modelDir = await ensureCloneReadyModelDir(t)
     if (!modelDir) return
 
-    const model = await loadCosyvoiceTTS({
-      cosyvoiceModelDir: modelDir,
-      referenceAudio: resolveRefWavPath({}),
-      promptText: JFK_TRANSCRIPT
-    })
-    try {
-      const result = await runCosyvoiceTTS(
-        model,
-        { text: 'Cloning now runs fully on device.' },
-        { minSamples: 1, minDurationMs: 1, maxDurationMs: 300000 }
-      )
-      console.log(result.output)
-
-      t.ok(result.passed, 'zero-shot cloned synth passes expectations')
-      t.ok(result.data.sampleCount > 0, 'zero-shot clone produced audio')
-      t.is(result.data.reportedSampleRate, 24000, 'clone reports 24 kHz native rate')
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
+    const baked = await synthOnce(t, { cosyvoiceModelDir: modelDir }, 'baked baseline')
+    const cloned = await synthOnce(
+      t,
+      {
+        cosyvoiceModelDir: modelDir,
+        referenceAudio: resolveRefWavPath({}),
+        promptText: JFK_TRANSCRIPT
+      },
+      'zero-shot clone'
+    )
+    t.is(cloned.reportedSampleRate, 24000, 'clone reports 24 kHz native rate')
+    t.ok(
+      samplesDiffer(baked.samples, cloned.samples),
+      'zero-shot clone diverges from the baked voice (same text + seed), so the ' +
+        'reference conditioning demonstrably reached the engine'
+    )
+    zeroShotSamples = cloned.samples
   }
 )
 
 test(
-  'CosyVoice3 cloning (ggml): cross-lingual (reference only, no transcript) synthesizes',
+  'CosyVoice3 cloning (ggml): cross-lingual differs from zero-shot at the same seed',
   { timeout: 900000 },
   async (t) => {
     const modelDir = await ensureCloneReadyModelDir(t)
     if (!modelDir) return
 
-    const model = await loadCosyvoiceTTS({
-      cosyvoiceModelDir: modelDir,
-      referenceAudio: resolveRefWavPath({})
-    })
-    try {
-      const result = await runCosyvoiceTTS(
-        model,
-        { text: '今天天气真不错。' },
-        { minSamples: 1, minDurationMs: 1, maxDurationMs: 300000 }
-      )
-      console.log(result.output)
-
-      t.ok(result.passed, 'cross-lingual cloned synth passes expectations')
-      t.ok(result.data.sampleCount > 0, 'cross-lingual clone produced audio')
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
+    const xl = await synthOnce(
+      t,
+      { cosyvoiceModelDir: modelDir, referenceAudio: resolveRefWavPath({}) },
+      'cross-lingual clone'
+    )
+    if (!zeroShotSamples) {
+      t.fail('zero-shot baseline unavailable (previous test did not complete)')
+      return
     }
+    t.ok(
+      samplesDiffer(zeroShotSamples, xl.samples),
+      'cross-lingual diverges from zero-shot (same text + seed + reference), so ' +
+        'the transcript-selected mode demonstrably changed the LM prompt'
+    )
   }
 )
 
@@ -133,6 +166,48 @@ test(
         }),
       /cosyvoiceS3tokModel/,
       'clone request without s3tok/campplus models throws with an actionable message'
+    )
+  }
+)
+
+test(
+  'CosyVoice3 cloning (ggml): base-only model dir fails the native load, not silently',
+  { timeout: 600000 },
+  async (t) => {
+    // The JS assert is satisfied by a model dir alone; the documented
+    // fail-closed contract then belongs to the native side.  A directory
+    // holding the full base set but neither cloning GGUF must reject load()
+    // rather than fall back to the baked voice.
+    const modelDir = await ensureCloneReadyModelDir(t)
+    if (!modelDir) return
+
+    const baseOnlyDir = path.join(getBaseDir(), 'models', 'cosyvoice3-base-only')
+    fs.mkdirSync(baseOnlyDir, { recursive: true })
+    const baseFiles = [
+      'cosyvoice3-llm-q8_0.gguf',
+      'cosyvoice3-flow-f32.gguf',
+      'cosyvoice3-hift-f32.gguf',
+      'voice.gguf',
+      'vocab.json',
+      'merges.txt'
+    ]
+    for (const name of baseFiles) {
+      const dst = path.join(baseOnlyDir, name)
+      if (!fs.existsSync(dst)) {
+        // Hard links keep this free even for the multi-GB GGUFs (same volume).
+        fs.linkSync(path.join(modelDir, name), dst)
+      }
+    }
+
+    const model = new TTSGgml({
+      engine: TTSGgml.ENGINE_COSYVOICE3,
+      files: { cosyvoiceModelDir: baseOnlyDir },
+      referenceAudio: resolveRefWavPath({})
+    })
+    await t.exception(
+      model.load(),
+      /s3tok/i,
+      'native load rejects a clone request when the model dir lacks the cloning GGUFs'
     )
   }
 )
