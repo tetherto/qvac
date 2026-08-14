@@ -17,8 +17,15 @@
 #
 dl() {
   local url="$1" dest="$2"
+
   [[ -f "$dest" ]] && echo "exists: $(basename "$dest")" && return
   echo "downloading: $(basename "$dest")"
-  curl -fL --progress-bar --retry 5 --retry-delay 3 --retry-connrefused -C - -o "$dest" "$url" \
-    || { rm -f "$dest"; exit 1; }
+  if [[ "$url" == https://huggingface.co/* && -n "${HF_TOKEN:-}" ]]; then
+    curl -fL --progress-bar --retry 5 --retry-delay 3 --retry-connrefused -C - \
+      -H "Authorization: Bearer $HF_TOKEN" -o "$dest" "$url" \
+      || { rm -f "$dest"; exit 1; }
+  else
+    curl -fL --progress-bar --retry 5 --retry-delay 3 --retry-connrefused -C - -o "$dest" "$url" \
+      || { rm -f "$dest"; exit 1; }
+  fi
 }

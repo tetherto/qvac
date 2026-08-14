@@ -133,6 +133,7 @@
   },
   "files": [
     "dist/**/*",
+    "!dist/models/update-models/**",
     "LICENSE",
     "NOTICE"
   ],
@@ -148,7 +149,9 @@
     "prepare": "npm run build",
     "build:test": "tsc -p test/tsconfig.build.json && tsc-alias -p test/tsconfig.alias.json",
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
-    "test:bare": "npm run test"
+    "test:bare": "npm run test",
+    "check-models": "bare ./dist/models/update-models/index.js --check",
+    "update-models": "bare ./dist/models/update-models/index.js"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -194,7 +197,7 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.16.2"
+    "@qvac/vla-ggml": "^0.17.0"
   },
   "peerDependenciesMeta": {
     "@qvac/asr-ggml": {
@@ -250,11 +253,12 @@
     "@qvac/ocr-ggml": "^0.13.1",
     "@qvac/translation-nmtcpp": "^8.3.0",
     "@qvac/tts-ggml": "^0.6.0",
-    "@qvac/vla-ggml": "^0.16.2",
+    "@qvac/vla-ggml": "^0.17.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
     "bare-stdio": "^1.0.3",
+    "bare-subprocess": "^6.1.0",
     "bare-timers": "*",
     "brittle": "^4.1.0",
     "lunte": "^1.8.4",
