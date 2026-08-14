@@ -372,7 +372,11 @@ test('gate blocks operation requests once shutting down', (t) => {
   // and start native work against a model that unloadAllModels is about to free.
   resetLifecycleState()
   markShuttingDown()
-  t.is(getLifecycleState(), 'shuttingDown')
+  t.is(
+    getLifecycleState(),
+    'active',
+    'shutdown is internal; the reported lifecycle state is unchanged'
+  )
 
   t.execution(() => assertLifecycleAllowed(fakeRequest('state')), 'state still allowed')
   t.exception(
@@ -395,9 +399,12 @@ test('shutdown is terminal: suspend/resume cannot revert it', async (t) => {
     'suspend blocked during shutdown'
   )
 
-  // Even a direct call must not leave the terminal state.
+  // A direct resumeRuntime() must early-return and leave the gate raised.
   await resumeRuntime()
-  t.is(getLifecycleState(), 'shuttingDown', 'still shutting down after resumeRuntime()')
+  t.exception(
+    () => assertLifecycleAllowed(fakeRequest('completionStream')),
+    'still gated after resumeRuntime()'
+  )
 
   resetLifecycleState()
 })
@@ -408,13 +415,16 @@ test('shutdown during an in-flight transition is not overwritten', async (t) => 
   await suspendRuntime()
 
   // Resume is in flight (its transition callback will try to set `active`);
-  // shutting down mid-flight must win.
+  // shutting down mid-flight must win — the gate stays raised.
   const resumeP = resumeRuntime()
   await delay(5)
   markShuttingDown()
   await resumeP
 
-  t.is(getLifecycleState(), 'shuttingDown', 'in-flight resume did not overwrite shutdown')
+  t.exception(
+    () => assertLifecycleAllowed(fakeRequest('completionStream')),
+    'in-flight resume did not clear the shutdown gate'
+  )
   resetLifecycleState()
 })
 

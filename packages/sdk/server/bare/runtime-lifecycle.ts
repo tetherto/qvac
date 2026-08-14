@@ -29,6 +29,11 @@ type ResumeListener = () => void
 const resumeListeners = new Set<ResumeListener>()
 
 let state: LifecycleState = 'active'
+// Internal-only terminal teardown flag. Kept off the public `state` enum: it
+// gates new operation RPCs during worker cleanup but is never reported to
+// clients (a new public enum value would break exhaustive switches and older
+// generated clients).
+let shuttingDown = false
 let transitionPromise: Promise<void> | null = null
 
 /**
@@ -87,13 +92,13 @@ export function getLifecycleState(): LifecycleState {
 // then rejects new operation requests (only suspend/resume/state stay allowed),
 // so nothing new admits against models that are about to be unloaded.
 export function markShuttingDown(): void {
-  state = 'shuttingDown'
+  shuttingDown = true
 }
 
 export function assertLifecycleAllowed(request: Request): void {
   // Shutting down is terminal: allow only `state`. suspend/resume would otherwise
   // move the runtime back out of the terminal state and let new work admit.
-  if (state === 'shuttingDown') {
+  if (shuttingDown) {
     if (request.type === 'state') return
     throw new LifecycleOperationBlockedError(request.type, state)
   }
@@ -111,6 +116,7 @@ export function resetLifecycleState() {
   stores.clear()
   resumeListeners.clear()
   state = 'active'
+  shuttingDown = false
   transitionPromise = null
 }
 
@@ -139,7 +145,7 @@ async function runPhase<T>(
 }
 
 export async function suspendRuntime(): Promise<void> {
-  if (state === 'shuttingDown') return // terminal — cannot transition out
+  if (shuttingDown) return // terminal — cannot transition out
   if (state === 'suspended') return
 
   if (state === 'suspending' && transitionPromise) return transitionPromise
@@ -178,14 +184,14 @@ export async function suspendRuntime(): Promise<void> {
   })()
     .then(() => {
       // If shutdown began mid-transition, that terminal state wins.
-      if (state === 'shuttingDown') return
+      if (shuttingDown) return
       state = 'suspended'
       logger.info('⏸️ Runtime suspended')
     })
     .catch((error: unknown) => {
       // Partial failure: commit to target so recovery resume() can repair
       // instead of leaving state as "suspending" which blocks all future calls.
-      if (state !== 'shuttingDown') {
+      if (!shuttingDown) {
         state = 'suspended'
         logger.error('⏸️ Runtime suspend partially failed, state committed for recovery')
       }
@@ -199,7 +205,7 @@ export async function suspendRuntime(): Promise<void> {
 }
 
 export async function resumeRuntime(): Promise<void> {
-  if (state === 'shuttingDown') return // terminal — cannot transition out
+  if (shuttingDown) return // terminal — cannot transition out
   if (state === 'active') return
 
   if (state === 'resuming' && transitionPromise) return transitionPromise
@@ -238,13 +244,13 @@ export async function resumeRuntime(): Promise<void> {
     .then(() => {
       // If shutdown began mid-transition, that terminal state wins — don't
       // resume or fire onResume listeners into a worker that's tearing down.
-      if (state === 'shuttingDown') return
+      if (shuttingDown) return
       state = 'active'
       logger.info('▶️ Runtime resumed')
       notifyResume()
     })
     .catch((error: unknown) => {
-      if (state !== 'shuttingDown') {
+      if (!shuttingDown) {
         state = 'suspended'
         logger.error('▶️ Runtime resume partially failed, staying suspended for retry')
       }

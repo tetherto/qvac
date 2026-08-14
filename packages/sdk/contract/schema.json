@@ -14801,7 +14801,7 @@
         },
         "state": {
           "type": "string",
-          "enum": ["active", "suspending", "suspended", "resuming", "shuttingDown"],
+          "enum": ["active", "suspending", "suspended", "resuming"],
           "title": "StateResponseState"
         }
       },

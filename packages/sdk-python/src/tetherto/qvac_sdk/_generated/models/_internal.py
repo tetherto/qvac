@@ -11487,7 +11487,6 @@ class StateResponseState(Enum):
     suspending = "suspending"
     suspended = "suspended"
     resuming = "resuming"
-    shutting_down = "shuttingDown"
 
 
 class StateResponse(GeneratedBaseModel):
