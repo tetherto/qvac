@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const TTSGgml = require('../../index.js')
 const { TTSInterface } = require('../../tts.js')
 const { QvacErrorAddonTTSGgml, ERR_CODES } = require('../../lib/error.js')
 
@@ -25,6 +26,11 @@ function createErrorBinding(errorMethods = {}) {
     }
   }
 }
+
+test('package root exports the public error API', (t) => {
+  t.is(TTSGgml.QvacErrorAddonTTSGgml, QvacErrorAddonTTSGgml)
+  t.is(TTSGgml.ERR_CODES, ERR_CODES)
+})
 
 test('activate() throws QvacErrorAddonTTSGgml with FAILED_TO_ACTIVATE code', async (t) => {
   const errorMessage = 'Activation failed due to invalid state'

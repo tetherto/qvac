@@ -76,6 +76,32 @@ export interface GenerateOptions {
     dcwHighScaler?: number;
     /** Frozen ACE-Step semantic codes; when present, skips the LM stage. */
     audioCodes?: Int32Array;
+    /**
+     * Optional timbre reference: interleaved stereo float PCM at 48 kHz.
+     * Empty / omitted keeps the engine's canonical silence reference.
+     */
+    referenceAudio?: Float32Array;
+    /**
+     * Source / cover audio (same layout as `referenceAudio`). Required when
+     * `taskType` is `"cover"` or `"cover-nofsq"`.
+     */
+    sourceAudio?: Float32Array;
+    /**
+     * Task discriminator. Supported today: `"text2music"` (default) |
+     * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
+     * in the engine yet.
+     */
+    taskType?: 'text2music' | 'cover' | 'cover-nofsq';
+    /**
+     * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
+     * Values < 1 are rejected by the engine until context switching lands.
+     */
+    audioCoverStrength?: number;
+    /**
+     * Blend initial DiT noise toward clean source latents (0..1). 0 = pure noise;
+     * 1 ≈ source latent. Default 0.
+     */
+    coverNoiseStrength?: number;
 }
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
 export interface AudiogenProgress {
@@ -127,19 +153,29 @@ export declare class AudioGen {
     static readonly ENGINE_ACESTEP = "acestep";
     addon: AudioGenInterface | null;
     private readonly _job;
+    private readonly _runExclusive;
     private readonly _configuration;
     private readonly _logger;
+    private _lifecycleRevision;
+    private _destroyed;
+    private _cancelPromise;
+    private _cancellingResponse;
     constructor(options?: AudioGenOptions);
     /** Create the native engine and load every stage GGUF. Idempotent. */
     load(): Promise<void>;
+    private _load;
     /**
      * Generate music from a text prompt. Returns a `QvacResponse` that streams
      * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
      */
     run(caption: string, opts?: GenerateOptions): Promise<QvacResponse<AudiogenOutputChunk>>;
+    private _admitAndWait;
+    private _createJobData;
     cancel(): Promise<void>;
+    private _cancelActiveResponse;
     unload(): Promise<void>;
     destroy(): Promise<void>;
+    private _stop;
     /**
      * Encode interleaved Int16 PCM into one or more output formats. Pass a single
      * format for one file, or an array to produce several at once (input order).
@@ -151,9 +187,12 @@ export declare class AudioGen {
     private _createAddon;
     private _addonOutputCallback;
     private _requireAddon;
+    private _lifecycleError;
+    private _failedCancelError;
 }
 export { REGISTRY_SOURCE, REGISTRY_PREFIX, FIXED_MODELS, DIT_VARIANTS, DEFAULT_DIT_VARIANT, ditVariants, ditFilename, registryPath, modelFilenames, modelManifest, modelSources, resolveDitModelPath, allRegistryPaths } from './models';
 export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOptions } from './models';
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
+export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

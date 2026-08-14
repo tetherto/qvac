@@ -17,6 +17,15 @@ on:
         required: false
         type: boolean
         default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-* artifacts)"
+        required: false
+        type: boolean
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the desktop benchmark matrix"
+        required: false
+        type: string
 
   workflow_call:
     inputs:
@@ -36,6 +45,16 @@ on:
         type: boolean
         required: false
         default: true
+      run_rtf_benchmarks:
+        description: "Run the RTF benchmark matrix (writes rtf-results-* artifacts)"
+        type: boolean
+        required: false
+        default: false
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the desktop benchmark matrix"
+        type: string
+        required: false
+        default: ""
 
 # Least-privilege default scoped to the whole file (CodeQL
 # actions/missing-workflow-permissions). The single job below only reads the
@@ -51,7 +70,10 @@ jobs:
   # the generation suite does NOT block a merge yet. Tighten this gate (drop
   # `continue-on-error`) once the addon's flake surface is small enough.
   run-integration-tests:
-    timeout-minutes: 120
+    # The benchmark leg sweeps three DiT variants (and doubles that on a GPU
+    # runner) with multi-minute renders each, so it needs far more headroom than
+    # the functional suite.
+    timeout-minutes: ${{ inputs.run_rtf_benchmarks && 360 || 120 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
@@ -182,6 +204,9 @@ jobs:
         name: Pin ggml Vulkan to the NVIDIA GPU on Windows
         run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
 
+      # A benchmark run needs every DiT variant, the functional suite only
+      # turbo-q4. They get separate cache entries so the bigger set neither
+      # displaces the smaller one nor gets mistaken for it on a key hit.
       - name: Cache AudioGen GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
@@ -190,13 +215,16 @@ jobs:
           package: audiogen-ggml
           paths: packages/audiogen-ggml/models
           hash-files-glob: packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js
+          cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || '' }}
           enable-cross-os: 'true'
 
       - name: Download GGUF models from registry
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ github.workspace }}/packages/audiogen-ggml
-        run: npm run download-models:registry
+        env:
+          DOWNLOAD_SCRIPT: ${{ inputs.run_rtf_benchmarks && 'download-models:registry:all' || 'download-models:registry' }}
+        run: npm run "$DOWNLOAD_SCRIPT"
 
       - name: Run integration test
         if: ${{ inputs.run_integration_tests != false }}
@@ -208,3 +236,103 @@ jobs:
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '3600' || '1800' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+
+      # Benchmark leg (run_rtf_benchmarks=true, set by
+      # benchmark-performance-audiogen-ggml.yml). Every runner sweeps the three
+      # DiT variants on CPU; a GPU runner sweeps them again on the platform's
+      # ggml backend (Vulkan on linux/win32, Metal on darwin). turbo-q4 and
+      # turbo-q8 share the ~8-step turbo schedule; sft runs the ~50-step one, so
+      # it gets fewer iterations to keep the leg inside the job timeout. The
+      # matrix runner's per-entry watchdog isolates an entry that still overruns.
+      - name: Run RTF benchmark matrix
+        if: ${{ inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/audiogen-ggml
+        run: |
+          set -euo pipefail
+          if [ -n "$MATRIX_OVERRIDE" ]; then
+            MATRIX="$MATRIX_OVERRIDE"
+          elif [ "$NO_GPU_ROW" = "true" ]; then
+            MATRIX="$CPU_MATRIX"
+          elif [ "$ROW_PLATFORM" = "darwin" ]; then
+            MATRIX="$METAL_MATRIX"
+          else
+            MATRIX="$VULKAN_MATRIX"
+          fi
+          export QVAC_AUDIOGEN_GGML_BENCHMARK_MATRIX_JSON="$MATRIX"
+          node scripts/run-rtf-benchmark-matrix.js
+        env:
+          MATRIX_OVERRIDE: ${{ inputs.benchmark_matrix_json }}
+          NO_GPU_ROW: ${{ matrix.no_gpu || 'false' }}
+          ROW_PLATFORM: ${{ matrix.platform }}
+          CPU_MATRIX: >-
+            [{"ditVariant":"turbo-q4","useGPU":false,"backendHint":"cpu"},
+            {"ditVariant":"turbo-q8","useGPU":false,"backendHint":"cpu"},
+            {"ditVariant":"sft","useGPU":false,"backendHint":"cpu","numWarmup":0,"numRuns":1}]
+          VULKAN_MATRIX: >-
+            [{"ditVariant":"turbo-q4","useGPU":false,"backendHint":"cpu"},
+            {"ditVariant":"turbo-q8","useGPU":false,"backendHint":"cpu"},
+            {"ditVariant":"sft","useGPU":false,"backendHint":"cpu","numWarmup":0,"numRuns":1},
+            {"ditVariant":"turbo-q4","useGPU":true,"backendHint":"vulkan"},
+            {"ditVariant":"turbo-q8","useGPU":true,"backendHint":"vulkan"},
+            {"ditVariant":"sft","useGPU":true,"backendHint":"vulkan","numRuns":2}]
+          METAL_MATRIX: >-
+            [{"ditVariant":"turbo-q4","useGPU":false,"backendHint":"cpu"},
+            {"ditVariant":"turbo-q8","useGPU":false,"backendHint":"cpu"},
+            {"ditVariant":"sft","useGPU":false,"backendHint":"cpu","numWarmup":0,"numRuns":1},
+            {"ditVariant":"turbo-q4","useGPU":true,"backendHint":"metal"},
+            {"ditVariant":"turbo-q8","useGPU":true,"backendHint":"metal"},
+            {"ditVariant":"sft","useGPU":true,"backendHint":"metal","numRuns":2}]
+          # Matrix-wide defaults; a per-entry numWarmup/numRuns above wins.
+          QVAC_AUDIOGEN_GGML_BENCHMARK_WARMUP_RUNS: '1'
+          QVAC_AUDIOGEN_GGML_BENCHMARK_RUNS: '3'
+          QVAC_AUDIOGEN_GGML_BENCHMARK_DURATION_S: '15'
+          QVAC_AUDIOGEN_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
+          QVAC_AUDIOGEN_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
+          LD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_JOB: ${{ github.job }}
+
+      # The matrix runner deliberately exits 0 on partial failure so one variant
+      # or backend does not sink the whole leg. A run with zero artifacts means
+      # every entry failed and should still fail loudly.
+      - name: Verify RTF benchmark output exists
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        shell: bash
+        working-directory: ${{ github.workspace }}/packages/audiogen-ggml
+        env:
+          ROW_LABEL: ${{ matrix.runner || matrix.os }} (${{ matrix.platform }}-${{ matrix.arch }})
+        run: |
+          set -euo pipefail
+          results_dir="benchmarks/results"
+          mkdir -p "$results_dir"
+          shopt -s nullglob
+          rtf_files=("$results_dir"/rtf-benchmark-*.json)
+          rtf_count=${#rtf_files[@]}
+          echo "Benchmark output in $results_dir:"
+          ls -la "$results_dir" || true
+          echo
+          echo "rtf-benchmark-*.json: $rtf_count"
+          {
+            echo "### Benchmark output — $ROW_LABEL"
+            echo "- rtf-benchmark JSON files: \`$rtf_count\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$rtf_count" -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::scripts/run-rtf-benchmark-matrix.js produced zero rtf-benchmark-*.json files on $ROW_LABEL. Every benchmark entry failed — check the matrix runner log above for model-fetch failures, prebuild path issues, or per-entry crashes."
+            exit 1
+          fi
+
+      - name: Upload RTF benchmark results
+        if: ${{ always() && !cancelled() && inputs.run_rtf_benchmarks }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: rtf-results-audiogen-ggml-${{ matrix.runner || matrix.os }}-${{ matrix.arch }}${{ matrix.no_gpu == 'true' && '-cpu' || '-gpu' }}
+          path: packages/audiogen-ggml/benchmarks/results/rtf-benchmark-*.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -32,6 +32,14 @@
 #       pr: "https://github.com/tetherto/qvac/pull/1234"
 #       expires: "2027-06-15"         # optional re-review date; expired entries are ignored (finding re-blocks)
 #
-# No exceptions are recorded yet — this gate starts in warn-only (shadow) mode,
-# and entries are added as real findings surface.
-allow: []
+allow:
+  - package: "pkg:npm/bare-fs"
+    license: "Apache-2.0"
+    reason: "Apache-2.0 per upstream holepunchto/bare-fs LICENSE; scanner reports none-detected on the npm artifact. Promoted to a runtime dependency of @qvac/ocr-ggml (required at import time by the published entrypoints)."
+    approved-by: "@mexxik"
+    pr: "https://github.com/tetherto/qvac/pull/3740"
+  - package: "pkg:npm/bare-path"
+    license: "Apache-2.0"
+    reason: "Apache-2.0 per upstream holepunchto/bare-path LICENSE; scanner reports none-detected on the npm artifact. Runtime dependency of @qvac/ocr-ggml and @qvac/translation-nmtcpp."
+    approved-by: "@mexxik"
+    pr: "https://github.com/tetherto/qvac/pull/3740"

@@ -1,5 +1,97 @@
 # Changelog
 
+## [0.20.0] - 2026-08-14
+
+This release adds production LTX-2.3 Ingredients IC-LoRA video generation
+with reference-sheet conditioning and validated controls across the JavaScript
+and native addon surfaces.
+
+### Added
+
+#### LTX Ingredients reference-guided video
+
+- LTX video requests accept IC-LoRA adapters, runtime `lora_strength`, and
+  `reference_images`, with validation that rejects unsupported combinations.
+- LTX-2 scheduling is selected by default for LTX models and can be requested
+  explicitly; `stg_scale` and `stg_block` expose skip-layer guidance controls.
+- The `generate:ltx-coffee` example and pinned download workflow provide a
+  reproducible reference-conditioned Ingredients showcase.
+
+### Changed
+
+- `vae_auto_cpu_fallback` and its memory-ratio control expose automatic VAE
+  capacity fallback, while the dependency stack selects exact-stateful VAE
+  behavior for Vulkan.
+- `stable-diffusion-cpp` now resolves at `2026-07-03#7` from the
+  `tetherto/qvac-registry-vcpkg` registry. The package uses registry-backed
+  `stable-diffusion-cpp` and `ggml` dependencies without local overlays.
+- TypeScript declarations and generated bindings, JavaScript and C++ unit
+  tests, addon tests, and registry-backed native builds validate the new
+  request surface and dependency path.
+
+### Pull Requests
+
+- [#3551](https://github.com/tetherto/qvac/pull/3551) - QVAC-22534
+  Feature/ltx lora
+
+## [0.19.0] - 2026-08-12
+
+This release adds ABot-World: a causal, interactive world model
+(Wan2.2-TI2V-5B derivative) that generates video block-by-block under live
+keyboard input. Worlds are created natively from a prompt and a first-frame
+image, then walked in real time — the package's first interactive
+(non-batch) generation surface.
+
+### Added
+
+#### ABot-World interactive walk sessions
+
+- New `@qvac/diffusion-cpp/world` entry point (`WorldStableDiffusion`):
+  `load()` / `step(keys)` / `unload()` sessions that stream decoded PNG or
+  JPEG frames per generated block. `kvCache` enables the per-layer history
+  KV cache (~3.7x fewer frame passes per block, the main speed knob),
+  `frameJpegQuality` selects a lightweight JPEG transport for remote
+  streaming, and a cancelled step rejects with the typed
+  `Diffusion/Cancelled` error at block granularity.
+- Native scene creation via `createScene()`: umT5-XXL encodes the prompt and
+  the Wan2.2 VAE encodes the first-frame image into a loadable scene pack,
+  entirely on-device — no offline extraction tooling.
+- `ActionFlag` named bits for the walk action mask, exported from both the
+  JS layer (`world.step(ActionFlag.W | ActionFlag.L)`) and the native layer,
+  and pinned against `KEY_ORDER` by tests on both sides.
+- Walk-session config is parsed through a validated handler map like every
+  other model in the package: numeric booleans (`kvCache: 1`) parse
+  correctly and invalid values throw typed `InvalidArgument` errors instead
+  of failing silently.
+- Browser demo `examples/world-walk-server.js` (`npm run walk:world`):
+  generate a world from an uploaded image and walk it with WASD/IJKL over a
+  paced MJPEG stream, locally or over an SSH tunnel. A full guide lives in
+  `docs/abot-world.md` — P2P registry model acquisition, hardware
+  requirements, performance versus the PyTorch reference, and
+  troubleshooting.
+- The four-model set (DiT Q8_0, taehv, umT5-XXL Q8_0, Wan2.2 VAE) is
+  published in the QVAC P2P model registry (tag `abot-world`); the
+  integration lanes provision it from there in CI.
+
+### Changed
+
+- `stable-diffusion-cpp` engine floor raised to `2026-07-03#6`, which ships
+  the ABot session C API and the masked-attention formulation compatible
+  with the registry ggml's CUDA kernels.
+- Removed the package-local `ggml` overlay port and the `overlay-ports`
+  entry in `vcpkg-configuration.json`: registry ggml `2026-07-03#4` now
+  builds with position-independent code (Linux CUDA `.bare` linking), so
+  `ggml` and `stable-diffusion-cpp` resolve purely from
+  `tetherto/qvac-registry-vcpkg`.
+
+### Pull Requests
+
+- [#3352](https://github.com/tetherto/qvac/pull/3352) - QVAC-21981
+  feat[api]: ABot-World interactive world sessions (walk + native scene
+  creation)
+- [#3793](https://github.com/tetherto/qvac/pull/3793) - QVAC-21981 fix:
+  drop the ggml overlay port, resolve builds purely from the registry
+
 ## [0.18.0] - 2026-08-06
 
 ### Changed

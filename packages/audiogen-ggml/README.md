@@ -30,15 +30,23 @@ downloads anything: you give it **local file paths** to the model GGUFs and it
 opens them. GPU (Metal / Vulkan, including Vulkan on Android Mali devices) is
 used when you ask for it, with a CPU fallback.
 
-## Install & build
+## Install
 
 ```bash
-npm install
-npm run build      # bare-make generate && build && install
+npm install @qvac/audiogen-ggml
 ```
 
-You also need the model GGUFs on disk (see [Models](#models)); point the addon
-at the folder that holds them.
+Published prebuilds cover Linux x64/arm64, macOS x64/arm64, Windows x64,
+Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
+[Models](#models)); point the addon at the folder that holds them.
+
+To build the native addon from source in a repository checkout:
+
+```bash
+cd packages/audiogen-ggml
+npm install
+npm run build
+```
 
 ## Usage
 
@@ -59,15 +67,20 @@ const gen = new AudioGen({
 
 await gen.load() // loads the 4 model stages
 
-// run() returns a @qvac/infer-base QvacResponse: iterate() streams progress
-// ticks + the interleaved-Int16 PCM chunk(s); await() resolves the run stats.
+// iterate() streams live progress, then one interleaved-Int16 PCM item.
 const response = await gen.run('lo-fi hip hop, mellow piano, rainy night', {
   lyrics: '[Instrumental]' // no vocals
 })
 for await (const item of response.iterate()) {
-  if (item.outputArray) {
-    // item.outputArray: interleaved stereo Int16 @ item.sampleRate — collect
-    // these chunks as they stream in.
+  if ('progress' in item) {
+    console.log(item.progress.stage, item.progress.step, item.progress.total)
+  } else {
+    const pcmBytes = Buffer.from(
+      item.outputArray.buffer,
+      item.outputArray.byteOffset,
+      item.outputArray.byteLength
+    )
+    // Copy pcmBytes if it must outlive item.outputArray.
   }
 }
 const stats = await response.await()
@@ -78,8 +91,9 @@ const stats = await response.await()
 await gen.destroy()
 ```
 
-> The audio arrives as PCM chunks over the `QvacResponse` stream; `await()`
-> resolves with the run stats once generation completes. `backendDevice` /
+> Progress items arrive live during generation. The current native engine emits
+> one PCM item after generation, not incremental audio chunks. `await()` resolves
+> with terminal stats. `backendDevice` /
 > `backendId` report the backend the engine *resolved to*, not the one requested,
 > so a `useGPU: true` run that fell back to the CPU is detectable.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
@@ -111,15 +125,72 @@ Anything you leave out is inferred: omit `bpm`/`keyscale`/`duration` and the LM
 picks them from the caption. `inferenceSteps` / `shift` are auto-tuned to the
 DiT you loaded (turbo vs sft), so you normally don't set them.
 
+### 3. Reference and cover audio
+
+`referenceAudio` conditions the generated timbre without changing the
+text-to-music task:
+
+```js
+const response = await gen.run('slow blues with warm electric guitar', {
+  lyrics: '[Instrumental]',
+  referenceAudio
+})
+```
+
+Use `cover-nofsq` to preserve the structure of source audio while applying a
+new caption and optional timbre reference:
+
+```js
+const response = await gen.run('orchestral arrangement with dramatic strings', {
+  lyrics: '[Instrumental]',
+  taskType: 'cover-nofsq',
+  sourceAudio,
+  referenceAudio,
+  audioCoverStrength: 1,
+  coverNoiseStrength: 0.75
+})
+```
+
+Both PCM inputs must be `Float32Array` values containing finite, normalized
+samples in interleaved stereo order (`L, R, L, R, ...`) at 48 kHz. The addon
+does not resample, convert channels, or normalize input PCM. Keep samples in
+the conventional `[-1, 1]` range. `sourceAudio` is required for cover tasks.
+`cover-nofsq` currently requires `audioCoverStrength: 1`;
+`coverNoiseStrength` controls the source/noise blend from `0` to `1`. The
+full FSQ-based `cover` task is reserved but not implemented.
+
+See [`examples/generate-cover.js`](examples/generate-cover.js) for a runnable
+cover example using raw stereo 48 kHz float PCM input.
+
+```bash
+ffmpeg -i source.wav -f f32le -acodec pcm_f32le -ar 48000 -ac 2 source.f32le
+AUDIOGEN_MODEL_DIR=/path/to/models \
+  AUDIOGEN_SOURCE_PCM=source.f32le \
+  npm run example:cover
+```
+
 ### Turning PCM into a file
 
-The run streams raw PCM chunks. Concatenate them and encode to a file. The
-addon receives the format(s) **by parameter**: pass one format for a single
-file, or an array to produce several at once (one file per format):
+Convert each `Int16Array` view to bytes using its `byteOffset` and `byteLength`,
+concatenate the byte chunks, then encode them. Do not pass the entire backing
+buffer because a typed array can be a smaller view into it. This snippet
+continues with the `response` returned by `gen.run()` in the Usage example.
 
 ```js
 const { AudioGen } = require('@qvac/audiogen-ggml')
 const fs = require('fs')
+
+const pcmChunks = []
+for await (const item of response.iterate()) {
+  if (!('outputArray' in item)) continue
+  pcmChunks.push(Buffer.from(
+    item.outputArray.buffer.slice(
+      item.outputArray.byteOffset,
+      item.outputArray.byteOffset + item.outputArray.byteLength
+    )
+  ))
+}
+const pcmBuffer = Buffer.concat(pcmChunks)
 
 // Single format -> { format, data, extension, mimeType }
 const wav = AudioGen.encode(pcmBuffer, 'wav', { sampleRate: 48000, channels: 2 })
@@ -191,8 +262,26 @@ runnable end-to-end script (`npm run example`).
 `logger` — an optional object implementing `error`/`warn`/`info`/`debug`,
 wrapped by a level-gated `QvacLogger`.
 
-**`run(caption, opts)`** returns a `QvacResponse`; `opts`: `lyrics`,
-`vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `duration`, `seed`.
+**`run(caption, opts)`** returns a `QvacResponse`.
+
+| Option | Meaning |
+|--------|---------|
+| `lyrics` | Lyrics text; use `[Instrumental]` for no vocals. |
+| `vocalLanguage` | Vocal language hint. |
+| `bpm` | Tempo in beats per minute. |
+| `keyscale` | Key and scale, such as `C minor`. |
+| `timesignature` | Time signature, such as `4/4`. |
+| `duration` | Target length in seconds; omit to let the LM decide. |
+| `seed` | RNG seed for reproducible generation. |
+| `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
+| `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |
+| `dcwEnabled` / `dcwScaler` / `dcwHighScaler` | Haar DCW correction controls. |
+| `audioCodes` | Frozen ACE-Step semantic codes as an `Int32Array`; skips the LM. |
+| `referenceAudio` | Optional finite, normalized, interleaved stereo 48 kHz `Float32Array` used for timbre conditioning. |
+| `sourceAudio` | Source PCM in the same format; required by cover tasks. |
+| `taskType` | `text2music` (default), `cover-nofsq`, or reserved `cover`. |
+| `audioCoverStrength` | Source-context strength from `0` to `1`; currently must be `1` for `cover-nofsq`. |
+| `coverNoiseStrength` | Initial source/noise blend from `0` to `1`. |
 
 ## Models
 
@@ -212,6 +301,50 @@ Downloading the GGUFs is the caller's job (the qvac SDK's `resolveModelPath`, a
 download script, etc.) — the addon only ever receives a local path. `models.js`
 is the single source of truth for the registry paths and the `ditVariant` enum.
 
+Install the optional registry client used by the downloader, then download a
+selected model set into a directory owned by your application:
+
+```bash
+npm install @qvac/registry-client
+npx qvac-audiogen-download-models --output ./models/audiogen --variant turbo-q4
+```
+
+`--output`/`-o` is required. `--variant`/`-v` accepts `turbo-q4`, `turbo-q8`,
+`sft`, or `all`; it defaults to `turbo-q4`. Use `--help` to print the flags.
+The command does not write into the installed package.
+
+## Lifecycle
+
+Call `load()` before `run()`. Overlapping `run()` calls are admitted in order;
+each call returns its own `QvacResponse` after native admission, and the next
+run waits until that response settles. A native busy rejection fails admission
+with `QvacErrorAudioGen`.
+
+`cancel()` cancels the active native job and rejects its response with
+`ERR_CODES.CANCELLED`. `unload()` cancels and rejects active work, releases the
+native instance, and permits a later `load()`. `destroy()` performs the same
+cleanup but permanently closes that `AudioGen` instance. `AudioGen.encode()`
+does not depend on loaded model state and converts collected PCM bytes to the
+requested output format.
+
+The package exports `QvacErrorAudioGen` and `ERR_CODES` for structured handling
+of invalid input, lifecycle state, cancellation, admission, and native failures.
+
+## Example environment variables
+
+`examples/generate-music.js` accepts `AUDIOGEN_MODEL_DIR` (required),
+`AUDIOGEN_DIT_VARIANT`, `AUDIOGEN_DIT`, `AUDIOGEN_CAPTION`,
+`AUDIOGEN_LYRICS`, `AUDIOGEN_LANG`, `AUDIOGEN_BPM`, `AUDIOGEN_KEY`,
+`AUDIOGEN_TSIG`, `AUDIOGEN_DUR`, `AUDIOGEN_SEED`, `AUDIOGEN_CODES`,
+`AUDIOGEN_DCW`, `AUDIOGEN_DCW_LOW`, `AUDIOGEN_DCW_HIGH`,
+`AUDIOGEN_FORMAT`, `AUDIOGEN_GPU`, and `AUDIOGEN_OUT`.
+
+`AUDIOGEN_DIT_VARIANT` selects a named variant. `AUDIOGEN_DIT` is an explicit
+DiT model path and takes precedence. The cover example additionally accepts
+`AUDIOGEN_SOURCE_PCM` (required), `AUDIOGEN_REFERENCE_PCM`,
+`AUDIOGEN_COVER_NOISE`, and the shared caption, lyrics, seed, GPU, output,
+model-directory, and DiT-variant variables.
+
 ## Internals
 
 ```
@@ -224,8 +357,47 @@ index.js ─► binding (BARE_MODULE) ─► AcestepModel ─► tts_cpp::aceste
 - `addon/src/addon/AddonJs.hpp` — `createInstance` / `activate` / `runJob`.
 - `addon/src/model-interface/acestep/` — `AcestepModel`, wrapping the engine.
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on `audiogen-cpp`
-  (the C++ engine, on our ggml-speech fork). No prebuilt binaries — the C++ is
-  compiled for every supported platform.
+  (the C++ engine, on our ggml-speech fork).
+
+## Benchmarking
+
+The package ships the Real-Time Factor benchmark it is measured with, so the
+numbers can be reproduced on your own hardware:
+
+```bash
+npm run test:benchmark:rtf          # one (DiT variant, GPU) combination
+npm run test:benchmark:rtf:matrix   # sweep several in one process
+```
+
+Both are configured through `QVAC_AUDIOGEN_GGML_BENCHMARK_*` environment
+variables. `benchmarks/RTF-BENCHMARKS.md` documents the metrics, the determinism
+guarantees and the full variable list.
+
+### `@qvac/audiogen-ggml/test/benchmark-runner`
+
+A subpath export of the shared measurement, used by the on-device harness so the
+desktop and mobile lanes report comparable numbers:
+
+```js
+const {
+  readBenchmarkSettings,
+  runRtfBenchmark,
+  emitCanonicalReport
+} = require('@qvac/audiogen-ggml/test/benchmark-runner')
+
+const settings = readBenchmarkSettings()
+const { summary, backend } = await runRtfBenchmark(settings)
+emitCanonicalReport(settings, summary, backend)
+```
+
+`runRtfBenchmark` throws if the measurement is unusable — a non-positive RTF, a
+run that rendered no audio, implausible memory, or a mean RTF above
+`QVAC_AUDIOGEN_GGML_BENCHMARK_RTF_UPPER_BOUND` — so a broken run can never be
+reported as a passing one.
+
+This subpath is test tooling, not part of the addon's stable API: it depends on
+the runtime providing `bare-os` / `bare-fs`, and it may change without a major
+version bump.
 
 ## License
 

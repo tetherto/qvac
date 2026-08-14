@@ -9,16 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@qvac/transcription-whispercpp` (final release `0.12.1`) and
 `@qvac/transcription-parakeet` (final release `0.10.1`). Version numbering
 restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
-[`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) and
-[`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md).
+[`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
+[`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
 ## [Unreleased]
+
+### Fixed
+
+- Publish a dependency-clean Whisper quickstart with positional audio, model,
+  and VAD model arguments.
+- Correct public documentation for Whisper VAD naming, engine-specific status
+  codes, the `speech-cpp` umbrella dependency, and backend device value types.
+
+## [0.3.0] - 2026-08-12
 
 ### Added
 
 - **Choosing a model guide.** README documents which specific Whisper `.bin` or
   Parakeet `.gguf` to pick per use case (default TDT, EOU, CTC, Sortformer
   offline vs streaming, Whisper turbo/small for language breadth / translation).
+- **`parakeetConfig.language`.** Optional multilingual CTC language id (e.g.
+  `"hi"`, `"ta"`) forwarded to `EngineOptions::language`. Required for Indic
+  Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on
+  monolingual CTC.
+
+### Changed
+
+- Update `parakeet-cpp` to `2026-08-10#2` for Indic Conformer CTC language
+  masking.
+
+### Pull Requests
+
+- [#3702](https://github.com/tetherto/qvac/pull/3702) - QVAC-23279 feat[asr-ggml]:
+  Indic Conformer CTC language support and fork registry pin
+- [#3674](https://github.com/tetherto/qvac/pull/3674) - QVAC-22512 doc: add speech
+  model choice guides for TTS and ASR
 
 ## [0.2.0] - 2026-08-06
 

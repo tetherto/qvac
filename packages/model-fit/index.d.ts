@@ -3,9 +3,8 @@ export interface FitConfig {
      * Path to the GGUF weights file.
      *
      * Must be absolute; a relative path throws. It would otherwise resolve
-     * against the process working directory, which nothing in a worklet
-     * controls, so the same call could name a different file — or no file — from
-     * one launch to the next.
+     * against the process working directory, so the same call could name a
+     * different file — or no file — from one launch to the next.
      */
     modelPath: string;
     /**
@@ -172,9 +171,9 @@ export declare const FIT_STATUS: Readonly<{
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
- * This is a synchronous, blocking native call. It is designed to run in its own
- * short-lived worklet so that any backend/driver instability during probing
- * stays isolated from the inference worker.
+ * This is a synchronous, blocking in-process native call. Callers that need
+ * isolation should use `@qvac/model-fit/process` to run it in a disposable
+ * Bare subprocess.
  *
  * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of
