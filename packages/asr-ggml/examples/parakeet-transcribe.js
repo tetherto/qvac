@@ -25,7 +25,7 @@ const {
   readFileAsStream,
   validatePaths,
   printResults
-} = require('./utils.js')
+} = require('./parakeet-utils.js')
 
 function parseArgs() {
   const args = { model: null, audio: null }

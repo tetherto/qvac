@@ -185,7 +185,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' && (inputs.mode == 'smoke' || inputs.mode == 'full')
     environment: benchmark-live
-    runs-on: macos-26
+    runs-on: [self-hosted, qvac-macos26-arm64-gpu]
     timeout-minutes: 180
     env:
       BENCHMARK_CONFIG_PATH: ${{ vars.BENCHMARK_CONFIG_PATH }}

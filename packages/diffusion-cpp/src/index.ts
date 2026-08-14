@@ -82,6 +82,7 @@ export type ScheduleType =
   | 'smoothstep'
   | 'kl_optimal'
   | 'bong_tangent'
+  | 'ltx2'
 
 export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
 
@@ -98,6 +99,8 @@ export interface SdConfig {
   sampler_rng?: RngType
   clip_on_cpu?: boolean
   vae_on_cpu?: boolean
+  vae_auto_cpu_fallback?: boolean
+  vae_auto_cpu_fallback_memory_ratio?: number
   vae_decode_only?: boolean
   vae_tiling?: boolean
   flash_attn?: boolean

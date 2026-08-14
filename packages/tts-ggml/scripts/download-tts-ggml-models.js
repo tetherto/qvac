@@ -14,6 +14,7 @@ const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10'
 const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15'
 // Parler family (mini / large / indic) publish date.
 const REGISTRY_DATE_PARLER = '2026-07-20'
+const REGISTRY_DATE_AUDIO8 = '2026-08-12'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
 const GROUPS = {
@@ -86,6 +87,20 @@ const GROUPS = {
     {
       name: 'parler-indic-f16.gguf',
       registryPath: `qvac_models_compiled/ggml/parler-tts/${REGISTRY_DATE_PARLER}/parler-indic-f16.gguf`
+    }
+  ],
+  audio8: [
+    {
+      name: 'audio8-lm-q8_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/audio-8/${REGISTRY_DATE_AUDIO8}/audio8-lm-q8_0.gguf`
+    },
+    {
+      name: 'audio8-codec-decoder-q8_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/audio-8/${REGISTRY_DATE_AUDIO8}/audio8-codec-decoder-q8_0.gguf`
+    },
+    {
+      name: 'audio8-codec-encoder-q8_0.gguf',
+      registryPath: `qvac_models_compiled/ggml/audio-8/${REGISTRY_DATE_AUDIO8}/audio8-codec-encoder-q8_0.gguf`
     }
   ]
 }

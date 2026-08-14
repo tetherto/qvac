@@ -338,6 +338,7 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      run_rtf_benchmarks: ${{ contains(github.event.pull_request.labels.*.name, 'run-benchmarks') }}
 
   # Mobile integration lane: on-device (AWS Device Farm) load + generate smoke.
   # Like the desktop lane it needs the mobile prebuild artifacts (android-arm64 /
@@ -360,6 +361,26 @@ jobs:
     if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
     secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      run_rtf_benchmarks: ${{ contains(github.event.pull_request.labels.*.name, 'run-benchmarks') }}
+
+  # The benchmark lanes only write artifacts; without this the table exists
+  # nowhere on a PR. Gated on the same label so an ordinary PR pays nothing.
+  # Secrets are deliberately not inherited: this job runs the aggregator from
+  # the PR's own checkout, and the reusable workflow falls back to github.token.
+  summarize-benchmarks:
+    needs:
+      - fork-approval
+      - authorize
+      - context
+      - run-integration-tests
+      - run-mobile-integration-tests
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && contains(github.event.pull_request.labels.*.name, 'run-benchmarks')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-summarize-audiogen-ggml-benchmarks.yml
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}

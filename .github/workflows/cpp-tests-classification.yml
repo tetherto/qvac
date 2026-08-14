@@ -40,10 +40,10 @@ jobs:
             platform: linux
             arch: x64
             runner: qvac-ubuntu2404-x64
-          - os: macos-26
+          - os: macos-15
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64

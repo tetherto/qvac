@@ -486,6 +486,7 @@ const REGISTRY_DATE_S3GEN_Q4_0 = '2026-06-01' // chatterbox-s3gen* / -s3gen-mtl*
 const REGISTRY_DATE_Q4_0 = '2026-05-18' // chatterbox-t3*, supertonic, supertonic2
 const REGISTRY_DATE_SUPERTONIC3 = '2026-06-10' // supertonic3-f16 / -f32
 const REGISTRY_DATE_SUPERTONIC3_QUANT = '2026-06-15' // supertonic3-q8_0 / -q4_0
+const REGISTRY_DATE_AUDIO8 = '2026-08-12'
 
 // Size bands.  Both bounds are enforced (see `hasAllGgufsIn` below) so a
 // stale f16 cache from a previous test run gets rejected and re-fetched
@@ -505,6 +506,11 @@ const SIZE_SUPERTONIC2_Q4_0 = { minSize: 25_000_000, maxSize: 250_000_000 }
 // 2026-06-10; q8_0 / q4_0 @ 2026-06-15). One generous
 // band covers them all so the resolver accepts whichever tier was fetched.
 const SIZE_SUPERTONIC3 = { minSize: 25_000_000, maxSize: 500_000_000 }
+const SIZE_AUDIO8_LM = { minSize: 500_000_000, maxSize: 2_000_000_000 }
+const SIZE_AUDIO8_DECODER = { minSize: 100_000_000, maxSize: 600_000_000 }
+const SIZE_AUDIO8_ENCODER = { minSize: 150_000_000, maxSize: 800_000_000 }
+const DEFAULT_AUDIO8_QUANT = 'q8_0'
+const VALID_AUDIO8_QUANTS = [DEFAULT_AUDIO8_QUANT, 'f16']
 
 const CHATTERBOX_GGUFS = [
   {
@@ -553,6 +559,34 @@ const SUPERTONIC_MTL_GGUFS = [
     registrySource: REGISTRY_SOURCE
   }
 ]
+
+function audio8Ggufs(quant = DEFAULT_AUDIO8_QUANT, includeEncoder = true) {
+  if (!VALID_AUDIO8_QUANTS.includes(quant)) return []
+  const prefix = `qvac_models_compiled/ggml/audio-8/${REGISTRY_DATE_AUDIO8}`
+  const files = [
+    {
+      name: `audio8-lm-${quant}.gguf`,
+      ...SIZE_AUDIO8_LM,
+      registryPath: `${prefix}/audio8-lm-${quant}.gguf`,
+      registrySource: REGISTRY_SOURCE
+    },
+    {
+      name: `audio8-codec-decoder-${quant}.gguf`,
+      ...SIZE_AUDIO8_DECODER,
+      registryPath: `${prefix}/audio8-codec-decoder-${quant}.gguf`,
+      registrySource: REGISTRY_SOURCE
+    }
+  ]
+  if (includeEncoder) {
+    files.push({
+      name: `audio8-codec-encoder-${quant}.gguf`,
+      ...SIZE_AUDIO8_ENCODER,
+      registryPath: `${prefix}/audio8-codec-encoder-${quant}.gguf`,
+      registrySource: REGISTRY_SOURCE
+    })
+  }
+  return files
+}
 
 // LavaSR 48 kHz bandwidth-extension enhancer (benchmark `enhancer=lavasr` axis).
 // fp16 (~28 MB, the benchmark default) + fp32 (~56 MB) are published on the QVAC
@@ -779,6 +813,52 @@ function hasAllGgufsIn(dir, ggufs) {
 
 function hasAllGgufs(dir) {
   return hasAllGgufsIn(dir, CHATTERBOX_GGUFS)
+}
+
+function audio8CandidateDirs(requestedDir) {
+  const candidates = [requestedDir]
+  for (const dir of desktopFallbackDirs()) {
+    if (!candidates.includes(dir)) candidates.push(dir)
+  }
+  return candidates
+}
+
+function findAudio8Dir(candidates, files) {
+  for (const dir of candidates) {
+    if (hasAllGgufsIn(dir, files)) return dir
+  }
+  return null
+}
+
+function audio8Result(dir, quant, includeEncoder, cached) {
+  return {
+    success: true,
+    targetDir: dir,
+    quant,
+    cached,
+    lmPath: path.join(dir, `audio8-lm-${quant}.gguf`),
+    decoderPath: path.join(dir, `audio8-codec-decoder-${quant}.gguf`),
+    encoderPath: includeEncoder ? path.join(dir, `audio8-codec-encoder-${quant}.gguf`) : null
+  }
+}
+
+async function ensureAudio8Models(options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models')
+  const quant = options.quant || DEFAULT_AUDIO8_QUANT
+  const includeEncoder = options.includeEncoder !== false
+  const files = audio8Ggufs(quant, includeEncoder)
+  if (files.length === 0) {
+    return { success: false, targetDir: requestedDir, quant }
+  }
+
+  const resolvedDir = findAudio8Dir(audio8CandidateDirs(requestedDir), files)
+  if (resolvedDir) return audio8Result(resolvedDir, quant, includeEncoder, true)
+
+  if (await tryFetchGgufsFromRegistry(files, requestedDir)) {
+    return audio8Result(requestedDir, quant, includeEncoder, false)
+  }
+
+  return { success: false, targetDir: requestedDir, quant }
 }
 
 /**
@@ -1750,6 +1830,8 @@ module.exports = {
   ensureSupertonicModel,
   ensureSupertonicMtlModel,
   ensureSupertonic3Model,
+  ensureAudio8Models,
+  audio8Ggufs,
   supertonic3QuantFromVariant,
   DEFAULT_SUPERTONIC3_QUANT,
   ensureParlerModel,
