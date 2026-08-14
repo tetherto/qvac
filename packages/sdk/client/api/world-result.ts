@@ -83,16 +83,32 @@ export function toWalkKeys(keys: WalkKeysInput | undefined): WalkKey[] {
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
-  let reject: (error: unknown) => void = () => {}
+  let reject: (error: Error) => void = () => {}
+  let settled = false
   const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
+    resolve = (value) => {
+      settled = true
+      res(value)
+    }
+    reject = (error: Error) => {
+      settled = true
+      rej(error)
+    }
   })
   // Nothing else settles these, so an unobserved rejection must not surface as
   // an unhandled rejection just because the caller only awaited one of them.
   promise.catch(() => {})
-  return { promise, resolve, reject }
+  return { promise, resolve, reject, isSettled: () => settled }
 }
+
+/**
+ * A stream that ends without a `done` frame has to fail the result promises
+ * explicitly. Nothing else settles them, so leaving them pending turns a
+ * dropped connection or a truncated stream into an `await` that never returns —
+ * a hang the caller cannot distinguish from slow generation, and cannot time
+ * out because no error is ever delivered.
+ */
+const TRUNCATED_STREAM = 'World stream ended before the operation completed'
 
 export function createWorldStepResult(
   params: WorldStepClientParams,
@@ -148,6 +164,13 @@ export function createWorldStepResult(
       streamError = error instanceof Error ? error : new Error(String(error))
       statsOut.reject(streamError)
       framesOut.reject(streamError)
+    }
+
+    if (!framesOut.isSettled()) {
+      const truncated = streamError ?? new Error(TRUNCATED_STREAM)
+      streamError = truncated
+      statsOut.reject(truncated)
+      framesOut.reject(truncated)
     }
 
     done = true
@@ -221,6 +244,12 @@ export function createWorldSceneResult(
       }
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error))
+      statsOut.reject(failure)
+      sceneOut.reject(failure)
+    }
+
+    if (!sceneOut.isSettled()) {
+      const failure = new Error(TRUNCATED_STREAM)
       statsOut.reject(failure)
       sceneOut.reject(failure)
     }

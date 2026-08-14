@@ -144,3 +144,51 @@ test('worldCreateScene result: a stream failure rejects the pack', async (t) => 
   await t.exception(result.scene, /Model was unloaded/)
   await t.exception(result.stats, /Model was unloaded/)
 })
+
+// A stream can end cleanly without ever carrying `done` — a dropped transport,
+// a worker that goes away, a server-side abort that closes rather than throws.
+// Nothing else settles the result promises, so leaving them pending turns that
+// into an await that never returns: indistinguishable from slow generation, and
+// impossible for the caller to time out because no error is ever delivered.
+test('worldStep result: a stream that ends without done rejects instead of hanging', async (t) => {
+  async function* truncatedStream() {
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+  }
+
+  const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, truncatedStream)
+
+  await t.exception(result.frames, /ended before the operation completed/, 'frames do not hang')
+  await t.exception(result.stats, /ended before the operation completed/, 'stats do not hang')
+})
+
+test('worldStep result: a truncated block surfaces on the frame stream too', async (t) => {
+  async function* truncatedStream() {
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+  }
+
+  const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, truncatedStream)
+
+  const streamed: number[] = []
+  await t.exception(
+    (async () => {
+      for await (const f of result.frameStream) streamed.push(f[0]!)
+    })(),
+    /ended before the operation completed/,
+    'a partial block is an error, not a short but successful walk'
+  )
+  t.alike(streamed, [1], 'frames delivered before the truncation are still handed over')
+})
+
+test('worldCreateScene result: a stream that ends without done rejects instead of hanging', async (t) => {
+  async function* truncatedStream() {
+    yield { type: 'worldSceneStream' }
+  }
+
+  const result = createWorldSceneResult(
+    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]) },
+    truncatedStream
+  )
+
+  await t.exception(result.scene, /ended before the operation completed/, 'the pack does not hang')
+  await t.exception(result.stats, /ended before the operation completed/, 'stats do not hang')
+})
