@@ -28,8 +28,9 @@ inputs:
     required: false
     default: ""
   output-map:
-    description: "Path to write the name -> presigned-URL JSON map"
-    required: true
+    description: "Path to write the name -> presigned-URL JSON map (required for mode=presign|both)"
+    required: false
+    default: ""
   model-names:
     description: "Optional comma-separated allowlist of model names to seed (the mobile subset). Empty = every model in the manifest."
     required: false
@@ -38,6 +39,10 @@ inputs:
     description: "Presigned-URL lifetime in seconds (effective TTL capped by the STS session)"
     required: false
     default: "7200"
+  mode:
+    description: "both = seed then presign (default); seed = mirror-only (one writer, no map); presign = presign already-seeded objects (per matrix leg)"
+    required: false
+    default: "both"
 
 runs:
   using: composite
@@ -97,7 +102,28 @@ runs:
         MODEL_NAMES: ${{ inputs.model-names }}
         EXPIRES_IN: ${{ inputs.expires-in }}
         HF_TOKEN: ${{ inputs.hf-token }}
+        MODE: ${{ inputs.mode }}
       run: |
         set -euo pipefail
         unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
         node "$GITHUB_ACTION_PATH/seed-and-presign.mjs"
+
+    # The presigned URLs carry bearer credentials and this repo is public, so
+    # register each with the runner so it is redacted wherever the workflow would
+    # otherwise echo it (e.g. the prestage block / manifest, step inputs). Masking
+    # only covers this job's log stream; the Device Farm artifact half is scrubbed
+    # separately in collect-and-upload-logs.
+    - name: Mask presigned URLs in the runner log
+      if: inputs.mode != 'seed'
+      shell: bash
+      env:
+        OUTPUT_MAP: ${{ inputs.output-map }}
+      run: |
+        set -euo pipefail
+        node -e '
+          const fs = require("fs")
+          const map = JSON.parse(fs.readFileSync(process.env.OUTPUT_MAP, "utf8"))
+          for (const url of Object.values(map)) {
+            if (typeof url === "string" && url) console.log("::add-mask::" + url)
+          }
+        '

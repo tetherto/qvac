@@ -182,7 +182,7 @@ test('buildScript rejects unknown platforms', () => {
 
 test('normalizeManifest stores each URL once and maps tests to names', () => {
   const shared = 'https://us-bucket.example/presigned/shared.gguf?sig=abc'
-  const { urls, tests } = normalizeManifest({
+  const { urls, fallbacks, tests } = normalizeManifest({
     runA: [{ name: 'shared.gguf', url: shared }],
     runB: [
       { name: 'shared.gguf', url: shared },
@@ -192,7 +192,28 @@ test('normalizeManifest stores each URL once and maps tests to names', () => {
 
   assert.deepEqual(Object.keys(urls).sort(), ['only-b.gguf', 'shared.gguf'])
   assert.equal(urls['shared.gguf'], shared)
+  assert.deepEqual(fallbacks, {})
   assert.deepEqual(tests, { runA: ['shared.gguf'], runB: ['shared.gguf', 'only-b.gguf'] })
+})
+
+test('normalize -> expand carries the upstream fallback through to the row', () => {
+  const presigned = 'https://us-bucket.example/presigned/m.gguf?sig=abc'
+  const upstream = 'https://huggingface.co/x/y/resolve/deadbeef/m.gguf'
+  const normalized = normalizeManifest({
+    runA: [{ name: 'm.gguf', url: presigned, fallback: upstream }]
+  })
+
+  assert.deepEqual(normalized.fallbacks, { 'm.gguf': upstream })
+  assert.deepEqual(expandPrestageList(normalized, 'runA'), [
+    { name: 'm.gguf', url: presigned, fallback: upstream }
+  ])
+})
+
+test('commonPrelude writes the optional fallback as a third tsv column', () => {
+  const script = buildScript(Buffer.from('{"urls":{},"tests":{}}').toString('base64'))
+  assert.match(script, /r\.fallback\?/)
+  assert.match(script, /read -r NAME URL FALLBACK/)
+  assert.match(script, /used fallback/)
 })
 
 test('normalize -> expand round-trips each shard to its {name,url} rows', () => {

@@ -22,9 +22,14 @@ const MANIFEST_PATH = env('MANIFEST_PATH')
 const S3_BUCKET = env('S3_BUCKET')
 const S3_PREFIX = env('S3_PREFIX')
 const AWS_REGION = env('AWS_REGION', 'us-west-2')
-const OUTPUT_MAP = env('OUTPUT_MAP')
+// OUTPUT_MAP is only needed when presigning; seed-only runs don't write a map.
+const OUTPUT_MAP = process.env.OUTPUT_MAP || ''
 const EXPIRES_IN = env('EXPIRES_IN', '7200')
 const HF_TOKEN = process.env.HF_TOKEN || ''
+// both  = seed missing objects, then presign (default; single-job callers)
+// seed  = only mirror missing objects into S3 (one writer; no map, no presign)
+// presign = only presign already-seeded objects (per matrix leg; fresh URLs)
+const MODE = env('MODE', 'both')
 const MODEL_NAMES = (process.env.MODEL_NAMES || '')
   .split(',')
   .map((s) => s.trim())
@@ -66,20 +71,42 @@ function headObjectSize(key) {
   }
 }
 
-function isHuggingFace(url) {
+// The manifest is read from the PR head, so its URLs are untrusted input. Pin
+// the source to https on a known model host; this blocks file://, internal
+// hosts, and option-injection via a leading '-' before curl ever runs. Every
+// live seeded manifest (llm/embed/diffusion) uses only these two hosts.
+const ALLOWED_HOSTS = new Set(['huggingface.co', 'github.com'])
+
+function parseSourceUrl(url) {
+  let parsed
   try {
-    return new URL(url).host === 'huggingface.co'
+    parsed = new URL(url)
   } catch {
-    return false
+    throw new Error(`[seed] rejected non-URL source: ${JSON.stringify(url)}`)
   }
+  if (parsed.protocol !== 'https:' || !ALLOWED_HOSTS.has(parsed.hostname)) {
+    throw new Error(`[seed] rejected source host/scheme: ${parsed.protocol}//${parsed.hostname}`)
+  }
+  return parsed
+}
+
+function isHuggingFace(parsed) {
+  return parsed.hostname === 'huggingface.co'
 }
 
 function download(url, dest) {
+  const parsed = parseSourceUrl(url)
   const args = [
     '--fail',
     '--silent',
     '--show-error',
     '--location',
+    // Keep the initial fetch and every redirect on https so a manifest URL can
+    // never downgrade to a non-TLS or file:// scheme mid-chain.
+    '--proto',
+    '=https',
+    '--proto-redir',
+    '=https',
     '--retry',
     '6',
     '--retry-all-errors',
@@ -94,10 +121,12 @@ function download(url, dest) {
   ]
   // Only send the HF token to huggingface.co; curl drops it on the cross-host
   // redirect to the signed CDN (no --location-trusted), so it never leaks.
-  if (HF_TOKEN && isHuggingFace(url)) {
+  if (HF_TOKEN && isHuggingFace(parsed)) {
     args.push('-H', `Authorization: Bearer ${HF_TOKEN}`)
   }
-  args.push(url)
+  // '--' terminates option parsing so a URL beginning with '-' is never read as
+  // a curl flag.
+  args.push('--', url)
   execFileSync('curl', args, { stdio: ['ignore', 'inherit', 'inherit'] })
 }
 
@@ -118,15 +147,21 @@ function sha256(file) {
 }
 
 function verify(file, entry, name) {
+  // Fail closed: the pins are the only defence against a poisoned mirror object,
+  // so a manifest that omits them must not silently skip verification.
+  if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+    throw new Error(`[seed] ${name}: manifest entry is missing a positive bytes pin`)
+  }
+  if (typeof entry.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(entry.sha256)) {
+    throw new Error(`[seed] ${name}: manifest entry is missing a valid sha256 pin`)
+  }
   const size = statSync(file).size
-  if (Number.isInteger(entry.bytes) && size !== entry.bytes) {
+  if (size !== entry.bytes) {
     throw new Error(`[seed] ${name}: size ${size} != manifest ${entry.bytes}`)
   }
-  if (typeof entry.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(entry.sha256)) {
-    const got = sha256(file)
-    if (got !== entry.sha256.toLowerCase()) {
-      throw new Error(`[seed] ${name}: sha256 ${got} != manifest ${entry.sha256}`)
-    }
+  const got = sha256(file)
+  if (got !== entry.sha256.toLowerCase()) {
+    throw new Error(`[seed] ${name}: sha256 ${got} != manifest ${entry.sha256}`)
   }
 }
 
@@ -161,27 +196,34 @@ function main(workDir) {
     names = MODEL_NAMES
   }
   names.forEach(validateModelName)
-  console.log(`[seed] ${names.length} model(s) to seed (manifest has ${Object.keys(manifest.models).length})`)
+  const doSeed = MODE !== 'presign'
+  const doPresign = MODE !== 'seed'
+  console.log(`[seed] mode=${MODE}: ${names.length} model(s) (manifest has ${Object.keys(manifest.models).length})`)
   console.log(`[seed] destination s3://${S3_BUCKET}/${S3_PREFIX} (${AWS_REGION})`)
 
-  const map = {}
   let seeded = 0
   let present = 0
 
-  for (const name of names) {
-    const entry = manifest.models[name]
-    const urls = Array.isArray(entry.urls) ? entry.urls : []
-    if (urls.length === 0) throw new Error(`[seed] ${name}: no urls in manifest`)
-    const key = s3Key(name)
+  // Phase 1 (seed/both): mirror every missing object into S3. Splitting this from
+  // presigning lets one non-matrixed job own the writes (no concurrent-write race
+  // across the platform legs) while each leg presigns for itself in phase 2.
+  if (doSeed) {
+    for (const name of names) {
+      const entry = manifest.models[name]
+      const urls = Array.isArray(entry.urls) ? entry.urls : []
+      if (urls.length === 0) throw new Error(`[seed] ${name}: no urls in manifest`)
+      const key = s3Key(name)
 
-    const existingSize = headObjectSize(key)
-    const alreadySeeded =
-      existingSize !== null && (!Number.isInteger(entry.bytes) || existingSize === entry.bytes)
+      const existingSize = headObjectSize(key)
+      const alreadySeeded =
+        existingSize !== null && (!Number.isInteger(entry.bytes) || existingSize === entry.bytes)
 
-    if (alreadySeeded) {
-      present++
-      console.log(`[seed] ${name}: already in US bucket (${existingSize} bytes), skipping`)
-    } else {
+      if (alreadySeeded) {
+        present++
+        console.log(`[seed] ${name}: already in US bucket (${existingSize} bytes), skipping`)
+        continue
+      }
+
       const tmp = join(workDir, name)
       // finally: drop the partial multi-GB file even when download/verify/upload
       // throws, so failed models don't fill the shared self-hosted runner disk.
@@ -210,7 +252,24 @@ function main(workDir) {
         } catch {}
       }
     }
+  }
 
+  if (!doPresign) {
+    console.log(`[seed] done (seed-only): ${seeded} seeded, ${present} already present`)
+    return
+  }
+
+  if (!OUTPUT_MAP) throw new Error('[seed] OUTPUT_MAP is required when presigning')
+
+  // Phase 2 (presign/both): presign in one pass so every URL starts its TTL at
+  // the same moment right before the map is handed back. In presign-only mode the
+  // objects must already exist (seeded by the upstream seed job).
+  const map = {}
+  for (const name of names) {
+    const key = s3Key(name)
+    if (!doSeed && headObjectSize(key) === null) {
+      throw new Error(`[seed] ${name}: not present in s3://${S3_BUCKET}/${key} (run the seed job first)`)
+    }
     map[name] = presign(key)
   }
 
@@ -231,4 +290,4 @@ function run() {
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) run()
 
-export { validateModelName, s3Key }
+export { validateModelName, s3Key, parseSourceUrl, verify }

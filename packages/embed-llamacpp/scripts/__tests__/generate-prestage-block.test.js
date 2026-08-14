@@ -70,9 +70,12 @@ test('PRESTAGE_URL_MAP overrides pull from the US bucket and bypass the HF-shape
     const models = modelsFromManifest(SAMPLE)
     const gte = models.find((m) => m.name === 'gte-large_fp16.gguf')
     assert.equal(gte.url, usUrl)
-    // Un-overridden models still resolve from their pinned HF URL.
+    // The pinned HF URL is retained as an on-device fallback.
+    assert.match(gte.fallback, /^https:\/\/huggingface\.co\//)
+    // Un-overridden models still resolve from their pinned HF URL (no fallback).
     const gemma = models.find((m) => m.name === 'embeddinggemma-300M-Q8_0.gguf')
     assert.match(gemma.url, /^https:\/\/huggingface\.co\//)
+    assert.equal(gemma.fallback, undefined)
   } finally {
     if (prev === undefined) delete process.env.PRESTAGE_URL_MAP
     else process.env.PRESTAGE_URL_MAP = prev
@@ -107,6 +110,15 @@ test('buildScript ios backend uses pymobiledevice3 apps push into Documents', ()
 
 test('buildScript rejects unknown platforms', () => {
   assert.throws(() => buildScript([], 'windows'), /unknown platform/)
+})
+
+test('buildScript wires a fallback URL into the stage call and curl fall-through', () => {
+  const script = buildScript([
+    { name: 'a.gguf', url: 'https://us/a?sig=1', fallback: 'https://hf/a' }
+  ])
+  assert.match(script, /stage "a\.gguf" "https:\/\/us\/a\?sig=1" "https:\/\/hf\/a"/)
+  assert.match(script, /NAME="\$1"; URL="\$2"; FALLBACK="\$3"/)
+  assert.match(script, /\[ -n "\$FALLBACK" \] && curl/)
 })
 
 test('real integration manifest drives the complete pre-stage set', () => {

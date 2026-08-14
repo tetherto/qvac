@@ -33,17 +33,23 @@ function modelsFromManifest(manifest) {
   const overrideMap = loadUrlOverrideMap()
   const models = []
   for (const [name, entry] of Object.entries(manifest.models)) {
-    // Prefer the presigned US-bucket URL (bypasses the HF-shape check below).
+    const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
+    const pinnedOk =
+      typeof url === 'string' &&
+      url.startsWith('https://') &&
+      !/\/resolve\/(?:main|master)\//.test(url)
+    // Prefer the presigned US-bucket URL (bypasses the HF-shape check), but keep
+    // the pinned URL as an on-device fallback so an expired/unreachable presigned
+    // URL doesn't fail the run.
     if (overrideMap && typeof overrideMap[name] === 'string') {
-      models.push({ name, url: overrideMap[name] })
+      models.push(
+        pinnedOk
+          ? { name, url: overrideMap[name], fallback: url }
+          : { name, url: overrideMap[name] }
+      )
       continue
     }
-    const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
-    if (
-      typeof url !== 'string' ||
-      !url.startsWith('https://') ||
-      /\/resolve\/(?:main|master)\//.test(url)
-    ) {
+    if (!pinnedOk) {
       throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
     }
     models.push({ name, url })
@@ -53,15 +59,19 @@ function modelsFromManifest(manifest) {
 
 // Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
 function buildAndroidScript(models) {
-  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+  const stageCalls = models
+    .map((m) => `stage "${m.name}" "${m.url}" "${m.fallback || ''}"`)
+    .join('\n')
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
 adb shell mkdir -p "$PRESTAGE_DIR"
 mkdir -p /tmp/prestage
 stage() {
-  NAME="$1"; URL="$2"
+  NAME="$1"; URL="$2"; FALLBACK="$3"
   echo "[prestage] staging $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
+  if curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then :;
+  elif [ -n "$FALLBACK" ] && curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$FALLBACK"; then echo "[prestage] $NAME: primary URL failed, used fallback";
+  else echo "[prestage] FATAL: download of $NAME failed"; exit 1; fi
   adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"
   adb shell test -s "$PRESTAGE_DIR/$NAME" || { echo "[prestage] FATAL: $NAME not present on device after push"; exit 1; }
   rm -f "/tmp/prestage/$NAME"
@@ -73,7 +83,9 @@ echo "[prestage] done"`
 }
 
 function buildIosScript(models) {
-  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+  const stageCalls = models
+    .map((m) => `stage "${m.name}" "${m.url}" "${m.fallback || ''}"`)
+    .join('\n')
   return `set -e
 export PATH="$HOME/.local/bin:$PATH"
 unset SUDO_UID SUDO_GID
@@ -83,9 +95,11 @@ python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install
 pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
 mkdir -p /tmp/prestage
 stage() {
-  NAME="$1"; URL="$2"
+  NAME="$1"; URL="$2"; FALLBACK="$3"
   echo "[prestage] staging $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
+  if curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then :;
+  elif [ -n "$FALLBACK" ] && curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$FALLBACK"; then echo "[prestage] $NAME: primary URL failed, used fallback";
+  else echo "[prestage] FATAL: download of $NAME failed"; exit 1; fi
   if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
   printf '%s\\n' "$PUSH_OUT"
   if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
