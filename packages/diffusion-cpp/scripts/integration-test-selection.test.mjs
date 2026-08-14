@@ -16,9 +16,14 @@ const testFiles = fs
   .map((file) => path.posix.join('test', 'integration', file))
 const modelFamilyFiles = {
   flux2: testFiles.filter((file) => /flux2/i.test(path.basename(file))),
-  ideogram: testFiles.filter((file) => /ideogram/i.test(path.basename(file)))
+  ideogram: testFiles.filter((file) => /ideogram/i.test(path.basename(file))),
+  ltx: testFiles.filter((file) => /ltx/i.test(path.basename(file)))
 }
-const unsupportedFamilyFiles = [...modelFamilyFiles.flux2, ...modelFamilyFiles.ideogram]
+const unsupportedFamilyFiles = [
+  ...modelFamilyFiles.flux2,
+  ...modelFamilyFiles.ideogram,
+  ...modelFamilyFiles.ltx
+]
 const unrelatedFiles = testFiles.filter((file) => !unsupportedFamilyFiles.includes(file))
 const workflow = fs.readFileSync(
   path.join(repoDir, '.github/workflows/integration-test-diffusion-cpp.yml'),
@@ -38,7 +43,7 @@ function assertAllTestsSelected(selection) {
 }
 
 function assertUnsupportedFamiliesSkipped(selection) {
-  assert.deepEqual(selection.families, ['flux2', 'ideogram'])
+  assert.deepEqual(selection.families, ['flux2', 'ideogram', 'ltx'])
   assert.deepEqual(selection.skipped, unsupportedFamilyFiles)
   assert.deepEqual(selection.selected, unrelatedFiles)
 }
@@ -49,14 +54,19 @@ test('default selection includes every model family', () => {
     modelFamilyFiles.ideogram.length >= 1,
     'expected all current Ideogram tests in the fixture'
   )
+  assert.ok(modelFamilyFiles.ltx.length >= 1, 'expected all current LTX tests in the fixture')
+  assert.ok(
+    modelFamilyFiles.ltx.includes('test/integration/generate-video-ltx.test.js'),
+    'expected the LTX video test in the fixture'
+  )
   assert.ok(unrelatedFiles.length > 0, 'expected unrelated tests in the fixture')
   assertAllTestsSelected(select())
 })
 
 test('explicit family list excludes every named family and no unrelated test', () => {
-  const selection = select({ env: { SKIP_DIFFUSION_MODELS: 'flux2,ideogram' } })
+  const selection = select({ env: { SKIP_DIFFUSION_MODELS: 'flux2,ideogram,ltx' } })
 
-  assert.equal(selection.reason, 'SKIP_DIFFUSION_MODELS=flux2,ideogram')
+  assert.equal(selection.reason, 'SKIP_DIFFUSION_MODELS=flux2,ideogram,ltx')
   assertUnsupportedFamiliesSkipped(selection)
 })
 
@@ -106,12 +116,12 @@ test('workflow scopes model-family exclusions to the macos-26-xlarge matrix leg'
     '            platform: darwin',
     '            arch: arm64',
     '            runner: macos-26-xlarge',
-    "            ltx: 'true'",
-    '            skip_diffusion_models: flux2,ideogram'
+    '            skip_diffusion_models: flux2,ideogram,ltx'
   ].join('\n')
 
   assert.ok(workflow.includes(targetMatrixEntry))
-  assert.equal((workflow.match(/skip_diffusion_models: flux2,ideogram/g) || []).length, 1)
+  assert.equal((workflow.match(/skip_diffusion_models: flux2,ideogram,ltx/g) || []).length, 1)
+  assert.equal(workflow.includes("            ltx: 'true'"), false)
   assert.match(workflow, /SKIP_DIFFUSION_MODELS: \$\{\{ matrix\.skip_diffusion_models \|\| '' \}\}/)
   assert.equal(workflow.includes(oldFamilyGate), false)
   assert.equal(workflow.includes(oldFamilyGate.toLowerCase()), false)

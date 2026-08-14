@@ -12,9 +12,10 @@ const brittleCli = require.resolve('brittle/bin/node.js')
 
 const modelFamilyPatterns = new Map([
   ['flux2', /(?:^|[-_])flux2(?:[-_.]|$)/i],
-  ['ideogram', /(?:^|[-_])ideogram(?:[-_.]|$)/i]
+  ['ideogram', /(?:^|[-_])ideogram(?:[-_.]|$)/i],
+  ['ltx', /(?:^|[-_])ltx(?:[-_.]|$)/i]
 ])
-const githubHostedDarwinArm64Exclusions = ['flux2', 'ideogram']
+const githubHostedDarwinArm64Exclusions = ['flux2', 'ideogram', 'ltx']
 
 function parseExcludedModelFamilies(value = '') {
   const families = [
@@ -94,7 +95,7 @@ export function generateIntegrationTests() {
 
   if (selection.families.length > 0) {
     console.log(
-      `[integration-selector] Excluded model families: ${selection.families.join(', ')} (${selection.reason})`
+      `[integration-selector] Excluded model families: ${selection.families.join(',')} (${selection.reason})`
     )
   }
 
