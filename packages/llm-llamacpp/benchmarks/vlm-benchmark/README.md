@@ -86,7 +86,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 | Feature | Desktop | Mobile | Argument | Notes & restrictions |
 |---|---|---|---|---|
 | Linux CPU/GPU | ✅ | — | `-f matrix_desktop=linux-cpu,linux-gpu` | GPU = Vulkan. |
-| macOS | ✅ | — | `macos-cpu`, `macos-gpu` | GitHub-hosted `macos-26` (Apple-silicon); GPU = Metal. |
+| macOS | ✅ | — | `macos-cpu`, `macos-gpu` | Self-hosted `qvac-macos26-arm64-gpu` (Apple-silicon); GPU = Metal. |
 | Windows CPU/GPU | ✅ | — | `windows-cpu`, `windows-gpu` | GPU = Vulkan. CLI builds use pre-installed clang + Ninja (no Visual Studio on the runner). |
 | Android | — | ✅ | `-f matrix_mobile=s26,s25,pixel9` | Each suffixable `-cpu`/`-gpu`; **bare token = CPU **and** GPU in one session**. One phone per leg (AWS Device Farm). |
 | iOS | — | ✅ | `iphone16,iphone17,iphone17pro` | Same suffix rule. |
