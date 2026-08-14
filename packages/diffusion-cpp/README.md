@@ -140,6 +140,7 @@ Downloads are resumable where supported by the script.
 | `bare examples/img2vid-wan.js`               | Wan 2.1 image-to-video                      |
 | `npm run generate:video`                     | Wan text-to-video                           |
 | `npm run generate:ltx`                       | LTX-2.3 text-to-video with audio            |
+| `npm run generate:ltx-coffee`                | 9-second LTX Ingredients coffee example     |
 | `npm run generate:esrgan`                    | Image generation followed by ESRGAN upscale |
 | `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale                   |
 | `npm run walk:world`                         | ABot-World browser demo (generate + walk a world) |

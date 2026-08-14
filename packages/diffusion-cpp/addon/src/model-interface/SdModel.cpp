@@ -232,7 +232,8 @@ struct PreparedLoras {
 // Mirrors the pinned fork's CLI flow in examples/common/common.hpp:
 // build owned path storage first, then build sd_lora_t entries that point
 // at that stable storage for the lifetime of generate_image().
-PreparedLoras prepareLoras(const std::string& loraPath) {
+PreparedLoras
+prepareLoras(const std::string& loraPath, float multiplier = 1.0f) {
   PreparedLoras prepared;
   if (loraPath.empty()) {
     return prepared;
@@ -242,7 +243,7 @@ PreparedLoras prepareLoras(const std::string& loraPath) {
 
   sd_lora_t item{};
   item.is_high_noise = false;
-  item.multiplier = 1.0f;
+  item.multiplier = multiplier;
   item.path = prepared.paths.back().c_str();
   prepared.items.push_back(item);
 
@@ -326,6 +327,9 @@ void SdModel::load() {
   params.offload_params_to_cpu = config_.offloadToCpu;
   params.keep_clip_on_cpu = config_.keepClipOnCpu;
   params.keep_vae_on_cpu = config_.keepVaeOnCpu;
+  params.vae_auto_cpu_fallback = config_.vaeAutoCpuFallback;
+  params.vae_auto_cpu_fallback_memory_ratio =
+      config_.vaeAutoCpuFallbackMemoryRatio;
 
   // Also set the newer backend spec so offload intent survives sd.cpp builds
   // that route parameter placement through params_backend.
@@ -956,6 +960,48 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
         "processVideo: unsupported mode '" + vid.mode +
             "' (expected txt2vid or img2vid)");
 
+  const bool hasReferenceOptions =
+      paramsObject.find("reference_attention_strength") != paramsObject.end() ||
+      paramsObject.find("reference_downscale_factor") != paramsObject.end();
+  const bool hasReferenceImages = !job.referenceImagesBytes.empty();
+  if (hasReferenceImages && vid.loraPath.empty())
+    throw StatusError(
+        general_error::InvalidArgument,
+        "reference_images requires params.lora.");
+  if (hasReferenceImages && job.referenceImagesBytes.size() != 1)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX Ingredients requires exactly one composite reference sheet");
+  if (hasReferenceImages &&
+      (vid.mode == "img2vid" || !job.initImageBytes.empty()))
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX IC-LoRA reference conditioning cannot be combined with img2vid "
+        "or init_image");
+  if (hasReferenceImages && config_.vaeDecodeOnly)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX IC-LoRA reference conditioning requires VAE encoder weights; "
+        "vae_decode_only must be false");
+  if ((hasReferenceImages || hasReferenceOptions) && !isLtxModel_)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "LTX IC-LoRA reference conditioning is only supported by LTX video "
+        "models");
+  if (hasReferenceOptions && !hasReferenceImages)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "reference_attention_strength and reference_downscale_factor require "
+        "reference_images");
+  if (!vid.loraPath.empty() && !isLtxModel_)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "video lora is only supported by LTX video models");
+  if (vid.stgScale > 0.0f && !isLtxModel_)
+    throw StatusError(
+        general_error::InvalidArgument,
+        "active stg_scale is only supported by LTX video models");
+
   // Keep the direct native entry point consistent with video.js: an A14B MoE
   // tuning knob without a high-noise expert is always a caller error, not a
   // silent no-op. Dense Wan 2.2 TI2V-5B and Wan 2.1 use only sample_params.
@@ -1023,10 +1069,12 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // so we can pass them straight to the C ABI.
   sd_image_t initImg{};
   std::vector<sd_image_t> controlFrames;
+  std::vector<sd_image_t> referenceImages;
 
   using PixelBuffer = std::unique_ptr<uint8_t, image_codec::FreeDeleter>;
   PixelBuffer initData;
   std::vector<PixelBuffer> controlData;
+  std::vector<PixelBuffer> referenceData;
 
   if (!job.initImageBytes.empty()) {
     initImg = image_codec::decodeImage(job.initImageBytes);
@@ -1076,16 +1124,41 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     }
   }
 
+  if (!job.referenceImagesBytes.empty()) {
+    referenceImages.reserve(job.referenceImagesBytes.size());
+    referenceData.reserve(job.referenceImagesBytes.size());
+    for (size_t i = 0; i < job.referenceImagesBytes.size(); ++i) {
+      sd_image_t decoded =
+          image_codec::decodeImage(job.referenceImagesBytes[i]);
+      if (!decoded.data)
+        throw StatusError(
+            general_error::InvalidArgument,
+            "processVideo: failed to decode reference_images[" +
+                std::to_string(i) +
+                "] (corrupt or unsupported format; supported: PNG, JPEG)");
+      referenceData.emplace_back(decoded.data);
+      referenceImages.push_back(decoded);
+    }
+  }
+
   // -- Build sd_vid_gen_params_t --------------------------------------------
   sd_vid_gen_params_t vidParams{};
   sd_vid_gen_params_init(&vidParams);
 
+  PreparedLoras loras = prepareLoras(vid.loraPath, vid.loraStrength);
+  vidParams.loras = loras.items.empty() ? nullptr : loras.items.data();
+  vidParams.lora_count = static_cast<uint32_t>(loras.items.size());
   vidParams.prompt = vid.prompt.c_str();
   vidParams.negative_prompt = vid.negativePrompt.c_str();
   vidParams.width = vid.width;
   vidParams.height = vid.height;
   vidParams.seed = vid.seed;
   vidParams.video_frames = vid.videoFrames;
+  // Generation-time frame rate, distinct from the AVI muxing rate below. LTX
+  // derives temporal RoPE positions and the audio latent count from this, so
+  // leaving it at the engine default desynchronises motion timing and audio
+  // length from the requested fps.
+  vidParams.fps = vid.fps;
   vidParams.strength = vid.strength;
   vidParams.vace_strength = vid.vaceStrength;
   vidParams.moe_boundary = vid.moeBoundary;
@@ -1096,12 +1169,36 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     vidParams.control_frames = controlFrames.data();
     vidParams.control_frames_size = static_cast<int>(controlFrames.size());
   }
+  if (!referenceImages.empty()) {
+    vidParams.reference_images = referenceImages.data();
+    vidParams.reference_images_count = static_cast<int>(referenceImages.size());
+  }
+  if (vid.referenceAttentionStrength.has_value())
+    vidParams.reference_attention_strength =
+        vid.referenceAttentionStrength.value();
+  if (vid.referenceDownscaleFactor.has_value())
+    vidParams.reference_downscale_factor = vid.referenceDownscaleFactor.value();
 
   // Low-noise / only-expert sample params
   vidParams.sample_params.sample_method = vid.sampleMethod;
-  vidParams.sample_params.scheduler = vid.scheduler;
+  // SdVidGenConfig defaults to the Wan-recommended SIMPLE scheduler. LTX-2 is
+  // trained against its own shift-based schedule, and forcing SIMPLE on it
+  // denoises along the wrong sigma trajectory, so fall back to LTX2 unless the
+  // caller named a scheduler explicitly.
+  vidParams.sample_params.scheduler =
+      (isLtxModel_ && !vid.schedulerExplicit) ? LTX2_SCHEDULER : vid.scheduler;
   vidParams.sample_params.sample_steps = vid.sampleSteps;
   vidParams.sample_params.guidance.txt_cfg = vid.cfgScale;
+  int stgBlock = vid.stgBlock;
+  if (vid.stgScale > 0.0f) {
+    vidParams.sample_params.guidance.slg.scale = vid.stgScale;
+    vidParams.sample_params.guidance.slg.layers = &stgBlock;
+    vidParams.sample_params.guidance.slg.layer_count = 1;
+    // SkipLayerGuidance uses strict bounds; a small negative start includes
+    // step zero, matching the official LTX STG validation loop.
+    vidParams.sample_params.guidance.slg.layer_start = -1e-6f;
+    vidParams.sample_params.guidance.slg.layer_end = 1.0f;
+  }
   // img_cfg: -1 sentinel means "use cfg_scale for image conditioning too",
   // identical to the image-gen path (SdModel processImage's img_cfg
   // wiring). For txt2vid the field is ignored downstream; for img2vid
@@ -1135,6 +1232,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   vidParams.vae_tiling_params.target_overlap = vid.vaeTileOverlap;
   // Temporal tiling -- LTX-2 video VAE only; no-op for Wan.
   vidParams.vae_tiling_params.temporal_tiling = vid.vaeTemporalTiling;
+  vidParams.vae_tiling_params.extra_tiling_args =
+      vid.vaeExtraTilingArgs.empty() ? nullptr : vid.vaeExtraTilingArgs.c_str();
 
   // Step-caching
   sd_cache_params_init(&vidParams.cache);
