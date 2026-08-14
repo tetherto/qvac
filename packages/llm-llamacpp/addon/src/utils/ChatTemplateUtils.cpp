@@ -9,7 +9,6 @@
 
 #include <llama.h>
 
-#include "Qwen3ToolsDynamicTemplate.hpp"
 #include "QwenTemplate.hpp"
 #include "utils/LoggingMacros.hpp"
 
@@ -40,10 +39,6 @@ std::string normalizeArchitecture(std::string_view architecture) {
   return toLower(architecture);
 }
 
-bool isQwen3Architecture(std::string_view architecture) {
-  return normalizeArchitecture(architecture) == "qwen3";
-}
-
 bool isHarmonyArchitecture(std::string_view architecture) {
   return normalizeArchitecture(architecture) == "gpt-oss";
 }
@@ -53,8 +48,8 @@ bool isGemma4Architecture(std::string_view architecture) {
 }
 
 // Architectures in the Qwen3 family that emit `<think>`/`</think>`.
-// Broader than `isQwen3Architecture` (which is exact-match "qwen3" for
-// the tools_compact path) but deliberately narrower than the full
+// Broader than `isQwen3Architecture` (which is exact-match "qwen3")
+// but deliberately narrower than the full
 // `qwen3*` HuggingFace lineage — explicit list keeps unrelated
 // `qwen3*`-named archs from silently inheriting the wrong tags.
 inline constexpr std::array<std::string_view, 6> QWEN3_REASONING_FAMILY_ARCHES{
@@ -86,8 +81,8 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
     return std::nullopt;
   }
 
-  // Check architecture metadata first; this drives family-specific template and
-  // tools_compact profile selection.
+  // Check architecture metadata first; this drives family-specific template
+  // selection.
   char arch[64] = {0};
   int32_t len = llama_model_meta_val_str(
       model, "general.architecture", arch, sizeof(arch));
@@ -98,12 +93,17 @@ std::optional<std::string> getModelArchitecture(const ::llama_model* model) {
   return std::nullopt;
 }
 
+bool isQwen3Architecture(std::string_view architecture) {
+  return normalizeArchitecture(architecture) == "qwen3";
+}
+
 bool isQwen3Model(const ::llama_model* model) {
   if (model == nullptr) {
     return false;
   }
 
-  return supportsToolsCompactForModelMetadata(getModelArchitecture(model));
+  const std::optional<std::string> arch = getModelArchitecture(model);
+  return arch.has_value() && isQwen3Architecture(arch.value());
 }
 
 bool isMedPsyBasename(std::string_view basename) {
@@ -157,19 +157,6 @@ llama_token getHarmonyCallToken(::llama_context* lctx) {
     return tokens[0];
   }
   return LLAMA_TOKEN_NULL;
-}
-
-bool supportsToolsCompactForModelMetadata(
-    const std::optional<std::string>& architecture) {
-  return architecture.has_value() && isQwen3Architecture(architecture.value());
-}
-
-std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
-    const std::optional<std::string>& architecture) {
-  if (!supportsToolsCompactForModelMetadata(architecture)) {
-    return std::nullopt;
-  }
-  return std::string("<tool_call>");
 }
 
 bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
@@ -227,8 +214,7 @@ selectReasoningTagsForModel(const ::llama_model* model) {
 }
 
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride,
-    bool toolsCompact) {
+    const ::llama_model* model, const std::string& manualOverride) {
   if (!manualOverride.empty()) {
     return manualOverride;
   }
@@ -246,20 +232,17 @@ std::string getChatTemplateForModel(
   }
 
   if (isQwen3Model(model)) {
-    return toolsCompact ? getToolsDynamicQwen3Template()
-                        : getFixedQwen3Template();
+    return getFixedQwen3Template();
   }
 
   return "";
 }
 
-std::string getChatTemplate(
-    const ::llama_model* model, const common_params& params,
-    bool toolsCompact) {
+std::string
+getChatTemplate(const ::llama_model* model, const common_params& params) {
   std::string chatTemplate = params.chat_template;
   if (params.use_jinja) {
-    chatTemplate =
-        getChatTemplateForModel(model, params.chat_template, toolsCompact);
+    chatTemplate = getChatTemplateForModel(model, params.chat_template);
     if (!chatTemplate.empty() && chatTemplate != params.chat_template) {
       QLOG_IF(
           Priority::INFO, "[ChatTemplateUtils] Using fixed Qwen3 template\n");
