@@ -17147,7 +17147,7 @@ export const models = [
     params: 'groot-n1.7-3b-libero'
   },
   {
-    name: 'GROOT_Q5_VF16_1',
+    name: 'GROOT_MULTI_Q5_VF16',
     registryPath: 'qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
@@ -17163,7 +17163,7 @@ export const models = [
     params: 'groot-n1.7-3b-multi'
   },
   {
-    name: 'GROOT_Q8_VF16_1',
+    name: 'GROOT_MULTI_Q8_VF16',
     registryPath: 'qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
@@ -23960,8 +23960,8 @@ export const GROOT_Q8_VF16 = {
   params: models[649].params
 } as const
 
-export const GROOT_Q5_VF16_1 = {
-  name: 'GROOT_Q5_VF16_1',
+export const GROOT_MULTI_Q5_VF16 = {
+  name: 'GROOT_MULTI_Q5_VF16',
   src: `registry://${models[650].registrySource}/${models[650].registryPath}`,
   registryPath: models[650].registryPath,
   registrySource: models[650].registrySource,
@@ -23978,8 +23978,8 @@ export const GROOT_Q5_VF16_1 = {
   params: models[650].params
 } as const
 
-export const GROOT_Q8_VF16_1 = {
-  name: 'GROOT_Q8_VF16_1',
+export const GROOT_MULTI_Q8_VF16 = {
+  name: 'GROOT_MULTI_Q8_VF16',
   src: `registry://${models[651].registrySource}/${models[651].registryPath}`,
   registryPath: models[651].registryPath,
   registrySource: models[651].registrySource,

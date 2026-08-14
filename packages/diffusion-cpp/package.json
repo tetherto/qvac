@@ -21,6 +21,7 @@
     "generate:video": "bare examples/generate-video-wan.js",
     "generate:wan22": "bare examples/generate-video-wan22.js",
     "generate:ltx": "bare examples/generate-video-ltx.js",
+    "generate:ltx-coffee": "bare examples/generate-video-ltx-coffee-everest.js",
     "test": "npm run test:types && npm run test:integration",
     "test:ltx": "npm run build:ts && bare test/integration/generate-video-ltx.test.js --exit",
     "generate:img2vid": "bare examples/img2vid-wan.js",
