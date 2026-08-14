@@ -6,6 +6,8 @@
 // from earlier iterations even when the final run OOMs.
 
 // prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
+// prestage-ignore: visionpsy-nano-460m-q8_0.gguf — desktop opt-in via QVAC_VLM_MODEL, never set on Device Farm
+// prestage-ignore: mmproj-visionpsy-nano-460m-q8.gguf — desktop opt-in via QVAC_VLM_MODEL, never set on Device Farm
 const { runPerImageBackendTests } = require('./_image-common.js')
 
 runPerImageBackendTests({

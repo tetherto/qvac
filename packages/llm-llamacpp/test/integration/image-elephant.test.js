@@ -9,6 +9,8 @@ const test = require('brittle')
 const fs = require('bare-fs')
 // prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
 // prestage-uses: multimodal-large — LARGE_MULTIMODAL_CONFIG, passed explicitly below
+// prestage-ignore: visionpsy-nano-460m-q8_0.gguf — desktop opt-in via QVAC_VLM_MODEL, never set on Device Farm
+// prestage-ignore: mmproj-visionpsy-nano-460m-q8.gguf — desktop opt-in via QVAC_VLM_MODEL, never set on Device Farm
 const {
   DEVICE_CONFIGS,
   LARGE_MULTIMODAL_CONFIG,

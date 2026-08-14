@@ -9,6 +9,8 @@ const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest, getMediaPath } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 // prestage-uses: multimodal-default — MULTIMODAL_MODEL_CONFIG, loaded via ensureModel() below
+// prestage-ignore: visionpsy-nano-460m-q8_0.gguf — desktop opt-in via QVAC_VLM_MODEL, never set on Device Farm
+// prestage-ignore: mmproj-visionpsy-nano-460m-q8.gguf — desktop opt-in via QVAC_VLM_MODEL, never set on Device Farm
 const { MULTIMODAL_MODEL_CONFIG } = require('./_image-common.js')
 
 const platform = os.platform()
@@ -285,12 +287,17 @@ async function setupMultimodalBatchModel(t, configOverrides = {}) {
   const modelPath = path.join(dirPath, modelName)
   const projModelPath = path.join(dirPath, projModelName)
 
-  // ctx_size 4096 gives each of the 4 parallel slots ~1024 tokens — enough for
-  // SmolVLM2-500M vision tokens (~256 per image) + prompt + output.
+  // Sized so each of the 4 parallel slots holds one image plus prompt and
+  // output. The per-image cost is model-specific, so the value travels with the
+  // model rather than being hardcoded: SmolVLM2-500M emits ~256 vision tokens
+  // per image, so 4096 leaves each slot ~1024. VisionPsy Nano caps its long
+  // side at 2048 and slices at 512, so both images used here become a 13-crop
+  // grid at ~858 tokens — four of those would need ~4000 of 4096 before any
+  // output, hence 8192 for that pair.
   const config = {
     device: useCpu ? 'cpu' : 'gpu',
     gpu_layers: '99',
-    ctx_size: '4096',
+    ctx_size: MULTIMODAL_MODEL_CONFIG.batchCtxSize,
     temp: '0',
     top_p: '1',
     top_k: '1',
