@@ -78,6 +78,13 @@ jobs:
           path: addon
           fetch-depth: 0
 
+      # node is job-managed on the self-hosted runners (only on PATH after this
+      # step); the seed action shells out to node, so it must run first.
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
       - name: Seed embed models into US bucket (mirror-only)
         uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
         with:
