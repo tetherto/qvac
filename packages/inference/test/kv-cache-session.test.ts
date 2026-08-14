@@ -128,6 +128,33 @@ test('generateConfigHash: includes complete canonical tool definitions', async (
   }
 })
 
+// `configHash` is the on-disk `.bin` filename, so the digest of a tool-free
+// session is a compatibility surface: any change to the hash payload or its
+// serialization renames every plain-chat cache file and re-primes it cold.
+// Pinning the shipped digests keeps that a deliberate decision.
+test('generateConfigHash: no-tools digests stay pinned', async (t) => {
+  const { mod, cleanup } = await loadSession()
+  try {
+    t.is(
+      mod.generateConfigHash('you are a helpful assistant.', undefined),
+      '3f5906d163f40776',
+      'omitted tools keep the shipped digest'
+    )
+    t.is(
+      mod.generateConfigHash('you are a helpful assistant.', []),
+      '3f5906d163f40776',
+      'an empty tool array hashes like omitted tools'
+    )
+    t.is(
+      mod.generateConfigHash(null, undefined),
+      '99ba47708d700919',
+      'a missing system prompt keeps the shipped digest'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: beginTurn primes the cache on first use, reuses on second', async (t) => {
   const { mod, cleanup, writeFakeCache } = await loadSession()
   try {
