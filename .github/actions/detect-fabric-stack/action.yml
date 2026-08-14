@@ -1,9 +1,11 @@
 name: 'Detect fabric stack'
 description: >
   Read-only detection for fabric-stack PRs. Sets fabric_stack=true when the
-  full PR diff touches the qvac-fabric overlay port or any packages/fabric
-  source. Used to disable stale prebuild reuse and to wire npm-runtime consumers
-  to PR-built @qvac/fabric prebuilds.
+  full PR diff touches the qvac-fabric overlay port or a packages/fabric file
+  that changes the built artifact. Used to disable stale prebuild reuse and to
+  wire npm-runtime consumers to PR-built @qvac/fabric prebuilds. The predicate
+  must stay in lockstep with detect-native-changes: claiming a prebuild the
+  producer never makes leaves the consumer polling until timeout.
 
 outputs:
   fabric_stack:
@@ -72,10 +74,18 @@ runs:
             exit 0
           }
           if [ -n "$DIFF_FILES" ]; then
+            # Only paths that change the built artifact. A `case` glob's `*`
+            # spans `/`, so `packages/fabric/*.cpp` also covers `addon/`.
+            # Docs, release notes and tests are deliberately excluded: they
+            # never produce a prebuild for the consumer to wait on.
             while IFS= read -r file; do
               case "$file" in
                 vcpkg-overlays/ports/qvac-fabric/*) STACK=true; break ;;
-                packages/fabric/*) STACK=true; break ;;
+                packages/fabric/*.cpp|packages/fabric/*.hpp|packages/fabric/*.c|packages/fabric/*.h) STACK=true; break ;;
+                packages/fabric/*CMakeLists.txt) STACK=true; break ;;
+                packages/fabric/cmake/*) STACK=true; break ;;
+                packages/fabric/vcpkg.json|packages/fabric/vcpkg-configuration.json) STACK=true; break ;;
+                packages/fabric/binding.js|packages/fabric/exports.txt|packages/fabric/symbols.map) STACK=true; break ;;
               esac
             done <<< "$DIFF_FILES"
           fi

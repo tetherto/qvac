@@ -52,6 +52,42 @@ runs:
           exit 1
         fi
 
+        # share/ becomes the find_package(qvac-fabric CONFIG) search path, so its
+        # contents are include()d as CMake at configure time. Validate the shape
+        # of the tree before anything is copied: reject symlinks and non-regular
+        # files anywhere, and allow only .cmake files under share/. Recursive
+        # `find` is avoided here for the same reason as below (Git Bash resolves
+        # it to Windows find.exe).
+        if ! node -e '
+          const fs = require("node:fs")
+          const path = require("node:path")
+
+          function validate(directory, relative) {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const child = relative ? `${relative}/${entry.name}` : entry.name
+
+              if (entry.isSymbolicLink()) {
+                throw new Error(`symlink in fabric prebuilds: ${child}`)
+              }
+              if (entry.isDirectory()) {
+                validate(path.join(directory, entry.name), child)
+                continue
+              }
+              if (!entry.isFile()) {
+                throw new Error(`non-regular file in fabric prebuilds: ${child}`)
+              }
+              if (child.startsWith("share/") && !entry.name.endsWith(".cmake")) {
+                throw new Error(`non-cmake file under share/: ${child}`)
+              }
+            }
+          }
+
+          validate(process.argv[1], "")
+        ' "$SRC"; then
+          echo "::error::Fabric prebuilds failed content validation: $SRC"
+          exit 1
+        fi
+
         WORK_ABS="$(cd "$WORKDIR" && pwd)"
         WS_ABS="$(cd "$GITHUB_WORKSPACE" && pwd)"
         SEARCH="$WORK_ABS $WS_ABS"

@@ -87,6 +87,32 @@ jobs:
             exit 1
           fi
 
+      - name: Run detection with a docs-only Fabric change
+        id: docs-only
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MOCK_EXPECTED_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          MOCK_GIT_ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed-docs
+          MOCK_GIT_FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used-docs
+          MOCK_GIT_DIFF_FILES: |
+            packages/fabric/CHANGELOG.md
+            packages/fabric/release-notes/v1.0.0.md
+            packages/fabric/test/integration/smoke.js
+
+      - name: Verify docs-only Fabric change is not a fabric-stack PR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.docs-only.outputs.fabric_stack }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL" != "false" ]; then
+            echo "::error::Docs-only packages/fabric change must not set fabric_stack, got $ACTUAL"
+            exit 1
+          fi
+
   overlay-local-fabric:
     name: Overlay local fabric prebuilds
     runs-on: ubuntu-24.04
@@ -115,15 +141,29 @@ jobs:
               "consumer/node_modules/@qvac/fabric/prebuilds",
             )
 
+            const planted = path.join(root, "planted")
+
             for (const directory of [
               path.join(source, "include"),
               path.join(source, "share"),
               path.join(source, "linux-x64"),
               path.join(root, "incomplete/linux-x64"),
+              path.join(planted, "include"),
+              path.join(planted, "share"),
+              path.join(planted, "linux-x64"),
               path.join(destination, "linux-x64"),
             ]) {
               fs.mkdirSync(directory, { recursive: true })
             }
+
+            // A symlink named like a legitimate CMake config: passes an
+            // extension allowlist, so only the file-type check rejects it.
+            fs.writeFileSync(path.join(planted, "include/fabric.h"), "header")
+            fs.writeFileSync(path.join(planted, "linux-x64/qvac_fabric.so"), "binary")
+            fs.symlinkSync(
+              "/etc/passwd",
+              path.join(planted, "share/qvac-fabricTargets.cmake"),
+            )
 
             fs.writeFileSync(path.join(source, "include/fabric.h"), "header")
             fs.writeFileSync(path.join(source, "share/qvac-fabric.cmake"), "cmake")
@@ -197,10 +237,38 @@ jobs:
             exit 1
           fi
 
+      - name: Reject fabric prebuilds carrying a planted symlink
+        id: planted
+        continue-on-error: true
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ runner.temp }}/fabric-overlay-test/consumer
+          prebuilds-root: ${{ runner.temp }}/fabric-overlay-test/planted
+          platform: linux
+          arch: x64
+
+      - name: Verify planted symlink was rejected before any copy
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.planted.outcome }}
+          PREBUILDS: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric/prebuilds
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Expected planted symlink to fail, got $OUTCOME"
+            exit 1
+          fi
+          if [ -e "$PREBUILDS/share/qvac-fabricTargets.cmake" ]; then
+            echo "::error::Planted symlink reached the consumer tree"
+            exit 1
+          fi
+
   wait-and-download:
     name: Wait and download fabric prebuilds
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Two negative cases poll to their one-minute deadline before failing.
+    timeout-minutes: 10
     steps:
       - name: Checkout tested revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -232,6 +300,7 @@ jobs:
         with:
           github-token: test-token
           head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
           download-dir: ${{ runner.temp }}/fabric-download-test
           timeout-minutes: 1
           poll-seconds: 1
@@ -249,6 +318,62 @@ jobs:
           fi
           if [ ! -f "$DOWNLOAD_DIR/mock-download-complete" ]; then
             echo "::error::Mock artifact was not downloaded"
+            exit 1
+          fi
+
+      - name: Reject a run from an unrelated head repository
+        id: foreign-run
+        continue-on-error: true
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
+          MOCK_RUN_HEAD_REPO: attacker/qvac
+        with:
+          github-token: test-token
+          head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
+          download-dir: ${{ runner.temp }}/fabric-foreign-run-test
+          timeout-minutes: 1
+          poll-seconds: 5
+
+      - name: Reject a run associated with a different PR
+        id: foreign-pr
+        continue-on-error: true
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
+          MOCK_RUN_PULL_REQUESTS: '[{"number":999999}]'
+        with:
+          github-token: test-token
+          head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
+          pr-number: '31337'
+          download-dir: ${{ runner.temp }}/fabric-foreign-pr-test
+          timeout-minutes: 1
+          poll-seconds: 5
+
+      - name: Verify runs failing provenance were not downloaded
+        if: ${{ always() }}
+        shell: bash
+        env:
+          FOREIGN_RUN_OUTCOME: ${{ steps.foreign-run.outcome }}
+          FOREIGN_PR_OUTCOME: ${{ steps.foreign-pr.outcome }}
+          FOREIGN_RUN_DIR: ${{ runner.temp }}/fabric-foreign-run-test
+          FOREIGN_PR_DIR: ${{ runner.temp }}/fabric-foreign-pr-test
+        run: |
+          set -euo pipefail
+          if [ "$FOREIGN_RUN_OUTCOME" != "failure" ]; then
+            echo "::error::Expected a foreign head repository to fail, got $FOREIGN_RUN_OUTCOME"
+            exit 1
+          fi
+          if [ "$FOREIGN_PR_OUTCOME" != "failure" ]; then
+            echo "::error::Expected a foreign PR association to fail, got $FOREIGN_PR_OUTCOME"
+            exit 1
+          fi
+          if [ -f "$FOREIGN_RUN_DIR/mock-download-complete" ] || [ -f "$FOREIGN_PR_DIR/mock-download-complete" ]; then
+            echo "::error::Artifact from an unbound run was downloaded"
             exit 1
           fi
 

@@ -2,11 +2,23 @@
 set -euo pipefail
 
 EXPECTED_RUNS_URL="repos/${GITHUB_REPOSITORY}/actions/workflows/on-pr-fabric.yml/runs?head_sha=${MOCK_EXPECTED_HEAD_SHA}&per_page=20"
+EXPECTED_RUN_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242"
 EXPECTED_ARTIFACTS_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242/artifacts"
+
+# Provenance fields of the mocked run. Defaults describe a run the consumer must
+# accept; tests override them to describe one it must reject.
+RUN_HEAD_SHA="${MOCK_RUN_HEAD_SHA:-$MOCK_EXPECTED_HEAD_SHA}"
+RUN_PATH="${MOCK_RUN_PATH:-.github/workflows/on-pr-fabric.yml}"
+RUN_EVENT="${MOCK_RUN_EVENT:-pull_request_target}"
+RUN_HEAD_REPO="${MOCK_RUN_HEAD_REPO:-$GITHUB_REPOSITORY}"
+RUN_PULL_REQUESTS="${MOCK_RUN_PULL_REQUESTS:-[]}"
 
 if [ "$1" = "api" ]; then
   if [ "$2" = "$EXPECTED_RUNS_URL" ]; then
     printf '%s\n' '4242'
+  elif [ "$2" = "$EXPECTED_RUN_URL" ]; then
+    printf '{"id":4242,"head_sha":"%s","path":"%s","event":"%s","head_repository":{"full_name":"%s"},"pull_requests":%s}\n' \
+      "$RUN_HEAD_SHA" "$RUN_PATH" "$RUN_EVENT" "$RUN_HEAD_REPO" "$RUN_PULL_REQUESTS"
   elif [ "$2" = "$EXPECTED_ARTIFACTS_URL" ]; then
     printf '%s\n' "$MOCK_EXPECTED_ARTIFACT"
   else
