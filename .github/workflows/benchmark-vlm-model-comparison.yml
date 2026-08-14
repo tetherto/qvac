@@ -710,10 +710,25 @@ jobs:
             # Only attach the HF token to an actual huggingface.co URL. matrix_models'
             # json: escape hatch lets a caller point downloadUrl anywhere, and this secret
             # must never ride along to a non-HF host.
+            #
+            # The host check alone is not enough, because -L would carry the token past it:
+            # curl sends a -H header on every hop of a redirect chain, its own docs for -H
+            # say so, and the credential-scoping that --location-trusted gates covers only
+            # -u, not -H. HF resolve URLs always 302 to a separate CDN host, so -L plus the
+            # token hands it to whatever that redirect names. Resolve the hop with the token
+            # and no -L, then fetch the target without it. The CDN link is presigned and
+            # needs no auth, so nothing is lost.
             case "$2" in
               https://huggingface.co/*)
                 if [ -n "$HF_TOKEN" ]; then
-                  curl -fL --retry 3 -H "Authorization: Bearer $HF_TOKEN" -o "$1" "$2"
+                  hf_redirect=$(curl -fsS -I --retry 3 -H "Authorization: Bearer $HF_TOKEN" \
+                    -o /dev/null -w '%{redirect_url}' "$2")
+                  if [ -n "$hf_redirect" ]; then
+                    curl -fL --retry 3 -o "$1" "$hf_redirect"
+                  else
+                    # Served inline, no redirect to follow, so no hop the token could leak on.
+                    curl -f --retry 3 -H "Authorization: Bearer $HF_TOKEN" -o "$1" "$2"
+                  fi
                 else
                   curl -fL --retry 3 -o "$1" "$2"
                 fi
