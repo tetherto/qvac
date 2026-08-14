@@ -106,7 +106,14 @@ function validateGroups(functionNames) {
   // test_groups override, and are deliberately absent from test-groups.json
   // so normal mobile integration runs never trigger the heavy benchmark.
   // Exclude them from the group-coverage requirement.
-  const isOverrideOnly = (n) => n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest'
+  //
+  // runQwen38SupportTest is exempt for the same reason as runFinetuningMoeTest: it is
+  // an env-gated opt-in (QVAC_QWEN38_MODEL_PATH) around a ~17 GB model that no phone
+  // can hold. It also cannot be pre-staged at all — model-manifest.json entries must
+  // resolve in models.manifest.json, and Qwen3.8-27B has no pinned sha256/bytes there
+  // because it is not published yet.
+  const isOverrideOnly = (n) =>
+    n.startsWith('runBenchmarkPerf') || n === 'runFinetuningMoeTest' || n === 'runQwen38SupportTest'
 
   const coveredByFamily = new Map()
   for (const [platform, splits] of Object.entries(groups)) {

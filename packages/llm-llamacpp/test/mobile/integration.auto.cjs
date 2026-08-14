@@ -411,14 +411,14 @@ async function runFinetuningArchsTest (options = {}) { // eslint-disable-line no
   return runIntegrationModule('../integration/finetuning-archs.test.js', options)
 }
 
-async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
-  return runIntegrationModule('../integration/finetuning-moe.test.js', options)
-}
-
 async function runFinetuningCancelSlotReleaseTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningCancelSlotReleaseTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-cancel-slot-release.test.js', options)
+}
+
+async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-moe.test.js', options)
 }
 
 async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -549,6 +549,11 @@ async function runQwen35MultimodalCacheStressTest (options = {}) { // eslint-dis
 async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen35Test')) return __FILTERED
   return runIntegrationModule('../integration/qwen3-5.test.js', options)
+}
+
+async function runQwen38SupportTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runQwen38SupportTest')) return __FILTERED
+  return runIntegrationModule('../integration/qwen38-support.test.js', options)
 }
 
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
