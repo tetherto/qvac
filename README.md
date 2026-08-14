@@ -1,80 +1,38 @@
+HERO-begin:
+
 [![QVAC logo](docs/branding/logo.avif)](https://docs.qvac.tether.io)
 
----
+Local AI SDK & Model Provider
+Run LLMs, speech, vision, image/video generation, and more on any device.
+Build mobile and desktop apps with QVAC, or power your favorite AI tools like OpenCode and OpenClaw.
 
+Large GIF
+
+LINK strip
 > <a href="https://qvac.tether.io" >Website</a> &nbsp;•&nbsp;
 > <a href="https://docs.qvac.tether.io" >Docs</a> &nbsp;•&nbsp;
-> <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
-> <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
-**QVAC** is an open-source, cross-platform ecosystem for building local-first, peer-to-peer **AI** applications and systems. With QVAC, you can run AI tasks like LLMs, speech, RAG, and more locally across Linux, macOS, Windows, Android, and iOS — or delegate inference to peers using its built-in P2P capabilities.
+Badge strip:
 
-### Key features
+**QVAC** lets you run a comprehensive range of AI workloads locally using open models across Linux, macOS, Windows, Android, and iOS.
 
-- **Local-first:** load AI models and perform inference on your own machine. No third-party APIs, SaaS, or cloud involved.
-- **P2P:** build unstoppable internet systems — like BitTorrent, IPFS, and blockchain networks, but for AI.
-- **Cross-platform:** consistent developer experience across Linux, macOS, Windows, Android, and iOS.
-- **OpenAI-compatible API:** integrate with the broader AI ecosystem.
-- **Open source:** 100% free to use and modify — build on top, contribute back, be part of our community.
+HERO-end:
 
-## Usage
+QVAC provides:
+- **SDK** for building local-first AI applications and systems in JavaScript/TypeScript and Python. You can also delegate inference to peers through QVAC's built-in P2P capabilities.
+- **HTTP server** for using QVAC as a local model provider. Its OpenAI-compatible API lets you connect AI tools such as OpenCode and OpenClaw, or any other compatible tool.
 
-QVAC ships client SDKs for building AI apps: **JavaScript/TypeScript** (`@qvac/sdk` on npm) and **Python** (`tetherto-qvac-sdk` on PyPI). _Both drive the same worker, so capabilities and behavior are identical across languages_. The JS/TS client runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev); the Python client is asyncio-native.
+## Why QVAC
 
-Additionally, QVAC also provides an HTTP server, _allowing you to use it as a **local model provider** for your favorite AI tools_, such as OpenCode, OpenClaw, and any other harness compatible with the [OpenAI API](https://platform.openai.com/docs/api-reference).
-
-Whether you're building applications with the SDK or using QVAC as a local model provider, the principle is the same: load models and run inference locally, or delegate inference to peers using the built-in P2P capabilities.
-
-## AI capabilities
-
-| Task | Description |
-| --- | --- |
-| **Text generation** | LLM inference for text generation and chat via [Fabric LLM](https://github.com/tetherto/qvac-fabric-llm.cpp). |
-| **Text embeddings** | Vector embedding generation for semantic search, clustering, and retrieval, via Fabric LLM. |
-| **RAG** | Out-of-the-box retrieval-augmented generation workflow. |
-| **Fine-tuning** | Adapting LLMs to domain-specific tasks via LoRA. |
-| **Multimodal** | LLM inference over text, images, and other media within a single conversation context. |
-| **Image generation** | Text-to-image and image-to-image generation via a customized Diffusion backend. |
-| **Video generation** | Text-to-video and image-to-video generation via a customized Diffusion backend. |
-| **Music generation** | Generate music from text, lyrics, and musical controls with [`@qvac/audiogen-ggml`](packages/audiogen-ggml/README.md), backed by [ACE-Step](https://github.com/ace-step/ACE-Step-1.5). Published prebuilds cover Linux, macOS, Windows, Android arm64, and iOS arm64; the package includes a model downloader for application-owned model directories. |
-| **Transcription** | Automatic speech recognition (ASR) via [`@qvac/asr-ggml`](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml) (Whisper or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)), with duplex streaming and terminal performance statistics. See [Choosing a model](packages/asr-ggml/README.md#choosing-a-model). |
-| **Text-to-Speech** | Speech synthesis (TTS) via [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 support opt-in GPU offload (Metal on Apple, Vulkan on desktop Linux/Windows for Chatterbox, Supertonic, and CosyVoice3, OpenCL/Adreno on Android), while Audio8 supports optional desktop Vulkan acceleration. Prebuilds cover Linux, macOS, Windows, Android arm64, and iOS; models can be downloaded from the QVAC registry where published or staged from local converted artifacts. See [Choosing a model](packages/tts-ggml/README.md#choosing-a-model). |
-| **Translation** | Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt). |
-| **BCI** | Brain–computer interface transcription via [a customized Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
-| **VLA** | Vision-language-action for robot control via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
-| **OCR** | Optical character recognition for extracting text from images via ONNX Runtime or GGML backends. |
-| **Image classification** | Classify images into labels with confidence scores via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). |
-
-## Resources
-
-Explore and use QVAC:
-
-| Resource | Description |
-| --- | --- |
-| [**Docs**](https://docs.qvac.tether.io) | Comprehensive QVAC documentation. |
-| [**Examples**](https://github.com/tetherto/qvac-examples/) | Sample apps and PoCs built with QVAC SDK. |
-| [**Local model provider**](https://docs.qvac.tether.io/cli/http-server/connection/) | Use QVAC as a local model provider connected to your favorite AI tools. |
-| [**QV.AC**](https://qv.ac) | Get to know our local AI assistant. |
-| **Support and community** | We gather on [Discord](https://discord.com/invite/tetherdev) and [Keet](https://keet.io). Ask for help, give feedback, and discuss QVAC. |
-| [**Blog**](https://qvac.tether.io/blog/) | Tutorials, deep dives, engineering notes, and announcements. |
-| [**Ecosystem**](https://qvac.tether.io) | Discover the broader QVAC ecosystem. |
-| [**Research**](https://huggingface.co/qvac) | Papers, datasets, and models optimized for edge devices. |
-| [**Our vision**](https://docs.qvac.tether.io/about/vision/) | Learn why Tether built QVAC. |
-
-Note: access our Keet room via this link:
-
-<details>
-<summary><code>keet://chat/nfo61f4e...</code></summary>
-
-```
-keet://chat/nfo61f4e6zc5t1ifncyh9yp7s5eynbruz5bs95oc5ufn3e79entmhix74miigc8iz9iawfrb7pzk3am8eotxw8wat7554etbn7d6j4ho84b1zqnb63z7hxq1ubt5w4wi4kpq3mdgpijcnaifnhm7sy4cfxqqoyedpnb5qg1majcggy4s9s91fgtg3khgw
-```
-
-</details>
+- **Local-first:** run AI offline with inference optimized for commodity hardware, from consumer apps and embedded systems to on-premises deployments.
+- **Privacy and control:** keep data local, own the AI system. No cloud or third-party APIs required.
+- **One SDK, all of AI:** a comprehensive range of AI capabilities through one interface.
+- **Cross-platform:** one codebase for Linux, macOS, Windows, Android, and iOS, using JavaScript/TypeScript or Python.
+- **Peer-to-peer:** delegate inference to peers and build unstoppable internet systems, like BitTorrent or IPFS, but for AI.
 
 ## Quickstart
 
-Want to get hands-on right away? Here's a simple example you can use to test QVAC, in either supported client.
+Load a model and run inference locally in a few lines. Pick your language.
 
 ### JavaScript
 
@@ -203,6 +161,44 @@ python quickstart.py
 You'll see the model download first. Then, QVAC will stream the response tokens and print them to the terminal.
 
 </details>
+
+⭐ If QVAC saves you from shipping yet another cloud dependency, give it a star, it helps other devs find it.
+
+## AI capabilities
+
+| Task | Description |
+| --- | --- |
+| **Text generation** | LLM inference for text generation and chat via [Fabric LLM](https://github.com/tetherto/qvac-fabric-llm.cpp). |
+| **Text embeddings** | Vector embedding generation for semantic search, clustering, and retrieval, via Fabric LLM. |
+| **RAG** | Out-of-the-box retrieval-augmented generation workflow. |
+| **Fine-tuning** | Adapting LLMs to domain-specific tasks via LoRA. |
+| **Multimodal** | LLM inference over text, images, and other media within a single conversation context. |
+| **Image generation** | Text-to-image and image-to-image generation via a customized Diffusion backend. |
+| **Video generation** | Text-to-video and image-to-video generation via a customized Diffusion backend. |
+| **Music generation** | Generate music from text, lyrics, and musical controls with [`@qvac/audiogen-ggml`](packages/audiogen-ggml/README.md), backed by [ACE-Step](https://github.com/ace-step/ACE-Step-1.5). Published prebuilds cover Linux, macOS, Windows, Android arm64, and iOS arm64; the package includes a model downloader for application-owned model directories. |
+| **Transcription** | Automatic speech recognition (ASR) via [`@qvac/asr-ggml`](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml) (Whisper or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)), with duplex streaming and terminal performance statistics. See [Choosing a model](packages/asr-ggml/README.md#choosing-a-model). |
+| **Text-to-Speech** | Speech synthesis (TTS) via [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 support opt-in GPU offload (Metal on Apple, Vulkan on desktop Linux/Windows for Chatterbox, Supertonic, and CosyVoice3, OpenCL/Adreno on Android), while Audio8 supports optional desktop Vulkan acceleration. Prebuilds cover Linux, macOS, Windows, Android arm64, and iOS; models can be downloaded from the QVAC registry where published or staged from local converted artifacts. See [Choosing a model](packages/tts-ggml/README.md#choosing-a-model). |
+| **Translation** | Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt). |
+| **BCI** | Brain–computer interface transcription via [a customized Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
+| **VLA** | Vision-language-action for robot control via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
+| **OCR** | Optical character recognition for extracting text from images via ONNX Runtime or GGML backends. |
+| **Image classification** | Classify images into labels with confidence scores via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). |
+
+## Resources
+
+Explore and use QVAC:
+
+| Resource | Description |
+| --- | --- |
+| [**Docs**](https://docs.qvac.tether.io) | Comprehensive QVAC documentation. |
+| [**Examples**](https://github.com/tetherto/qvac-examples/) | Sample apps and PoCs built with QVAC SDK. |
+| [**Local model provider**](https://docs.qvac.tether.io/cli/http-server/connection/) | Use QVAC as a local model provider connected to your favorite AI tools. |
+| [**QV.AC**](https://qv.ac) | Get to know our local AI assistant. |
+| **Support and community** | We gather on [Discord](https://discord.com/invite/tetherdev) and [Keet](https://keet.io). Ask for help, give feedback, and discuss QVAC. |
+| [**Blog**](https://qvac.tether.io/blog/) | Tutorials, deep dives, engineering notes, and announcements. |
+| [**Ecosystem**](https://qvac.tether.io) | Discover the broader QVAC ecosystem. |
+| [**Research**](https://huggingface.co/qvac) | Papers, datasets, and models optimized for edge devices. |
+| [**Our vision**](https://docs.qvac.tether.io/about/vision/) | Learn why Tether built QVAC. |
 
 ## Contributing
 
