@@ -315,7 +315,10 @@ def translate(
     # Eager task, matching the JS promise: the wire call starts now, not
     # when `text` is first awaited.
     return TranslateRun(
-        empty_stream(), loop.create_task(collect_text()), stats_future, resolved_request_id
+        empty_stream(),
+        loop.create_task(collect_text()),
+        stats_future,
+        resolved_request_id,
     )
 
 

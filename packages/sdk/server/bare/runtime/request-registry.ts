@@ -408,9 +408,9 @@ export function createRequestRegistry(options?: {
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
   // Worker-wide teardown: once cancelAll('shutdown') runs, every begin(...)
-  // starts aborted regardless of model. The drainingModels barrier's shutdown
-  // twin — catches a begin still in the reservation gap that cancelAll/drainAll
-  // sweep past. Terminal for the instance (the worker is exiting).
+  // rejects regardless of model. The drainingModels barrier's shutdown twin
+  // catches a begin still in the reservation gap that cancelAll/drainAll sweep
+  // past. Terminal for the instance (the worker is exiting).
   let shuttingDown = false
   // Entries whose disposal has started but not finished. disposeEntry removes
   // from `entries` before unwinding, so a drain must consult this too or it
@@ -961,7 +961,7 @@ export function createRequestRegistry(options?: {
 
   function cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void> {
     // Worker teardown: raise the barrier so a begin still suspended in admission
-    // starts aborted instead of registering under models about to be freed.
+    // rejects instead of registering under models about to be freed.
     if (reason === 'shutdown') shuttingDown = true
     for (const entry of entries.values()) {
       cancelEntry(entry, reason)
