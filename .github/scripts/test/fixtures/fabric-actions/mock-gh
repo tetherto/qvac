@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EXPECTED_RUNS_URL="repos/${GITHUB_REPOSITORY}/actions/workflows/on-pr-fabric.yml/runs?head_sha=${MOCK_EXPECTED_HEAD_SHA}&per_page=20"
+EXPECTED_HEAD_SHA="${MOCK_EXPECTED_HEAD_SHA:-}"
+EXPECTED_RUNS_URL="repos/${GITHUB_REPOSITORY}/actions/workflows/on-pr-fabric.yml/runs?head_sha=${EXPECTED_HEAD_SHA}&per_page=20"
 EXPECTED_RUN_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242"
 EXPECTED_ARTIFACTS_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242/artifacts"
 
 # Provenance fields of the mocked run. Defaults describe a run the consumer must
 # accept; tests override them to describe one it must reject.
-RUN_HEAD_SHA="${MOCK_RUN_HEAD_SHA:-$MOCK_EXPECTED_HEAD_SHA}"
+RUN_HEAD_SHA="${MOCK_RUN_HEAD_SHA:-$EXPECTED_HEAD_SHA}"
 RUN_PATH="${MOCK_RUN_PATH:-.github/workflows/on-pr-fabric.yml}"
 RUN_EVENT="${MOCK_RUN_EVENT:-pull_request_target}"
 RUN_HEAD_REPO="${MOCK_RUN_HEAD_REPO:-$GITHUB_REPOSITORY}"
 RUN_PULL_REQUESTS="${MOCK_RUN_PULL_REQUESTS:-[]}"
 
-if [ "$1" = "api" ]; then
+if [ "${1:-}" = "api" ]; then
+  # detect-fabric-stack resolves the merge base here. The mock answers with a
+  # SHA the test controls, so drift between the base tip and the branch point
+  # can be driven rather than waited for.
+  case "${2:-}" in
+    repos/*/compare/*)
+      if [ -n "${MOCK_COMPARE_MERGE_BASE:-}" ]; then
+        printf '%s\n' "$MOCK_COMPARE_MERGE_BASE"
+        exit 0
+      fi
+      ;;
+  esac
+
   if [ "$2" = "$EXPECTED_RUNS_URL" ]; then
     printf '%s\n' '4242'
   elif [ "$2" = "$EXPECTED_RUN_URL" ]; then
@@ -28,7 +41,7 @@ if [ "$1" = "api" ]; then
   exit 0
 fi
 
-if [ "$1" = "run" ] && [ "$2" = "download" ]; then
+if [ "${1:-}" = "run" ] && [ "${2:-}" = "download" ]; then
   shift 2
   download_dir=
   artifact=

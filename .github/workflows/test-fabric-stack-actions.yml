@@ -19,6 +19,12 @@ jobs:
     name: Detect fabric-stack changes
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    env:
+      # The merge base the mocks hand back. Distinct from base.sha, so a diff
+      # taken from the base branch tip is distinguishable from one taken from
+      # the branch point.
+      MOCK_MERGE_BASE: 1111111111111111111111111111111111111111
+      MOCK_LOCAL_MERGE_BASE: 2222222222222222222222222222222222222222
     steps:
       - name: Checkout tested revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -28,23 +34,29 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Run detection action
-        id: detect
+      - name: Run detection action against the real repository
+        id: smoke
         uses: ./.github/actions/detect-fabric-stack
 
-      - name: Verify detection result
+      - name: Verify the unmocked run produced a boolean
         shell: bash
         env:
-          ACTUAL: ${{ steps.detect.outputs.fabric_stack }}
-          EXPECTED: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
+          ACTUAL: ${{ steps.smoke.outputs.fabric_stack }}
         run: |
           set -euo pipefail
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::Expected fabric_stack=$EXPECTED, got $ACTUAL"
-            exit 1
-          fi
+          # Shape, not value. What this PR touches and how far the base branch
+          # has drifted both move the value, and the fetch fail-safe legitimately
+          # returns true — pinning an expectation here reds the build when the
+          # action behaves correctly. The predicate itself is driven below.
+          case "$ACTUAL" in
+            true|false) ;;
+            *)
+              echo "::error::Expected a boolean fabric_stack, got '$ACTUAL'"
+              exit 1
+              ;;
+          esac
 
-      - name: Install mock Git
+      - name: Install mock Git and mock GitHub CLI
         shell: bash
         env:
           MOCK_BIN: ${{ runner.temp }}/fabric-actions-mock-git
@@ -52,11 +64,127 @@ jobs:
           set -euo pipefail
           mkdir -p "$MOCK_BIN"
           cp .github/scripts/test/fixtures/fabric-actions/mock-git "$MOCK_BIN/git"
-          chmod +x "$MOCK_BIN/git"
+          cp .github/scripts/test/fixtures/fabric-actions/mock-gh "$MOCK_BIN/gh"
+          chmod +x "$MOCK_BIN/git" "$MOCK_BIN/gh"
           node -e '
             const fs = require("node:fs")
             fs.appendFileSync(process.env.GITHUB_PATH, `${process.env.MOCK_BIN}\n`)
           '
+
+      - name: Run detection with a diff touching no fabric path
+        id: unrelated
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_ARGS_FILE: ${{ runner.temp }}/diff-args-unrelated
+          MOCK_GIT_DIFF_FILES: |
+            packages/llm-llamacpp/addon/binding.cpp
+            packages/sdk/index.ts
+
+      - name: Verify an unrelated diff is read from the merge base and reports false
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.unrelated.outputs.fabric_stack }}
+          DIFF_ARGS: ${{ runner.temp }}/diff-args-unrelated
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL" != "false" ]; then
+            echo "::error::Expected a non-fabric diff to report false, got $ACTUAL"
+            exit 1
+          fi
+          # The base branch tip is not the branch point: diffing against it also
+          # reports, in reverse, whatever landed on the base branch since.
+          if ! grep -q "$MERGE_BASE" "$DIFF_ARGS"; then
+            echo "::error::Diff was not taken from the merge base: $(cat "$DIFF_ARGS")"
+            exit 1
+          fi
+          if grep -q "$BASE_SHA" "$DIFF_ARGS"; then
+            echo "::error::Diff was taken from the base branch tip: $(cat "$DIFF_ARGS")"
+            exit 1
+          fi
+
+      - name: Run detection with a Fabric source change last in the diff
+        id: fabric-last
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: |
+            docs/ci/MERGE-GUARD.md
+            packages/sdk/index.ts
+            packages/fabric/addon/fabric.cpp
+
+      - name: Run detection with a qvac-fabric overlay port change
+        id: overlay-port
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: vcpkg-overlays/ports/qvac-fabric/portfile.cmake
+
+      - name: Verify both build-affecting diffs are fabric-stack PRs
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          FABRIC_LAST: ${{ steps.fabric-last.outputs.fabric_stack }}
+          OVERLAY_PORT: ${{ steps.overlay-port.outputs.fabric_stack }}
+        run: |
+          set -euo pipefail
+          if [ "$FABRIC_LAST" != "true" ]; then
+            echo "::error::Expected a Fabric source change behind unrelated files to report true, got $FABRIC_LAST"
+            exit 1
+          fi
+          if [ "$OVERLAY_PORT" != "true" ]; then
+            echo "::error::Expected a qvac-fabric overlay port change to report true, got $OVERLAY_PORT"
+            exit 1
+          fi
+
+      - name: Run detection with the compare API unavailable
+        id: local-merge-base
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          # MOCK_COMPARE_MERGE_BASE unset — mock-gh rejects the compare call, so
+          # the action must fall back to a local merge base.
+          MOCK_GIT_MERGE_BASE: ${{ env.MOCK_LOCAL_MERGE_BASE }}
+          MOCK_GIT_DIFF_ARGS_FILE: ${{ runner.temp }}/diff-args-local
+          MOCK_GIT_DIFF_FILES: packages/fabric/vcpkg.json
+
+      - name: Run detection with no resolvable merge base
+        id: no-merge-base
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_GIT_MERGE_BASE: none
+          MOCK_GIT_DIFF_FILES: packages/sdk/index.ts
+
+      - name: Verify merge-base fallback and fail-safe
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          LOCAL: ${{ steps.local-merge-base.outputs.fabric_stack }}
+          NO_MERGE_BASE: ${{ steps.no-merge-base.outputs.fabric_stack }}
+          DIFF_ARGS: ${{ runner.temp }}/diff-args-local
+          MERGE_BASE: ${{ env.MOCK_LOCAL_MERGE_BASE }}
+        run: |
+          set -euo pipefail
+          if [ "$LOCAL" != "true" ]; then
+            echo "::error::Expected the local merge-base path to detect a Fabric change, got $LOCAL"
+            exit 1
+          fi
+          if ! grep -q "$MERGE_BASE" "$DIFF_ARGS"; then
+            echo "::error::Diff did not use the local merge base: $(cat "$DIFF_ARGS")"
+            exit 1
+          fi
+          # An unresolvable merge base must not silently degrade to the base tip.
+          if [ "$NO_MERGE_BASE" != "true" ]; then
+            echo "::error::Expected an unresolvable merge base to fail safe, got $NO_MERGE_BASE"
+            exit 1
+          fi
 
       - name: Run exact-SHA fallback with Fabric source change
         id: fallback
@@ -67,6 +195,7 @@ jobs:
           MOCK_EXPECTED_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           MOCK_GIT_ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed
           MOCK_GIT_FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
           MOCK_GIT_DIFF_FILES: packages/fabric/CMakeLists.txt
 
       - name: Verify exact-SHA fallback and Fabric source detection
@@ -96,6 +225,7 @@ jobs:
           MOCK_EXPECTED_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           MOCK_GIT_ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed-docs
           MOCK_GIT_FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used-docs
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
           MOCK_GIT_DIFF_FILES: |
             packages/fabric/CHANGELOG.md
             packages/fabric/release-notes/v1.0.0.md

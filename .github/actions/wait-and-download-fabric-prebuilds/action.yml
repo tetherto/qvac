@@ -79,9 +79,14 @@ runs:
 
         while [ "$(date +%s)" -lt "$deadline" ]; do
           # `in_progress` is a status value; conclusion stays null until the run
-          # completes, so it must not be matched against conclusion.
+          # completes, so it must not be matched against conclusion. Accepting a
+          # still-running producer is deliberate — it publishes the artifact long
+          # before the tests behind it conclude, and an unrelated failure there
+          # would otherwise strand the consumer until its own timeout.
           RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?head_sha=${HEAD_SHA}&per_page=20" \
-            --jq '.workflow_runs[] | select(.status=="in_progress" or .conclusion=="success") | .id' 2>/dev/null || true)
+            --jq '.workflow_runs[]
+                  | select(.status=="in_progress" or (.status=="completed" and .conclusion=="success"))
+                  | .id' 2>/dev/null || true)
           for rid in $RUNS; do
             [ "$rid" = "$RUN_ID" ] && continue
 
