@@ -115,6 +115,8 @@ export {
   type TtsCosyvoice3Instruct,
   type TtsCosyvoice3LoadConfig,
   type TtsCosyvoice3RuntimeConfig,
+  type TtsAudio8LoadConfig,
+  type TtsAudio8RuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
