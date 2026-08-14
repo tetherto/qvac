@@ -10,6 +10,7 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-12#1",
       "default-features": false,
       "features": [
         "tts",
@@ -19,6 +20,7 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-12#1",
       "default-features": false,
       "features": [
         "tts",
@@ -29,6 +31,7 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-12#1",
       "default-features": false,
       "features": [
         "tts",
@@ -49,6 +52,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
+          "version>=": "2026-08-12#1",
           "default-features": false,
           "features": [
             "vulkan"
