@@ -8259,6 +8259,50 @@
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 CAM++ speaker embedding model (GGUF)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "campplus", "speaker-embedding", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 S3 speech tokenizer (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 S3 speech tokenizer (GGUF)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 S3 speech tokenizer (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 DualAR language model (GGUF, multilingual)",

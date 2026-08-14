@@ -11,8 +11,14 @@ const path = require('bare-path')
 const https = require('bare-https')
 
 const TRANSIENT_ERROR_CODES = new Set([
-  'EAI_NODATA', 'EAI_AGAIN', 'ENOTFOUND', 'ETIMEDOUT',
-  'ECONNRESET', 'EPIPE', 'ECONNABORTED', 'ESIZE'
+  'EAI_NODATA',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNABORTED',
+  'ESIZE'
 ])
 
 // A tiny (~1MB) llama-architecture GGUF. Public, no auth — ideal for a fast
@@ -23,7 +29,7 @@ const DEFAULT_MODEL = {
   downloadUrl: 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf'
 }
 
-function isTransientError (err) {
+function isTransientError(err) {
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
   if (err.statusCode) {
     const s = err.statusCode
@@ -32,31 +38,54 @@ function isTransientError (err) {
   return false
 }
 
-function urlHost (url) {
-  try { return new URL(url).host } catch (_) { return url }
+function urlHost(url) {
+  try {
+    return new URL(url).host
+  } catch (_) {
+    return url
+  }
 }
 
-async function downloadFileOnce (url, dest, opts = {}) {
+function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let resolved = false
-    const safeResolve = () => { if (!resolved) { resolved = true; resolve() } }
-    const safeReject = (err) => { if (!resolved) { resolved = true; reject(err) } }
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
 
     const file = fs.createWriteStream(dest)
-    file.on('error', (err) => { file.destroy(); fs.unlink(dest, () => safeReject(err)) })
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
 
     const reqTimer = setTimeout(() => {
-      req.destroy(Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), { code: 'ETIMEDOUT' }))
+      req.destroy(
+        Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), {
+          code: 'ETIMEDOUT'
+        })
+      )
     }, timeoutMs)
 
-    const req = https.request(url, response => {
+    const req = https.request(url, (response) => {
       clearTimeout(reqTimer)
 
       if ([301, 302, 307, 308].includes(response.statusCode)) {
         file.destroy()
         if (_redirectCount >= maxRedirects) {
-          fs.unlink(dest, () => safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`)))
+          fs.unlink(dest, () =>
+            safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`))
+          )
           return
         }
         fs.unlink(dest, (unlinkErr) => {
@@ -83,10 +112,12 @@ async function downloadFileOnce (url, dest, opts = {}) {
       const resetIdle = () => {
         if (idleTimer) clearTimeout(idleTimer)
         idleTimer = setTimeout(() => {
-          response.destroy(Object.assign(
-            new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
-            { code: 'ETIMEDOUT' }
-          ))
+          response.destroy(
+            Object.assign(
+              new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
+              { code: 'ETIMEDOUT' }
+            )
+          )
         }, idleTimeoutMs)
       }
       resetIdle()
@@ -98,15 +129,22 @@ async function downloadFileOnce (url, dest, opts = {}) {
       })
 
       response.pipe(file)
-      file.on('close', () => { if (idleTimer) clearTimeout(idleTimer); safeResolve() })
+      file.on('close', () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        safeResolve()
+      })
     })
 
-    req.on('error', err => { clearTimeout(reqTimer); file.destroy(); fs.unlink(dest, () => safeReject(err)) })
+    req.on('error', (err) => {
+      clearTimeout(reqTimer)
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
     req.end()
   })
 }
 
-async function downloadFileWithRetries (urls, dest, opts = {}) {
+async function downloadFileWithRetries(urls, dest, opts = {}) {
   const { retries = 3, minBytes = 1, ...downloadOpts } = opts
   const urlList = Array.isArray(urls) ? urls : [urls]
   const partPath = dest + '.part'
@@ -126,17 +164,23 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
       fs.renameSync(partPath, dest)
       return
     } catch (err) {
-      try { fs.unlinkSync(partPath) } catch (_) {}
+      try {
+        fs.unlinkSync(partPath)
+      } catch (_) {}
 
       const attemptsLeft = retries - attempt
       if (!isTransientError(err) || attemptsLeft === 0) {
-        console.error(`[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`)
+        console.error(
+          `[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`
+        )
         throw err
       }
 
       const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
-      console.log(`[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`)
-      await new Promise(resolve => setTimeout(resolve, delay))
+      console.log(
+        `[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`
+      )
+      await new Promise((resolve) => setTimeout(resolve, delay))
     }
   }
 }
@@ -146,7 +190,7 @@ async function downloadFileWithRetries (urls, dest, opts = {}) {
  * its absolute path. Honours FIT_MODEL_PATH as an override for local runs.
  * @returns {Promise<string>} absolute path to a GGUF file
  */
-async function ensureModelPath ({ modelName, downloadUrl } = DEFAULT_MODEL) {
+async function ensureModelPath({ modelName, downloadUrl } = DEFAULT_MODEL) {
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, modelName)
 
