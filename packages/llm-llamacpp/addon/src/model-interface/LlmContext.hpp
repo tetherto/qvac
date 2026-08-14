@@ -15,7 +15,6 @@
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
-struct PromptLayout;
 struct mtmd_context;
 
 struct GenerationParams {
@@ -472,21 +471,6 @@ public:
    *
    */
   virtual void resetMedia() {};
-
-  /// Validates an incoming prompt against any policy-level constraints
-  /// (size, layout, KV-cache state). Default is a no-op; concrete
-  /// contexts (`TextLlmContext`, `MtmdLlmContext`) override as needed.
-  /// Used by both the legacy single-prompt path and the per-slot
-  /// continuous-batching path before admission.
-  virtual void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const {
-    (void)chatMsgs;
-    (void)tools;
-    (void)layout;
-    (void)hasKvCacheContext;
-  }
 
   /// Loaded multimodal (mmproj) context this LLM context can hand to
   /// per-slot batch drivers, or null for text-only contexts. Used by the

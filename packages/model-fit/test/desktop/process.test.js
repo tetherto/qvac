@@ -34,7 +34,7 @@ const NATIVE_DEADLINE_MS = 120_000
 // The runner has no timeout of its own, so the harness supplies one. Without it
 // a stuck child is a bare assertion timeout with no output and an orphaned
 // process left on the runner.
-function runRunner (input, deadlineMs = RUNNER_DEADLINE_MS) {
+function runRunner(input, deadlineMs = RUNNER_DEADLINE_MS) {
   return new Promise((resolve, reject) => {
     // Overlapped, not plain pipes: libuv gives a child synchronous stdio handles
     // on Windows, and a Bare child then emulates async reads with a worker
@@ -50,13 +50,15 @@ function runRunner (input, deadlineMs = RUNNER_DEADLINE_MS) {
       if (settled) return
       settled = true
       child.kill('SIGKILL')
-      reject(new Error(
-        `runner did not exit within ${deadlineMs}ms; ` +
-        `stdout=${JSON.stringify(stdout)} stderr=${JSON.stringify(stderr)}`
-      ))
+      reject(
+        new Error(
+          `runner did not exit within ${deadlineMs}ms; ` +
+            `stdout=${JSON.stringify(stdout)} stderr=${JSON.stringify(stderr)}`
+        )
+      )
     }, deadlineMs)
 
-    function settle (result, error) {
+    function settle(result, error) {
       if (settled) return
       settled = true
       clearTimeout(deadline)
@@ -78,7 +80,7 @@ function runRunner (input, deadlineMs = RUNNER_DEADLINE_MS) {
   })
 }
 
-function invocationErrorResponse (message) {
+function invocationErrorResponse(message) {
   return {
     version: 1,
     status: 'invocation-error',
@@ -86,11 +88,11 @@ function invocationErrorResponse (message) {
   }
 }
 
-function encodedResponseBytes (response) {
+function encodedResponseBytes(response) {
   return Buffer.byteLength(`${JSON.stringify(response)}\n`, 'utf8')
 }
 
-function completedFitResult () {
+function completedFitResult() {
   return {
     status: 0,
     fits: true,
@@ -100,9 +102,7 @@ function completedFitResult () {
     nBatch: 512,
     nUbatch: 128,
     tensorSplit: [0.6, 0.4],
-    buftOverrides: [
-      { pattern: 'blk\\.0\\.ffn_.*', bufferType: 'CPU' }
-    ],
+    buftOverrides: [{ pattern: 'blk\\.0\\.ffn_.*', bufferType: 'CPU' }],
     splitMode: 1,
     mainGpu: 0,
     typeK: 1,
@@ -132,10 +132,11 @@ test('fit process request encoding is versioned and newline delimited', (t) => {
 
 test('fit process request encoding rejects requests above 64 KiB', async (t) => {
   await t.exception.all(
-    () => encodeFitProcessRequest({
-      modelPath: path.resolve('/tmp/model.gguf'),
-      backendsDir: `/${'x'.repeat(FIT_PROCESS_MAX_REQUEST_BYTES)}`
-    }),
+    () =>
+      encodeFitProcessRequest({
+        modelPath: path.resolve('/tmp/model.gguf'),
+        backendsDir: `/${'x'.repeat(FIT_PROCESS_MAX_REQUEST_BYTES)}`
+      }),
     /Fit process request exceeds 64 KiB/
   )
 })
@@ -213,7 +214,8 @@ test('fit process response parsing accepts invocation errors', (t) => {
 test('fit process response parsing rejects malformed envelopes', async (t) => {
   await t.exception.all(() => parseFitProcessResponse(null), /response must be an object/)
   await t.exception.all(
-    () => parseFitProcessResponse({ version: 2, status: 'completed', result: completedFitResult() }),
+    () =>
+      parseFitProcessResponse({ version: 2, status: 'completed', result: completedFitResult() }),
     /Unsupported fit process protocol version/
   )
   await t.exception.all(
@@ -221,11 +223,12 @@ test('fit process response parsing rejects malformed envelopes', async (t) => {
     /response status/
   )
   await t.exception.all(
-    () => parseFitProcessResponse({
-      version: 1,
-      status: 'invocation-error',
-      error: { name: 'TypeError', message: 42 }
-    }),
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'invocation-error',
+        error: { name: 'TypeError', message: 42 }
+      }),
     /error message must be a string/
   )
 })
@@ -235,30 +238,33 @@ test('fit process response parsing validates canonical FitResults', async (t) =>
   delete missingPlanField.nCtx
 
   await t.exception.all(
-    () => parseFitProcessResponse({
-      version: 1,
-      status: 'completed',
-      result: missingPlanField
-    }),
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: missingPlanField
+      }),
     /result nCtx must be a number/
   )
   await t.exception.all(
-    () => parseFitProcessResponse({
-      version: 1,
-      status: 'completed',
-      result: { ...completedFitResult(), fits: false }
-    }),
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: { ...completedFitResult(), fits: false }
+      }),
     /result fits must be true/
   )
   await t.exception.all(
-    () => parseFitProcessResponse({
-      version: 1,
-      status: 'completed',
-      result: {
-        ...completedFitResult(),
-        buftOverrides: [{ pattern: 'blk\\..*', bufferType: 1 }]
-      }
-    }),
+    () =>
+      parseFitProcessResponse({
+        version: 1,
+        status: 'completed',
+        result: {
+          ...completedFitResult(),
+          buftOverrides: [{ pattern: 'blk\\..*', bufferType: 1 }]
+        }
+      }),
     /bufferType must be a string/
   )
 })
@@ -294,7 +300,9 @@ test('the runner smoke is reachable from both test lanes', (t) => {
   // The integration job appends `<platform>-<arch>`, and npm appends run args to
   // the end of the script, so the bare invocation has to be last.
   t.ok(packageJson.scripts['test:integration'].endsWith('npm run test:integration:suite'))
-  t.ok(packageJson.scripts['test:integration:suite'].endsWith('bare test/integration/all.js --exit'))
+  t.ok(
+    packageJson.scripts['test:integration:suite'].endsWith('bare test/integration/all.js --exit')
+  )
 })
 
 test('fit process runner path resolves to the published entrypoint', (t) => {
@@ -438,24 +446,31 @@ test('fit process runner answers a closed stdin without a request', async (t) =>
   t.is(JSON.parse(outcome.stdout).status, 'invocation-error')
 })
 
-test('fit process runner returns a real fit through the boundary', { skip: !HAS_NATIVE_PREBUILD }, async (t) => {
-  t.timeout(NATIVE_DEADLINE_MS * 1.5)
+test(
+  'fit process runner returns a real fit through the boundary',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    t.timeout(NATIVE_DEADLINE_MS * 1.5)
 
-  // The only test that loads the addon in the child. A path that cannot exist is
-  // a documented ERROR outcome rather than a throw, so this exercises native
-  // load, backend registration and the response encoding without a model file.
-  const outcome = await runRunner(encodeFitProcessRequest({
-    modelPath: path.join(__dirname, 'no-such-model.gguf')
-  }), NATIVE_DEADLINE_MS)
-  const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
+    // The only test that loads the addon in the child. A path that cannot exist is
+    // a documented ERROR outcome rather than a throw, so this exercises native
+    // load, backend registration and the response encoding without a model file.
+    const outcome = await runRunner(
+      encodeFitProcessRequest({
+        modelPath: path.join(__dirname, 'no-such-model.gguf')
+      }),
+      NATIVE_DEADLINE_MS
+    )
+    const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
 
-  t.is(outcome.code, 0)
-  t.is(response.status, 'completed')
-  t.is(response.result.status, 2)
-  t.ok(['model-unreadable', 'no-backend-device'].includes(response.result.reason))
-})
+    t.is(outcome.code, 0)
+    t.is(response.status, 'completed')
+    t.is(response.result.status, 2)
+    t.ok(['model-unreadable', 'no-backend-device'].includes(response.result.reason))
+  }
+)
 
-function messageForEncodedBytes (targetBytes) {
+function messageForEncodedBytes(targetBytes) {
   const baseBytes = encodedResponseBytes(invocationErrorResponse(''))
   return 'x'.repeat(Math.max(0, targetBytes - baseBytes))
 }

@@ -1,5 +1,7 @@
 #include "SdVidGenHandlers.hpp"
 
+#include <cmath>
+
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "SdParsers.hpp"
@@ -147,6 +149,7 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"scheduler",
      [](SdVidGenConfig& c, const picojson::value& v) {
        c.scheduler = parseScheduler(requireStr(v, "scheduler"));
+       c.schedulerExplicit = true;
      }},
 
     {"cfg_scale",
@@ -229,6 +232,58 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
        c.vaceStrength = requireRange(v, "vace_strength", 0.0f, 1.0f);
      }},
 
+    // -- LTX IC-LoRA ---------------------------------------------------------
+
+    {"lora",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.loraPath = requireStr(v, "lora");
+     }},
+    {"lora_strength",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.loraStrength = static_cast<float>(requireNum(v, "lora_strength"));
+       if (c.loraStrength < 0.0f || c.loraStrength > 10.0f)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "lora_strength must be in [0, 10], got: " +
+                 std::to_string(c.loraStrength));
+     }},
+    {"stg_scale",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.stgScale = static_cast<float>(requireNum(v, "stg_scale"));
+       if (c.stgScale < 0.0f || c.stgScale > 10.0f)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "stg_scale must be in [0, 10], got: " +
+                 std::to_string(c.stgScale));
+     }},
+    {"stg_block",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.stgBlock = requireInt(v, "stg_block");
+       if (c.stgBlock < 0)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "stg_block must be non-negative, got: " +
+                 std::to_string(c.stgBlock));
+     }},
+
+    {"reference_attention_strength",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.referenceAttentionStrength =
+           requireRange(v, "reference_attention_strength", 0.0f, 1.0f);
+     }},
+
+    {"reference_downscale_factor",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       const float factor =
+           static_cast<float>(requireNum(v, "reference_downscale_factor"));
+       if (!std::isfinite(factor) || factor != 1.0f)
+         throw StatusError(
+             general_error::InvalidArgument,
+             "reference_downscale_factor must be exactly 1, got: " +
+                 std::to_string(factor));
+       c.referenceDownscaleFactor = factor;
+     }},
+
     // -- VAE tiling ----------------------------------------------------------
 
     {"vae_tiling",
@@ -260,6 +315,11 @@ const SdVidGenHandlersMap SD_VID_GEN_HANDLERS = {
     {"temporal_tiling",
      [](SdVidGenConfig& c, const picojson::value& v) {
        c.vaeTemporalTiling = requireBool(v, "temporal_tiling");
+     }},
+
+    {"vae_extra_tiling_args",
+     [](SdVidGenConfig& c, const picojson::value& v) {
+       c.vaeExtraTilingArgs = requireStr(v, "vae_extra_tiling_args");
      }},
 
     // -- Step-caching --------------------------------------------------------

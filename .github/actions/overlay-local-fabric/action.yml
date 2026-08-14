@@ -1,0 +1,187 @@
+name: 'Overlay local @qvac/fabric'
+description: >
+  Copy PR-built fabric prebuilds into every installed node_modules/@qvac/fabric
+  tree under the consumer workdir (and optional extra search roots). Must run
+  after npm install and before bare-make generate so find_package(qvac-fabric)
+  resolves headers from the overlaid tree.
+
+inputs:
+  workdir:
+    description: 'Consumer package directory, e.g. packages/classification-ggml'
+    required: true
+  prebuilds-root:
+    description: 'Path to the merged fabric prebuilds tree (include/, share/, <platform>-<arch>/)'
+    required: true
+  platform:
+    description: 'When set with arch, overlay only this platform directory'
+    required: false
+    default: ''
+  arch:
+    description: 'Platform arch suffix (x64, arm64, ...) paired with platform'
+    required: false
+    default: ''
+  tags:
+    description: 'Optional platform suffix (e.g. -simulator for ios-*-simulator jobs)'
+    required: false
+    default: ''
+  search-dirs:
+    description: 'Extra directories to search for node_modules/@qvac/fabric (space-separated)'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Overlay PR fabric prebuilds into @qvac/fabric
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        SRC: ${{ inputs.prebuilds-root }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+        TAGS: ${{ inputs.tags }}
+        SEARCH_DIRS: ${{ inputs.search-dirs }}
+      run: |
+        set -euo pipefail
+        if [ ! -d "$SRC" ]; then
+          echo "::error::Fabric prebuilds root does not exist: $SRC"
+          exit 1
+        fi
+        if [ ! -d "$SRC/include" ] || [ ! -d "$SRC/share" ]; then
+          echo "::error::Fabric prebuilds must contain both include/ and share/: $SRC"
+          exit 1
+        fi
+
+        # share/ becomes the find_package(qvac-fabric CONFIG) search path, so its
+        # contents are include()d as CMake at configure time. Validate the shape
+        # of the tree before anything is copied: reject symlinks and non-regular
+        # files anywhere, and allow only .cmake files under share/. Recursive
+        # `find` is avoided here for the same reason as below (Git Bash resolves
+        # it to Windows find.exe).
+        if ! node -e '
+          const fs = require("node:fs")
+          const path = require("node:path")
+
+          function validate(directory, relative) {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const child = relative ? `${relative}/${entry.name}` : entry.name
+
+              if (entry.isSymbolicLink()) {
+                throw new Error(`symlink in fabric prebuilds: ${child}`)
+              }
+              if (entry.isDirectory()) {
+                validate(path.join(directory, entry.name), child)
+                continue
+              }
+              if (!entry.isFile()) {
+                throw new Error(`non-regular file in fabric prebuilds: ${child}`)
+              }
+              if (child.startsWith("share/") && !entry.name.endsWith(".cmake")) {
+                throw new Error(`non-cmake file under share/: ${child}`)
+              }
+            }
+          }
+
+          validate(process.argv[1], "")
+        ' "$SRC"; then
+          echo "::error::Fabric prebuilds failed content validation: $SRC"
+          exit 1
+        fi
+
+        WORK_ABS="$(cd "$WORKDIR" && pwd)"
+        WS_ABS="$(cd "$GITHUB_WORKSPACE" && pwd)"
+        SEARCH="$WORK_ABS $WS_ABS"
+        if [ -n "$SEARCH_DIRS" ]; then
+          SEARCH="$SEARCH $SEARCH_DIRS"
+        fi
+
+        # Check each explicit search root directly. Recursive `find` is avoided:
+        # Git Bash can resolve it to Windows find.exe instead of GNU find.
+        discover_fabric_packages() {
+          local search_root="$1"
+          [ -d "$search_root" ] || return 0
+
+          local direct="$search_root/node_modules/@qvac/fabric"
+          if [ -d "$direct" ]; then
+            echo "$direct"
+          fi
+        }
+
+        overlay_tree() {
+          local dest_root="$1"
+          mkdir -p "$dest_root"
+
+          rm -rf "$dest_root/include"
+          cp -r "$SRC/include" "$dest_root/"
+          rm -rf "$dest_root/share"
+          cp -r "$SRC/share" "$dest_root/"
+
+          if [ -n "$PLATFORM" ] && [ -n "$ARCH" ]; then
+            plat_key="${PLATFORM}-${ARCH}${TAGS}"
+            plat_dir="$SRC/${plat_key}"
+            if [ ! -d "$plat_dir" ]; then
+              echo "::error::No '${plat_key}/' in fabric prebuilds at $SRC"
+              ls -la "$SRC" 2>/dev/null || true
+              exit 1
+            fi
+            dest_plat="$dest_root/${plat_key}"
+            rm -rf "$dest_plat"
+            mkdir -p "$dest_plat"
+            cp -r "$plat_dir/." "$dest_plat/"
+            return
+          fi
+
+          for plat_dir in "$SRC"/*-*; do
+            [ -d "$plat_dir" ] || continue
+            base=$(basename "$plat_dir")
+            case "$base" in
+              include|share) continue ;;
+            esac
+            dest_plat="$dest_root/$base"
+            rm -rf "$dest_plat"
+            mkdir -p "$dest_plat"
+            cp -r "$plat_dir/." "$dest_plat/"
+          done
+        }
+
+        # Portable bash (macOS /bin/bash is 3.2 — no mapfile).
+        found_pkg=false
+        while IFS= read -r pkg; do
+          [ -z "$pkg" ] && continue
+          found_pkg=true
+          dest="$pkg/prebuilds"
+          echo "Overlaid PR fabric prebuilds into $dest"
+          overlay_tree "$dest"
+          node -e '
+            const fs = require("node:fs")
+            const path = require("node:path")
+
+            function renameArtifacts(root) {
+              for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+                const source = path.join(root, entry.name)
+                if (entry.isDirectory()) renameArtifacts(source)
+                if (!entry.name.startsWith("tetherto_")) continue
+
+                const target = path.join(root, `qvac_${entry.name.slice(9)}`)
+                fs.renameSync(source, target)
+              }
+            }
+
+            renameArtifacts(process.argv[1])
+          ' "$dest"
+        done < <(
+          for search_root in $SEARCH; do
+            discover_fabric_packages "$search_root"
+          done | awk '!seen[$0]++'
+        )
+
+        if [ "$found_pkg" != "true" ]; then
+          echo "::error::No installed @qvac/fabric found under $SEARCH"
+          for search_root in $SEARCH; do
+            if [ -d "$search_root/node_modules/@qvac" ]; then
+              echo "Contents of $search_root/node_modules/@qvac:"
+              ls -la "$search_root/node_modules/@qvac" 2>/dev/null || true
+            fi
+          done
+          exit 1
+        fi

@@ -910,6 +910,23 @@ test('audit-called-out privileged checkouts are pinned to event head SHA', () =>
   )
 })
 
+test('audiogen mobile actions come from an isolated default-branch checkout', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
+  const trustedActionUses = workflow.match(
+    /uses:\s+\.\/trusted-actions\/\.github\/actions\/run-mobile-integration-tests\//g,
+  ) || []
+
+  assert.match(
+    workflow,
+    /name:\s+Checkout composite action source[\s\S]*?repository:\s+\$\{\{ github\.repository \}\}[\s\S]*?ref:\s+\$\{\{ github\.event\.repository\.default_branch \}\}[\s\S]*?path:\s+trusted-actions[\s\S]*?persist-credentials:\s+false/,
+  )
+  assert.equal(trustedActionUses.length, 9)
+  assert.doesNotMatch(
+    workflow,
+    /uses:\s+\.\/\.github\/actions\/run-mobile-integration-tests\//,
+  )
+})
+
 test('no GitHub Actions checkout/ref input resolves mutable PR head.ref', () => {
   const actionFiles = filesUnder(join(root, '.github')).filter((path) =>
     /\.(?:ya?ml)$/.test(path),

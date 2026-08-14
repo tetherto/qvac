@@ -86,7 +86,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -136,7 +136,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/ocr-ggml' }}
           addon-npm-name: '@qvac/ocr-ggml'
           prebuild-artifact-prefix: 'ggml-ocr-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 

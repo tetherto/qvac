@@ -124,11 +124,14 @@ jobs:
             # Fetch PR head (available on the repo via pull refs)
             git fetch origin "refs/pull/${PR_NUMBER}/head"
 
-            # Filter to only packages with changed files in this PR
+            # Filter to packages whose own path or a `depends_on` path changed.
             CHANGED_FILES=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
-            PACKAGES=$(echo "$ALL_PACKAGES" | jq -c --arg files "$CHANGED_FILES" '[
-              .[] | select(.path as $p | $files | split("\n") | any(startswith($p + "/")))
-            ]')
+            PACKAGES=$(echo "$ALL_PACKAGES" | jq -c --arg files "$CHANGED_FILES" '
+              ($files | split("\n")) as $changed
+              | [ .[]
+                  | ([.path] + (.depends_on // [])) as $paths
+                  | select(any($paths[]; . as $p | any($changed[]; startswith($p + "/"))))
+                ]')
           fi
 
           echo "packages=${PACKAGES}" >> "$GITHUB_OUTPUT"
