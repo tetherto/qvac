@@ -1,6 +1,6 @@
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getKVCacheDir, isSafeCacheKey } from '@/server/utils'
+import { getKVCacheDir } from '@/server/utils'
 import { getServerLogger } from '@/logging'
 
 const logger = getServerLogger()
@@ -22,15 +22,18 @@ interface AutoCacheEntry {
 
 const AUTO_CACHE_MARKER_PREFIX = '.auto-cache-'
 const AUTO_CACHE_MARKER_PATTERN = /^\.auto-cache-([a-f0-9]{16})$/
+// SDK-generated auto-cache keys are 16 hex chars. Marker ops gate on this so a
+// caller-provided key never gets a marker and the raw-key marker path stays
+// inside the cache root.
+const AUTO_CACHE_KEY_PATTERN = /^[a-f0-9]{16}$/
 
 function getAutoCacheMarkerPath(cacheKey: string) {
   return path.join(getKVCacheDir(), `${AUTO_CACHE_MARKER_PREFIX}${cacheKey}`)
 }
 
 export async function markAutoCacheKey(cacheKey: string) {
-  // An unsafe key would place the marker outside the cache root (the marker
-  // path joins the raw key), so skip it rather than write out of bounds.
-  if (!isSafeCacheKey(cacheKey)) return
+  // Only generated 16-hex auto keys get markers (see AUTO_CACHE_KEY_PATTERN).
+  if (!AUTO_CACHE_KEY_PATTERN.test(cacheKey)) return
   try {
     await fsPromises.writeFile(getAutoCacheMarkerPath(cacheKey), '')
   } catch (error) {
@@ -41,7 +44,7 @@ export async function markAutoCacheKey(cacheKey: string) {
 }
 
 export async function removeAutoCacheMarker(cacheKey: string) {
-  if (!isSafeCacheKey(cacheKey)) return
+  if (!AUTO_CACHE_KEY_PATTERN.test(cacheKey)) return
   try {
     await fsPromises.unlink(getAutoCacheMarkerPath(cacheKey))
   } catch {
@@ -50,7 +53,7 @@ export async function removeAutoCacheMarker(cacheKey: string) {
 }
 
 export async function removeAutoCacheMarkerIfMissing(cacheKey: string) {
-  if (!isSafeCacheKey(cacheKey)) return
+  if (!AUTO_CACHE_KEY_PATTERN.test(cacheKey)) return
   try {
     await fsPromises.access(path.join(getKVCacheDir(), cacheKey))
   } catch {

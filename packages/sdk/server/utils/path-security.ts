@@ -1,9 +1,9 @@
 import path from 'bare-path'
 import { PathTraversalError } from '@/utils/errors-server'
-import { sanitizePathComponent, isSafeCacheKey, checkPathWithinBase } from '@/utils/path-sanitize'
+import { sanitizePathComponent, checkPathWithinBase } from '@/utils/path-sanitize'
 
 // Re-export the bare-free helpers unchanged
-export { sanitizePathComponent, isSafeCacheKey } from '@/utils/path-sanitize'
+export { sanitizePathComponent } from '@/utils/path-sanitize'
 
 /**
  * Check whether a target path is contained within a base directory.
@@ -16,13 +16,6 @@ export function isPathWithinBase(basePath: string, targetPath: string): boolean 
     (...args: [string, ...string[]]) => path.resolve(...args),
     path.sep || '/'
   )
-}
-
-/** Throws PathTraversalError unless `cacheKey` is a safe single component. */
-export function assertSafeCacheKey(cacheKey: string, basePath: string): void {
-  if (!isSafeCacheKey(cacheKey)) {
-    throw new PathTraversalError(cacheKey, basePath)
-  }
 }
 
 /**

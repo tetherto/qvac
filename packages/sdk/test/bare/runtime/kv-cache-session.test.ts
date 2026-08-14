@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { PathTraversalError } from '@/utils/errors-server'
 
 // -----------------------------------------------------------------------------
 // `KvCacheSession` — Bare runtime tests.
@@ -467,6 +468,10 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
       { role: 'assistant', content: 'hi' }
     ])
     const sourceDirectory = path.dirname(path.dirname(turn.cachePath))
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
+      'source path is marked initialized before the rename'
+    )
 
     await session.commitTurn(turn, {
       kind: 'autoRename',
@@ -478,6 +483,10 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
     t.is(fs.existsSync(turn.cachePath), false, 'source file moved')
     t.is(fs.existsSync(sourceDirectory), false, 'empty source directory removed')
     t.ok(fs.existsSync(target.cachePath), 'renamed cache remains at the target')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
+      'stale source init state cleared after rename (not left marked initialized)'
+    )
   } finally {
     cleanup()
   }
@@ -815,7 +824,7 @@ test('kv-cache-session: dropStaleSavedCount forgets the count without touching t
 })
 
 test('kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for the targeted key', async (t) => {
-  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  const { fs, path, mod, retention, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
@@ -845,12 +854,36 @@ test('kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for
       false,
       'init flag cleared by the keyed delete'
     )
+
+    // Aliased auto-key delete: markers are named `.auto-cache-<16hex>`. Deleting
+    // via an alias such as `./<16hex>` must still remove the canonical marker.
+    const cacheRoot = path.dirname(path.dirname(path.dirname(turn.cachePath)))
+    const autoKey = 'a1b2c3d4e5f60718'
+    await retention.markAutoCacheKey(autoKey)
+    const markerPath = path.join(cacheRoot, `.auto-cache-${autoKey}`)
+    t.is(fs.existsSync(markerPath), true, 'auto-cache marker written')
+    await mod.deleteKvCacheState({ kvCacheKey: `./${autoKey}` })
+    t.is(fs.existsSync(markerPath), false, 'aliased auto-key delete removed the canonical marker')
+
+    // A nested key ending in a 16-hex segment must NOT touch the unrelated
+    // top-level auto marker of the same name — marker keys are root-relative,
+    // not basenames.
+    const nestedHex = 'deadbeefdeadbeef'
+    await retention.markAutoCacheKey(nestedHex)
+    const topLevelMarker = path.join(cacheRoot, `.auto-cache-${nestedHex}`)
+    t.is(fs.existsSync(topLevelMarker), true, 'top-level auto-cache marker written')
+    await mod.deleteKvCacheState({ kvCacheKey: `tenant/${nestedHex}` })
+    t.is(
+      fs.existsSync(topLevelMarker),
+      true,
+      'nested-key delete leaves the unrelated top-level marker intact'
+    )
   } finally {
     cleanup()
   }
 })
 
-test('kv-cache-session: a keyed delete rejects an empty or traversal modelId before touching disk', async (t) => {
+test('kv-cache-session: a keyed delete blocks only a root-resolving target, not sanitized keys', async (t) => {
   const { fs, mod, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
@@ -865,20 +898,134 @@ test('kv-cache-session: a keyed delete rejects an empty or traversal modelId bef
     })
     fs.writeFileSync(turn.cachePath, 'bytes')
 
-    // An empty modelId collapses the target back to the whole key directory
-    // (wiping every model under it); a traversal form targets a sibling. Both
-    // must be rejected before any fs.rm runs.
-    for (const badModelId of ['', '../evil', 'a/b']) {
+    // A kvCacheKey that resolves to the cache root ('' / '.' / '..') is rejected —
+    // deleting the root would wipe every cache.
+    for (const rootKey of ['', '.', '..']) {
       let caught: unknown = null
       try {
-        await mod.deleteKvCacheState({ kvCacheKey: 'keep-me', modelId: badModelId })
+        await mod.deleteKvCacheState({ kvCacheKey: rootKey })
       } catch (err) {
         caught = err
       }
-      t.ok(caught instanceof Error, `modelId ${JSON.stringify(badModelId)} rejected`)
+      t.ok(
+        caught instanceof PathTraversalError,
+        `kvCacheKey ${JSON.stringify(rootKey)} rejected as a root delete`
+      )
+    }
+    t.is(fs.existsSync(turn.cachePath), true, 'the real cache survives the rejected root deletes')
+
+    // An empty kvCacheKey with a modelId must not bypass the root guard and
+    // delete a real key dir named like the modelId. Create such a cache and
+    // confirm it survives + the delete is rejected.
+    const other = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'session-a',
+      configHash,
+      primeIfMissing: async (p: string) => {
+        writeFakeCache(p)
+      }
+    })
+    fs.writeFileSync(other.cachePath, 'bytes')
+    await session.commitTurn(other, { kind: 'static', messageCount: 1, toolBlockCached: false })
+    let caughtEmptyKey: unknown = null
+    try {
+      await mod.deleteKvCacheState({ kvCacheKey: '', modelId: 'session-a' })
+    } catch (err) {
+      caughtEmptyKey = err
+    }
+    t.ok(caughtEmptyKey instanceof PathTraversalError, 'empty kvCacheKey + modelId rejected')
+    t.is(
+      fs.existsSync(other.cachePath),
+      true,
+      "the 'session-a' cache survives the empty-key delete"
+    )
+
+    // A PROVIDED but empty modelId collapses to the whole key dir — rejected, so
+    // it can't silently broaden the delete (omitting modelId is the explicit way).
+    let caughtEmptyModel: unknown = null
+    try {
+      await mod.deleteKvCacheState({ kvCacheKey: 'keep-me', modelId: '' })
+    } catch (err) {
+      caughtEmptyModel = err
+    }
+    t.ok(
+      caughtEmptyModel instanceof PathTraversalError,
+      'empty modelId rejected — no silent broadening'
+    )
+    t.is(
+      fs.existsSync(turn.cachePath),
+      true,
+      'keep-me cache survives the rejected empty-modelId delete'
+    )
+
+    // A sanitized/nested modelId resolves inside the key dir and deletes only that
+    // (here nonexistent) sub-target — it never escapes or touches the real cache.
+    for (const modelId of ['../evil', 'a/b']) {
+      await mod.deleteKvCacheState({ kvCacheKey: 'keep-me', modelId })
+    }
+    t.is(
+      fs.existsSync(turn.cachePath),
+      true,
+      'sanitized/nested modelIds leave the real cache intact'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: custom keys — nested / uppercase / unicode / absolute all resolve; aliases share', async (t) => {
+  const { mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCount = 0
+    const primeIfMissing = async (p: string) => {
+      primeCount++
+      writeFakeCache(p)
+    }
+    const commit = { kind: 'static' as const, messageCount: 1, toolBlockCached: false }
+
+    // Nested, uppercase, unicode, and absolute (sanitized to a contained key) all
+    // prime once and reuse — these are shapes that resolve and contain.
+    for (const key of ['tenant/session', 'MyCache', 'café', '/leading-slash']) {
+      const before = primeCount
+      const t1 = await session.beginTurn({
+        kind: 'custom',
+        customKey: key,
+        configHash,
+        primeIfMissing
+      })
+      t.is(primeCount, before + 1, `key ${JSON.stringify(key)} primes`)
+      await session.commitTurn(t1, commit)
+      const t2 = await session.beginTurn({
+        kind: 'custom',
+        customKey: key,
+        configHash,
+        primeIfMissing
+      })
+      t.is(primeCount, before + 1, `key ${JSON.stringify(key)} reuses (no re-prime)`)
+      await session.commitTurn(t2, commit)
     }
 
-    t.is(fs.existsSync(turn.cachePath), true, 'cache under the key survives the rejected deletes')
+    // Two spellings that resolve to the same file share initializedCaches: the
+    // second spelling reuses rather than re-priming (keyed by resolved path).
+    const before = primeCount
+    const a = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'alias-x',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCount, before + 1, 'first spelling primes')
+    await session.commitTurn(a, commit)
+    const b = await session.beginTurn({
+      kind: 'custom',
+      customKey: './alias-x',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCount, before + 1, 'alias "./alias-x" reuses the same cache — no re-prime')
+    await session.commitTurn(b, commit)
   } finally {
     cleanup()
   }

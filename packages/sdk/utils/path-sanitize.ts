@@ -9,25 +9,6 @@
  *
  * Throws on null bytes (literal or URL-encoded).
  */
-/**
- * A cache key is safe when it is a single, non-empty path component that
- * survives sanitization unchanged — no empty/dot/absolute/traversal/separator
- * forms. Empty or dot-like keys would resolve a delete to the cache root;
- * separators or `..` would escape it (directly, or via the raw marker path).
- */
-export function isSafeCacheKey(cacheKey: string): boolean {
-  if (typeof cacheKey !== 'string' || cacheKey.trim() === '') return false
-  if (cacheKey === '.' || cacheKey === '..') return false
-  // A null byte is unsafe; reject here so this stays a predicate and doesn't let
-  // `sanitizePathComponent` throw a generic Error out of `assertSafeCacheKey`.
-  if (cacheKey.includes('\0') || cacheKey.includes('%00')) return false
-  // A key must be a single component: no separators (which would split it
-  // across directories or, in the raw marker path, escape the cache root).
-  if (cacheKey.includes('/') || cacheKey.includes('\\')) return false
-  const sanitized = sanitizePathComponent(cacheKey)
-  return sanitized !== '' && sanitized === cacheKey
-}
-
 export function sanitizePathComponent(component: string): string {
   if (component === '') return ''
 

@@ -7,6 +7,7 @@ import {
   getCurrentCacheInfo,
   pruneEmptyCacheDirectories,
   renameCacheFile,
+  resolveCacheFilePath,
   deleteCache as deleteCacheUtil
 } from '@/server/bare/ops/kv-cache-utils'
 import {
@@ -17,7 +18,7 @@ import {
   removeAutoCacheMarkerIfMissing
 } from '@/server/bare/ops/kv-cache-retention'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
-import { type CacheMessage, assertSafeCacheKey, getKVCacheDir } from '@/server/utils'
+import { type CacheMessage, getKVCacheDir } from '@/server/utils'
 import {
   logCacheSaveError,
   logCacheStatus
@@ -76,8 +77,9 @@ const cachedPrefixes = new Map<string, CachedPrefix>()
  * In-memory registry of caches initialized this session. The addon
  * defers disk writes, so the absence of a `.bin` file on disk isn't
  * proof that the cache hasn't been primed in this worker process. Keyed
- * by `${modelId}:${configHash}:${cacheKey}`, so on-disk caches from
- * older worker runs still hit the lazy-load path in `beginTurn`.
+ * by the resolved cache path, so aliased keys that name one file share an
+ * entry and on-disk caches from older worker runs still hit the lazy-load
+ * path in `beginTurn`.
  */
 const initializedCaches = new Set<string>()
 const activeCachePaths = new Map<string, number>()
@@ -171,10 +173,6 @@ async function acquireCachePathWriteLock(
   })
 
   return () => releaseCachePathWriteLock(lockKey)
-}
-
-function initRegistryKey(modelId: string, configHash: string, cacheKey: string): string {
-  return `${modelId}:${configHash}:${cacheKey}`
 }
 
 function markCachePathActive(cachePath: string): void {
@@ -412,7 +410,6 @@ export interface KvCacheSession {
 
 interface InternalTurnState {
   cachePath: string
-  registryKey: string
   autoCacheKey?: string
   /** Request abort signal, so commit's target-lock wait stays abortable. */
   signal?: AbortSignal
@@ -444,7 +441,6 @@ export function createKvCacheSession(
 
   function makeHandle(
     cachePath: string,
-    registryKey: string,
     autoCacheKey?: string,
     releaseWriteLock: () => void = () => {},
     signal?: AbortSignal
@@ -457,7 +453,6 @@ export function createKvCacheSession(
     }
     turnState.set(handle, {
       cachePath,
-      registryKey,
       ...(autoCacheKey !== undefined && { autoCacheKey }),
       ...(signal !== undefined && { signal }),
       releaseWriteLock,
@@ -469,28 +464,23 @@ export function createKvCacheSession(
   }
 
   async function beginCustom(input: BeginCustomTurnInput): Promise<TurnHandle> {
-    // Reject non-canonical keys so two aliases (e.g. "foo" and "/foo") can't
-    // resolve to one file while splitting its init/registry metadata across
-    // distinct keys. Matches the path/marker guards in the cache utils.
-    assertSafeCacheKey(input.customKey, getKVCacheDir())
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
-    const registryKey = initRegistryKey(modelId, input.configHash, input.customKey)
     // Held for the whole turn so a same-file peer can't interleave writes.
     // Released on commit/rollback/error; throws if aborted while queued.
     const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
-    const handle = makeHandle(cachePath, registryKey, undefined, releaseWriteLock, input.signal)
+    const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
 
     try {
       // In-memory registry check first — the addon defers disk writes, so
       // a freshly-primed cache may not yet exist on disk. If the
       // in-memory flag isn't set, fall back to a filesystem probe so
       // caches surviving across worker restarts still hit the reuse path.
-      let exists = initializedCaches.has(registryKey)
+      let exists = initializedCaches.has(cachePath)
       if (!exists) {
         try {
           await fsPromises.access(cachePath)
           exists = true
-          initializedCaches.add(registryKey)
+          initializedCaches.add(cachePath)
         } catch {
           exists = false
         }
@@ -502,7 +492,7 @@ export function createKvCacheSession(
         await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
-        initializedCaches.add(registryKey)
+        initializedCaches.add(cachePath)
       }
 
       return handle
@@ -524,12 +514,11 @@ export function createKvCacheSession(
         existingCache ?? (await getCurrentCacheInfo(modelId, input.configHash, input.history))
       return {
         cachePath: cacheInfo.cachePath,
-        cacheKey: cacheInfo.cacheKey,
-        registryKey: initRegistryKey(modelId, input.configHash, cacheInfo.cacheKey)
+        cacheKey: cacheInfo.cacheKey
       }
     })
 
-    const { cachePath, cacheKey, registryKey } = discovered
+    const { cachePath, cacheKey } = discovered
     const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
 
     let handle: TurnHandle
@@ -537,13 +526,13 @@ export function createKvCacheSession(
     try {
       const resolved = await withCacheStateLock(async () => {
         // Mark the path active under the state lock so retention can't evict it.
-        const h = makeHandle(cachePath, registryKey, cacheKey, releaseWriteLock, input.signal)
-        let exists = initializedCaches.has(registryKey)
+        const h = makeHandle(cachePath, cacheKey, releaseWriteLock, input.signal)
+        let exists = initializedCaches.has(cachePath)
         if (!exists) {
           try {
             await fsPromises.access(cachePath)
             exists = true
-            initializedCaches.add(registryKey)
+            initializedCaches.add(cachePath)
           } catch {
             exists = false
           }
@@ -565,7 +554,7 @@ export function createKvCacheSession(
         await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
-        initializedCaches.add(registryKey)
+        initializedCaches.add(cachePath)
       }
 
       return handle
@@ -650,7 +639,9 @@ export function createKvCacheSession(
           await removeAutoCacheMarkerIfMissing(sourceCacheKey)
         }
         cachedPrefixes.delete(sourceCachePath)
-        initializedCaches.delete(state.registryKey)
+        // state.cachePath was just reassigned to the target; clear the SOURCE
+        // entry, not the freshly-valid target.
+        initializedCaches.delete(sourceCachePath)
         return true
       })
 
@@ -711,7 +702,7 @@ export function createKvCacheSession(
     if (state.autoCacheKey !== undefined) {
       await removeAutoCacheMarkerIfMissing(state.autoCacheKey)
     }
-    initializedCaches.delete(state.registryKey)
+    initializedCaches.delete(state.cachePath)
     cachedPrefixes.delete(state.cachePath)
     state.rolledBack = true
     state.releaseWriteLock()
@@ -783,7 +774,11 @@ export async function deleteKvCacheState(
     ...(target.modelId !== undefined && { modelId: target.modelId })
   })
   if (target.modelId === undefined) {
-    await removeAutoCacheMarker(target.kvCacheKey)
+    // Remove the marker by the root-relative key: an alias like "./<16hex>"
+    // still resolves to the canonical auto key, while a nested key such as
+    // "tenant/<16hex>" stays distinct — path.basename would wrongly collapse it
+    // onto the unrelated top-level auto marker.
+    await removeAutoCacheMarker(path.relative(getKVCacheDir(), removedPath))
   }
 
   // Prefix-cleanup the in-memory counts. The on-disk directory tree
@@ -792,13 +787,9 @@ export async function deleteKvCacheState(
   // or sits beneath it must go.
   clearCachedMessageCountsByPrefix(removedPath, path.sep)
 
-  // The in-memory init-set keys are
-  // `${modelId}:${configHash}:${kvCacheKey}` — clear by the user-
-  // facing kvCacheKey (and optionally narrow by modelId).
-  clearInitializedCachesByScope({
-    cacheKey: target.kvCacheKey,
-    ...(target.modelId !== undefined && { modelId: target.modelId })
-  })
+  // initializedCaches is keyed by the resolved cachePath too, so clear it by
+  // the same removed-directory prefix as cachedPrefixes above.
+  clearInitializedCachesByPrefix(removedPath, path.sep)
 }
 
 // ----- private helpers -----
@@ -904,27 +895,13 @@ function clearCachedMessageCountsByPrefix(prefix: string, sep: string): void {
   }
 }
 
-function clearInitializedCachesByScope(scope: {
-  cacheKey?: string | undefined
-  modelId?: string | undefined
-}): void {
-  if (scope.cacheKey === undefined && scope.modelId === undefined) {
+function clearInitializedCachesByPrefix(prefix: string, sep: string): void {
+  if (!prefix) {
     initializedCaches.clear()
     return
   }
   for (const key of initializedCaches) {
-    const firstSep = key.indexOf(':')
-    const secondSep = key.indexOf(':', firstSep + 1)
-    if (firstSep === -1 || secondSep === -1) continue
-    const entryModelId = key.slice(0, firstSep)
-    const entryCacheKey = key.slice(secondSep + 1)
-    if (scope.cacheKey !== undefined && entryCacheKey !== scope.cacheKey) {
-      continue
-    }
-    if (scope.modelId !== undefined && entryModelId !== scope.modelId) {
-      continue
-    }
-    initializedCaches.delete(key)
+    if (key === prefix || key.startsWith(prefix + sep)) initializedCaches.delete(key)
   }
 }
 
@@ -950,10 +927,13 @@ export const __kvCacheSessionTestHooks = {
     return cachedPrefixes.get(cachePath)?.toolBlock ?? false
   },
   hasInitializedKey(modelId: string, configHash: string, cacheKey: string): boolean {
-    return initializedCaches.has(initRegistryKey(modelId, configHash, cacheKey))
+    return initializedCaches.has(resolveCacheFilePath(modelId, configHash, cacheKey))
+  },
+  hasInitializedPath(cachePath: string): boolean {
+    return initializedCaches.has(cachePath)
   },
   markInitializedForTest(modelId: string, configHash: string, cacheKey: string): void {
-    initializedCaches.add(initRegistryKey(modelId, configHash, cacheKey))
+    initializedCaches.add(resolveCacheFilePath(modelId, configHash, cacheKey))
   },
   getLastAutoCacheSweepMsForTest(): number {
     return lastAutoCacheSweepMs

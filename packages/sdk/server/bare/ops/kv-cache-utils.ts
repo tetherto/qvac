@@ -3,12 +3,12 @@ import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import {
   type CacheMessage,
-  assertSafeCacheKey,
   getAutoCacheLookupHistory,
   getKVCacheDir,
   validateAndJoinPath
 } from '@/server/utils'
 import { getServerLogger } from '@/logging'
+import { PathTraversalError } from '@/utils/errors-server'
 import { Buffer } from 'bare-buffer'
 import { markAutoCacheKey } from '@/server/bare/ops/kv-cache-retention'
 
@@ -56,7 +56,11 @@ export function generateCacheKey(messages: CacheMessage[]): string {
   return hashString.substring(0, 16)
 }
 
-function resolveCacheFilePath(modelId: string, configHash: string, cacheKey: string): string {
+export function resolveCacheFilePath(
+  modelId: string,
+  configHash: string,
+  cacheKey: string
+): string {
   const cacheDir = getKVCacheDir()
   const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
   const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)
@@ -167,16 +171,24 @@ export async function deleteCache(
     return cacheDir
   }
 
-  // Reject empty/dot/traversal keys before building any path: an empty key
-  // would resolve to the cache root and wipe every cache.
-  assertSafeCacheKey(options.kvCacheKey, cacheDir)
+  // validateAndJoinPath sanitizes the key (strips traversal) and rejects
+  // escapes, so nested and other in-root keys resolve normally. A key that
+  // resolves to the cache root would wipe every cache — reject it BEFORE joining
+  // any modelId, so an empty key plus a modelId can't delete a real key dir
+  // under the root.
+  const cacheRoot = path.resolve(cacheDir)
   const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey)
-  // Same guard for modelId: an empty one collapses the target back to the whole
-  // key directory (wiping every model under it); a traversal form would target
-  // a sibling model. modelId is one path component on the write path too.
-  if (options.modelId !== undefined) assertSafeCacheKey(options.modelId, kvCacheDir)
+  if (path.resolve(kvCacheDir) === cacheRoot) {
+    throw new PathTraversalError(options.kvCacheKey, cacheDir)
+  }
+  // Omitting modelId means "delete every model under the key"; a PROVIDED but
+  // empty/dot modelId collapses back to that same dir and would silently broaden
+  // the delete — reject it.
   const targetDir =
     options.modelId !== undefined ? validateAndJoinPath(kvCacheDir, options.modelId) : kvCacheDir
+  if (options.modelId !== undefined && path.resolve(targetDir) === path.resolve(kvCacheDir)) {
+    throw new PathTraversalError(options.modelId, kvCacheDir)
+  }
 
   await fsPromises.rm(targetDir, { recursive: true, force: true })
   return targetDir
