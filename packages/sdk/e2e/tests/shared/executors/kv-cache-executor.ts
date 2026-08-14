@@ -249,10 +249,17 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       lastTokenAt: number
     }>
     try {
-      results = await Promise.all([
-        ...TOPICS.map((topic) => fire(`Tell me about ${topic} in detail.`, true)),
-        ...TOPICS.map((topic) => fire(`Name one fact about ${topic}.`, false))
-      ])
+      // Interleave cached and plain submissions so both kinds are present in the
+      // first `parallel` admission window. Launching all four cached requests
+      // first legitimately fills all four permits; on fast platforms they can
+      // finish together before a queued plain request emits, making the mixed
+      // overlap check scheduling-dependent even though cached turns overlap.
+      results = await Promise.all(
+        TOPICS.flatMap((topic) => [
+          fire(`Tell me about ${topic} in detail.`, true),
+          fire(`Name one fact about ${topic}.`, false)
+        ])
+      )
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `Mixed auto-cache + plain completions threw: ${msg}` }
@@ -269,8 +276,10 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
           typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m,
         0
       )
-    const autoSeq = maxSeq(results.slice(0, TOPICS.length))
-    const plainSeq = maxSeq(results.slice(TOPICS.length))
+    const auto = results.filter((r) => r.useCache)
+    const plain = results.filter((r) => !r.useCache)
+    const autoSeq = maxSeq(auto)
+    const plainSeq = maxSeq(plain)
 
     if (autoSeq <= 1) {
       return {
@@ -288,8 +297,6 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     // Per-request proof, not just the epoch-wide metric: a plain request's token
     // window must overlap an auto-cache request's, i.e. it produced tokens while a
     // cached turn was still decoding rather than waiting for its lock to free.
-    const auto = results.filter((r) => r.useCache)
-    const plain = results.filter((r) => !r.useCache)
     const overlaps = plain.some((p) =>
       auto.some((a) => p.firstTokenAt < a.lastTokenAt && a.firstTokenAt < p.lastTokenAt)
     )
