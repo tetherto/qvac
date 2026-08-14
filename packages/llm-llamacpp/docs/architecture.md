@@ -459,7 +459,7 @@ graph TB
 
 #### **Notable C++ modules**
 
-The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ContextSlider`, `ToolsCompactController`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
+The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ContextSlider`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 
@@ -921,7 +921,6 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 - [multi-gpu.md](multi-gpu.md) - `device` / `split-mode` / `tensor-split` / `main-gpu` semantics for multi-GPU inference and finetuning
 - [cache-api.md](cache-api.md) - KV cache persistence (`cacheKey`, `saveCacheToDisk`)
-- [tools-compact.md](tools-compact.md) - Tool-call compaction behavior
 - [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
 - [continuous-batching.md](continuous-batching.md) - Continuous batching architecture (`parallel`, `ContinuousBatchScheduler`, slot lifecycle, cancellation)
 

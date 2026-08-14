@@ -190,7 +190,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ needs.context.outputs.workdir }}
 
@@ -454,7 +454,7 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.event_name == 'pull_request_target' && needs.context.outputs.base_sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download desktop RTF artifacts
         continue-on-error: true

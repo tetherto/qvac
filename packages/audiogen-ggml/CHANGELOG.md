@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-08-14
 
 ### Breaking
 
@@ -16,6 +16,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- RTF (Real-Time Factor) benchmark for the ACE-Step engine, measuring
+  generation time against rendered audio duration, plus cold-path latency,
+  model load time and process RSS (average, peak, reclaimed after unload).
+  Renders use a fixed seed and caption corpus so only the hardware varies.
+- `npm run test:benchmark:rtf` benchmarks one (DiT variant, GPU) combination;
+  `npm run test:benchmark:rtf:matrix` sweeps several in one process and keeps
+  going when an entry fails. Both are configured through
+  `QVAC_AUDIOGEN_GGML_BENCHMARK_*` environment variables.
+- The same measurement runs on-device as `testRtfBenchmark`, reporting through
+  the canonical `[PERF_REPORT_START]` log markers. Desktop and mobile share one
+  implementation so their numbers stay comparable.
+- `npm run download-models:registry:all` fetches every DiT variant, which a
+  full sweep needs.
+- `benchmarks/RTF-BENCHMARKS.md` documents the metrics and how to run a sweep;
+  `benchmarks/manual-results/` accepts hand-authored records for backends CI
+  cannot reach (CUDA, OpenCL).
+- `@qvac/audiogen-ggml/test/benchmark-runner` subpath export, so the on-device
+  harness can reach the shared benchmark implementation.
+- Shared validation of a benchmark result: a non-positive RTF, a missing run, a
+  run that rendered no audio, implausible memory or a mean RTF above
+  `QVAC_AUDIOGEN_GGML_BENCHMARK_RTF_UPPER_BOUND` now throws before any artifact
+  or log record is emitted, on both the desktop and the on-device lane.
+- Reports carry the backend that actually executed. A GPU request that fell back
+  to CPU is reported as CPU work, with the request preserved as
+  `requested_backend` / `requested_execution_provider`.
+- A `run-benchmarks` label makes a pull request run the benchmark matrix and
+  render the findings table on the run summary. The table was previously
+  reachable only from the manual sweep workflow.
+- ACE-Step appears in the weekly cross-addon performance report. The aggregator
+  can now fetch its own inputs with `--workflow` / `--runs`, folding the last six
+  sweeps into one table instead of only reading a directory staged by the run it
+  belongs to. Each row keeps the run id of the sweep it came from.
 - Expose ACE-Step reference/source audio and cover task controls through the
   JavaScript API (`referenceAudio`, `sourceAudio`, `taskType`,
   `audioCoverStrength`, `coverNoiseStrength`) and forward them to audiogen-cpp.
@@ -39,6 +71,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   admission failures consistently.
 - Exclude internal integration and mobile test utilities from the published
   package and include the downloader runtime dependency.
+
+### Fixed
+
+- On-device benchmark rows now honour their configuration. The mobile CI pushes
+  the per-row settings to the device as a `qvacPerfConfig.txt` file, but nothing
+  read it, so every Device Farm row silently measured the default `turbo-q4` on
+  CPU regardless of the variant and provider it was scheduled for.
+- A failed engine unload no longer reports the whole footprint as reclaimed
+  memory. Reclaim is reported as unavailable and the engine is left undestroyed
+  so the caller's cleanup still runs.
+- A GPU request that fell back to CPU no longer disappears from the findings
+  table. It keyed identically to a genuine CPU run on the same device and
+  variant, so one of the two was dropped as a duplicate and the survivor could be
+  the fallback wearing a plain `cpu` label. Rows now key on the requested backend
+  as well and render as `cpu (requested vulkan)`.
+- Mobile rows report the GitHub run id in the `Run` column. They previously
+  carried the shared extractor's per-workflow `run_number`, which sat in the same
+  column as the desktop run ids and could not be resolved to a run.
 
 ## [0.2.0] - 2026-08-06
 

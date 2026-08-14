@@ -81,7 +81,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || 'tetherto/qvac' }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -112,7 +112,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/translation-nmtcpp' }}
           addon-npm-name: '@qvac/translation-nmtcpp'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build mobile app
         id: build

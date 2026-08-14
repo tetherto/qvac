@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-08-14
 
 ### Added
 
@@ -121,6 +121,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Audio8 Vulkan synthesis crash with quantized models.** Requires
+  `speech-cpp` >= `2026-08-12#1`, whose TTS feature keeps Metal-specific F32
+  output precision scoped to Metal so Vulkan selects a valid matrix
+  multiplication pipeline.
 - **Public TypeScript and CommonJS API.** Audio chunks are now declared as
   their runtime `Int16Array` type, enhancer backend fields are included in
   `RuntimeStats`, invalid reload sample rates are rejected, and the package
