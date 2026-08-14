@@ -89,12 +89,20 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
 // from the decoded wdio config, and expand it into a /tmp/prestage-list.tsv of
 // "<name>\t<url>" rows (deduped) for exactly the tests this shard runs. Emitted
 // identically for both backends so shard resolution stays single-sourced.
+//
+// The embedded manifest is NORMALISED as { urls: { <name>: <url> },
+// tests: { <testName>: [<name>, ...] } } so each URL appears exactly once. This
+// matters for the presigned US-bucket URLs (QVAC-23466): they are ~900-1200 chars
+// each and, if inlined per test reference, the base64 blob balloons past the
+// Linux MAX_ARG_STRLEN (128 KB) single-env-var cap and the Android upload step
+// dies with "Argument list too long" while starting bash. Deduping keeps the
+// block small on both the presigned and HF paths.
 function commonPrelude(manifestB64) {
   return `echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
 GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
-node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):Object.keys(man);const missing=tests.filter(t=>t.startsWith('runBenchmarkPerf')&&!man[t]);if(missing.length)throw new Error('[prestage] missing benchmark mapping(s): '+missing.join(', '));const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
+node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const urls=man.urls||{};const byTest=man.tests||{};const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):Object.keys(byTest);const missing=tests.filter(t=>t.startsWith('runBenchmarkPerf')&&!byTest[t]);if(missing.length)throw new Error('[prestage] missing benchmark mapping(s): '+missing.join(', '));const seen=new Set();const out=[];for(const t of tests){for(const name of (byTest[t]||[])){if(!seen.has(name)){seen.add(name);out.push(name+'\\t'+urls[name])}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
 mkdir -p /tmp/prestage`
 }
 
@@ -173,7 +181,18 @@ function main() {
   const mobileManifest = JSON.parse(fs.readFileSync(mobileManifestPath, 'utf8'))
   const integrationManifest = JSON.parse(fs.readFileSync(integrationManifestPath, 'utf8'))
   const manifest = resolvePinnedManifest(mobileManifest, integrationManifest)
-  const manifestB64 = Buffer.from(JSON.stringify(manifest)).toString('base64')
+  // Normalise to { urls: { <name>: <url> }, tests: { <testName>: [<name>] } } so
+  // each (potentially ~1 KB presigned) URL is embedded once instead of once per
+  // referencing test — see the commonPrelude note on the 128 KB env-var cap.
+  const urls = {}
+  const tests = {}
+  for (const [testName, models] of Object.entries(manifest)) {
+    tests[testName] = models.map(({ name, url }) => {
+      urls[name] = url
+      return name
+    })
+  }
+  const manifestB64 = Buffer.from(JSON.stringify({ urls, tests })).toString('base64')
 
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
