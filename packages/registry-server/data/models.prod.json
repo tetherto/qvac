@@ -8532,5 +8532,38 @@
     "tags": ["generation", "multimodal", "visionpsy", "flash"],
     "notes": "Required by every VisionPsy Nano 460M Flash variant. Not interchangeable with the non-Flash projector.",
     "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen3.8 27B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "instruct", "multimodal", "qwen3.8", "video-instruct"],
+    "notes": "Pair with the F16 mmproj entry for image and video input.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen3.8 27B UD-Q8_K_XL model",
+    "quantization": "UD-Q8_K_XL",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "instruct", "multimodal", "qwen3.8", "video-instruct"],
+    "notes": "Pair with the F16 mmproj entry for image and video input.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.8 27B",
+    "quantization": "f16",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "instruct", "multimodal", "qwen3.8", "video-instruct"],
+    "notes": "Required for image and video input.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
   }
 ]
