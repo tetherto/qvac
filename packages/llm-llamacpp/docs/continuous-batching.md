@@ -231,7 +231,6 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 - `group` + `outputIndex` — back-pointer to the `BatchGroup` this slot belongs to
 - `streams` — per-sequence `onToken` / `onDone` callbacks wired to the JS streaming path
 - `cacheKey`, `saveCacheToDisk`, `prefillOnly`
-- `tools` — `ToolsCompactController` instance (when tools support is enabled)
 
 **BatchGroup** is shared by all sequences admitted in one `processBatch` call. It accumulates outputs and stats, and carries three fields the rest of the machinery keys off:
 
@@ -285,13 +284,12 @@ Lifecycle methods in call order:
 
 | Method | When | What it does |
 |--------|------|--------------|
-| `validatePromptPolicy` | Before admission | Rejects oversized prompts or invalid layout |
-| `loadCache` | After validation | Loads KV cache from disk if `cacheKey` is set |
+| `loadCache` | At admission | Loads KV cache from disk if `cacheKey` is set |
 | `preparePrefill` | At admission | Tokenizes chat messages, returns pending tokens |
 | `onPrefillComplete` | When prefill finishes | Records `nPast`, triggers context-shift check |
 | `onLogitsReady` | Each generation step | Samples next token, runs antiprompt/stop checks |
-| `onGenerationFinished` | Natural EOG | Runs `onGenerationCompletePolicy` (tools_compact trim), flushes UTF-8 buffer |
-| `onCancel` | User cancel or decode error | Same policy as above; called before KV clear |
+| `onGenerationFinished` | Natural EOG | Flushes UTF-8 buffer |
+| `onCancel` | User cancel or decode error | Flushes UTF-8 buffer; called before KV clear |
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
 | `saveCache` | Before KV clear | Persists KV cache to disk if `saveCacheToDisk` is set. `drainFinishedLocked` calls `saveCacheForSlot` and only then `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
 
@@ -677,8 +675,7 @@ backend, not a slow model. Per-step accounting: see
 |---------|-----------|
 | Text models | Supported |
 | Multimodal / vision models | Supported (per-slot MTMD driver; batch prompts may include media messages) |
-| Tools | Supported (per-slot `ToolsCompactController`) |
-| `tools_compact` | Supported |
+| Tools | Supported |
 | Per-prompt `cacheKey` | Supported (read sharing allowed; write sharing rejected) |
 | Context shifting (`n_discarded`) | Supported, against per-slot window |
 | Concurrent top-level `run()` calls | Supported — each call is its own scheduler job and decodes alongside the others (see [Admission](#admission-job-ids-and-rejectwhenbusy)) |

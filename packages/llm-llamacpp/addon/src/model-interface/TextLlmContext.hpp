@@ -16,7 +16,6 @@
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
-#include "ToolsCompactController.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
 
@@ -24,7 +23,7 @@
 /// `LlmContext` API (driven by the single-prompt path in `LlamaModel`)
 /// and the per-sequence `SequenceDriver` API (driven by the
 /// `ContinuousBatchScheduler`). The overlapping state-query methods
-/// (`getNPast`, `getNSlides`, `validatePromptPolicy`) appear on both
+/// (`getNPast`, `getNSlides`) appear on both
 /// bases; a single override below satisfies both vtables.
 class TextLlmContext : public LlmContext, public SequenceDriver {
 public:
@@ -33,13 +32,10 @@ public:
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(
-      common_params& commonParams, common_init_result_ptr llamaInit,
-      ToolsCompactController& tools);
+  TextLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
   TextLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
-      ToolsCompactController& tools, llama_seq_id seqId,
-      llama_pos perSeqCtxCeiling = -1);
+      llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -211,11 +207,6 @@ public:
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const override;
-
   [[nodiscard]] bool loadCache(
       const std::string& cacheKey, llama_pos configuredNDiscarded) override;
   void saveCache(const std::string& cacheKey) const override;
@@ -242,11 +233,6 @@ public:
   }
 
 private:
-  /// Hook fired exactly once per slot, immediately before the policy
-  /// flushes its UTF-8 buffer at end-of-generation. Internal helper for
-  /// `onGenerationFinished`.
-  void onGenerationCompletePolicy(std::string_view assistantOutput);
-
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
@@ -330,7 +316,6 @@ private:
   // whose header no longer matches live memory.
   void snapshotForRecurrentRollback();
 
-  ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
@@ -349,9 +334,7 @@ private:
   llama_pos preRequestNPast_ = 0;
   llama_pos preRequestFirstMsgTokens_ = 0;
   bool pendingBatchFirstMsg_ = false;
-  bool generationStarted_ = false;
   GenerationStopReason generationStopReason_ = GenerationStopReason::None;
-  std::string assistantOutput_;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
 
