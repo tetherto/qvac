@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import type { TestResult } from '@tetherto/qvac-test-suite'
+import type { TestResult } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import {
   runParakeetStreamHappy,
