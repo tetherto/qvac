@@ -420,5 +420,15 @@
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     }
+  ],
+  "runVisionpsyImageNoUpscaleTokensTest": [
+    {
+      "name": "visionpsy-nano-460m-flash-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf"
+    },
+    {
+      "name": "mmproj-visionpsy-nano-460m-flash-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf"
+    }
   ]
 }

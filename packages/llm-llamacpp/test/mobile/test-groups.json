@@ -85,7 +85,8 @@
     ],
     "imageHeavy": [
       "runImageElephantTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runVisionpsyImageNoUpscaleTokensTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
@@ -110,7 +111,8 @@
     ],
     "imageHeavy": [
       "runImageElephantTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runVisionpsyImageNoUpscaleTokensTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
