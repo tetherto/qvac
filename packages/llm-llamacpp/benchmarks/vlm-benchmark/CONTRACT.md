@@ -49,14 +49,51 @@ source_ref, model, device, block, stability:{kind:'temp'|'probe', value_ms?, wai
 
 ```
 qwen3.5-q8                                        # catalog name (config.cjs catalog)
-[label=]<llm-url>|<mmproj-url>[@ctx=N]            # ANY new model: two https URLs, zero code changes
+[label=]<llm-url>|<mmproj-url>[@ctx=N]            # CLI legs only: two https URLs, zero code changes
 json:[{label, ctx_size, llm:{source}, mmproj:{source}}, …]   # escape hatch (registry sources etc.)
 ```
 
 `|` separates the blobs (never appears unencoded in URLs). `huggingface.co/...resolve/<ref>/...`
 URLs are reported as Source=HF with repo+ref (unpinned refs flagged); other URLs as URL/S3.
+The pair form reaches the **CLI legs only**. The addon leg downloads through `ensureModel()`,
+which resolves the blob by `modelName` against `models.manifest.json` and verifies the sha256
+pinned there, so a URL it has never seen has no integrity pin and is refused. Use the pair form
+for a CLI-only dispatch (`matrix_sources=fabric@<ref>`); anything with an addon leg needs a
+catalog name, or a `json:` spec whose `modelName` matches a manifest key.
 Registry-type sources: `json:` form only, desktop-only (no registry client in the mobile app).
 Presigned S3 URLs work for a one-off dispatch but expire — don't commit them to the catalog.
+
+In **several-sources** mode the model axis is fixed, so only the FIRST token is used; empty
+falls back to `config.sourcesModel`. Both legs resolve it identically (`harness.cjs runAll()`
+for the addon, `resolve-cli-model.cjs` for the native CLIs), so a model with no catalog entry
+can be compared across engines with no config commit. A dispatch with CLI sources only
+(`matrix_sources=fabric@<ref>`) runs no addon leg at all, and the CLI step downloads the two
+blobs itself, which is what a model the published addon cannot load yet needs.
+
+A model needing a per-model flag (VisionPsy Flash needs `--image-no-upscale on`, else it runs
+base preprocessing and the run measures the wrong thing) carries it as `cliArgs` for the native
+CLIs and `addonConfig` for the addon. Both live on the spec, so a catalog entry or a `json:`
+spec can set them; a bare `<llm-url>|<mmproj-url>` pair cannot. Use `json:` for a one-off run of
+such a model, not the pair form.
+
+Both are restricted to per-model **multimodal** settings and nothing else, checked at parse
+time on both sides. `cliArgs` accepts only `--image-no-upscale`, `--image-tile-mode`,
+`--image-max-tiles`, `--image-max-tokens`, `--image-min-tokens`; `addonConfig` the `image-*`
+keys plus `mmproj-use-gpu`, in either spelling. Everything else is rejected, including the
+model files, device, sampling params, context size and `reasoning-budget`, all of which the
+harness fixes so that the legs stay comparable.
+
+`mmproj-use-gpu` is allowed because it selects the backend for the **projector only**, which
+`device` does not control. On Android the addon auto-defaults it by GPU class: GPU on Adreno
+800+, CPU on Mali and on any tier it cannot identify. A plain `device: gpu` leg on a Mali
+phone therefore runs the language model on Vulkan and the vision encoder on CPU, so exercising
+the Mali Vulkan encoder requires setting this explicitly. The addon logs which it picked,
+`[LlamaModel] multimodal projector backend: GPU|CPU (<reason>)`, and that line is the only
+reliable way to tell from a run which path was measured. This is an allowlist on purpose: llama.cpp gives most options
+several spellings (`-n` / `--predict` / `--n-predict`, `-ngl` / `--gpu-layers` /
+`--n-gpu-layers`, `--temp` / `--temperature`), extra args are appended after the harness's own,
+so a late alias would win, and a fabric bump can add a spelling at any time. Widening the list
+is a deliberate code change.
 
 **`matrix_sources`** — comma-separated builds-under-comparison: `addon` (published, default) ·
 `addon@candidate` / `addon@baseline` *(build comparison)* · `fabric@<ref>` ·

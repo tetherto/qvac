@@ -18,7 +18,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { ensureModel } = require('../../test/integration/utils')
+const { ensureModel, resolveModelEntry } = require('../../test/integration/utils')
 const LlmLlamacpp = require('../../index.js')
 const fixture = require('./fixture.data.cjs')
 const config = require('./config.cjs')
@@ -203,7 +203,23 @@ async function fetchFromRegistry (source, destPath) {
 // ensureModel()'s cache-by-name behaviour for the custom-fetch (registry) path.
 async function ensureBlob (blob) {
   const plan = resolveBlob(blob)
-  if (plan.downloadUrl) return ensureModel({ modelName: plan.modelName, downloadUrl: plan.downloadUrl })
+  if (plan.downloadUrl) {
+    // ensureModel() resolves modelName against models.manifest.json and verifies the
+    // sha256 pinned there; it never reads downloadUrl. So the addon leg can only run
+    // blobs the manifest pins, and a generated adhoc-* name never is one. Fail with
+    // that, rather than letting resolveModelEntry report a missing manifest entry as
+    // if the manifest were at fault.
+    try {
+      resolveModelEntry(plan.modelName)
+    } catch (_) {
+      throw new Error(
+        `${plan.modelName}: the addon leg runs only blobs pinned in models.manifest.json, so a bare ` +
+        '<llm-url>|<mmproj-url> pair cannot run on it. Use a catalog name, or a json: spec whose ' +
+        'modelName matches a manifest key. CLI-only dispatches fetch the URL directly and are unaffected.'
+      )
+    }
+    return ensureModel({ modelName: plan.modelName })
+  }
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, plan.modelName)
   if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 0) return [plan.modelName, modelDir]
@@ -350,6 +366,11 @@ function runModel (spec) {
           n_predict: String(nPredict),
           verbosity: '2', // surfaces `image slice encoded in N ms` on native stderr
           'reasoning-budget': '0', // disable Qwen3.5 thinking -> clean direct answers
+          // Per-model load config, the addon-side twin of the catalog's `cliArgs`
+          // (e.g. VisionPsy Flash needs image-no-upscale, which nothing in its mmproj
+          // declares). Omitted entirely for models that define none, so the addon keeps
+          // its own defaults.
+          ...(spec.addonConfig || {}),
           ...(BACKENDS_DIR ? { backendsDir: BACKENDS_DIR } : {}) // candidate/baseline build swap (scheduler)
         },
         logger: console,
@@ -452,13 +473,18 @@ function runModel (spec) {
 }
 
 // One test file -> one mobile test function -> one Device Farm spec -> one phone.
-// two-models runs the QVAC_VLM_MODELS launch param (catalog names, ad-hoc
-// <llm-url>|<mmproj-url> pairs, or json: specs — see models.cjs / CONTRACT.md §3),
-// falling back to the committed config.models pair; several-sources loads the one
-// sourcesModel (the other engines run via cli-fixture-runner.cjs, same log).
+// two-models runs the QVAC_VLM_MODELS launch param (catalog names, or json: specs; see
+// models.cjs / CONTRACT.md §3. Ad-hoc <llm-url>|<mmproj-url> pairs parse here but reach the
+// CLI legs only, since the addon leg downloads only manifest-pinned blobs),
+// falling back to the committed config.models pair; several-sources runs ONE model
+// across the engines (the other engines run via cli-fixture-runner.cjs, same log).
+// several-sources honours the same launch param, first token only, so a model that
+// has no catalog entry can be compared across engines without a config commit;
+// empty falls back to config.sourcesModel. The workflow's CLI step resolves the
+// blob filenames the same way, so both legs read the same two files.
 function runAll () {
   const models = MODE === 'several-sources'
-    ? [config.sourcesModel]
+    ? parseModels(env('QVAC_VLM_MODELS'), config.catalog, [config.sourcesModel]).slice(0, 1)
     : parseModels(env('QVAC_VLM_MODELS'), config.catalog, config.models)
   // When the desktop scheduler drives one (source × model × block) per process it pins
   // the model by index (QVAC_VLM_MODEL_INDEX); otherwise run the whole list.

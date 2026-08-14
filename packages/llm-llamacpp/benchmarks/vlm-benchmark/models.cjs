@@ -80,6 +80,70 @@ function parsePair (token) {
   return { label, name: label, ctx_size: ctx, llm, mmproj }
 }
 
+// Bare filename only: modelName becomes a path segment under $MODEL_DIR (see
+// resolve-cli-model.cjs / the benchmark-vlm-model-comparison.yml fetch_blob step), so a
+// caller-supplied value must not be able to escape that directory.
+const MODEL_NAME_RE = /^[A-Za-z0-9._-]+$/
+
+// cliArgs exists for ONE purpose: per-model image preprocessing that the GGUF cannot
+// declare, e.g. VisionPsy Flash's --image-no-upscale. So allow exactly that family and
+// reject every other flag, rather than blocklisting the ones the harness sets.
+//
+// A blocklist cannot be made safe here. llama.cpp gives most options several spellings
+// (common/arg.cpp: {"-n","--predict","--n-predict"}, {"-s","--seed"},
+// {"--temp","--temperature"}, {"-mm","--mmproj"}, {"-ngl","--gpu-layers",
+// "--n-gpu-layers"}), extraArgs are appended AFTER buildCliArgs' fixed flags so a late
+// alias wins, and a fabric bump can add another alias without touching this file. An
+// allowlist cannot rot that way: a new spelling of --seed is still not on it.
+//
+// These five are single-spelling in arg.cpp (:2418 :2425 :2432 :2452 :2463) and none
+// of them is set by buildCliArgs. Adding to this list is a deliberate act; do it when a
+// model genuinely needs a new preprocessing knob.
+const ALLOWED_CLI_FLAGS = new Set([
+  '--image-no-upscale', '--image-tile-mode', '--image-max-tiles',
+  '--image-max-tokens', '--image-min-tokens'
+])
+
+// The addon twin. LOAD_CONFIG_HANDLERS in the addon accepts both spellings of each key,
+// so both are listed. reasoning-budget is deliberately absent: the harness pins it to 0
+// for every leg, so a spec that set it would be changing the comparison, not the model.
+// mmproj-use-gpu is here rather than treated as a device setting: `device` picks the
+// backend for the LLM layers, this picks it for the projector only, and on Android the
+// addon auto-defaults it per GPU class (LlamaModel.cpp: GPU for Adreno 800+, CPU for
+// Mali and anything undetected). Validating the projector on a Mali GPU is therefore
+// impossible without overriding it, so a dispatch has to be able to set it.
+const ALLOWED_ADDON_KEYS = new Set([
+  'image-no-upscale', 'image_no_upscale', 'image-tile-mode', 'image_tile_mode',
+  'image-max-tokens', 'image_max_tokens', 'image-min-tokens', 'image_min_tokens',
+  'mmproj-use-gpu', 'mmproj_use_gpu'
+])
+
+// llama.cpp rewrites `_` to `-` on any `--` argument before it looks the option up
+// (common/arg.cpp, both parse loops), so `--image_no_upscale` reaches the same option
+// as `--image-no-upscale`. Match that, and split `--flag=value` so the flag is compared
+// on its own.
+function canonicalCliFlag (a) {
+  const head = a.split('=')[0]
+  return head.startsWith('--') ? head.replace(/_/g, '-') : head
+}
+
+// A token is a flag if it starts with `-` and is not a negative number, since values
+// like `-1` are legitimate arguments to the flag before them.
+function isFlagToken (a) {
+  return a.startsWith('-') && !/^-\d/.test(a)
+}
+
+// Every URL the workflow hands to curl must be https. curl reads a leading dash as an
+// option however the shell quotes it, so a value like `--config=/tmp/curlrc` would be
+// obeyed rather than fetched; requiring the https:// prefix rejects that by construction.
+const HTTPS_RE = /^https:\/\/[^\s]+$/
+
+function assertHttpsUrl (value, what, i, label) {
+  if (!HTTPS_RE.test(String(value))) {
+    throw new Error(`json model #${i} ('${label || '?'}'): ${what} must be an https URL (got '${String(value).slice(0, 60)}')`)
+  }
+}
+
 // json: form — validate the minimum the harness needs; registry-type sources
 // are accepted here (desktop-only; the mobile app has no registry client).
 function normalizeSpec (spec, i) {
@@ -89,11 +153,42 @@ function normalizeSpec (spec, i) {
     if (!blob || (!blob.source && !blob.downloadUrl)) {
       throw new Error(`json model #${i} ('${spec.label || '?'}'): missing ${role}.source`)
     }
+    if (blob.downloadUrl) {
+      assertHttpsUrl(blob.downloadUrl, `${role}.downloadUrl`, i, spec.label)
+    }
+    // resolveBlob() turns a url/s3 source into exactly this downloadUrl, and
+    // resolve-cli-model.cjs emits it into the env file the workflow curls, so it needs
+    // the same check. `hf` is built from repo/sha/file and `registry` never reaches curl.
+    const src = blob.source || {}
+    if (src.type === 'url' || src.type === 's3') {
+      assertHttpsUrl(src.url, `${role}.source.url`, i, spec.label)
+    }
     if (!blob.modelName) {
       const ident = JSON.stringify(blob.source || blob.downloadUrl)
       blob.modelName = `adhoc-${hash8(ident)}-${role}.gguf`
+    } else if (!MODEL_NAME_RE.test(blob.modelName)) {
+      throw new Error(`json model #${i} ('${spec.label || '?'}'): ${role}.modelName must be a bare filename (got '${String(blob.modelName).slice(0, 60)}')`)
     }
     if (!blob.origin) blob.origin = blob.modelName
+  }
+  if (spec.cliArgs != null) {
+    if (!Array.isArray(spec.cliArgs) || spec.cliArgs.some(a => typeof a !== 'string')) {
+      throw new Error(`json model #${i} ('${spec.label || '?'}'): cliArgs must be an array of strings`)
+    }
+    const bad = spec.cliArgs.filter(a => isFlagToken(a) && !ALLOWED_CLI_FLAGS.has(canonicalCliFlag(a)))
+    if (bad.length) {
+      throw new Error(`json model #${i} ('${spec.label || '?'}'): cliArgs may only carry per-model image preprocessing flags (${[...ALLOWED_CLI_FLAGS].join(', ')}); rejected ${bad.join(', ')}`)
+    }
+  }
+  if (spec.addonConfig != null) {
+    const cfg = spec.addonConfig
+    if (typeof cfg !== 'object' || Array.isArray(cfg) || Object.values(cfg).some(v => typeof v !== 'string')) {
+      throw new Error(`json model #${i} ('${spec.label || '?'}'): addonConfig must be an object of string values`)
+    }
+    const bad = Object.keys(cfg).filter(k => !ALLOWED_ADDON_KEYS.has(k))
+    if (bad.length) {
+      throw new Error(`json model #${i} ('${spec.label || '?'}'): addonConfig may only carry per-model image preprocessing keys (${[...ALLOWED_ADDON_KEYS].join(', ')}); rejected ${bad.join(', ')}`)
+    }
   }
   if (!spec.label) spec.label = `json-model-${i}`
   if (!spec.name) spec.name = spec.label

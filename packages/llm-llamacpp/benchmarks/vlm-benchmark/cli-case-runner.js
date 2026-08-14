@@ -149,6 +149,12 @@ function buildCliArgs (spec) {
   // parses its output (metrics come from the timing lines, not the prompt dump), so it is
   // simply gone rather than gated on a build check.
 
+  // Model-specific flags from the catalog entry's `cliArgs`, e.g. VisionPsy Flash's
+  // --image-no-upscale. Pushed before -p so the prompt stays last.
+  if (Array.isArray(spec.extraArgs) && spec.extraArgs.length) {
+    args.push(...spec.extraArgs)
+  }
+
   args.push('-p', spec.prompt)
 
   return args
