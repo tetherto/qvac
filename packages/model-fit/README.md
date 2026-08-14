@@ -284,7 +284,7 @@ Edit `src/index.ts`, never the generated files.
 npm test                       # validation + enum tests (no model needed)
 FIT_MODEL_PATH=/abs/model.gguf npm test   # also runs the real fit projection
 npm run test:types             # typecheck + consumer narrowing test + drift check
-npm run lint                   # standard (JS) + eslint (TS)
+npm run lint                   # prettier + lunte (JS) + eslint (TS)
 ```
 
 ### Reading the outcome

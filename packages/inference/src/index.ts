@@ -57,6 +57,7 @@ export {
   state,
   vla,
   vlaHparams,
+  vlaSetEmbodiment,
   vlaPreprocessImage,
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,

@@ -1,6 +1,6 @@
-import { createHash } from 'crypto'
+import { createHash } from 'bare-crypto'
 import type { ProcessedModel, CompanionSetMetadata, CompanionSetMetadataEntry } from './types'
-import { BERGAMOT_MODEL_RE } from '@/schemas'
+import { BERGAMOT_MODEL_RE } from '../../surface'
 
 /**
  * Detects companion file relationships among processed models and
@@ -357,5 +357,5 @@ function findOnnxCompanionKey(
 }
 
 function shortHash(input: string): string {
-  return createHash('sha256').update(input).digest('hex').substring(0, 16)
+  return createHash('sha-256').update(input).digest('hex').substring(0, 16)
 }
