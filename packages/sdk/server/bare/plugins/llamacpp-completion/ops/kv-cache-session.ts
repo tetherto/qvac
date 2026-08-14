@@ -486,6 +486,8 @@ export function createKvCacheSession(
       logCacheStatus(input.customKey, exists)
 
       if (!exists) {
+        // Recreate the parent dir if a same-key peer's rollback pruned it after our lock wait.
+        await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(registryKey)

@@ -178,6 +178,52 @@ test('kv-cache-session: a second same-key turn waits for the first to release it
   }
 })
 
+test('kv-cache-session: a queued same-key waiter recreates a parent a holder rollback pruned', async (t) => {
+  // Race: the holder rolls back (unlink + prune the empty parent dir) while a
+  // same-key waiter is queued for the lock and not yet in activeCachePaths, so
+  // the prune removes the waiter's parent. The waiter must recreate it after
+  // acquiring the lock. The prime writer does NOT mkdir — like the real addon —
+  // so a missing parent surfaces as ENOENT rather than being silently masked.
+  const { mod, cleanup } = await loadSession()
+  const fs = await import('bare-fs')
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const primeNoMkdir = async (cachePath: string) => {
+      fs.writeFileSync(cachePath, 'fake-kv-cache-bytes')
+    }
+
+    const holder = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'race-a',
+      configHash,
+      primeIfMissing: primeNoMkdir
+    })
+
+    // Waiter queues on the same key: its getCacheFilePath made the parent, then
+    // it blocks on the write lock the holder owns.
+    let waiterErr: unknown = null
+    const waiterPromise = session
+      .beginTurn({ kind: 'custom', customKey: 'race-a', configHash, primeIfMissing: primeNoMkdir })
+      .catch((err) => {
+        waiterErr = err
+        return null
+      })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    // Holder rolls back: unlinks the file and prunes the parent the waiter needs.
+    await session.rollback(holder)
+
+    const waiter = await waiterPromise
+    t.is(waiterErr, null, 'waiter recreated the pruned parent and primed without ENOENT')
+    t.ok(waiter, 'waiter turn admitted after the holder rolled back')
+    // Release the admitted waiter so it doesn't leak its write lock / active-path ref.
+    if (waiter) await session.rollback(waiter)
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: turns on different cache keys do not block each other', async (t) => {
   const { mod, cleanup, writeFakeCache } = await loadSession()
   try {
