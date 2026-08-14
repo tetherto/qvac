@@ -28,6 +28,13 @@ const RESOURCE = 'world'
 const SCENE_PROMPT = '| unknown | A realistic outdoor world scene with a navigable path.'
 
 /**
+ * Stand-in id for the tests that only exercise client-side validation. The
+ * request never reaches the server, so the id is never resolved — using a real
+ * one would mean loading 13.3 GB of weights to check a string.
+ */
+const UNLOADED_MODEL_ID = 'world-client-validation-only'
+
+/**
  * Drives the ABot-World session ops. Every test that walks must create a world
  * first: the session defers activation until a scene pack exists, so a step on
  * a freshly loaded model is expected to fail until `worldCreateScene` has run.
@@ -172,10 +179,12 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
   }
 
   async invalidKey(params: WorldParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded(RESOURCE)
     try {
-      // Rejected client-side by parseClientInput, before any RPC.
-      worldStep({ modelId, keys: params['keys'] as string[] })
+      // Rejected client-side by parseClientInput, before any RPC — so this test
+      // must NOT load a model. It is declared `dependency: 'none'`, and calling
+      // ensureLoaded here would pull the 13.3 GB ABot set to exercise a string
+      // check that never leaves the process.
+      worldStep({ modelId: UNLOADED_MODEL_ID, keys: params['keys'] as string[] })
       return { passed: false, output: 'an unmapped walk key was accepted' }
     } catch (error) {
       return ValidationHelpers.validate(
@@ -186,10 +195,10 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
   }
 
   async invalidDimensions(params: WorldParams, expectation: Expectation): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded(RESOURCE)
     try {
+      // Same as invalidKey: the multiple-of-32 refinement runs client-side.
       worldCreateScene({
-        modelId,
+        modelId: UNLOADED_MODEL_ID,
         prompt: SCENE_PROMPT,
         image: await this.firstFrame(params),
         width: params['width'] as number,
@@ -246,20 +255,33 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     await this.createWorld(modelId, params)
 
     const inFlight = worldStep({ modelId, keys: params['keys'] as string[] })
-    const timer = setTimeout(() => {
-      cancel({ requestId: inFlight.requestId }).catch(() => {})
-    }, 1500)
 
-    // Either outcome is correct — the engine cannot abort mid-block, so a
-    // cancel landing after the block finished legitimately resolves — but they
-    // are distinguishable, so assert which one happened rather than discarding
-    // both. A rejection for any OTHER reason is a real failure.
+    // Cancel while the block is unambiguously in flight, and AWAIT the cancel so
+    // the assertion below rests on a cancel the server actually accepted — an
+    // unsuccessful one throws CancelFailedError.
+    //
+    // The earlier version fired the cancel from a 1500 ms timer and accepted
+    // either outcome, on the grounds that a cancel landing after the block
+    // finished legitimately resolves. That reasoning is sound but it made the
+    // test unfalsifiable: with cancellation entirely removed, every run would
+    // take the "resolved" branch and still pass. A cancel accepted against a
+    // live request must make the step reject — the op raises
+    // InferenceCancelledError rather than yielding `done`, precisely so a
+    // truncated block is never dressed up as success.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    await cancel({ requestId: inFlight.requestId })
+
     let cancelOutcome = 'resolved'
     await inFlight.frames.catch((error: unknown) => {
       cancelOutcome = error instanceof Error ? error.message : String(error)
     })
-    clearTimeout(timer)
-    if (cancelOutcome !== 'resolved' && !/cancel/i.test(cancelOutcome)) {
+    if (cancelOutcome === 'resolved') {
+      return {
+        passed: false,
+        output: 'the step completed normally after an accepted cancel — cancellation had no effect'
+      }
+    }
+    if (!/cancel/i.test(cancelOutcome)) {
       return {
         passed: false,
         output: `in-flight step failed for a non-cancel reason: ${cancelOutcome}`
