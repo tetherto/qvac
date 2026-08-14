@@ -82,8 +82,10 @@ function parsePair (token) {
 
 // Bare filename only: modelName becomes a path segment under $MODEL_DIR (see
 // resolve-cli-model.cjs / the benchmark-vlm-model-comparison.yml fetch_blob step), so a
-// caller-supplied value must not be able to escape that directory.
-const MODEL_NAME_RE = /^[A-Za-z0-9._-]+$/
+// caller-supplied value must not be able to escape that directory. The leading (?!\.+$)
+// is what closes that: the character class has no slash, but it does allow a name made
+// only of dots, and `..` is a path segment that walks up one level.
+const MODEL_NAME_RE = /^(?!\.+$)[A-Za-z0-9._-]+$/
 
 // cliArgs exists for ONE purpose: per-model image preprocessing that the GGUF cannot
 // declare, e.g. VisionPsy Flash's --image-no-upscale. So allow exactly that family and
