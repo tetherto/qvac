@@ -136,7 +136,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/ocr-ggml' }}
           addon-npm-name: '@qvac/ocr-ggml'
           prebuild-artifact-prefix: 'ggml-ocr-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
