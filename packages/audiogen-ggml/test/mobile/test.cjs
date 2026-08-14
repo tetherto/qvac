@@ -15,6 +15,8 @@
 // the tests fetch them from the QVAC model registry on-device at runtime into
 // `<testDir>/models/` (same client the desktop suite uses). A pre-side-loaded
 // set under `<testDir>/models` or `$AUDIOGEN_MODEL_DIR` is used as-is if present.
+// Android Device Farm also pre-stages the same set under /data/local/tmp so the
+// phone does not spend its per-test budget downloading ~3 GB over mobile Wi-Fi.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -42,6 +44,7 @@ const SMOKE_CAPTION = 'Upbeat pop rock with driving electric guitars, punchy dru
 const GPU_DEVICE = 1
 const VULKAN_BACKEND = 3
 const OPENCL_BACKEND = 4
+const ANDROID_PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-audiogen-models'
 
 // The four stage filenames a variant needs on disk. Defaults to the smoke's
 // turbo-q4; testRtfBenchmark passes the variant its matrix row asks for.
@@ -104,6 +107,7 @@ function _candidateDirs () {
       candidates.push(process.env.AUDIOGEN_MODEL_DIR)
     }
   } catch (_e) {}
+  candidates.push(ANDROID_PRESTAGED_MODEL_DIR)
   if (global.testDir) candidates.push(path.join(global.testDir, 'models'))
   if (typeof dirPath === 'string' && dirPath) candidates.push(path.join(dirPath, 'models'))
   return candidates
