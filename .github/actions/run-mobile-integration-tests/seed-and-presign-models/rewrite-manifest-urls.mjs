@@ -3,6 +3,7 @@
 // on-device manifest before the app is built, keeping the original source(s) as
 // fallbacks. sha256/bytes pins are untouched, so integrity checks are unchanged.
 import { readFileSync, writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 function env(name) {
   const v = process.env[name]
@@ -10,14 +11,12 @@ function env(name) {
   return v
 }
 
-const MANIFEST_PATH = env('MANIFEST_PATH')
-const URL_MAP = env('URL_MAP')
-
-function main() {
-  const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
-  const map = JSON.parse(readFileSync(URL_MAP, 'utf8'))
+// Prepend each presigned URL to the matching model's urls[], keeping the
+// original source(s) as ordered fallbacks and leaving sha256/bytes pins intact.
+// Returns the number of models repointed. Mutates `manifest` in place.
+function rewriteManifest(manifest, map) {
   if (!manifest || !manifest.models) {
-    throw new Error(`[rewrite] manifest ${MANIFEST_PATH} has no models object`)
+    throw new Error('[rewrite] manifest has no models object')
   }
 
   let rewritten = 0
@@ -32,9 +31,18 @@ function main() {
     entry.urls = [presignedUrl, ...fallbacks]
     rewritten++
   }
-
-  writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n')
-  console.log(`[rewrite] ${rewritten} model URL(s) repointed to US bucket in ${MANIFEST_PATH}`)
+  return rewritten
 }
 
-main()
+function main() {
+  const manifestPath = env('MANIFEST_PATH')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const map = JSON.parse(readFileSync(env('URL_MAP'), 'utf8'))
+  const rewritten = rewriteManifest(manifest, map)
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+  console.log(`[rewrite] ${rewritten} model URL(s) repointed to US bucket in ${manifestPath}`)
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) main()
+
+export { rewriteManifest }

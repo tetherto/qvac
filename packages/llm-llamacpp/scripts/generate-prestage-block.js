@@ -81,20 +81,63 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
   )
 }
 
+// Normalise the resolved shard->models map into { urls: { <name>: <url> },
+// tests: { <testName>: [<name>, ...] } } so each URL is stored once. Presigned
+// URLs are ~1 KB each; inlining them per test reference pushes the base64 env var
+// past Linux's 128 KB MAX_ARG_STRLEN cap and the Android upload dies with
+// "Argument list too long".
+function normalizeManifest(resolved) {
+  const urls = {}
+  const tests = {}
+  for (const [testName, models] of Object.entries(resolved)) {
+    tests[testName] = models.map(({ name, url }) => {
+      urls[name] = url
+      return name
+    })
+  }
+  return { urls, tests }
+}
+
+// Inverse of normalizeManifest for one shard: given the normalised manifest and
+// the shard's grep pattern, return deduped [{ name, url }] rows for the tests it
+// runs. Also runs on the Device Farm host (embedded verbatim into commonPrelude
+// via .toString()), so it stays a self-contained, quote/`$`-free pure function.
+function expandPrestageList(man, grep) {
+  const urls = man.urls || {}
+  const byTest = man.tests || {}
+  const tests = grep
+    ? grep
+        .split('|')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : Object.keys(byTest)
+  const missing = tests.filter((t) => t.startsWith('runBenchmarkPerf') && !byTest[t])
+  if (missing.length)
+    throw new Error('[prestage] missing benchmark mapping(s): ' + missing.join(', '))
+  const seen = new Set()
+  const rows = []
+  for (const t of tests) {
+    for (const name of byTest[t] || []) {
+      if (!seen.has(name)) {
+        seen.add(name)
+        rows.push({ name, url: urls[name] })
+      }
+    }
+  }
+  return rows
+}
+
 // Shared host-side prelude: decode the embedded manifest, read the shard's grep
 // from the decoded wdio config, and expand it into /tmp/prestage-list.tsv of
-// "<name>\t<url>" rows (deduped) for the tests this shard runs.
-//
-// The manifest is normalised as { urls: { <name>: <url> }, tests: { <testName>:
-// [<name>, ...] } } so each URL appears once. Presigned URLs are ~1 KB each;
-// inlining them per test reference pushes the base64 env var past Linux's 128 KB
-// MAX_ARG_STRLEN cap and the Android upload dies with "Argument list too long".
+// "<name>\t<url>" rows (deduped) for the tests this shard runs. The expansion
+// reuses expandPrestageList verbatim so host and CI never drift.
 function commonPrelude(manifestB64) {
+  const expand = expandPrestageList.toString()
   return `echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
 GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
-node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const urls=man.urls||{};const byTest=man.tests||{};const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):Object.keys(byTest);const missing=tests.filter(t=>t.startsWith('runBenchmarkPerf')&&!byTest[t]);if(missing.length)throw new Error('[prestage] missing benchmark mapping(s): '+missing.join(', '));const seen=new Set();const out=[];for(const t of tests){for(const name of (byTest[t]||[])){if(!seen.has(name)){seen.add(name);out.push(name+'\\t'+urls[name])}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
+node -e "const fs=require('fs');const expandPrestageList=${expand};const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const rows=expandPrestageList(man,process.env.GREP||'');fs.writeFileSync('/tmp/prestage-list.tsv',rows.map(r=>r.name+'\\t'+r.url).join('\\n')+(rows.length?'\\n':''));console.error('[prestage] '+rows.length+' model(s)')"
 mkdir -p /tmp/prestage`
 }
 
@@ -173,17 +216,7 @@ function main() {
   const mobileManifest = JSON.parse(fs.readFileSync(mobileManifestPath, 'utf8'))
   const integrationManifest = JSON.parse(fs.readFileSync(integrationManifestPath, 'utf8'))
   const manifest = resolvePinnedManifest(mobileManifest, integrationManifest)
-  // Normalise to { urls: { <name>: <url> }, tests: { <testName>: [<name>] } } so
-  // each URL is embedded once — see the commonPrelude note on the 128 KB cap.
-  const urls = {}
-  const tests = {}
-  for (const [testName, models] of Object.entries(manifest)) {
-    tests[testName] = models.map(({ name, url }) => {
-      urls[name] = url
-      return name
-    })
-  }
-  const manifestB64 = Buffer.from(JSON.stringify({ urls, tests })).toString('base64')
+  const manifestB64 = Buffer.from(JSON.stringify(normalizeManifest(manifest))).toString('base64')
 
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
@@ -196,4 +229,11 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { benchmarkModelsByTest, resolvePinnedManifest, buildScript, IOS_BUNDLE_ID }
+module.exports = {
+  benchmarkModelsByTest,
+  resolvePinnedManifest,
+  normalizeManifest,
+  expandPrestageList,
+  buildScript,
+  IOS_BUNDLE_ID
+}

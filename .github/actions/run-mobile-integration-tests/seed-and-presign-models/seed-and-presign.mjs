@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, statSync, rmSync, mkdtempSync, openSync, readSync, closeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, isAbsolute } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 function env(name, fallback) {
   const v = process.env[name]
@@ -146,7 +147,7 @@ function presign(key) {
   return out.toString('utf8').trim()
 }
 
-function main() {
+function main(workDir) {
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
   if (!manifest || !manifest.models) {
     throw new Error(`[seed] manifest ${MANIFEST_PATH} has no models object`)
@@ -163,7 +164,6 @@ function main() {
   console.log(`[seed] ${names.length} model(s) to seed (manifest has ${Object.keys(manifest.models).length})`)
   console.log(`[seed] destination s3://${S3_BUCKET}/${S3_PREFIX} (${AWS_REGION})`)
 
-  const workDir = mkdtempSync(join(tmpdir(), 'seed-models-'))
   const map = {}
   let seeded = 0
   let present = 0
@@ -183,38 +183,52 @@ function main() {
       console.log(`[seed] ${name}: already in US bucket (${existingSize} bytes), skipping`)
     } else {
       const tmp = join(workDir, name)
-      let lastErr = null
-      let ok = false
-      for (const url of urls) {
-        try {
-          console.log(`[seed] ${name}: downloading from ${new URL(url).host}`)
-          download(url, tmp)
-          verify(tmp, entry, name)
-          ok = true
-          break
-        } catch (err) {
-          lastErr = err
-          console.log(`[seed] ${name}: source failed (${err.message}); trying next url if any`)
-        }
-      }
-      if (!ok) throw lastErr || new Error(`[seed] ${name}: all sources failed`)
-      console.log(`[seed] ${name}: uploading to s3://${S3_BUCKET}/${key}`)
-      upload(tmp, key)
+      // finally: drop the partial multi-GB file even when download/verify/upload
+      // throws, so failed models don't fill the shared self-hosted runner disk.
       try {
-        rmSync(tmp, { force: true })
-      } catch {}
-      seeded++
+        let lastErr = null
+        let ok = false
+        for (const url of urls) {
+          try {
+            console.log(`[seed] ${name}: downloading from ${new URL(url).host}`)
+            download(url, tmp)
+            verify(tmp, entry, name)
+            ok = true
+            break
+          } catch (err) {
+            lastErr = err
+            console.log(`[seed] ${name}: source failed (${err.message}); trying next url if any`)
+          }
+        }
+        if (!ok) throw lastErr || new Error(`[seed] ${name}: all sources failed`)
+        console.log(`[seed] ${name}: uploading to s3://${S3_BUCKET}/${key}`)
+        upload(tmp, key)
+        seeded++
+      } finally {
+        try {
+          rmSync(tmp, { force: true })
+        } catch {}
+      }
     }
 
     map[name] = presign(key)
   }
 
-  try {
-    rmSync(workDir, { recursive: true, force: true })
-  } catch {}
-
   writeFileSync(OUTPUT_MAP, JSON.stringify(map, null, 2) + '\n')
   console.log(`[seed] done: ${seeded} seeded, ${present} already present; map -> ${OUTPUT_MAP}`)
 }
 
-main()
+function run() {
+  const workDir = mkdtempSync(join(tmpdir(), 'seed-models-'))
+  try {
+    main(workDir)
+  } finally {
+    try {
+      rmSync(workDir, { recursive: true, force: true })
+    } catch {}
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) run()
+
+export { validateModelName, s3Key }

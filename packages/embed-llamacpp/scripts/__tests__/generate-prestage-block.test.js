@@ -10,6 +10,9 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 const { modelsFromManifest, buildScript } = require('../generate-prestage-block')
 const realManifest = require('../../test/integration/models.manifest.json')
@@ -55,6 +58,26 @@ test('modelsFromManifest rejects entries without a usable URL', () => {
       }),
     /no usable pinned manifest URL/
   )
+})
+
+test('PRESTAGE_URL_MAP overrides pull from the US bucket and bypass the HF-shape check', () => {
+  const mapPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'embed-prestage-')), 'map.json')
+  const usUrl = 'https://tether-ai-dev-us.s3.us-west-2.amazonaws.com/x/gte-large_fp16.gguf?sig=abc'
+  fs.writeFileSync(mapPath, JSON.stringify({ 'gte-large_fp16.gguf': usUrl }))
+  const prev = process.env.PRESTAGE_URL_MAP
+  process.env.PRESTAGE_URL_MAP = mapPath
+  try {
+    const models = modelsFromManifest(SAMPLE)
+    const gte = models.find((m) => m.name === 'gte-large_fp16.gguf')
+    assert.equal(gte.url, usUrl)
+    // Un-overridden models still resolve from their pinned HF URL.
+    const gemma = models.find((m) => m.name === 'embeddinggemma-300M-Q8_0.gguf')
+    assert.match(gemma.url, /^https:\/\/huggingface\.co\//)
+  } finally {
+    if (prev === undefined) delete process.env.PRESTAGE_URL_MAP
+    else process.env.PRESTAGE_URL_MAP = prev
+    fs.rmSync(path.dirname(mapPath), { recursive: true, force: true })
+  }
 })
 
 test('buildScript stages every model to the Android prestage dir', () => {
