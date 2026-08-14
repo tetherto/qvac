@@ -105,7 +105,7 @@ jobs:
             arch: arm64
             no_gpu: 'true'
           - os: macos-26
-            runner: mac-mini-m4-gpu
+            runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
           - os: macos-15-large
