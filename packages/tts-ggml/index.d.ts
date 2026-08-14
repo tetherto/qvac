@@ -110,6 +110,13 @@ interface TTSGgmlFiles {
     cosyvoiceFlowModelPath?: string;
     cosyvoiceHiftModel?: string;
     cosyvoiceHiftModelPath?: string;
+    /**
+     * CosyVoice3 voice-cloning add-on GGUFs, required only when
+     * `referenceAudio` is set: the speech_tokenizer_v3 speech tokenizer
+     * (`cosyvoice3-s3tok-*.gguf`) and the CAM++ speaker encoder
+     * (`cosyvoice3-campplus-*.gguf`). Auto-discovered under
+     * `cosyvoiceModelDir` by those name prefixes when unset.
+     */
     cosyvoiceS3tokModel?: string;
     cosyvoiceS3tokModelPath?: string;
     cosyvoiceCampplusModel?: string;
@@ -245,10 +252,16 @@ interface ParlerDescriptionFields {
  */
 interface Audio8VoiceFields {
     /**
-     * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3: reserved
-     * / not yet effective — zero-shot cloning needs the native S3 tokenizer +
-     * CAM++ (not ported yet), so the engine falls back to the baked voice.
-     * Audio8: the recording to clone, with `referenceText` alongside it.
+     * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3:
+     * zero-shot / cross-lingual cloning reference (mono, 0.5-30 s hard limits,
+     * 5-15 s of clean speech recommended) — the native front-end tokenizes it
+     * (speech_tokenizer_v3), extracts the CAM++ speaker embedding and prompt
+     * mel at load, replacing the baked voice; requires the
+     * `cosyvoiceS3tokModel` + `cosyvoiceCampplusModel` files and fails the
+     * load (never silently falls back) when they are missing or the audio is
+     * unusable. Pair with `promptText` (the verbatim transcript) for zero-shot
+     * or omit it for cross-lingual. Audio8: the recording to clone, with
+     * `referenceText` alongside it.
      */
     referenceAudio?: string;
     /** Audio8: what `referenceAudio` says. Required when cloning. */
@@ -319,7 +332,15 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * model's baked rate. Omit it to retain the baked rate.
      */
     cfgRate?: number;
-    /** CosyVoice3: transcript of `referenceAudio` for zero-shot voice cloning (conditions the LM prompt). */
+    /**
+     * CosyVoice3: verbatim transcript of `referenceAudio`, selecting the
+     * cloning mode per the upstream frontends — set it for zero-shot (the LM
+     * is prompted with transcript + reference speech tokens; best fidelity in
+     * the reference's own language), omit it for cross-lingual (timbre-only
+     * conditioning; best when synthesizing a different language than the
+     * reference). Without `referenceAudio` it still overrides the baked
+     * voice's transcript metadata for the LM prompt.
+     */
     promptText?: string;
     /**
      * CosyVoice3: natural-language control (instruct2) — Chinese dialect, emotion,
@@ -575,6 +596,16 @@ declare class TTSGgml {
      * both halves have to arrive together.
      */
     private _assertAudio8VoiceConsistent;
+    /**
+     * A CosyVoice3 clone request must be resolvable to the two cloning models
+     * before the native load starts: with neither explicit s3tok + campplus
+     * paths nor a model dir to discover them under, the engine cannot bake the
+     * reference and the failure surfaces clearer here. `promptText` stays
+     * deliberately optional — its absence selects cross-lingual mode, and with
+     * a model dir present the native side still fail-closes loudly when the
+     * cloning GGUFs are missing from it.
+     */
+    private _assertCosyvoiceCloneConsistent;
     private _assertCosyvoiceOptionConsistency;
     /**
      * Validate the cross-engine emotion/pace surface against this engine, and
