@@ -1,36 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+EXPECTED_RUNS_URL="repos/${GITHUB_REPOSITORY}/actions/workflows/on-pr-fabric.yml/runs?head_sha=${MOCK_EXPECTED_HEAD_SHA}&per_page=20"
+EXPECTED_ARTIFACTS_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242/artifacts"
+
 if [ "$1" = "api" ]; then
-  case "$2" in
-    */actions/workflows/*/runs*)
-      printf '%s\n' '4242'
-      ;;
-    */actions/runs/4242/artifacts)
-      printf '%s\n' 'fabric-prebuilds'
-      ;;
-    *)
-      printf 'Unexpected gh api URL: %s\n' "$2" >&2
-      exit 1
-      ;;
-  esac
+  if [ "$2" = "$EXPECTED_RUNS_URL" ]; then
+    printf '%s\n' '4242'
+  elif [ "$2" = "$EXPECTED_ARTIFACTS_URL" ]; then
+    printf '%s\n' "$MOCK_EXPECTED_ARTIFACT"
+  else
+    printf 'Unexpected gh api URL: %s\n' "$2" >&2
+    exit 1
+  fi
   exit 0
 fi
 
 if [ "$1" = "run" ] && [ "$2" = "download" ]; then
   shift 2
   download_dir=
+  artifact=
+  repo=
+  run_id=
   while [ "$#" -gt 0 ]; do
-    if [ "$1" = "--dir" ]; then
-      download_dir="$2"
-      shift 2
-      continue
-    fi
-    shift
+    case "$1" in
+      --dir)
+        download_dir="$2"
+        shift 2
+        ;;
+      --name)
+        artifact="$2"
+        shift 2
+        ;;
+      --repo)
+        repo="$2"
+        shift 2
+        ;;
+      *)
+        run_id="$1"
+        shift
+        ;;
+    esac
   done
 
   if [ -z "$download_dir" ]; then
     printf '%s\n' 'Missing --dir in gh run download' >&2
+    exit 1
+  fi
+  if [ "$run_id" != "4242" ] || [ "$artifact" != "$MOCK_EXPECTED_ARTIFACT" ] || [ "$repo" != "$GITHUB_REPOSITORY" ]; then
+    printf 'Unexpected gh run download selection: run=%s artifact=%s repo=%s\n' "$run_id" "$artifact" "$repo" >&2
     exit 1
   fi
 

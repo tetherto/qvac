@@ -47,6 +47,10 @@ runs:
           echo "::error::Fabric prebuilds root does not exist: $SRC"
           exit 1
         fi
+        if [ ! -d "$SRC/include" ] || [ ! -d "$SRC/share" ]; then
+          echo "::error::Fabric prebuilds must contain both include/ and share/: $SRC"
+          exit 1
+        fi
 
         WORK_ABS="$(cd "$WORKDIR" && pwd)"
         WS_ABS="$(cd "$GITHUB_WORKSPACE" && pwd)"
@@ -71,14 +75,10 @@ runs:
           local dest_root="$1"
           mkdir -p "$dest_root"
 
-          if [ -d "$SRC/include" ]; then
-            rm -rf "$dest_root/include"
-            cp -r "$SRC/include" "$dest_root/"
-          fi
-          if [ -d "$SRC/share" ]; then
-            rm -rf "$dest_root/share"
-            cp -r "$SRC/share" "$dest_root/"
-          fi
+          rm -rf "$dest_root/include"
+          cp -r "$SRC/include" "$dest_root/"
+          rm -rf "$dest_root/share"
+          cp -r "$SRC/share" "$dest_root/"
 
           if [ -n "$PLATFORM" ] && [ -n "$ARCH" ]; then
             plat_key="${PLATFORM}-${ARCH}${TAGS}"

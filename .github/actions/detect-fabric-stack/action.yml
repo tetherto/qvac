@@ -1,9 +1,9 @@
 name: 'Detect fabric stack'
 description: >
   Read-only detection for fabric-stack PRs. Sets fabric_stack=true when the
-  full PR diff touches the qvac-fabric overlay port or packages/fabric vcpkg
-  manifests. Used to disable stale prebuild reuse and to wire npm-runtime
-  consumers to PR-built @qvac/fabric prebuilds.
+  full PR diff touches the qvac-fabric overlay port or any packages/fabric
+  source. Used to disable stale prebuild reuse and to wire npm-runtime consumers
+  to PR-built @qvac/fabric prebuilds.
 
 outputs:
   fabric_stack:
@@ -75,7 +75,7 @@ runs:
             while IFS= read -r file; do
               case "$file" in
                 vcpkg-overlays/ports/qvac-fabric/*) STACK=true; break ;;
-                packages/fabric/vcpkg.json|packages/fabric/vcpkg-configuration.json) STACK=true; break ;;
+                packages/fabric/*) STACK=true; break ;;
               esac
             done <<< "$DIFF_FILES"
           fi

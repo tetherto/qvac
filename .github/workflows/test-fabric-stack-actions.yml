@@ -44,6 +44,49 @@ jobs:
             exit 1
           fi
 
+      - name: Install mock Git
+        shell: bash
+        env:
+          MOCK_BIN: ${{ runner.temp }}/fabric-actions-mock-git
+        run: |
+          set -euo pipefail
+          mkdir -p "$MOCK_BIN"
+          cp .github/scripts/test/fixtures/fabric-actions/mock-git "$MOCK_BIN/git"
+          chmod +x "$MOCK_BIN/git"
+          node -e '
+            const fs = require("node:fs")
+            fs.appendFileSync(process.env.GITHUB_PATH, `${process.env.MOCK_BIN}\n`)
+          '
+
+      - name: Run exact-SHA fallback with Fabric source change
+        id: fallback
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MOCK_EXPECTED_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          MOCK_GIT_ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed
+          MOCK_GIT_FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used
+          MOCK_GIT_DIFF_FILES: packages/fabric/CMakeLists.txt
+
+      - name: Verify exact-SHA fallback and Fabric source detection
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.fallback.outputs.fabric_stack }}
+          ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed
+          FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL" != "true" ]; then
+            echo "::error::Expected packages/fabric source change to set fabric_stack=true, got $ACTUAL"
+            exit 1
+          fi
+          if [ ! -f "$ORIGIN_FAILURE_MARKER" ] || [ ! -f "$FALLBACK_MARKER" ]; then
+            echo "::error::Exact-SHA fallback fetch was not exercised"
+            exit 1
+          fi
+
   overlay-local-fabric:
     name: Overlay local fabric prebuilds
     runs-on: ubuntu-24.04
@@ -76,6 +119,7 @@ jobs:
               path.join(source, "include"),
               path.join(source, "share"),
               path.join(source, "linux-x64"),
+              path.join(root, "incomplete/linux-x64"),
               path.join(destination, "linux-x64"),
             ]) {
               fs.mkdirSync(directory, { recursive: true })
@@ -131,6 +175,28 @@ jobs:
             }
           ' "$PREBUILDS"
 
+      - name: Reject incomplete fabric prebuilds
+        id: incomplete
+        continue-on-error: true
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ runner.temp }}/fabric-overlay-test/consumer
+          prebuilds-root: ${{ runner.temp }}/fabric-overlay-test/incomplete
+          platform: linux
+          arch: x64
+
+      - name: Verify incomplete fabric prebuilds were rejected
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.incomplete.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Expected incomplete prebuilds to fail, got $OUTCOME"
+            exit 1
+          fi
+
   wait-and-download:
     name: Wait and download fabric prebuilds
     runs-on: ubuntu-24.04
@@ -160,6 +226,9 @@ jobs:
       - name: Run wait-and-download action
         id: download
         uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
         with:
           github-token: test-token
           head-sha: 0123456789abcdef0123456789abcdef01234567
