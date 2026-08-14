@@ -350,6 +350,10 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      # The scoped-registry step below writes an @tetherto GPR authToken into
+      # .npmrc/bunfig. GITHUB_TOKEN is bounded by this block (PAT_TOKEN was not),
+      # so declare the scope the config implies.
+      packages: read
     env:
       WORKDIR_INFERENCE: packages/inference
     steps:
@@ -358,7 +362,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -369,7 +373,7 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKDIR_INFERENCE }}
         env:
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
           cat > .npmrc <<NPMRC
