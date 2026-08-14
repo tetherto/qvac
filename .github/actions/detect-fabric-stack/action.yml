@@ -22,7 +22,6 @@ runs:
         BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-        HEAD_REF: ${{ github.event.pull_request.head.ref }}
       run: |
         set -euo pipefail
 
@@ -38,11 +37,15 @@ runs:
         if [ -n "$HEAD_SHA" ]; then
           if git fetch origin "$HEAD_SHA" --depth=1 2>/dev/null; then
             FETCHED=true
-          elif [ -n "$HEAD_REPO" ] && [ -n "$HEAD_REF" ]; then
-            echo "SHA not fetchable from origin (likely fork PR) — trying $HEAD_REPO/$HEAD_REF"
-            if git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_REF" --depth=1 2>/dev/null; then
-              HEAD_SHA=$(git rev-parse FETCH_HEAD)
-              FETCHED=true
+          elif [ -n "$HEAD_REPO" ]; then
+            echo "SHA not fetchable from origin (likely fork PR) — trying exact SHA from $HEAD_REPO"
+            if git fetch "https://github.com/${HEAD_REPO}.git" "$HEAD_SHA" --depth=1 2>/dev/null; then
+              FETCHED_SHA=$(git rev-parse FETCH_HEAD)
+              if [ "$FETCHED_SHA" = "$HEAD_SHA" ]; then
+                FETCHED=true
+              else
+                echo "::warning::Fetched SHA $FETCHED_SHA does not match event SHA $HEAD_SHA"
+              fi
             fi
           fi
         fi
