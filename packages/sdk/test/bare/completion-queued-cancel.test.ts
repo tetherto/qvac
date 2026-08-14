@@ -8,6 +8,8 @@ import {
 } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry } from '@/server/bare/runtime'
 import { ModelType } from '@/schemas'
+import { ContextOverflowError } from '@/utils/errors-server'
+import { CacheLockAbortError } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
 
 // -----------------------------------------------------------------------------
 // QVAC-19346 regression — cancelling a *queued* same-model completion must not
@@ -114,6 +116,117 @@ test('completion: cancelling a queued request never touches the active model add
   )
 
   await holder[Symbol.asyncDispose]()
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The completion catch must classify a real typed error FIRST, so a failure
+// that merely races an abort (cancel / unload / shutdown) is not masked as a
+// cancellation. `iterate` aborts its own request, then throws, to force the
+// error-under-abort ordering deterministically.
+function registerThrowingModel(modelId: string, makeError: () => unknown): void {
+  const registry = getRequestRegistry()
+  registerModel(modelId, {
+    model: {
+      run() {
+        return {
+          iterate: async function* (): AsyncGenerator<string> {
+            registry.cancel({ requestId: `req-${modelId}` })
+            await settle()
+            throw makeError()
+          },
+          await: () => Promise.resolve(),
+          cancel: () => Promise.resolve(),
+          stats: {}
+        }
+      },
+      addon: { cancel: () => Promise.resolve() }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+}
+
+function runToCompletion(modelId: string) {
+  const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
+  return handler({
+    modelId,
+    requestId: `req-${modelId}`,
+    history: [
+      { role: 'system', content: 'You are a helpful assistant.', attachments: [] },
+      { role: 'user', content: 'hello', attachments: [] }
+    ],
+    stream: true
+  })
+}
+
+test('completion: a context overflow racing an abort surfaces as ContextOverflowError, not masked', async (t) => {
+  clearRegistry()
+  const modelId = `overflow-abort-${Date.now()}`
+  registerThrowingModel(modelId, () =>
+    Object.assign(new Error('context overflow at prefill step (5000 tokens, max 4096)'), {
+      code: '[ TextLlm :: ContextOverflow ]'
+    })
+  )
+
+  let caught: unknown = null
+  try {
+    for await (const _ of runToCompletion(modelId)) void _
+  } catch (err) {
+    caught = err
+  }
+  t.ok(
+    caught instanceof ContextOverflowError,
+    'a real overflow racing the abort still throws ContextOverflowError, not InferenceCancelledError'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: an addon Cancelled error under an abort rides the cancelled done path', async (t) => {
+  clearRegistry()
+  const modelId = `addon-cancel-${Date.now()}`
+  registerThrowingModel(modelId, () =>
+    Object.assign(new Error('run cancelled'), { code: '[ TextLlm :: Cancelled ]' })
+  )
+
+  let caught: unknown = null
+  let cancelledReason: string | undefined
+  try {
+    for await (const ev of runToCompletion(modelId)) {
+      const done = ev.events.find((e) => e.type === 'completionDone')
+      if (done) cancelledReason = done.stopReason
+    }
+  } catch (err) {
+    caught = err
+  }
+  t.is(caught, null, 'a genuine addon cancellation does not throw')
+  t.is(cancelledReason, 'cancelled', 'it rides the cancelled done path')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: an aborted KV-lock wait (CacheLockAbortError) rides the cancelled done path', async (t) => {
+  clearRegistry()
+  const modelId = `lock-abort-${Date.now()}`
+  registerThrowingModel(modelId, () => new CacheLockAbortError('modelUnload'))
+
+  let caught: unknown = null
+  let cancelledReason: string | undefined
+  try {
+    for await (const ev of runToCompletion(modelId)) {
+      const done = ev.events.find((e) => e.type === 'completionDone')
+      if (done) cancelledReason = done.stopReason
+    }
+  } catch (err) {
+    caught = err
+  }
+  t.is(caught, null, 'an aborted lock wait does not throw a generic failure')
+  t.is(cancelledReason, 'cancelled', 'the lock-abort sentinel rides the cancelled done path')
+
   unregisterModel(modelId)
   clearRegistry()
 })

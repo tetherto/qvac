@@ -97,6 +97,19 @@ type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
 type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
 const cachePathLocks = new Map<string, CacheLock>()
 
+// Distinct sentinel so a completion catch can tell an aborted KV-lock wait (a
+// real cancellation) from an unrelated failure that merely races the abort.
+export class CacheLockAbortError extends Error {
+  constructor(cause?: unknown) {
+    super('cache lock wait aborted', cause !== undefined ? { cause } : undefined)
+    this.name = 'CacheLockAbortError'
+  }
+}
+
+export function isCacheLockAbortError(err: unknown): err is CacheLockAbortError {
+  return err instanceof CacheLockAbortError
+}
+
 // Case-fold the lock-map key so case-only path variants (e.g. "Session" vs
 // "session"), which name the SAME file on case-insensitive filesystems (default
 // macOS/Windows), serialise on one lock and can't interleave writes. Over-locks
@@ -147,8 +160,7 @@ async function acquireCachePathWriteLock(
     const onAbort = () => {
       const index = lock.waiters.indexOf(waiter)
       if (index !== -1) lock.waiters.splice(index, 1)
-      const reason: unknown = signal?.reason
-      waiter.drop(reason instanceof Error ? reason : new Error('cache lock wait aborted'))
+      waiter.drop(new CacheLockAbortError(signal?.reason))
     }
     if (signal?.aborted) {
       onAbort()

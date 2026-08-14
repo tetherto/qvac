@@ -46,6 +46,7 @@ import {
 } from '@/server/bare/plugins/llamacpp-completion/ops/context-overflow'
 import { stoppedByLength } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
 import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
+import { isCacheLockAbortError } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 
@@ -462,11 +463,20 @@ export const llmPlugin = definePlugin({
             modelExecutionMs
           )
         } catch (err) {
-          // Any error thrown once the request is aborted is a consequence of the
-          // cancel (the addon's Cancelled rejection, or an aborted KV lock wait
-          // that rejects with a plain Error). Ride the done path so the client
-          // sees InferenceCancelledError, not a generic CompletionFailedError.
-          if (ctx.signal.aborted) {
+          // Classify a structured ContextOverflow first, even under an aborted
+          // signal, so a real overflow racing a cancel surfaces as a typed
+          // ContextOverflowError.
+          if (isAddonContextOverflowError(err)) {
+            const { promptTokens, ctxSize } = parseContextOverflowMessage(
+              err instanceof Error ? err.message : ''
+            )
+            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err)
+          }
+          // Cancelled done path only for a genuine cancellation. The aborted
+          // signal is the source of truth; under it, the addon's Cancelled
+          // rejection or our own aborted KV-lock wait rides the done path.
+          // Anything else is a real failure and must surface.
+          if (ctx.signal.aborted && (isAddonCancelledError(err) || isCacheLockAbortError(err))) {
             yield attachModelExecutionMs(
               {
                 type: 'completionStream' as const,
@@ -478,20 +488,6 @@ export const llmPlugin = definePlugin({
               undefined
             )
             return
-          }
-          // The llama.cpp addon emits a structured `ContextOverflow` status
-          // (LlmErrors.hpp::ContextOverflow = 14) when the prompt exceeds
-          // the model's `ctx_size`. Bare's `js_throw_error(env, code, msg)`
-          // surfaces it as a JS Error with `.code = "[ <addonId> :: ContextOverflow ]"`
-          // and `.message` carrying the C++-formatted detail. Rethrow as
-          // a typed `ContextOverflowError` so consumers can switch on the
-          // class (and `err.code === SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW`)
-          // instead of substring-matching on the raw addon message.
-          if (isAddonContextOverflowError(err)) {
-            const { promptTokens, ctxSize } = parseContextOverflowMessage(
-              err instanceof Error ? err.message : ''
-            )
-            throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err)
           }
           throw err
         } finally {
