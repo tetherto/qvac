@@ -211,7 +211,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -226,7 +226,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/asr-ggml' }}
           addon-npm-name: '@qvac/asr-ggml'
           prebuild-artifact-prefix: 'asr-ggml-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           # workflow_call uses prebuild_package; workflow_dispatch exposes the
           # equivalent package_spec input. Pin either path explicitly.
           package-version: ${{ inputs.prebuild_package || inputs.package_spec }}

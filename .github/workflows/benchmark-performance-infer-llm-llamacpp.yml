@@ -139,7 +139,7 @@ jobs:
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             scripts/perf-report
             packages/llm-llamacpp/media

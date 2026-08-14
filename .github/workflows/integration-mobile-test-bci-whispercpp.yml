@@ -88,7 +88,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -103,7 +103,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/bci-whispercpp' }}
           addon-npm-name: '@qvac/bci-whispercpp'
           prebuild-artifact-prefix: 'bci-whispercpp-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
@@ -113,8 +113,8 @@ jobs:
       - name: Generate mobile test assets
         working-directory: addon/${{ inputs.workdir || 'packages/bci-whispercpp' }}
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run test:mobile:generate
           echo "Generated mobile testAssets:"
