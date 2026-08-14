@@ -17,12 +17,30 @@ const path = require('path')
 const manifestPath = path.resolve(__dirname, '../test/integration/models.manifest.json')
 const IOS_BUNDLE_ID = 'io.tether.test.qvac'
 
+// Optional URL override map (QVAC-23466 pilot): when PRESTAGE_URL_MAP points to a
+// JSON file of { "<model>": "<presigned-us-bucket-url>" }, staged models are
+// pulled from the Device-Farm-local US bucket instead of huggingface.co. Absent
+// or empty => unchanged HF behaviour.
+function loadUrlOverrideMap() {
+  const mapPath = process.env.PRESTAGE_URL_MAP
+  if (!mapPath) return null
+  const raw = JSON.parse(fs.readFileSync(mapPath, 'utf8'))
+  return raw && typeof raw === 'object' ? raw : null
+}
+
 function modelsFromManifest(manifest) {
   if (!manifest || !manifest.models) {
     throw new Error('[prestage] integration model manifest has no models')
   }
+  const overrideMap = loadUrlOverrideMap()
   const models = []
   for (const [name, entry] of Object.entries(manifest.models)) {
+    // Prefer the presigned US-bucket URL when provided. It is a same-region S3
+    // URL (not a HF /resolve/ URL), so the HF-shape check below is bypassed.
+    if (overrideMap && typeof overrideMap[name] === 'string') {
+      models.push({ name, url: overrideMap[name] })
+      continue
+    }
     const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
     if (
       typeof url !== 'string' ||

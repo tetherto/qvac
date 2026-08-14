@@ -98,10 +98,15 @@ jobs:
 
       - name: Provision NMT models for mobile tests
         working-directory: addon/${{ inputs.workdir || 'packages/translation-nmtcpp' }}
+        # PILOT (QVAC-23466): presign IndicTrans against the Device-Farm-local US
+        # mirror bucket (us-west-2) instead of the cross-region EU bucket. The
+        # IndicTrans GGUF lives under qvac_models_compiled/ggml/indictrans2/,
+        # already mirrored by the EU->US sync job. Bergamot stays on its public
+        # Firefox CDN (not an S3 object).
         env:
           BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
-          AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           chmod +x scripts/provision-mobile-models.sh
           scripts/provision-mobile-models.sh
