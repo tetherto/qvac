@@ -10724,7 +10724,8 @@
                         },
                         "pace": {
                           "type": "string",
-                          "minLength": 1
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerPace"
                         },
                         "expressivity": {
                           "type": "string",
@@ -10814,6 +10815,585 @@
                       "required": ["ttsEngine"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigParler"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "cosyvoice3"
+                        },
+                        "emotion": {
+                          "type": "string",
+                          "enum": ["anger", "happy", "neutral", "sad"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"
+                        },
+                        "pace": {
+                          "type": "string",
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"
+                        },
+                        "instruct": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "dialect": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cantonese",
+                                    "northeastern",
+                                    "gansu",
+                                    "guizhou",
+                                    "henan",
+                                    "hubei",
+                                    "hunan",
+                                    "jiangxi",
+                                    "minnan",
+                                    "ningxia",
+                                    "shanxi",
+                                    "shaanxi",
+                                    "shandong",
+                                    "shanghai",
+                                    "sichuan",
+                                    "tianjin",
+                                    "yunnan"
+                                  ],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"
+                                },
+                                "volume": {
+                                  "type": "string",
+                                  "enum": ["loud", "soft"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"
+                                },
+                                "style": {
+                                  "type": "string",
+                                  "enum": ["peppa", "robot"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct"
+                            }
+                          ]
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "streamChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "streamFirstChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "audio8"
+                        },
+                        "referenceText": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "greedy": {
+                          "type": "boolean"
+                        },
+                        "temperature": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "topK": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "topP": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "maxFrames": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "audio8CodecDecoderModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc"
+                            }
+                          ]
+                        },
+                        "audio8CodecEncoderModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc"
+                            }
+                          ]
+                        },
+                        "referenceAudioSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine", "audio8CodecDecoderModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8"
                     }
                   ]
                 }
@@ -14927,7 +15507,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechRequestPace"
         },
         "expressivity": {
           "type": "string",
@@ -15064,7 +15645,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechStreamRequestPace"
         },
         "expressivity": {
           "type": "string",

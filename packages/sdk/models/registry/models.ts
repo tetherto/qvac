@@ -16696,7 +16696,86 @@ export const models = [
     sha256Checksum: '1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e',
     engine: 'tts-ggml',
     quantization: 'q8_0',
-    params: '0.5B'
+    params: '0.5B',
+    companionSet: {
+      setKey: '377f9721d0592b7c',
+      primaryKey: 'modelPath',
+      files: [
+        {
+          key: 'modelPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+          registrySource: 's3',
+          targetName: 'cosyvoice3-llm-q8_0.gguf',
+          expectedSize: 973496000,
+          sha256Checksum: '1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2777446,
+          blobBlockLength: 14855,
+          blobByteOffset: 182005936162,
+          primary: true
+        },
+        {
+          key: 'flowPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf',
+          registrySource: 's3',
+          targetName: 'cosyvoice3-flow-f32.gguf',
+          expectedSize: 1333857632,
+          sha256Checksum: '002fe52ee02cef4e76f8114bfd810bb64aefb44a218666b01872a46e5c0349fc',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2755824,
+          blobBlockLength: 20354,
+          blobByteOffset: 180588991010
+        },
+        {
+          key: 'hiftPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-hift-f32.gguf',
+          registrySource: 's3',
+          targetName: 'cosyvoice3-hift-f32.gguf',
+          expectedSize: 83087520,
+          sha256Checksum: '65af74b042568add308144363125120713ed94adfa8e66486194950ac6e80f85',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2776178,
+          blobBlockLength: 1268,
+          blobByteOffset: 181922848642
+        },
+        {
+          key: 'vocabPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json',
+          registrySource: 's3',
+          targetName: 'vocab.json',
+          expectedSize: 2776833,
+          sha256Checksum: 'ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 3044647,
+          blobBlockLength: 43,
+          blobByteOffset: 199516918821
+        },
+        {
+          key: 'mergesPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt',
+          registrySource: 's3',
+          targetName: 'merges.txt',
+          expectedSize: 1402109,
+          sha256Checksum: 'ac8ff86a72bee70828fbc1119bc4398c6f3a9a6e490d7b0dbe917be025478bd0',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 3044625,
+          blobBlockLength: 22,
+          blobByteOffset: 199515516712
+        },
+        {
+          key: 'voicePath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf',
+          registrySource: 's3',
+          targetName: 'voice.gguf',
+          expectedSize: 179584,
+          sha256Checksum: '69f00c782198dc911062c9d1222fe39c85a6f954211a96796050aec3f0980ed7',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2792301,
+          blobBlockLength: 3,
+          blobByteOffset: 182979432162
+        }
+      ]
+    }
   },
   {
     name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE',
@@ -17925,6 +18004,102 @@ export const models = [
     engine: 'whispercpp-transcription',
     quantization: '',
     params: ''
+  },
+  {
+    name: 'TTS_CODEC_DECODER_AUDIO8_FP16',
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5545464,
+    blobBlockLength: 4002,
+    blobByteOffset: 363414973610,
+    modelId: 'audio8-codec-decoder-f16.gguf',
+    addon: 'tts',
+    expectedSize: 262241216,
+    sha256Checksum: '3fd77e4d9f2e71033944f37d961674b901709146bb98ed33787985c6cdf8cf4e',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '0.6B'
+  },
+  {
+    name: 'TTS_CODEC_DECODER_AUDIO8_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5549466,
+    blobBlockLength: 3214,
+    blobByteOffset: 363677214826,
+    modelId: 'audio8-codec-decoder-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 210631616,
+    sha256Checksum: '0f6378cb3ad5b535cde616f75f405afaf498743e5742beae2948ab0665003316',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.6B'
+  },
+  {
+    name: 'TTS_CODEC_ENCODER_AUDIO8_FP16',
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5552680,
+    blobBlockLength: 6363,
+    blobByteOffset: 363887846442,
+    modelId: 'audio8-codec-encoder-f16.gguf',
+    addon: 'tts',
+    expectedSize: 416985952,
+    sha256Checksum: 'd9f0407f959eb029aeda6e53fac467819e01e835f984e4de1c95eec463bf3608',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '0.6B'
+  },
+  {
+    name: 'TTS_CODEC_ENCODER_AUDIO8_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5559043,
+    blobBlockLength: 4023,
+    blobByteOffset: 364304832394,
+    modelId: 'audio8-codec-encoder-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 263631712,
+    sha256Checksum: '44c96a7a69995aa4f086c3973c6a763b4fef328e01d96d02cf86d66de28e2706',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.6B'
+  },
+  {
+    name: 'TTS_LM_MULTILINGUAL_AUDIO8_FP16',
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5513884,
+    blobBlockLength: 18776,
+    blobByteOffset: 361345387306,
+    modelId: 'audio8-lm-f16.gguf',
+    addon: 'tts',
+    expectedSize: 1230479552,
+    sha256Checksum: '863a92c482184cdfd172cc77c55d6d8f71f132cbe154b2aa64d5f48a19e6f118',
+    engine: 'tts-ggml',
+    quantization: 'fp16',
+    params: '0.6B'
+  },
+  {
+    name: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0',
+    registryPath: 'qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
+    blobBlockOffset: 5532660,
+    blobBlockLength: 12804,
+    blobByteOffset: 362575866858,
+    modelId: 'audio8-lm-q8_0.gguf',
+    addon: 'tts',
+    expectedSize: 839106752,
+    sha256Checksum: 'f33c58b2fd46320c01544eec961112b4b9778106ce883e86914dd38854072d40',
+    engine: 'tts-ggml',
+    quantization: 'q8_0',
+    params: '0.6B'
   }
 ] as const satisfies readonly RegistryItem[]
 
@@ -24804,6 +24979,114 @@ export const WHISPER_Q8_0_1 = {
   engine: models[696].engine,
   quantization: models[696].quantization,
   params: models[696].params
+} as const
+
+export const TTS_CODEC_DECODER_AUDIO8_FP16 = {
+  name: 'TTS_CODEC_DECODER_AUDIO8_FP16',
+  src: `registry://${models[697].registrySource}/${models[697].registryPath}`,
+  registryPath: models[697].registryPath,
+  registrySource: models[697].registrySource,
+  blobCoreKey: models[697].blobCoreKey,
+  blobBlockOffset: models[697].blobBlockOffset,
+  blobBlockLength: models[697].blobBlockLength,
+  blobByteOffset: models[697].blobByteOffset,
+  modelId: models[697].modelId,
+  expectedSize: models[697].expectedSize,
+  sha256Checksum: models[697].sha256Checksum,
+  addon: models[697].addon,
+  engine: models[697].engine,
+  quantization: models[697].quantization,
+  params: models[697].params
+} as const
+
+export const TTS_CODEC_DECODER_AUDIO8_Q8_0 = {
+  name: 'TTS_CODEC_DECODER_AUDIO8_Q8_0',
+  src: `registry://${models[698].registrySource}/${models[698].registryPath}`,
+  registryPath: models[698].registryPath,
+  registrySource: models[698].registrySource,
+  blobCoreKey: models[698].blobCoreKey,
+  blobBlockOffset: models[698].blobBlockOffset,
+  blobBlockLength: models[698].blobBlockLength,
+  blobByteOffset: models[698].blobByteOffset,
+  modelId: models[698].modelId,
+  expectedSize: models[698].expectedSize,
+  sha256Checksum: models[698].sha256Checksum,
+  addon: models[698].addon,
+  engine: models[698].engine,
+  quantization: models[698].quantization,
+  params: models[698].params
+} as const
+
+export const TTS_CODEC_ENCODER_AUDIO8_FP16 = {
+  name: 'TTS_CODEC_ENCODER_AUDIO8_FP16',
+  src: `registry://${models[699].registrySource}/${models[699].registryPath}`,
+  registryPath: models[699].registryPath,
+  registrySource: models[699].registrySource,
+  blobCoreKey: models[699].blobCoreKey,
+  blobBlockOffset: models[699].blobBlockOffset,
+  blobBlockLength: models[699].blobBlockLength,
+  blobByteOffset: models[699].blobByteOffset,
+  modelId: models[699].modelId,
+  expectedSize: models[699].expectedSize,
+  sha256Checksum: models[699].sha256Checksum,
+  addon: models[699].addon,
+  engine: models[699].engine,
+  quantization: models[699].quantization,
+  params: models[699].params
+} as const
+
+export const TTS_CODEC_ENCODER_AUDIO8_Q8_0 = {
+  name: 'TTS_CODEC_ENCODER_AUDIO8_Q8_0',
+  src: `registry://${models[700].registrySource}/${models[700].registryPath}`,
+  registryPath: models[700].registryPath,
+  registrySource: models[700].registrySource,
+  blobCoreKey: models[700].blobCoreKey,
+  blobBlockOffset: models[700].blobBlockOffset,
+  blobBlockLength: models[700].blobBlockLength,
+  blobByteOffset: models[700].blobByteOffset,
+  modelId: models[700].modelId,
+  expectedSize: models[700].expectedSize,
+  sha256Checksum: models[700].sha256Checksum,
+  addon: models[700].addon,
+  engine: models[700].engine,
+  quantization: models[700].quantization,
+  params: models[700].params
+} as const
+
+export const TTS_LM_MULTILINGUAL_AUDIO8_FP16 = {
+  name: 'TTS_LM_MULTILINGUAL_AUDIO8_FP16',
+  src: `registry://${models[701].registrySource}/${models[701].registryPath}`,
+  registryPath: models[701].registryPath,
+  registrySource: models[701].registrySource,
+  blobCoreKey: models[701].blobCoreKey,
+  blobBlockOffset: models[701].blobBlockOffset,
+  blobBlockLength: models[701].blobBlockLength,
+  blobByteOffset: models[701].blobByteOffset,
+  modelId: models[701].modelId,
+  expectedSize: models[701].expectedSize,
+  sha256Checksum: models[701].sha256Checksum,
+  addon: models[701].addon,
+  engine: models[701].engine,
+  quantization: models[701].quantization,
+  params: models[701].params
+} as const
+
+export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = {
+  name: 'TTS_LM_MULTILINGUAL_AUDIO8_Q8_0',
+  src: `registry://${models[702].registrySource}/${models[702].registryPath}`,
+  registryPath: models[702].registryPath,
+  registrySource: models[702].registrySource,
+  blobCoreKey: models[702].blobCoreKey,
+  blobBlockOffset: models[702].blobBlockOffset,
+  blobBlockLength: models[702].blobBlockLength,
+  blobByteOffset: models[702].blobByteOffset,
+  modelId: models[702].modelId,
+  expectedSize: models[702].expectedSize,
+  sha256Checksum: models[702].sha256Checksum,
+  addon: models[702].addon,
+  engine: models[702].engine,
+  quantization: models[702].quantization,
+  params: models[702].params
 } as const
 
 /**

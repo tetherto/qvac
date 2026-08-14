@@ -5159,6 +5159,78 @@ TTS_CANGJIE_ZH_CHATTERBOX = ModelConstant(
     params="",
 )
 
+TTS_CODEC_DECODER_AUDIO8_FP16 = ModelConstant(
+    name="TTS_CODEC_DECODER_AUDIO8_FP16",
+    src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf",
+    registry_path="qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5545464,
+    blob_block_length=4002,
+    blob_byte_offset=363414973610,
+    model_id="audio8-codec-decoder-f16.gguf",
+    expected_size=262241216,
+    sha256_checksum="3fd77e4d9f2e71033944f37d961674b901709146bb98ed33787985c6cdf8cf4e",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="fp16",
+    params="0.6B",
+)
+
+TTS_CODEC_DECODER_AUDIO8_Q8_0 = ModelConstant(
+    name="TTS_CODEC_DECODER_AUDIO8_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5549466,
+    blob_block_length=3214,
+    blob_byte_offset=363677214826,
+    model_id="audio8-codec-decoder-q8_0.gguf",
+    expected_size=210631616,
+    sha256_checksum="0f6378cb3ad5b535cde616f75f405afaf498743e5742beae2948ab0665003316",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q8_0",
+    params="0.6B",
+)
+
+TTS_CODEC_ENCODER_AUDIO8_FP16 = ModelConstant(
+    name="TTS_CODEC_ENCODER_AUDIO8_FP16",
+    src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
+    registry_path="qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5552680,
+    blob_block_length=6363,
+    blob_byte_offset=363887846442,
+    model_id="audio8-codec-encoder-f16.gguf",
+    expected_size=416985952,
+    sha256_checksum="d9f0407f959eb029aeda6e53fac467819e01e835f984e4de1c95eec463bf3608",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="fp16",
+    params="0.6B",
+)
+
+TTS_CODEC_ENCODER_AUDIO8_Q8_0 = ModelConstant(
+    name="TTS_CODEC_ENCODER_AUDIO8_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5559043,
+    blob_block_length=4023,
+    blob_byte_offset=364304832394,
+    model_id="audio8-codec-encoder-q8_0.gguf",
+    expected_size=263631712,
+    sha256_checksum="44c96a7a69995aa4f086c3973c6a763b4fef328e01d96d02cf86d66de28e2706",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q8_0",
+    params="0.6B",
+)
+
 TTS_COSYVOICE3_FLOW_COSYVOICE_FP32 = ModelConstant(
     name="TTS_COSYVOICE3_FLOW_COSYVOICE_FP32",
     src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf",
@@ -5517,6 +5589,42 @@ TTS_LARGE_V1_EN_PARLER_TTS_Q8_0 = ModelConstant(
     engine="tts-ggml",
     quantization="q8_0",
     params="2.3B",
+)
+
+TTS_LM_MULTILINGUAL_AUDIO8_FP16 = ModelConstant(
+    name="TTS_LM_MULTILINGUAL_AUDIO8_FP16",
+    src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf",
+    registry_path="qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5513884,
+    blob_block_length=18776,
+    blob_byte_offset=361345387306,
+    model_id="audio8-lm-f16.gguf",
+    expected_size=1230479552,
+    sha256_checksum="863a92c482184cdfd172cc77c55d6d8f71f132cbe154b2aa64d5f48a19e6f118",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="fp16",
+    params="0.6B",
+)
+
+TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = ModelConstant(
+    name="TTS_LM_MULTILINGUAL_AUDIO8_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5532660,
+    blob_block_length=12804,
+    blob_byte_offset=362575866858,
+    model_id="audio8-lm-q8_0.gguf",
+    expected_size=839106752,
+    sha256_checksum="f33c58b2fd46320c01544eec961112b4b9778106ce883e86914dd38854072d40",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q8_0",
+    params="0.6B",
 )
 
 TTS_MECAB_IPADIC_CHATTERBOX = ModelConstant(
@@ -7210,6 +7318,10 @@ __all__ = [
     "SMOLVLM2_500M_MULTIMODAL_F16",
     "SMOLVLM2_500M_MULTIMODAL_Q8_0",
     "TTS_CANGJIE_ZH_CHATTERBOX",
+    "TTS_CODEC_DECODER_AUDIO8_FP16",
+    "TTS_CODEC_DECODER_AUDIO8_Q8_0",
+    "TTS_CODEC_ENCODER_AUDIO8_FP16",
+    "TTS_CODEC_ENCODER_AUDIO8_Q8_0",
     "TTS_COSYVOICE3_FLOW_COSYVOICE_FP32",
     "TTS_COSYVOICE3_HIFT_COSYVOICE_FP32",
     "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0",
@@ -7230,6 +7342,8 @@ __all__ = [
     "TTS_LARGE_V1_EN_PARLER_TTS_FP16",
     "TTS_LARGE_V1_EN_PARLER_TTS_FP32",
     "TTS_LARGE_V1_EN_PARLER_TTS_Q8_0",
+    "TTS_LM_MULTILINGUAL_AUDIO8_FP16",
+    "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0",
     "TTS_MECAB_IPADIC_CHATTERBOX",
     "TTS_MINI_V1_EN_PARLER_TTS_FP16",
     "TTS_MINI_V1_EN_PARLER_TTS_FP32",
