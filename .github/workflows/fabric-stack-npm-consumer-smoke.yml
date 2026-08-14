@@ -81,7 +81,7 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Overlay PR @qvac/fabric prebuilds
-        uses: ./.github/actions/overlay-local-fabric
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@886582f4cb3ac15f8be9970abde70166d76f9ec7
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
