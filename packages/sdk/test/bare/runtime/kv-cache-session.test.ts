@@ -225,6 +225,67 @@ test('kv-cache-session: a queued same-key waiter recreates a parent a holder rol
   }
 })
 
+test('kv-cache-session: an already-aborted turn does not prime (custom and auto)', async (t) => {
+  const { fs, path, mod, utils, cleanup } = await loadSession()
+  const { AbortController } = await import('bare-abort-controller')
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCalls = 0
+    const primeIfMissing = async () => {
+      primeCalls++
+    }
+
+    const c1 = new AbortController()
+    c1.abort()
+    let customErr: unknown = null
+    try {
+      await session.beginTurn({
+        kind: 'custom',
+        customKey: 'aborted-a',
+        configHash,
+        signal: c1.signal,
+        primeIfMissing
+      })
+    } catch (e) {
+      customErr = e
+    }
+    t.ok(mod.isCacheLockAbortError(customErr), 'custom: rejects with CacheLockAbortError, no prime')
+
+    const c2 = new AbortController()
+    c2.abort()
+    let autoErr: unknown = null
+    try {
+      await session.beginTurn({
+        kind: 'auto',
+        configHash,
+        history: [{ role: 'user', content: 'hi' }],
+        signal: c2.signal,
+        primeIfMissing
+      })
+    } catch (e) {
+      autoErr = e
+    }
+    t.ok(mod.isCacheLockAbortError(autoErr), 'auto: rejects with CacheLockAbortError, no prime')
+
+    t.is(primeCalls, 0, 'neither an already-aborted custom nor auto turn primes')
+
+    // No artifacts: the aborted turns pruned the parent dirs getCacheFilePath
+    // created, and the auto turn removed the retention marker its discovery wrote.
+    const customDir = path.dirname(
+      utils.resolveCacheFilePath('test-model', configHash, 'aborted-a')
+    )
+    t.is(fs.existsSync(customDir), false, 'aborted custom turn left no empty cache directory')
+    const cacheRoot = path.dirname(path.dirname(customDir))
+    const markers = fs.existsSync(cacheRoot)
+      ? fs.readdirSync(cacheRoot).filter((f) => String(f).startsWith('.auto-cache-'))
+      : []
+    t.is(markers.length, 0, 'aborted auto turn left no retention marker')
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: turns on different cache keys do not block each other', async (t) => {
   const { mod, cleanup, writeFakeCache } = await loadSession()
   try {

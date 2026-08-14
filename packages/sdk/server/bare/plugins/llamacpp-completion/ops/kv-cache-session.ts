@@ -468,6 +468,14 @@ export function createKvCacheSession(
     // Held for the whole turn so a same-file peer can't interleave writes.
     // Released on commit/rollback/error; throws if aborted while queued.
     const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    // A turn cancelled by the time it holds the lock must not prime (native work).
+    // getCacheFilePath already mkdir'd the parent, so prune it before surfacing
+    // the cancellation the plugin rides.
+    if (input.signal?.aborted) {
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      releaseWriteLock()
+      throw new CacheLockAbortError(input.signal.reason)
+    }
     const handle = makeHandle(cachePath, undefined, releaseWriteLock, input.signal)
 
     try {
@@ -490,6 +498,10 @@ export function createKvCacheSession(
       if (!exists) {
         // Recreate the parent dir if a same-key peer's rollback pruned it after our lock wait.
         await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
+        // The access probe / mkdir above yielded, so a cancel may have landed
+        // since the acquire-time check — re-check right before native priming.
+        // The catch below prunes the directory just created.
+        if (input.signal?.aborted) throw new CacheLockAbortError(input.signal.reason)
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(cachePath)
@@ -520,6 +532,15 @@ export function createKvCacheSession(
 
     const { cachePath, cacheKey } = discovered
     const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    // A turn cancelled by the time it holds the lock must not prime (native work).
+    // Discovery already mkdir'd the parent and wrote the auto marker; clean both
+    // before surfacing the cancellation.
+    if (input.signal?.aborted) {
+      await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      await removeAutoCacheMarkerIfMissing(cacheKey)
+      releaseWriteLock()
+      throw new CacheLockAbortError(input.signal.reason)
+    }
 
     let handle: TurnHandle
     let cacheExists: boolean
@@ -552,6 +573,10 @@ export function createKvCacheSession(
       if (!cacheExists) {
         // Recreate the parent dir if a same-file peer's rename pruned it.
         await fsPromises.mkdir(path.dirname(cachePath), { recursive: true })
+        // The discovery / mkdir above yielded, so a cancel may have landed since
+        // the acquire-time check — re-check right before native priming. The
+        // catch below prunes the directory and auto marker.
+        if (input.signal?.aborted) throw new CacheLockAbortError(input.signal.reason)
         await input.primeIfMissing(cachePath)
         await verifyPrimedFile(cachePath, logger)
         initializedCaches.add(cachePath)
@@ -743,8 +768,8 @@ export function createKvCacheSession(
  *      tree (or wipes and recreates the root for `all: true`).
  *   2. `cachedPrefixes`: prefix-cleanup by the removed directory
  *      so any per-cache count under the deleted tree is forgotten.
- *   3. `initializedCaches`: scope clear by `(kvCacheKey[, modelId])`,
- *      matching the on-disk scope.
+ *   3. `initializedCaches`: prefix-cleanup by the same removed
+ *      directory, since it is keyed by the resolved cache path.
  *
  * Concurrency with in-flight turns: this delete does not take the
  * per-cache-path write locks, so it races any turn holding a `TurnHandle`
