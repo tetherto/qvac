@@ -8,8 +8,6 @@ import {
 } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
-  SCENE_HEIGHT,
-  SCENE_WIDTH,
   worldTests,
   worldCancelThenReload,
   worldConcurrentStepRejected,

@@ -17,7 +17,7 @@ import {
  * restarts the walk from the beginning.
  *
  * Scene creation cannot be interrupted — the engine exposes no abort hook for
- * it — so `cancel(requestId)` stops the SDK from yielding but the encode runs
+ * it — so `cancel({ requestId })` stops the SDK from yielding but the encode runs
  * to completion. Await the result before unloading the model.
  *
  * @param params - Loaded world model ID, scene prompt, first-frame image bytes, and optional dimensions.
