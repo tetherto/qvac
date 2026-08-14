@@ -16,10 +16,15 @@ import {
  */
 let registry: RequestRegistry | null = null
 
-// completion + batchCompletion share one lane: singles and batches compete for
-// the model's `parallel` slots first-come-first-serve. Disk-KV-cache turns ride
-// the same lane and serialise same-file writes per cache path in the KV-cache
-// session, so they never need a separate admission group.
+// One admission lane per model for the llama.cpp addon: completion,
+// batchCompletion, LLM translate, and finetune all key on
+// (LLAMACPP_COMPLETION_SLOT_GROUP, modelId), so they compete for the model's
+// `parallel` slots first-come-first-serve and share ONE bounded FIFO wait queue.
+// The queue depth is the per-model cap below (64): once 64 requests across those
+// kinds are waiting, the 65th begin is rejected with RequestRejectedByPolicyError.
+// Disk-KV-cache turns ride the same lane and serialise same-file writes per cache
+// path in the KV-cache session, so they need no separate group. NMT translate
+// passes an infinite cap and never enters the lane, so it stays ungated.
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
 function installDefaultPolicies(r: RequestRegistry): void {
