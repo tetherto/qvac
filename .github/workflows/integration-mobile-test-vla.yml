@@ -146,15 +146,11 @@ jobs:
           prebuild-artifact-prefix: 'vla-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
-      # VLA-specific OIDC session for the SmolVLA/GR00T S3 presign.
-      # The us-west-2 Device Farm session is acquired separately inside the
-      # upload-to-devicefarm composite. Must run BEFORE Build mobile app so
-      # the presigned URL / sha256 / size are baked into testAssets before
-      # the test app bundle is generated.
-      # PILOT (QVAC-23466): presign against the Device-Farm-local US mirror
-      # bucket (us-west-2) instead of the cross-region EU bucket. The vla/*
-      # models live under qvac_models_compiled/, already mirrored by the
-      # EU->US sync job.
+      # OIDC session for the SmolVLA/GR00T S3 presign (the us-west-2 Device Farm
+      # session is acquired separately in upload-to-devicefarm). Must run BEFORE
+      # the build so the presigned URL / sha256 / size are baked into testAssets.
+      # Presign against the US bucket; vla/* models are mirrored under
+      # qvac_models_compiled/ by the EU->US sync job.
       - name: Configure AWS credentials for S3 presign
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:

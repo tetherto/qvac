@@ -38,10 +38,8 @@ function benchmarkModelsByTest() {
   )
 }
 
-// Optional URL override map (QVAC-23466 pilot): when PRESTAGE_URL_MAP points to a
-// JSON file of { "<model>": "<presigned-us-bucket-url>" }, staged models are
-// pulled from the Device-Farm-local US bucket instead of huggingface.co. Absent
-// or empty => unchanged HF behaviour for every existing caller.
+// Optional PRESTAGE_URL_MAP: JSON of { <model>: <presigned-us-bucket-url> } to
+// pull staged models from the US bucket instead of HF. Absent => HF behaviour.
 function loadUrlOverrideMap() {
   const mapPath = process.env.PRESTAGE_URL_MAP
   if (!mapPath) return null
@@ -65,9 +63,7 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
     Object.entries(modelsByTest).map(([testName, models]) => [
       testName,
       models.map(({ name }) => {
-        // Prefer the presigned US-bucket URL when provided. It is already an
-        // https URL to a same-region S3 object (not a HF /resolve/ URL), so the
-        // HF-only shape check below is intentionally bypassed for overrides.
+        // Prefer the presigned US-bucket URL (bypasses the HF-shape check below).
         if (overrideMap && typeof overrideMap[name] === 'string') {
           return { name, url: overrideMap[name] }
         }
@@ -86,17 +82,13 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
 }
 
 // Shared host-side prelude: decode the embedded manifest, read the shard's grep
-// from the decoded wdio config, and expand it into a /tmp/prestage-list.tsv of
-// "<name>\t<url>" rows (deduped) for exactly the tests this shard runs. Emitted
-// identically for both backends so shard resolution stays single-sourced.
+// from the decoded wdio config, and expand it into /tmp/prestage-list.tsv of
+// "<name>\t<url>" rows (deduped) for the tests this shard runs.
 //
-// The embedded manifest is NORMALISED as { urls: { <name>: <url> },
-// tests: { <testName>: [<name>, ...] } } so each URL appears exactly once. This
-// matters for the presigned US-bucket URLs (QVAC-23466): they are ~900-1200 chars
-// each and, if inlined per test reference, the base64 blob balloons past the
-// Linux MAX_ARG_STRLEN (128 KB) single-env-var cap and the Android upload step
-// dies with "Argument list too long" while starting bash. Deduping keeps the
-// block small on both the presigned and HF paths.
+// The manifest is normalised as { urls: { <name>: <url> }, tests: { <testName>:
+// [<name>, ...] } } so each URL appears once. Presigned URLs are ~1 KB each;
+// inlining them per test reference pushes the base64 env var past Linux's 128 KB
+// MAX_ARG_STRLEN cap and the Android upload dies with "Argument list too long".
 function commonPrelude(manifestB64) {
   return `echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
 GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
@@ -182,8 +174,7 @@ function main() {
   const integrationManifest = JSON.parse(fs.readFileSync(integrationManifestPath, 'utf8'))
   const manifest = resolvePinnedManifest(mobileManifest, integrationManifest)
   // Normalise to { urls: { <name>: <url> }, tests: { <testName>: [<name>] } } so
-  // each (potentially ~1 KB presigned) URL is embedded once instead of once per
-  // referencing test — see the commonPrelude note on the 128 KB env-var cap.
+  // each URL is embedded once — see the commonPrelude note on the 128 KB cap.
   const urls = {}
   const tests = {}
   for (const [testName, models] of Object.entries(manifest)) {

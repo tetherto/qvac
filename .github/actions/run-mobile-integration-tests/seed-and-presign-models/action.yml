@@ -49,21 +49,16 @@ runs:
         STS_REGION: ${{ inputs.aws-region }}
       run: |
         set -uo pipefail
-        # Reuses the sync-models-to-s3 pattern: a credential_process helper the
-        # AWS CLI re-invokes as temp creds near expiry, so a long first seed
-        # (tens of GB from HuggingFace -> US bucket) never dies at the 2h
-        # MaxSessionDuration cap. The helper mints a fresh GitHub OIDC JWT (the
-        # request token is valid for the whole job) and exchanges it via
-        # assume-role-with-web-identity, which needs no pre-existing AWS creds.
+        # credential_process helper the AWS CLI re-invokes near expiry, so a long
+        # first seed survives the 2h STS cap. It mints a fresh OIDC JWT and
+        # exchanges it via assume-role-with-web-identity (no pre-existing creds).
         CRED_HELPER="${RUNNER_TEMP}/oidc-cred-process-seed.sh"
         cat > "${CRED_HELPER}" <<'HELPER'
         #!/usr/bin/env bash
         set -euo pipefail
         JWT=$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
           "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value')
-        # Isolate the bootstrap call from the credential_process profile so the
-        # CLI does not recurse into this helper. AWS_PROFILE must be UNSET (an
-        # empty value is read as a profile literally named "").
+        # UNSET (not blank) so the CLI does not recurse into this helper's profile.
         unset AWS_PROFILE AWS_DEFAULT_PROFILE
         export AWS_CONFIG_FILE=/dev/null
         export AWS_SHARED_CREDENTIALS_FILE=/dev/null
@@ -84,8 +79,6 @@ runs:
         credential_process = ${CRED_HELPER}
         CONFIG
 
-        # Persist for the seed step. The helper reads OIDC_ROLE_ARN + STS_REGION
-        # from the inherited env.
         {
           echo "AWS_CONFIG_FILE=${AWS_CONFIG_FILE}"
           echo "AWS_PROFILE=seed"
@@ -106,6 +99,5 @@ runs:
         HF_TOKEN: ${{ inputs.hf-token }}
       run: |
         set -euo pipefail
-        # Ensure no stale static creds shadow the auto-refreshing profile.
         unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
         node "$GITHUB_ACTION_PATH/seed-and-presign.mjs"

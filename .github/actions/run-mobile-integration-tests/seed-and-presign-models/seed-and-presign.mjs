@@ -1,32 +1,12 @@
 'use strict'
-// Seed-if-missing + presign for mobile e2e model sourcing (QVAC-23466 pilot).
-//
-// HuggingFace-bound mobile addons (llm-llamacpp, diffusion-cpp) fetch their
-// models from huggingface.co, which is cross-region + flaky for the us-west-2
-// Device Farm fleet. This script mirrors exactly the models a run needs into the
-// Device-Farm-local US bucket ONCE (idempotent: an already-seeded object is a
-// no-op), then presigns each object so the run can pull it from the same region.
-//
-// It reads the addon's pinned integration manifest (the single source of truth
-// for URLs + sha256/bytes), and for each model:
-//   1. HEADs s3://<bucket>/<prefix><name>; if present with the pinned size it is
-//      left untouched (already seeded).
-//   2. Otherwise downloads from the manifest URL(s) (HF gets a bearer token; the
-//      token is never forwarded across a redirect to a CDN host), verifies the
-//      bytes against the manifest sha256 + size, and uploads to the US bucket.
-//   3. Presigns the US object and records name -> URL.
-// The name -> presigned-URL map is written to OUTPUT_MAP for the caller to feed
-// into the addon's staging path (LLM prestage override / diffusion manifest
-// rewrite).
-//
-// AWS auth comes from the ambient environment (the composite sets up an
-// auto-refreshing credential_process profile), so this script never handles
-// credentials directly — it just shells out to the AWS CLI.
+// Seed-if-missing + presign for mobile e2e model sourcing. Mirrors the models a
+// run needs from the addon's pinned manifest into the US bucket (idempotent),
+// then presigns each object and writes a name -> URL map for the caller.
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, statSync, rmSync, mkdtempSync, openSync, readSync, closeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, isAbsolute } from 'node:path'
 
 function env(name, fallback) {
   const v = process.env[name]
@@ -39,20 +19,33 @@ function env(name, fallback) {
 
 const MANIFEST_PATH = env('MANIFEST_PATH')
 const S3_BUCKET = env('S3_BUCKET')
-// Prefix identifies the pilot key space; caller passes a trailing slash.
 const S3_PREFIX = env('S3_PREFIX')
 const AWS_REGION = env('AWS_REGION', 'us-west-2')
 const OUTPUT_MAP = env('OUTPUT_MAP')
 const EXPIRES_IN = env('EXPIRES_IN', '7200')
 const HF_TOKEN = process.env.HF_TOKEN || ''
-// Optional allowlist: only seed/presign these model names (the subset a mobile
-// run actually stages). Empty => every model in the manifest. This keeps the
-// seed from mirroring desktop-only giants (e.g. 25GB LLM builds or diffusion
-// video models) that no phone test ever downloads.
 const MODEL_NAMES = (process.env.MODEL_NAMES || '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
+
+// Model names come from a PR-controlled manifest and are used to build both the
+// S3 key and a local file path, so reject anything that could escape the prefix
+// or the work dir (path traversal on shared self-hosted runners).
+function validateModelName(name) {
+  if (
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    name === '.' ||
+    name === '..' ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    isAbsolute(name)
+  ) {
+    throw new Error(`[seed] invalid model name: ${JSON.stringify(name)}`)
+  }
+  return name
+}
 
 function s3Key(name) {
   return `${S3_PREFIX}${name}`
@@ -68,7 +61,6 @@ function headObjectSize(key) {
     const meta = JSON.parse(out.toString('utf8'))
     return typeof meta.ContentLength === 'number' ? meta.ContentLength : null
   } catch {
-    // Non-zero exit == object missing (or no access); treat as "needs seeding".
     return null
   }
 }
@@ -82,10 +74,6 @@ function isHuggingFace(url) {
 }
 
 function download(url, dest) {
-  // curl strips the Authorization header on a cross-host redirect (HF -> CDN)
-  // unless --location-trusted is passed, so sending the bearer token only for
-  // huggingface.co origins is safe: it authenticates the gated repo lookup and
-  // is dropped before the signed CDN URL is fetched.
   const args = [
     '--fail',
     '--silent',
@@ -103,6 +91,8 @@ function download(url, dest) {
     '-o',
     dest
   ]
+  // Only send the HF token to huggingface.co; curl drops it on the cross-host
+  // redirect to the signed CDN (no --location-trusted), so it never leaks.
   if (HF_TOKEN && isHuggingFace(url)) {
     args.push('-H', `Authorization: Bearer ${HF_TOKEN}`)
   }
@@ -111,8 +101,7 @@ function download(url, dest) {
 }
 
 function sha256(file) {
-  // Chunked read: model files reach ~11 GB, and readFileSync throws
-  // ERR_FS_FILE_TOO_LARGE past the 2 GiB Buffer cap, so hash incrementally.
+  // Chunked: models reach ~11 GB and readFileSync throws past the 2 GiB cap.
   const hash = createHash('sha256')
   const fd = openSync(file, 'r')
   try {
@@ -170,6 +159,7 @@ function main() {
     }
     names = MODEL_NAMES
   }
+  names.forEach(validateModelName)
   console.log(`[seed] ${names.length} model(s) to seed (manifest has ${Object.keys(manifest.models).length})`)
   console.log(`[seed] destination s3://${S3_BUCKET}/${S3_PREFIX} (${AWS_REGION})`)
 

@@ -112,9 +112,8 @@ jobs:
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
-      # PILOT (QVAC-23466): seed diffusion's HF/github models into the
-      # Device-Farm-local US bucket if missing, then presign them, BEFORE the
-      # build. Idempotent once seeded.
+      # Seed diffusion's HF/github models into the US bucket if missing, then
+      # presign them, before the build. Idempotent once seeded.
       - name: Seed & presign diffusion models (US bucket)
         uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
         with:
@@ -123,15 +122,12 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           hf-token: ${{ secrets.HF_TOKEN }}
           output-map: ${{ runner.temp }}/diffusion-url-map.json
-          # Only the models a phone actually downloads: nearly every diffusion
-          # image/video test is `skip = isMobile || noGpu`, so on-device only the
-          # SD v2.1 loader/api tests (and the tiny ESRGAN asset) fetch a model.
-          # Everything else keeps its HF fallback in the rewritten manifest.
+          # Only the two models a phone actually downloads (the rest are
+          # skip = isMobile || noGpu and keep their HF fallback).
           model-names: stable-diffusion-v2-1-Q8_0.gguf,RealESRGAN_x4plus_anime_6B.pth
 
-      # Diffusion downloads models ON-DEVICE from the manifest bundled into the
-      # app, so the US URLs must be baked into models.manifest.json before the
-      # build (unlike LLM, which stages host-side at pre_test time).
+      # Diffusion fetches models on-device from the bundled manifest, so bake the
+      # US URLs in before the build.
       - name: Repoint diffusion manifest to US bucket
         env:
           MANIFEST_PATH: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json

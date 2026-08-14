@@ -136,12 +136,8 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
-      # PILOT (QVAC-23466): seed embed's HF models into the Device-Farm-local US
-      # bucket if missing, then presign them, writing a name -> presigned-URL map
-      # the prestage steps below consume so the Device Farm host pulls from
-      # us-west-2 instead of huggingface.co. Embed's manifest holds exactly the
-      # mobile model set (~0.9GB, 2 models), so no model-names scoping is needed.
-      # Idempotent: a no-op once the bucket is seeded.
+      # Seed embed's 2 HF models into the US bucket if missing, then presign them
+      # into a map the prestage steps below consume. Idempotent once seeded.
       - name: Seed & presign embed models (US bucket)
         uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
         with:
@@ -159,8 +155,7 @@ jobs:
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/packages/embed-llamacpp
-        # PILOT (QVAC-23466): PRESTAGE_URL_MAP repoints staged models to the US
-        # bucket presigned URLs produced by the seed step above.
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
         run: |
@@ -175,8 +170,7 @@ jobs:
         id: ios_prestage
         if: matrix.platform == 'iOS'
         working-directory: addon/packages/embed-llamacpp
-        # PILOT (QVAC-23466): PRESTAGE_URL_MAP repoints staged models to the US
-        # bucket presigned URLs produced by the seed step above.
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
         run: |

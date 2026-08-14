@@ -279,11 +279,8 @@ jobs:
           npm run test:mobile:generate
           echo "bootstrapped: staged files + regenerated mobile test list"
 
-      # PILOT (QVAC-23466): compute exactly the models this addon stages on
-      # mobile (union of the mobile manifest + benchmark matrix), so the seed
-      # mirrors only that ~26GB subset and skips desktop-only giants (e.g. the
-      # 19-25GB builds that live in the integration manifest but never ship to a
-      # phone).
+      # Compute the models this addon stages on mobile (mobile manifest +
+      # benchmark matrix) so the seed skips desktop-only giants in the manifest.
       - name: Compute LLM mobile model set
         id: mobileset
         working-directory: addon/packages/llm-llamacpp
@@ -292,11 +289,8 @@ jobs:
           echo "names=$NAMES" >> "$GITHUB_OUTPUT"
           echo "LLM mobile model set: $NAMES"
 
-      # PILOT (QVAC-23466): seed this addon's HF models into the Device-Farm-local
-      # US bucket if missing, then presign them, BEFORE the build. Writes a
-      # name -> presigned-URL map that the prestage steps below consume so the
-      # Device Farm host pulls models from us-west-2 instead of huggingface.co.
-      # Idempotent: a no-op once the bucket is seeded.
+      # Seed the mobile LLM model set into the US bucket if missing, then presign
+      # them into a map the prestage steps below consume. Idempotent once seeded.
       - name: Seed & presign LLM models (US bucket)
         uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
         with:
@@ -340,8 +334,7 @@ jobs:
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/packages/llm-llamacpp
-        # PILOT (QVAC-23466): PRESTAGE_URL_MAP repoints staged models to the US
-        # bucket presigned URLs produced by the seed step above.
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/llm-url-map.json
         run: |
@@ -356,8 +349,7 @@ jobs:
         id: ios_prestage
         if: matrix.platform == 'iOS'
         working-directory: addon/packages/llm-llamacpp
-        # PILOT (QVAC-23466): PRESTAGE_URL_MAP repoints staged models to the US
-        # bucket presigned URLs produced by the seed step above.
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/llm-url-map.json
         run: |

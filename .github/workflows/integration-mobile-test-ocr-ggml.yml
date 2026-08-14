@@ -94,11 +94,8 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
         run: npm run test:mobile:validate || true
 
-      # Model provisioning: presigned URLs so the device can download detector
-      # and recognizer models at runtime. Must happen before build-mobile-app
-      # because testAssets/ is bundled into the app during the build step.
-      # PILOT (QVAC-23466): point model download at the Device-Farm-local US
-      # bucket (us-west-2) instead of the cross-region EU bucket.
+      # Presign detector/recognizer models against the US bucket before the build
+      # (testAssets/ is bundled into the app during the build step).
       - name: Configure AWS credentials (us-west-2) for model download
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
@@ -109,8 +106,6 @@ jobs:
       - name: Generate presigned URLs for OCR models
         working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
         env:
-          # PILOT (QVAC-23466): US mirror bucket + region so presigned URLs point
-          # at us-west-2 (same region as the Device Farm devices).
           MODEL_S3_BUCKET: tether-ai-dev-us
           AWS_REGION: us-west-2
           OUTPUT_DIR: ${{ github.workspace }}/addon/${{ inputs.workdir || 'packages/ocr-ggml' }}/test/mobile/testAssets

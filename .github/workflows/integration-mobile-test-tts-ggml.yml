@@ -144,8 +144,7 @@ jobs:
       # Needed on Android always (functional multi-spec default matrix +
       # benchmark matrix both pre-stage there) and on iOS only for the
       # benchmark matrix, where it now also pre-stages via pymobiledevice3.
-      # PILOT (QVAC-23466): assume the role in us-west-2 so the presigned model
-      # URLs target the Device-Farm-local US bucket region.
+      # us-west-2 so the presigned model URLs target the US bucket region.
       - name: Configure AWS credentials via OIDC
         if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -158,8 +157,6 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         shell: bash
         env:
-          # PILOT (QVAC-23466): US mirror bucket; presign inherits us-west-2 from
-          # the AWS creds step above.
           MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           node scripts/generate-mobile-model-manifest.js
