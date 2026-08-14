@@ -1,7 +1,7 @@
 import test from 'brittle'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import fs from 'bare-fs'
+import os from 'bare-os'
+import path from 'bare-path'
 import {
   processRegistryModel,
   toHexString,
@@ -1522,8 +1522,8 @@ test('diffusion: FLUX.2 VAE — vae tag produces _VAE suffix', (t) => {
 // ---------------------------------------------------------------------------
 
 function writeCatalog(source: string) {
-  const file = join(mkdtempSync(join(tmpdir(), 'qvac-models-')), 'models.ts')
-  writeFileSync(file, source)
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-models-')), 'models.ts')
+  fs.writeFileSync(file, source)
   return file
 }
 
