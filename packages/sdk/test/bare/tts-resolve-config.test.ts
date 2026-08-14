@@ -25,6 +25,10 @@ type TtsGgmlDebugModel = {
   _minNewTokens?: number
   _normalizeNumbers?: boolean
   _outputSampleRate?: number | null
+  _cosyvoiceModelDir?: string
+  _cosyvoiceLlmModelPath?: string
+  _instruct?: string
+  _pace?: string
   _config?: {
     language?: string
     useGPU?: boolean
@@ -334,4 +338,80 @@ test('ttsPlugin createModel: forwards Chatterbox multilingual tokenizer paths', 
   const model = result.model as TtsGgmlDebugModel
   t.is(model._mecabDictPath, '/tmp/mecab-ipadic')
   t.is(model._cangjieTsvPath, '/tmp/Cangjie5_TC.tsv')
+})
+
+test('ttsPlugin resolveConfig: resolves CosyVoice3 LavaSR artifacts and strips *Src', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+
+  const resolved = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'cosyvoice3',
+      emotion: 'happy',
+      seed: 42,
+      lavasrEnhancerModelSrc: 'registry://s3/lavasr/enhancer.gguf'
+    },
+    {
+      resolveModelPath: async (src: unknown) => `/cache/${String(src)}`,
+      modelSrc: 'registry://s3/cosy_voice/cosyvoice3-llm-q8_0.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved.config, { ttsEngine: 'cosyvoice3', emotion: 'happy', seed: 42 })
+  t.alike(resolved.artifacts, {
+    lavasrEnhancerPath: '/cache/registry://s3/lavasr/enhancer.gguf'
+  })
+})
+
+test('ttsPlugin createModel: wires the CosyVoice3 constructor surface', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-cosyvoice3-test',
+    modelPath: '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    artifacts: { lavasrEnhancerPath: '/tmp/lavasr-enhancer.gguf' },
+    modelConfig: {
+      ttsEngine: 'cosyvoice3',
+      emotion: 'happy',
+      useGPU: true,
+      outputSampleRate: 24000,
+      streamChunkTokens: 25,
+      streamFirstChunkTokens: 10,
+      threads: 4,
+      nGpuLayers: 99,
+      seed: 42
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'cosyvoice3')
+  // The companion set co-locates the model files, so the model dir is the
+  // primary GGUF's containing directory.
+  t.is(model._cosyvoiceModelDir, '/tmp/qvac/sets/cosyvoice3')
+  t.is(model._cosyvoiceLlmModelPath, '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf')
+  t.is(model._emotion, 'happy')
+  t.is(model._enhancerGgufPath, '/tmp/lavasr-enhancer.gguf')
+  t.is(model._streamChunkTokens, 25)
+  t.is(model._streamFirstChunkTokens, 10)
+  t.is(model._threads, 4)
+  t.is(model._nGpuLayers, 99)
+  t.is(model._seed, 42)
+  t.is(model._outputSampleRate, 24000)
+  t.alike(model._config, { useGPU: true, outputSampleRate: 24000 })
+})
+
+test('ttsPlugin createModel: renders the CosyVoice3 structured instruct', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-cosyvoice3-instruct-test',
+    modelPath: '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    modelConfig: {
+      ttsEngine: 'cosyvoice3',
+      instruct: { dialect: 'cantonese' }
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model._instruct, '请用广东话表达。')
 })
