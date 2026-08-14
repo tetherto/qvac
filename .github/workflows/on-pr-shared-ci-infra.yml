@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
+      - "scripts/perf-report/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
       - "vcpkg-overlays/ports/qvac-fabric/**"
@@ -33,6 +34,24 @@ jobs:
           node-version: lts/*
       - name: Run cache-models action unit tests
         run: node --test .github/actions/cache-models/test/*.test.mjs
+
+  # The per-addon benchmark aggregators are plain Node scripts shared by the
+  # benchmark-performance-*.yml workflows, which only run on demand — so without
+  # this job a broken normalizer would not surface until someone triggered a
+  # sweep.
+  perf-report-unit-tests:
+    name: perf-report aggregator unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Run perf-report unit tests
+        run: node --test scripts/perf-report/__tests__/*.test.js
 
   model-availability:
     name: Model availability (${{ matrix.package }})

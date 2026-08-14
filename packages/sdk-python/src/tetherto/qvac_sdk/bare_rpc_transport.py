@@ -30,6 +30,35 @@ import bare_rpc
 from .errors import reconstruct_error
 
 
+def _patch_bare_rpc_outgoing_destroy() -> None:
+    """Work around a bare-rpc-python bug: `RPC._on_stream` handles a peer STREAM
+    DESTROY frame by calling the *async* `OutgoingStream.destroy()` without
+    awaiting or scheduling it, so the coroutine is dropped -- the outgoing stream
+    is never closed and Python warns "coroutine 'OutgoingStream.destroy' was
+    never awaited" (seen tearing down the completion-orchestrate duplex). Wrap
+    `destroy` so it schedules the original on the RPC's own task set -- it
+    actually runs and stays referenced -- and returns the task, so a direct
+    `await stream.destroy()` keeps working too. Idempotent. Remove once bare-rpc
+    schedules/awaits the destroy itself.
+    """
+    outgoing_stream = bare_rpc.OutgoingStream
+    original = outgoing_stream.destroy
+    if getattr(original, "_qvac_scheduled", False):
+        return
+
+    def destroy(self, error=None):
+        task = asyncio.ensure_future(original(self, error))
+        self._rpc._tasks.add(task)
+        task.add_done_callback(self._rpc._tasks.discard)
+        return task
+
+    destroy._qvac_scheduled = True  # type: ignore[attr-defined]
+    outgoing_stream.destroy = destroy  # type: ignore[method-assign]
+
+
+_patch_bare_rpc_outgoing_destroy()
+
+
 def _json_or_raise(data: bytes) -> Any:
     """Parse a JSON payload; the SDK reports failures in-band as
     {"type": "error", ...} envelopes -- rebuild the typed error (or a generic

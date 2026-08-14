@@ -55,7 +55,7 @@ export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unk
 export interface AudioGenBinding {
     createInstance(owner: AudioGenInterface, configuration: AudioGenConfigurationParams, outputCallback: AudioGenOutputCallback | null): object;
     activate(handle: object | null): Promise<void>;
-    runJob(handle: object | null, data: AudioGenJobData): void | Promise<void>;
+    runJob(handle: object | null, data: AudioGenJobData): boolean | Promise<boolean>;
     cancel(handle: object | null): Promise<void>;
     destroyInstance(handle: object): Promise<void> | void;
 }
@@ -65,7 +65,7 @@ export declare class AudioGenInterface {
     private _handle;
     constructor(binding: AudioGenBinding, configuration?: AudioGenConfigurationParams, outputCallback?: AudioGenOutputCallback | null);
     activate(): Promise<void>;
-    runJob(data: AudioGenJobData): Promise<void>;
+    runJob(data: AudioGenJobData): Promise<boolean>;
     cancel(): Promise<void>;
     destroyInstance(): Promise<void>;
 }
