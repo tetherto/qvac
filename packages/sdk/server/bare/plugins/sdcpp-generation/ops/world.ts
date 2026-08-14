@@ -10,6 +10,7 @@ import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 import { getCacheDir, generateShortHash } from '@/server/utils'
 import {
   InferenceCancelledError,
+  ModelNotLoadedError,
   ModelOperationNotSupportedError,
   PluginRequestValidationFailedError
 } from '@/utils/errors-server'
@@ -71,8 +72,12 @@ export interface WorldSession {
   readonly encoders: { t5?: string | undefined; vae?: string | undefined }
   ensureActivated(): Promise<void>
   deactivate(): Promise<void>
-  /** Promote a freshly generated pack; the previous world is replaced only here. */
-  commitStagedScene(): Promise<void>
+  /**
+   * Promote a freshly generated pack and return its bytes. The previous world is
+   * replaced only here, and the read is part of the same locked step so a
+   * concurrent unload cannot delete the pack between the two.
+   */
+  promoteStagedScene(): Promise<Buffer>
   /** Drop a failed generation, leaving the previous world usable. */
   discardStagedScene(): Promise<void>
   /** Wait for native work to finish. See the note on `settleInFlight`. */
@@ -86,15 +91,30 @@ export interface WorldSession {
 const worldSessions = new WeakSet<object>()
 
 /**
- * Server-side path for a model's scene pack. Derived from a hash of the
+ * Server-side path for one session's scene pack. Derived from a hash of the
  * caller-supplied `modelId` rather than the id itself, so the id can never
- * steer the write, and kept stable so `createScene` writes exactly where the
- * native session was constructed to read (`files.scene` is fixed at
- * construction — pointing them at different paths silently walks the wrong
- * world).
+ * steer the write.
+ *
+ * Deliberately unique per call, not per `modelId`. A pack keyed only on the
+ * model id is shared state across every process using the same cache dir: two
+ * workers loading the same model would write each other's world, and a pack
+ * orphaned by a crashed session would be adopted by the next `load()` as if the
+ * caller had built it — walking a world they never created. Neither is
+ * detectable from inside the session.
+ *
+ * Uniqueness costs nothing here because the managed pack is not a cache: it
+ * lives for exactly one loaded session, and callers who want to revisit a world
+ * pass the bytes back as `modelConfig.sceneSrc`. The one invariant that does
+ * matter — `createScene` writes exactly where the native session was
+ * constructed to read — comes from calling this ONCE per session and storing
+ * the result in `files.scene`, not from the path being reproducible.
  */
 export function worldScenePath(modelId: string): string {
-  return path.join(getCacheDir('world-scenes'), `${generateShortHash(modelId)}.safetensors`)
+  const session = generateShortHash(generateServerRequestId())
+  return path.join(
+    getCacheDir('world-scenes'),
+    `${generateShortHash(modelId)}-${session}.safetensors`
+  )
 }
 
 /**
@@ -117,6 +137,38 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
 
   let activated = false
   let inFlight: Promise<unknown> | null = null
+  let torn = false
+  let lockTail: Promise<void> = Promise.resolve()
+
+  /**
+   * Serialises everything that touches the native session or its pack files
+   * against teardown. `unloadModel` is a plain RPC — it does not pass through
+   * the request registry, so nothing else stops it landing between this
+   * session's own awaits. Same promise-chain idiom as `withCacheStateLock` in
+   * llamacpp-completion/ops/kv-cache-session.ts.
+   */
+  async function withSessionLock<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = lockTail
+    let releaseLock = () => {}
+    lockTail = new Promise<void>((resolve) => {
+      releaseLock = resolve
+    })
+    await previous
+    try {
+      return await operation()
+    } finally {
+      releaseLock()
+    }
+  }
+
+  /**
+   * `torn` is set synchronously by `unload()` before it awaits anything, so a
+   * caller that has not yet yielded cannot dispatch into a session that is
+   * already being torn down.
+   */
+  function assertLive(): void {
+    if (torn) throw new ModelNotLoadedError(modelId)
+  }
 
   function hasScene(): boolean {
     return fs.existsSync(files.scene)
@@ -176,15 +228,27 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     // Only here does a new world replace the old one. `rename` within the same
     // directory is atomic, so a reader never sees a half-written pack and a
     // crash mid-generation cannot leave the model pointing at one.
-    async commitStagedScene() {
-      await fsPromises.rename(stagingScenePath, files.scene)
+    //
+    // Promotion and the read that follows it are one locked step, and the bytes
+    // come back from here rather than the caller re-reading `scenePath`: an
+    // `unloadModel` landing between the two deletes the pack, which would turn
+    // a finished world into an ENOENT with no explanation.
+    async promoteStagedScene() {
+      return withSessionLock(async () => {
+        assertLive()
+        await fsPromises.rename(stagingScenePath, files.scene)
+        return fsPromises.readFile(files.scene)
+      })
     },
 
     // Generation failed: drop the staged file and leave the previous pack in
     // place, so the next step re-activates the world the caller already had
     // rather than finding the model worldless.
     async discardStagedScene() {
-      await removeIfPresent(stagingScenePath)
+      // No liveness check: dropping a staged file is safe whether or not the
+      // session survived, and a discard that threw would mask the failure that
+      // triggered it.
+      await withSessionLock(() => removeIfPresent(stagingScenePath))
     },
 
     // Eager when a scene pack is already present, so a bad pack or an
@@ -216,17 +280,22 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     },
 
     async ensureActivated() {
+      assertLive()
       if (activated) return
-      if (!hasScene()) {
-        // A request-time precondition on a model that loaded fine, so this is a
-        // bad request rather than a load failure.
-        throw new PluginRequestValidationFailedError(
-          'worldStepStream',
-          `No world exists for model "${modelId}". Create one with worldCreateScene({ modelId, prompt, image }), ` +
-            'or load the model with modelConfig.sceneSrc pointing at an existing scene pack.'
-        )
-      }
-      await activate()
+      await withSessionLock(async () => {
+        assertLive()
+        if (activated) return
+        if (!hasScene()) {
+          // A request-time precondition on a model that loaded fine, so this is
+          // a bad request rather than a load failure.
+          throw new PluginRequestValidationFailedError(
+            'worldStepStream',
+            `No world exists for model "${modelId}". Create one with worldCreateScene({ modelId, prompt, image }), ` +
+              'or load the model with modelConfig.sceneSrc pointing at an existing scene pack.'
+          )
+        }
+        await activate()
+      })
     },
 
     // The native session caches the scene it was activated with, and `load()`
@@ -234,28 +303,43 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     // walk would silently continue in the old world. Drop the session first.
     async deactivate() {
       if (!activated) return
-      await settleInFlight()
-      await world.unload()
-      activated = false
+      await withSessionLock(async () => {
+        if (!activated) return
+        await settleInFlight()
+        await world.unload()
+        activated = false
+      })
     },
 
     // Tracks the job for `unload()` to wait on. It must follow the response to
     // its terminal state, not just the dispatch: `step()` and `createScene()`
     // resolve as soon as the native scheduler admits the job, while the block
     // or encode this guard exists for runs on well after that.
+    //
+    // Registration happens at dispatch, before the first await, because the
+    // admission itself is part of the job: `await start()` yields the event
+    // loop, and a teardown landing in that window would find `inFlight` empty
+    // and take the native session down underneath a job the scheduler had
+    // already accepted.
     async run(start) {
-      const response = await start()
-      // Swallowed because this handle only answers "has it finished?" — the
-      // real failure still reaches the caller through `response.iterate()`.
-      const settled = response.await().then(
-        () => {},
+      assertLive()
+      const dispatch = (async () => start())()
+      // A dispatch that rejects is a finished job as far as teardown cares, so
+      // both arms settle the guard. Failures still reach the caller — from the
+      // returned promise here, and from `response.iterate()` after it.
+      const settled: Promise<void> = dispatch.then(
+        (response) =>
+          response.await().then(
+            () => {},
+            () => {}
+          ),
         () => {}
       )
       inFlight = settled
       void settled.finally(() => {
         if (inFlight === settled) inFlight = null
       })
-      return response
+      return dispatch
     },
 
     step: (keys) => world.step(keys),
@@ -263,15 +347,21 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     cancel: () => world.cancel(),
 
     async unload() {
-      await settleInFlight()
-      await world.unload()
-      activated = false
-      // The managed pack lives for exactly one loaded session. Callers who want
-      // to revisit a world keep the bytes `worldCreateScene` returned and pass
-      // them back as `modelConfig.sceneSrc`; without this every world would
-      // leave ~10 MB behind under ~/.qvac/world-scenes for good.
-      await removeIfPresent(files.scene)
-      await removeIfPresent(stagingScenePath)
+      // Set before the first await so `assertLive` can refuse new work from a
+      // caller that has not yielded yet. Taking the lock is not enough on its
+      // own: acquiring it is itself an await.
+      torn = true
+      await withSessionLock(async () => {
+        await settleInFlight()
+        await world.unload()
+        activated = false
+        // The managed pack lives for exactly one loaded session. Callers who
+        // want to revisit a world keep the bytes `worldCreateScene` returned and
+        // pass them back as `modelConfig.sceneSrc`; without this every world
+        // would leave ~10 MB behind under ~/.qvac/world-scenes for good.
+        await removeIfPresent(files.scene)
+        await removeIfPresent(stagingScenePath)
+      })
     }
   }
 
@@ -437,9 +527,7 @@ export async function* worldCreateScene(
     throw new InferenceCancelledError(ctx.requestId)
   }
 
-  await session.commitStagedScene()
-
-  const scene = await fsPromises.readFile(session.scenePath)
+  const scene = await session.promoteStagedScene()
   requestLogger.info(`World scene pack created for ${request.modelId} (${scene.length} bytes)`)
 
   const { stats } = response as unknown as SceneResponseWithStats

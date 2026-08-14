@@ -83,6 +83,11 @@ declare module 'bare-fs' {
     stat(path: string): Promise<Stats>
     unlink(path: string): Promise<void>
     rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
+    // Overloaded so the no-encoding call keeps its Buffer type. The union below
+    // otherwise forces every binary reader to re-narrow a `string` that the
+    // runtime never returns.
+    readFile(path: string): Promise<Buffer>
+    readFile(path: string, encoding: BufferEncoding): Promise<string>
     readFile(path: string, encoding?: BufferEncoding): Promise<string | Buffer>
     writeFile(path: string, data: string | Buffer, encoding?: BufferEncoding): Promise<void>
     copyFile(src: string, dst: string, mode?: number): Promise<void>

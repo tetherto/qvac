@@ -156,10 +156,20 @@ test('sdcpp plugin createModel: world scene path is derived from a hash, not the
   t.absent(hostile.includes('..'), 'a traversal-shaped modelId cannot steer the write')
   t.ok(hostile.includes('world-scenes'), 'scene packs stay in their own cache directory')
   t.ok(hostile.endsWith('.safetensors'), 'keeps the pack extension')
-  t.is(
+  // Deliberately NOT stable across calls. A pack keyed only on the model id is
+  // shared across processes: two workers on the same model would overwrite each
+  // other's world, and a pack orphaned by a crashed session would be adopted by
+  // the next load() as a world the caller never built. The invariant that
+  // matters — createScene writes where load reads — comes from calling this once
+  // per session and storing the result, which plugin.ts does.
+  t.not(
     worldScenePath('stable-id'),
     worldScenePath('stable-id'),
-    'the same model always maps to the same pack, so createScene writes where load reads'
+    'each session gets its own pack, so concurrent workers and crash leftovers cannot collide'
+  )
+  t.ok(
+    worldScenePath('stable-id').includes(worldScenePath('stable-id').split('-')[0]!),
+    'the model-derived prefix is still stable, so packs remain attributable to their model'
   )
 })
 
@@ -176,7 +186,7 @@ test('world session: a failed generation leaves the previous world in place', as
   const session = result.model as unknown as {
     scenePath: string
     stagingScenePath: string
-    commitStagedScene(): Promise<void>
+    promoteStagedScene(): Promise<Buffer>
     discardStagedScene(): Promise<void>
     unload(): Promise<void>
   }
@@ -202,8 +212,13 @@ test('world session: a failed generation leaves the previous world in place', as
   )
 
   fs.writeFileSync(session.stagingScenePath, 'a generation that succeeded')
-  await session.commitStagedScene()
+  const promoted = await session.promoteStagedScene()
 
+  t.is(
+    promoted.toString('utf8'),
+    'a generation that succeeded',
+    'promotion hands back the bytes it just published, read under the same lock'
+  )
   t.is(
     fs.readFileSync(session.scenePath, 'utf8'),
     'a generation that succeeded',

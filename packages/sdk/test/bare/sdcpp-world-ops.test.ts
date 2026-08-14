@@ -228,3 +228,81 @@ test('world scene op: the model slot is held until uninterruptible work settles'
     t.ok(freed.requestId, 'the slot is released once the native encode settles')
   })
 })
+
+test('world session: teardown waits for a job that is still being admitted', async function (t) {
+  const driver = makeResponse([])
+  let nativeUnloaded = false
+  let admit = () => {}
+  const admission = new Promise<void>((resolve) => {
+    admit = resolve
+  })
+
+  await withWorldSession(
+    fakeNativeSession(driver.response, async () => {
+      nativeUnloaded = true
+    }),
+    async ({ session }) => {
+      // The window this covers is dispatch itself: the native scheduler has
+      // been called but has not handed back a job handle yet. Tracking the job
+      // only after that returns leaves teardown believing nothing is running.
+      const running = session.run(async () => {
+        await admission
+        return driver.response
+      })
+
+      let unloadDone = false
+      const unloading = session.unload().then(() => {
+        unloadDone = true
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      t.absent(unloadDone, 'unload does not return while a job is still being admitted')
+      t.absent(nativeUnloaded, 'native teardown is not entered during admission')
+
+      admit()
+      await running
+      driver.settleJob()
+      await unloading
+      t.ok(nativeUnloaded, 'native teardown runs once the admitted job has settled')
+    }
+  )
+})
+
+test('world session: a torn-down session refuses new work instead of driving dead native state', async function (t) {
+  const driver = makeResponse([])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ session }) => {
+    await session.unload()
+
+    await t.exception(
+      session.run(async () => driver.response),
+      /is not loaded/,
+      'dispatch after teardown is refused rather than reaching the native session'
+    )
+    await t.exception(
+      session.ensureActivated(),
+      /is not loaded/,
+      'activation after teardown is refused too'
+    )
+  })
+})
+
+test('world session: promotion after teardown fails as an unloaded model, not a missing file', async function (t) {
+  const fsPromises = (await import('bare-fs')).promises
+  const driver = makeResponse([])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ session }) => {
+    // A generation that finished natively but has not been promoted yet.
+    await fsPromises.writeFile(session.stagingScenePath, 'staged')
+    await session.unload()
+
+    // Without the liveness check this surfaces as a bare ENOENT from rename —
+    // an unexplained filesystem error for what is really "you unloaded the
+    // model while its world was being created".
+    await t.exception(
+      session.promoteStagedScene(),
+      /is not loaded/,
+      'promotion reports the real cause once the session is gone'
+    )
+  })
+})
