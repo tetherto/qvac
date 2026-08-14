@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.1
 
-QVAC SDK 0.17.1 is a patch cut focused on Python packaging and release lockstep. It ships self-contained per-platform `tetherto-qvac-sdk` wheels on the GitHub release, keeps thin wheels on PyPI, makes the embedded Python examples runnable without shared helpers, and publishes `@qvac/inference` together with `@qvac/sdk`, `@qvac/bare-sdk`, and `tetherto-qvac-sdk` at the same version. It also fixes Windows fat-wheel builds and a dropped `bare-rpc` stream teardown.
+QVAC SDK 0.17.1 is a patch cut, focused on Python packaging and release lockstep. It ships self-contained per-platform `tetherto-qvac-sdk` wheels on the GitHub release, keeps thin wheels on PyPI, makes the embedded Python examples runnable without shared helpers, and publishes `@qvac/inference` together with `@qvac/sdk`, `@qvac/bare-sdk`, and `tetherto-qvac-sdk` at the same version. It also fixes Windows fat-wheel builds and a dropped `bare-rpc` stream teardown.
 
 ## Features
 
