@@ -66,11 +66,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # PILOT (QVAC-23466): Android-only to keep device-farm minutes low while
-          # we measure US-bucket (us-west-2) model download vs the EU baseline.
           - platform: Android
             os: ubuntu-24.04
             runner: qvac-ubuntu2404-x64
+          - platform: iOS
+            os: macos-14
+            runner: macos-14
 
     steps:
       - name: Checkout composite action source
