@@ -179,6 +179,53 @@ test('worldStep result: a truncated block surfaces on the frame stream too', asy
   t.alike(streamed, [1], 'frames delivered before the truncation are still handed over')
 })
 
+// The world ops throw InferenceCancelledError server-side, so it crosses the RPC
+// envelope and arrives as a generic RPCError carrying the code. Without the
+// client-side rebuild, `instanceof InferenceCancelledError` fails and a caller
+// cannot tell a cancelled walk from a failed one.
+test('worldStep result: a server cancellation is rebuilt as InferenceCancelledError', async (t) => {
+  const { InferenceCancelledError } = await import('@/utils/errors-server')
+  const { SDK_SERVER_ERROR_CODES } = await import('@/schemas/sdk-errors-server')
+
+  async function* cancelledStream() {
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+    const wire = new Error('Inference cancelled') as Error & { code: number }
+    wire.code = SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED
+    throw wire
+  }
+
+  const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, cancelledStream)
+
+  const error = await result.frames.then(
+    () => null,
+    (e: unknown) => e
+  )
+  t.ok(error instanceof InferenceCancelledError, 'the typed class survives the wire')
+  t.is(
+    (error as InstanceType<typeof InferenceCancelledError>).requestId,
+    result.requestId,
+    'and carries the requestId the caller cancelled with'
+  )
+})
+
+test('worldStep result: a non-cancel failure is left alone', async (t) => {
+  const { InferenceCancelledError } = await import('@/utils/errors-server')
+
+  async function* failingStream() {
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+    throw new Error('CUDA out of memory')
+  }
+
+  const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, failingStream)
+
+  const error = await result.frames.then(
+    () => null,
+    (e: unknown) => e
+  )
+  t.absent(error instanceof InferenceCancelledError, 'an unrelated failure is not relabelled')
+  t.ok(/out of memory/.test(String(error)), 'and keeps its own message')
+})
+
 test('worldCreateScene result: a stream that ends without done rejects instead of hanging', async (t) => {
   async function* truncatedStream() {
     yield { type: 'worldSceneStream' }

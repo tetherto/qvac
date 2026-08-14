@@ -17,6 +17,8 @@ import { parseClientInput } from '@/client/parse-input'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 import { RequestValidationFailedError } from '@/utils/errors-client'
+import { InferenceCancelledError } from '@/utils/errors-server'
+import { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
 
 export type WorldStepStreamFactory = (request: WorldStepStreamRequest) => AsyncGenerator<unknown>
 
@@ -110,6 +112,24 @@ function deferred<T>() {
  */
 const TRUNCATED_STREAM = 'World stream ended before the operation completed'
 
+/**
+ * The world ops throw `InferenceCancelledError` on the server, so it crosses the
+ * RPC envelope and arrives as a generic `RPCError` — `instanceof` fails and a
+ * caller cannot tell a cancelled walk from a failed one. Rebuild it here rather
+ * than registering a reconstructor in `client/rpc/rpc-error.ts`: that file's
+ * maintenance contract keeps client-constructed typed errors out of the
+ * reconstructor map, because a global entry would also fire for the completion
+ * path, which builds this same class from its aggregated partial state.
+ */
+function asClientError(error: unknown, requestId: string): Error {
+  if (error instanceof InferenceCancelledError) return error
+  const code = (error as { code?: number } | null)?.code
+  if (code === SDK_SERVER_ERROR_CODES.INFERENCE_CANCELLED) {
+    return new InferenceCancelledError(requestId, {}, error)
+  }
+  return error instanceof Error ? error : new Error(String(error))
+}
+
 export function createWorldStepResult(
   params: WorldStepClientParams,
   streamFactory: WorldStepStreamFactory
@@ -161,7 +181,7 @@ export function createWorldStepResult(
         }
       }
     } catch (error) {
-      streamError = error instanceof Error ? error : new Error(String(error))
+      streamError = asClientError(error, requestId)
       statsOut.reject(streamError)
       framesOut.reject(streamError)
     }
@@ -243,7 +263,7 @@ export function createWorldSceneResult(
         }
       }
     } catch (error) {
-      const failure = error instanceof Error ? error : new Error(String(error))
+      const failure = asClientError(error, requestId)
       statsOut.reject(failure)
       sceneOut.reject(failure)
     }

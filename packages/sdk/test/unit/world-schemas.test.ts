@@ -58,6 +58,48 @@ test('sdcppConfigSchema: frameJpegQuality stays on the 0..100 scale', (t) => {
   )
 })
 
+// These bounds mirror the addon's WorldSessionHandlers.cpp exactly:
+// parseAutoOrPositiveInt for threads, parseIntInRange(..., 0, 1 << 10) for the
+// two block-shape knobs. Accepting a value the native side rejects means the
+// caller finds out after the multi-gigabyte artifacts have been resolved.
+test('sdcppConfigSchema: world threads is -1 or positive, as the addon parses it', (t) => {
+  t.ok(sdcppConfigSchema.safeParse({ mode: 'world', world: { threads: -1 } }).success, 'auto')
+  t.ok(sdcppConfigSchema.safeParse({ mode: 'world', world: { threads: 8 } }).success, 'positive')
+  t.absent(
+    sdcppConfigSchema.safeParse({ mode: 'world', world: { threads: 0 } }).success,
+    'zero threads is not auto and not a thread count'
+  )
+  t.absent(
+    sdcppConfigSchema.safeParse({ mode: 'world', world: { threads: -2 } }).success,
+    'only -1 means auto'
+  )
+  t.absent(
+    sdcppConfigSchema.safeParse({ mode: 'world', world: { threads: 1.5 } }).success,
+    'fractional threads'
+  )
+})
+
+test('sdcppConfigSchema: world block-shape knobs stop at the native 1024 ceiling', (t) => {
+  for (const key of ['numFramePerBlock', 'localAttnSize'] as const) {
+    t.ok(
+      sdcppConfigSchema.safeParse({ mode: 'world', world: { [key]: 0 } }).success,
+      `${key}: 0 = engine default`
+    )
+    t.ok(
+      sdcppConfigSchema.safeParse({ mode: 'world', world: { [key]: 1024 } }).success,
+      `${key}: the native maximum`
+    )
+    t.absent(
+      sdcppConfigSchema.safeParse({ mode: 'world', world: { [key]: 1025 } }).success,
+      `${key}: past the native maximum`
+    )
+    t.absent(
+      sdcppConfigSchema.safeParse({ mode: 'world', world: { [key]: -1 } }).success,
+      `${key}: negative`
+    )
+  }
+})
+
 test('worldStepRequestSchema: keys are the eight documented walk keys', (t) => {
   t.ok(
     worldStepRequestSchema.safeParse({ modelId: 'm', keys: ['W', 'A', 'S', 'D'] }).success,

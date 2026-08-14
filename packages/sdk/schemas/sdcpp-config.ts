@@ -221,9 +221,11 @@ export const sdcppConfigSchema = z.object({
   world: z
     .object({
       seed: z.number().int().optional().describe('Walk RNG seed.'),
+      // Mirrors parseAutoOrPositiveInt in the addon's WorldSessionHandlers.cpp:
+      // -1 or > 0. Zero and other negatives throw natively at load, after the
+      // multi-gigabyte artifacts have already been resolved.
       threads: z
-        .number()
-        .int()
+        .union([z.literal(-1), z.number().int().positive()])
         .optional()
         .describe('CPU threads for the session. -1 = auto-detect (default).'),
       backend: z
@@ -234,16 +236,19 @@ export const sdcppConfigSchema = z.object({
           'Per-module backend override, e.g. "diffusion=cuda0,vae=cuda1" to keep ' +
             'scene creation off the walk GPU on a multi-GPU host.'
         ),
+      // Both are parseIntInRange(..., 0, 1 << 10) natively.
       numFramePerBlock: z
         .number()
         .int()
-        .nonnegative()
+        .min(0)
+        .max(1024)
         .optional()
         .describe('Latent frames denoised per step. 0 = model default (3).'),
       localAttnSize: z
         .number()
         .int()
-        .nonnegative()
+        .min(0)
+        .max(1024)
         .optional()
         .describe(
           'History attention window in latent frames. 0 = engine default (8). ' +
@@ -1047,22 +1052,29 @@ export const worldStepStatsSchema = z.object({
     .describe('Cumulative generation time in milliseconds across the session.'),
   totalSteps: z
     .number()
+    .int()
     .optional()
     .describe(
       'Number of blocks generated so far in this session; resets when the session reloads.'
     ),
-  totalFrames: z.number().optional().describe('Cumulative frames delivered across the session.'),
+  totalFrames: z
+    .number()
+    .int()
+    .optional()
+    .describe('Cumulative frames delivered across the session.'),
   frames: z
     .number()
+    .int()
     .optional()
     .describe(
       'Frames delivered for this block — 9 for the first block after a load ' +
         '(decoder warmup), 12 thereafter at the default numFramePerBlock.'
     ),
-  width: z.number().optional().describe('Frame width in pixels.'),
-  height: z.number().optional().describe('Frame height in pixels.'),
+  width: z.number().int().optional().describe('Frame width in pixels.'),
+  height: z.number().int().optional().describe('Frame height in pixels.'),
   actionMask: z
     .number()
+    .int()
     .optional()
     .describe('The 8-bit key mask this block was generated under (bit 0..7 = W,A,S,D,I,J,K,L).')
 })
@@ -1077,8 +1089,8 @@ export const worldSceneStatsSchema = z.object({
       'Wall-clock time in milliseconds for the scene pack: loading the prompt ' +
         'and image encoders, encoding both, and writing the pack.'
     ),
-  width: z.number().optional().describe('Scene width in pixels, baked into the pack.'),
-  height: z.number().optional().describe('Scene height in pixels, baked into the pack.')
+  width: z.number().int().optional().describe('Scene width in pixels, baked into the pack.'),
+  height: z.number().int().optional().describe('Scene height in pixels, baked into the pack.')
 })
 
 export type WorldSceneStats = z.infer<typeof worldSceneStatsSchema>
@@ -1121,7 +1133,11 @@ export const worldStepStreamResponseSchema = z.object({
     .string()
     .optional()
     .describe('Base64 of one decoded frame — PNG, or JPEG when world.frameJpegQuality is 1..100.'),
-  frameIndex: z.number().optional().describe('Zero-based index of this frame within the block.'),
+  frameIndex: z
+    .number()
+    .int()
+    .optional()
+    .describe('Zero-based index of this frame within the block.'),
   done: z.boolean().optional(),
   stats: worldStepStatsSchema.optional()
 })

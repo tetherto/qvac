@@ -9923,6 +9923,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc(GeneratedBaseModel):
     ) = None
 
 
+class Threads(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="CPU threads for the session. -1 = auto-detect (default).",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -9932,12 +9943,8 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         Field(description="Walk RNG seed.", ge=-9007199254740991, le=9007199254740991),
     ] = None
     threads: Annotated[
-        int | None,
-        Field(
-            description="CPU threads for the session. -1 = auto-detect (default).",
-            ge=-9007199254740991,
-            le=9007199254740991,
-        ),
+        Literal[-1] | Threads | None,
+        Field(description="CPU threads for the session. -1 = auto-detect (default)."),
     ] = None
     backend: Annotated[
         str | None,
@@ -9952,7 +9959,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
             alias="numFramePerBlock",
             description="Latent frames denoised per step. 0 = model default (3).",
             ge=0,
-            le=9007199254740991,
+            le=1024,
         ),
     ] = None
     local_attn_size: Annotated[
@@ -9961,7 +9968,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
             alias="localAttnSize",
             description="History attention window in latent frames. 0 = engine default (8). With `kvCache` the engine validates this against the compiled KV ring and fails at load on an unsupported combination.",
             ge=0,
-            le=9007199254740991,
+            le=1024,
         ),
     ] = None
     offload_params_to_cpu: Annotated[
@@ -10038,7 +10045,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(GeneratedBas
     ) = None
 
 
-class Threads(RootModel[int]):
+class Threads1(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -10086,7 +10093,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
         ),
     ] = None
     threads: Annotated[
-        Literal[-1] | Threads | None,
+        Literal[-1] | Threads1 | None,
         Field(
             description="Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto."
         ),
@@ -13461,10 +13468,20 @@ class WorldSceneStreamResponseStats(GeneratedBaseModel):
         ),
     ] = None
     width: Annotated[
-        float | None, Field(description="Scene width in pixels, baked into the pack.")
+        int | None,
+        Field(
+            description="Scene width in pixels, baked into the pack.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     height: Annotated[
-        float | None, Field(description="Scene height in pixels, baked into the pack.")
+        int | None,
+        Field(
+            description="Scene height in pixels, baked into the pack.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
 
 
@@ -13548,32 +13565,54 @@ class WorldStepStreamResponseStats(GeneratedBaseModel):
         ),
     ] = None
     total_steps: Annotated[
-        float | None,
+        int | None,
         Field(
             alias="totalSteps",
             description="Number of blocks generated so far in this session; resets when the session reloads.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
     ] = None
     total_frames: Annotated[
-        float | None,
+        int | None,
         Field(
             alias="totalFrames",
             description="Cumulative frames delivered across the session.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
     ] = None
     frames: Annotated[
-        float | None,
+        int | None,
         Field(
-            description="Frames delivered for this block — 9 for the first block after a load (decoder warmup), 12 thereafter at the default numFramePerBlock."
+            description="Frames delivered for this block — 9 for the first block after a load (decoder warmup), 12 thereafter at the default numFramePerBlock.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
     ] = None
-    width: Annotated[float | None, Field(description="Frame width in pixels.")] = None
-    height: Annotated[float | None, Field(description="Frame height in pixels.")] = None
+    width: Annotated[
+        int | None,
+        Field(
+            description="Frame width in pixels.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Frame height in pixels.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     action_mask: Annotated[
-        float | None,
+        int | None,
         Field(
             alias="actionMask",
             description="The 8-bit key mask this block was generated under (bit 0..7 = W,A,S,D,I,J,K,L).",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
     ] = None
 
@@ -13590,10 +13629,12 @@ class WorldStepStreamResponse(GeneratedBaseModel):
         ),
     ] = None
     frame_index: Annotated[
-        float | None,
+        int | None,
         Field(
             alias="frameIndex",
             description="Zero-based index of this frame within the block.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
     ] = None
     done: bool | None = None
