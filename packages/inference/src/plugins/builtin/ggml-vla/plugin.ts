@@ -1,4 +1,4 @@
-import { VlaModel } from '@qvac/vla-ggml'
+import { VlaModel, type VlaEmbodimentSelector as AddonVlaEmbodimentSelector } from '@qvac/vla-ggml'
 import {
   definePlugin,
   defineHandler,
@@ -7,6 +7,8 @@ import {
   vlaRunResponseSchema,
   vlaHparamsRequestSchema,
   vlaHparamsResponseSchema,
+  vlaSetEmbodimentRequestSchema,
+  vlaSetEmbodimentResponseSchema,
   ModelType,
   ADDON_VLA,
   type CreateModelParams,
@@ -16,6 +18,7 @@ import {
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { vlaRun } from '@/plugins/builtin/ggml-vla/ops/vla-run'
 import { vlaGetHparams } from '@/plugins/builtin/ggml-vla/ops/vla-hparams'
+import { vlaSetEmbodiment } from '@/plugins/builtin/ggml-vla/ops/vla-set-embodiment'
 
 interface VlaLoadOptions {
   backend?: 'auto' | 'cpu'
@@ -49,11 +52,18 @@ export const vlaPlugin = definePlugin({
     const logger = createStreamLogger(params.modelId, ModelType.ggmlVla)
     registerAddonLogger(params.modelId, ModelType.ggmlVla, logger)
 
+    const addonConfig = {
+      ...(config.verbosity !== undefined && { verbosity: config.verbosity }),
+      // The zod-inferred selector widens optional props with `| undefined`,
+      // which exactOptionalPropertyTypes rejects against the addon's exact
+      // shape — the runtime value is identical, so re-assert the addon type.
+      ...(config.embodiment !== undefined && {
+        embodiment: config.embodiment as AddonVlaEmbodimentSelector
+      })
+    }
     const inner = new VlaModel({
       files: { model: [params.modelPath] },
-      ...(config.verbosity !== undefined && {
-        config: { verbosity: config.verbosity }
-      }),
+      ...(Object.keys(addonConfig).length > 0 && { config: addonConfig }),
       logger,
       opts: { stats: true }
     })
@@ -80,6 +90,15 @@ export const vlaPlugin = definePlugin({
       streaming: false,
       cancel: { scope: 'none' },
       handler: vlaGetHparams
+    }),
+    vlaSetEmbodiment: defineHandler({
+      requestSchema: vlaSetEmbodimentRequestSchema,
+      responseSchema: vlaSetEmbodimentResponseSchema,
+      streaming: false,
+      // The addon refuses to switch while an inference job is in flight
+      // (JOB_ALREADY_RUNNING), so there is nothing meaningful to cancel here.
+      cancel: { scope: 'none' },
+      handler: vlaSetEmbodiment
     })
   }
 })
