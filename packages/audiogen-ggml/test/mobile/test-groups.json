@@ -9,7 +9,7 @@
   "ios": {
     "functional": [
       "testLoadModels",
-      "testGenerateMusic"
+      "testGenerateMusicOnCpu"
     ]
   }
 }
