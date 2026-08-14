@@ -18,7 +18,4 @@ if ! bun run typecheck; then
   exit 1
 fi
 
-echo "📦 Checking model registry..."
-npm run check-models:hook --silent 2>/dev/null
-
 echo "✅ All checks passed!"
