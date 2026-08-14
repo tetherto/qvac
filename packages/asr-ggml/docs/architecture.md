@@ -1,17 +1,29 @@
-# Architecture Documentation (Whisper engine)
+# Architecture Documentation
 
-**Package:** `@qvac/asr-ggml` (formerly `@qvac/transcription-whispercpp` v0.6.7)
-**Stack:** JavaScript, C++20, whisper.cpp, Bare Runtime, CMake, vcpkg  
+**Package:** `@qvac/asr-ggml`
+**Stack:** TypeScript, JavaScript, C++20, whisper.cpp, parakeet-cpp, Bare Runtime, CMake, vcpkg
 **License:** Apache-2.0
 
-> **Heritage document.** This describes the **whisper engine's** internals as
-> they stood before the whisper + parakeet merge, when the package shipped a
-> single `TranscriptionWhispercpp` class. The native model interface, config
-> pipeline, and whisper.cpp integration it documents are still accurate, but
-> the JS entrypoint is now the engine-agnostic `ASRGgml` orchestrator with
-> `WhisperDriver` behind it — read [`engines.md`](engines.md) for the current
-> layering, and mentally substitute `ASRGgml` + `WhisperDriver` wherever this
-> document says `TranscriptionWhispercpp`.
+`ASRGgml` is the public orchestrator. It resolves one engine per instance,
+owns shared lifecycle and response handling, then delegates engine behavior
+to `WhisperDriver` or `ParakeetDriver`. Each driver validates its own
+configuration vocabulary, normalizes audio, maps native events, and owns its
+native interface.
+
+```text
+Consumer
+   |
+ASRGgml
+   |-- WhisperDriver  --> WhisperInterface  --> WhisperModel  --> whisper.cpp
+   `-- ParakeetDriver --> ParakeetInterface --> ParakeetModel --> parakeet-cpp
+```
+
+The native module and shared addon framework are common to both paths.
+Configuration remains engine-scoped under `whisperConfig` and
+`parakeetConfig`; only lifecycle verbs and shared output types cross the
+driver seam. [`engines.md`](engines.md) is the detailed current-state
+reference. The Whisper-specific sections below retain deeper native detail
+and use the former class name where they describe heritage implementation.
 
 ---
 
@@ -45,13 +57,14 @@
 
 ## Purpose
 
-`@qvac/transcription-whispercpp` is a cross-platform npm package providing speech-to-text transcription for Bare runtime applications. It wraps [whisper.cpp](https://github.com/ggerganov/whisper.cpp) in a JavaScript-friendly API, enabling local audio transcription on desktop and mobile with CPU/GPU acceleration.
+`@qvac/asr-ggml` is a cross-platform npm package providing Whisper and
+Parakeet speech recognition through one Bare-compatible JavaScript API.
 
 **Core value:**
 - High-level JavaScript API for speech-to-text inference
 - Streaming transcription with real-time segment delivery
 - Silero VAD integration for production-quality accuracy
-- Unified interface shared with other QVAC inference backends
+- Unified `ASRGgml` interface over `WhisperDriver` and `ParakeetDriver`
 - Hot-reload of configuration without destroying the instance
 
 ## Key Features
@@ -74,13 +87,13 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan (CPU fallback) |
 
 **Dependencies:**
-- whisper.cpp (=1.8.4.1): Inference engine (GGML-based)
-- inference-addon-cpp (≥1.1.6): C++ addon framework (`AddonJs`, `runJob`, streaming exports, cancellation)
-- @qvac/infer-base (^0.4.0): `createJobHandler`, `exclusiveRunQueue`, QvacResponse
-- @qvac/decoder-audio (^0.3.3): Audio decoding and sample rate conversion
-- @qvac/error (^0.1.0): Shared error code infrastructure
-- @qvac/logging (^0.1.0): Structured logging
-- Bare Runtime (≥1.24.0): JavaScript runtime
+- `speech-cpp`: umbrella vcpkg dependency for whisper.cpp, parakeet-cpp, and shared ggml backends
+- `qvac-lib-inference-addon-cpp`: C++ addon framework
+- `@qvac/infer-base`: `createJobHandler` and `QvacResponse`
+- `@qvac/decoder-audio`: example audio decoding and sample-rate conversion
+- `@qvac/error`: shared error code infrastructure
+- `@qvac/logging`: structured logging
+- Bare Runtime: JavaScript runtime
 
 ---
 

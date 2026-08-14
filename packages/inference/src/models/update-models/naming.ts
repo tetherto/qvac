@@ -1,5 +1,5 @@
-import { getAddonFromEngine } from '../../schemas/engine-addon-map'
-import type { ModelRegistryEngine } from '../../schemas/registry'
+import { getAddonFromEngine } from '../../surface'
+import type { ModelRegistryEngine } from '../../surface'
 import { detectShardedModel } from './shards'
 import type { ExportNameInput } from './types'
 

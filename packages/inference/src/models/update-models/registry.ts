@@ -1,9 +1,10 @@
+import env from 'bare-env'
 import { QVACRegistryClient } from '@qvac/registry-client'
 import { groupShardedModels } from './shards'
 import { groupCompanionSets } from './companions'
 import { processRegistryModel } from './processing'
 import type { CollectOptions, ProcessedModel } from './types'
-import { DEFAULT_REGISTRY_CORE_KEY } from '@/constants'
+import { DEFAULT_REGISTRY_CORE_KEY } from '../../surface'
 
 // Re-export for backward compat
 export { processRegistryModel, extractModelName, toHexString } from './processing'
@@ -12,8 +13,7 @@ export async function collectModels(options: CollectOptions = {}): Promise<Proce
   const { showDuplicates = false, noDedup = false } = options
   const models: ProcessedModel[] = []
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const registryCoreKey: string = process.env['QVAC_REGISTRY_CORE_KEY'] ?? DEFAULT_REGISTRY_CORE_KEY
+  const registryCoreKey: string = env['QVAC_REGISTRY_CORE_KEY'] ?? DEFAULT_REGISTRY_CORE_KEY
   const client = new QVACRegistryClient({ registryCoreKey })
 
   try {

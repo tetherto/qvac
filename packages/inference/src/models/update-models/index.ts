@@ -1,6 +1,6 @@
-import fs from 'fs'
-import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
+import fs from 'bare-fs'
+import path from 'bare-path'
+import os from 'bare-os'
 import { generateModelsFileContent } from './codegen'
 import {
   assignNames,
@@ -12,8 +12,12 @@ import {
 import { collectModels } from './registry'
 import { formatSize } from './utils'
 
-const OUTPUT_FILE = fileURLToPath(new URL('../registry/models.ts', import.meta.url))
-const HISTORY_DIR = fileURLToPath(new URL('../history', import.meta.url))
+// This tool runs from the compiled build (bare resolves the `@/` alias only
+// after tsc-alias), but regenerates the source catalog. Resolve both targets
+// against the package root (cwd for `npm run`/`bun run`) so the location the
+// build ran from does not matter.
+const OUTPUT_FILE = path.join(os.cwd(), 'src', 'models', 'registry', 'models.ts')
+const HISTORY_DIR = path.join(os.cwd(), 'src', 'models', 'history')
 
 async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<void> {
   const timeoutMs = 30000
@@ -44,7 +48,7 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
     ])
 
     if (timedOut || !result) {
-      process.exit(nonBlocking ? 0 : 1)
+      Bare.exit(nonBlocking ? 0 : 1)
     }
 
     const { remoteModels, currentModels } = result
@@ -52,7 +56,7 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
 
     if (rawAdded.length === 0 && rawRemoved.length === 0) {
       console.log(`✅ Models are up to date (${remoteModels.length} models)`)
-      process.exit(0)
+      Bare.exit(0)
     }
 
     const addedWithNames = assignNames(rawAdded)
@@ -100,11 +104,11 @@ async function checkOnly(nonBlocking = false, showDuplicates = false): Promise<v
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     console.log('')
 
-    process.exit(nonBlocking ? 0 : 1)
+    Bare.exit(nonBlocking ? 0 : 1)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('❌ Model check failed:', message)
-    process.exit(nonBlocking ? 0 : 1)
+    Bare.exit(nonBlocking ? 0 : 1)
   }
 }
 
@@ -120,12 +124,6 @@ async function updateModels(showDuplicates = false, noDedup = false): Promise<vo
   )
 
   fs.writeFileSync(OUTPUT_FILE, generateModelsFileContent(models))
-
-  try {
-    execSync(`npx prettier --write "${OUTPUT_FILE}"`, { stdio: 'pipe' })
-  } catch {
-    // prettier not available, skip formatting
-  }
 
   console.log(`✅ Generated ${models.length} models → ${OUTPUT_FILE}`)
 
@@ -148,10 +146,10 @@ async function updateModels(showDuplicates = false, noDedup = false): Promise<vo
 }
 
 async function main(): Promise<void> {
-  const CHECK_ONLY = process.argv.includes('--check')
-  const NON_BLOCKING = process.argv.includes('--non-blocking')
-  const SHOW_DUPLICATES = process.argv.includes('--show-duplicates')
-  const NO_DEDUP = process.argv.includes('--no-dedup')
+  const CHECK_ONLY = Bare.argv.includes('--check')
+  const NON_BLOCKING = Bare.argv.includes('--non-blocking')
+  const SHOW_DUPLICATES = Bare.argv.includes('--show-duplicates')
+  const NO_DEDUP = Bare.argv.includes('--no-dedup')
 
   if (CHECK_ONLY) {
     await checkOnly(NON_BLOCKING, SHOW_DUPLICATES)

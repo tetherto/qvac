@@ -59,6 +59,7 @@ interface CompletionResult {
   modelExecutionMs: number
   stats?: CompletionStats
   toolCalls: ToolCall[]
+  stoppedAtContextBoundary: boolean
 }
 
 interface ProcessModelResponseResult extends CompletionResult {
@@ -428,7 +429,8 @@ async function* processModelResponse(
     ...buildStreamResult(modelExecutionMs, stats),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
-    producedTokens
+    producedTokens,
+    stoppedAtContextBoundary: responseWithStats.stats?.stopReason === 'contextOverflow'
   }
 }
 
@@ -638,7 +640,8 @@ export async function* completion(
     aborted: signal.aborted,
     producedTokens: result.producedTokens,
     generatedTokens: result.stats?.generatedTokens,
-    predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict
+    predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict,
+    stoppedAtContextBoundary: result.stoppedAtContextBoundary
   })
 
   if (typeof kvCache === 'string') {
