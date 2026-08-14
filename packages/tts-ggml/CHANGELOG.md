@@ -121,6 +121,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Audio8 Vulkan synthesis crash with quantized models.** Requires
+  `speech-cpp` >= `2026-08-12#1`, whose TTS feature keeps Metal-specific F32
+  output precision scoped to Metal so Vulkan selects a valid matrix
+  multiplication pipeline.
 - **Public TypeScript and CommonJS API.** Audio chunks are now declared as
   their runtime `Int16Array` type, enhancer backend fields are included in
   `RuntimeStats`, invalid reload sample rates are rejected, and the package
