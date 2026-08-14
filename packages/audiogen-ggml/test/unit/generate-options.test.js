@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('brittle')
-const { AudioGen } = require('../../index.js')
+const { AudioEditOperationType, AudioGen, RepaintMode } = require('../../index.js')
 
 function createHarness() {
   let received
@@ -178,6 +178,131 @@ test('AudioGen.run rejects non-finite referenceAudio samples', async (t) => {
     t,
     { referenceAudio: new Float32Array([0, Number.NaN]) },
     /referenceAudio must contain only finite samples/
+  )
+})
+
+test('AudioGen.edit chains Flow-Edit and Repaint operations in exact order', async (t) => {
+  const { gen, received } = createHarness()
+  const pcm = new Float32Array([0.1, -0.1, 0.2, -0.2])
+
+  const response = await gen
+    .edit({ pcm, sampleRate: 48000, channels: 2 })
+    .edit({
+      from: { caption: 'original pop', lyrics: 'old words' },
+      to: { caption: 'guitar pop-rock', lyrics: 'new words' },
+      nMin: 0.2,
+      nMax: 0.8,
+      nAvg: 2
+    })
+    .repaint({
+      caption: 'analog synth solo',
+      lyrics: '[Instrumental]',
+      start: 1,
+      end: 2,
+      mode: RepaintMode.Balanced,
+      strength: 0.5
+    })
+    .flowEdit({
+      from: { caption: 'guitar pop-rock' },
+      to: { caption: 'dark synthwave' }
+    })
+    .run({ seed: 10 })
+  await response.await()
+
+  const job = received()
+  t.is(job.type, 'edit')
+  t.is(job.seed, 10)
+  t.is(job.sourceAudio, pcm)
+  t.alike(
+    job.editOperations.map((operation) => operation.type),
+    [
+      AudioEditOperationType.FlowEdit,
+      AudioEditOperationType.Repaint,
+      AudioEditOperationType.FlowEdit
+    ],
+    'operation order and repeated types are preserved'
+  )
+  t.is(job.editOperations[0].sourceCaption, 'original pop')
+  t.is(job.editOperations[0].targetCaption, 'guitar pop-rock')
+  t.is(job.editOperations[1].caption, 'analog synth solo')
+  t.is(job.editOperations[1].start, 1)
+  t.is(job.editOperations[1].end, 2)
+  t.is(job.editOperations[2].nMin, 0)
+  t.is(job.editOperations[2].nMax, 1)
+  t.is(job.editOperations[2].nAvg, 1)
+})
+
+test('AudioGen.edit accepts Int16 output PCM and converts it for native', async (t) => {
+  const { gen, received } = createHarness()
+  const input = new Int16Array([32767, -32768, 16384, -16384])
+
+  const response = await gen
+    .edit({ pcm: input, sampleRate: 48000, channels: 2 })
+    .repaint({ caption: 'new intro', start: 0 })
+    .run()
+  await response.await()
+
+  const source = received().sourceAudio
+  t.ok(source instanceof Float32Array)
+  t.is(source.length, input.length)
+  t.is(source[0], 1)
+  t.is(source[1], -1)
+})
+
+test('AudioGen.edit validates source and operation-specific ranges', async (t) => {
+  const { gen } = createHarness()
+
+  await t.exception(
+    () =>
+      gen
+        .edit({ pcm: new Float32Array([0, 0]), sampleRate: 44100, channels: 2 })
+        .repaint({ caption: 'test', start: 0 })
+        .run(),
+    /sampleRate must be 48000/
+  )
+
+  t.exception(
+    () =>
+      gen.edit({ pcm: new Float32Array([0, 0]), sampleRate: 48000, channels: 2 }).flowEdit({
+        from: { caption: 'source' },
+        to: { caption: 'target' },
+        nMin: 0.8,
+        nMax: 0.2
+      }),
+    /0 <= nMin <= nMax <= 1/
+  )
+
+  t.exception(
+    () =>
+      gen
+        .edit({ pcm: new Float32Array([0, 0]), sampleRate: 48000, channels: 2 })
+        .repaint({ caption: 'test', start: 4, end: 2 }),
+    /end must be greater/
+  )
+})
+
+test('AudioEditSession requires operations and is single-use', async (t) => {
+  const { gen } = createHarness()
+  const source = {
+    pcm: new Float32Array([0, 0]),
+    sampleRate: 48000,
+    channels: 2
+  }
+
+  await t.exception(() => gen.edit(source).run(), /requires at least one/)
+
+  const session = gen.edit(source).repaint({ caption: 'new ending', start: 0 })
+  const response = await session.run()
+  await response.await()
+
+  await t.exception(() => session.run(), /may only be called once/)
+  t.exception(
+    () =>
+      session.flowEdit({
+        from: { caption: 'source' },
+        to: { caption: 'target' }
+      }),
+    /cannot modify/
   )
 })
 

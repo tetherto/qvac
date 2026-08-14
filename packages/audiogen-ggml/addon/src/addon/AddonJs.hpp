@@ -1,6 +1,7 @@
 #pragma once
 
 #include <any>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -156,7 +157,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
 
-  if (type != "text") {
+  if (type != "text" && type != "edit") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Unknown input type: " + type);
@@ -191,7 +192,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   AcestepModel::AnyInput modelInput;
-  modelInput.caption = js::String(env, jsInput).as<std::string>(env);
+  if (type == "text") {
+    modelInput.caption = js::String(env, jsInput).as<std::string>(env);
+  }
   if (auto v = optStr("lyrics")) modelInput.lyrics = *v;
   if (auto v = optStr("vocalLanguage")) modelInput.vocalLanguage = *v;
   if (auto v = optStr("keyscale")) modelInput.keyscale = *v;
@@ -233,6 +236,103 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     modelInput.audioCoverStrength = static_cast<float>(*v);
   if (auto v = optNum("coverNoiseStrength"))
     modelInput.coverNoiseStrength = static_cast<float>(*v);
+
+  if (type == "edit") {
+    if (modelInput.sourceAudio.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio edit requires non-empty sourceAudio");
+    }
+    auto operations =
+        jobObj.getOptionalProperty<js::Array>(env, "editOperations");
+    if (!operations || operations->size(env) == 0) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio edit requires at least one edit operation");
+    }
+    modelInput.editOperations.reserve(operations->size(env));
+    for (uint32_t i = 0; i < operations->size(env); ++i) {
+      auto operation = operations->get<js::Object>(env, i);
+      auto requiredString = [&](const char* key) {
+        auto value =
+            operation.getOptionalPropertyAs<js::String, std::string>(env, key);
+        if (!value || value->empty()) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              std::string("Edit operation '") + key +
+                  "' must be a non-empty string");
+        }
+        return *value;
+      };
+      auto optionalString = [&](const char* key, const char* fallback) {
+        return operation
+            .getOptionalPropertyAs<js::String, std::string>(env, key)
+            .value_or(fallback);
+      };
+      auto optionalNumber = [&](const char* key, double fallback) {
+        js_value_t* raw = operation.getProperty(env, key);
+        if (js::is<js::Undefined>(env, raw) ||
+            js::is<js::Null>(env, raw)) {
+          return fallback;
+        }
+        if (!js::is<js::Number>(env, raw)) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              std::string("Edit operation '") + key + "' must be a number");
+        }
+        const double value = js::Number::fromValue(raw).as<double>(env);
+        if (!std::isfinite(value)) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              std::string("Edit operation '") + key + "' must be finite");
+        }
+        return value;
+      };
+
+      const std::string operationType = requiredString("type");
+      if (operationType == "flow-edit") {
+        AcestepModel::FlowEditInput flow;
+        flow.sourceCaption = requiredString("sourceCaption");
+        flow.sourceLyrics =
+            optionalString("sourceLyrics", "[Instrumental]");
+        flow.targetCaption = requiredString("targetCaption");
+        flow.targetLyrics =
+            optionalString("targetLyrics", "[Instrumental]");
+        flow.nMin = static_cast<float>(optionalNumber("nMin", 0.0));
+        flow.nMax = static_cast<float>(optionalNumber("nMax", 1.0));
+        flow.nAvg = static_cast<int>(optionalNumber("nAvg", 1.0));
+        modelInput.editOperations.emplace_back(std::move(flow));
+        continue;
+      }
+      if (operationType == "repaint") {
+        AcestepModel::RepaintInput repaint;
+        repaint.caption = requiredString("caption");
+        repaint.lyrics = optionalString("lyrics", "[Instrumental]");
+        repaint.start =
+            static_cast<float>(optionalNumber("start", 0.0));
+        repaint.end = static_cast<float>(optionalNumber("end", -1.0));
+        repaint.strength =
+            static_cast<float>(optionalNumber("strength", 0.5));
+        const std::string mode = optionalString("mode", "balanced");
+        if (mode == "conservative") {
+          repaint.mode = AcestepModel::RepaintMode::Conservative;
+        } else if (mode == "balanced") {
+          repaint.mode = AcestepModel::RepaintMode::Balanced;
+        } else if (mode == "aggressive") {
+          repaint.mode = AcestepModel::RepaintMode::Aggressive;
+        } else {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              "Unknown repaint mode: " + mode);
+        }
+        modelInput.editOperations.emplace_back(std::move(repaint));
+        continue;
+      }
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Unknown audio edit operation type: " + operationType);
+    }
+  }
   return instance.runJob(std::any(std::move(modelInput)));
 }
 JSCATCH

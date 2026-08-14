@@ -1,8 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "cf1500e91d595db131c41421d4e1455f9143ec6e",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
+    "baseline": "edf13678f823089f6d6e45928ce0fad878d7604c",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+    "reference": "QVAC-22883/audiogen-repaint-flow-edit"
   },
   "registries": [
     {

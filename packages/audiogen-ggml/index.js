@@ -11,7 +11,7 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.ENGINE_ACESTEP = void 0;
 const infer_base_1 = require("@qvac/infer-base");
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 const QvacLogger = require("@qvac/logging");
@@ -73,6 +73,48 @@ function optionalStereoPcm(value, name) {
     requireFinitePcm(value, name);
     return value;
 }
+function requireEditSource(source) {
+    if (typeof source !== 'object' || source === null) {
+        throw invalidInput('edit source must be an audio source object');
+    }
+    if (source.sampleRate !== 48000) {
+        throw invalidInput(`edit source sampleRate must be 48000, got ${source.sampleRate}`);
+    }
+    if (source.channels !== 2) {
+        throw invalidInput(`edit source channels must be 2, got ${source.channels}`);
+    }
+    if (!(source.pcm instanceof Float32Array) && !(source.pcm instanceof Int16Array)) {
+        throw invalidInput('edit source pcm must be a Float32Array or Int16Array');
+    }
+    if (source.pcm.length === 0) {
+        throw invalidInput('edit source pcm must not be empty');
+    }
+    if ((source.pcm.length & 1) !== 0) {
+        throw invalidInput('edit source pcm must be interleaved stereo');
+    }
+    if (source.pcm instanceof Float32Array) {
+        requireFinitePcm(source.pcm, 'edit source pcm');
+        return source.pcm;
+    }
+    const pcm = new Float32Array(source.pcm.length);
+    for (let i = 0; i < source.pcm.length; ++i) {
+        const sample = source.pcm[i];
+        pcm[i] = sample < 0 ? sample / 32768 : sample / 32767;
+    }
+    return pcm;
+}
+function requirePrompt(prompt, name) {
+    if (typeof prompt !== 'object' || prompt === null) {
+        throw invalidInput(`${name} must be an object`);
+    }
+    if (typeof prompt.caption !== 'string' || prompt.caption.trim().length === 0) {
+        throw invalidInput(`${name}.caption must be a non-empty string`);
+    }
+    if (prompt.lyrics !== undefined && typeof prompt.lyrics !== 'string') {
+        throw invalidInput(`${name}.lyrics must be a string`);
+    }
+    return prompt;
+}
 function isCoverTask(taskType) {
     return taskType === 'cover' || taskType === 'cover-nofsq';
 }
@@ -82,6 +124,98 @@ function invalidInput(message) {
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
+/**
+ * Fluent, ordered edit pipeline. Every call appends one operation; operations
+ * may be repeated in any order before the session is submitted with `run()`.
+ */
+class AudioEditSession {
+    _source;
+    _runner;
+    _operations = [];
+    _started = false;
+    constructor(_source, _runner) {
+        this._source = _source;
+        this._runner = _runner;
+    }
+    /** Append a Flow-Edit operation. */
+    flowEdit(options) {
+        if (this._started)
+            throw invalidInput('cannot modify an edit session after run()');
+        if (typeof options !== 'object' || options === null) {
+            throw invalidInput('flowEdit options must be an object');
+        }
+        const from = requirePrompt(options.from, 'flowEdit.from');
+        const to = requirePrompt(options.to, 'flowEdit.to');
+        const nMin = requireFiniteNumber(options.nMin ?? 0, 'flowEdit.nMin');
+        const nMax = requireFiniteNumber(options.nMax ?? 1, 'flowEdit.nMax');
+        const nAvg = requireFiniteNumber(options.nAvg ?? 1, 'flowEdit.nAvg', true);
+        if (nMin < 0 || nMax > 1 || nMin > nMax) {
+            throw invalidInput('flowEdit requires 0 <= nMin <= nMax <= 1');
+        }
+        if (nAvg < 1)
+            throw invalidInput('flowEdit.nAvg must be at least 1');
+        this._operations.push({
+            type: audiogen_1.AudioEditOperationType.FlowEdit,
+            sourceCaption: from.caption,
+            sourceLyrics: from.lyrics ?? '[Instrumental]',
+            targetCaption: to.caption,
+            targetLyrics: to.lyrics ?? '[Instrumental]',
+            nMin,
+            nMax,
+            nAvg
+        });
+        return this;
+    }
+    /** Alias for `flowEdit()` so `.edit().repaint().edit()` reads naturally. */
+    edit(options) {
+        return this.flowEdit(options);
+    }
+    /** Append a timeline Repaint operation. */
+    repaint(options) {
+        if (this._started)
+            throw invalidInput('cannot modify an edit session after run()');
+        const prompt = requirePrompt(options, 'repaint');
+        const start = requireFiniteNumber(options.start, 'repaint.start');
+        const end = optionalFiniteNumber(options.end, 'repaint.end') ?? -1;
+        const mode = options.mode ?? audiogen_1.RepaintMode.Balanced;
+        const strength = requireFiniteNumber(options.strength ?? 0.5, 'repaint.strength');
+        if (start < 0)
+            throw invalidInput('repaint.start must be non-negative');
+        if (end !== -1 && end <= start) {
+            throw invalidInput('repaint.end must be greater than repaint.start');
+        }
+        if (!Object.values(audiogen_1.RepaintMode).includes(mode)) {
+            throw invalidInput('repaint.mode must be conservative|balanced|aggressive');
+        }
+        if (strength < 0 || strength > 1) {
+            throw invalidInput('repaint.strength must be between 0 and 1');
+        }
+        this._operations.push({
+            type: audiogen_1.AudioEditOperationType.Repaint,
+            caption: prompt.caption,
+            lyrics: prompt.lyrics ?? '[Instrumental]',
+            start,
+            end,
+            mode,
+            strength
+        });
+        return this;
+    }
+    async run(options = {}) {
+        if (this._started)
+            throw invalidInput('edit session run() may only be called once');
+        if (this._operations.length === 0) {
+            throw invalidInput('edit session requires at least one edit or repaint operation');
+        }
+        if (typeof options !== 'object' || options === null) {
+            throw invalidInput('edit session run options must be an object');
+        }
+        const seed = optionalFiniteNumber(options.seed, 'edit.seed', true);
+        this._started = true;
+        return this._runner(this._source, this._operations, { seed });
+    }
+}
+exports.AudioEditSession = AudioEditSession;
 /**
  * GGML-backed music generation via the ACE-Step engine. Owns a persistent
  * native engine: the four model stages are loaded once by `load()` and reused
@@ -193,6 +327,28 @@ class AudioGen {
      */
     async run(caption, opts = {}) {
         const jobData = this._createJobData(caption, opts);
+        const revision = this._lifecycleRevision;
+        return new Promise((resolve, reject) => {
+            const queued = this._runExclusive(() => this._admitAndWait(jobData, revision, resolve, reject));
+            void queued.catch(reject);
+        });
+    }
+    /**
+     * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
+     * be repeated and are executed in the exact order in which they are chained.
+     */
+    edit(source) {
+        return new AudioEditSession(source, async (audio, operations, options) => this._runEdit(audio, operations, options));
+    }
+    async _runEdit(source, operations, options) {
+        const sourceAudio = requireEditSource(source);
+        const jobData = {
+            type: 'edit',
+            input: '',
+            sourceAudio,
+            editOperations: [...operations],
+            seed: options.seed
+        };
         const revision = this._lifecycleRevision;
         return new Promise((resolve, reject) => {
             const queued = this._runExclusive(() => this._admitAndWait(jobData, revision, resolve, reject));
@@ -458,3 +614,6 @@ var error_2 = require("./error");
 Object.defineProperty(exports, "ERR_CODE_RANGE", { enumerable: true, get: function () { return error_2.ERR_CODE_RANGE; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_2.ERR_CODES; } });
 Object.defineProperty(exports, "QvacErrorAudioGen", { enumerable: true, get: function () { return error_2.QvacErrorAudioGen; } });
+var audiogen_2 = require("./audiogen");
+Object.defineProperty(exports, "AudioEditOperationType", { enumerable: true, get: function () { return audiogen_2.AudioEditOperationType; } });
+Object.defineProperty(exports, "RepaintMode", { enumerable: true, get: function () { return audiogen_2.RepaintMode; } });
