@@ -1,5 +1,5 @@
 import { audioGen, type AudioGenClientParams } from '@qvac/sdk'
-import { ValidationHelpers, type Expectation, type TestResult } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   audioGenEmptyCaptionError,
