@@ -3,7 +3,7 @@ import {
   ValidationHelpers,
   type TestResult,
   type Expectation
-} from '@tetherto/qvac-test-suite/mobile'
+} from '@qvac/qvac-test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { ragTests } from '../../rag-tests.js'
