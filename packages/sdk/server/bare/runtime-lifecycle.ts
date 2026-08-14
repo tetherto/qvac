@@ -100,7 +100,7 @@ export function assertLifecycleAllowed(request: Request): void {
   // move the runtime back out of the terminal state and let new work admit.
   if (shuttingDown) {
     if (request.type === 'state') return
-    throw new LifecycleOperationBlockedError(request.type, state)
+    throw new LifecycleOperationBlockedError(request.type, 'shuttingDown')
   }
   if (state === 'active' || LIFECYCLE_ALLOWED_TYPES.has(request.type)) return
 
