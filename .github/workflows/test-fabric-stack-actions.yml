@@ -22,9 +22,10 @@ jobs:
     env:
       # The merge base the mocks hand back. Distinct from base.sha, so a diff
       # taken from the base branch tip is distinguishable from one taken from
-      # the branch point.
-      MOCK_MERGE_BASE: 1111111111111111111111111111111111111111
-      MOCK_LOCAL_MERGE_BASE: 2222222222222222222222222222222222222222
+      # the branch point. Quoted, and carrying hex letters: an all-digit scalar
+      # is a YAML number, and 40 digits reach the mock as 1.11111111111111E+39.
+      MOCK_MERGE_BASE: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
+      MOCK_LOCAL_MERGE_BASE: 'b2c3d4e5f60718293a4b5c6d7e8f90123456789a'
     steps:
       - name: Checkout tested revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
