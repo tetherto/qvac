@@ -35,6 +35,6 @@ jobs:
       device_model: Samsung Galaxy S25 Ultra
       device_manufacturer: Samsung
       device_model_operator: EQUALS
-      device_env: "GGML_OPENCL_Q4K_MOE_DP4A=1"
+      device_env: "GGML_OPENCL_Q4K_MOE_DP4A=1;GGML_OPENCL_Q4K_MOE_CPU_REPACK=1"
       job_timeout_minutes: 180
       per_test_timeout_minutes: "45"
