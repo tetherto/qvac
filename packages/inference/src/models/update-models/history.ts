@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'bare-fs'
 import { generateExportName } from './naming'
 import type { CurrentModel, ProcessedModel } from './types'
 import { getCommitHash } from './utils'
