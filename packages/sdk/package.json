@@ -192,6 +192,7 @@
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
+    "sdk-source:workspace": "bun run ./scripts/link-workspace-inference.ts",
     "watch": "nodemon --watch server --ext ts --exec 'bun run build'",
     "bare:ensureprebuilds:llamacpp": "cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-ia32 && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-arm && cp -r node_modules/@qvac/llm-llamacpp/prebuilds/android-arm64 node_modules/@qvac/llm-llamacpp/prebuilds/android-x64",
     "bare:ensureprebuilds:asr": "cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-ia32 && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-arm && cp -r node_modules/@qvac/asr-ggml/prebuilds/android-arm64 node_modules/@qvac/asr-ggml/prebuilds/android-x64",
