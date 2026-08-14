@@ -113,7 +113,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -124,7 +124,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/audiogen-ggml' }}
           addon-npm-name: '@qvac/audiogen-ggml'
           prebuild-artifact-prefix: 'audiogen-ggml-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           # workflow_call passes prebuild_package; workflow_dispatch passes package_spec.
           package-version: ${{ inputs.prebuild_package || inputs.package_spec }}
           force-npm-prebuild: ${{ (inputs.prebuild_package || inputs.package_spec) != '' && 'true' || 'false' }}

@@ -93,7 +93,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -108,7 +108,7 @@ jobs:
           addon-workdir: 'packages/embed-llamacpp'
           addon-npm-name: '@qvac/embed-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
       # committed — they are generated from test/integration/_benchmark-matrix.js.

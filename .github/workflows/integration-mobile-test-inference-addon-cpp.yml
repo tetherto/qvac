@@ -70,7 +70,7 @@ jobs:
       - name: Resolve qvac-test-addon-mobile HEAD
         id: resolve
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHA=$(gh api repos/tetherto/qvac-test-addon-mobile/commits/main --jq '.sha')
           if [ -z "$SHA" ]; then
@@ -339,7 +339,7 @@ jobs:
           addon-workdir: ${{ env.ADDON_WORKDIR }}
           addon-npm-name: 'inference-addon-cpp-mobile-tests'
           prebuild-artifact-prefix: ${{ env.PREBUILD_PREFIX }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Trusted pin from resolve-framework, so this job never reads a mutable
           # ref and device-farm gets the identical revision.
           test-framework-ref: ${{ needs.resolve-framework.outputs.sha }}
@@ -479,7 +479,9 @@ jobs:
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ needs.resolve-framework.outputs.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          # qvac-test-addon-mobile is public, so the repo-scoped GITHUB_TOKEN can
+          # clone it — no PAT / app token needed.
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
           path: test-framework
 

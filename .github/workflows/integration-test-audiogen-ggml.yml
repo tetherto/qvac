@@ -79,7 +79,7 @@ jobs:
     environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
     env:
-      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
     permissions:
       contents: read
@@ -133,7 +133,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install NPM dependencies
         working-directory: ${{ github.workspace }}/packages/audiogen-ggml
@@ -232,7 +232,7 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/audiogen-ggml
         run: npm run test:integration
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '3600' || '1800' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/audiogen-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
