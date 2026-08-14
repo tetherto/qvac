@@ -98,7 +98,10 @@ export const cancelIsolatesConcurrentBatches: TestDefinition = {
   testId: 'cancel-isolates-concurrent-batches',
   params: {
     doomedPredict: 256,
-    survivorPredict: 16
+    // Long survivor: it must still be decoding when the doomed cancel lands, so a
+    // whole-model cancel can't pass this by killing only the still-live doomed
+    // batch while an already-finished survivor stays successful.
+    survivorPredict: 256
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {

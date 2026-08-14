@@ -300,9 +300,32 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       }
     }
 
+    // Cached-vs-cached proof (peak >= 2): different-history auto-cache turns must
+    // themselves decode concurrently, not serialize. Without this, the plain-vs-
+    // cached overlap above still passes when cached turns serialize under an old
+    // model-wide lock — a plain turn need only overlap ONE serialized cached turn.
+    // Ties resolve end-before-start so back-to-back turns don't read as overlap.
+    const cachedEvents = auto.flatMap((r) => [
+      { t: r.firstTokenAt, delta: 1 },
+      { t: r.lastTokenAt, delta: -1 }
+    ])
+    cachedEvents.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let cachedLive = 0
+    let cachedPeak = 0
+    for (const event of cachedEvents) {
+      cachedLive += event.delta
+      if (cachedLive > cachedPeak) cachedPeak = cachedLive
+    }
+    if (cachedPeak < 2) {
+      return {
+        passed: false,
+        output: `Different-history auto-cache turns did not decode concurrently (peak cached overlap ${cachedPeak} < 2)`
+      }
+    }
+
     return {
       passed: true,
-      output: `Auto-cache turns and plain completions both decode concurrently (avgConcurrentSeq auto=${autoSeq.toFixed(2)} plain=${plainSeq.toFixed(2)}, token windows overlap)`
+      output: `Auto-cache turns and plain completions both decode concurrently (avgConcurrentSeq auto=${autoSeq.toFixed(2)} plain=${plainSeq.toFixed(2)}, cached-vs-cached peak ${cachedPeak}, token windows overlap)`
     }
   }
 

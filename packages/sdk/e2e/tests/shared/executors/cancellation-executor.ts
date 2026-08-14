@@ -698,31 +698,72 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
         ]
       })
 
-    // doomed generates long so it is still decoding when cancelled; survivor is short.
+    // Both batches generate long. The survivor MUST still be decoding when the
+    // cancel lands: a short survivor could finish first, and then a whole-model
+    // cancel would kill only the still-live doomed batch while the already-complete
+    // survivor still passed — a false isolation pass.
     const doomed = mkBatch(
       'doomed',
       params.doomedPredict,
       'Write a very long detailed story about an otter and a river.'
     )
-    const survivor = mkBatch('survivor', params.survivorPredict, 'Reply with only the word MELON.')
+    const survivor = mkBatch(
+      'survivor',
+      params.survivorPredict,
+      'Write a very long detailed story about a fox and a mountain.'
+    )
 
-    // Wait for a real streamed token from every prompt in both batches before
-    // cancelling. ids resolve before native sequence-slot admission, so waiting
-    // on ids alone can cancel a batch that is still queued or already finished;
-    // a first token proves every sequence is admitted and actively decoding, so
-    // the cancel exercises the per-group cancelJob path against live peers.
+    // Track survivor tokens over the WHOLE stream (never closed early) so we can
+    // prove the survivor keeps decoding AFTER the doomed batch is cancelled.
+    const survivorTokens: Record<string, number> = { 'survivor-a': 0, 'survivor-b': 0 }
+    const tok = (id: string) => survivorTokens[id] ?? 0
+    // Capture a tracker rejection so a survivor stream that errors mid-wait is
+    // surfaced immediately by waitUntil, not hidden until the final Promise.all
+    // (or as an unhandled rejection). The `.catch` also keeps it observed.
+    let trackerError: unknown = null
+    const survivorTracking = ['survivor-a', 'survivor-b'].map((id) =>
+      (async () => {
+        for await (const ev of survivor.byId(id).events) {
+          if (ev.type === 'contentDelta') survivorTokens[id] = tok(id) + 1
+        }
+      })().catch((err: unknown) => {
+        trackerError ??= err
+      })
+    )
+    const waitUntil = async (pred: () => boolean, label: string) => {
+      const deadline = Date.now() + 30000
+      while (!pred()) {
+        if (trackerError) throw trackerError
+        if (Date.now() > deadline) throw new Error(`timeout waiting for ${label}`)
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+    }
+
+    // Admission barrier: every sequence in both batches is actively decoding. ids
+    // resolve before native sequence-slot admission, so a first token — not just an
+    // id — proves the sequence is admitted and live. doomed streams are consumed
+    // here; survivor progress is observed through its background token counters.
     const firstToken = async (run: typeof doomed, id: string) => {
       for await (const ev of run.byId(id).events) {
         if (ev.type === 'contentDelta') return
       }
     }
-    await Promise.all([
-      firstToken(doomed, 'doomed-a'),
-      firstToken(doomed, 'doomed-b'),
-      firstToken(survivor, 'survivor-a'),
-      firstToken(survivor, 'survivor-b')
-    ])
+    await Promise.all([firstToken(doomed, 'doomed-a'), firstToken(doomed, 'doomed-b')])
+    await waitUntil(() => tok('survivor-a') > 0 && tok('survivor-b') > 0, 'survivor admission')
+
     await cancel({ requestId: doomed.requestId })
+
+    // Snapshot AFTER the cancel acknowledgement, then require further progress.
+    // Snapshotting before cancel() could count tokens already in flight when the
+    // cancel landed; taking it after the ack proves the survivor kept decoding
+    // past the acknowledgement — i.e. the cancel hit only the doomed group (addon
+    // cancelJob), not the whole model. A survivor that had already finished could
+    // never advance here.
+    const survivorAfterAck = { a: tok('survivor-a'), b: tok('survivor-b') }
+    await waitUntil(
+      () => tok('survivor-a') > survivorAfterAck.a && tok('survivor-b') > survivorAfterAck.b,
+      'survivor progress after the cancel acknowledgement'
+    )
 
     const doomedOutcome = await captureFinal(doomed.results)
     if (doomedOutcome.resolved) {
@@ -741,6 +782,8 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
     let results: Awaited<ReturnType<typeof batchCompletion>['results']>
     try {
       results = await survivor.results
+      await Promise.all(survivorTracking)
+      if (trackerError) throw trackerError
     } catch (err) {
       return {
         passed: false,
@@ -757,19 +800,11 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
         output: `peer batch resolved but produced no content: ${JSON.stringify(results)}`
       }
     }
-    // Deterministic content, not just non-empty: the survivor prompts ask for the
-    // word MELON, so a peer that truly decoded through the doomed's cancel says so.
-    if (!results.every((r) => /melon/i.test(r.final.contentText))) {
-      return {
-        passed: false,
-        output: `peer batch produced content but not the expected deterministic output: ${JSON.stringify(results.map((r) => r.final.contentText))}`
-      }
-    }
 
     return {
       passed: true,
       output:
-        'Per-group batch cancel: doomed batch cancelled, concurrent peer batch decoded to completion'
+        'Per-group batch cancel: doomed batch cancelled; concurrent peer batch kept decoding after the cancel and completed'
     }
   }
 
