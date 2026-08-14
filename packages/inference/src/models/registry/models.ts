@@ -17147,7 +17147,7 @@ export const models = [
     params: 'groot-n1.7-3b-libero'
   },
   {
-    name: 'GROOT_Q5_VF16_1',
+    name: 'GROOT_MULTI_Q5_VF16',
     registryPath: 'qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
@@ -17163,7 +17163,7 @@ export const models = [
     params: 'groot-n1.7-3b-multi'
   },
   {
-    name: 'GROOT_Q8_VF16_1',
+    name: 'GROOT_MULTI_Q8_VF16',
     registryPath: 'qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf',
     registrySource: 's3',
     blobCoreKey: 'd90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8',
@@ -17925,6 +17925,57 @@ export const models = [
     engine: 'whispercpp-transcription',
     quantization: '',
     params: ''
+  },
+  {
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_F16',
+    registryPath:
+      'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3248455,
+    blobBlockLength: 21061,
+    blobByteOffset: 212873512294,
+    modelId: 'indic-conformer-ctc.f16.gguf',
+    addon: 'parakeet',
+    expectedSize: 1380198336,
+    sha256Checksum: '78566cbce8fe23b85c5c956d3bd9125a351d6aedd43e8e38470ecb00075e3b37',
+    engine: 'parakeet-transcription',
+    quantization: 'f16',
+    params: '600M'
+  },
+  {
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0',
+    registryPath:
+      'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3269516,
+    blobBlockLength: 5973,
+    blobByteOffset: 214253710630,
+    modelId: 'indic-conformer-ctc.q4_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 391389696,
+    sha256Checksum: 'adf2dbe247896ab2812404a693f4c4b52145dc76811c88490e286d2efe6f5b32',
+    engine: 'parakeet-transcription',
+    quantization: 'q4_0',
+    params: '600M'
+  },
+  {
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0',
+    registryPath:
+      'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf',
+    registrySource: 's3',
+    blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+    blobBlockOffset: 3275489,
+    blobBlockLength: 11221,
+    blobByteOffset: 214645100326,
+    modelId: 'indic-conformer-ctc.q8_0.gguf',
+    addon: 'parakeet',
+    expectedSize: 735323136,
+    sha256Checksum: 'ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a',
+    engine: 'parakeet-transcription',
+    quantization: 'q8_0',
+    params: '600M'
   }
 ] as const satisfies readonly RegistryItem[]
 
@@ -23960,8 +24011,8 @@ export const GROOT_Q8_VF16 = {
   params: models[649].params
 } as const
 
-export const GROOT_Q5_VF16_1 = {
-  name: 'GROOT_Q5_VF16_1',
+export const GROOT_MULTI_Q5_VF16 = {
+  name: 'GROOT_MULTI_Q5_VF16',
   src: `registry://${models[650].registrySource}/${models[650].registryPath}`,
   registryPath: models[650].registryPath,
   registrySource: models[650].registrySource,
@@ -23978,8 +24029,8 @@ export const GROOT_Q5_VF16_1 = {
   params: models[650].params
 } as const
 
-export const GROOT_Q8_VF16_1 = {
-  name: 'GROOT_Q8_VF16_1',
+export const GROOT_MULTI_Q8_VF16 = {
+  name: 'GROOT_MULTI_Q8_VF16',
   src: `registry://${models[651].registrySource}/${models[651].registryPath}`,
   registryPath: models[651].registryPath,
   registrySource: models[651].registrySource,
@@ -24804,6 +24855,60 @@ export const WHISPER_Q8_0_1 = {
   engine: models[696].engine,
   quantization: models[696].quantization,
   params: models[696].params
+} as const
+
+export const PARAKEET_INDIC_CONFORMER_CTC_F16 = {
+  name: 'PARAKEET_INDIC_CONFORMER_CTC_F16',
+  src: `registry://${models[697].registrySource}/${models[697].registryPath}`,
+  registryPath: models[697].registryPath,
+  registrySource: models[697].registrySource,
+  blobCoreKey: models[697].blobCoreKey,
+  blobBlockOffset: models[697].blobBlockOffset,
+  blobBlockLength: models[697].blobBlockLength,
+  blobByteOffset: models[697].blobByteOffset,
+  modelId: models[697].modelId,
+  expectedSize: models[697].expectedSize,
+  sha256Checksum: models[697].sha256Checksum,
+  addon: models[697].addon,
+  engine: models[697].engine,
+  quantization: models[697].quantization,
+  params: models[697].params
+} as const
+
+export const PARAKEET_INDIC_CONFORMER_CTC_Q4_0 = {
+  name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0',
+  src: `registry://${models[698].registrySource}/${models[698].registryPath}`,
+  registryPath: models[698].registryPath,
+  registrySource: models[698].registrySource,
+  blobCoreKey: models[698].blobCoreKey,
+  blobBlockOffset: models[698].blobBlockOffset,
+  blobBlockLength: models[698].blobBlockLength,
+  blobByteOffset: models[698].blobByteOffset,
+  modelId: models[698].modelId,
+  expectedSize: models[698].expectedSize,
+  sha256Checksum: models[698].sha256Checksum,
+  addon: models[698].addon,
+  engine: models[698].engine,
+  quantization: models[698].quantization,
+  params: models[698].params
+} as const
+
+export const PARAKEET_INDIC_CONFORMER_CTC_Q8_0 = {
+  name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0',
+  src: `registry://${models[699].registrySource}/${models[699].registryPath}`,
+  registryPath: models[699].registryPath,
+  registrySource: models[699].registrySource,
+  blobCoreKey: models[699].blobCoreKey,
+  blobBlockOffset: models[699].blobBlockOffset,
+  blobBlockLength: models[699].blobBlockLength,
+  blobByteOffset: models[699].blobByteOffset,
+  modelId: models[699].modelId,
+  expectedSize: models[699].expectedSize,
+  sha256Checksum: models[699].sha256Checksum,
+  addon: models[699].addon,
+  engine: models[699].engine,
+  quantization: models[699].quantization,
+  params: models[699].params
 } as const
 
 /**
