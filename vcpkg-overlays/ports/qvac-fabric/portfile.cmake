@@ -4,12 +4,12 @@ vcpkg_from_github(
   # QVAC-23075 rollout Phase A: validate the 7 consumers against the VisionPsy fabric
   # branch head before the tag exists. A branch SHA, not v${VERSION}, on purpose.
   # Replaced by the published tag at the registry publish, so this overlay is temporary.
-  REF a812964c93ce692e70fc190857614ef462c43850
-  SHA512 1fb895fb6e826a355909775db039dc52c4095f360c9e9894a288400e8a8a79f6b7f4db8acb78d2c1eae6ac2b3b96b1c97cba8bc332cc3e69498a47d0f28938f1
+  REF 4ef2b3fdc0788d38e4e176030c07241ede40c5d0
+  SHA512 d37f50c9097fdbbb5af4c26ff130d1725aa431611220195a0a7f9fbbfb8acb0663593b09084f499145cc164e18ba2db96230005b885a38b942b58c7c79c675d2
   HEAD_REF main
 )
 
-# Upstream CMake options only — passed through to vcpkg_cmake_configure.
+# Upstream CMake options only, passed through to vcpkg_cmake_configure.
 vcpkg_check_features(
   OUT_FEATURE_OPTIONS FEATURE_OPTIONS
   FEATURES
@@ -31,7 +31,7 @@ vcpkg_check_features(
 # consumers (e.g. @qvac/classification-ggml) disable it with
 # default-features:false (and re-add 'llama' if needed).
 if(NOT BUILD_GPU_BACKENDS)
-  message(STATUS "qvac-fabric: gpu-backends feature OFF — building CPU-only ggml (no Metal/Vulkan/CUDA/OpenCL)")
+  message(STATUS "qvac-fabric: gpu-backends feature OFF, building CPU-only ggml (no Metal/Vulkan/CUDA/OpenCL)")
 endif()
 
 set(PLATFORM_OPTIONS)
@@ -93,7 +93,7 @@ else()
   set(DL_BACKENDS OFF)
 endif()
 
-# HIP/ROCm backend — opt-in via the 'hip-backend' feature (Linux + AMD only).
+# HIP/ROCm backend, opt-in via the 'hip-backend' feature (Linux + AMD only).
 # Only @qvac/vla-ggml requests it, so every other consumer builds with no HIP
 # and gains no ROCm dependency. Builds libqvac-ggml-hip.so as a standalone DL
 # module alongside Vulkan (GGML_BACKEND_DL is already ON above), so the addon
@@ -101,16 +101,16 @@ endif()
 # feature-dependency port forwards the system ROCm's find_package() configs.
 #
 # FAIL-SAFE: enable GGML_HIP only when a ROCm SDK is actually present. On a build
-# host without ROCm we skip HIP and build Vulkan/CPU only — the build never
+# host without ROCm we skip HIP and build Vulkan/CPU only, so the build never
 # hard-fails, and at runtime a missing HIP module just isn't loaded (the DL
 # loader skips it) so BackendSelection falls back to Vulkan/CPU. Targets gfx1151
 # (Strix Halo / Radeon 8060S); the HIP compiler + ROCM_PATH come from the build env.
 # linux-x64 only: AMD GPU hosts (Strix Halo / gfx1151) are x86_64, and the ROCm
 # dist is x64. On other arches (e.g. linux-arm64) HIP is skipped even if the
-# feature is requested — no ROCm requirement, no build break.
+# feature is requested, so no ROCm requirement and no build break.
 if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_GPU_BACKENDS AND BUILD_HIP_BACKEND)
   # DETERMINISTIC: requesting hip-backend REQUIRES a ROCm SDK at build time. We
-  # must NOT silently skip when ROCm is absent — a host-dependent skip yields a
+  # must NOT silently skip when ROCm is absent, because a host-dependent skip yields a
   # no-HIP package with the SAME vcpkg ABI as a real HIP build, which the binary
   # cache then conflates (cache poisoning: a no-ROCm build caches a no-HIP
   # package that ROCm-equipped builds then restore). So ROCm present => HIP;
@@ -118,9 +118,9 @@ if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_
   # The RUNTIME fail-safe is unchanged: an absent HIP module / non-AMD target is
   # simply not loaded and BackendSelection falls back to Vulkan/CPU.
   if(NOT (DEFINED ENV{ROCM_PATH} AND EXISTS "$ENV{ROCM_PATH}/lib/cmake/hip/hip-config.cmake"))
-    message(FATAL_ERROR "qvac-fabric: hip-backend feature requires a ROCm SDK — set ROCM_PATH to a ROCm/TheRock install containing lib/cmake/hip/hip-config.cmake. Do not request hip-backend on a host without ROCm.")
+    message(FATAL_ERROR "qvac-fabric: hip-backend feature requires a ROCm SDK. Set ROCM_PATH to a ROCm/TheRock install containing lib/cmake/hip/hip-config.cmake. Do not request hip-backend on a host without ROCm.")
   endif()
-  message(STATUS "qvac-fabric: hip-backend ON — building GGML_HIP (gfx1151)")
+  message(STATUS "qvac-fabric: hip-backend ON, building GGML_HIP (gfx1151)")
   list(APPEND PLATFORM_OPTIONS
     -DGGML_HIP=ON
     -DAMDGPU_TARGETS=gfx1151
@@ -128,7 +128,7 @@ if(VCPKG_TARGET_IS_LINUX AND VCPKG_TARGET_ARCHITECTURE STREQUAL "x64" AND BUILD_
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
-  message(STATUS "qvac-fabric: kleidiai feature ON — building with ARM KleidiAI optimized kernels")
+  message(STATUS "qvac-fabric: kleidiai feature ON, building with ARM KleidiAI optimized kernels")
   # ggml only vendors KleidiAI via FetchContent; registry vcpkg-cmake sets
   # FETCHCONTENT_FULLY_DISCONNECTED=ON globally, so allow the download here.
   list(APPEND PLATFORM_OPTIONS
@@ -163,7 +163,7 @@ endif()
 # libqvac-ggml-*.so modules that the consumer dlopen's at runtime. Built with
 # -stdlib=libc++ they otherwise carry a runtime NEEDED dependency on the system
 # libc++.so.1 / libc++abi.so.1, so they silently fail to dlopen on any target
-# without libc++ installed (e.g. stock ubuntu-24.04 — no CPU backend registers,
+# without libc++ installed (e.g. stock ubuntu-24.04, no CPU backend registers,
 # inference aborts). Statically link the C++ runtime into the modules so they
 # are self-contained, matching how the addons link themselves. The module<->addon
 # boundary is the C ggml-backend ABI, so per-module libc++ copies never exchange
