@@ -237,7 +237,8 @@ const scenarios = [
       'main-gpu': '-1',
       n_discarded: '-4'
     },
-    skipInferenceAfterLoad: true
+
+    expectLoadFailure: /error while handling argument/
   },
   {
     name: 'main_gpu underscore variant must load identically to main-gpu hyphen',

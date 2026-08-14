@@ -1813,7 +1813,7 @@ void LlamaModel::commonParamsParse(
     }
   }
   if (noMmap.value_or(false)) {
-    params.use_mmap = false;
+    params.load_mode = LLAMA_LOAD_MODE_NONE;
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja

@@ -264,7 +264,9 @@ std::string getPrompt(
       *outThinkingStartTag = params.thinking_start_tag;
     }
     if (outThinkingEndTag) {
-      *outThinkingEndTag = params.thinking_end_tag;
+      *outThinkingEndTag = params.thinking_end_tags.empty()
+                               ? std::string()
+                               : params.thinking_end_tags.front();
     }
     if (outGenerationPrompt) {
       *outGenerationPrompt = params.generation_prompt;
@@ -339,8 +341,9 @@ bool configureReasoningBudgetSampling(
       next.reasoning_budget_start =
           common_tokenize(lctx, thinkingStartTag, false, true);
     }
-    next.reasoning_budget_end =
-        common_tokenize(lctx, thinkingEndTag, false, true);
+
+    next.reasoning_budget_end = {
+        common_tokenize(lctx, thinkingEndTag, false, true)};
     next.reasoning_budget_forced = common_tokenize(
         lctx,
         params.sampling.reasoning_budget_message + thinkingEndTag,
