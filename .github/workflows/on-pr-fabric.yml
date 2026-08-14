@@ -207,19 +207,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
-      # New composite actions may not exist on default branch until the PR
-      # merges — overlay the PR revision for the action only (read-only git ops
-      # still run against the default-branch checkout above).
-      - name: Checkout detect-fabric-stack action (PR head)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          sparse-checkout: .github/actions/detect-fabric-stack
-          sparse-checkout-cone-mode: false
-          persist-credentials: false
       - name: Detect fabric-stack PR
         id: detect
-        uses: ./.github/actions/detect-fabric-stack
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@886582f4cb3ac15f8be9970abde70166d76f9ec7
 
   fabric-stack-matrix:
     needs: [detect-fabric-stack]

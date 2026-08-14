@@ -104,7 +104,7 @@ jobs:
 
       - name: Overlay PR @qvac/fabric prebuilds
         if: ${{ inputs.fabric-overlay-artifact != '' }}
-        uses: ./.github/actions/overlay-local-fabric
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@886582f4cb3ac15f8be9970abde70166d76f9ec7
         with:
           workdir: ${{ env.PKG_DIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
