@@ -20,7 +20,7 @@ const process = require('bare-process')
 const { FFmpegDecoder } = require('@qvac/decoder-audio')
 const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
-const { setupLogger, validatePaths, printResults } = require('./utils.js')
+const { setupLogger, validatePaths, printResults } = require('./parakeet-utils.js')
 
 const SAMPLE_RATE = 16000
 
