@@ -194,7 +194,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -233,7 +233,7 @@ jobs:
           # candidate binary. See run-mobile-integration-tests/setup.
           force-npm-prebuild: ${{ inputs.addon_npm_version != '' && 'true' || 'false' }}
           package-version: ${{ inputs.addon_npm_version }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
       # committed — they are generated from test/integration/_benchmark-matrix.js.

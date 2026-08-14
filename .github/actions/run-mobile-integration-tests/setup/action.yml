@@ -43,7 +43,7 @@ inputs:
     required: false
     default: "false"
   pat-token:
-    description: "GitHub PAT used to clone qvac-test-addon-mobile"
+    description: "Token used to clone the public qvac-test-addon-mobile (GITHUB_TOKEN suffices)"
     required: true
   test-framework-ref:
     description: "Branch/tag of qvac-test-addon-mobile to check out"

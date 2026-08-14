@@ -88,7 +88,7 @@ async function createReadyAudioServer(t: TestContext) {
 }
 
 describe('serve: transcriptions validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('JSON content-type returns 400', async () => {
     const res = await server().inject({
@@ -142,7 +142,7 @@ describe('serve: transcriptions validation', () => {
 })
 
 describe('serve: translations validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('JSON content-type returns 400', async () => {
     const res = await server().inject({

@@ -129,7 +129,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -144,7 +144,7 @@ jobs:
           addon-workdir: 'packages/vla-ggml'
           addon-npm-name: '@qvac/vla-ggml'
           prebuild-artifact-prefix: 'vla-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # VLA-specific eu-central-1 OIDC session for the SmolVLA S3 presign.
       # The us-west-2 Device Farm session is acquired separately inside the

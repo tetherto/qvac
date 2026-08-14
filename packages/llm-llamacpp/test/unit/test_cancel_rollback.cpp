@@ -23,7 +23,6 @@
 #include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
 #include "model-interface/TextLlmContext.hpp"
-#include "model-interface/ToolsCompactController.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
@@ -330,9 +329,8 @@ TEST_F(TextLlmContextCancelTest, PrefillCancelAtEntryReturnsFalseOnHybrid) {
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -355,9 +353,8 @@ TEST_F(
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   driver.stop();
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
@@ -385,10 +382,9 @@ TEST_F(
 
   // First, cancel via the high-level API.
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
   {
-    TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+    TextLlmContext driver(params, shared, /*seqId=*/0);
     driver.stop();
     std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
     const LlmContext::EvalMessageResult result = driver.evalMessageWithTools(
@@ -400,7 +396,7 @@ TEST_F(
   }
 
   // Then run a normal prefill on a fresh driver — must succeed.
-  TextLlmContext driver2(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver2(params, shared, /*seqId=*/0);
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
   const LlmContext::EvalMessageResult result = driver2.evalMessageWithTools(
       chatMsgs, {}, /*isCacheLoaded=*/false, /*prefill=*/true);
@@ -426,9 +422,8 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(true);
 
   // Pre-request cursor before any prompt is submitted. For a freshly
@@ -482,9 +477,8 @@ TEST_F(
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(true);
 
   const llama_pos preRequestNPast = driver.getNPast();
@@ -539,9 +533,8 @@ TEST_F(
   ASSERT_TRUE(model->isLoaded());
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
   // Non-zero discard budget so overflow slides instead of throwing.
   driver.setNDiscarded(128);
 
@@ -667,9 +660,8 @@ TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
       << "Newly constructed driver must report no user-visible perf snapshot";
@@ -694,9 +686,8 @@ TEST_F(
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
   const LlmContext::EvalMessageResult evalResult = driver.evalMessageWithTools(
@@ -1370,9 +1361,8 @@ TEST_F(
   }
 
   LlmModelContext shared = makeShared(*model);
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
   driver.setRemoveThinkingFromContext(true);
 
   // Turn 1 (warm baseline). This is the "prior turn's leftover state"

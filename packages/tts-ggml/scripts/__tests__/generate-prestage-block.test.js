@@ -314,6 +314,22 @@ test('functionalModelsByTest maps each functional runner to only its required st
       'cosyvoice3/merges.txt'
     ]
   )
+  // The gpu smoke runs every engine's GPU leg, so its prestage list must
+  // carry the CosyVoice3 artifacts too — the on-device registry fetch of the
+  // ~2.3 GB set is exactly the Device Farm flake this mapping prevents.
+  for (const target of [
+    'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    'cosyvoice3/cosyvoice3-flow-f32.gguf',
+    'cosyvoice3/cosyvoice3-hift-f32.gguf',
+    'cosyvoice3/voice.gguf',
+    'cosyvoice3/vocab.json',
+    'cosyvoice3/merges.txt'
+  ]) {
+    assert.ok(
+      modelsByTest.runGpuSmokeTest.some((entry) => entry.targetName === target),
+      `runGpuSmokeTest prestage must include ${target}`
+    )
+  }
   assert.deepEqual(
     modelsByTest.runLavasrEnhancerTest.map((entry) => entry.targetName),
     [

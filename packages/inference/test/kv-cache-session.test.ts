@@ -103,7 +103,8 @@ test('kv-cache-session: beginTurn primes the cache on first use, reuses on secon
 
     await session.commitTurn(firstTurn, {
       kind: 'static',
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     const secondTurn = await session.beginTurn({
@@ -144,7 +145,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
     // Simulate that the addon wrote the file.
     fs.writeFileSync(turn.cachePath, 'fake-cache-bytes')
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 7 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 7, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
@@ -237,7 +238,8 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
     await session.commitTurn(turn, {
       kind: 'autoRename',
       targetCachePath: target.cachePath,
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     t.is(fs.existsSync(turn.cachePath), false, 'source file moved')
@@ -757,7 +759,7 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
     // error where the file was removed externally.
     fs.unlinkSync(turn.cachePath)
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 5 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 5, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),

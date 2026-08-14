@@ -171,6 +171,11 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.dcw_scaler = in.dcwScaler;
   params.dcw_high_scaler = in.dcwHighScaler;
   params.audio_codes = in.audioCodes;
+  params.reference_audio = in.referenceAudio;
+  params.source_audio = in.sourceAudio;
+  params.task_type = in.taskType;
+  params.audio_cover_strength = in.audioCoverStrength;
+  params.cover_noise_strength = in.coverNoiseStrength;
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
