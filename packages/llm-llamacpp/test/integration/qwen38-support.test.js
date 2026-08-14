@@ -18,18 +18,31 @@ const isLinuxArm64 = platform === 'linux' && arch === 'arm64'
 // qwen3-5.test.js.
 const useCpu = isDarwinX64 || isLinuxArm64
 
-// Qwen3.8-27B is not published on HuggingFace at the time of writing, so it cannot be
-// pinned in models.manifest.json: resolveModelEntry() there demands a sha256 and a byte
-// count, and neither exists for a file nobody can download yet. ensureModel() is
-// therefore unusable and this probe takes the model as a local path instead. Unset,
-// every block below skips; point it at a GGUF and the whole suite runs unchanged.
+// Qwen/Qwen3.8-27B publishes safetensors only, so the GGUF comes from the unsloth
+// conversion — the same publisher models.manifest.json already uses for every Qwen3.5
+// entry. Pinned to an immutable commit rather than /resolve/main/, per
+// MODELS_MANIFEST.md. The repo also carries mmproj-F16.gguf for the vision tower, which
+// this probe does not exercise.
+const QWEN38_MODEL = {
+  name: 'Qwen3.8-27B-Q4_K_M.gguf',
+  url: 'https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/430473d9d0e975450ce1f445642b6527cb4faea1/Qwen3.8-27B-Q4_K_M.gguf',
+  // Verified by HEAD against that commit; this is the `bytes` a manifest entry needs.
+  // The matching sha256 still has to come from hashing the download, not from a header.
+  bytes: 17106773984
+}
+
+// Still not in models.manifest.json: resolveModelEntry() there demands a sha256 and a
+// byte count, and producing those means hashing ~17 GB first. Until someone runs
+// `node scripts/generate-model-manifest.mjs --only Qwen3.8-27B-Q4_K_M.gguf`, ensureModel()
+// cannot fetch it and this probe takes a local path instead. Unset, every block skips.
 //
-//   QVAC_QWEN38_MODEL_PATH=/path/to/model.gguf bare test/integration/qwen38-support.test.js
+//   curl -L -o Qwen3.8-27B-Q4_K_M.gguf <QWEN38_MODEL.url above>
+//   QVAC_QWEN38_MODEL_PATH=./Qwen3.8-27B-Q4_K_M.gguf bare test/integration/qwen38-support.test.js
 const modelPathEnv = proc.env && proc.env.QVAC_QWEN38_MODEL_PATH
 const modelPath = modelPathEnv ? path.resolve(modelPathEnv) : null
 const skipReason = modelPath
   ? false
-  : 'set QVAC_QWEN38_MODEL_PATH to a Qwen3.8-27B GGUF to run this support probe'
+  : `set QVAC_QWEN38_MODEL_PATH to a local copy of ${QWEN38_MODEL.name} — ${QWEN38_MODEL.url}`
 
 // 27B at 4-bit is roughly 17 GB, which will not fit most GPUs. Offloading every layer
 // unconditionally would surface as an OOM rather than an answer about whether the
@@ -40,9 +53,10 @@ const gpuLayers = (proc.env && proc.env.QVAC_QWEN38_GPU_LAYERS) || '999'
 // A 27B decodes an order of magnitude slower than the 0.8B this file mirrors.
 const TIMEOUT = 1_800_000
 
-// Qwen3.8's chat template is unpublished. If it renames its reasoning markers these two
-// constants are the only edit the reasoning blocks need — a failure confined to them
-// means the markers moved, not that the architecture is unsupported.
+// Confirmed against the published chat_template.jinja, which emits '\n<think>\n' and
+// '\n</think>\n\n' literally. Kept as constants so a future template revision is a
+// one-line edit — a failure confined to these means the markers moved, not that the
+// architecture is unsupported.
 const THINK_OPEN = '<think>'
 const THINK_CLOSE = '</think>'
 
@@ -104,6 +118,9 @@ function parseJsonToolCall(inner) {
   }
 }
 
+// Qwen3.8-27B's published chat_template.jinja emits exactly this form — '<tool_call>'
+// wrapping '<function=NAME>' and '<parameter=KEY>VALUE</parameter>' — so the XML branch
+// is the primary path here and parseJsonToolCall is the fallback, not the reverse.
 // Parses HuggingFace function-call XML emitted by Qwen's embedded template:
 //   <function=NAME>
 //     <parameter=KEY>VALUE</parameter>
