@@ -66,7 +66,7 @@ const process = require('bare-process')
 const subprocess = require('bare-subprocess')
 const ASRGgml = require('../index.js')
 const addonLogging = require('../addonLogging.js')
-const { setupLogger, validatePaths, pushableStream } = require('./utils.js')
+const { setupLogger, validatePaths, pushableStream } = require('./parakeet-utils.js')
 
 const CAPTURE_CMD = 'sox -d -t raw -r 16000 -b 16 -c 1 -e signed-integer -L -'
 

@@ -8,6 +8,8 @@ export interface LlmStats {
   generatedTokens?: number
   avgConcurrentSeq?: number
   backendDevice?: 'cpu' | 'gpu'
+  stopReason?:
+    'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
 }
 
 export interface LlmResponse {

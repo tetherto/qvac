@@ -158,12 +158,7 @@ test('Whisper manifest selects only the models required by each test runner', ()
   )
   assert.deepEqual(
     manifest.runMobilePerfSweepGpuTest.map((model) => model.name),
-    [
-      'ggml-base-q5_1.bin',
-      'ggml-base-q8_0.bin',
-      'ggml-small-q5_1.bin',
-      'ggml-small-q8_0.bin'
-    ]
+    ['ggml-base-q5_1.bin', 'ggml-base-q8_0.bin', 'ggml-small-q5_1.bin', 'ggml-small-q8_0.bin']
   )
   assert.deepEqual(manifest.runLiveStreamSimulationTest, [])
 })
@@ -346,9 +341,7 @@ test('complete prestage script keeps Parakeet staging fail-hard', () => {
   const result = runCompleteScript({
     grep: 'runRequiredParakeetTest',
     manifest: {
-      runRequiredParakeetTest: [
-        { name: 'required.gguf', url: 'https://example.com/required.gguf' }
-      ]
+      runRequiredParakeetTest: [{ name: 'required.gguf', url: 'https://example.com/required.gguf' }]
     },
     curlFailMatch: 'required.gguf'
   })
