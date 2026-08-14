@@ -156,12 +156,14 @@ async function runCleanup(): Promise<void> {
   // admits against a model while we cancel/drain/unload below.
   markShuttingDown()
   destroyWorkerResourceCollector()
-  clearRegistries()
   // Cancel and drain every in-flight request before freeing models, so nothing
   // is still decoding against a model unloadAllModels is about to destroy.
   const registry = getRequestRegistry()
   await registry.cancelAll('shutdown')
   await registry.drainAll()
+  // Only now release addon loggers / plugins: a still-draining request must not
+  // log through a freed native logger reference.
+  clearRegistries()
   await Promise.allSettled([
     destroySwarm(),
     closeAllRagInstances(),
@@ -169,6 +171,15 @@ async function runCleanup(): Promise<void> {
     unloadAllModels(),
     closeRegistryClient()
   ])
+}
+
+/**
+ * Test-only: clear the run-once latch so a test that drives `runCleanup`
+ * (via `cleanupForTerminate`) can restore the worker for later tests.
+ * @internal
+ */
+export function __resetWorkerCleanupForTest(): void {
+  cleanupRan = false
 }
 
 /**
