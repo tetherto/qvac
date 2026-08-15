@@ -111,6 +111,21 @@ export const cancelIsolatesConcurrentBatches: TestDefinition = {
   }
 }
 
+export const cancelQueuedNativeBatch: TestDefinition = {
+  testId: 'cancel-queued-native-batch',
+  params: {
+    promptCount: 8,
+    parallel: 4,
+    predict: 256
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: {
+    category: 'cancellation',
+    dependency: 'llm-batch',
+    estimatedDurationMs: 30000
+  }
+}
+
 export const cancelByRequestIdEmbed: TestDefinition = {
   testId: 'cancel-by-requestid-embed',
   params: {
@@ -168,6 +183,7 @@ export const cancellationTests = [
   cancelBroadTranslateLlm,
   serializeConcurrentCompletion,
   cancelIsolatesConcurrentBatches,
+  cancelQueuedNativeBatch,
   cancelByRequestIdEmbed,
   cancelByRequestIdTranscribe,
   cancelByRequestIdRagIngest

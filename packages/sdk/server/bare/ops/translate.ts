@@ -20,7 +20,6 @@ import {
   TranslationFailedError
 } from '@/utils/errors-server'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
-import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 import { getModelParallel } from '@/server/utils'
 import { getServerLogger } from '@/logging'
@@ -239,10 +238,11 @@ export async function* translate(
         yield token
       }
     } catch (err) {
-      // A cancel routes to this run's response.cancel(), so the addon rejects
-      // iterate() with a Cancelled error. Under an aborted signal that's a clean
-      // soft-cancel; any other error is real and propagates.
-      if (!(ctx.signal.aborted && isAddonCancelledError(err))) throw err
+      // The request signal is the SDK-owned cancellation contract. Addon
+      // rejection shapes differ for active and queued native sequences, so once
+      // cancellation is accepted the translate ends cleanly regardless of that
+      // transport detail; without an abort, every error still propagates.
+      if (!ctx.signal.aborted) throw err
     }
     const modelExecutionMs = nowMs() - modelStart
 

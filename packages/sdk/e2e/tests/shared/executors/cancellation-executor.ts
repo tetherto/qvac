@@ -23,6 +23,7 @@ import {
   cancelByRequestIdEmbed,
   cancelByRequestIdRagIngest,
   cancelIsolatesConcurrentBatches,
+  cancelQueuedNativeBatch,
   cancelMidStreamCompletion,
   cancelThenResumeKvCache,
   serializeConcurrentCompletion
@@ -319,6 +320,7 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       [cancelBroadTranslateLlm.testId]: this.translateLlmBroad.bind(this),
       [serializeConcurrentCompletion.testId]: this.serializeConcurrent.bind(this),
       [cancelIsolatesConcurrentBatches.testId]: this.cancelIsolatesConcurrentBatches.bind(this),
+      [cancelQueuedNativeBatch.testId]: this.cancelQueuedNativeBatch.bind(this),
       [cancelByRequestIdRagIngest.testId]: this.ragIngestTargeted.bind(this)
     }
   }
@@ -805,6 +807,96 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
       passed: true,
       output:
         'Per-group batch cancel: doomed batch cancelled; concurrent peer batch kept decoding after the cancel and completed'
+    }
+  }
+
+  // Cancels one batch while more native sequences are queued than the model's
+  // parallel width. The SDK request signal, not an addon error string, must own
+  // the terminal outcome.
+  async cancelQueuedNativeBatch(
+    params: { promptCount: number; parallel: number; predict: number },
+    _expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm-batch')
+    const ids = Array.from({ length: params.promptCount }, (_, index) => `queued-${index}`)
+    const run = batchCompletion({
+      modelId,
+      prompts: ids.map((id, index) => ({
+        id,
+        history: [
+          {
+            role: 'user',
+            content: `Write a long detailed story about topic ${index} using many sentences.`
+          }
+        ],
+        generationParams: { temp: 0, seed: index + 1, predict: params.predict }
+      }))
+    })
+    const results = markHandled(run.results)
+    const tokenCounts = new Map(ids.map((id) => [id, 0]))
+    let trackerError: unknown = null
+    const trackers = ids.map((id) =>
+      (async () => {
+        for await (const event of run.byId(id).events) {
+          if (event.type === 'contentDelta') {
+            tokenCounts.set(id, (tokenCounts.get(id) ?? 0) + 1)
+          }
+        }
+      })().catch((error: unknown) => {
+        trackerError ??= error
+      })
+    )
+
+    const deadline = Date.now() + 30000
+    while (![...tokenCounts.values()].some((count) => count > 0)) {
+      if (trackerError) break
+      if (Date.now() > deadline) break
+      await sleep(25)
+    }
+    const zeroTokenIds = ids.filter((id) => tokenCounts.get(id) === 0)
+
+    let cancelError: unknown = null
+    try {
+      await cancel({ requestId: run.requestId })
+    } catch (error) {
+      cancelError = error
+    }
+    const outcome = await captureFinal(results)
+    await Promise.all(trackers)
+
+    if (cancelError) {
+      return {
+        passed: false,
+        output: `queued batch cancel rejected: ${describeError(cancelError)}`
+      }
+    }
+    if (trackerError) {
+      return {
+        passed: false,
+        output: `queued batch stream failed: ${describeError(trackerError)}`
+      }
+    }
+    const minimumQueued = params.promptCount - params.parallel
+    if (minimumQueued < 1 || zeroTokenIds.length < minimumQueued) {
+      return {
+        passed: false,
+        output:
+          `only ${zeroTokenIds.length}/${ids.length} sequences awaited their first token; ` +
+          `expected at least ${minimumQueued} queued behind parallel=${params.parallel}`
+      }
+    }
+    if (!(outcome.error instanceof InferenceCancelledError)) {
+      return {
+        passed: false,
+        output: `queued batch ended with ${describeError(outcome.error)}, expected InferenceCancelledError`
+      }
+    }
+
+    return {
+      passed: true,
+      output:
+        `Queued native batch cancellation surfaced InferenceCancelledError with ` +
+        `${zeroTokenIds.length}/${ids.length} sequences still awaiting their first token`
     }
   }
 

@@ -9,7 +9,6 @@ import {
 import { getRequestRegistry } from '@/server/bare/runtime'
 import { ModelType } from '@/schemas'
 import { ContextOverflowError } from '@/utils/errors-server'
-import { CacheLockAbortError } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
 
 // -----------------------------------------------------------------------------
 // QVAC-19346 regression — cancelling a *queued* same-model completion must not
@@ -185,12 +184,10 @@ test('completion: a context overflow racing an abort surfaces as ContextOverflow
   clearRegistry()
 })
 
-test('completion: an addon Cancelled error under an abort rides the cancelled done path', async (t) => {
+test('completion: accepted cancellation wins over addon rejection shape', async (t) => {
   clearRegistry()
   const modelId = `addon-cancel-${Date.now()}`
-  registerThrowingModel(modelId, () =>
-    Object.assign(new Error('run cancelled'), { code: '[ TextLlm :: Cancelled ]' })
-  )
+  registerThrowingModel(modelId, () => new Error('opaque addon failure'))
 
   let caught: unknown = null
   let cancelledReason: string | undefined
@@ -202,30 +199,8 @@ test('completion: an addon Cancelled error under an abort rides the cancelled do
   } catch (err) {
     caught = err
   }
-  t.is(caught, null, 'a genuine addon cancellation does not throw')
-  t.is(cancelledReason, 'cancelled', 'it rides the cancelled done path')
-
-  unregisterModel(modelId)
-  clearRegistry()
-})
-
-test('completion: an aborted KV-lock wait (CacheLockAbortError) rides the cancelled done path', async (t) => {
-  clearRegistry()
-  const modelId = `lock-abort-${Date.now()}`
-  registerThrowingModel(modelId, () => new CacheLockAbortError('modelUnload'))
-
-  let caught: unknown = null
-  let cancelledReason: string | undefined
-  try {
-    for await (const ev of runToCompletion(modelId)) {
-      const done = ev.events.find((e) => e.type === 'completionDone')
-      if (done) cancelledReason = done.stopReason
-    }
-  } catch (err) {
-    caught = err
-  }
-  t.is(caught, null, 'an aborted lock wait does not throw a generic failure')
-  t.is(cancelledReason, 'cancelled', 'the lock-abort sentinel rides the cancelled done path')
+  t.is(caught, null, 'an addon rejection after accepted cancellation does not throw')
+  t.is(cancelledReason, 'cancelled', 'the request signal determines the terminal outcome')
 
   unregisterModel(modelId)
   clearRegistry()

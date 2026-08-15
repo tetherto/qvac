@@ -45,8 +45,6 @@ import {
   parseContextOverflowMessage
 } from '@/server/bare/plugins/llamacpp-completion/ops/context-overflow'
 import { stoppedByLength } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
-import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
-import { isCacheLockAbortError } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 
@@ -289,14 +287,11 @@ export const llmPlugin = definePlugin({
             )
             throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err)
           }
-          // Cancelling a batch that still has prompts queued behind the
-          // `parallel` slot limit fails the whole native batch group with
-          // a `Cancelled` error (the addon rejects `run()` rather than
-          // resolving with partial outputs — see continuous-batching docs).
-          // Ride the same graceful "done" path the non-overflow cancel
-          // uses: emit cancelled terminals per id so the client surfaces
-          // `InferenceCancelledError`, not a generic `CompletionFailedError`.
-          if (ctx.signal.aborted && isAddonCancelledError(err)) {
+          // Once the registry accepts cancellation, the request signal owns the
+          // terminal outcome. The addon may reject with different shapes
+          // depending on whether native sequences were active or queued; those
+          // transport details must not change the SDK cancellation contract.
+          if (ctx.signal.aborted) {
             const cancelledIds =
               ids.length > 0
                 ? ids
@@ -472,11 +467,10 @@ export const llmPlugin = definePlugin({
             )
             throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err)
           }
-          // Cancelled done path only for a genuine cancellation. The aborted
-          // signal is the source of truth; under it, the addon's Cancelled
-          // rejection or our own aborted KV-lock wait rides the done path.
-          // Anything else is a real failure and must surface.
-          if (ctx.signal.aborted && (isAddonCancelledError(err) || isCacheLockAbortError(err))) {
+          // Context overflow is classified above. For every other error after
+          // accepted cancellation, the request signal owns the terminal outcome
+          // regardless of the addon's active/queued error shape.
+          if (ctx.signal.aborted) {
             yield attachModelExecutionMs(
               {
                 type: 'completionStream' as const,
