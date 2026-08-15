@@ -205,8 +205,9 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     }
   }
 
-  // Different-history kvCache:true turns must decode concurrently with plain
-  // completions, not serialize or starve them; gates on engine avgConcurrentSeq.
+  // Auto-cache turns must decode concurrently at the engine level — both with
+  // each other (cached-vs-cached) and alongside plain completions without
+  // starving them. Gates on the engine's own avgConcurrentSeq metric.
   async autoCacheConcurrency(
     params: { generationParams?: Record<string, unknown> },
     _expectation: Expectation
@@ -241,19 +242,53 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       })()
     }
 
-    let results: Array<{
+    type Result = {
       text: string
       avgConcurrentSeq?: number
       useCache: boolean
       firstTokenAt: number
       lastTokenAt: number
-    }>
+    }
+    const maxSeq = (group: Result[]) =>
+      group.reduce<number>(
+        (m, r) =>
+          typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m,
+        0
+      )
+
+    // Phase 1 — cached-vs-cached native concurrency. Fire only different-history
+    // auto-cache turns (distinct cache paths, so distinct per-path locks). With
+    // no plain requests in flight, a cached response's engine avgConcurrentSeq
+    // can exceed 1 only by decoding alongside ANOTHER cached response — a direct
+    // native proof that cached turns don't serialize, which client-side token
+    // windows can't give (they stay open through post-decode commit/final).
+    let cachedOnly: Result[]
     try {
-      // Interleave cached and plain submissions so both kinds are present in the
-      // first `parallel` admission window. Launching all four cached requests
-      // first legitimately fills all four permits; on fast platforms they can
-      // finish together before a queued plain request emits, making the mixed
-      // overlap check scheduling-dependent even though cached turns overlap.
+      cachedOnly = await Promise.all(TOPICS.map((t) => fire(`Tell me about ${t} in detail.`, true)))
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return { passed: false, output: `Cached-only auto turns threw: ${msg}` }
+    }
+    const cachedEmpty = cachedOnly.filter((r) => r.text.length === 0).length
+    if (cachedEmpty > 0) {
+      return {
+        passed: false,
+        output: `${cachedEmpty}/${cachedOnly.length} cached-only turns produced no output`
+      }
+    }
+    const cachedOnlySeq = maxSeq(cachedOnly)
+    if (cachedOnlySeq <= 1) {
+      return {
+        passed: false,
+        output: `Different-history auto-cache turns serialized (engine avgConcurrentSeq ${cachedOnlySeq.toFixed(2)} <= 1 with no plain traffic)`
+      }
+    }
+
+    // Phase 2 — mixed starvation. Interleave cached and plain so both kinds land
+    // in the first `parallel` admission window; the plain turns must not starve
+    // behind the cached ones.
+    let results: Result[]
+    try {
       results = await Promise.all(
         TOPICS.flatMap((topic) => [
           fire(`Tell me about ${topic} in detail.`, true),
@@ -264,39 +299,25 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       const msg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `Mixed auto-cache + plain completions threw: ${msg}` }
     }
-
     const empty = results.filter((r) => r.text.length === 0).length
     if (empty > 0) {
-      return { passed: false, output: `${empty}/${results.length} completions produced no output` }
-    }
-
-    const maxSeq = (group: typeof results) =>
-      group.reduce<number>(
-        (m, r) =>
-          typeof r.avgConcurrentSeq === 'number' && r.avgConcurrentSeq > m ? r.avgConcurrentSeq : m,
-        0
-      )
-    const auto = results.filter((r) => r.useCache)
-    const plain = results.filter((r) => !r.useCache)
-    const autoSeq = maxSeq(auto)
-    const plainSeq = maxSeq(plain)
-
-    if (autoSeq <= 1) {
       return {
         passed: false,
-        output: `Different-history auto-cache turns serialized (engine avgConcurrentSeq ${autoSeq} <= 1)`
+        output: `${empty}/${results.length} mixed completions produced no output`
       }
     }
+    const auto = results.filter((r) => r.useCache)
+    const plain = results.filter((r) => !r.useCache)
+    const plainSeq = maxSeq(plain)
     if (plainSeq <= 1) {
       return {
         passed: false,
-        output: `Plain completions starved behind auto-cache turns (engine avgConcurrentSeq ${plainSeq} <= 1)`
+        output: `Plain completions starved behind auto-cache turns (engine avgConcurrentSeq ${plainSeq.toFixed(2)} <= 1)`
       }
     }
 
-    // Per-request proof, not just the epoch-wide metric: a plain request's token
-    // window must overlap an auto-cache request's, i.e. it produced tokens while a
-    // cached turn was still decoding rather than waiting for its lock to free.
+    // Per-request proof: a plain request produced tokens while an auto-cache
+    // request was still decoding, not after it released a serializing lock.
     const overlaps = plain.some((p) =>
       auto.some((a) => p.firstTokenAt < a.lastTokenAt && a.firstTokenAt < p.lastTokenAt)
     )
@@ -307,32 +328,9 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       }
     }
 
-    // Cached-vs-cached proof (peak >= 2): different-history auto-cache turns must
-    // themselves decode concurrently, not serialize. Without this, the plain-vs-
-    // cached overlap above still passes when cached turns serialize under an old
-    // model-wide lock — a plain turn need only overlap ONE serialized cached turn.
-    // Ties resolve end-before-start so back-to-back turns don't read as overlap.
-    const cachedEvents = auto.flatMap((r) => [
-      { t: r.firstTokenAt, delta: 1 },
-      { t: r.lastTokenAt, delta: -1 }
-    ])
-    cachedEvents.sort((a, b) => a.t - b.t || a.delta - b.delta)
-    let cachedLive = 0
-    let cachedPeak = 0
-    for (const event of cachedEvents) {
-      cachedLive += event.delta
-      if (cachedLive > cachedPeak) cachedPeak = cachedLive
-    }
-    if (cachedPeak < 2) {
-      return {
-        passed: false,
-        output: `Different-history auto-cache turns did not decode concurrently (peak cached overlap ${cachedPeak} < 2)`
-      }
-    }
-
     return {
       passed: true,
-      output: `Auto-cache turns and plain completions both decode concurrently (avgConcurrentSeq auto=${autoSeq.toFixed(2)} plain=${plainSeq.toFixed(2)}, cached-vs-cached peak ${cachedPeak}, token windows overlap)`
+      output: `Auto-cache turns decode concurrently with each other (cached-only avgConcurrentSeq ${cachedOnlySeq.toFixed(2)}) and don't starve plain completions (plain avgConcurrentSeq ${plainSeq.toFixed(2)}, token windows overlap)`
     }
   }
 

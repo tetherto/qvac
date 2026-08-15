@@ -350,13 +350,15 @@ export const kvCacheConcurrentSameKeyAuto: TestDefinition = {
   metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
 }
 
-// Different-history auto turns decode concurrently with plain completions —
-// the regression guard for auto-cache serialization / slot starvation.
+// Different-history auto turns decode concurrently — with each other and with
+// plain completions. The regression guard for auto-cache serialization and slot
+// starvation: a cached-only phase proves native cached-vs-cached concurrency,
+// then a mixed phase proves plain completions aren't starved behind cached ones.
 export const kvCacheAutoConcurrency: TestDefinition = {
   testId: 'kv-cache-auto-concurrency',
   params: { generationParams: { temp: 0, seed: 42, predict: 48 } },
   expectation: { validation: 'type', expectedType: 'string' },
-  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 60000 }
 }
 
 export const kvCacheTests = [
