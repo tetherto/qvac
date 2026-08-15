@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { QRCodeSVG } from 'qrcode.react';
-import { Check, Copy, Download, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, X } from 'lucide-react';
 import { KeetIcon } from '@/components/keet-icon';
 
 // Copy is kept verbatim from the main site (https://qvac.tether.io) modal.
@@ -73,6 +73,13 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme !== 'light';
   const [isCopied, setIsCopied] = useState(false);
+
+  const openKeet = useCallback(() => {
+    // Fire-and-forget navigation to the custom scheme. Browsers that have
+    // Keet registered as a handler will open the app; others silently
+    // ignore the navigation, leaving the modal in place as fallback.
+    window.location.href = KEET.card2.roomLink;
+  }, []);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -230,6 +237,15 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
                   )}
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={openKeet}
+                className="mt-2 flex w-[200px] max-w-full items-center justify-center gap-2 rounded-[8px] px-4 py-[8px] text-[15px] font-medium leading-[22px] transition-opacity hover:opacity-80"
+                style={{ background: accent, color: DARK }}
+              >
+                <ExternalLink className="size-[15px]" />
+                Open in Keet
+              </button>
             </div>
           </div>
         </div>
