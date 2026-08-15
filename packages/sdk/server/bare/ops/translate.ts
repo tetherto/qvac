@@ -20,6 +20,7 @@ import {
   TranslationFailedError
 } from '@/utils/errors-server'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
+import { isAddonContextOverflowError } from '@/server/bare/plugins/llamacpp-completion/ops/context-overflow'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
 import { getModelParallel } from '@/server/utils'
 import { getServerLogger } from '@/logging'
@@ -238,6 +239,9 @@ export async function* translate(
         yield token
       }
     } catch (err) {
+      // A context-overflow rejection is a real terminal condition, not a
+      // cancellation — surface it even under an aborted signal, as completion does.
+      if (isAddonContextOverflowError(err)) throw err
       // The request signal is the SDK-owned cancellation contract. Addon
       // rejection shapes differ for active and queued native sequences, so once
       // cancellation is accepted the translate ends cleanly regardless of that
