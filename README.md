@@ -23,9 +23,7 @@
   <a href="https://pypi.org/project/tetherto-qvac-sdk/"><img src="https://img.shields.io/badge/Python-3776ab?style=flat&logo=python&logoColor=white" alt="Python client on PyPI" /></a>
   &nbsp;
   <a href="https://www.npmjs.com/package/@qvac/cli"><img src="https://img.shields.io/npm/v/%40qvac%2Fcli?label=CLI%2FServer&labelColor=4b5563&color=1f6feb&style=flat" alt="QVAC CLI / Server on npm" /></a>
-</p>
-
-<p align="center">
+  &nbsp;
   <a href="https://x.com/qvac"><img src="https://img.shields.io/badge/Follow-000000?style=flat&logo=x&logoColor=white" alt="Follow QVAC on X" /></a>
   &nbsp;
   <a href="https://discord.com/invite/tetherdev"><img src="https://img.shields.io/badge/Join%20server-5865F2?style=flat&logo=discord&logoColor=white" alt="Join the QVAC Discord server" /></a>
