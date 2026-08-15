@@ -2,7 +2,7 @@ import path from 'bare-path'
 import { PathTraversalError } from '@/utils/errors-server'
 import { sanitizePathComponent, checkPathWithinBase } from '@/utils/path-sanitize'
 
-// Re-export the bare-free helpers unchanged
+// Re-export sanitizePathComponent unchanged
 export { sanitizePathComponent } from '@/utils/path-sanitize'
 
 /**
