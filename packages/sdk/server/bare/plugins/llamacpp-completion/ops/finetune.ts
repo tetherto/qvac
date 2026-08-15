@@ -146,6 +146,12 @@ export async function startFinetune(
     return { type: 'finetune', status: 'CANCELLED' }
   }
 
+  // The pre-admission validation above ran before this request queued for the
+  // exclusive lane, so a peer finetune could have changed the checkpoint state
+  // while we waited. Re-validate now that we hold the lane exclusively and the
+  // state is stable.
+  validateExplicitFinetuneOperation(request)
+
   // Global cancel is finetune's only stop; it runs exclusively, so nothing else
   // is on the model when this fires.
   const onAbort = () => {

@@ -460,3 +460,84 @@ test('startFinetune: detaches progress listeners after completion', async (t) =>
     clearRegistry()
   }
 })
+
+test('startFinetune: revalidates checkpoint state after the exclusive-lane wait', async (t) => {
+  clearRegistry()
+  const checkpointDir = createTempCheckpointDir()
+  const modelId = 'finetune-revalidate-model'
+  const options = {
+    trainDatasetDir: '/tmp/train.jsonl',
+    validation: { type: 'none' as const },
+    outputParametersDir: '/tmp/out',
+    checkpointSaveDir: checkpointDir
+  }
+
+  let finetuneCalls = 0
+  let resolveAEntered = () => {}
+  const aEntered = new Promise<void>((resolve) => (resolveAEntered = resolve))
+  let releaseA = () => {}
+  const gateA = new Promise<void>((resolve) => (releaseA = resolve))
+
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        finetuneCalls++
+        const isA = finetuneCalls === 1
+        return {
+          on: () => {},
+          removeListener: () => {},
+          await: async () => {
+            // The first finetune (A) holds the exclusive lane until released, so
+            // the second (B) has to queue behind it.
+            if (isA) {
+              resolveAEntered()
+              await gateA
+            }
+            return { status: 'COMPLETED', stats: {} }
+          }
+        }
+      },
+      pause: async () => {},
+      cancel: async () => {}
+    } as unknown as AnyModel,
+    path: '/tmp/revalidate-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  try {
+    // A: a valid 'start' (checkpoint dir empty ⇒ IDLE). Admitted on the free
+    // exclusive lane, then parks in handle.await holding the lane.
+    const aPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    await aEntered
+
+    // B: also a valid 'start' at its pre-admission check (still IDLE); queues
+    // behind A on the exclusive lane.
+    const bPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    // A peer pauses the model while B waits — the state B validated against is
+    // now stale: a paused checkpoint appears, so 'start' is no longer allowed.
+    createPauseCheckpointDir(checkpointDir, 5)
+
+    // Release A; B is admitted and must re-validate before model.finetune() runs.
+    releaseA()
+
+    await aPromise
+    let bError: unknown = null
+    try {
+      await bPromise
+    } catch (error) {
+      bError = error
+    }
+    t.ok(
+      bError instanceof CompletionFailedError,
+      'B rejects on re-validation because the checkpoint state changed while it queued'
+    )
+    t.is(finetuneCalls, 1, 'model.finetune ran only for A; B was rejected before any native work')
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+    cleanupCheckpointDir(checkpointDir)
+  }
+})
