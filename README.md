@@ -16,13 +16,13 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/%40qvac%2Fsdk?label=SDK&labelColor=4b5563&color=cb3837&style=flat" alt="QVAC SDK version" />
+  <img src="https://img.shields.io/npm/v/%40qvac%2Fsdk?label=SDK&labelColor=4b5563&color=1f6feb&style=flat" alt="QVAC SDK version" />
   &nbsp;
   <a href="https://www.npmjs.com/package/@qvac/sdk"><img src="https://img.shields.io/badge/TypeScript-3178c6?style=flat&logo=typescript&logoColor=white" alt="TypeScript client on npm" /></a>
   &nbsp;
   <a href="https://pypi.org/project/tetherto-qvac-sdk/"><img src="https://img.shields.io/badge/Python-3776ab?style=flat&logo=python&logoColor=white" alt="Python client on PyPI" /></a>
   &nbsp;
-  <a href="https://www.npmjs.com/package/@qvac/cli"><img src="https://img.shields.io/npm/v/%40qvac%2Fcli?label=CLI%2FServer&labelColor=4b5563&color=cb3837&style=flat" alt="QVAC CLI / Server on npm" /></a>
+  <a href="https://www.npmjs.com/package/@qvac/cli"><img src="https://img.shields.io/npm/v/%40qvac%2Fcli?label=CLI%2FServer&labelColor=4b5563&color=1f6feb&style=flat" alt="QVAC CLI / Server on npm" /></a>
 </p>
 
 <p align="center">
