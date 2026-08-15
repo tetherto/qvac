@@ -10,7 +10,11 @@ import { KeetIcon } from '@/components/keet-icon';
 // Copy is kept verbatim from the main site (https://qvac.tether.io) modal.
 // `title` is only used for the dialog's accessible label — the modal renders
 // no heading/description, it is purely a container for the two cards.
-const KEET = {
+// Exported so the `/keet/` launcher page (linked from external
+// surfaces like the repo README, where the GitHub Markdown sanitizer strips
+// `keet://` anchors) can share the same room link as the single source of
+// truth.
+export const KEET = {
   title: 'Join QVAC Keet Room!',
   card1: {
     step: 'Step 1',
@@ -41,7 +45,7 @@ const DARK = '#171817';
  * The viewBox is tightened to the bird's bounds so it sits as a centered logo
  * (no surrounding concentric-ring artwork).
  */
-function KeetMascot({ className }: { className?: string }) {
+export function KeetMascot({ className }: { className?: string }) {
   return (
     <svg
       viewBox="78 152 95 104"

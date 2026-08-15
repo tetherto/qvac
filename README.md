@@ -27,6 +27,8 @@
   <a href="https://x.com/qvac"><img src="https://img.shields.io/badge/Follow-000000?style=flat&logo=x&logoColor=white" alt="Follow QVAC on X" /></a>
   &nbsp;
   <a href="https://discord.com/invite/tetherdev"><img src="https://img.shields.io/badge/Join%20server-5865F2?style=flat&logo=discord&logoColor=white" alt="Join the QVAC Discord server" /></a>
+  &nbsp;
+  <a href="https://docs.qvac.tether.io/keet/"><img src="docs/branding/keet.svg" alt="Join the QVAC Keet room" /></a>
 </p>
 
 <p align="center">
@@ -307,7 +309,7 @@ Explore and use QVAC:
 | [**Examples**](https://github.com/tetherto/qvac-examples/) | Sample apps and PoCs built with QVAC SDK. |
 | [**Local model provider**](https://docs.qvac.tether.io/cli/http-server/connection/) | Use QVAC as a local model provider connected to your favorite AI tools. |
 | [**QV.AC**](https://qv.ac) | Get to know our local AI assistant. |
-| **Support and community** | We gather on [Discord](https://discord.com/invite/tetherdev). Ask for help, give feedback, and discuss QVAC. |
+| **Support and community** | We gather on [Discord](https://discord.com/invite/tetherdev) and [Keet](https://docs.qvac.tether.io/keet/). Ask for help, give feedback, and discuss QVAC. |
 | [**Blog**](https://qvac.tether.io/blog/) | Tutorials, deep dives, engineering notes, and announcements. |
 | [**Ecosystem**](https://qvac.tether.io) | Discover the broader QVAC ecosystem. |
 | [**Research**](https://huggingface.co/qvac) | Papers, datasets, and models optimized for edge devices. |
