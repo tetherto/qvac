@@ -94,13 +94,12 @@ class RAGDocument {
 }
 
 class Provider {
-    topic: string
-    firewall: allow|deny
+    publicKey: string
+    firewall?: allow|deny
 }
 
 class Consumer {
     providerPublicKey: string
-    topic: string
 }
 
 SDKEntryPoint "0..*" --> "1" WireContract : generated/validated against
@@ -119,6 +118,6 @@ RAGWorkspace "1" --> "1" Model : uses (embeddings)
 RAGWorkspace "1" --> "0..*" RAGDocument : stores
 
 Provider "1" --> "1" Model : exposes
-Consumer "0..*" --> "1" Provider : delegates to
+Consumer "0..*" --> "1" Provider : delegates to by public key
 
 @enduml

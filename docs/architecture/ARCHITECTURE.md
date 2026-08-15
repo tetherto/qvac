@@ -264,9 +264,13 @@ The Python package provides:
 
 # Native Addons Architecture
 
+- [Addon C++ Framework](../../packages/inference-addon-cpp/docs/architecture.md)
 - [LLM Completion - llama.cpp](../../packages/llm-llamacpp/docs/architecture.md)
 - [Embeddings - llama.cpp](../../packages/embed-llamacpp/docs/architecture.md)
+- [Speech-to-text - ASR GGML](../../packages/asr-ggml/docs/architecture.md)
 - [Translation - nmt.cpp](../../packages/translation-nmtcpp/docs/architecture.md)
+- [Diffusion - stable-diffusion.cpp](../../packages/diffusion-cpp/docs/architecture.md)
+- [Classification - GGML](../../packages/classification-ggml/docs/architecture.md)
 
 ---
 
@@ -284,7 +288,7 @@ The Python package provides:
 
 # Repositories
 
-All packages live in this monorepo under `packages/`:
+Most packages live in this monorepo under `packages/`. Integration plugins live under `plugins/`, and the documentation site lives under `docs/website`.
 
 **SDK & CLI**
 
@@ -298,7 +302,7 @@ All packages live in this monorepo under `packages/`:
 | `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
 | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode integration |
 | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw integration |
-| `docs` | `docs` | Documentation site (Next.js / Fumadocs) |
+| `docs/website` | - | Documentation site (Next.js / Fumadocs) |
 
 **Inference Addons**
 
