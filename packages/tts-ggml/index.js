@@ -1167,13 +1167,9 @@ class TTSGgml {
         }
     }
     /**
-     * A CosyVoice3 clone request must be resolvable to the two cloning models
-     * before the native load starts: with neither explicit s3tok + campplus
-     * paths nor a model dir to discover them under, the engine cannot bake the
-     * reference and the failure surfaces clearer here. `promptText` stays
-     * deliberately optional — its absence selects cross-lingual mode, and with
-     * a model dir present the native side still fail-closes loudly when the
-     * cloning GGUFs are missing from it.
+     * `promptText` is deliberately not required: its absence selects
+     * cross-lingual mode. With a model dir present but no cloning GGUFs in it,
+     * the native load fail-closes instead.
      */
     _assertCosyvoiceCloneConsistent() {
         if (this._engineType !== ENGINE_COSYVOICE3)

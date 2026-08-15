@@ -49,8 +49,9 @@ struct CosyvoiceConfig {
    * when the cloning GGUFs are missing or the audio is unusable (no silent
    * fallback). promptText selects the mode: the verbatim transcript =
    * zero-shot, empty = cross-lingual (timbre only). Without referenceAudio,
-   * promptText still overrides the baked voice's transcript metadata. The
-   * clone is fixed at construction (reload does not re-apply it).
+   * promptText still overrides the baked voice's transcript metadata. Each
+   * engine construction re-bakes whatever reference it is given, so a JS
+   * reload repeats the same bake rather than switching voices.
    */
   std::string referenceAudio;
   std::string promptText;

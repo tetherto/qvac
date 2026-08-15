@@ -422,10 +422,9 @@ required **only** when `referenceAudio` is set; every failure (missing
 GGUFs, unreadable or out-of-range audio) rejects the load rather than
 silently keeping the baked voice.  `instruct` composes with a cloned voice:
 the instruction drives dialect/style while the clone supplies the timbre.
-The clone is fixed for the life of the instance: there is no per-call
-reference (unlike Audio8), and `reload()` does **not** re-apply
-`referenceAudio` / `promptText` — switching voices means constructing a new
-instance.
+The reference is fixed at construction: there is no per-call reference
+(unlike Audio8), and `reload()` re-bakes the *same* recording rather than
+accepting a new one, so changing voices means constructing a new instance.
 
 ## Speech enhancement (LavaSR)
 
@@ -772,7 +771,7 @@ a one-off encode when a new reference recording is supplied.
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
 | `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
 | `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'cosyvoice3'`, `'parler'` or `'audio8'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_COSYVOICE3` / `ENGINE_PARLER` / `ENGINE_AUDIO8`); auto-detected from the GGUFs present otherwise |
-| `referenceAudio`          | string     | —          | Mono wav for voice cloning (Chatterbox: ≥ 5 s; CosyVoice3: 0.5-30 s, needs the s3tok + campplus GGUFs; Audio8: also needs `referenceText`).  Audio8 accepts it per call too |
+| `referenceAudio`          | string     | —          | Wav to clone (Chatterbox: mono, ≥ 5 s; CosyVoice3: 0.5-30 s, multichannel downmixed to mono, needs the s3tok + campplus GGUFs; Audio8: also needs `referenceText`).  Audio8 accepts it per call too |
 | `referenceText`           | string     | —          | Audio8-only: what `referenceAudio` says, verbatim.  Required whenever a reference is set; accepted per call |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |

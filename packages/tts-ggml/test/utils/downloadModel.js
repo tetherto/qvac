@@ -1391,9 +1391,7 @@ async function ensureCosyvoiceModel(options = {}) {
   return { success: false, modelDir: requestedDir, targetDir: requestedDir }
 }
 
-// Voice-cloning add-on: the speech_tokenizer_v3 speech tokenizer + CAM++
-// speaker encoder GGUFs, needed only when a test passes referenceAudio.  A
-// deliberately SEPARATE tier from COSYVOICE_FILES: hasAllGgufsIn is
+// A deliberately SEPARATE tier from COSYVOICE_FILES: hasAllGgufsIn is
 // all-or-nothing, so folding these in would invalidate every existing staged
 // CosyVoice3 dir and force the ~300 MB download on tests that never clone.
 const REGISTRY_DATE_COSYVOICE_CLONE = '2026-08-14'
@@ -1447,10 +1445,8 @@ async function ensureCosyvoiceCloneModels(options = {}) {
   }
 
   for (const dir of candidateDirs) {
-    // A usable dir must hold the BASE set alongside the cloning add-on: the
-    // returned modelDir feeds the engine's whole-directory discovery, so a
-    // clone-only cache with the base staged elsewhere would resolve the
-    // cloning GGUFs and then fail on the LM/flow/hift.
+    // The returned dir feeds the engine's whole-directory discovery, so a
+    // clone-only cache would resolve and then fail on the missing LM.
     if (hasAllGgufsIn(dir, COSYVOICE_CLONE_FILES) && hasAllGgufsIn(dir, COSYVOICE_FILES)) {
       console.log(` ✓ using CosyVoice3 cloning GGUFs at ${dir}`)
       return { success: true, modelDir: dir, targetDir: dir }

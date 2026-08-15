@@ -36,10 +36,6 @@ function buildCosyvoiceLoadOptions(params = {}) {
     opts: { stats: true }
   }
   if (params.nGpuLayers !== undefined) options.nGpuLayers = params.nGpuLayers
-  // Zero-shot / cross-lingual cloning: the reference wav bakes the voice at
-  // load; promptText (its verbatim transcript) selects zero-shot, omitting it
-  // selects cross-lingual. The s3tok/campplus GGUFs auto-resolve from the
-  // model dir; explicit paths are for override tests.
   if (params.referenceAudio !== undefined) options.referenceAudio = params.referenceAudio
   if (params.promptText !== undefined) options.promptText = params.promptText
   if (params.cosyvoiceS3tokModel !== undefined) {

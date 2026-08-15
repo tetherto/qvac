@@ -1,10 +1,5 @@
 'use strict'
 
-// Argument parser for examples/cosyvoice-tts.js, extracted so the flag
-// handling is unit-testable without running the example. Returns
-// { useGPU, refAudio, promptText, positional } or throws with a
-// usage-worthy message on a flag whose value is missing or looks like
-// another option.
 function parseCloneArgs(args) {
   let useGPU = false
   let refAudio

@@ -532,8 +532,9 @@ interface Audio8VoiceFields {
    * `cosyvoiceCampplusModel` files and fails the load (never silently falls
    * back) when they are missing or the audio is unusable. Pair with
    * `promptText` (the verbatim transcript) for zero-shot or omit it for
-   * cross-lingual. The clone is fixed for the instance's lifetime:
-   * `reload()` does not re-apply it — switching voices means a new
+   * cross-lingual. The reference is fixed at construction: `reload()`
+   * re-bakes the same recording (it is forwarded to the new addon instance)
+   * but cannot switch to a different one, so changing voices means a new
    * instance. Audio8: the recording to clone, with `referenceText`
    * alongside it.
    */
@@ -2093,13 +2094,9 @@ class TTSGgml {
   }
 
   /**
-   * A CosyVoice3 clone request must be resolvable to the two cloning models
-   * before the native load starts: with neither explicit s3tok + campplus
-   * paths nor a model dir to discover them under, the engine cannot bake the
-   * reference and the failure surfaces clearer here. `promptText` stays
-   * deliberately optional — its absence selects cross-lingual mode, and with
-   * a model dir present the native side still fail-closes loudly when the
-   * cloning GGUFs are missing from it.
+   * `promptText` is deliberately not required: its absence selects
+   * cross-lingual mode. With a model dir present but no cloning GGUFs in it,
+   * the native load fail-closes instead.
    */
   private _assertCosyvoiceCloneConsistent(): void {
     if (this._engineType !== ENGINE_COSYVOICE3) return;

@@ -1,9 +1,5 @@
 'use strict'
 
-// Unit coverage for the cosyvoice example's extracted argument parser: flag
-// mapping, positional passthrough, and the fail-loud contract for flags whose
-// value is missing or looks like another option.
-
 const test = require('brittle')
 
 const { parseCloneArgs } = require('../../examples/parse-clone-args')
