@@ -251,6 +251,39 @@ test('registry: duplicate requestId throws RequestIdConflictError', async (t) =>
   )
 })
 
+test('registry: an id stays reserved through async disposal, then frees cleanly', async (t) => {
+  const r = createRequestRegistry()
+
+  let releaseCleanup = () => {}
+  const cleanupBlocked = new Promise<void>((resolve) => {
+    releaseCleanup = resolve
+  })
+
+  const ctx = await r.begin({ requestId: 'dup-1', kind: 'completion', modelId: 'm1' })
+  // A blocking deferred cleanup holds the scope mid-dispose, so the id sits in
+  // the window where it is out of `entries` but teardown has not finished.
+  ctx.scope.defer(() => cleanupBlocked)
+  const disposing = ctx[Symbol.asyncDispose]()
+
+  await t.exception(
+    async () => {
+      await r.begin({ requestId: 'dup-1', kind: 'completion', modelId: 'm1' })
+    },
+    RequestIdConflictError as unknown as new () => Error,
+    'a same-id begin during disposal is rejected, not admitted concurrently'
+  )
+  t.is(r.cancel({ requestId: 'dup-1' }), 0, 'a cancel during disposal matches nothing')
+
+  releaseCleanup()
+  await disposing
+
+  // Teardown done: the id is reusable and must not inherit the disposal-window
+  // cancel as a stale cancel-before-begin marker.
+  await using fresh = await r.begin({ requestId: 'dup-1', kind: 'completion', modelId: 'm1' })
+  t.is(fresh.signal.aborted, false, 'the reused id starts clean, no stale cancel')
+  t.is(fresh.state, 'running')
+})
+
 test('registry: end(requestId) sets state, disposes scope, and removes slot', async (t) => {
   const r = createRequestRegistry()
   let cleanupRan = 0

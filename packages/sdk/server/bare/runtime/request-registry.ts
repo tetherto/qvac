@@ -209,9 +209,12 @@ export interface RequestRegistry {
   cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void>
 
   /**
-   * Wait for every active and in-flight-disposing request to fully unwind.
-   * Call after `cancelAll('shutdown')` so worker teardown frees models only
-   * once native cleanup is complete.
+   * Wait for every active and in-flight-disposing request's scope to run its
+   * deferred cleanups (for llama.cpp completion, disposing the run response and
+   * stopping native decode). Call after `cancelAll('shutdown')` so models free
+   * only once scopes release what they registered. Bounds scope teardown, not
+   * background native work a soft-cancel handler (e.g. NMT translate) leaves
+   * running by merely detaching from its response.
    */
   drainAll(): Promise<void>
 
@@ -416,6 +419,12 @@ export function createRequestRegistry(options?: {
   // from `entries` before unwinding, so a drain must consult this too or it
   // would return while a request is still tearing down natively.
   const disposingEntries = new Set<RegistryEntry>()
+  // Request ids whose entry is mid-disposal. disposeEntry drops the id from
+  // `entries` before its async scope unwinds; without this the id looks free
+  // during that gap, so a same-id begin could activate concurrently with the
+  // still-tearing-down request and a cancel would land as a cancel-before-begin
+  // tripwire that aborts a later reuse. Held until teardown completes.
+  const disposingIds = new Set<string>()
 
   function logLifecycle(
     event: 'begin' | 'cancel' | 'end',
@@ -546,14 +555,12 @@ export function createRequestRegistry(options?: {
     const policy = policies.get(opts.kind)
     if (!policy) return { slotKey: undefined, exclusive: false }
     // The per-request override (the model's own `parallel`) wins over the
-    // per-kind default. A non-finite effective cap disables gating entirely; a
-    // finite value is floored to an integer >= 1 (matching `normalizePolicy`) so
-    // a stray 0 can't wedge the lane and a fractional cap can't over-admit.
+    // per-kind default. A non-finite effective cap disables gating entirely.
     const requestedMax = opts.maxConcurrentPerModel ?? policy.maxConcurrent
     if (!Number.isFinite(requestedMax)) {
       return { slotKey: undefined, exclusive: false }
     }
-    const maxConcurrent = requestedMax < 1 ? 1 : Math.floor(requestedMax)
+    const maxConcurrent = clampSlotCount(requestedMax)
     // A parent (worker-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
@@ -675,8 +682,9 @@ export function createRequestRegistry(options?: {
 
   /**
    * Release a held slot, then hand the freed capacity to waiters. Called from
-   * `disposeEntry` after the scope has fully unwound, so the native context is
-   * genuinely free before the next same-model request is admitted.
+   * `disposeEntry` after the scope has fully unwound, so its deferred teardown
+   * (for llama.cpp completion, disposing the run response that stops native
+   * decode) has run before the next same-model request is admitted.
    */
   function releaseSlot(key: string, wasExclusive: boolean): void {
     const st = keyStates.get(key)
@@ -698,6 +706,9 @@ export function createRequestRegistry(options?: {
     if (entry.scope.disposed || entry.disposing) return
     entry.disposing = true
     disposingEntries.add(entry)
+    // Keep the id reserved across async teardown so a same-id begin can't
+    // activate concurrently and a cancel can't strand a tripwire for a reuse.
+    disposingIds.add(entry.ctx.requestId)
     entry.ctx.state = outcome
     entry.detachParent()
     logLifecycle('end', entry.ctx, Date.now() - entry.startedAt)
@@ -715,6 +726,8 @@ export function createRequestRegistry(options?: {
       // otherwise a throwing teardown would strand the queue forever.
       if (entry.slotKey !== undefined) releaseSlot(entry.slotKey, entry.exclusive)
       disposingEntries.delete(entry)
+      // The id is free for reuse only now that native teardown is complete.
+      disposingIds.delete(entry.ctx.requestId)
       // Signal any `cancelAndDrain` waiting on this request that its native
       // teardown is complete.
       entry.resolveDisposed()
@@ -734,16 +747,19 @@ export function createRequestRegistry(options?: {
         'worker is shutting down'
       )
     }
-    // A request id is reserved for its whole lifecycle, including the time
-    // it spends *queued* for an admission slot. `waitersById` holds the
-    // still-queued begins (they aren't in `entries` yet), so a duplicate id
-    // must be rejected against both maps — otherwise a second begin with the
-    // same id would enqueue behind the first and overwrite its `waitersById`
-    // index, leaving the original waiter unreachable by `cancel({ requestId })`.
+    // A request id is reserved for its whole lifecycle: the time it spends
+    // *queued* for an admission slot, while it is active, and while it is
+    // tearing down. `waitersById` holds the still-queued begins (not yet in
+    // `entries`) and `disposingIds` holds the ones whose async teardown hasn't
+    // finished, so a duplicate id must be rejected against all of them —
+    // otherwise a second begin with the same id would enqueue behind the first
+    // and overwrite its `waitersById` index (unreachable by `cancel(...)`), or
+    // activate while the prior request is still releasing its native context.
     if (
       entries.has(opts.requestId) ||
       waitersById.has(opts.requestId) ||
-      reservedIds.has(opts.requestId)
+      reservedIds.has(opts.requestId) ||
+      disposingIds.has(opts.requestId)
     ) {
       throw new RequestIdConflictError(opts.requestId)
     }
@@ -933,6 +949,11 @@ export function createRequestRegistry(options?: {
         cancelQueuedWaiterGracefully(queued.key, queued.waiter, target.reason)
         return cancelled + 1
       }
+      // Mid-disposal: the request already reached a terminal outcome and is
+      // releasing its native context. There is nothing to cancel, and a
+      // cancel-before-begin marker would wrongly abort a later begin that
+      // reuses this id once teardown frees it.
+      if (disposingIds.has(target.requestId)) return cancelled
       // Stop-button race: the client beat its own
       // `begin(...)`. Record the cancel so the next matching `begin`
       // aborts immediately. The return value stays 0 — no in-flight
@@ -1068,6 +1089,13 @@ export function createRequestRegistry(options?: {
   }
 }
 
+// A finite slot count floored to an integer >= 1: a value below 1 would gate
+// every request forever and a fractional one could over-admit. Callers gate on
+// `Number.isFinite` first — Infinity means "ungated" and must stay Infinity.
+function clampSlotCount(count: number): number {
+  return Math.max(1, Math.floor(count))
+}
+
 /**
  * Resolve a `ConcurrencyPolicy` to concrete numbers, applying defaults and
  * the deprecated `oneAtATimePerModel` alias. Done once at registration so
@@ -1090,9 +1118,7 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
     onOverflow = opts.onOverflow ?? 'queue'
   }
 
-  // A finite cap is a slot count: floor to an integer >= 1 so a value below 1
-  // can't gate every request forever and a fractional one can't over-admit.
-  if (Number.isFinite(maxConcurrent)) maxConcurrent = Math.max(1, Math.floor(maxConcurrent))
+  if (Number.isFinite(maxConcurrent)) maxConcurrent = clampSlotCount(maxConcurrent)
 
   return {
     maxConcurrent,
