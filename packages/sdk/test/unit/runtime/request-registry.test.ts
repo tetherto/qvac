@@ -418,45 +418,6 @@ test('registry: a begin racing withModelDraining starts aborted (drain barrier, 
   t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
 })
 
-test('registry: a begin racing worker shutdown (cancelAll+drainAll) is rejected', async (t) => {
-  // Worker shutdown is cancelAll('shutdown') + drainAll(), which sweep
-  // `entries`/`waiters`/`disposingEntries` but not a begin still in the
-  // reservation gap (reserved id, suspended on acquireSlot). Returning an
-  // aborted context is not enough: a handler that calls model.run() without
-  // checking the signal (the diffusion op does exactly that) would touch a model
-  // unloadAllModels is freeing. So a begin racing terminal shutdown is REJECTED
-  // rather than admitted, both when shutdown starts mid-admission and after.
-  const r = createRequestRegistry()
-
-  const racing = r.begin({
-    requestId: 'race',
-    kind: 'completion',
-    modelId: 'm',
-    maxConcurrentPerModel: 1
-  })
-
-  r.cancelAll('shutdown')
-  await r.drainAll()
-
-  await t.exception(
-    async () => {
-      await racing
-    },
-    RequestRejectedByPolicyError,
-    'a begin racing worker shutdown is rejected, not admitted'
-  )
-  t.is(r.get('race'), null, 'no live entry left behind for the racing begin')
-
-  // A begin issued after shutdown is likewise rejected up front.
-  await t.exception(
-    async () => {
-      await r.begin({ requestId: 'after', kind: 'completion', modelId: 'm' })
-    },
-    RequestRejectedByPolicyError,
-    'a begin issued after shutdown is rejected'
-  )
-})
-
 test('registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly', async (t) => {
   // The Stop-button race close consumes its entry on the matching
   // `begin(...)`. In practice ids are UUIDv4 and never reused, but a
@@ -1734,38 +1695,4 @@ test('withModelDraining: waits for a request whose disposal already started', as
   await p
   t.is(cleanupDone, true, 'gated cleanup finished')
   t.is(done, true, 'resolved only after the in-flight disposal completed')
-})
-
-test('cancelAll + drainAll: waits for cancelled requests to finish tearing down', async (t) => {
-  const r = createRequestRegistry()
-  const a = await r.begin({ requestId: 'a', kind: 'completion', modelId: 'm1' })
-
-  let releaseA = () => {}
-  const gateA = new Promise<void>((resolve) => {
-    releaseA = resolve
-  })
-  a.scope.defer(async () => {
-    await gateA
-  })
-  a.signal.addEventListener(
-    'abort',
-    () => {
-      void a[Symbol.asyncDispose]()
-    },
-    { once: true }
-  )
-
-  await r.cancelAll('shutdown')
-  await settle()
-
-  let drainDone = false
-  const drainP = r.drainAll().then(() => {
-    drainDone = true
-  })
-  await settle()
-  t.is(drainDone, false, 'drainAll waits while the request tears down')
-
-  releaseA()
-  await drainP
-  t.is(drainDone, true, 'drainAll resolved only after teardown finished')
 })

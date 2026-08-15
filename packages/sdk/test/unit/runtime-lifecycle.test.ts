@@ -11,7 +11,6 @@ import {
   getRegisteredResourceCounts,
   resetLifecycleState,
   assertLifecycleAllowed,
-  markShuttingDown,
   onResume
 } from '@/server/bare/runtime-lifecycle'
 import type { Request } from '@/schemas'
@@ -365,67 +364,6 @@ test('gate allows only lifecycle ops and blocks representative requests when sus
   t.exception(() => assertLifecycleAllowed(fakeRequest('getModelInfo')))
   t.exception(() => assertLifecycleAllowed(fakeRequest('completionStream')))
   t.exception(() => assertLifecycleAllowed(fakeRequest('transcribeStream')))
-})
-
-test('gate blocks operation requests once shutting down', (t) => {
-  // Repro: without this, a request arriving during worker cleanup would admit
-  // and start native work against a model that unloadAllModels is about to free.
-  resetLifecycleState()
-  markShuttingDown()
-  t.is(
-    getLifecycleState(),
-    'active',
-    'shutdown is internal; the reported lifecycle state is unchanged'
-  )
-
-  t.execution(() => assertLifecycleAllowed(fakeRequest('state')), 'state still allowed')
-  t.exception(
-    () => assertLifecycleAllowed(fakeRequest('completionStream')),
-    'operation request blocked during shutdown'
-  )
-  t.exception(() => assertLifecycleAllowed(fakeRequest('translate')))
-  resetLifecycleState()
-})
-
-test('shutdown is terminal: suspend/resume cannot revert it', async (t) => {
-  resetLifecycleState()
-  markShuttingDown()
-
-  // Only `state` is allowed; suspend/resume are blocked so they can't move the
-  // runtime back out of the terminal state and let new work admit.
-  t.exception(() => assertLifecycleAllowed(fakeRequest('resume')), 'resume blocked during shutdown')
-  t.exception(
-    () => assertLifecycleAllowed(fakeRequest('suspend')),
-    'suspend blocked during shutdown'
-  )
-
-  // A direct resumeRuntime() must early-return and leave the gate raised.
-  await resumeRuntime()
-  t.exception(
-    () => assertLifecycleAllowed(fakeRequest('completionStream')),
-    'still gated after resumeRuntime()'
-  )
-
-  resetLifecycleState()
-})
-
-test('shutdown during an in-flight transition is not overwritten', async (t) => {
-  const log: string[] = []
-  setup(log, { delayMs: 30 })
-  await suspendRuntime()
-
-  // Resume is in flight (its transition callback will try to set `active`);
-  // shutting down mid-flight must win — the gate stays raised.
-  const resumeP = resumeRuntime()
-  await delay(5)
-  markShuttingDown()
-  await resumeP
-
-  t.exception(
-    () => assertLifecycleAllowed(fakeRequest('completionStream')),
-    'in-flight resume did not clear the shutdown gate'
-  )
-  resetLifecycleState()
 })
 
 test('gate error includes request type and lifecycle state', async (t) => {

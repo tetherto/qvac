@@ -6,9 +6,6 @@ import { initEnv, getValidatedEnv } from '@/server/env'
 import { closeAllRagInstances } from '@/server/bare/rag-hyperdb'
 import { cleanupDownloads } from '@/server/rpc/handlers/load-model/download-manager'
 import { unloadAllModels } from '@/server/bare/registry/model-registry'
-import { getRequestRegistry } from '@/server/bare/runtime'
-import { drainRequestsThenReleaseAddons } from '@/server/bare/runtime/shutdown-drain'
-import { markShuttingDown } from '@/server/bare/runtime-lifecycle'
 import { closeRegistryClient } from '@/server/bare/registry/registry-client'
 import {
   clearAllLoggingStreams,
@@ -153,12 +150,8 @@ export type BareDirectShutdownReason =
 async function runCleanup(): Promise<void> {
   if (cleanupRan) return
   cleanupRan = true
-  // Reject new operation RPCs from here on (assertLifecycleAllowed), so nothing
-  // admits against a model while we cancel/drain/unload below.
-  markShuttingDown()
   destroyWorkerResourceCollector()
-  // Drain in-flight requests before freeing models, then release addon loggers.
-  await drainRequestsThenReleaseAddons(getRequestRegistry(), clearRegistries)
+  clearRegistries()
   await Promise.allSettled([
     destroySwarm(),
     closeAllRagInstances(),

@@ -209,16 +209,6 @@ export interface RequestRegistry {
   cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void>
 
   /**
-   * Wait for every active and in-flight-disposing request's scope to run its
-   * deferred cleanups (for llama.cpp completion, disposing the run response and
-   * stopping native decode). Call after `cancelAll('shutdown')` so models free
-   * only once scopes release what they registered. Bounds scope teardown, not
-   * background native work a soft-cancel handler (e.g. NMT translate) leaves
-   * running by merely detaching from its response.
-   */
-  drainAll(): Promise<void>
-
-  /**
    * Cancel every request for a model and wait for each to fully dispose (native
    * context freed, slot released) before running `teardown` with an admission
    * barrier held — any begin for the model starts aborted — then lift it. Used
@@ -410,11 +400,6 @@ export function createRequestRegistry(options?: {
   // Models being torn down: a begin(...) for one starts aborted. The barrier
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
-  // Worker-wide teardown: once cancelAll('shutdown') runs, every begin(...)
-  // rejects regardless of model. The drainingModels barrier's shutdown twin
-  // catches a begin still in the reservation gap that cancelAll/drainAll sweep
-  // past. Terminal for the instance (the worker is exiting).
-  let shuttingDown = false
   // Entries whose disposal has started but not finished. disposeEntry removes
   // from `entries` before unwinding, so a drain must consult this too or it
   // would return while a request is still tearing down natively.
@@ -735,18 +720,6 @@ export function createRequestRegistry(options?: {
   }
 
   async function begin(opts: BeginOpts): Promise<ManagedRequestContext> {
-    // Terminal worker shutdown: reject outright rather than admit. The worker is
-    // exiting and unloadAllModels is about to free every model; a handler that
-    // calls model.run() without checking the signal (e.g. the diffusion op) must
-    // not proceed, so an aborted context is not enough — nothing may begin.
-    if (shuttingDown) {
-      throw new RequestRejectedByPolicyError(
-        opts.requestId,
-        opts.kind,
-        opts.modelId ?? '',
-        'worker is shutting down'
-      )
-    }
     // A request id is reserved for its whole lifecycle: the time it spends
     // *queued* for an admission slot, while it is active, and while it is
     // tearing down. `waitersById` holds the still-queued begins (not yet in
@@ -804,21 +777,6 @@ export function createRequestRegistry(options?: {
       // A cancel that landed WHILE we were queued resolved acquireSlot with no
       // slot and recorded a marker; consume it so the context starts aborted.
       preCancel = consumeCancelBeforeBegin(opts.requestId)
-    }
-
-    // Terminal shutdown that began WHILE this begin was queued for a slot:
-    // reject the same way, handing the just-acquired slot back first. Catches a
-    // begin already past the pre-admission check above when cancelAll('shutdown')
-    // ran during acquireSlot.
-    if (shuttingDown) {
-      if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
-      reservedIds.delete(opts.requestId)
-      throw new RequestRejectedByPolicyError(
-        opts.requestId,
-        opts.kind,
-        opts.modelId ?? '',
-        'worker is shutting down'
-      )
     }
 
     // A begin arriving while its model is being torn down starts aborted — no
@@ -981,9 +939,6 @@ export function createRequestRegistry(options?: {
   }
 
   function cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void> {
-    // Worker teardown: raise the barrier so a begin still suspended in admission
-    // rejects instead of registering under models about to be freed.
-    if (reason === 'shutdown') shuttingDown = true
     for (const entry of entries.values()) {
       cancelEntry(entry, reason)
     }
@@ -1005,19 +960,8 @@ export function createRequestRegistry(options?: {
         )
       )
     }
-    // Fire-and-forget the abort; callers that must wait for native teardown
-    // (worker shutdown) follow with `drainAll()`.
+    // Fire-and-forget the abort; each handler unwinds on its own dispose path.
     return Promise.resolve()
-  }
-
-  // Wait for every active and in-flight-disposing request to fully unwind. Call
-  // after cancelAll('shutdown') so the worker frees models only once native
-  // teardown is done.
-  function drainAll(): Promise<void> {
-    const draining: Array<Promise<void>> = []
-    for (const entry of entries.values()) draining.push(entry.disposed)
-    for (const entry of disposingEntries) draining.push(entry.disposed)
-    return Promise.all(draining).then(() => {})
   }
 
   // Cancel and drain every request for a model, then run `teardown` with the
@@ -1069,7 +1013,6 @@ export function createRequestRegistry(options?: {
     list,
     cancel,
     cancelAll,
-    drainAll,
     withModelDraining,
     end,
     policy,

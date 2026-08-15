@@ -1,7 +1,3 @@
-// Runs in its own Bare process via `test:bare:isolated` (the `.isolated.ts` name
-// keeps it out of the aggregated `*.test.js` run). It drives the real
-// `cleanupForTerminate()`, which shuts the process-wide request-registry
-// singleton into its terminal state — poisoning it for the shared-process suite.
 import test from 'brittle'
 import { z } from 'zod'
 import { nativeResourceCollectorDependencies } from '@/server/bare/resources/native'
