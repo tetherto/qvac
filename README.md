@@ -2,7 +2,7 @@
 
 <a href="https://docs.qvac.tether.io"><img src="docs/branding/logo.avif" alt="QVAC" height="20" /></a>
 
-<h3>Local AI SDK &amp; Model Provider</h3>
+<h2>Local AI SDK &amp; Model Provider</h2>
 
 <p><strong>Run LLMs, speech, vision, image/video generation, and more on any device.</strong></p>
 
