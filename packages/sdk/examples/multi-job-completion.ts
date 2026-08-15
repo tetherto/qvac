@@ -92,8 +92,8 @@ try {
     `\n▸ All 4 finished in ${elapsed} ms; engine avg concurrent sequences: ${peakConcurrent.toFixed(1)} (> 1 = decoded together).`
   )
 
-  // ---- Per-request cancel isolation. Fire two more; cancel only the first by
-  // its requestId. The second must still complete. ----
+  // ---- Per-request cancel isolation. Fire two long runs; cancel only the
+  // first by its requestId. The second must keep decoding past the cancel. ----
   console.log('\n▸ Per-request cancel: cancelling one of two in-flight completions:')
   const doomed = completion({
     modelId,
@@ -103,42 +103,46 @@ try {
   })
   const survivor = completion({
     modelId,
-    history: [{ role: 'user', content: 'Reply with only the word MELON.' }],
-    generationParams: { temp: 0, seed: 42, predict: 16 },
+    history: [{ role: 'user', content: 'Write a long story about a melon.' }],
+    generationParams: { temp: 0, seed: 42, predict: 256 },
     stream: true
   })
 
-  // Wait until BOTH runs are actually streaming before cancelling, so the
-  // cancel hits a genuinely in-flight peer (not a pre-admission drop) and the
-  // survivor is provably decoding alongside the one we cancel.
-  await Promise.all([
-    doomed.events[Symbol.asyncIterator]().next(),
-    survivor.events[Symbol.asyncIterator]().next()
-  ])
+  // Consume the survivor's stream directly so we can count tokens produced AFTER
+  // the cancel is acknowledged — a short survivor could otherwise finish before
+  // the cancel lands and pass even under a model-wide cancel.
+  const survivorTokens = survivor.events[Symbol.asyncIterator]()
+
+  // Wait until BOTH runs are actually streaming before cancelling, so the cancel
+  // hits a genuinely in-flight peer, not a pre-admission drop.
+  await Promise.all([doomed.events[Symbol.asyncIterator]().next(), survivorTokens.next()])
 
   await cancel({ requestId: doomed.requestId })
 
-  let doomedOutcome: string
   let doomedCancelled = false
   try {
     await doomed.final
-    doomedOutcome = 'completed (cancel lost the race)'
   } catch (err) {
     doomedCancelled = err instanceof InferenceCancelledError
-    doomedOutcome = doomedCancelled ? 'cancelled' : `errored: ${String(err)}`
+  }
+
+  // Drain what the survivor emits from here on: a per-request cancel leaves it
+  // decoding to completion, a model-wide cancel would have stopped it.
+  let tokensAfterCancel = 0
+  for (let next = await survivorTokens.next(); !next.done; next = await survivorTokens.next()) {
+    tokensAfterCancel++
   }
   const survivorText = (await survivor.final).contentText.replace(/\s+/g, ' ').trim()
-  const survivorSaidMelon = /MELON/i.test(survivorText)
-  console.log(`  ▸ cancelled run -> ${doomedOutcome}`)
-  console.log(`  ▸ peer run kept decoding -> "${survivorText}"`)
+  console.log(`  ▸ cancelled run -> ${doomedCancelled ? 'cancelled' : 'NOT cancelled'}`)
+  console.log(`  ▸ peer kept decoding -> +${tokensAfterCancel} tokens after the cancel ack`)
 
   await unloadModel({ modelId, clearStorage: false })
 
   // A zero exit must prove BOTH typed cancellation and survivor isolation: the
-  // doomed run cancelled (not completed or errored), and the peer still answered.
-  if (!doomedCancelled || !survivorSaidMelon) {
+  // doomed run cancelled, and the peer produced tokens AFTER the cancel landed.
+  if (!doomedCancelled || tokensAfterCancel === 0) {
     console.error(
-      `✖ cancel isolation not demonstrated (doomedCancelled=${doomedCancelled}, survivorSaidMelon=${survivorSaidMelon})`
+      `✖ cancel isolation not demonstrated (doomedCancelled=${doomedCancelled}, tokensAfterCancel=${tokensAfterCancel}, survivorText="${survivorText}")`
     )
     process.exit(1)
   }
