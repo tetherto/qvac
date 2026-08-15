@@ -7,6 +7,7 @@ import { closeAllRagInstances } from '@/server/bare/rag-hyperdb'
 import { cleanupDownloads } from '@/server/rpc/handlers/load-model/download-manager'
 import { unloadAllModels } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry } from '@/server/bare/runtime'
+import { drainRequestsThenReleaseAddons } from '@/server/bare/runtime/shutdown-drain'
 import { markShuttingDown } from '@/server/bare/runtime-lifecycle'
 import { closeRegistryClient } from '@/server/bare/registry/registry-client'
 import {
@@ -156,14 +157,8 @@ async function runCleanup(): Promise<void> {
   // admits against a model while we cancel/drain/unload below.
   markShuttingDown()
   destroyWorkerResourceCollector()
-  // Cancel and drain every in-flight request before freeing models, so nothing
-  // is still decoding against a model unloadAllModels is about to destroy.
-  const registry = getRequestRegistry()
-  await registry.cancelAll('shutdown')
-  await registry.drainAll()
-  // Only now release addon loggers / plugins: a still-draining request must not
-  // log through a freed native logger reference.
-  clearRegistries()
+  // Drain in-flight requests before freeing models, then release addon loggers.
+  await drainRequestsThenReleaseAddons(getRequestRegistry(), clearRegistries)
   await Promise.allSettled([
     destroySwarm(),
     closeAllRagInstances(),
@@ -171,15 +166,6 @@ async function runCleanup(): Promise<void> {
     unloadAllModels(),
     closeRegistryClient()
   ])
-}
-
-/**
- * Test-only: clear the run-once latch so a test that drives `runCleanup`
- * (via `cleanupForTerminate`) can restore the worker for later tests.
- * @internal
- */
-export function __resetWorkerCleanupForTest(): void {
-  cleanupRan = false
 }
 
 /**

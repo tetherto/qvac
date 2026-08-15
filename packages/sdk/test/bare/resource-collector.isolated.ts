@@ -1,3 +1,7 @@
+// Runs in its own Bare process via `test:bare:isolated` (the `.isolated.ts` name
+// keeps it out of the aggregated `*.test.js` run). It drives the real
+// `cleanupForTerminate()`, which shuts the process-wide request-registry
+// singleton into its terminal state — poisoning it for the shared-process suite.
 import test from 'brittle'
 import { z } from 'zod'
 import { nativeResourceCollectorDependencies } from '@/server/bare/resources/native'
@@ -7,7 +11,6 @@ import {
   destroyWorkerResourceCollector
 } from '@/server/bare/resources/worker-collector'
 import { registerPlugin } from '@/server/plugins'
-import { __resetRequestRegistrySingletonForTest } from '@/server/bare/runtime'
 import { cleanupForTerminate } from '@/server/worker-core'
 import type { QvacPlugin } from '@/schemas/plugin'
 import { getSystemResourcesResponseSchema } from '@/schemas/system-resources'
@@ -75,8 +78,4 @@ test('releases native contexts during worker cleanup', async (t) => {
   await cleanupForTerminate()
   t.is(getWorkerResourceCollector(), undefined)
   t.execution(() => destroyWorkerResourceCollector())
-  // cleanupForTerminate() shut the shared request-registry singleton into its
-  // terminal shutting-down state; reset it so later bare-test files in this
-  // process get a live registry rather than one that aborts every begin().
-  __resetRequestRegistrySingletonForTest()
 })

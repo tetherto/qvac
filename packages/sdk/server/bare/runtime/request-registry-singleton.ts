@@ -82,17 +82,4 @@ export function getRequestRegistry(): RequestRegistry {
   return registry
 }
 
-/**
- * Test-only: drop the worker singleton so the next `getRequestRegistry()`
- * builds a fresh one with default policies. `cleanupForTerminate()` leaves the
- * singleton in its terminal shutting-down state (every later `begin()` starts
- * aborted); a shared-process bare-test suite must reset it after exercising
- * terminate so subsequent tests get a live registry.
- *
- * @internal
- */
-export function __resetRequestRegistrySingletonForTest(): void {
-  registry = null
-}
-
 export { createRegistry as createRequestRegistry }
