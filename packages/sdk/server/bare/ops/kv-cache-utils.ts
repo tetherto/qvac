@@ -56,11 +56,7 @@ export function generateCacheKey(messages: CacheMessage[]): string {
   return hashString.substring(0, 16)
 }
 
-export function resolveCacheFilePath(
-  modelId: string,
-  configHash: string,
-  cacheKey: string
-): string {
+function resolveCacheFilePath(modelId: string, configHash: string, cacheKey: string): string {
   const cacheDir = getKVCacheDir()
   const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
   const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)

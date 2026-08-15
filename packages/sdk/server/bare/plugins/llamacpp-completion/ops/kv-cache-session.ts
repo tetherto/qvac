@@ -7,7 +7,6 @@ import {
   getCurrentCacheInfo,
   pruneEmptyCacheDirectories,
   renameCacheFile,
-  resolveCacheFilePath,
   deleteCache as deleteCacheUtil
 } from '@/server/bare/ops/kv-cache-utils'
 import {
@@ -99,17 +98,14 @@ type CacheLockWaiter = { grant: () => void; drop: (reason: Error) => void }
 type CacheLock = { held: boolean; waiters: CacheLockWaiter[] }
 const cachePathLocks = new Map<string, CacheLock>()
 
-// Distinct sentinel so a completion catch can tell an aborted KV-lock wait (a
-// real cancellation) from an unrelated failure that merely races the abort.
-export class CacheLockAbortError extends Error {
+// Internal sentinel so acquisition paths prune directories/markers only when a
+// queued lock wait was aborted, not when lock acquisition failed for another
+// reason.
+class CacheLockAbortError extends Error {
   constructor(cause?: unknown) {
     super('cache lock wait aborted', cause !== undefined ? { cause } : undefined)
     this.name = 'CacheLockAbortError'
   }
-}
-
-export function isCacheLockAbortError(err: unknown): err is CacheLockAbortError {
-  return err instanceof CacheLockAbortError
 }
 
 // Case-fold the lock-map key so case-only path variants (e.g. "Session" vs
@@ -467,7 +463,18 @@ export function createKvCacheSession(
     const cachePath = await getCacheFilePath(modelId, input.configHash, input.customKey)
     // Held for the whole turn so a same-file peer can't interleave writes.
     // Released on commit/rollback/error; throws if aborted while queued.
-    const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    let releaseWriteLock: () => void
+    try {
+      releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    } catch (error) {
+      // Aborted while queued: no lock is held to release, and getCacheFilePath
+      // already mkdir'd this key's parent (a distinct dir under a case variant),
+      // so prune it before the cancellation propagates.
+      if (error instanceof CacheLockAbortError) {
+        await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+      }
+      throw error
+    }
     // A turn cancelled by the time it holds the lock must not prime (native work).
     // getCacheFilePath already mkdir'd the parent, so prune it before surfacing
     // the cancellation the plugin rides.
@@ -531,7 +538,19 @@ export function createKvCacheSession(
     })
 
     const { cachePath, cacheKey } = discovered
-    const releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    let releaseWriteLock: () => void
+    try {
+      releaseWriteLock = await acquireCachePathWriteLock(cachePath, input.signal)
+    } catch (error) {
+      // Aborted while queued: no lock is held to release. Discovery already
+      // mkdir'd the parent and wrote the auto marker; clean both before the
+      // cancellation propagates.
+      if (error instanceof CacheLockAbortError) {
+        await pruneEmptyCacheDirectories(cachePath, snapshotActivePaths())
+        await removeAutoCacheMarkerIfMissing(cacheKey)
+      }
+      throw error
+    }
     // A turn cancelled by the time it holds the lock must not prime (native work).
     // Discovery already mkdir'd the parent and wrote the auto marker; clean both
     // before surfacing the cancellation.
@@ -773,13 +792,14 @@ export function createKvCacheSession(
  *
  * Concurrency with in-flight turns: this delete does not take the
  * per-cache-path write locks, so it races any turn holding a `TurnHandle`
- * for the same key. The contract is last-writer-wins, not guaranteed
- * absence: a delete landing mid-write either makes the turn's
- * `verifySaveAndRecord` probe fail (clean idempotent rollback) or loses to
- * a turn that re-creates the file after it. Every layer's mutation is
- * idempotent (`unlink` no-ops if missing, `Map.delete` / `Set.delete` no-op
- * on absent keys), so no state is corrupted either way — but a caller that
- * needs the key gone for good must not delete one that is in active use.
+ * for the same key. Deleting a key that is in active use is unsupported.
+ * Each individual mutation is idempotent (`unlink` no-ops if missing,
+ * `Map.delete` / `Set.delete` no-op on absent keys), but the layers are
+ * cleared without a lock, so an interleaving that lands the delete's
+ * in-memory cleanup after a concurrent turn has already renamed/committed
+ * its file splits state: the file stays on disk while its saved-count and
+ * init flag are cleared, so the next turn sees the file, skips priming, and
+ * reports `savedCount=0`. Callers must not delete a key that is in active use.
  */
 export async function deleteKvCacheState(
   target: { kvCacheKey: string; modelId?: string } | { all: true }
@@ -951,14 +971,8 @@ export const __kvCacheSessionTestHooks = {
   getToolBlockCachedForTest(cachePath: string): boolean {
     return cachedPrefixes.get(cachePath)?.toolBlock ?? false
   },
-  hasInitializedKey(modelId: string, configHash: string, cacheKey: string): boolean {
-    return initializedCaches.has(resolveCacheFilePath(modelId, configHash, cacheKey))
-  },
   hasInitializedPath(cachePath: string): boolean {
     return initializedCaches.has(cachePath)
-  },
-  markInitializedForTest(modelId: string, configHash: string, cacheKey: string): void {
-    initializedCaches.add(resolveCacheFilePath(modelId, configHash, cacheKey))
   },
   getLastAutoCacheSweepMsForTest(): number {
     return lastAutoCacheSweepMs
