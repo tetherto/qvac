@@ -811,6 +811,17 @@ test('ttsConfigSchema: requires the Audio8 codec decoder source', (t) => {
   t.is(r.success, false, 'audio8CodecDecoderModelSrc is required')
 })
 
+test('ttsConfigSchema: rejects a whitespace-only Audio8 referenceText', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/encoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: '   '
+  })
+  t.is(r.success, false, 'a whitespace-only transcript must not reach the engine')
+})
+
 test('ttsConfigSchema: enforces the Audio8 voice-cloning pairing rules', (t) => {
   const missingTranscript = ttsConfigSchema.safeParse({
     ttsEngine: 'audio8',

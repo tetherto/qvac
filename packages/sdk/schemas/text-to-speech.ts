@@ -393,7 +393,9 @@ const ttsAudio8RuntimeConfigShape = {
   // Transcript of the load-time reference recording (zero-shot voice cloning).
   // Paired with `referenceAudioSrc` on the load config; kept on the runtime
   // config because it survives artifact resolution as plain data.
-  referenceText: z.string().min(1).optional(),
+  // Trimmed for the same reason as the CosyVoice3 instruct string: a
+  // whitespace-only transcript would reach the engine as a non-empty value.
+  referenceText: z.string().trim().min(1).optional(),
   greedy: z.boolean().optional(),
   temperature: z.number().nonnegative().optional(),
   topK: ttsNonNegativeInt32Schema.optional(),
