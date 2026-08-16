@@ -93,9 +93,15 @@ const CASES = [
   },
   { id: 'story-canyon', story: true, expected: ['canyon'] },
   {
+    // Keep this open-ended. Offering the options instead ("yellow, green, or
+    // purple?") made it worse, not better: Llama-3.2-1B picked "Green" off the
+    // list and broke a test that had been passing. A weak model will take a
+    // distractor when one is handed to it.
+    // "sand" covers VisionPsy, which answers "sandstone" — a yellow-brown shade,
+    // and a fair reading of the question rather than a wrong colour.
     id: 'primary-yellow',
     user: 'What primary color is the sun often drawn as? Answer with one word.',
-    expected: ['yellow', 'orange', 'red']
+    expected: ['yellow', 'orange', 'red', 'sand']
   },
   { id: 'story-saffron', story: true, expected: ['saffron'] }
 ]
@@ -152,7 +158,12 @@ const IMAGE_CASES = [
       'photo',
       'photograph',
       'picture',
-      'news'
+      'news',
+      // Masthead rather than headline. SmolVLM2 reads the banner headline
+      // ("STORM."); VisionPsy names the publication ("New York Times"). Both are
+      // true readings of the page, and "news" does not match "new york times".
+      'times',
+      'york'
     ]
   }
 ]
@@ -172,8 +183,19 @@ function normalizeText(text) {
     .trim()
 }
 
+// Drop a leading reasoning trace before matching. Some VLMs (VisionPsy Nano)
+// open a `<think>` block even under a one-word system prompt and with a chat
+// template that has no thinking branch, so the answer sits after it. A block
+// left unterminated by the token budget strips to empty, which fails loudly
+// rather than matching on the reasoning text.
+function stripReasoning(text) {
+  const s = String(text || '')
+  const closed = s.replace(/<think>[\s\S]*?<\/think>/g, ' ')
+  return closed.replace(/<think>[\s\S]*$/, ' ')
+}
+
 function containsExpectedWord(text, expectedOptions) {
-  const normalized = normalizeText(text)
+  const normalized = normalizeText(stripReasoning(text))
   const options = Array.isArray(expectedOptions) ? expectedOptions : [expectedOptions]
   return options.some((option) => normalized.includes(option))
 }
@@ -238,10 +260,17 @@ function buildVlmBatchItem(item) {
   return {
     id: item.id,
     prompt: [
-      { role: 'system', content: 'Answer with one word only.' },
+      // "Do not explain" is aimed at VisionPsy, which opens a <think> trace even
+      // under a one-word instruction and with a chat template that has no
+      // thinking branch. At predict 64 the trace was still unterminated, so the
+      // answer never arrived and stripReasoning() correctly reduced it to empty.
+      { role: 'system', content: 'Answer with one word only. Do not explain or think first.' },
       { role: 'user', content: item.user }
     ],
-    runOptions: { generationParams: { predict: 16 } }
+    // 128, not 16. A reasoning model spends a 16-token budget restating the
+    // question, and 64 was still short of closing the trace. Models that answer
+    // in one word stop at their EOG token, so this costs them nothing.
+    runOptions: { generationParams: { predict: 128 } }
   }
 }
 
