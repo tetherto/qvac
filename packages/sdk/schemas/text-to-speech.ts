@@ -296,8 +296,10 @@ export const ttsParlerRuntimeConfigSchema = z
 // CosyVoice3 structured instruct: a raw string passes through to the engine as
 // the exact instruction text (advanced escape hatch); the object form renders
 // exactly one trained control by precedence dialect > volume > style.
+// The string branch trims first: the addon trims too, so a whitespace-only
+// instruction would otherwise silently degrade to zero-shot synthesis.
 const ttsCosyvoice3InstructSchema = z.union([
-  z.string().min(1),
+  z.string().trim().min(1),
   z
     .object({
       dialect: z.enum(TTS_COSYVOICE3_INSTRUCT_DIALECTS).optional(),

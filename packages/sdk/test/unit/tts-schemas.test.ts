@@ -669,6 +669,14 @@ test('ttsConfigSchema: rejects empty or unknown CosyVoice3 instruct controls', (
   })
   t.is(empty.success, false, 'instruct object requires at least one control')
 
+  // The addon trims raw-string instructions, so a whitespace-only string would
+  // silently disengage conditioning (zero-shot) instead of erroring.
+  const whitespace = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    instruct: '   '
+  })
+  t.is(whitespace.success, false, 'whitespace-only instruct strings are rejected')
+
   const unknown = ttsConfigSchema.safeParse({
     ttsEngine: 'cosyvoice3',
     instruct: { emotion: 'happy' }

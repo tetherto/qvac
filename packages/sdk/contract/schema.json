@@ -2748,6 +2748,72 @@
       "enum": ["static", "dynamic"],
       "x-enum-varnames": ["static", "dynamic"]
     },
+    "constants.TtsCosyvoice3Emotion": {
+      "title": "TtsCosyvoice3Emotion",
+      "type": "string",
+      "enum": ["anger", "happy", "neutral", "sad"],
+      "x-enum-varnames": ["ANGER", "HAPPY", "NEUTRAL", "SAD"]
+    },
+    "constants.TtsCosyvoice3InstructDialect": {
+      "title": "TtsCosyvoice3InstructDialect",
+      "type": "string",
+      "enum": [
+        "cantonese",
+        "northeastern",
+        "gansu",
+        "guizhou",
+        "henan",
+        "hubei",
+        "hunan",
+        "jiangxi",
+        "minnan",
+        "ningxia",
+        "shanxi",
+        "shaanxi",
+        "shandong",
+        "shanghai",
+        "sichuan",
+        "tianjin",
+        "yunnan"
+      ],
+      "x-enum-varnames": [
+        "CANTONESE",
+        "NORTHEASTERN",
+        "GANSU",
+        "GUIZHOU",
+        "HENAN",
+        "HUBEI",
+        "HUNAN",
+        "JIANGXI",
+        "MINNAN",
+        "NINGXIA",
+        "SHANXI",
+        "SHAANXI",
+        "SHANDONG",
+        "SHANGHAI",
+        "SICHUAN",
+        "TIANJIN",
+        "YUNNAN"
+      ]
+    },
+    "constants.TtsCosyvoice3InstructStyle": {
+      "title": "TtsCosyvoice3InstructStyle",
+      "type": "string",
+      "enum": ["peppa", "robot"],
+      "x-enum-varnames": ["PEPPA", "ROBOT"]
+    },
+    "constants.TtsCosyvoice3InstructVolume": {
+      "title": "TtsCosyvoice3InstructVolume",
+      "type": "string",
+      "enum": ["loud", "soft"],
+      "x-enum-varnames": ["LOUD", "SOFT"]
+    },
+    "constants.TtsPace": {
+      "title": "TtsPace",
+      "type": "string",
+      "enum": ["slow", "moderate", "fast"],
+      "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
+    },
     "constants.Verbosity": {
       "title": "Verbosity",
       "type": "number",

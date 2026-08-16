@@ -285,6 +285,26 @@ export const ttsCosyvoice3Streaming: TestDefinition = {
   metadata: { category: 'tts', dependency: 'tts-cosyvoice3', estimatedDurationMs: 90000 }
 }
 
+// Runs against the native-chunk-streaming resource (streamChunkTokens > 0) so
+// the newly exposed native 24 kHz chunk path is exercised, not just the
+// generic SDK streaming wrapper used by tts-cosyvoice3-streaming.
+export const ttsCosyvoice3NativeStreaming: TestDefinition = {
+  testId: 'tts-cosyvoice3-native-streaming',
+  params: {
+    text: 'CosyVoice3 native chunk streaming emits audio progressively.',
+    operation: 'stream'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['cosyvoice3-generated', 'operation=stream', 'samples']
+  },
+  metadata: {
+    category: 'tts',
+    dependency: 'tts-cosyvoice3-native-stream',
+    estimatedDurationMs: 90000
+  }
+}
+
 export const ttsCosyvoice3SentenceStreaming: TestDefinition = {
   testId: 'tts-cosyvoice3-sentence-streaming',
   params: {
@@ -350,6 +370,7 @@ export const ttsTests = [
   ttsCosyvoice3EmotionConditioning,
   ttsCosyvoice3Default,
   ttsCosyvoice3Streaming,
+  ttsCosyvoice3NativeStreaming,
   ttsCosyvoice3SentenceStreaming,
   ttsCosyvoice3DuplexStreaming,
   ttsCosyvoice3InvalidEmotion

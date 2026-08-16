@@ -2075,6 +2075,49 @@ class ToolsMode(Enum):
     dynamic = "dynamic"
 
 
+class TtsCosyvoice3Emotion(Enum):
+    anger = "anger"
+    happy = "happy"
+    neutral = "neutral"
+    sad = "sad"
+
+
+class TtsCosyvoice3InstructDialect(Enum):
+    cantonese = "cantonese"
+    northeastern = "northeastern"
+    gansu = "gansu"
+    guizhou = "guizhou"
+    henan = "henan"
+    hubei = "hubei"
+    hunan = "hunan"
+    jiangxi = "jiangxi"
+    minnan = "minnan"
+    ningxia = "ningxia"
+    shanxi = "shanxi"
+    shaanxi = "shaanxi"
+    shandong = "shandong"
+    shanghai = "shanghai"
+    sichuan = "sichuan"
+    tianjin = "tianjin"
+    yunnan = "yunnan"
+
+
+class TtsCosyvoice3InstructStyle(Enum):
+    peppa = "peppa"
+    robot = "robot"
+
+
+class TtsCosyvoice3InstructVolume(Enum):
+    loud = "loud"
+    soft = "soft"
+
+
+class TtsPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class Verbosity(Enum):
     error = 0
     warn = 1

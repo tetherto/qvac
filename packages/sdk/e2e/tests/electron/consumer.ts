@@ -316,6 +316,20 @@ resources.define('tts-cosyvoice3', {
   }
 })
 
+// Same model with native chunk streaming engaged, so the streaming e2e can
+// exercise the native 24 kHz chunk path rather than generic SDK streaming.
+resources.define('tts-cosyvoice3-native-stream', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10
+  }
+})
+
 resources.define('tts-supertonic', {
   constant: TTS_EN_SUPERTONIC_Q8_0,
   type: 'tts-ggml',
