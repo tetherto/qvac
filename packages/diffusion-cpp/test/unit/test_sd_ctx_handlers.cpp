@@ -137,6 +137,13 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_TRUE(applyOne("offload_to_cpu", "1").offloadToCpu);
   EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
   EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
+  EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);
+  EXPECT_FLOAT_EQ(
+      applyOne("vae_auto_cpu_fallback_memory_ratio", "0.75")
+          .vaeAutoCpuFallbackMemoryRatio,
+      0.75f);
+  EXPECT_THROW(
+      applyOne("vae_auto_cpu_fallback_memory_ratio", "1.1"), StatusError);
   EXPECT_TRUE(applyOne("vae_decode_only", "true").vaeDecodeOnly);
 
   SdCtxConfig cfg;

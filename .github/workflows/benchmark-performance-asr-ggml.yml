@@ -121,7 +121,7 @@ jobs:
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # No merge-multiple: same-platform runners (e.g. qvac-ubuntu2204-x64 and
       # qvac-ubuntu2204-x64-gpu) emit identically named rtf-benchmark-*.json

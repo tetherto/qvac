@@ -52,7 +52,8 @@ def save_benchmark_results(
 
     md_path = model_dir / f"{config_name}.md"
 
-    addon_info = f'"{addon}": "{cfg.server.version}"'
+    addon_version = results.model_version or cfg.server.version or "unknown"
+    addon_info = f'"{addon}": "{addon_version}"'
     gpu_info = "Enabled" if cfg.model.use_gpu else "Disabled"
     streaming_info = "Enabled" if cfg.model.streaming else "Disabled"
     notes = notes or f"Model type: {model_type}, Threads: {cfg.model.max_threads}"

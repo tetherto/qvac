@@ -546,9 +546,7 @@ void LlamaModel::init(bool acquireLock) {
 
   common_params params;
   std::optional<int> adrenoVersion;
-  ResolvedToolsCompactConfig toolsCompactConfig;
-  commonParamsParse(
-      modelPath, configFilemap, params, adrenoVersion, toolsCompactConfig);
+  commonParamsParse(modelPath, configFilemap, params, adrenoVersion);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -570,16 +568,11 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
-  // Create tools compact controller before context (contexts hold reference)
-  snap->toolsCompact_ =
-      std::make_unique<ToolsCompactController>(toolsCompactConfig.profile);
-
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
-      std::move(llamaInit),
-      *snap->toolsCompact_);
+      std::move(llamaInit));
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -615,16 +608,15 @@ batching::DriverFactory
 buildDriverFactory(LlmModelContext shared, mtmd_context* sharedVision) {
   return [shared, sharedVision](
              const common_params& params,
-             ToolsCompactController& tools,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
     const auto sid = static_cast<llama_seq_id>(seqId);
     if (sharedVision != nullptr) {
       return std::make_unique<MtmdLlmContext>(
-          params, shared, tools, sharedVision, sid, perSeqCtxCeiling);
+          params, shared, sharedVision, sid, perSeqCtxCeiling);
     }
     return std::make_unique<TextLlmContext>(
-        params, shared, tools, sid, perSeqCtxCeiling);
+        params, shared, sid, perSeqCtxCeiling);
   };
 }
 
@@ -657,7 +649,6 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
         batchCapacity,
         cparams,
         state.configuredNDiscarded_,
-        state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
         buildDriverFactory(shared, state.llmContext_->visionContext()));
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
@@ -682,14 +673,6 @@ void LlamaModel::setWeightsForFile(
 bool LlamaModel::isLoaded() {
   std::shared_lock lock(stateMtx_);
   return static_cast<bool>(state_->llmContext_);
-}
-
-llama_pos LlamaModel::getNPastBeforeTools() const {
-  std::shared_lock lock(stateMtx_);
-  if (state_->toolsCompact_) {
-    return state_->toolsCompact_->anchor();
-  }
-  return -1;
 }
 
 llama_context* LlamaModel::getContext() {
@@ -1320,7 +1303,6 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
-    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference =
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
@@ -1329,7 +1311,6 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
-    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference = true;
   }
   return resolved;
@@ -1365,11 +1346,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     resetState(true);
   }
 
-  bool hasKvCacheContext = resolved.isCacheLoaded;
-  if (state_->llmContext_->getNPast() > 0) {
-    hasKvCacheContext = true;
-  }
-
   auto resetAndInvalidateActiveCache = [this]() {
     resetState(false);
     if (state_->cacheManager_.has_value()) {
@@ -1379,8 +1355,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   bool shouldSaveCache = false;
   bool shouldResetAfterInference = false;
-  state_->llmContext_->validatePromptPolicy(
-      resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
@@ -1634,7 +1608,6 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
-    sr.layout = std::move(parsed.layout);
     sr.media = prompt.media;
     sr.mediaPlan = std::move(parsed.mediaPlan);
     sr.prefill = prompt.prefill;
@@ -1786,55 +1759,13 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"backendDevice", runtimeBackendDevice_}};
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats
-LlamaModel::runtimeDebugStats() const {
-  std::shared_lock lock(stateMtx_);
-  const int64_t firstMsgTokens =
-      state_->llmContext_
-          ? static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())
-          : 0LL;
-  auto snapshot = state_->toolsCompact_
-                      ? state_->toolsCompact_->debugSnapshot()
-                      : ToolsCompactController::DebugSnapshot{};
-  return {
-      {"nPastBeforeTools", static_cast<int64_t>(snapshot.nPastBeforeTools)},
-      {"firstMsgTokens", firstMsgTokens},
-      {"toolsTrimmed", snapshot.lastToolsTrimmed ? 1LL : 0LL}};
-}
-
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-LlamaModel::ResolvedToolsCompactConfig
-LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
-  if (!toolsCompactRequested) {
-    return {};
-  }
-
-  auto arch = metadata_.tryGetString("general.architecture");
-  auto marker = qvac_lib_inference_addon_llama::utils::
-      selectToolsCompactMarkerForModelMetadata(arch);
-
-  if (!marker.has_value()) {
-    return {
-        .resolution = ToolsCompactResolution::RequestedUnsupported,
-        .profile = std::nullopt};
-  }
-
-  ToolsCompactProfile profile;
-  profile.toolCallStartMarker = marker.value();
-  return {
-      .resolution = ToolsCompactResolution::RequestedSupported,
-      .profile = std::move(profile)};
-}
-
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 void LlamaModel::commonParamsParse(
     const std::string& modelPath,
     std::unordered_map<std::string, std::string>& configFilemap,
-    common_params& params, std::optional<int>& outAdrenoVersion,
-    ResolvedToolsCompactConfig& outToolsCompactConfig) {
+    common_params& params, std::optional<int>& outAdrenoVersion) {
 
   std::vector<std::string> configVector;
-  outToolsCompactConfig = ResolvedToolsCompactConfig{};
 
   // Check if tools are enabled and exclude it with jinja from the config file
   if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
@@ -1924,25 +1855,6 @@ void LlamaModel::commonParamsParse(
           errorMsg);
     }
     configFilemap.erase(iter);
-  }
-
-  // parse tools_compact flag from config
-  bool toolsCompactRequested = false;
-  if (auto iter = configFilemap.find("tools_compact");
-      iter != configFilemap.end()) {
-    std::string val = iter->second;
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    toolsCompactRequested = (val == "true");
-    configFilemap.erase(iter);
-  }
-
-  outToolsCompactConfig = resolveToolsCompactConfig(toolsCompactRequested);
-  if (outToolsCompactConfig.resolution ==
-      ToolsCompactResolution::RequestedUnsupported) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[LlamaModel] tools_compact is not supported for this model "
-        "architecture, ignoring\n");
   }
 
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
@@ -2368,10 +2280,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
 
-    // Build PromptLayout for tools_compact validation
-    PromptLayout layout;
-    layout.totalItems = obj.size();
-
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
     for (size_t i = 0; i < obj.size(); ++i) {
@@ -2381,12 +2289,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
-          if (!layout.firstToolIdx.has_value()) {
-            layout.firstToolIdx = i;
-          }
-          layout.lastToolIdx = i;
-          layout.toolCount++;
-
           common_chat_tool tool;
           tool.name = jsonObj["name"].get<std::string>();
           if (jsonObj.find("description") != jsonObj.end()) {
@@ -2406,16 +2308,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(NoRoleProvided), errorMsg);
         }
         newMsg.role = jsonObj["role"].get<std::string>();
-
-        // Track last anchor (user/tool) message index for tools_compact
-        if (newMsg.role == "user" || newMsg.role == "tool") {
-          layout.lastAnchorIdx = i;
-        }
-
-        // Track if the very last array item is a user message
-        if (newMsg.role == "user" && i == obj.size() - 1) {
-          layout.lastItemIsUserMsg = true;
-        }
 
         if (jsonObj.find("content") == jsonObj.end()) {
           const char* errorMsg = "content is required in the input\n";
@@ -2463,8 +2355,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
       }
     }
 
-    parsed.layout = std::move(layout);
-
     if (addMediaPlaceholder > 0) {
       state_->llmContext_->resetMedia();
       std::string errorMsg =
@@ -2490,13 +2380,12 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit, ToolsCompactController& tools) {
+    common_init_result_ptr llamaInit) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), tools);
+    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
+  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

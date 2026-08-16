@@ -1,7 +1,7 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
 import { FFmpegDecoder } from '@qvac/decoder-audio'
-import { FORMATS_NEEDING_DECODE } from '@qvac/decoder-audio/constants'
+import { FORMATS_NEEDING_DECODE } from '@/constants/audio'
 import { Readable } from 'bare-stream'
 import Buffer from 'bare-buffer'
 import { getEngineLogger } from '@/logging/index'

@@ -123,6 +123,9 @@ public:
      *  per frame). Empty for unguided txt2vid / img2vid. When supplied,
      *  vaceStrength controls how strongly these frames guide generation. */
     std::vector<std::vector<uint8_t>> controlFramesBytes;
+    /** LTX IC-LoRA reference images (PNG/JPEG bytes). Each image becomes a
+     *  static reference video for LTX conditioning. */
+    std::vector<std::vector<uint8_t>> referenceImagesBytes;
     /** Called each diffusion step: {"step":N,"total":M,"elapsed_ms":T} */
     std::function<void(const std::string&)> progressCallback;
     /** Called once per output image (txt2img / img2img) with PNG bytes,

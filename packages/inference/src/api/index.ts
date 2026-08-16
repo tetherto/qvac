@@ -46,5 +46,5 @@ export {
 export { suspend } from '@/api/suspend'
 export { resume } from '@/api/resume'
 export { state } from '@/api/state'
-export { vla, vlaHparams } from '@/api/vla'
+export { vla, vlaHparams, vlaSetEmbodiment } from '@/api/vla'
 export { vlaPreprocessImage, vlaPadState, VLA_DEFAULT_IMAGE_SIZE } from '@/api/vla-helpers'
