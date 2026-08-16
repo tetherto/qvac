@@ -86,12 +86,19 @@ const MULTIMODAL_MODEL_CONFIGS = {
   }
 }
 
-// QVAC_VLM_MODEL swaps that pair for every test that takes the default, so the
-// same assertions can be run against a second model without forking them.
-// Unset keeps SmolVLM2, which is what CI and Device Farm get. A typo throws
-// rather than falling back, because silently measuring the wrong model is the
-// worse failure — same rule as QVAC_QWEN35_MTMD_SIZE.
-const VLM_MODEL = (_envStr('QVAC_VLM_MODEL') || 'smolvlm2').toLowerCase()
+// QVAC_VLM_MODEL selects the pair for every test that takes the default, so the
+// same assertions can run against either model without forking them.
+//
+// VisionPsy Nano base is the default: it is the model this suite is here to
+// cover, and it exercises real idefics3 slicing. SmolVLM2 stays available as
+// QVAC_VLM_MODEL=smolvlm2 for an A/B, but note its mmproj declares no
+// clip.vision.preproc_image_size, so fabric falls back to an overview-only
+// encode — ~64 image tokens regardless of image size, against VisionPsy's ~862.
+// It is the cheaper baseline, not the equivalent one.
+//
+// A typo throws rather than falling back, because silently measuring the wrong
+// model is the worse failure — same rule as QVAC_QWEN35_MTMD_SIZE.
+const VLM_MODEL = (_envStr('QVAC_VLM_MODEL') || 'visionpsy').toLowerCase()
 if (!MULTIMODAL_MODEL_CONFIGS[VLM_MODEL]) {
   throw new Error(
     `QVAC_VLM_MODEL must be one of ${Object.keys(MULTIMODAL_MODEL_CONFIGS).join(', ')} ` +
