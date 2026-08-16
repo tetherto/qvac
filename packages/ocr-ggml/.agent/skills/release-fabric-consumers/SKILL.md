@@ -67,16 +67,20 @@ npm view @qvac/<pkg> dist-tags.latest
 git -C <repo> ls-remote --tags origin "<tag-prefix>-v*"
 ```
 
-Both signals together (`0.0.0` **and** no tag) mean a first release. **`model-fit` is the current
-instance**: npm `0.0.0`, no `model-fit-v*` tag, and `origin/main` at `0.1.0`. Its first release needs
-two things settled before dispatch:
+Both signals together (`0.0.0` **and** no tag) mean a first release. `0.0.0` here is a **sentinel**,
+not a version that drifts — it is npm's placeholder for a name reserved but never published, so it
+stays literal. Which package is in that state does drift, so run the two commands above across the
+roster rather than trusting a name written here; `model-fit` was the instance when this was written
+and has since published. When a package is in that state, its first release needs two things settled
+before dispatch:
 
-1. a dated `## [<version>] - <date>` entry — its `CHANGELOG.md` currently has only an
-   `## [Unreleased]` block, which the release extractor will not accept as a version section;
-2. a decision on whether `0.1.0` publishes as-is, or is superseded by the rollout bump. Do not bump
-   past an unpublished version without asking — that silently burns a version number.
+1. a dated `## [<version>] - <date>` entry — a `CHANGELOG.md` holding only an `## [Unreleased]`
+   block is what the release extractor will not accept as a version section;
+2. a decision on whether the version already on `origin/main` publishes as-is, or is superseded by
+   the rollout bump. Do not bump past an unpublished version without asking — that silently burns a
+   version number.
 
-Until both are settled, hold it back with **`--exclude model-fit`** rather than dispatching it and
+Until both are settled, hold it back with **`--exclude <pkg>`** rather than dispatching it and
 dealing with a failed `release-merge-guard`. That is the supported way to release the rest of the
 roster on schedule while a first-publish package waits.
 
@@ -118,14 +122,24 @@ build-validated on the fabric sync PR; a canary-first order is a fine alternativ
 
 ### Release `fabric` first
 
-`@qvac/fabric` is the shared runtime addon the others build against, and it is also what
-`@qvac/classification-ggml` depends on (`"@qvac/fabric": "^0.3.1"`). Publish it ahead of
-the rest so downstream installs resolve against the new build rather than the previous one.
+`@qvac/fabric` is the shared runtime addon the others build against, and it is also a
+**caret dependency of `@qvac/classification-ggml`**. Publish it ahead of the rest so
+downstream installs resolve against the new build rather than the previous one.
 
-Then check the caret: on a `0.x` version **a caret locks the minor**, so `^0.3.1` absorbs
-`0.3.x` automatically but will **not** pick up `0.4.0`. If `@qvac/fabric` crosses a minor,
+Then check the caret. Read both values rather than assuming either — they move every
+release, so any version written here would be wrong by the time you read it:
+
+```bash
+git -C <repo> grep -h "@qvac/fabric" origin/main -- packages/classification-ggml/package.json
+git -C <repo> grep -h '"version"' origin/main -- packages/fabric/package.json
+```
+
+On a `0.x` version **a caret locks the minor**: `^0.<m>.<p>` absorbs later `0.<m>.x`
+automatically but will **not** cross to `0.<m+1>.0`. So if this release moves
+`@qvac/fabric`'s minor past the one classification-ggml's caret pins,
 `classification-ggml` needs a manual dependency bump — track it as a **follow-up after the
-release**, not as part of the rollout PR.
+release**, not as part of the rollout PR. This has happened before and is expected to
+recur; `packages/classification-ggml/CHANGELOG.md` records each crossing.
 
 If `fabric` is in `--exclude`, this ordering step does not apply to that pass and the
 `classification-ggml` caret follow-up does not arise — release the rest of the set in
@@ -238,7 +252,10 @@ indistinguishable later from one that dropped a package by accident.
   appears rather than guessing from the directory name.
 - **label-gate auto-authorises release dispatches.** The `label-gate`/Authorise job treats
   `push` and `workflow_dispatch` as *trusted events* (`authorised=true`) — so a
-  `release-*` branch dispatch needs **no `verified` label** (unlike PR events, which do).
+  `release-*` branch dispatch needs **no labels at all**. PR events are the contrasting
+  case, and they do **not** want `verified` either: they need the granular stage labels
+  (`prebuilds` plus the four `run-*`), which are the only names `ci-router` reads.
+  `verified` selects nothing anywhere — the label gate was retired repo-wide.
 - **The npm approval gate is mandatory and human-only.** `publish-npm` runs in the `npm`
   environment, protected by `required_reviewers` (team `qvac-internal-release`). Every run
   pauses there. Detect via `.../pending_deployments`. **Never approve** — hand off to the

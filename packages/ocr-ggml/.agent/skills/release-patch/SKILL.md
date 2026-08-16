@@ -97,8 +97,12 @@ files apply automatically.
 Push the helper branch; open PR #1 with **base = `release-<pkg>-<newver>`** (four-emoji body; link the
 source PR(s)).
 
-**CI:** add the matrix labels — `verified`, `run-cpp-addon-tests`, `run-desktop-addon-tests`,
-`run-mobile-addon-tests`, `prebuilds` — to run the fix-validating jobs. Auto-approve the `release`
+**CI:** add the matrix labels — `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`,
+`run-mobile-addon-tests`, `run-coload-tests` — to run the fix-validating jobs. **Do not add
+`verified`**: `ci-router` reads only those five names, so `verified` selects no stage and fails
+silently, costing a CI round. (The label still exists and its siblings' descriptions still read
+"requires verified" — that text is stale; the label gate was retired, and
+`ci-trust-policy.test.mjs` asserts it stays retired.) Auto-approve the `release`
 environment deployment when it appears. **Always read failures from full logs via**
 `gh api repos/tetherto/qvac/actions/jobs/{id}/logs` — `gh run view --job --log` silently truncates
 (~1.1 MB of ~9 MB) and can fake a "hang". Triage flaky-vs-real; pre-existing environment failures
@@ -121,8 +125,9 @@ Open PR #2 (base = `release-<pkg>-<newver>`).
 ### Step 7 — Release (merging PR #2 auto-triggers publish; use the `release` skill to verify)
 
 Merging the bump PR into the `release-*` branch is a **trusted push** → `on-merge-<pkg>.yml` runs and
-publishes automatically (no `verified` label needed on a merge/push; gated by version>npm +
-`release-merge-guard`). Follow the **`release` skill** for the monitor/verify mechanics (its Steps 4–6),
+publishes automatically. No labels are needed on a merge/push: `push` is a trusted event in
+`ci-router`, which short-circuits label parsing and enables every stage on its own. Publication is
+gated by version>npm + `release-merge-guard`. Follow the **`release` skill** for the monitor/verify mechanics (its Steps 4–6),
 with these **nuances**:
 
 - **`release`-skill latest-guard caveat.** The `release` skill's Step 1 compares the local version to
