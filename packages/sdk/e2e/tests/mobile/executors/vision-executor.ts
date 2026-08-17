@@ -1,9 +1,5 @@
 import { completion } from '@qvac/sdk'
-import {
-  ValidationHelpers,
-  type TestResult,
-  type Expectation
-} from '@tetherto/qvac-test-suite/mobile'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { visionTests } from '../../vision-tests.js'

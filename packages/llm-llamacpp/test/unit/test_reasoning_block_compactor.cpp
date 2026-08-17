@@ -8,7 +8,6 @@
 
 #include "model-interface/ContextSlider.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
-#include "model-interface/ToolsCompactController.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
@@ -272,7 +271,7 @@ TEST(ReasoningRollbackStateClip, PreservesMultipleSeededStructuralTokens) {
 
 TEST(ReasoningRollbackStateClip, KeepsSeededPrefixAndCapsCapturedTail) {
   // Replay buffer is [close_marker, t0, t1, t2]. Live cache only has
-  // two post-close tokens left (tools-compact trimmed one). Clip cap
+  // two post-close tokens left (a tail trim removed one). Clip cap
   // is the captured-tail length (2), not the total. The close marker
   // stays; only the last captured token is dropped.
   ReasoningRollbackState rollback;
@@ -332,12 +331,7 @@ namespace {
 // file-backed snapshot through the rollback test seam.
 struct CompactorFixture {
   ReasoningRollbackState rollback;
-  // Tools-compact controller is unused by `recordCloseMarkerForReplay`
-  // — its slide notifier only fires from `compact()`. Constructed with
-  // an empty profile so it stays in its disabled state for the lifetime
-  // of the fixture.
-  ToolsCompactController tools{std::nullopt};
-  ReasoningBlockCompactor compactor{rollback, tools};
+  ReasoningBlockCompactor compactor{rollback};
 };
 
 } // namespace
@@ -830,8 +824,7 @@ namespace {
 //
 //   * `AcceptingSliderOps` — `seqRm` returns `true`, so the compactor
 //     proceeds to `seqAdd` and reports `CompactedAttention`. Used by
-//     the successful-drop tests to observe that `seqAdd` fires and
-//     that side-effect notifications (e.g. `tools_.onSlide`) run.
+//     the successful-drop tests to observe that `seqAdd` fires.
 //   * `RejectingSliderOps` — `seqRm` returns `false` to mimic a
 //     rejected primitive. The production contract is "all-or-nothing
 //     on rejection", so `seqAdd` MUST NOT fire afterwards; otherwise
@@ -1016,52 +1009,36 @@ TEST(
 }
 
 // ============================================================================
-// tools_compact × remove_thinking_from_context — shared post-generation seam
+// Tail trims × remove_thinking_from_context — shared post-generation seam
 // ============================================================================
 //
-// `TextLlmContext::onGenerationFinished` runs the two post-generation
-// policies back-to-back: `onGenerationCompletePolicy` (tools_compact
-// tail trim) fires first, then `compactThinkSpan()` (the reasoning
-// compactor). Prior to this PR, no unit or integration test enabled
-// both features at the same time — `reasoning.test.js` never sets
-// `tools_compact` and `tools-compact.test.js` never sets
-// `remove_thinking_from_context`. Pin the two invariants that connect
-// them on the shared code path so a future change to either policy
-// cannot silently break the other:
+// A tail-eraser can shrink `nPast_` below the recorded close-span end
+// before `compactThinkSpan()` runs. Pin how `compact()` must behave
+// per-path so a future tail-trimming policy cannot silently break the
+// strict cleanup contract:
 //
-//   1. If a tail-eraser (today: tools_compact) has shrunk `nPast_`
-//      below the recorded close-span end, `compact()` MUST behave
-//      per-path:
-//        a. Whole span already past the live cursor (`start >= pos`):
-//           NoOp — nothing resident to remove.
-//        b. Partial span still resident (`start < pos < end`):
-//           * Pure-attention: honor the default-on strict-cleanup
-//             contract by dropping the resident remainder via a
-//             clamped `[start, pos)` `seq_rm + seq_add`; reports
-//             `CompactedAttention`.
-//           * Recurrent / hybrid: hard-fail — replay is anchored at a
-//             captured post-reasoning tail we can no longer reconcile
-//             against a shorter live cache without leaving resident
-//             reasoning behind.
-//      The current Qwen3-only tools_compact caller is not expected to
-//      overshoot `</think>` (its trim is sized against the trailing
-//      tool region only); these guards are the defence-in-depth path
-//      if a future tail-eraser ever legitimately trims past the close
-//      marker.
-//   2. On a successful pure-attention drop, `compact()` MUST notify an
-//      enabled `ToolsCompactController` via `onSlide` so the tools
-//      anchor tracks the shifted tail. Skipping this would leave the
-//      anchor pointing past the actual tool region on the next slide,
-//      breaking `clampDiscard`.
+//   a. Whole span already past the live cursor (`start >= pos`):
+//      NoOp — nothing resident to remove.
+//   b. Partial span still resident (`start < pos < end`):
+//      * Pure-attention: honor the default-on strict-cleanup
+//        contract by dropping the resident remainder via a
+//        clamped `[start, pos)` `seq_rm + seq_add`; reports
+//        `CompactedAttention`.
+//      * Recurrent / hybrid: hard-fail — replay is anchored at a
+//        captured post-reasoning tail we can no longer reconcile
+//        against a shorter live cache without leaving resident
+//        reasoning behind.
+//
+// These guards are the defence-in-depth path if a tail-eraser ever
+// legitimately trims past the close marker.
 
 TEST(
-    ReasoningBlockCompactorToolsCompactInteraction,
+    ReasoningBlockCompactorTailTrimInteraction,
     NoOpWhenWholeSpanTrimmedPastLivePos) {
   // Whole recorded reasoning span sits past the live cursor: `start`
   // and `end` are both above `pos`, so nothing from the span remains
   // resident. This models a tail-eraser that reset `pos` to a point
-  // before the reasoning span (the shape produced by tools_compact
-  // trimming the entire assistant tail back to `nPastBeforeTools_`).
+  // before the reasoning span.
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
@@ -1093,7 +1070,7 @@ TEST(
 }
 
 TEST(
-    ReasoningBlockCompactorToolsCompactInteraction,
+    ReasoningBlockCompactorTailTrimInteraction,
     PartialResidentSpanCompactsOnPureAttention) {
   // `start < pos < end`: the tail-eraser stopped inside the reasoning
   // span, so `[start, pos)` is still resident. Under the default-on
@@ -1136,7 +1113,7 @@ TEST(
 }
 
 TEST(
-    ReasoningBlockCompactorToolsCompactInteraction,
+    ReasoningBlockCompactorTailTrimInteraction,
     PartialResidentSpanHardFailsOnRecurrentPath) {
   // Same partial-resident shape as above but on the recurrent /
   // hybrid path: replay is anchored at a captured post-reasoning tail
@@ -1180,68 +1157,4 @@ TEST(
       << "recurrent hard-fail bail must not be counted as a successful discard";
 
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
-}
-
-TEST(
-    ReasoningBlockCompactorToolsCompactInteraction,
-    SuccessfulPureAttentionDropNotifiesEnabledToolsController) {
-  // Enable both features and drive a successful pure-attention
-  // compaction. Assert that the compactor threads its discard through
-  // `ToolsCompactController::onSlide` so the tools anchor shifts by
-  // the same amount the tail shrank.
-  ReasoningRollbackState rollback;
-  ToolsCompactController tools{ToolsCompactProfile{}};
-  ASSERT_TRUE(tools.enabled());
-
-  // Seed the tools controller with an anchor via the normal lifecycle:
-  //   - `onTokenize` captures the conversation-only token count,
-  //   - `onEvalComplete` derives `nPastBeforeTools_` from the delta.
-  //
-  // Concrete numbers: total-with-tools=100, without-tools=80 =>
-  // `nConversationOnlyTokens_ = 80`. After
-  // `onEvalComplete(nPast=100, totalTokensEvaled=100)` the anchor
-  // lands at `100 - (100 - 80) = 80`.
-  constexpr size_t kWithTools = 100;
-  constexpr size_t kWithoutTools = 80;
-  constexpr llama_pos kNPastAfterEval = 100;
-  tools.onTokenize(kWithTools, kWithoutTools);
-  tools.onEvalComplete(kNPastAfterEval, /*totalTokensEvaled=*/kNPastAfterEval);
-  ASSERT_EQ(tools.anchor(), 80);
-
-  ReasoningBlockCompactor compactor{rollback, tools};
-  compactor.setRemoveThinkingFromContext(true);
-  compactor.setReasoningEnabled(true);
-  compactor.setNeedsRecurrentSnapshot(false); // pure-attention
-
-  // Reasoning close span at `[15, 20)`, live pos at 25 — 5 tokens will
-  // be dropped by the successful compact.
-  compactor.setOpenSpan(/*start=*/15);
-  compactor.requestCloseCapture();
-  compactor.onCloseCommitted(/*pos=*/20);
-
-  AcceptingSliderOps accepting;
-  compactor.setContextSliderOpsForTesting(&accepting);
-  const auto outcome = compactor.compact(
-      /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
-  compactor.setContextSliderOpsForTesting(nullptr);
-
-  EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
-  EXPECT_EQ(outcome.newPos, 20);
-  EXPECT_EQ(outcome.discarded, 5);
-  EXPECT_EQ(outcome.keptPrefixEnd, 15)
-      << "after seq_rm + seq_add, the protected prefix ends at the span start";
-  EXPECT_EQ(accepting.seqRmCalls(), 1);
-  EXPECT_EQ(accepting.seqAddCalls(), 1)
-      << "successful seq_rm must be followed by the paired seq_add";
-  EXPECT_EQ(compactor.blockDiscards(), 1);
-
-  // The whole point of this test: tools_compact must observe the drop.
-  // Anchor should shift from 80 to 75 via `onSlide(5, /*first=*/15)`.
-  // Without the `tools_.onSlide` call inside `compact()`, the anchor
-  // would stay at 80 and the next `clampDiscard` would allow a slide
-  // that eats into the tool region.
-  EXPECT_EQ(tools.anchor(), 75)
-      << "compactor must forward the discard through tools_.onSlide so the "
-         "anchor tracks the shifted tail";
 }

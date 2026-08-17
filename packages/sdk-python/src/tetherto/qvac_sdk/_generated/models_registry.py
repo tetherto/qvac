@@ -3935,6 +3935,24 @@ MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16 = ModelConstant(
     params="35B-A3B",
 )
 
+MMPROJ_QWEN3_8_27B_MULTIMODAL_F16 = ModelConstant(
+    name="MMPROJ_QWEN3_8_27B_MULTIMODAL_F16",
+    src="registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/mmproj-F16.gguf",
+    registry_path="unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/mmproj-F16.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=6343547,
+    blob_block_length=14155,
+    blob_byte_offset=415717872874,
+    model_id="mmproj-F16.gguf",
+    expected_size=927607488,
+    sha256_checksum="cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="f16",
+    params="27B",
+)
+
 MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16 = ModelConstant(
     name="MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16",
     src="registry://hf/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf",
@@ -4943,6 +4961,42 @@ QWEN3_8B_INST_Q4_K_M = ModelConstant(
     params="8B",
 )
 
+QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL = ModelConstant(
+    name="QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL",
+    src="registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf",
+    registry_path="unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5590046,
+    blob_block_length=273490,
+    blob_byte_offset=366336486570,
+    model_id="Qwen3.8-27B-UD-Q4_K_XL.gguf",
+    expected_size=17923394624,
+    sha256_checksum="bee238bbeb3dc0a34bde4d0dedbaee1f98c009e8bb4226f03070054c12fb1372",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="UD-Q4_K_XL",
+    params="27B",
+)
+
+QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL = ModelConstant(
+    name="QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL",
+    src="registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+    registry_path="unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+    registry_source="hf",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5863536,
+    blob_block_length=480011,
+    blob_byte_offset=384259881194,
+    model_id="Qwen3.8-27B-UD-Q8_K_XL.gguf",
+    expected_size=31457991680,
+    sha256_checksum="af36ecb6b5db1407953345b746c14ac93f0657dda413910b4348683a2d990377",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="UD-Q8_K_XL",
+    params="27B",
+)
+
 REALESRGAN_X4PLUS = ModelConstant(
     name="REALESRGAN_X4PLUS",
     src="registry://s3/qvac_models_compiled/esrgan/2026-05-07/RealESRGAN_x4plus.pth",
@@ -5321,6 +5375,24 @@ TTS_CODEC_ENCODER_AUDIO8_Q8_0 = ModelConstant(
     params="0.6B",
 )
 
+TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32 = ModelConstant(
+    name="TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32",
+    src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf",
+    registry_path="qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5563066,
+    blob_block_length=421,
+    blob_byte_offset=364568464106,
+    model_id="cosyvoice3-campplus-f32.gguf",
+    expected_size=27530656,
+    sha256_checksum="6844883ee7b9c73e029369a2428fd48657b48111a2ca087662bf538e4ac1388f",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="fp32",
+    params="",
+)
+
 TTS_COSYVOICE3_FLOW_COSYVOICE_FP32 = ModelConstant(
     name="TTS_COSYVOICE3_FLOW_COSYVOICE_FP32",
     src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf",
@@ -5373,6 +5445,60 @@ TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0 = ModelConstant(
     engine="tts-ggml",
     quantization="q8_0",
     params="0.5B",
+)
+
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16 = ModelConstant(
+    name="TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16",
+    src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f16.gguf",
+    registry_path="qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f16.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5563487,
+    blob_block_length=7578,
+    blob_byte_offset=364595994762,
+    model_id="cosyvoice3-s3tok-f16.gguf",
+    expected_size=496605536,
+    sha256_checksum="5a6e5209c8680071e121d5d493e3dc8c92fc6944a8f986a5446b74589c5c4c91",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="fp16",
+    params="",
+)
+
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32 = ModelConstant(
+    name="TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32",
+    src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f32.gguf",
+    registry_path="qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f32.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5571065,
+    blob_block_length=14778,
+    blob_byte_offset=365092600298,
+    model_id="cosyvoice3-s3tok-f32.gguf",
+    expected_size=968464736,
+    sha256_checksum="09aa40049d54d3c7ca752af09ddcba3ca7462df5bb8e8f163bd13f4c0e1a5c8c",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="fp32",
+    params="",
+)
+
+TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0 = ModelConstant(
+    name="TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
+    blob_block_offset=5585843,
+    blob_block_length=4203,
+    blob_byte_offset=366061065034,
+    model_id="cosyvoice3-s3tok-q8_0.gguf",
+    expected_size=275421536,
+    sha256_checksum="7cc4968b010bac6e41cce317ae8a59a702883446140761fd323d91ce99803953",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q8_0",
+    params="",
 )
 
 TTS_COSYVOICE3_TOKENIZER_COSYVOICE = ModelConstant(
@@ -7412,6 +7538,7 @@ __all__ = [
     "MMPROJ_QWEN3_6_27B_MULTIMODAL_F16",
     "MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_BF16",
     "MMPROJ_QWEN3_6_35B_A3B_MULTIMODAL_F16",
+    "MMPROJ_QWEN3_8_27B_MULTIMODAL_F16",
     "MMPROJ_SMOLVLM2_500M_MULTIMODAL_F16",
     "MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0",
     "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0",
@@ -7468,6 +7595,8 @@ __all__ = [
     "QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M",
     "QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL",
     "QWEN3_8B_INST_Q4_K_M",
+    "QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL",
+    "QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL",
     "REALESRGAN_X4PLUS",
     "REALESRGAN_X4PLUS_ANIME_6B",
     "REALESRNET_X4PLUS",
@@ -7489,9 +7618,13 @@ __all__ = [
     "TTS_CODEC_DECODER_AUDIO8_Q8_0",
     "TTS_CODEC_ENCODER_AUDIO8_FP16",
     "TTS_CODEC_ENCODER_AUDIO8_Q8_0",
+    "TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32",
     "TTS_COSYVOICE3_FLOW_COSYVOICE_FP32",
     "TTS_COSYVOICE3_HIFT_COSYVOICE_FP32",
     "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0",
+    "TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16",
+    "TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32",
+    "TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0",
     "TTS_COSYVOICE3_TOKENIZER_COSYVOICE",
     "TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1",
     "TTS_COSYVOICE3_VOICE_COSYVOICE",

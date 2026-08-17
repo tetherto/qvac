@@ -1,6 +1,6 @@
 import { transcribe } from '@qvac/sdk'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { parakeetTests } from '../../../parakeet-tests.js'
 

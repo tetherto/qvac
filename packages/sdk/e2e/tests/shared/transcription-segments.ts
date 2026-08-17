@@ -3,7 +3,7 @@ import {
   type TranscribeSegment,
   type TranscribeStreamMetadataSession
 } from '@qvac/sdk'
-import type { TestResult } from '@tetherto/qvac-test-suite'
+import type { TestResult } from '@qvac/qvac-test-suite'
 import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
 
 const EXPECTED_SAMPLE_RATE = 16000

@@ -37,7 +37,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.event.pull_request.head.repo.full_name }}
           ref: ${{ inputs.ref || github.event.pull_request.head.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Setup Node.js

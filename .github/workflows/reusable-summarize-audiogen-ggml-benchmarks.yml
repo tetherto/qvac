@@ -23,16 +23,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      # This job only needs the repo to run the aggregator script, so fall back
-      # to the automatic token where PAT_TOKEN is not configured (forks). An
-      # empty `token:` is not a no-op — checkout fails with "Input required and
-      # not supplied".
+      # This job only needs a read-only checkout of the (public) repo to run the
+      # aggregator script, so the ambient GITHUB_TOKEN suffices. An empty `token:`
+      # is not a no-op — checkout fails with "Input required and not supplied" —
+      # so keep it set explicitly.
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN || github.token }}
+          token: ${{ github.token }}
 
       # No merge-multiple: same-platform runners emit identically named
       # rtf-benchmark-*.json files, so per-artifact subdirectories preserve all
