@@ -84,6 +84,13 @@ const CASES = [
   {
     id: 'count-fingers',
     user: 'How many fingers are on one typical human hand? Answer with one word.',
+    // Workaround, not a fix: VisionPsy answers this wrong, so we ask a wording it
+    // gets right. Defensible only because this test covers batch scheduling, not
+    // answer quality. "one" and "typical" are what break it, and they are exactly
+    // what Llama-3.2-1B needs to avoid answering "Fifty", so the two paths cannot
+    // share one string. Greedy, so it is the same every run. Re-measure both
+    // models before editing either wording; full table in the commit.
+    vlmUser: 'How many fingers are on a human hand? Answer with one word.',
     expected: ['five', '5', 'ten', '10']
   },
   {
@@ -265,7 +272,8 @@ function buildVlmBatchItem(item) {
       // thinking branch. At predict 64 the trace was still unterminated, so the
       // answer never arrived and stripReasoning() correctly reduced it to empty.
       { role: 'system', content: 'Answer with one word only. Do not explain or think first.' },
-      { role: 'user', content: item.user }
+      // vlmUser overrides user for the VLM pair only; see count-fingers.
+      { role: 'user', content: item.vlmUser || item.user }
     ],
     // 128, not 16. A reasoning model spends a 16-token budget restating the
     // question, and 64 was still short of closing the trace. Models that answer
