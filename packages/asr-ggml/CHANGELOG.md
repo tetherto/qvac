@@ -14,6 +14,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-17, which brings in
+  ggml-speech 2026-08-17. The engine sources for this package are unchanged; the
+  ggml update fixes an uncatchable abort in the OpenCL elementwise ops on a
+  non-contiguous input and speeds up pad, small-M matmul and argmax dispatches
+  on Adreno.
+
 ### Fixed
 
 - Publish a dependency-clean Whisper quickstart with positional audio, model,

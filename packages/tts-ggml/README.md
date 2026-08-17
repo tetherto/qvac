@@ -522,9 +522,12 @@ host's policy:
 > (Mali, Xclipse) fall back to CPU rather than running a backend its
 > per-stage parity gates have not covered.
 >
-> Audio8 uses Vulkan only and is supported on Linux and Windows. A GPU request
-> on another platform, or in a build without Vulkan, falls back to CPU and sets
-> `response.stats.gpuUnsupported`.
+> Audio8's GPU path covers Metal (macOS / iOS), Vulkan on desktop
+> Linux / Windows, and OpenCL/Adreno (Android). `useGPU: true` /
+> `nGpuLayers > 0` offloads there — on Android, pair it with
+> `openclCacheDir` to persist the compiled kernels. A GPU request on a
+> platform or in a build without one of those backends falls back to CPU
+> and sets `response.stats.gpuUnsupported`.
 
 ### Android: dynamic backend loading
 
@@ -689,8 +692,9 @@ falls into.  `greedy: true` takes the argmax instead and ignores
 `maxFrames` caps generation in codec frames (~21.5/s of audio).
 
 Audio8 runs on CPU by default. Set `config.useGPU: true` or `nGpuLayers: 99`
-to offload the language model and codec graphs to Vulkan on Linux and Windows.
-If Vulkan is unavailable, the engine falls back to CPU and sets
+to offload the language model and codec graphs to Metal (macOS / iOS), Vulkan
+(desktop Linux / Windows) or OpenCL (Android / Adreno). If none of those is
+available, the engine falls back to CPU and sets
 `response.stats.gpuUnsupported`. Voice cloning uses the same backend and adds
 a one-off encode when a new reference recording is supplied.
 
