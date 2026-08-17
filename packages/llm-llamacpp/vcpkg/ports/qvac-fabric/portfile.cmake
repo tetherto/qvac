@@ -10,7 +10,7 @@
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp.git
-  REF 480ccee84fbac1d0eaf1f7de552eaf0cc6ea0c54
+  REF 6d40e0d2b10616568b7ce679ea5b0ec91625d5f7
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
