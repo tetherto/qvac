@@ -268,8 +268,11 @@ runs:
         # clean up and no reason to spend an API call.
         SCHEDULING_STARTED=1
 
-        if [ "$SPEC_COUNT" -gt 1 ] && { [ "$SCHEDULING_MODE" != "dual-flagship" ] || [ "$MULTI_SPEC_DUAL_FLAGSHIP" != "true" ]; }; then
+        if [ "$SCHEDULING_MODE" != "manual-devices" ] && [ "$SPEC_COUNT" -gt 1 ] && { [ "$SCHEDULING_MODE" != "dual-flagship" ] || [ "$MULTI_SPEC_DUAL_FLAGSHIP" != "true" ]; }; then
           # Sharded mode: each group runs against the addon's pool.
+          # manual-devices is excluded here so a manual multi-spec run (OCR/LLM
+          # shards, or TTS's functional set) still fans out across the chosen
+          # device(s) via its own branch below instead of hitting the pool.
           if [ "$PLATFORM" = "Android" ]; then
             POOL_ARN="$ANDROID_POOL_ARN"
           else
