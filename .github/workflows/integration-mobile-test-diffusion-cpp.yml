@@ -131,6 +131,12 @@ jobs:
   # multi-GB objects concurrently. Each leg then only presigns for itself.
   seed-models:
     name: Seed diffusion models (US bucket)
+    # Gated on validate-devices so a bad/empty manual device selection fails
+    # fast BEFORE this up-to-120-min seed runs (the ticket's whole point is not
+    # to spend on a doomed run). Skipped on workflow_call — validate-devices is
+    # itself skipped there, and the `skipped` branch keeps this job running.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: qvac-ubuntu2204-x64
     environment: release
     timeout-minutes: 120
@@ -283,6 +289,13 @@ jobs:
         env:
           TESTS: ${{ inputs.tests }}
         run: |
+          # Reject anything but mocha-safe grep characters so a manual `tests`
+          # value cannot break out of the generated WDIO config on the Device
+          # Farm host (defense-in-depth; the sink is also JSON-encoded).
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
           MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
           echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
 
