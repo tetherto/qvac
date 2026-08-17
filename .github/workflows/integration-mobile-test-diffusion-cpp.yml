@@ -50,8 +50,56 @@ on:
         default: "packages/diffusion-cpp"
 
 jobs:
+  # One non-matrixed writer mirrors diffusion's on-device models into the US
+  # bucket, so the two platform legs below never download/upload the same
+  # multi-GB objects concurrently. Each leg then only presigns for itself.
+  seed-models:
+    name: Seed diffusion models (US bucket)
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      # node is job-managed on the self-hosted runners (only on PATH after this
+      # step); the seed action shells out to node, so it must run first.
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Seed diffusion models into US bucket (mirror-only)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/diffusion/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          hf-token: ${{ secrets.HF_TOKEN }}
+          # Only the two models a phone actually downloads (the rest are
+          # skip = isMobile || noGpu and keep their HF fallback).
+          model-names: stable-diffusion-v2-1-Q8_0.gguf,RealESRGAN_x4plus_anime_6B.pth
+          mode: seed
+
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
+    needs: seed-models
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -111,6 +159,30 @@ jobs:
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+
+      # Presign the already-seeded (by the seed-models job) US-bucket objects into
+      # a map, then bake them into the manifest before the build. Presign-only: no
+      # S3 write, fresh URLs minted per leg.
+      - name: Presign diffusion models (US bucket)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/diffusion/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          output-map: ${{ runner.temp }}/diffusion-url-map.json
+          # Only the two models a phone actually downloads (the rest are
+          # skip = isMobile || noGpu and keep their HF fallback).
+          model-names: stable-diffusion-v2-1-Q8_0.gguf,RealESRGAN_x4plus_anime_6B.pth
+          mode: presign
+
+      # Diffusion fetches models on-device from the bundled manifest, so bake the
+      # US URLs in before the build.
+      - name: Repoint diffusion manifest to US bucket
+        env:
+          MANIFEST_PATH: addon/${{ inputs.workdir || 'packages/diffusion-cpp' }}/test/integration/models.manifest.json
+          URL_MAP: ${{ runner.temp }}/diffusion-url-map.json
+        run: |
+          node ./.github/actions/run-mobile-integration-tests/seed-and-presign-models/rewrite-manifest-urls.mjs
 
       - name: Build mobile app
         id: build

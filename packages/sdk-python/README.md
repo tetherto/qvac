@@ -143,6 +143,21 @@ ergonomic Python `audio_gen()` wrapper. Build an `AudioGenStreamRequest`, iterat
 the progress and base64 PCM frames, and assemble the output audio. See
 [`examples/audiogen.py`](./examples/audiogen.py).
 
+### Intentional divergences from `@qvac/sdk`
+
+Two top-level JS/TS facades are deliberately not ported; Python uses the ecosystem
+equivalent instead.
+
+- **`getLogger`** — use the standard library `logging` module. A `logging.Handler`
+  is the `LogTransport` equivalent, and the log-stream surface that has no stdlib
+  counterpart (`logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`,
+  `SDK_ALL_LOG_ID`) is already exported above.
+- **`profiler`** (process-wide aggregation + `exportTable`/`exportJSON`) — use the
+  per-call `profiled_call` and the `__profiling` envelope helpers in
+  `tetherto.qvac_sdk.profiling`, aggregating the returned `ProfilingReport`s
+  yourself. The global profiler is not a Client-API capability and would only
+  collect useful data after instrumenting the full streaming client.
+
 ## Notebook / data science
 
 For notebooks and REPLs, `tetherto.qvac_sdk.notebook.SyncClient` runs the async
