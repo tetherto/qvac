@@ -920,7 +920,10 @@ test('audiogen mobile actions come from an isolated default-branch checkout', ()
     workflow,
     /name:\s+Checkout composite action source[\s\S]*?repository:\s+\$\{\{ github\.repository \}\}[\s\S]*?ref:\s+\$\{\{ github\.event\.repository\.default_branch \}\}[\s\S]*?path:\s+trusted-actions[\s\S]*?persist-credentials:\s+false/,
   )
-  assert.equal(trustedActionUses.length, 9)
+  // 10, not 9: the on-demand validate-devices job also runs in the release
+  // environment (OIDC), so it too sources its action from the default-branch
+  // trusted-actions checkout rather than a caller-selected ref.
+  assert.equal(trustedActionUses.length, 10)
   assert.doesNotMatch(
     workflow,
     /uses:\s+\.\/\.github\/actions\/run-mobile-integration-tests\//,
@@ -1541,9 +1544,12 @@ test('mobile scheduler preserves automatic sharding and supports explicit multi-
     action,
     /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{\{ github\.run_id \}\}\.\$\{\{ github\.run_attempt \}\}-\$\{APP_UPLOAD_ID\}"/,
   )
+  // Automatic sharding is preserved, but the manual on-demand path
+  // (manual-devices) is deliberately excluded from the sharded branch so a
+  // manual multi-spec run pins to the chosen device(s) instead of the pool.
   assert.match(
     action,
-    /if \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
+    /if \[ "\$SCHEDULING_MODE" != "manual-devices" \] && \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
   )
   assert.match(action, /for IDX in \$\(seq 0 \$\(\(SPEC_COUNT - 1\)\)\); do/)
   assert.match(action, /RUN_NAME_PREFIX="\$\{RUN_NAME_BASE\}-\$\{GROUP_NAME\}"/)
@@ -1556,6 +1562,18 @@ test('mobile scheduler preserves automatic sharding and supports explicit multi-
   assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/)
   assert.match(action, /iPhone 17/)
   assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/)
+
+  // Manual on-demand (workflow_dispatch) path: fan out one run per
+  // (spec x device), pinned to a single device, never the pool.
+  assert.match(action, /elif \[ "\$SCHEDULING_MODE" = "manual-devices" \]; then/)
+  assert.match(action, /Manual on-demand fan-out/)
+  // The device list is de-duplicated so `Pixel 9,Pixel 9` cannot bill twice ...
+  assert.match(action, /map\(select\(length > 0\)\) \| unique/)
+  // ... and bounded so a fat-fingered list cannot spray the whole fleet.
+  assert.match(action, /MAX_DEVICES=10/)
+  assert.match(action, /MAX_RUNS=20/)
+  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
+  assert.match(action, /for MIDX in \$\(seq 0 \$\(\(MODEL_COUNT - 1\)\)\); do/)
 })
 
 test('mobile monitor maps both flagship runs back to each test spec', () => {
@@ -1596,10 +1614,15 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
 
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+  // The workflow_call branch (benchmark || functional) is unchanged; it is now
+  // preceded inside fromJSON() by the manual-dispatch single-platform branch,
+  // so anchor on the matrix JSON rather than on `fromJSON(` directly.
   const matrices = workflow.match(
-    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+    /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
   )
-  const jobName = workflow.match(/^\s{4}name:\s*(.+)$/m)
+  // Scope to the build job's name: validate-devices is now the first job in the
+  // file, so a bare "first name:" capture would pick the wrong job.
+  const jobName = workflow.match(/^\s{4}name:\s*(Build .+)$/m)
 
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
   assert.ok(jobName, 'build-and-test job must have a name')
@@ -1609,6 +1632,18 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],
   )
+  // Manual dispatch (inputs.platform set) selects ONE row on the chosen
+  // platform; devices come from the manual inputs, not the matrix.
+  const dispatchMatrices = workflow.match(
+    /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
+  )
+  assert.ok(dispatchMatrices, 'manual dispatch must select a single-platform matrix')
+  const dispatchIos = JSON.parse(dispatchMatrices[1])
+  const dispatchAndroid = JSON.parse(dispatchMatrices[2])
+  assert.equal(dispatchIos.include.length, 1)
+  assert.equal(dispatchIos.include[0].platform, 'iOS')
+  assert.equal(dispatchAndroid.include.length, 1)
+  assert.equal(dispatchAndroid.include[0].platform, 'Android')
   assert.equal(benchmarkMatrix.include.length, 25)
   assert.equal(
     benchmarkMatrix.include.filter((entry) => entry.platform === 'Android').length,
@@ -1624,14 +1659,24 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
   )
   assert.match(workflow, /egress-policy:\s*audit/)
   assert.match(workflow, /release environment authorizes GitHub OIDC/)
-  assert.match(workflow, /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/)
+  // A manual `tests` filter (steps.manual_tests) overrides the automatic
+  // perf/functional groups; otherwise the auto-sharded groups are used.
+  assert.match(
+    workflow,
+    /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
+  )
   assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
   assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/)
   assert.match(jobName[1], /matrix\.engine/)
   assert.match(jobName[1], /matrix\.variant/)
   assert.match(jobName[1], /matrix\.use_gpu/)
   assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/)
-  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
+  // workflow_call path keeps its dual-flagship sharding, unchanged.
+  assert.match(
+    workflow,
+    /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
+  )
   assert.match(
     workflow,
     /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
@@ -1660,8 +1705,11 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
 
 test('asr-ggml functional mobile workflow opts into dual flagship per engine shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+  // The workflow_call branch (benchmark || functional) is unchanged; it is now
+  // preceded inside fromJSON() by the manual-dispatch single-platform branch,
+  // so anchor on the matrix JSON rather than on `fromJSON(` directly.
   const matrices = workflow.match(
-    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+    /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
   )
 
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
@@ -1672,13 +1720,28 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],
   )
+  // Manual dispatch (inputs.platform set) selects ONE row on the chosen
+  // platform; devices come from the manual inputs, not the matrix.
+  const dispatchMatrices = workflow.match(
+    /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
+  )
+  assert.ok(dispatchMatrices, 'manual dispatch must select a single-platform matrix')
+  const dispatchIos = JSON.parse(dispatchMatrices[1])
+  const dispatchAndroid = JSON.parse(dispatchMatrices[2])
+  assert.equal(dispatchIos.include.length, 1)
+  assert.equal(dispatchIos.include[0].platform, 'iOS')
+  assert.equal(dispatchAndroid.include.length, 1)
+  assert.equal(dispatchAndroid.include[0].platform, 'Android')
+  // Manual dispatch is serialized per (workflow, branch) and supersedes an
+  // in-flight manual run; workflow_call keys on the unique run_id and never
+  // cancels, so parallel automated callers cannot collide or cancel each other.
   assert.match(
     workflow,
-    /concurrency:\s*\n\s+group:[\s\S]*?\n\s+cancel-in-progress:\s*true/,
+    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}', github\.workflow, github\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
   )
   assert.match(
     workflow,
-    /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
+    /cancel-in-progress:\s*\$\{\{ inputs\.platform != '' \}\}/,
   )
   assert.match(
     workflow,
@@ -1698,11 +1761,18 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     workflow,
     /if \[\[ ! "\$\{\{ github\.event\.inputs\.package_spec \}\}"/,
   )
+  // A manual `tests` filter (steps.manual_tests) overrides the automatic
+  // perf/functional groups; otherwise the auto-sharded groups are used.
   assert.match(
     workflow,
-    /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/,
+    /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
   )
-  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
+  // workflow_call path keeps its dual-flagship sharding, unchanged.
+  assert.match(
+    workflow,
+    /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
+  )
   assert.match(
     workflow,
     /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,

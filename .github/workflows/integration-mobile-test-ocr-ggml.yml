@@ -73,10 +73,10 @@ on:
         required: false
         default: ""
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
         type: string
         required: false
-        default: main
+        default: ""
       package:
         description: "Full NPM package spec to test"
         type: string

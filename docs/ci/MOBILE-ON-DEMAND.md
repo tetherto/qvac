@@ -126,10 +126,12 @@ one. Which prebuild depends on the `package` / `package_spec` input:
   is released**: push your branch (its prebuild/publish workflow puts a dev build
   on GPR), then dispatch with `package: @tetherto/<addon>@<that dev version>`.
 
-> The **`ref`** input only changes the JS test harness + app that gets built; it
-> does **not** rebuild the native binary. To test unpublished native changes, pin
-> the GPR dev build via `package` as above — otherwise the run silently tests the
-> published `@latest`, not your branch.
+> The **`ref`** input defaults to **blank**, so the run checks out the branch you
+> dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
+> `-f ref=<tag/sha>` only to override it. `ref` changes the JS test harness + app
+> that gets built; it does **not** rebuild the native binary. To test unpublished
+> native changes, pin the GPR dev build via `package` as above — otherwise the run
+> silently tests the published `@latest`, not your branch.
 
 **Exceptions:**
 

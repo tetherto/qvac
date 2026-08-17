@@ -153,6 +153,11 @@ jobs:
   # are spent. Blocks the whole chain. Runs fork code but holds no secrets.
   host-test:
     name: Host build + tests (linux)
+    # Fail fast on a bad/empty device selection before spending the (up to
+    # 20 min) host build. validate-devices is skipped on workflow_call, so
+    # tolerate the skip to keep automated callers unchanged.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

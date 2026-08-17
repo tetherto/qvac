@@ -76,10 +76,10 @@ on:
         required: false
         default: ""
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
         type: string
         required: false
-        default: main
+        default: ""
       package_spec:
         description: "Package to test (name@version). Use @qvac/audiogen-ggml@... for npm, @tetherto/audiogen-ggml@... for GPR"
         type: string
@@ -123,14 +123,22 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # This job runs in the `release` environment with OIDC, so — like the
+      # build-and-test job below — it must source the composite action from the
+      # default branch, never from a caller-selected ref. (Consequence: the
+      # validate-devices action is only available here once this PR is merged.)
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
+          path: trusted-actions
+          persist-credentials: false
       - name: Validate requested devices
-        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        uses: ./trusted-actions/.github/actions/run-mobile-integration-tests/validate-devices
         with:
           platform: ${{ inputs.platform }}
           devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
@@ -182,14 +190,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.repository }}
-          # workflow_call (benchmarks / weekend / on-merge): pull the trusted
-          # composite actions from the default branch, unchanged — that is the
-          # supply-chain guard for automated callers.
-          # workflow_dispatch (trusted maintainer, inputs.platform set): use the
-          # dispatched ref so new scheduler code (e.g. manual-devices) is present;
-          # otherwise the default-branch copy silently ignores manual-devices and
-          # falls back to the dual-flagship pool, breaking the pin guarantee.
-          ref: ${{ inputs.platform != '' && (inputs.ref || github.ref) || github.event.repository.default_branch }}
+          # Always pull the trusted composite actions from the default branch —
+          # this is the supply-chain guard for the release-environment job, for
+          # both workflow_call and workflow_dispatch. Note: manual-devices
+          # scheduling is only available once this PR is merged to the default
+          # branch, so it cannot be validated pre-merge on this addon by design.
+          ref: ${{ github.event.repository.default_branch }}
           path: trusted-actions
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests

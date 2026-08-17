@@ -351,12 +351,26 @@ runs:
             *) echo "ERROR: device-model-operator must be EQUALS or CONTAINS (got '$MODEL_OP')" >&2; exit 1 ;;
           esac
           PLAT_UPPER=$([ "$PLATFORM" = "Android" ] && echo ANDROID || echo IOS)
-          # Split the comma-separated list, trimming surrounding whitespace and
-          # dropping empty entries (e.g. a trailing comma).
-          MODELS_JSON=$(printf '%s' "$DEVICE_MODELS" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0))')
+          # Split the comma-separated list, trimming surrounding whitespace,
+          # dropping empty entries (e.g. a trailing comma), and de-duplicating
+          # so `Pixel 9,Pixel 9` cannot schedule (and bill) the same device twice.
+          MODELS_JSON=$(printf '%s' "$DEVICE_MODELS" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | unique')
           MODEL_COUNT=$(echo "$MODELS_JSON" | jq 'length')
           if [ "$MODEL_COUNT" -eq 0 ]; then
             echo "ERROR: manual-devices mode: device-models parsed to an empty list ('$DEVICE_MODELS')" >&2
+            exit 1
+          fi
+          # Bound the fan-out so a fat-fingered list cannot spray the whole fleet.
+          # These are per-dispatch safety rails, not hard platform limits.
+          MAX_DEVICES=10
+          if [ "$MODEL_COUNT" -gt "$MAX_DEVICES" ]; then
+            echo "ERROR: manual-devices mode: $MODEL_COUNT unique devices requested, cap is $MAX_DEVICES. Narrow the selection." >&2
+            exit 1
+          fi
+          TOTAL_RUNS=$((SPEC_COUNT * MODEL_COUNT))
+          MAX_RUNS=20
+          if [ "$TOTAL_RUNS" -gt "$MAX_RUNS" ]; then
+            echo "ERROR: manual-devices mode: $SPEC_COUNT spec(s) x $MODEL_COUNT device(s) = $TOTAL_RUNS Device Farm runs exceeds the cap of $MAX_RUNS. Filter tests (-f tests=...) or reduce devices." >&2
             exit 1
           fi
           echo "Manual device fan-out: $SPEC_COUNT spec(s) × $MODEL_COUNT device(s) [MODEL $MODEL_OP]"

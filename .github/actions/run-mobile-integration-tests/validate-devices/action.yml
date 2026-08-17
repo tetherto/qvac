@@ -57,11 +57,20 @@ runs:
           *) echo "::error::device-model-operator must be EQUALS or CONTAINS (got '$MODEL_OP')"; exit 1 ;;
         esac
 
-        # Parse the comma-separated list, trimming whitespace and dropping empties.
-        MODELS_JSON=$(printf '%s' "$DEVICES" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0))')
+        # Parse the comma-separated list, trimming whitespace, dropping empties,
+        # and de-duplicating — mirrors schedule-test-run so validation matches
+        # exactly what will be scheduled (no duplicate billed runs).
+        MODELS_JSON=$(printf '%s' "$DEVICES" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | unique')
         MODEL_COUNT=$(echo "$MODELS_JSON" | jq 'length')
         if [ "$MODEL_COUNT" -eq 0 ]; then
           echo "::error::No device selected. A manual mobile run must specify at least one device (input 'devices'), e.g. 'Pixel 9' or 'Pixel 9, iPhone 17'."
+          exit 1
+        fi
+        # Same device cap the scheduler enforces, so a fat-fingered list is
+        # rejected here (cheaply) instead of at scheduling time.
+        MAX_DEVICES=10
+        if [ "$MODEL_COUNT" -gt "$MAX_DEVICES" ]; then
+          echo "::error::$MODEL_COUNT unique devices requested, cap is $MAX_DEVICES. Narrow the selection."
           exit 1
         fi
 
