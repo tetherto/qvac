@@ -286,9 +286,14 @@ jobs:
       - detect-fabric-stack
       - resolve-fabric-prebuilds
       - prebuild-artifact-reuse
+    # A failed detection leaves fabric_stack empty, which satisfies
+    # fabric_stack != 'true' — without the result guard a stack PR would build
+    # against the released @qvac/fabric and prebuild-artifact-save would then
+    # publish that bundle as reusable.
     if: |
       always() &&
       needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
@@ -326,6 +331,7 @@ jobs:
   run-integration-tests:
     if: |
       always() &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_desktop == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
@@ -416,7 +422,12 @@ jobs:
       pull-requests: write
       packages: read
     with:
-      sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      # Every status below opens with the same fabric-stack guard: a skipped
+      # downstream job is only a deliberate no-op when the decision that skipped
+      # it is trustworthy. If detection failed, or the prebuild hand-off failed
+      # on a stack PR, the skips are consequences of that failure and must not
+      # read as passes.
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       # run-mobile-integration-tests removed — mobile is on-demand only now.
-      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
+      integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}

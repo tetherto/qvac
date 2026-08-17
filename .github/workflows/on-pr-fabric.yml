@@ -448,4 +448,8 @@ jobs:
       # label) don't produce a compiled artifact, and a native-unchanged PR reuses a
       # prior prebuild instead of rebuilding.
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      integration-tests-status: ${{ needs.fabric-npm-consumer-smoke.result == 'success' || needs.fabric-npm-consumer-smoke.result == 'skipped' }}
+      # A skipped consumer smoke is a pass only when it was never meant to run:
+      # a non-stack PR, or a PR without the prebuilds label (nothing to overlay).
+      # A skip caused by failed detection, an empty matrix, or a failed
+      # fabric-prebuilds publish means no npm consumer was tested at all.
+      integration-tests-status: ${{ needs.fabric-npm-consumer-smoke.result == 'success' || (needs.fabric-npm-consumer-smoke.result == 'skipped' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.ci-router.outputs.run_prebuilds != 'true')) }}
