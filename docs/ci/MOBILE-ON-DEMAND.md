@@ -165,10 +165,10 @@ gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
   -f devices_custom="Google Pixel 9, Google Pixel 8, Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS
 
-# iOS — the iPhone
+# iOS — the iPhones
 gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
   -f platform=iOS \
-  -f devices_custom="Apple iPhone 16 Pro" \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
   -f device_model_operator=EQUALS
 ```
 
