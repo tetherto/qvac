@@ -226,13 +226,17 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.pre-publish-rows) }}
-    # TEST-ONLY: real `uses: ./.github/workflows/integration-test-nx.yml` call
-    # replaced with an echo so the job graph can be exercised in seconds.
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "STUB pre-publish-integration package=${{ matrix.package }}"
-          echo "packages input would be: ${{ format('["{0}"]', matrix.package) }}"
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
 
   pre-publish-mobile:
     name: Pre-publish mobile integration (${{ matrix.package }})
@@ -260,15 +264,17 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.prebuild-rows) }}
-    # TEST-ONLY: real `uses: ./.github/workflows/prebuilds-nx.yml` call replaced
-    # with an echo — the registry moved the asr-ggml ports (speech-cpp umbrella,
-    # main#3758) so a real prebuild cannot succeed on this stale test base, and
-    # the graph/outputs behaviour is what we are measuring anyway.
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "STUB prebuild package=${{ matrix.package }}"
-          echo "packages input would be: ${{ format('["{0}"]', matrix.package) }}"
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
 
   publish-gpr:
     name: Publish GPR (${{ matrix.package }})
