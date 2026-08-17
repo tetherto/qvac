@@ -359,6 +359,46 @@ index.js ─► binding (BARE_MODULE) ─► AcestepModel ─► tts_cpp::aceste
 - Built with `cmake-bare` + `cmake-vcpkg`; `vcpkg.json` depends on `audiogen-cpp`
   (the C++ engine, on our ggml-speech fork).
 
+## Benchmarking
+
+The package ships the Real-Time Factor benchmark it is measured with, so the
+numbers can be reproduced on your own hardware:
+
+```bash
+npm run test:benchmark:rtf          # one (DiT variant, GPU) combination
+npm run test:benchmark:rtf:matrix   # sweep several in one process
+```
+
+Both are configured through `QVAC_AUDIOGEN_GGML_BENCHMARK_*` environment
+variables. `benchmarks/RTF-BENCHMARKS.md` documents the metrics, the determinism
+guarantees and the full variable list.
+
+### `@qvac/audiogen-ggml/test/benchmark-runner`
+
+A subpath export of the shared measurement, used by the on-device harness so the
+desktop and mobile lanes report comparable numbers:
+
+```js
+const {
+  readBenchmarkSettings,
+  runRtfBenchmark,
+  emitCanonicalReport
+} = require('@qvac/audiogen-ggml/test/benchmark-runner')
+
+const settings = readBenchmarkSettings()
+const { summary, backend } = await runRtfBenchmark(settings)
+emitCanonicalReport(settings, summary, backend)
+```
+
+`runRtfBenchmark` throws if the measurement is unusable — a non-positive RTF, a
+run that rendered no audio, implausible memory, or a mean RTF above
+`QVAC_AUDIOGEN_GGML_BENCHMARK_RTF_UPPER_BOUND` — so a broken run can never be
+reported as a passing one.
+
+This subpath is test tooling, not part of the addon's stable API: it depends on
+the runtime providing `bare-os` / `bare-fs`, and it may change without a major
+version bump.
+
 ## License
 
 Apache-2.0. Model weights belong to ACE Studio and StepFun.

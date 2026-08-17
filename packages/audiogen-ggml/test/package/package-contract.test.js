@@ -13,6 +13,17 @@ const REPOSITORY_DOWNLOAD_COMMAND =
   'node scripts/download-audiogen-ggml-models.js --output ./models'
 const IS_WINDOWS = process.platform === 'win32'
 const NPM_COMMAND = IS_WINDOWS ? 'npm.cmd' : 'npm'
+const BENCHMARK_PATHS = [
+  'package/benchmarks/RTF-BENCHMARKS.md',
+  'package/test/utils/benchmark-report.js',
+  'package/test/utils/benchmark-runner.js',
+  'package/test/utils/benchmark-stats.js',
+  'package/test/utils/benchmark-validate.js',
+  'package/test/utils/device-env.js',
+  'package/test/utils/downloadModel.js',
+  'package/test/utils/memory-usage.js',
+  'package/test/utils/runAudioGen.js'
+]
 const REQUIRED_PATHS = [
   'package/index.js',
   'package/index.d.ts',
@@ -20,13 +31,10 @@ const REQUIRED_PATHS = [
   'package/audiogen.d.ts',
   'package/error.js',
   'package/error.d.ts',
-  'package/scripts/download-audiogen-ggml-models.js'
+  'package/scripts/download-audiogen-ggml-models.js',
+  ...BENCHMARK_PATHS
 ]
-const FORBIDDEN_PREFIXES = [
-  'package/test/integration/',
-  'package/test/mobile/',
-  'package/test/utils/'
-]
+const FORBIDDEN_PREFIXES = ['package/test/integration/', 'package/test/mobile/']
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
@@ -43,6 +51,10 @@ function assertRequiredPaths(t, entries) {
   }
 }
 
+function isInternalTestUtility(entry) {
+  return entry.startsWith('package/test/utils/') && !BENCHMARK_PATHS.includes(entry)
+}
+
 function assertForbiddenPaths(t, entries) {
   for (const prefix of FORBIDDEN_PREFIXES) {
     t.absent(
@@ -50,6 +62,7 @@ function assertForbiddenPaths(t, entries) {
       `tarball excludes ${prefix}`
     )
   }
+  t.absent(entries.some(isInternalTestUtility), 'tarball excludes internal test utilities')
 }
 
 function runDownloader(downloaderPath, cwd) {
@@ -92,6 +105,11 @@ test('published package contains only consumer contract files', (t) => {
   const packedPackageRoot = path.join(temporaryDirectory, 'package')
   const packedPackage = JSON.parse(
     fs.readFileSync(path.join(packedPackageRoot, 'package.json'), 'utf8')
+  )
+  t.is(
+    packedPackage.exports['./test/benchmark-runner'],
+    './test/utils/benchmark-runner.js',
+    'package exposes the documented benchmark runner'
   )
   t.is(packedPackage.bin[COMMAND_NAME], DOWNLOADER_PATH, 'package exposes downloader bin')
   t.is(

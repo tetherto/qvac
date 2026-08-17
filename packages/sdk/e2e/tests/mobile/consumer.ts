@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@tetherto/qvac-test-suite/mobile'
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor } from '@qvac/qvac-test-suite/mobile'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -548,6 +548,10 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^parakeet-indic-conformer-/,
+      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
+    ),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'

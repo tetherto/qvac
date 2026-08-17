@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.43.0] - 2026-08-14
+
+This release removes the Qwen3-only dynamic tools feature behind
+`tools_compact`. Regular static tool calling remains supported and continues to
+use the fixed Qwen3 chat template.
+
+### Breaking Changes
+
+- The `tools_compact` load option is no longer supported. Configurations that
+  pass it now fail model loading as an unsupported option; remove the key and
+  keep tool definitions in the normal prompt flow.
+- Tool definitions are no longer added mid-conversation and trimmed from the KV
+  cache after a tool-call chain. This removes the Qwen3-specific cache behavior
+  that depended on context-sliding anchor bookkeeping.
+
+### Changed
+
+- Qwen3 tool calling now always uses the fixed chat template, so tool definitions
+  remain in the prompt throughout the conversation. General context sliding,
+  M-RoPE sliding, reasoning-block compaction, and static tool calling are
+  unchanged.
+
+### Removed
+
+- The `nPastBeforeTools` and `toolsTrimmed` runtime debug statistics, which only
+  reported dynamic tool compaction state, have been removed.
+
+### Pull Requests
+
+- [#3373](https://github.com/tetherto/qvac/pull/3373) - QVAC-22567 feat[bc]:
+  remove dynamic tools (tools_compact) from llm-llamacpp addon
+
 ## [0.42.0] - 2026-08-10
 
 ### Changed

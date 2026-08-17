@@ -1,0 +1,16 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+**/*.auto.cjs
+test/integration/all.js
+test/results
+addon
+*.d.ts
+index.js
+process.js
+process-internal.js
+process-runner.js
+eslint.config.mjs
