@@ -146,23 +146,23 @@ jobs:
           prebuild-artifact-prefix: 'vla-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # VLA-specific eu-central-1 OIDC session for the SmolVLA S3 presign.
-      # The us-west-2 Device Farm session is acquired separately inside the
-      # upload-to-devicefarm composite. Must run BEFORE Build mobile app so
-      # the presigned URL / sha256 / size are baked into testAssets before
-      # the test app bundle is generated.
+      # OIDC session for the SmolVLA/GR00T S3 presign (the us-west-2 Device Farm
+      # session is acquired separately in upload-to-devicefarm). Must run BEFORE
+      # the build so the presigned URL / sha256 / size are baked into testAssets.
+      # Presign against the US bucket; vla/* models are mirrored under
+      # qvac_models_compiled/ by the EU->US sync job.
       - name: Configure AWS credentials for S3 presign
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
+          aws-region: us-west-2
           role-duration-seconds: 7200
 
       - name: Generate SmolVLA Model URL
         working-directory: addon/packages/vla-ggml
         env:
-          AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           echo "🔑 Generating SmolVLA model URL for mobile tests..."
           chmod +x scripts/generate-smolvla-presigned-url.sh
@@ -172,8 +172,8 @@ jobs:
       - name: Generate GR00T Model URL
         working-directory: addon/packages/vla-ggml
         env:
-          AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           echo "Generating GR00T model URL for mobile tests..."
           chmod +x scripts/generate-groot-presigned-url.sh

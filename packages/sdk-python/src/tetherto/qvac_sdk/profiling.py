@@ -7,6 +7,14 @@ attaches `__profiling: {id, server?, delegation?, operation?}` to its reply.
 `profiled_call()` wraps one unary call, measuring the client-side wall time
 and surfacing the server's breakdown; the envelope helpers are exported for
 callers composing their own instrumented flows.
+
+Intentional divergence: the JS SDK's top-level process-wide `profiler` object
+(`enable`/`disable`, aggregation, `exportTable`/`exportJSON`/`exportSummary`) is
+deliberately not ported. It is not a Client-API capability, and meaningful value
+would require instrumenting the full unary *and* streaming client -- `profiled_call`
+covers unary calls only, whereas the main inference workload is streaming. Python
+therefore exposes the per-call envelope + `profiled_call`, and callers aggregate
+the returned `ProfilingReport`s themselves.
 """
 
 from __future__ import annotations

@@ -1,0 +1,532 @@
+name: Test fabric-stack composite actions
+
+on:
+  pull_request:
+    paths:
+      - ".github/actions/detect-fabric-stack/**"
+      - ".github/actions/overlay-local-fabric/**"
+      - ".github/actions/wait-and-download-fabric-prebuilds/**"
+      - ".github/scripts/test/fixtures/fabric-actions/**"
+      - ".github/workflows/test-fabric-stack-actions.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  detect-fabric-stack:
+    name: Detect fabric-stack changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      # The merge base the mocks hand back. Distinct from base.sha, so a diff
+      # taken from the base branch tip is distinguishable from one taken from
+      # the branch point. Quoted, and carrying hex letters: an all-digit scalar
+      # is a YAML number, and 40 digits reach the mock as 1.11111111111111E+39.
+      MOCK_MERGE_BASE: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678'
+      MOCK_LOCAL_MERGE_BASE: 'b2c3d4e5f60718293a4b5c6d7e8f90123456789a'
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Run detection action against the real repository
+        id: smoke
+        uses: ./.github/actions/detect-fabric-stack
+
+      - name: Verify the unmocked run produced a boolean
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.smoke.outputs.fabric_stack }}
+        run: |
+          set -euo pipefail
+          # Shape, not value. What this PR touches and how far the base branch
+          # has drifted both move the value, and the fetch fail-safe legitimately
+          # returns true — pinning an expectation here reds the build when the
+          # action behaves correctly. The predicate itself is driven below.
+          case "$ACTUAL" in
+            true|false) ;;
+            *)
+              echo "::error::Expected a boolean fabric_stack, got '$ACTUAL'"
+              exit 1
+              ;;
+          esac
+
+      - name: Install mock Git and mock GitHub CLI
+        shell: bash
+        env:
+          MOCK_BIN: ${{ runner.temp }}/fabric-actions-mock-git
+        run: |
+          set -euo pipefail
+          mkdir -p "$MOCK_BIN"
+          cp .github/scripts/test/fixtures/fabric-actions/mock-git "$MOCK_BIN/git"
+          cp .github/scripts/test/fixtures/fabric-actions/mock-gh "$MOCK_BIN/gh"
+          chmod +x "$MOCK_BIN/git" "$MOCK_BIN/gh"
+          node -e '
+            const fs = require("node:fs")
+            fs.appendFileSync(process.env.GITHUB_PATH, `${process.env.MOCK_BIN}\n`)
+          '
+
+      - name: Run detection with a diff touching no fabric path
+        id: unrelated
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_ARGS_FILE: ${{ runner.temp }}/diff-args-unrelated
+          MOCK_GIT_DIFF_FILES: |
+            packages/llm-llamacpp/addon/binding.cpp
+            packages/sdk/index.ts
+
+      - name: Verify an unrelated diff is read from the merge base and reports false
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.unrelated.outputs.fabric_stack }}
+          DIFF_ARGS: ${{ runner.temp }}/diff-args-unrelated
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL" != "false" ]; then
+            echo "::error::Expected a non-fabric diff to report false, got $ACTUAL"
+            exit 1
+          fi
+          # The base branch tip is not the branch point: diffing against it also
+          # reports, in reverse, whatever landed on the base branch since.
+          if ! grep -q "$MERGE_BASE" "$DIFF_ARGS"; then
+            echo "::error::Diff was not taken from the merge base: $(cat "$DIFF_ARGS")"
+            exit 1
+          fi
+          if grep -q "$BASE_SHA" "$DIFF_ARGS"; then
+            echo "::error::Diff was taken from the base branch tip: $(cat "$DIFF_ARGS")"
+            exit 1
+          fi
+
+      - name: Run detection with a Fabric source change last in the diff
+        id: fabric-last
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: |
+            docs/ci/MERGE-GUARD.md
+            packages/sdk/index.ts
+            packages/fabric/addon/fabric.cpp
+
+      - name: Run detection with a qvac-fabric overlay port change
+        id: overlay-port
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: vcpkg-overlays/ports/qvac-fabric/portfile.cmake
+
+      - name: Verify both build-affecting diffs are fabric-stack PRs
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          FABRIC_LAST: ${{ steps.fabric-last.outputs.fabric_stack }}
+          OVERLAY_PORT: ${{ steps.overlay-port.outputs.fabric_stack }}
+        run: |
+          set -euo pipefail
+          if [ "$FABRIC_LAST" != "true" ]; then
+            echo "::error::Expected a Fabric source change behind unrelated files to report true, got $FABRIC_LAST"
+            exit 1
+          fi
+          if [ "$OVERLAY_PORT" != "true" ]; then
+            echo "::error::Expected a qvac-fabric overlay port change to report true, got $OVERLAY_PORT"
+            exit 1
+          fi
+
+      - name: Run detection with the compare API unavailable
+        id: local-merge-base
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          # MOCK_COMPARE_MERGE_BASE unset — mock-gh rejects the compare call, so
+          # the action must fall back to a local merge base.
+          MOCK_GIT_MERGE_BASE: ${{ env.MOCK_LOCAL_MERGE_BASE }}
+          MOCK_GIT_DIFF_ARGS_FILE: ${{ runner.temp }}/diff-args-local
+          MOCK_GIT_DIFF_FILES: packages/fabric/vcpkg.json
+
+      - name: Run detection with no resolvable merge base
+        id: no-merge-base
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_GIT_MERGE_BASE: none
+          MOCK_GIT_DIFF_FILES: packages/sdk/index.ts
+
+      - name: Verify merge-base fallback and fail-safe
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          LOCAL: ${{ steps.local-merge-base.outputs.fabric_stack }}
+          NO_MERGE_BASE: ${{ steps.no-merge-base.outputs.fabric_stack }}
+          DIFF_ARGS: ${{ runner.temp }}/diff-args-local
+          MERGE_BASE: ${{ env.MOCK_LOCAL_MERGE_BASE }}
+        run: |
+          set -euo pipefail
+          if [ "$LOCAL" != "true" ]; then
+            echo "::error::Expected the local merge-base path to detect a Fabric change, got $LOCAL"
+            exit 1
+          fi
+          if ! grep -q "$MERGE_BASE" "$DIFF_ARGS"; then
+            echo "::error::Diff did not use the local merge base: $(cat "$DIFF_ARGS")"
+            exit 1
+          fi
+          # An unresolvable merge base must not silently degrade to the base tip.
+          if [ "$NO_MERGE_BASE" != "true" ]; then
+            echo "::error::Expected an unresolvable merge base to fail safe, got $NO_MERGE_BASE"
+            exit 1
+          fi
+
+      - name: Run exact-SHA fallback with Fabric source change
+        id: fallback
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MOCK_EXPECTED_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          MOCK_GIT_ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed
+          MOCK_GIT_FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: packages/fabric/CMakeLists.txt
+
+      - name: Verify exact-SHA fallback and Fabric source detection
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.fallback.outputs.fabric_stack }}
+          ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed
+          FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL" != "true" ]; then
+            echo "::error::Expected packages/fabric source change to set fabric_stack=true, got $ACTUAL"
+            exit 1
+          fi
+          if [ ! -f "$ORIGIN_FAILURE_MARKER" ] || [ ! -f "$FALLBACK_MARKER" ]; then
+            echo "::error::Exact-SHA fallback fetch was not exercised"
+            exit 1
+          fi
+
+      - name: Run detection with a docs-only Fabric change
+        id: docs-only
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/detect-fabric-stack
+        env:
+          MOCK_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MOCK_EXPECTED_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          MOCK_GIT_ORIGIN_FAILURE_MARKER: ${{ runner.temp }}/mock-git-origin-failed-docs
+          MOCK_GIT_FALLBACK_MARKER: ${{ runner.temp }}/mock-git-fallback-used-docs
+          MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
+          MOCK_GIT_DIFF_FILES: |
+            packages/fabric/CHANGELOG.md
+            packages/fabric/release-notes/v1.0.0.md
+            packages/fabric/test/integration/smoke.js
+
+      - name: Verify docs-only Fabric change is not a fabric-stack PR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          ACTUAL: ${{ steps.docs-only.outputs.fabric_stack }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTUAL" != "false" ]; then
+            echo "::error::Docs-only packages/fabric change must not set fabric_stack, got $ACTUAL"
+            exit 1
+          fi
+
+  overlay-local-fabric:
+    name: Overlay local fabric prebuilds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Create overlay fixtures
+        shell: bash
+        env:
+          TEST_ROOT: ${{ runner.temp }}/fabric-overlay-test
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("node:fs")
+            const path = require("node:path")
+            const root = process.argv[1]
+            const source = path.join(root, "source")
+            const destination = path.join(
+              root,
+              "consumer/node_modules/@qvac/fabric/prebuilds",
+            )
+
+            const planted = path.join(root, "planted")
+
+            for (const directory of [
+              path.join(source, "include"),
+              path.join(source, "share"),
+              path.join(source, "linux-x64"),
+              path.join(root, "incomplete/linux-x64"),
+              path.join(planted, "include"),
+              path.join(planted, "share"),
+              path.join(planted, "linux-x64"),
+              path.join(destination, "linux-x64"),
+            ]) {
+              fs.mkdirSync(directory, { recursive: true })
+            }
+
+            // A symlink named like a legitimate CMake config: passes an
+            // extension allowlist, so only the file-type check rejects it.
+            fs.writeFileSync(path.join(planted, "include/fabric.h"), "header")
+            fs.writeFileSync(path.join(planted, "linux-x64/qvac_fabric.so"), "binary")
+            fs.symlinkSync(
+              "/etc/passwd",
+              path.join(planted, "share/qvac-fabricTargets.cmake"),
+            )
+
+            fs.writeFileSync(path.join(source, "include/fabric.h"), "header")
+            fs.writeFileSync(path.join(source, "share/qvac-fabric.cmake"), "cmake")
+            fs.writeFileSync(
+              path.join(source, "linux-x64/tetherto_fabric.so"),
+              "binary",
+            )
+            fs.writeFileSync(
+              path.join(destination, "linux-x64/stale-library.so"),
+              "stale",
+            )
+          ' "$TEST_ROOT"
+
+      - name: Run overlay action
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ runner.temp }}/fabric-overlay-test/consumer
+          prebuilds-root: ${{ runner.temp }}/fabric-overlay-test/source
+          platform: linux
+          arch: x64
+
+      - name: Verify overlaid tree
+        shell: bash
+        env:
+          PREBUILDS: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric/prebuilds
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("node:fs")
+            const path = require("node:path")
+            const root = process.argv[1]
+            const expected = [
+              "include/fabric.h",
+              "share/qvac-fabric.cmake",
+              "linux-x64/qvac_fabric.so",
+            ]
+            for (const file of expected) {
+              if (!fs.existsSync(path.join(root, file))) {
+                throw new Error(`Missing overlaid file: ${file}`)
+              }
+            }
+            for (const file of [
+              "linux-x64/tetherto_fabric.so",
+              "linux-x64/stale-library.so",
+            ]) {
+              if (fs.existsSync(path.join(root, file))) {
+                throw new Error(`Unexpected stale file: ${file}`)
+              }
+            }
+          ' "$PREBUILDS"
+
+      - name: Reject incomplete fabric prebuilds
+        id: incomplete
+        continue-on-error: true
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ runner.temp }}/fabric-overlay-test/consumer
+          prebuilds-root: ${{ runner.temp }}/fabric-overlay-test/incomplete
+          platform: linux
+          arch: x64
+
+      - name: Verify incomplete fabric prebuilds were rejected
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.incomplete.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Expected incomplete prebuilds to fail, got $OUTCOME"
+            exit 1
+          fi
+
+      - name: Reject fabric prebuilds carrying a planted symlink
+        id: planted
+        continue-on-error: true
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ runner.temp }}/fabric-overlay-test/consumer
+          prebuilds-root: ${{ runner.temp }}/fabric-overlay-test/planted
+          platform: linux
+          arch: x64
+
+      - name: Verify planted symlink was rejected before any copy
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.planted.outcome }}
+          PREBUILDS: ${{ runner.temp }}/fabric-overlay-test/consumer/node_modules/@qvac/fabric/prebuilds
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Expected planted symlink to fail, got $OUTCOME"
+            exit 1
+          fi
+          if [ -e "$PREBUILDS/share/qvac-fabricTargets.cmake" ]; then
+            echo "::error::Planted symlink reached the consumer tree"
+            exit 1
+          fi
+
+  wait-and-download:
+    name: Wait and download fabric prebuilds
+    runs-on: ubuntu-24.04
+    # Two negative cases poll to their one-minute deadline before failing.
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Install mock GitHub CLI
+        shell: bash
+        env:
+          MOCK_BIN: ${{ runner.temp }}/fabric-actions-mock-bin
+        run: |
+          set -euo pipefail
+          mkdir -p "$MOCK_BIN"
+          cp .github/scripts/test/fixtures/fabric-actions/mock-gh "$MOCK_BIN/gh"
+          chmod +x "$MOCK_BIN/gh"
+          node -e '
+            const fs = require("node:fs")
+            fs.appendFileSync(process.env.GITHUB_PATH, `${process.env.MOCK_BIN}\n`)
+          '
+
+      - name: Run wait-and-download action
+        id: download
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
+        with:
+          github-token: test-token
+          head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
+          download-dir: ${{ runner.temp }}/fabric-download-test
+          timeout-minutes: 1
+          poll-seconds: 1
+
+      - name: Verify downloaded artifact
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ steps.download.outputs['source-run-id'] }}
+          DOWNLOAD_DIR: ${{ runner.temp }}/fabric-download-test
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_RUN_ID" != "4242" ]; then
+            echo "::error::Expected source run 4242, got $SOURCE_RUN_ID"
+            exit 1
+          fi
+          if [ ! -f "$DOWNLOAD_DIR/mock-download-complete" ]; then
+            echo "::error::Mock artifact was not downloaded"
+            exit 1
+          fi
+
+      - name: Reject a run from an unrelated head repository
+        id: foreign-run
+        continue-on-error: true
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
+          MOCK_RUN_HEAD_REPO: attacker/qvac
+        with:
+          github-token: test-token
+          head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
+          download-dir: ${{ runner.temp }}/fabric-foreign-run-test
+          timeout-minutes: 1
+          poll-seconds: 5
+
+      - name: Reject a run associated with a different PR
+        id: foreign-pr
+        continue-on-error: true
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
+          MOCK_RUN_PULL_REQUESTS: '[{"number":999999}]'
+        with:
+          github-token: test-token
+          head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
+          pr-number: '31337'
+          download-dir: ${{ runner.temp }}/fabric-foreign-pr-test
+          timeout-minutes: 1
+          poll-seconds: 5
+
+      - name: Verify runs failing provenance were not downloaded
+        if: ${{ always() }}
+        shell: bash
+        env:
+          FOREIGN_RUN_OUTCOME: ${{ steps.foreign-run.outcome }}
+          FOREIGN_PR_OUTCOME: ${{ steps.foreign-pr.outcome }}
+          FOREIGN_RUN_DIR: ${{ runner.temp }}/fabric-foreign-run-test
+          FOREIGN_PR_DIR: ${{ runner.temp }}/fabric-foreign-pr-test
+        run: |
+          set -euo pipefail
+          if [ "$FOREIGN_RUN_OUTCOME" != "failure" ]; then
+            echo "::error::Expected a foreign head repository to fail, got $FOREIGN_RUN_OUTCOME"
+            exit 1
+          fi
+          if [ "$FOREIGN_PR_OUTCOME" != "failure" ]; then
+            echo "::error::Expected a foreign PR association to fail, got $FOREIGN_PR_OUTCOME"
+            exit 1
+          fi
+          if [ -f "$FOREIGN_RUN_DIR/mock-download-complete" ] || [ -f "$FOREIGN_PR_DIR/mock-download-complete" ]; then
+            echo "::error::Artifact from an unbound run was downloaded"
+            exit 1
+          fi
+
+      - name: Reject an empty head SHA
+        id: empty-head-sha
+        continue-on-error: true
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        with:
+          github-token: test-token
+          head-sha: ""
+          download-dir: ${{ runner.temp }}/fabric-empty-sha-test
+          timeout-minutes: 1
+          poll-seconds: 1
+
+      - name: Verify empty SHA was rejected
+        if: ${{ always() }}
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.empty-head-sha.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Expected empty head-sha input to fail, got $OUTCOME"
+            exit 1
+          fi
