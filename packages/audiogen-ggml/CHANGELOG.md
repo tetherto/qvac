@@ -52,9 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JavaScript API (`referenceAudio`, `sourceAudio`, `taskType`,
   `audioCoverStrength`, `coverNoiseStrength`) and forward them to audiogen-cpp.
 - Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
-  `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
-  produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
-  Pixel 9a instead of silently accepting a CPU fallback.
+  `useGPU: true` must resolve to Vulkan or OpenCL and produce non-silent 48 kHz
+  stereo audio. This covers Mali and Adreno devices without accepting a CPU
+  fallback.
 - Expose ACE-Step LM sampling controls, Haar DCW parameters, and optional frozen
   semantic codes through the JavaScript API for reproducible quality comparisons.
 - Export structured AudioGen errors with a CommonJS-compatible error runtime and
