@@ -280,18 +280,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # RTF benchmark leg: expand the package's compact options.ci.rtfBenchmark
-      # combos into its runner's own matrix env var, then run the runner unchanged.
-      - name: Expand RTF benchmark matrix
+      # RTF benchmark leg: options.ci.platforms[].benchmarkMatrixJson is already
+      # the fully expanded per-platform matrix (hand-rolled in project.json, no
+      # runtime expansion), so this just sets it under the runner's own env var
+      # name, then the runner runs unchanged.
+      - name: Set RTF benchmark matrix env var
         if: always() && !cancelled() && matrix.runRtfBenchmarks
-        run: node scripts/rtf/expand-matrix.js
-        env:
-          QVAC_RTF_COMBO_GROUPS_JSON: ${{ toJson(matrix.rtfBenchmark.comboGroups) }}
-          QVAC_RTF_NO_GPU: ${{ matrix.noGpu && 'true' || 'false' }}
-          QVAC_RTF_GPU_BACKEND: ${{ matrix.platform == 'darwin' && 'metal' || 'vulkan' }}
-          QVAC_RTF_DEVICE: ${{ matrix.runner || matrix.os }}
-          QVAC_RTF_RUNNER: ${{ matrix.runner || matrix.os }}
-          QVAC_RTF_TARGET_ENV: ${{ matrix.rtfBenchmark.matrixEnvVar }}
+        shell: bash
+        run: |
+          echo "${{ matrix.rtfBenchmark.matrixEnvVar }}=${{ toJson(matrix.benchmarkMatrixJson) }}" >> "$GITHUB_ENV"
 
       - name: Run RTF benchmark
         if: always() && !cancelled() && matrix.runRtfBenchmarks
