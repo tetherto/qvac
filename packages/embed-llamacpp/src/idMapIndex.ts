@@ -282,6 +282,7 @@ export default class IdMapIndex {
   addWithIds(vectors: Float32Array, ids: BigUint64Array) {
     this.validateBatch('addWithIds', vectors, ids)
     binding.idx_add(ensureHandle(this), vectors, ids)
+    this.disposeFilters()
   }
 
   /**
@@ -297,7 +298,11 @@ export default class IdMapIndex {
   addLogged(vectors: Float32Array, ids: BigUint64Array, deltaPath: string) {
     this.validateBatch('addLogged', vectors, ids)
     requireNonEmptyPath(deltaPath, 'addLogged: deltaPath')
-    binding.idx_add_logged(ensureHandle(this), vectors, ids, deltaPath)
+    try {
+      binding.idx_add_logged(ensureHandle(this), vectors, ids, deltaPath)
+    } finally {
+      this.disposeFilters()
+    }
   }
 
   /**
@@ -363,7 +368,11 @@ export default class IdMapIndex {
   /** Remove an ID, returning false when it is not present. */
   remove(id: bigint) {
     this.validateId('remove', id)
-    return binding.idx_remove(ensureHandle(this), id)
+    const removed = binding.idx_remove(ensureHandle(this), id)
+    if (removed) {
+      this.disposeFilters()
+    }
+    return removed
   }
 
   /**
@@ -376,12 +385,17 @@ export default class IdMapIndex {
   removeLogged(id: bigint, deltaPath: string) {
     this.validateId('removeLogged', id)
     requireNonEmptyPath(deltaPath, 'removeLogged: deltaPath')
-    return binding.idx_remove_logged(ensureHandle(this), id, deltaPath)
+    try {
+      return binding.idx_remove_logged(ensureHandle(this), id, deltaPath)
+    } finally {
+      this.disposeFilters()
+    }
   }
 
   /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
   compact() {
     binding.idx_compact(ensureHandle(this))
+    this.disposeFilters()
   }
 
   /** Return whether the index contains an external ID. */
@@ -414,7 +428,11 @@ export default class IdMapIndex {
   compactDelta(snapshotPath: string, deltaPath: string) {
     requireNonEmptyPath(snapshotPath, 'compactDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'compactDelta: deltaPath')
-    binding.idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath)
+    try {
+      binding.idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath)
+    } finally {
+      this.disposeFilters()
+    }
   }
 
   /** Number of live entries. */
@@ -439,12 +457,16 @@ export default class IdMapIndex {
       return
     }
 
+    this.disposeFilters()
+    binding.idx_dispose(handle)
+    this[HANDLE] = null
+  }
+
+  private disposeFilters() {
     for (const filter of this[FILTERS]) {
       filter.dispose()
     }
     this[FILTERS].clear()
-    binding.idx_dispose(handle)
-    this[HANDLE] = null
   }
 
   private validateBatch(name: string, vectors: Float32Array, ids: BigUint64Array) {

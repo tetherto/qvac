@@ -349,6 +349,7 @@ bool read_utf8_string_prop(
     size_t copied = 0;
     if (js_get_value_string_utf8(
             env, val, buffer.data(), buffer.size(), &copied) != 0) {
+      js_throw_error(env, "InternalError", "failed to read string option");
       return false;
     }
     out->assign(reinterpret_cast<const char*>(buffer.data()), copied);
@@ -653,6 +654,14 @@ js_value_t* idx_create(js_env_t* env, js_callback_info_t* info) {
           env, "InvalidArgument", "bitWidth does not match storage");
       return nullptr;
     }
+  }
+
+  const bool uses_turbovec = storage == "turbovec-q4" ||
+                             storage == "turbovec-q2" ||
+                             (storage.empty() && bit_width == 2);
+  if (uses_turbovec && sizeof(size_t) < 8) {
+    js_throw_error(env, "InvalidArgument", "TurboVec requires a 64-bit target");
+    return nullptr;
   }
 
   VectorIndex* idx = nullptr;

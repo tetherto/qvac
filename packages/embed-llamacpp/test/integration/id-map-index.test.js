@@ -55,6 +55,15 @@ function expectThrows(t, fn, message) {
   }
 }
 
+function expectDisposedFilter(t, filter, message) {
+  const error = expectThrows(t, () => filter.search(new Float32Array([1, 0]), 1), message)
+  t.is(
+    error && error.message,
+    'IdMapIndexFilter has been disposed',
+    `${message} releases the filter`
+  )
+}
+
 function findCacheKey(modulePath) {
   return Object.keys(require.cache).find((key) => require.cache[key].filename === modulePath)
 }
@@ -412,14 +421,48 @@ test('IdMapIndex: filtered and prepared-filter searches restrict allowed ids', (
     filter = idx.prepareFilter(new BigUint64Array([22n, 33n]))
     t.is(filter.search(new Float32Array([0, 1]), 1).ids[0], 22n, 'prepared filter is reusable')
     idx.addWithIds(new Float32Array([0.25, 0.75]), new BigUint64Array([44n]))
-    expectThrows(
-      t,
-      () => filter.search(new Float32Array([1, 0]), 1),
-      'mutation invalidates prepared filter'
-    )
+    expectDisposedFilter(t, filter, 'mutation invalidates prepared filter')
   } finally {
     if (filter !== null) filter.dispose()
     idx.dispose()
+  }
+})
+
+test('IdMapIndex: every mutation path disposes prepared filters when required', (t) => {
+  const snapshot = tmpPath('id-map-index-filter-invalidation-snapshot')
+  const delta = tmpDeltaPath('id-map-index-filter-invalidation-delta')
+  const idx = new IdMapIndex({ dim: 2, bitWidth: 4 })
+  let filter = null
+  try {
+    idx.addWithIds(new Float32Array([1, 0, 0, 1]), new BigUint64Array([11n, 22n]))
+
+    filter = idx.prepareFilter(new BigUint64Array([11n]))
+    t.is(idx.remove(999n), false, 'missing plain remove is a no-op')
+    t.is(filter.search(new Float32Array([1, 0]), 1).ids[0], 11n, 'no-op remove preserves filter')
+    t.is(idx.remove(22n), true, 'plain remove mutates the index')
+    expectDisposedFilter(t, filter, 'successful remove invalidates prepared filter')
+
+    filter = idx.prepareFilter(new BigUint64Array([11n]))
+    idx.compact()
+    expectDisposedFilter(t, filter, 'compact invalidates prepared filter')
+
+    idx.write(snapshot)
+    filter = idx.prepareFilter(new BigUint64Array([11n]))
+    idx.addLogged(new Float32Array([0.5, 0.5]), new BigUint64Array([33n]), delta)
+    expectDisposedFilter(t, filter, 'logged add invalidates prepared filter')
+
+    filter = idx.prepareFilter(new BigUint64Array([11n]))
+    t.is(idx.removeLogged(999n, delta), false, 'missing logged remove returns false')
+    expectDisposedFilter(t, filter, 'logged remove invalidates prepared filter')
+
+    filter = idx.prepareFilter(new BigUint64Array([11n]))
+    idx.compactDelta(snapshot, delta)
+    expectDisposedFilter(t, filter, 'delta compaction invalidates prepared filter')
+  } finally {
+    if (filter !== null) filter.dispose()
+    idx.dispose()
+    if (fs.existsSync(snapshot)) fs.unlinkSync(snapshot)
+    removeDeltaArtifacts(delta)
   }
 })
 

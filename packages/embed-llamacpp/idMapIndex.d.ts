@@ -163,6 +163,7 @@ export default class IdMapIndex {
     get bitWidth(): IdMapIndexBitWidth;
     /** Release filters and native index resources. This operation is idempotent. */
     dispose(): void;
+    private disposeFilters;
     private validateBatch;
     private validateSearch;
     private validateId;

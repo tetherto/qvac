@@ -177,6 +177,7 @@ class IdMapIndex {
     addWithIds(vectors, ids) {
         this.validateBatch('addWithIds', vectors, ids);
         binding.idx_add(ensureHandle(this), vectors, ids);
+        this.disposeFilters();
     }
     /**
      * Add vectors and append a durable v4 delta record. The index must first be
@@ -191,7 +192,12 @@ class IdMapIndex {
     addLogged(vectors, ids, deltaPath) {
         this.validateBatch('addLogged', vectors, ids);
         requireNonEmptyPath(deltaPath, 'addLogged: deltaPath');
-        binding.idx_add_logged(ensureHandle(this), vectors, ids, deltaPath);
+        try {
+            binding.idx_add_logged(ensureHandle(this), vectors, ids, deltaPath);
+        }
+        finally {
+            this.disposeFilters();
+        }
     }
     /**
      * Top-k similarity search over row-major queries. Results are sorted
@@ -251,7 +257,11 @@ class IdMapIndex {
     /** Remove an ID, returning false when it is not present. */
     remove(id) {
         this.validateId('remove', id);
-        return binding.idx_remove(ensureHandle(this), id);
+        const removed = binding.idx_remove(ensureHandle(this), id);
+        if (removed) {
+            this.disposeFilters();
+        }
+        return removed;
     }
     /**
      * Remove an ID and append a durable v4 delta record. Returns false when the
@@ -263,11 +273,17 @@ class IdMapIndex {
     removeLogged(id, deltaPath) {
         this.validateId('removeLogged', id);
         requireNonEmptyPath(deltaPath, 'removeLogged: deltaPath');
-        return binding.idx_remove_logged(ensureHandle(this), id, deltaPath);
+        try {
+            return binding.idx_remove_logged(ensureHandle(this), id, deltaPath);
+        }
+        finally {
+            this.disposeFilters();
+        }
     }
     /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
     compact() {
         binding.idx_compact(ensureHandle(this));
+        this.disposeFilters();
     }
     /** Return whether the index contains an external ID. */
     contains(id) {
@@ -296,7 +312,12 @@ class IdMapIndex {
     compactDelta(snapshotPath, deltaPath) {
         requireNonEmptyPath(snapshotPath, 'compactDelta: snapshotPath');
         requireNonEmptyPath(deltaPath, 'compactDelta: deltaPath');
-        binding.idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath);
+        try {
+            binding.idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath);
+        }
+        finally {
+            this.disposeFilters();
+        }
     }
     /** Number of live entries. */
     get length() {
@@ -316,12 +337,15 @@ class IdMapIndex {
         if (handle === null) {
             return;
         }
+        this.disposeFilters();
+        binding.idx_dispose(handle);
+        this[HANDLE] = null;
+    }
+    disposeFilters() {
         for (const filter of this[FILTERS]) {
             filter.dispose();
         }
         this[FILTERS].clear();
-        binding.idx_dispose(handle);
-        this[HANDLE] = null;
     }
     validateBatch(name, vectors, ids) {
         if (!(vectors instanceof Float32Array)) {

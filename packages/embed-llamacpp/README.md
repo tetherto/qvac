@@ -16,6 +16,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
   - [6. Generate embeddings for input sequence](#6-generate-embeddings-for-input-sequence)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
+- [IdMapIndex vector database](#idmapindex-vector-database)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
 - [Benchmarking](#benchmarking)
@@ -225,6 +226,50 @@ The following table describes the expected behavior of `run` and `cancel` depend
 A second `run()` while a job is active is serialized by `exclusiveRunQueue` — it waits in the queue until the previous `_runInternal` returns, then enters the busy guard. Because the busy flag (`_hasActiveResponse`) is only cleared when the previous `response.await()` settles, the second call rejects with `"Cannot set new job: a job is already set or being processed"`. The queue eliminates race conditions but does not retry or buffer results; callers must wait for the previous `response.await()` to settle (or call `model.cancel()`) before issuing the next request.
 
 **Cancellation API:** Prefer cancelling from the model: `await model.cancel()`. This cancels the current job and the Promise resolves when the job has actually stopped (future-based in C++). You can also call `await response.cancel()` on the value returned by `run()`; it is equivalent and targets the same job. Both are no-op when idle.
+
+## IdMapIndex vector database
+
+`IdMapIndex` is a synchronous CPU vector index with stable unsigned 64-bit IDs. Vector-only consumers should use the subpath export so importing the index does not load the embedding-model runtime:
+
+```javascript
+const IdMapIndex = require('@qvac/embed-llamacpp/idMapIndex')
+
+const index = new IdMapIndex({ dim: 768, storage: 'turbovec-q4' })
+try {
+  index.addWithIds(vectors, new BigUint64Array([1n, 2n]))
+  index.prepare()
+  const { ids, scores } = index.search(query, 2)
+} finally {
+  index.dispose()
+}
+```
+
+`vectors` contains row-major `Float32Array` data with one `dim`-sized row per ID. Queries use the same layout and may contain multiple rows. Search uses dot-product similarity; L2-normalize indexed vectors and queries first when cosine similarity is required. Results are ordered by descending score and then ascending ID.
+
+### Storage modes
+
+| Storage | Effective bits | Snapshot | Mmap | Delta log |
+|---------|---------------:|----------|------|-----------|
+| `f32` | 32 | v2 | Yes | Yes |
+| `q8` | 8 | v2 | Yes | Yes |
+| `q4` | 4 | v2 | Yes | Yes |
+| `turbovec-q4` | 4 | v3 | No | No |
+| `turbovec-q2` | 2 | v3 | No | No |
+
+The default storage is `q8`. `bitWidth: 2` selects `turbovec-q2`, while `bitWidth: 4` selects generic `q4`; use `storage: 'turbovec-q4'` explicitly for TurboVec Q4.
+
+TurboVec requires a 64-bit target and dimensions divisible by 8 and no greater than 1,024. It provides approximate rotated/quantized dot-product search. TurboVec snapshots support `write()` and `load()`, but reject mmap loading, delta-log loading, logged mutations, and delta compaction.
+
+### Operations and lifecycle
+
+- `addWithIds()`, `remove()`, `contains()`, and `compact()` mutate or inspect the index.
+- `search()`, `searchFiltered()`, and `prepareFilter()` perform full-scan retrieval.
+- `buildIvf()` enables approximate `searchIvf()` retrieval. IVF state is in-memory only and must be rebuilt after a mutation or snapshot load.
+- `write()` and `load()` persist all storage modes. Generic `f32`, `q8`, and `q4` additionally support `loadMmap()`, `loadWithDelta()`, `addLogged()`, `removeLogged()`, and `compactDelta()`.
+- Mutations invalidate prepared filters and IVF state.
+- Call `dispose()` on indexes and prepared filters when finished. Disposal is idempotent.
+
+See [RAG with TurboVec](./examples/ragWithTurboVec.js) for an end-to-end embedding and retrieval example.
 
 ## Quickstart Example
 
