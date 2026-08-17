@@ -44,19 +44,25 @@ run that can't be scheduled.
 
 ### Valid device names
 
-A device name is matched as a **`MODEL`** value on Device Farm (per
-`device_model_operator`: `CONTAINS` matches any model containing your value,
-`EQUALS` matches that exact model). These are the models the pipeline is known to
-use today — safe values to pass:
+A device name is matched as a **`MODEL`** value on Device Farm. **The fleet uses
+full manufacturer-prefixed names** (e.g. `Google Pixel 9`, not `Pixel 9`). How the
+match works depends on `device_model_operator`:
 
-| Platform | Known-good `MODEL` values | Manufacturer |
-|----------|---------------------------|--------------|
-| Android  | `Pixel 9`, `Pixel 8`, `S25 Ultra` (Samsung Galaxy S25 Ultra) | `Google` / `Samsung` |
-| iOS      | `iPhone 17`, `iPhone 16 Pro`, `iPhone 15` | `Apple` |
+- **`CONTAINS`** (default): your value need only be a substring — `Pixel 9` matches
+  `Google Pixel 9` (and `Google Pixel 9 Pro`, `Google Pixel 9a`, …).
+- **`EQUALS`**: your value must be the **exact** fleet model — `Pixel 9` is
+  rejected; you must pass `Google Pixel 9`.
 
-The dropdown offers a common subset; `devices_custom` accepts any of the above (or
-any other model that exists on the fleet). **This table can drift** as the fleet
-changes, so the authoritative list is Device Farm itself. Two ways to see it:
+The dropdown uses **exact** names so they work with either operator:
+
+| Platform | Exact `MODEL` values (dropdown) | Manufacturer |
+|----------|---------------------------------|--------------|
+| Android  | `Google Pixel 9`, `Google Pixel 8`, `Samsung Galaxy S25 Ultra` | `Google` / `Samsung` |
+| iOS      | `Apple iPhone 17`, `Apple iPhone 16 Pro`, `Apple iPhone 15` | `Apple` |
+
+`devices_custom` accepts any of the above, a bare substring (with `CONTAINS`), or
+any other model on the fleet. **This table can drift** as the fleet changes, so the
+authoritative list is Device Farm itself. Two ways to see it:
 
 1. **Let the workflow tell you (easiest).** Dispatch the run with a made-up device
    (e.g. `devices_custom: nope`). The `validate-devices` job fails fast and prints

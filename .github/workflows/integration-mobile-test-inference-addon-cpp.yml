@@ -41,12 +41,12 @@ on:
         required: false
         options:
           - "(custom)"
-          - "Samsung S25 Ultra"
-          - "Pixel 9"
-          - "Pixel 8"
-          - "iPhone 17"
-          - "iPhone 16 Pro"
-          - "iPhone 15"
+          - "Google Pixel 9"
+          - "Google Pixel 8"
+          - "Samsung Galaxy S25 Ultra"
+          - "Apple iPhone 17"
+          - "Apple iPhone 16 Pro"
+          - "Apple iPhone 15"
         default: "(custom)"
       devices_custom:
         description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
