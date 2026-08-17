@@ -17037,6 +17037,10 @@
           "maximum": 9007199254740991,
           "multipleOf": 32
         },
+        "returnPack": {
+          "description": "Return the generated scene pack in the response. Off by default: the pack is 10+ MB (a third larger again as base64) and the common create-then-walk-now flow never touches the bytes — the world is already live on the session. Turn it on to persist a world, then pass the saved file back as modelConfig.sceneSrc on a later load to walk it again.",
+          "type": "boolean"
+        },
         "type": {
           "type": "string",
           "const": "worldSceneStream"

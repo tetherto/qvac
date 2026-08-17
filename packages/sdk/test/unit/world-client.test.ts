@@ -109,12 +109,45 @@ test('worldCreateScene result: resolves the pack and its stats', async (t) => {
   }
 
   const result = createWorldSceneResult(
-    { modelId: 'm', prompt: '| unknown | a forest path', image: new Uint8Array([7, 7]) },
+    {
+      modelId: 'm',
+      prompt: '| unknown | a forest path',
+      image: new Uint8Array([7, 7]),
+      returnPack: true
+    },
     stubStream
   )
 
   t.is((await result.scene).length, 4, 'the scene pack comes back to the caller')
   t.is((await result.stats)?.sceneCreateMs, 4200, 'stats come through')
+})
+
+// The default. The world is already live on the session, so the common
+// create-then-walk-now flow should never carry 10+ MB back (a third more again
+// as base64) or parse it as one giant string.
+test('worldCreateScene result: without returnPack there is no pack to await', async (t) => {
+  let sent: Record<string, unknown> | undefined
+  async function* stubStream(request: Record<string, unknown>) {
+    sent = request
+    yield { type: 'worldSceneStream', done: true, stats: { sceneCreateMs: 4200 } }
+  }
+
+  const result = createWorldSceneResult(
+    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]) },
+    stubStream as never
+  )
+
+  // Await FIRST. `sent` is assigned inside the generator, which only runs once
+  // the pump iterates it — reading it before that would assert against
+  // `undefined` and pass whatever the request actually carried.
+  t.is((await result.stats)?.sceneCreateMs, 4200, 'stats still complete the creation')
+
+  t.ok(sent, 'the stream really was consumed, so the check below is not vacuous')
+  t.absent(sent?.['returnPack'], 'the request does not ask the server for the bytes')
+  t.absent(
+    'scene' in result,
+    'no scene promise exists on this shape, so it cannot be awaited by mistake'
+  )
 })
 
 test('worldCreateScene result: finishing without a pack rejects rather than resolving empty', async (t) => {
@@ -123,7 +156,7 @@ test('worldCreateScene result: finishing without a pack rejects rather than reso
   }
 
   const result = createWorldSceneResult(
-    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]) },
+    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]), returnPack: true },
     emptyStream
   )
 
@@ -137,7 +170,7 @@ test('worldCreateScene result: a stream failure rejects the pack', async (t) => 
   }
 
   const result = createWorldSceneResult(
-    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]) },
+    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]), returnPack: true },
     failingStream
   )
 
@@ -151,14 +184,26 @@ test('worldCreateScene result: a stream failure rejects the pack', async (t) => 
 // into an await that never returns: indistinguishable from slow generation, and
 // impossible for the caller to time out because no error is ever delivered.
 test('worldStep result: a stream that ends without done rejects instead of hanging', async (t) => {
+  const { StreamEndedError } = await import('@/utils/errors-client')
+
   async function* truncatedStream() {
     yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
   }
 
   const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, truncatedStream)
 
-  await t.exception(result.frames, /ended before the operation completed/, 'frames do not hang')
-  await t.exception(result.stats, /ended before the operation completed/, 'stats do not hang')
+  const framesError = await result.frames.then(
+    () => null,
+    (e: unknown) => e
+  )
+  const statsError = await result.stats.then(
+    () => null,
+    (e: unknown) => e
+  )
+  // The typed class, not just any rejection: callers match a dropped walk with
+  // `instanceof StreamEndedError`, the same way they do for upscale.
+  t.ok(framesError instanceof StreamEndedError, 'frames reject with StreamEndedError')
+  t.ok(statsError instanceof StreamEndedError, 'stats reject with StreamEndedError')
 })
 
 test('worldStep result: a truncated block surfaces on the frame stream too', async (t) => {
@@ -173,7 +218,7 @@ test('worldStep result: a truncated block surfaces on the frame stream too', asy
     (async () => {
       for await (const f of result.frameStream) streamed.push(f[0]!)
     })(),
-    /ended before the operation completed/,
+    /Stream ended without receiving final response/,
     'a partial block is an error, not a short but successful walk'
   )
   t.alike(streamed, [1], 'frames delivered before the truncation are still handed over')
@@ -227,15 +272,25 @@ test('worldStep result: a non-cancel failure is left alone', async (t) => {
 })
 
 test('worldCreateScene result: a stream that ends without done rejects instead of hanging', async (t) => {
+  const { StreamEndedError } = await import('@/utils/errors-client')
+
   async function* truncatedStream() {
     yield { type: 'worldSceneStream' }
   }
 
   const result = createWorldSceneResult(
-    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]) },
+    { modelId: 'm', prompt: 'a scene', image: new Uint8Array([7]), returnPack: true },
     truncatedStream
   )
 
-  await t.exception(result.scene, /ended before the operation completed/, 'the pack does not hang')
-  await t.exception(result.stats, /ended before the operation completed/, 'stats do not hang')
+  const sceneError = await result.scene.then(
+    () => null,
+    (e: unknown) => e
+  )
+  const statsError = await result.stats.then(
+    () => null,
+    (e: unknown) => e
+  )
+  t.ok(sceneError instanceof StreamEndedError, 'the pack rejects with StreamEndedError')
+  t.ok(statsError instanceof StreamEndedError, 'stats reject with StreamEndedError')
 })

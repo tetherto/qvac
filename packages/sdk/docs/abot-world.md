@@ -19,8 +19,10 @@ const modelId = await loadModel({
   }
 })
 
-const { scene } = worldCreateScene({ modelId, prompt, image })
-await scene // persist these bytes to revisit this world later
+// The world is live on the session once this resolves. Add `returnPack: true`
+// only if you want the bytes to persist and revisit this world later.
+const { stats } = worldCreateScene({ modelId, prompt, image })
+await stats
 
 const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
 for await (const frame of frameStream) render(frame)
@@ -58,11 +60,19 @@ A scene pack (~10 MB `.safetensors`) is prompt embeddings plus first-frame
 latents, and its resolution is baked in — create one pack per resolution.
 
 The SDK owns the pack on disk. It lives under `~/.qvac/world-scenes/` at a path
-derived from the model id, and **it lives for exactly one loaded session**: it is
-deleted on `unloadModel`, on worker shutdown, and on a failed load. Callers who
-want to revisit a world keep the bytes `worldCreateScene` returns and pass them
-back as `modelConfig.sceneSrc` on a later load. A supplied `sceneSrc` is copied
-into the managed slot; the caller's own file is never touched or deleted.
+derived from the model id **and a per-session token**, and **it lives for exactly
+one loaded session**: it is deleted on `unloadModel`, on worker shutdown, and on
+a failed load. The per-session token is what stops two workers on the same model
+from writing each other's world, and stops a pack orphaned by a crashed session
+being adopted by the next load as a world the caller never built.
+
+Because the pack is session-scoped, persisting a world is explicit. Pass
+`returnPack: true` to `worldCreateScene`, save the bytes it returns, and pass
+that file back as `modelConfig.sceneSrc` on a later load. Without it the response
+carries no pack at all — 10+ MB, a third larger again as base64, that the
+create-then-walk-now flow never reads. `sceneSrc` takes a path or URL; a supplied
+pack is copied into the managed slot and the caller's own file is never touched
+or deleted.
 
 Creating a world on a session that is already walking **replaces** it and
 restarts from the beginning. The replacement is staged: generation writes to a
@@ -81,11 +91,14 @@ can drop. Drive the next step off the previous one.
 
 - **`worldStep` is block-granular.** The engine exposes no mid-block abort, so
   the current block finishes internally; cancelling stops frame delivery and
-  makes the step reject. It never resolves with a truncated block — the DiT has
-  already committed that block to the session history, so the undelivered frames
-  are gone and the walk resumes past them. A cancel that lands _after_ the block
-  finished legitimately succeeds instead; both outcomes are correct, so handle
-  each.
+  makes the step reject with `InferenceCancelledError`. It never resolves with a
+  truncated block — the DiT has already committed that block to the session
+  history, so the undelivered frames are gone and the walk resumes past them.
+- **A cancelled step is terminal for the native session**, exactly like a failed
+  one: the engine's RNG and history cannot be resumed either way. The SDK drops
+  the session for you and the **next `worldStep` rebuilds it** from the same
+  promoted pack, so no `unloadModel`/`loadModel` cycle is needed — the walk
+  simply restarts from the world's beginning.
 - **`worldCreateScene` is uninterruptible.** The engine takes no abort predicate
   for it. Cancelling suppresses delivery, but the encode runs to completion and
   the model's concurrency slot is held until it does. Await the result before

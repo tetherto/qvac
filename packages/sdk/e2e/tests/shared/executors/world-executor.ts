@@ -61,6 +61,9 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     return resolved.image
   }
 
+  // The walk tests only need the world live on the session, so this deliberately
+  // does NOT ask for the pack — it exercises the default and skips a ~14 MB
+  // base64 round-trip per test. `stats` is the completion signal.
   private async createWorld(modelId: string, params: WorldParams, width = 448, height = 256) {
     const run = worldCreateScene({
       modelId,
@@ -69,7 +72,7 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
       width,
       height
     })
-    return run.scene
+    return run.stats
   }
 
   // Exhaustive testId → handler map; `Required<...>` turns a missing handler
@@ -93,12 +96,15 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     const modelId = await this.resources.ensureLoaded(RESOURCE)
     const width = params['width'] as number
     const height = params['height'] as number
+    // This is the test that asserts the pack itself comes back, so it is the one
+    // place that opts in.
     const run = worldCreateScene({
       modelId,
       prompt: SCENE_PROMPT,
       image: await this.firstFrame(params),
       width,
-      height
+      height,
+      returnPack: true
     })
     const scene = await run.scene
     const stats = await run.stats

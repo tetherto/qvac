@@ -1183,7 +1183,17 @@ export const worldSceneRequestSchema = z.object({
     .positive()
     .multipleOf(32)
     .optional()
-    .describe('Scene height in pixels, a multiple of 32. Defaults to 480.')
+    .describe('Scene height in pixels, a multiple of 32. Defaults to 480.'),
+  returnPack: z
+    .boolean()
+    .optional()
+    .describe(
+      'Return the generated scene pack in the response. Off by default: the pack ' +
+        'is 10+ MB (a third larger again as base64) and the common ' +
+        'create-then-walk-now flow never touches the bytes — the world is already ' +
+        'live on the session. Turn it on to persist a world, then pass the saved ' +
+        'file back as modelConfig.sceneSrc on a later load to walk it again.'
+    )
 })
 
 export type WorldSceneRequest = z.input<typeof worldSceneRequestSchema>

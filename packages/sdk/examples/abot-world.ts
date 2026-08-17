@@ -70,7 +70,10 @@ try {
     prompt,
     image: new Uint8Array(fs.readFileSync(firstFramePath)),
     width,
-    height
+    height,
+    // The world is live on the session without this; ask for the bytes only
+    // because this example saves them to walk the same world again later.
+    returnPack: true
   })
   const scene = await creation.scene
   const sceneStats = await creation.stats

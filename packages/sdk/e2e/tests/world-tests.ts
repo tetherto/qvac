@@ -169,9 +169,11 @@ export const worldConcurrentStepRejected = createWorldTest(
   { validation: 'throws-error', errorContains: 'rejected by registry concurrency policy' }
 )
 
-// Cancellation is block-granular and the engine cannot abort mid-block, so a
-// cancel that lands after the block finished legitimately resolves. Both
-// outcomes are accepted; what must hold is that the session is reusable after.
+// Cancellation is block-granular — the engine cannot abort mid-block — but an
+// accepted cancel must still make the step reject rather than resolve, or a
+// truncated block would read as success. The executor asserts that, then
+// reloads the session and walks it again: the validation here covers the walk
+// after the reload, which is what proves the session is reusable.
 export const worldCancelThenReload = createWorldTest(
   'world-cancel-then-reload',
   { image: 'elephant.jpg', keys: ['W'] },

@@ -47,6 +47,7 @@ export {
   worldStep,
   type WorldStepResult,
   type WorldSceneResult,
+  type WorldSceneResultWithPack,
   modelRegistryList,
   modelRegistrySearch,
   modelRegistryGetModel,
@@ -284,11 +285,15 @@ export {
 // spawn because the platform's `bare-runtime-<platform>-<arch>` package is
 // missing (common under pnpm). Exported so consumers can pattern-match with
 // `instanceof`.
+// `StreamEndedError` is raised by the streaming result helpers (upscale, world)
+// when the RPC stream closes without a terminal `done` frame. Exported for the
+// same reason as the rest of this block: matching on it requires the class.
 export {
   BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
-  RequestValidationFailedError
+  RequestValidationFailedError,
+  StreamEndedError
 } from './utils/errors-client'
 
 // Logging exports

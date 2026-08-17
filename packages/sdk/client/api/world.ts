@@ -4,6 +4,7 @@ import {
   createWorldSceneResult,
   createWorldStepResult,
   type WorldSceneResult,
+  type WorldSceneResultWithPack,
   type WorldStepResult
 } from '@/client/api/world-result'
 
@@ -11,17 +12,22 @@ import {
  * Builds a world for an ABot-World session: the prompt and first frame are
  * encoded into a scene pack the walk then runs on.
  *
- * Run this once per world. The returned pack can be stored and passed back as
- * `modelConfig.sceneSrc` on a later `loadModel` to revisit the same world.
- * Creating a world on a session that is already walking replaces it and
- * restarts the walk from the beginning.
+ * Run this once per world. The world is live on the session as soon as this
+ * completes — `stats` is the completion signal. Creating a world on a session
+ * that is already walking replaces it and restarts the walk from the beginning.
+ *
+ * The pack itself is NOT returned by default: it is 10+ MB, a third larger again
+ * as base64, and the common create-then-walk-now flow never touches the bytes.
+ * Pass `returnPack: true` to get them, save them, and pass that file back as
+ * `modelConfig.sceneSrc` on a later `loadModel` to walk the same world again.
+ * `sceneSrc` takes a path or URL, so persist the bytes yourself.
  *
  * Scene creation cannot be interrupted — the engine exposes no abort hook for
  * it — so `cancel({ requestId })` stops the SDK from yielding but the encode runs
  * to completion. Await the result before unloading the model.
  *
- * @param params - Loaded world model ID, scene prompt, first-frame image bytes, and optional dimensions.
- * @returns `requestId`, `scene` (promise of the scene pack), and `stats`.
+ * @param params - Loaded world model ID, scene prompt, first-frame image bytes, optional dimensions, and `returnPack`.
+ * @returns `requestId` and `stats`; plus `scene` (promise of the pack) when `returnPack: true`.
  *
  * @example
  * ```typescript
@@ -37,15 +43,31 @@ import {
  *   },
  * });
  *
- * const { scene } = worldCreateScene({
+ * // Walk it now and never persist it: no pack crosses the wire.
+ * const { stats } = worldCreateScene({
  *   modelId,
  *   prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
  *   image: fs.readFileSync("first-frame.jpg"),
  * });
+ * await stats;
+ *
+ * // Or keep it, to walk the same world after a reload.
+ * const { scene } = worldCreateScene({
+ *   modelId,
+ *   prompt: "| unknown | A realistic outdoor world scene with a navigable path.",
+ *   image: fs.readFileSync("first-frame.jpg"),
+ *   returnPack: true,
+ * });
  * fs.writeFileSync("world.safetensors", await scene);
  * ```
  */
-export function worldCreateScene(params: WorldSceneClientParams): WorldSceneResult {
+export function worldCreateScene(
+  params: WorldSceneClientParams & { returnPack: true }
+): WorldSceneResultWithPack
+export function worldCreateScene(params: WorldSceneClientParams): WorldSceneResult
+export function worldCreateScene(
+  params: WorldSceneClientParams
+): WorldSceneResult | WorldSceneResultWithPack {
   return createWorldSceneResult(params, streamRpc)
 }
 

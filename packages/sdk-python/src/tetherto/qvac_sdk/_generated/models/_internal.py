@@ -13453,6 +13453,13 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
             multiple_of=32,
         ),
     ] = None
+    return_pack: Annotated[
+        bool | None,
+        Field(
+            alias="returnPack",
+            description="Return the generated scene pack in the response. Off by default: the pack is 10+ MB (a third larger again as base64) and the common create-then-walk-now flow never touches the bytes — the world is already live on the session. Turn it on to persist a world, then pass the saved file back as modelConfig.sceneSrc on a later load to walk it again.",
+        ),
+    ] = None
     type: Literal["worldSceneStream"] = "worldSceneStream"
 
 

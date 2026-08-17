@@ -16,7 +16,7 @@ import {
 import { parseClientInput } from '@/client/parse-input'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
-import { RequestValidationFailedError } from '@/utils/errors-client'
+import { RequestValidationFailedError, StreamEndedError } from '@/utils/errors-client'
 import { InferenceCancelledError } from '@/utils/errors-server'
 import { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
 
@@ -33,11 +33,27 @@ export interface WorldStepResult {
   stats: Promise<WorldStepStats | undefined>
 }
 
+/**
+ * Completion of a scene creation. The world is live on the session either way —
+ * `stats` is what tells you it finished.
+ */
 export interface WorldSceneResult {
   requestId: string
-  /** The finished scene pack; pass it back as `modelConfig.sceneSrc` to revisit this world. */
-  scene: Promise<Uint8Array>
   stats: Promise<WorldSceneStats | undefined>
+}
+
+/**
+ * What `worldCreateScene({ returnPack: true })` returns. `scene` exists only on
+ * this shape, so the bytes cannot be awaited on a request that never asked for
+ * them — the alternative, a `Promise<Uint8Array | undefined>` on one shared
+ * type, pushes that check to every caller and hides it from the compiler.
+ *
+ * Save the bytes to walk the world again: pass the file back as
+ * `modelConfig.sceneSrc` on a later `loadModel`. `sceneSrc` stays a path/URL —
+ * it is resolved on the load path with every other model source.
+ */
+export interface WorldSceneResultWithPack extends WorldSceneResult {
+  scene: Promise<Uint8Array>
 }
 
 /** Bit order the native action adapter expects: bit 0..7 = W,A,S,D,I,J,K,L. */
@@ -109,8 +125,13 @@ function deferred<T>() {
  * dropped connection or a truncated stream into an `await` that never returns —
  * a hang the caller cannot distinguish from slow generation, and cannot time
  * out because no error is ever delivered.
+ *
+ * `StreamEndedError` rather than a bare `Error`, matching `upscale.ts`, so a
+ * caller can `instanceof` a dropped walk instead of matching on message text.
  */
-const TRUNCATED_STREAM = 'World stream ended before the operation completed'
+function truncatedStream(): StreamEndedError {
+  return new StreamEndedError()
+}
 
 /**
  * The world ops throw `InferenceCancelledError` on the server, so it crosses the
@@ -187,7 +208,7 @@ export function createWorldStepResult(
     }
 
     if (!framesOut.isSettled()) {
-      const truncated = streamError ?? new Error(TRUNCATED_STREAM)
+      const truncated = streamError ?? truncatedStream()
       streamError = truncated
       statsOut.reject(truncated)
       framesOut.reject(truncated)
@@ -221,10 +242,21 @@ export function createWorldStepResult(
   return { requestId, frameStream, frames: framesOut.promise, stats: statsOut.promise }
 }
 
+// Overloaded on the literal so `returnPack: true` is the only way to reach a
+// result carrying `scene`. `createWorldSceneResult({ returnPack: false })` and
+// the omitted case both land on the pack-free shape.
+export function createWorldSceneResult(
+  params: WorldSceneClientParams & { returnPack: true },
+  streamFactory: WorldSceneStreamFactory
+): WorldSceneResultWithPack
 export function createWorldSceneResult(
   params: WorldSceneClientParams,
   streamFactory: WorldSceneStreamFactory
-): WorldSceneResult {
+): WorldSceneResult
+export function createWorldSceneResult(
+  params: WorldSceneClientParams,
+  streamFactory: WorldSceneStreamFactory
+): WorldSceneResult | WorldSceneResultWithPack {
   const requestId = generateClientRequestId()
   const { image, ...rest } = params
   // Empty prompts and dimensions that are not multiples of 32 are rejected
@@ -236,6 +268,7 @@ export function createWorldSceneResult(
     requestId
   })
 
+  const wantsPack = params.returnPack === true
   const sceneOut = deferred<Uint8Array>()
   const statsOut = deferred<WorldSceneStats | undefined>()
 
@@ -257,7 +290,9 @@ export function createWorldSceneResult(
           statsOut.resolve(parsed.stats)
           if (scene) {
             sceneOut.resolve(scene)
-          } else {
+          } else if (wantsPack) {
+            // Only a failure when the caller asked for the bytes; otherwise the
+            // server keeping them is the whole point of the default.
             sceneOut.reject(new Error('World scene creation finished without returning a pack'))
           }
         }
@@ -268,8 +303,8 @@ export function createWorldSceneResult(
       sceneOut.reject(failure)
     }
 
-    if (!sceneOut.isSettled()) {
-      const failure = new Error(TRUNCATED_STREAM)
+    if (!statsOut.isSettled()) {
+      const failure = truncatedStream()
       statsOut.reject(failure)
       sceneOut.reject(failure)
     }
@@ -277,5 +312,9 @@ export function createWorldSceneResult(
 
   void pump()
 
-  return { requestId, scene: sceneOut.promise, stats: statsOut.promise }
+  // `scene` is present only on the requested shape, so a caller who did not ask
+  // for the bytes has nothing to await by mistake.
+  return wantsPack
+    ? { requestId, scene: sceneOut.promise, stats: statsOut.promise }
+    : { requestId, stats: statsOut.promise }
 }
