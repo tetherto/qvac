@@ -44,7 +44,10 @@ function runWithStubs(script, { adbExit = 0, curlExit = 0, mkdirExit = null }) {
   }
   fs.writeFileSync(
     path.join(testsDir, 'wdio.config.devicefarm.js'),
-    "exports.config = { mochaOpts: { grep: 'runAddonTest' } }\n"
+    // Double quotes: upload-to-devicefarm JSON-encodes the grep into the wdio
+    // config, so the prestage extractor must read a double-quoted value (a
+    // single-quote-only regex silently stages the whole manifest — QVAC-23665).
+    'exports.config = { mochaOpts: { grep: "runAddonTest" } }\n'
   )
   try {
     return childProcess.spawnSync('sh', ['-c', script], {

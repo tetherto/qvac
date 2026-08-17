@@ -144,7 +144,7 @@ function expandPrestageList(man, grep) {
 function commonPrelude(manifestB64) {
   const expand = expandPrestageList.toString()
   return `echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
+GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*[\\"']([^\\"']*)[\\"']/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
 node -e "const fs=require('fs');const expandPrestageList=${expand};const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const rows=expandPrestageList(man,process.env.GREP||'');fs.writeFileSync('/tmp/prestage-list.tsv',rows.map(r=>r.name+'\\t'+r.url+(r.fallback?'\\t'+r.fallback:'')).join('\\n')+(rows.length?'\\n':''));console.error('[prestage] '+rows.length+' model(s)')"
