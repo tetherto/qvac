@@ -145,6 +145,26 @@ export const diffusionPlugin = definePlugin({
         )
       }
     } else {
+      // The mirror of the rule above. Only `config.world` reaches the native
+      // walk session, so a flat compute key here is accepted by the schema and
+      // then silently dropped: `device: 'cpu'` — the documented escape hatch
+      // every other mode honours — would hand back a GPU session with no
+      // feedback, and `threads` would be ignored while `world.threads` works.
+      const worldEquivalent = {
+        device: 'world.backend',
+        'main-gpu': 'world.backend',
+        threads: 'world.threads',
+        offload_to_cpu: 'world.offloadParamsToCpu'
+      } as const
+      const dropped = (Object.keys(worldEquivalent) as (keyof typeof worldEquivalent)[]).find(
+        (key) => cfg[key] !== undefined
+      )
+      if (dropped) {
+        throw new ModelLoadFailedError(
+          `modelConfig.${dropped} does not reach the ABot-World session. Use ` +
+            `modelConfig.${worldEquivalent[dropped]} instead, which is forwarded to it.`
+        )
+      }
       if (!cfg.taehvModelSrc) {
         throw new ModelLoadFailedError(
           'modelConfig.taehvModelSrc is required in world mode. Provide the taew2_2 ' +

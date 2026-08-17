@@ -28,6 +28,12 @@ import type {
 // this means the native job is not progressing. Warn only — see settleInFlight.
 const INFLIGHT_WARN_MS = 120_000
 
+// A pack is ~10 MB at 832x480 and scales with pixel area; 128 MB is far above
+// any real resolution and well under what would hurt a worker to hold, base64
+// included. A pack past it means something went wrong natively, not a bigger
+// world.
+const MAX_SCENE_PACK_BYTES = 128 * 1024 * 1024
+
 interface WorldSessionArgs {
   modelId: string
   files: { model: string; taehv: string; scene: string }
@@ -44,6 +50,12 @@ interface WorldSessionArgs {
    * no substitution point of its own.
    */
   world?: NativeWorldSession
+  /**
+   * Ceiling for a generated pack, defaulting to `MAX_SCENE_PACK_BYTES`.
+   * Overridable for the same reason as `world` above: the real limit is far
+   * larger than anything a test should write to disk.
+   */
+  maxScenePackBytes?: number
 }
 
 /** The part of `WorldStableDiffusion` this module actually uses. */
@@ -73,11 +85,11 @@ export interface WorldSession {
   ensureActivated(): Promise<void>
   deactivate(): Promise<void>
   /**
-   * Promote a freshly generated pack and return its bytes. The previous world is
-   * replaced only here, and the read is part of the same locked step so a
-   * concurrent unload cannot delete the pack between the two.
+   * Promote a freshly generated pack, returning its bytes only when asked. The
+   * previous world is replaced only here, and the read is part of the same
+   * locked step so a concurrent unload cannot delete the pack between the two.
    */
-  promoteStagedScene(): Promise<Buffer>
+  promoteStagedScene(readBytes: boolean): Promise<Buffer | undefined>
   /** Drop a failed generation, leaving the previous world usable. */
   discardStagedScene(): Promise<void>
   /** Wait for native work to finish. See the note on `settleInFlight`. */
@@ -131,6 +143,7 @@ export function worldScenePath(modelId: string): string {
  */
 export function createWorldSession(args: WorldSessionArgs): WorldSession {
   const { modelId, files, config, encoders, seedScenePath, logger } = args
+  const maxScenePackBytes = args.maxScenePackBytes ?? MAX_SCENE_PACK_BYTES
   const world: NativeWorldSession =
     args.world ?? new WorldStableDiffusion({ files, config, logger, opts: { stats: true } })
   const stagingScenePath = `${files.scene}.staging`
@@ -233,11 +246,22 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     // come back from here rather than the caller re-reading `scenePath`: an
     // `unloadModel` landing between the two deletes the pack, which would turn
     // a finished world into an ENOENT with no explanation.
-    async promoteStagedScene() {
+    async promoteStagedScene(readBytes) {
       return withSessionLock(async () => {
         assertLive()
+        // Sized BEFORE promotion, so an implausible pack cannot replace the
+        // world the caller already had — and, when the bytes were asked for,
+        // cannot be base64'd into ~4/3 of its size in worker memory either.
+        const { size } = await fsPromises.stat(stagingScenePath)
+        if (size > maxScenePackBytes) {
+          throw new PluginRequestValidationFailedError(
+            'worldSceneStream',
+            `Generated world scene pack is ${size} bytes, over the ${maxScenePackBytes}-byte ceiling. ` +
+              'The previous world was left in place; lower worldCreateScene width/height and create it again.'
+          )
+        }
         await fsPromises.rename(stagingScenePath, files.scene)
-        return fsPromises.readFile(files.scene)
+        return readBytes ? fsPromises.readFile(files.scene) : undefined
       })
     },
 
@@ -428,6 +452,7 @@ export async function* worldStep(
   const response = await session.run(() => session.step(request.keys ?? []))
 
   let frameIndex = 0
+  let stepFailed = false
 
   try {
     for await (const chunk of response.iterate()) {
@@ -442,11 +467,37 @@ export async function* worldStep(
       // The native progress tick carries step/frames/elapsed_ms, all of which
       // the terminal stats already report — so it is not forwarded.
     }
+  } catch (error) {
+    stepFailed = true
+    throw error
   } finally {
     // Cancel is block-granular, so the DiT keeps going after we stop reading.
     // Hold the model's slot until it stops, or the next step is admitted into a
     // session the addon will reject as busy. Runs on early consumer exit too.
     await session.settle()
+
+    // Both a failure AND a cancellation are terminal for the native session.
+    // The addon contract is explicit that the engine's RNG/history cannot be
+    // resumed after either — of cancellation it says "Treat it like any failed
+    // step: reload the session" — so leaving `activated` true would make every
+    // later step dispatch into dead state and surface opaque native errors,
+    // recoverable only by unloadModel + loadModel and a re-resolve of the
+    // artifacts. Dropping it here lets the next step rebuild transparently from
+    // the same promoted pack.
+    //
+    // A cancel does not reach the `catch` above: the loop breaks on the abort
+    // flag rather than throwing, so the abort has to be tested here too.
+    if (stepFailed || ctx.signal.aborted) {
+      try {
+        await session.deactivate()
+      } catch (teardownError) {
+        // Never mask the failure that got us here.
+        requestLogger.warn(
+          `World session teardown failed for modelId=${request.modelId} after a terminal step: ` +
+            `${teardownError instanceof Error ? teardownError.message : String(teardownError)}`
+        )
+      }
+    }
   }
 
   // A cancelled block must not be reported as a finished one. The DiT already
@@ -507,7 +558,7 @@ export async function* worldCreateScene(
   // rather than in front of it.
   let promoted = false
   let response: SceneResponseWithStats & { iterate(): AsyncIterable<unknown> }
-  let scene: Buffer
+  let scene: Buffer | undefined
 
   try {
     response = (await session.run(() =>
@@ -544,18 +595,21 @@ export async function* worldCreateScene(
       throw new InferenceCancelledError(ctx.requestId)
     }
 
-    scene = await session.promoteStagedScene()
+    scene = await session.promoteStagedScene(request.returnPack === true)
     promoted = true
   } finally {
     if (!promoted) await session.discardStagedScene()
   }
 
-  requestLogger.info(`World scene pack created for ${request.modelId} (${scene.length} bytes)`)
+  requestLogger.info(
+    `World scene pack created for ${request.modelId}` +
+      (scene ? ` (${scene.length} bytes returned)` : ' (pack retained server-side)')
+  )
 
   const { stats } = response as SceneResponseWithStats
   yield {
     type: 'worldSceneStream',
-    data: Buffer.from(scene).toString('base64'),
+    ...(scene && { data: Buffer.from(scene).toString('base64') }),
     done: true,
     ...(stats && { stats })
   }

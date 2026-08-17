@@ -229,6 +229,108 @@ test('world scene op: the model slot is held until uninterruptible work settles'
   })
 })
 
+// The addon contract puts cancellation in the same bucket as a failed step —
+// "Treat it like any failed step: reload the session" — because the engine's
+// RNG/history cannot be resumed either way. So a cancelled step must also drop
+// the session, and the NEXT step must rebuild it with no explicit reload from
+// the caller.
+test('world step op: a cancelled step rebuilds the session without an explicit reload', async function (t) {
+  const [{ worldStep }, { getRequestRegistry }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime')
+  ])
+  // One response per step, handed out in order. Returning a single shared fake
+  // would let the second step re-iterate the first one's chunks and pass without
+  // the session ever having been rebuilt.
+  const cancelled = makeResponse([new Uint8Array([1, 2, 3])])
+  const resumedResponse = makeResponse([new Uint8Array([4])])
+  const responses = [cancelled, resumedResponse]
+  let stepCount = 0
+
+  let loads = 0
+  let unloads = 0
+  const counting = {
+    load: async () => {
+      loads++
+    },
+    unload: async () => {
+      unloads++
+    },
+    step: async () => responses[stepCount++]?.response,
+    createScene: async () => cancelled.response,
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId }) => {
+    const requestId = makeId('req')
+    const stream = worldStep({ modelId, requestId, keys: ['W'] })
+    await stream.next()
+
+    getRequestRegistry().cancel({ requestId })
+    cancelled.releaseStream()
+    cancelled.settleJob()
+    await stream.next().catch(() => {})
+
+    t.is(loads, 1, 'the cancelled walk activated once')
+    t.is(unloads, 1, 'a cancelled session is dropped, not kept for the next step')
+
+    const resumed = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+    const frame = await resumed.next()
+    t.is(
+      (frame.value as { data?: string } | undefined)?.data,
+      Buffer.from([4]).toString('base64'),
+      'the next step walks again — and on a FRESH native response, not the cancelled one'
+    )
+    t.is(loads, 2, 'and it rebuilt the native session from the same promoted pack')
+    t.is(stepCount, 2, 'each step drove its own native job')
+
+    resumedResponse.releaseStream()
+    resumedResponse.settleJob()
+    await resumed.return(undefined).catch(() => {})
+  })
+})
+
+test('world step op: a terminal step failure drops the session so the next step rebuilds', async function (t) {
+  const { worldStep } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+
+  let loads = 0
+  let unloads = 0
+  const failing = {
+    load: async () => {
+      loads++
+    },
+    unload: async () => {
+      unloads++
+    },
+    step: async () => ({
+      // eslint-disable-next-line require-yield
+      async *iterate() {
+        throw new Error('native step failed')
+      },
+      await: async () => {}
+    }),
+    createScene: async () => ({
+      async *iterate() {},
+      await: async () => {}
+    }),
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(failing, async ({ modelId }) => {
+    const stream = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+    await t.exception(stream.next(), /native step failed/, 'the failure reaches the caller')
+
+    // Per the addon contract the native session is unusable after a failed step.
+    // Without dropping it, every later step dispatches into dead state and the
+    // only recovery is unloadModel + loadModel.
+    t.is(unloads, 1, 'the dead session is torn down rather than left activated')
+
+    const second = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+    await t.exception(second.next(), /native step failed/, 'the next step still surfaces failures')
+    t.is(loads, 2, 'the next step rebuilt the session from the promoted pack')
+  })
+})
+
 test('world scene op: a dispatch that never starts leaves no staged file behind', async function (t) {
   const fs = await import('bare-fs')
   const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
@@ -297,6 +399,56 @@ test('world scene op: abandoning the generator drops the staged file', async fun
       'an abandoned generation does not leave its staged pack on disk'
     )
   })
+})
+
+test('world session: an oversized pack is refused and the existing world survives', async function (t) {
+  const [fsMod, { getServerLogger }, worldOps] = await Promise.all([
+    import('bare-fs'),
+    import('@/logging'),
+    import('@/server/bare/plugins/sdcpp-generation/ops/world')
+  ])
+  const driver = makeResponse([])
+
+  const modelId = makeId('test-world-oversized')
+  const session = worldOps.createWorldSession({
+    modelId,
+    files: {
+      model: '/tmp/dit.gguf',
+      taehv: '/tmp/taehv.gguf',
+      scene: worldOps.worldScenePath(modelId)
+    },
+    config: {},
+    encoders: { t5: '/tmp/t5.gguf', vae: '/tmp/vae.gguf' },
+    logger: getServerLogger(),
+    world: fakeNativeSession(driver.response),
+    // The real ceiling is 128 MB; a test has no business writing that.
+    maxScenePackBytes: 16
+  })
+
+  try {
+    fsMod.default.writeFileSync(session.scenePath, 'the world the caller already had')
+    fsMod.default.writeFileSync(session.stagingScenePath, 'a pack far past the ceiling')
+
+    await t.exception(
+      session.promoteStagedScene(false),
+      /over the 16-byte ceiling/,
+      'an implausible pack is refused'
+    )
+    // Sized BEFORE the rename, so the caller keeps the world they had rather
+    // than having it replaced by something the worker would not hand back.
+    t.is(
+      fsMod.default.readFileSync(session.scenePath, 'utf8'),
+      'the world the caller already had',
+      'the existing valid world is left in place'
+    )
+  } finally {
+    try {
+      fsMod.default.unlinkSync(session.scenePath)
+    } catch {}
+    try {
+      fsMod.default.unlinkSync(session.stagingScenePath)
+    } catch {}
+  }
 })
 
 test('world session: teardown waits for a job that is still being admitted', async function (t) {
@@ -370,7 +522,7 @@ test('world session: promotion after teardown fails as an unloaded model, not a 
     // an unexplained filesystem error for what is really "you unloaded the
     // model while its world was being created".
     await t.exception(
-      session.promoteStagedScene(),
+      session.promoteStagedScene(true),
       /is not loaded/,
       'promotion reports the real cause once the session is gone'
     )

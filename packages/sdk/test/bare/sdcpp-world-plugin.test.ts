@@ -148,6 +148,35 @@ test('sdcpp plugin createModel: world session defers activation when there is no
   await t.execution(result.model.load(false), 'load() defers activation instead of throwing')
 })
 
+// The mirror of "world-only fields are rejected in other modes". Only
+// config.world reaches the native walk session, so a flat compute key is
+// schema-legal here and then silently dropped — device: 'cpu' would hand back a
+// GPU session with no feedback at all.
+test('sdcpp plugin resolveConfig: flat compute keys are rejected in world mode', async (t) => {
+  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, device: 'cpu' }, resolveCtx),
+    /world\.backend/,
+    'device points at world.backend rather than being silently dropped'
+  )
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, 'main-gpu': 1 }, resolveCtx),
+    /world\.backend/,
+    'main-gpu points at world.backend'
+  )
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, threads: 8 }, resolveCtx),
+    /world\.threads/,
+    'threads points at world.threads'
+  )
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, offload_to_cpu: true }, resolveCtx),
+    /world\.offloadParamsToCpu/,
+    'offload_to_cpu points at world.offloadParamsToCpu'
+  )
+})
+
 test('sdcpp plugin createModel: world scene path is derived from a hash, not the modelId', async (t) => {
   const { worldScenePath } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
 
@@ -186,7 +215,7 @@ test('world session: a failed generation leaves the previous world in place', as
   const session = result.model as unknown as {
     scenePath: string
     stagingScenePath: string
-    promoteStagedScene(): Promise<Buffer>
+    promoteStagedScene(readBytes: boolean): Promise<Buffer | undefined>
     discardStagedScene(): Promise<void>
     unload(): Promise<void>
   }
@@ -212,19 +241,34 @@ test('world session: a failed generation leaves the previous world in place', as
   )
 
   fs.writeFileSync(session.stagingScenePath, 'a generation that succeeded')
-  const promoted = await session.promoteStagedScene()
+  const promoted = await session.promoteStagedScene(true)
 
   t.is(
-    promoted.toString('utf8'),
+    promoted?.toString('utf8'),
     'a generation that succeeded',
     'promotion hands back the bytes it just published, read under the same lock'
   )
+
   t.is(
     fs.readFileSync(session.scenePath, 'utf8'),
     'a generation that succeeded',
     'a successful generation takes over'
   )
   t.absent(fs.existsSync(session.stagingScenePath), 'staging does not linger after commit')
+
+  // The default path: the pack is published but never read, so the common
+  // create-then-walk-now flow does not pull 10+ MB through the worker.
+  fs.writeFileSync(session.stagingScenePath, 'a second generation')
+  t.is(
+    await session.promoteStagedScene(false),
+    undefined,
+    'promotion without a read returns nothing'
+  )
+  t.is(
+    fs.readFileSync(session.scenePath, 'utf8'),
+    'a second generation',
+    'and still publishes the new world without handing the bytes back'
+  )
 
   await session.unload()
   t.absent(
