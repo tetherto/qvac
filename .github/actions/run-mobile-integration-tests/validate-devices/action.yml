@@ -1,0 +1,102 @@
+name: Mobile Test — Validate Manual Device Selection
+description: |
+  Fail-fast guard for the on-demand (workflow_dispatch) mobile path.
+  Confirms the dispatcher supplied at least one device and that
+  every requested MODEL exists in the AWS Device Farm fleet for the target
+  platform — BEFORE any Device Farm run is scheduled, so a typo or an empty
+  selection costs nothing instead of silently falling back to the full pool.
+
+  The MODEL match mirrors schedule-test-run's device filter exactly:
+    * CONTAINS (default): the requested value is a case-sensitive substring of
+      a fleet device's model (e.g. "Pixel 9" also matches "Pixel 9 Pro XL").
+    * EQUALS: the requested value equals a fleet device's model exactly.
+
+  Requires an OIDC role granted devicefarm:ListDevices (the same role the
+  scheduler and sdk-device-farm-select-pool already use).
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  devices:
+    description: "Comma-separated MODEL values requested by the dispatcher, e.g. 'Pixel 9, iPhone 17'."
+    required: true
+  device-model-operator:
+    description: "MODEL match operator: CONTAINS (default) or EQUALS. Must match what schedule-test-run is given."
+    required: false
+    default: "CONTAINS"
+  aws-role-to-assume:
+    description: "AWS IAM role ARN for OIDC (needs devicefarm:ListDevices)."
+    required: true
+  aws-region:
+    description: "AWS region for Device Farm (Device Farm is us-west-2)."
+    required: false
+    default: "us-west-2"
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Validate requested devices exist on Device Farm
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        DEVICES: ${{ inputs.devices }}
+        MODEL_OPERATOR: ${{ inputs.device-model-operator }}
+      run: |
+        set -euo pipefail
+
+        MODEL_OP="${MODEL_OPERATOR:-CONTAINS}"
+        case "$MODEL_OP" in
+          EQUALS|CONTAINS) ;;
+          *) echo "::error::device-model-operator must be EQUALS or CONTAINS (got '$MODEL_OP')"; exit 1 ;;
+        esac
+
+        # Parse the comma-separated list, trimming whitespace and dropping empties.
+        MODELS_JSON=$(printf '%s' "$DEVICES" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0))')
+        MODEL_COUNT=$(echo "$MODELS_JSON" | jq 'length')
+        if [ "$MODEL_COUNT" -eq 0 ]; then
+          echo "::error::No device selected. A manual mobile run must specify at least one device (input 'devices'), e.g. 'Pixel 9' or 'Pixel 9, iPhone 17'."
+          exit 1
+        fi
+
+        PLAT_UPPER=$([ "$PLATFORM" = "Android" ] && echo ANDROID || echo IOS)
+        FILTER=$(jq -nc --arg plat "$PLAT_UPPER" '[{attribute:"PLATFORM", operator:"EQUALS", values:[$plat]}]')
+
+        echo "Listing $PLAT_UPPER devices on Device Farm..."
+        FLEET=$(aws devicefarm list-devices --filters "$FILTER" --query 'devices[].{model: model, name: name, availability: availability}' --output json)
+        FLEET_COUNT=$(echo "$FLEET" | jq 'length')
+        if [ "$FLEET_COUNT" -eq 0 ]; then
+          echo "::error::Device Farm returned no $PLAT_UPPER devices — cannot validate the selection. Check the OIDC role has devicefarm:ListDevices."
+          exit 1
+        fi
+
+        MISSING=""
+        for MIDX in $(seq 0 $((MODEL_COUNT - 1))); do
+          MODEL=$(echo "$MODELS_JSON" | jq -r ".[$MIDX]")
+          if [ "$MODEL_OP" = "EQUALS" ]; then
+            HIT=$(echo "$FLEET" | jq --arg m "$MODEL" 'map(select(.model == $m)) | length')
+          else
+            HIT=$(echo "$FLEET" | jq --arg m "$MODEL" 'map(select(.model | contains($m))) | length')
+          fi
+          if [ "$HIT" -gt 0 ]; then
+            echo "  OK   '$MODEL' matches $HIT $PLAT_UPPER device model(s) [$MODEL_OP]"
+          else
+            echo "  MISS '$MODEL' matches no $PLAT_UPPER device model [$MODEL_OP]"
+            MISSING="$MISSING $MODEL"
+          fi
+        done
+
+        if [ -n "$MISSING" ]; then
+          echo "::error::These requested device(s) do not exist on Device Farm for $PLAT_UPPER [$MODEL_OP]:$MISSING"
+          echo "Available $PLAT_UPPER device models:"
+          echo "$FLEET" | jq -r '.[].model' | sort -u | sed 's/^/  - /'
+          exit 1
+        fi
+
+        echo "All requested $PLAT_UPPER device(s) exist on Device Farm."
