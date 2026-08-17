@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Audio8 OpenCL GPU offload (Android / Adreno).** `useGPU: true` /
+  `nGpuLayers > 0` now engages the OpenCL backend for Audio8 on Qualcomm Adreno
+  devices, which previously declined to CPU. Requires `speech-cpp` >=
+  2026-08-17. On an Adreno 740 codec synthesis is 4.7-5.1x faster than CPU; the
+  autoregressive loop is bound by host dispatch cost rather than by the GPU, so
+  the end-to-end figure ranges 1.1x-2.3x depending on CPU core placement. At
+  f32 the GPU reproduces the CPU code trajectory exactly, and the quantised
+  tiers score the same WER on either backend.
+
 ## [0.7.0] - 2026-08-14
 
 ### Added
