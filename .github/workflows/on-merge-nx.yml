@@ -226,17 +226,13 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.pre-publish-rows) }}
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    uses: ./.github/workflows/integration-test-nx.yml
-    with:
-      ref: ${{ github.sha }}
-      repository: ${{ github.repository }}
-      base-ref: ${{ github.sha }}
-      packages: ${{ format('["{0}"]', matrix.package) }}
-    secrets: inherit
+    # TEST-ONLY: real `uses: ./.github/workflows/integration-test-nx.yml` call
+    # replaced with an echo so the job graph can be exercised in seconds.
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "STUB pre-publish-integration package=${{ matrix.package }}"
+          echo "packages input would be: ${{ format('["{0}"]', matrix.package) }}"
 
   pre-publish-mobile:
     name: Pre-publish mobile integration (${{ matrix.package }})
@@ -246,18 +242,13 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.pre-publish-rows) }}
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-nx.yml
-    with:
-      ref: ${{ github.sha }}
-      repository: ${{ github.repository }}
-      base-ref: ${{ github.sha }}
-      packages: ${{ format('["{0}"]', matrix.package) }}
-    secrets: inherit
+    # TEST-ONLY: real `uses: ./.github/workflows/integration-mobile-test-nx.yml`
+    # call replaced with an echo.
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "STUB pre-publish-mobile package=${{ matrix.package }}"
+          echo "packages input would be: ${{ format('["{0}"]', matrix.package) }}"
 
   # Same `packages` bypass — asks the leaf to build exactly this package,
   # not whatever nx-affected would compute against base-ref/head-ref.
@@ -269,17 +260,15 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.prebuild-rows) }}
-    permissions:
-      contents: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/prebuilds-nx.yml
-    with:
-      ref: ${{ github.sha }}
-      repository: ${{ github.repository }}
-      base-ref: ${{ github.sha }}
-      packages: ${{ format('["{0}"]', matrix.package) }}
-    secrets: inherit
+    # TEST-ONLY: real `uses: ./.github/workflows/prebuilds-nx.yml` call replaced
+    # with an echo — the registry moved the asr-ggml ports (speech-cpp umbrella,
+    # main#3758) so a real prebuild cannot succeed on this stale test base, and
+    # the graph/outputs behaviour is what we are measuring anyway.
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "STUB prebuild package=${{ matrix.package }}"
+          echo "packages input would be: ${{ format('["{0}"]', matrix.package) }}"
 
   publish-gpr:
     name: Publish GPR (${{ matrix.package }})
@@ -305,65 +294,11 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          token: ${{ matrix.installToken == 'PAT_TOKEN' && secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Download prebuild artifacts
-        if: matrix.hasPrebuilds == true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ matrix.workdir }}/prebuilds
-
-      - name: Set up Node.js
-        if: matrix.buildStep != 'none'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Run build step
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        run: npm run ${{ matrix.buildStep }}
-
-      - name: Rename prebuild files from qvac_ to tetherto_ prefix
-        if: matrix.nameTransform == 'rename-prefix'
-        working-directory: ${{ matrix.workdir }}
-        run: |
-          find prebuilds -depth -name 'qvac_*' | while read -r file; do
-            dir=$(dirname "$file")
-            base=$(basename "$file")
-            newbase=$(echo "$base" | sed 's/^qvac_/tetherto_/')
-            mv "$file" "$dir/$newbase"
-          done
-
-          if [ -f binding.js ]; then
-            sed -i 's/qvac_/tetherto_/g' binding.js
-          fi
-
-      - name: Scope package as @tetherto for GPR
-        if: matrix.nameTransform == 'scope-rewrite'
-        shell: bash
-        env:
-          WORKDIR: ${{ matrix.workdir }}
-          PACKAGE: ${{ matrix.package }}
-        run: |
-          set -euo pipefail
-          node -e "const fs=require('fs');const f=process.env.WORKDIR+'/package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));const want='@tetherto/'+process.env.PACKAGE;if(p.name!==want){p.name=want;fs.writeFileSync(f,JSON.stringify(p,null,2));console.log('Set name to',p.name);}else{console.log('Already',p.name);}"
-
-      - name: Publish to GitHub Package Registry
-        uses: ./.github/actions/publish-library-to-gpr
-        with:
-          secret-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.publish-logic.outputs.gpr_tag }}
-          workdir: ${{ matrix.workdir }}
-          name-suffix: "-mono"
+      # TEST-ONLY: prebuild is stubbed, so there is no `prebuilds` artifact to
+      # download and nothing real to publish. Echo only; the job still exists
+      # with its real matrix/if wiring so its .result propagates as normal.
+      - name: Publish to GitHub Package Registry (stubbed)
+        run: echo "STUB publish-gpr package=${{ matrix.package }} tag=${{ needs.publish-logic.outputs.gpr_tag }}"
 
   publish-npm:
     name: Publish NPM (${{ matrix.package }})
@@ -393,43 +328,14 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          token: ${{ matrix.installToken == 'PAT_TOKEN' && secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Download prebuild artifacts
-        if: matrix.hasPrebuilds == true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: prebuilds
-          path: ${{ matrix.workdir }}/prebuilds
-
-      - name: Set up Node.js
-        if: matrix.buildStep != 'none'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Run build step
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        run: npm run ${{ matrix.buildStep }}
-
-      - name: Determine dist-tag
-        id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
-        with:
-          workdir: ${{ matrix.workdir }}
-          tag: ${{ matrix.npmTagOverride || inputs.npm_tag }}
-
-      - name: Publish to npm
+      # TEST-ONLY: checkout / artifact download / build / dist-tag / real npm
+      # publish all replaced with an echo. Job keeps its real needs/if/matrix
+      # wiring so its .result feeds post-build-gate exactly as in production.
+      - name: Publish to npm (stubbed)
         id: publish
-        run: echo "publish-to-npm (stubbed, package=${{ matrix.package }}, tag=${{ steps.dist-tag.outputs.tag }})"
+        run: |
+          echo "STUB publish-npm package=${{ matrix.package }}"
+          echo "npm_published_version=0.0.0-stub" >> "$GITHUB_OUTPUT"
 
   # OR-gate: post-publish tests only run after a real publish landed. Single
   # (non-matrixed) job so its output propagates reliably to the matrixed
@@ -479,17 +385,14 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.post-integration-rows) }}
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    uses: ./.github/workflows/integration-test-nx.yml
-    with:
-      ref: ${{ github.sha }}
-      repository: ${{ github.repository }}
-      base-ref: ${{ github.sha }}
-      packages: ${{ format('["{0}"]', matrix.package) }}
-    secrets: inherit
+    # TEST-ONLY: real `uses: ./.github/workflows/integration-test-nx.yml` call
+    # replaced with an echo. Matrix + if wiring unchanged — this job reaching
+    # (or not reaching) an echo is exactly the signal we are after.
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "STUB post-publish-integration package=${{ matrix.package }}"
+          echo "should_run_tests=${{ needs.post-build-gate.outputs.should_run_tests }}"
 
   post-publish-mobile:
     name: Post-publish mobile integration (${{ matrix.package }})
@@ -502,17 +405,12 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.post-mobile-rows) }}
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-nx.yml
-    with:
-      ref: ${{ github.sha }}
-      repository: ${{ github.repository }}
-      base-ref: ${{ github.sha }}
-      packages: ${{ format('["{0}"]', matrix.package) }}
-    secrets: inherit
+    # TEST-ONLY: real `uses: ./.github/workflows/integration-mobile-test-nx.yml`
+    # call replaced with an echo.
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "STUB post-publish-mobile package=${{ matrix.package }}"
+          echo "should_run_tests=${{ needs.post-build-gate.outputs.should_run_tests }}"
 
   # TEST-ONLY: create-tag removed for this diagnostic run.
