@@ -182,7 +182,14 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.event.repository.default_branch }}
+          # workflow_call (benchmarks / weekend / on-merge): pull the trusted
+          # composite actions from the default branch, unchanged — that is the
+          # supply-chain guard for automated callers.
+          # workflow_dispatch (trusted maintainer, inputs.platform set): use the
+          # dispatched ref so new scheduler code (e.g. manual-devices) is present;
+          # otherwise the default-branch copy silently ignores manual-devices and
+          # falls back to the dual-flagship pool, breaking the pin guarantee.
+          ref: ${{ inputs.platform != '' && (inputs.ref || github.ref) || github.event.repository.default_branch }}
           path: trusted-actions
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests

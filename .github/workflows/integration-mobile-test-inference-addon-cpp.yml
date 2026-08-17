@@ -223,7 +223,11 @@ jobs:
   # ---------------------------------------------------------------------------
   prebuild-android:
     name: Prebuild (Android arm64)
-    needs: host-test
+    # On a manual single-platform dispatch, skip the unused platform's prebuild
+    # (so an Android-only run is not blocked by an iOS prebuild) and fail fast on
+    # a bad/empty device selection. validate-devices is skipped on workflow_call.
+    needs: [host-test, validate-devices]
+    if: ${{ !cancelled() && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'Android') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -287,7 +291,11 @@ jobs:
 
   prebuild-ios:
     name: Prebuild (iOS arm64)
-    needs: host-test
+    # On a manual single-platform dispatch, skip the unused platform's prebuild
+    # (so an iOS-only run is not blocked by an Android prebuild) and fail fast on
+    # a bad/empty device selection. validate-devices is skipped on workflow_call.
+    needs: [host-test, validate-devices]
+    if: ${{ !cancelled() && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'iOS') }}
     runs-on: macos-14
     timeout-minutes: 30
     permissions:
@@ -356,7 +364,12 @@ jobs:
       - prebuild-android
       - prebuild-ios
       - validate-devices
-    if: ${{ !cancelled() && needs.resolve-framework.result == 'success' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    # Require only the prebuild for the dispatched platform: on a single-platform
+    # manual run the other platform's prebuild is skipped and must not block the
+    # platform the dispatcher chose. workflow_call (inputs.platform == '') still
+    # requires both prebuilds. NOTE: matrix.* is unavailable in a job-level if
+    # (evaluated pre-fan-out), so the discriminator is inputs.platform, not matrix.
+    if: ${{ !cancelled() && needs.resolve-framework.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && ((inputs.platform == 'Android' && needs.prebuild-android.result == 'success') || (inputs.platform == 'iOS' && needs.prebuild-ios.result == 'success') || (inputs.platform == '' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success')) }}
     runs-on: ${{ matrix.runner }}
     environment: release
     # Exceeds the 30m default: npm install + expo prebuild + Gradle/xcodebuild.

@@ -146,8 +146,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: inputs.platform != '' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
