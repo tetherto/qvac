@@ -2,11 +2,11 @@
 
 <a href="https://docs.qvac.tether.io"><img src="docs/branding/logo.avif" alt="QVAC" height="32" /></a>
 
-<h2>Local AI SDK &amp; Model Provider</h2>
+<h2>Local AI – SDK &amp; Model Provider</h2>
 
 <h3>Run LLMs, speech, vision, image/video generation, and more on any device.</h3>
 
-<p><em>Build mobile and desktop apps with QVAC, or power your favorite AI tools like OpenCode and OpenClaw.</em></p>
+<p><em>Build mobile and desktop apps, or serve local models to your favorite AI tools.</em></p>
 
 </div>
 
