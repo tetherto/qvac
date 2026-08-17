@@ -2,9 +2,9 @@
 #
 # Pinned by default to a commit on
 #   https://github.com/dev-nid/qvac-fabric-llm.cpp.git
-# (branch: turbovec-cpu-pr3-turbovec)
-# which carries the production ggml-vector-index implementation on top
-# of the fabric line consumed by embed-llamacpp.
+# (branch: turbovec-cpu-pr1-core)
+# which combines the fabric TurboVec/vector-index sub-PRs on top of
+# the fabric line consumed by embed-llamacpp.
 #
 # Why an overlay at all: the public `tetherto/qvac-registry-vcpkg` port
 # does not yet carry the turbovec/vector-index fabric changes. This
@@ -19,13 +19,13 @@
 # bump the `# fabric-src-hash:` comment line on each iteration so vcpkg
 # rebuilds the port.
 
-# fabric-src-hash: d4453c833dd44dfe37ce9870837c69c04aa62586
+# fabric-src-hash: 12ff806fd708b71d907a7030478d0fea7c68f1d8
 
 set(FABRIC_GH_REPO "dev-nid/qvac-fabric-llm.cpp")
-set(FABRIC_GH_REF  "9811914e9a38594906ea69ef685e778570a2702e")  # turbovec-cpu-pr3-turbovec
-set(FABRIC_GH_HEAD_REF "turbovec-cpu-pr3-turbovec")
+set(FABRIC_GH_REF  "12ff806fd708b71d907a7030478d0fea7c68f1d8")  # turbovec-cpu-pr1-core
+set(FABRIC_GH_HEAD_REF "turbovec-cpu-pr1-core")
 set(FABRIC_GH_SHA512
-    "f7d69c8b17f41a5b6e8a4e44b2a820f8f17431576ae60746430206ef1c57eb57113a54b6fbf66e24c8841a7abcdcfbf43e4d3681236aab89887e97cbce1321bc")
+    "75b15272e9c42005fa14c74a41a36fccff320fd05797b479722389b21c50a63dcd3f53faf9db35aede0d7848f2cf0d4e972418deecbce6246473c82aa0adebb1")
 
 if(DEFINED ENV{QVAC_FABRIC_LOCAL_PATH})
   set(FABRIC_LOCAL_PATH "$ENV{QVAC_FABRIC_LOCAL_PATH}")

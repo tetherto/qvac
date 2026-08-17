@@ -247,6 +247,12 @@ npm run quickstart
 
 - [Batch Inference](./examples/batchInference.js) – Demonstrates running multiple prompts at once using batch inference.
 - [Native Logging](./examples/nativelog.js) – Demonstrates C++ addon logging integration.
+- [RAG with TurboVec](./examples/ragWithTurboVec.js) – Embeds document chunks, retrieves relevant context with `IdMapIndex`, and prepares it for an LLM.
+
+Run the TurboVec RAG retrieval example on a 64-bit desktop:
+```bash
+bare examples/ragWithTurboVec.js
+```
 
 ## Benchmarking
 
