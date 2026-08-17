@@ -29,7 +29,8 @@ TEST(GenerationParamsApplyTest, NoReasoningBudgetOverrideLeavesSamplingState) {
 
   EXPECT_EQ(sampling.reasoning_budget_tokens, 12);
   EXPECT_EQ(sampling.reasoning_budget_start, tokens({1, 2}));
-  EXPECT_EQ(sampling.reasoning_budget_end, std::vector<llama_tokens>{tokens({3})});
+  EXPECT_EQ(
+      sampling.reasoning_budget_end, std::vector<llama_tokens>{tokens({3})});
   EXPECT_EQ(sampling.reasoning_budget_forced, tokens({4, 5}));
 }
 
@@ -47,7 +48,8 @@ TEST(GenerationParamsApplyTest, PositiveReasoningBudgetUpdatesOnlyTokenCap) {
 
   EXPECT_EQ(sampling.reasoning_budget_tokens, 16);
   EXPECT_EQ(sampling.reasoning_budget_start, tokens({10}));
-  EXPECT_EQ(sampling.reasoning_budget_end, std::vector<llama_tokens>{tokens({11})});
+  EXPECT_EQ(
+      sampling.reasoning_budget_end, std::vector<llama_tokens>{tokens({11})});
   EXPECT_EQ(sampling.reasoning_budget_forced, tokens({12}));
 }
 
