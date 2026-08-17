@@ -288,6 +288,8 @@ A policy turns admission into a per-`(lane, modelId)` FIFO queue with a configur
 
 Kinds without a registered policy are unconstrained, and a policy without `sharedSlotGroup` only contends with its own kind. `embeddings` / `transcribe` and NMT `translate` register no policy — those addons tolerate concurrent requests against the same model (and the registry's per-request lifecycle is enough for cancel routing). `finetune` and LLM `translate`, by contrast, join the shared `llamacppCompletion` lane: `finetune` as an *exclusive writer* (it needs the lane empty so its model-wide cancel can't hit a concurrent completion), and LLM `translate` as a *reader* capped at the model's `parallel`. NMT `translate` passes no cap and stays ungated on its own model.
 
+**Availability cost of the exclusive writer:** while a `finetune` runs, it holds the lane alone, so every `completion`, `batchCompletion`, and LLM `translate` on that model queues behind it for the finetune's *entire* duration. The per-model queue is bounded (`maxQueueDepthPerModel`, default 64) but the *wait* is not — a queued reader can be blocked for the whole finetune with no timeout. This is deliberate: adding a queue timeout here would turn ordinary inference into a new typed failure, so any bound needs an owner/QIP-approved duration and a policy consistent across every shared-lane kind. Callers that need inference responsiveness during training should not share a model between finetune and interactive requests.
+
 Policy enforcement runs in `registry.begin(...)` **before** any controller / scope allocation, so a rejected `begin` leaves no entry behind. Tests pin the FIFO wait, the shared-lane cross-kind serialization, and the "no slot leak" property in `packages/sdk/test/unit/runtime/request-registry.test.ts`.
 
 ## Structured Logging
@@ -490,7 +492,7 @@ import type {
 
 ```typescript
 interface RequestRegistry {
-  begin(opts: BeginOpts): ManagedRequestContext;
+  begin(opts: BeginOpts): Promise<ManagedRequestContext>;
   get(requestId: string): RequestContext | null;
   list(): RequestContext[];
   cancel(target: CancelTarget): number; // count of contexts whose abort fired this call
