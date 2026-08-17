@@ -279,7 +279,7 @@ jobs:
       - pre-publish-integration
       - pre-publish-mobile
     if: >-
-      always() &&
+      always() && !cancelled() &&
       (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') &&
       (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
       (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
@@ -310,7 +310,7 @@ jobs:
       - pre-publish-integration
       - pre-publish-mobile
     if: >-
-      always() &&
+      always() && !cancelled() &&
       (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') &&
       (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
       (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
@@ -348,7 +348,8 @@ jobs:
       - publish-gpr
       - publish-npm
     if: >-
-      always() && needs.detect.outputs.post-integration-rows != '[]'
+      always() && !cancelled() &&
+      needs.detect.outputs.post-integration-rows != '[]'
     runs-on: ubuntu-latest
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
@@ -369,7 +370,7 @@ jobs:
   # and can't have an inline debug step, so echo the received value here.
   debug-gate-output:
     needs: [detect, post-build-gate]
-    if: always()
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
       - run: |
@@ -380,33 +381,41 @@ jobs:
   post-publish-integration:
     name: Post-publish integration (${{ matrix.package }})
     needs: [detect, post-build-gate]
-    if: always() && needs.post-build-gate.outputs.should_run_tests == 'true'
+    if: >-
+      always() && !cancelled() &&
+      needs.post-build-gate.outputs.should_run_tests == 'true'
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.post-integration-rows) }}
-    # TEST-ONLY: real `uses: ./.github/workflows/integration-test-nx.yml` call
-    # replaced with an echo. Matrix + if wiring unchanged — this job reaching
-    # (or not reaching) an echo is exactly the signal we are after.
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "STUB post-publish-integration package=${{ matrix.package }}"
-          echo "should_run_tests=${{ needs.post-build-gate.outputs.should_run_tests }}"
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
+    with:
+      ref: ${{ github.sha }}
+      repository: ${{ github.repository }}
+      base-ref: ${{ github.sha }}
+      packages: ${{ format('["{0}"]', matrix.package) }}
+    secrets: inherit
 
   post-publish-mobile:
     name: Post-publish mobile integration (${{ matrix.package }})
     needs: [detect, post-build-gate]
     if: >-
-      always() &&
+      always() && !cancelled() &&
       needs.detect.outputs.post-mobile-rows != '[]' &&
       needs.post-build-gate.outputs.should_run_tests == 'true'
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.post-mobile-rows) }}
-    # TEST-ONLY: real `uses: ./.github/workflows/integration-mobile-test-nx.yml`
-    # call replaced with an echo.
+    # TEST-ONLY: mobile integration runs are expensive, so the real
+    # `uses: ./.github/workflows/integration-mobile-test-nx.yml` call stays
+    # stubbed. The matrixed `uses:` form is exercised by
+    # post-publish-integration above, which shares the identical if/matrix
+    # wiring — that is the behaviour under test.
     runs-on: ubuntu-latest
     steps:
       - run: |
