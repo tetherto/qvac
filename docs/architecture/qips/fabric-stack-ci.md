@@ -227,6 +227,21 @@ Mitigation: coordinate via `needs: fabric-prebuild` and shared artifact name.
 *Prebuild reuse cache* may serve stale fabric when only overlay REF changes
 Mitigation: include overlay REF in `detect-native-changes` hash or disable reuse for `fabric_stack` PRs.
 
+*Mobile tests a PR-built addon against the published fabric runtime*
+The overlay reaches every prebuild matrix entry, mobile included, so the Android/iOS
+`.bare` modules are compiled and linked against PR fabric. The ggml runtime is not
+bundled by the addon (`qvac_addon_use_fabric`), so the libraries packed into the
+APK/IPA are whatever `npm install` resolves for `@qvac/fabric` — the published
+release. Mobile therefore exercises a mismatched pairing rather than either a clean
+PR stack or a clean published baseline, and an ABI-breaking fabric change can crash
+on device or pass for the wrong reason. Closing it means overlaying fabric inside
+`.github/actions/run-mobile-integration-tests/build-mobile-app` between the
+test-framework `npm install` and the app build; that composite is shared by 14
+mobile workflows and the overlaid tree has to land where the external
+`tetherto/qvac-test-addon-mobile` bundler looks, so it needs its own change with a
+real fabric-stack mobile run to validate. Bounded for now: the mobile job is
+`continue-on-error: true` and runs only behind the `mobile` label.
+
 *New responsibilities*
 
 • Fabric-stack PR authors keep overlay REF in sync with the `qvac-fabric-llm.cpp` branch under test
@@ -240,7 +255,7 @@ Mitigation: include overlay REF in `detect-native-changes` hash or disable reuse
 • Automating registry publish or coordinated bump PRs after `qvac-fabric` release
 • Replacing `/vlm-benchmark` or Device Farm performance A/B — stack CI targets correctness (compile, link, integration smoke), not perf gates
 • Migrating remaining direct vcpkg consumers to `@qvac/fabric` — separate work in `INTEGRATION.md`
-• Mobile fabric-stack overlay for every platform on day one — desktop smoke first
+• Mobile fabric-stack overlay — desktop smoke first; see the mismatched-runtime trade-off above
 
 ---
 
