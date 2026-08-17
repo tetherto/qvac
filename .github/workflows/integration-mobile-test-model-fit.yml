@@ -92,7 +92,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -107,7 +107,7 @@ jobs:
           addon-workdir: 'packages/model-fit'
           addon-npm-name: '@qvac/model-fit'
           prebuild-artifact-prefix: 'model-fit-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build mobile app
         id: build

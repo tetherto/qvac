@@ -22,8 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `files.cosyvoiceCampplusModel`; they are needed only when cloning. Every
   bake failure (missing GGUFs, unreadable / non-finite audio, duration
   outside 0.5-30 s) rejects the load — there is no silent fallback to the
-  baked voice. `instruct` composes with a cloned voice. Consumes speech-cpp
-  >= 2026-08-14 via the registry baseline.
+  baked voice. `instruct` composes with a cloned voice. Requires
+  `speech-cpp` >= 2026-08-14.
+
+## [0.7.0] - 2026-08-14
+
+### Added
+
 - **CosyVoice3 Vulkan GPU offload (Linux / Windows).** `useGPU: true` /
   `nGpuLayers > 0` now engages tts-cpp's Vulkan backend for CosyVoice3 on
   desktop hosts (previously a policy CPU fallback). Requires `tts-cpp` >=
@@ -136,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Audio8 Vulkan synthesis crash with quantized models.** Requires
+  `speech-cpp` >= `2026-08-12#1`, whose TTS feature keeps Metal-specific F32
+  output precision scoped to Metal so Vulkan selects a valid matrix
+  multiplication pipeline.
 - **Public TypeScript and CommonJS API.** Audio chunks are now declared as
   their runtime `Int16Array` type, enhancer backend fields are included in
   `RuntimeStats`, invalid reload sample rates are rejected, and the package

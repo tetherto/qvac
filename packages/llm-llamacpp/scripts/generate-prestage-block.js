@@ -38,10 +38,21 @@ function benchmarkModelsByTest() {
   )
 }
 
+// Optional PRESTAGE_URL_MAP: JSON of { <model>: <presigned-us-bucket-url> } to
+// pull staged models from the US bucket instead of HF. Absent => HF behaviour.
+function loadUrlOverrideMap() {
+  const mapPath = process.env.PRESTAGE_URL_MAP
+  if (!mapPath) return null
+  const raw = JSON.parse(fs.readFileSync(mapPath, 'utf8'))
+  return raw && typeof raw === 'object' ? raw : null
+}
+
 function resolvePinnedManifest(mobileManifest, integrationManifest) {
   if (!integrationManifest || !integrationManifest.models) {
     throw new Error('[prestage] integration model manifest has no models')
   }
+
+  const overrideMap = loadUrlOverrideMap()
 
   // Benchmark shard sources construct model names dynamically, so the static
   // mobile-manifest extractor cannot see them. Derive all 70 grep-name mappings
@@ -53,29 +64,90 @@ function resolvePinnedManifest(mobileManifest, integrationManifest) {
       testName,
       models.map(({ name }) => {
         const entry = integrationManifest.models[name]
-        const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
-        if (
-          typeof url !== 'string' ||
-          !/^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//i.test(url)
-        ) {
+        const pinned = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
+        const pinnedOk =
+          typeof pinned === 'string' &&
+          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//i.test(pinned)
+        // Prefer the presigned US-bucket URL (bypasses the HF-shape check), but keep
+        // the pinned HF URL as an on-device fallback so an expired/unreachable
+        // presigned URL doesn't fail the run.
+        if (overrideMap && typeof overrideMap[name] === 'string') {
+          return pinnedOk
+            ? { name, url: overrideMap[name], fallback: pinned }
+            : { name, url: overrideMap[name] }
+        }
+        if (!pinnedOk) {
           throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
         }
-        return { name, url }
+        return { name, url: pinned }
       })
     ])
   )
 }
 
+// Normalise the resolved shard->models map into { urls: { <name>: <url> },
+// fallbacks: { <name>: <url> }, tests: { <testName>: [<name>, ...] } } so each
+// URL is stored once. Presigned URLs are ~1 KB each; inlining them per test
+// reference pushes the base64 env var past Linux's 128 KB MAX_ARG_STRLEN cap and
+// the Android upload dies with "Argument list too long".
+function normalizeManifest(resolved) {
+  const urls = {}
+  const fallbacks = {}
+  const tests = {}
+  for (const [testName, models] of Object.entries(resolved)) {
+    tests[testName] = models.map(({ name, url, fallback }) => {
+      urls[name] = url
+      if (fallback) fallbacks[name] = fallback
+      return name
+    })
+  }
+  return { urls, fallbacks, tests }
+}
+
+// Inverse of normalizeManifest for one shard: given the normalised manifest and
+// the shard's grep pattern, return deduped [{ name, url, fallback? }] rows for
+// the tests it runs. Also runs on the Device Farm host (embedded verbatim into
+// commonPrelude via .toString()), so it stays a self-contained, quote/`$`-free
+// pure function.
+function expandPrestageList(man, grep) {
+  const urls = man.urls || {}
+  const fallbacks = man.fallbacks || {}
+  const byTest = man.tests || {}
+  const tests = grep
+    ? grep
+        .split('|')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : Object.keys(byTest)
+  const missing = tests.filter((t) => t.startsWith('runBenchmarkPerf') && !byTest[t])
+  if (missing.length)
+    throw new Error('[prestage] missing benchmark mapping(s): ' + missing.join(', '))
+  const seen = new Set()
+  const rows = []
+  for (const t of tests) {
+    for (const name of byTest[t] || []) {
+      if (!seen.has(name)) {
+        seen.add(name)
+        const row = { name, url: urls[name] }
+        if (fallbacks[name]) row.fallback = fallbacks[name]
+        rows.push(row)
+      }
+    }
+  }
+  return rows
+}
+
 // Shared host-side prelude: decode the embedded manifest, read the shard's grep
-// from the decoded wdio config, and expand it into a /tmp/prestage-list.tsv of
-// "<name>\t<url>" rows (deduped) for exactly the tests this shard runs. Emitted
-// identically for both backends so shard resolution stays single-sourced.
+// from the decoded wdio config, and expand it into /tmp/prestage-list.tsv of
+// "<name>\t<url>[\t<fallback>]" rows (deduped) for the tests this shard runs.
+// The expansion reuses expandPrestageList verbatim so host and CI never drift.
 function commonPrelude(manifestB64) {
+  const expand = expandPrestageList.toString()
   return `echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
 GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
-node -e "const fs=require('fs');const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const g=process.env.GREP||'';const tests=g?g.split('|').map(s=>s.trim()).filter(Boolean):Object.keys(man);const missing=tests.filter(t=>t.startsWith('runBenchmarkPerf')&&!man[t]);if(missing.length)throw new Error('[prestage] missing benchmark mapping(s): '+missing.join(', '));const seen=new Set();const out=[];for(const t of tests){for(const m of (man[t]||[])){if(!seen.has(m.name)){seen.add(m.name);out.push(m.name+'\\t'+m.url)}}}fs.writeFileSync('/tmp/prestage-list.tsv',out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
+node -e "const fs=require('fs');const expandPrestageList=${expand};const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const rows=expandPrestageList(man,process.env.GREP||'');fs.writeFileSync('/tmp/prestage-list.tsv',rows.map(r=>r.name+'\\t'+r.url+(r.fallback?'\\t'+r.fallback:'')).join('\\n')+(rows.length?'\\n':''));console.error('[prestage] '+rows.length+' model(s)')"
 mkdir -p /tmp/prestage`
 }
 
@@ -86,10 +158,12 @@ function buildAndroidScript(manifestB64) {
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
 ${commonPrelude(manifestB64)}
 adb shell mkdir -p "$PRESTAGE_DIR"
-while IFS=$(printf '\\t') read -r NAME URL; do
+while IFS=$(printf '\\t') read -r NAME URL FALLBACK; do
   [ -z "$NAME" ] && continue
   echo "[prestage] staging $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
+  if curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then :;
+  elif [ -n "$FALLBACK" ] && curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$FALLBACK"; then echo "[prestage] $NAME: primary URL failed, used fallback";
+  else echo "[prestage] FATAL: download of $NAME failed"; exit 1; fi
   adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"
   adb shell test -s "$PRESTAGE_DIR/$NAME" || { echo "[prestage] FATAL: $NAME not present on device after push"; exit 1; }
   rm -f "/tmp/prestage/$NAME"
@@ -127,10 +201,12 @@ echo "[prestage] installing pymobiledevice3..."
 python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
 pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
 ${commonPrelude(manifestB64)}
-while IFS=$(printf '\\t') read -r NAME URL; do
+while IFS=$(printf '\\t') read -r NAME URL FALLBACK; do
   [ -z "$NAME" ] && continue
   echo "[prestage] staging $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
+  if curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then :;
+  elif [ -n "$FALLBACK" ] && curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$FALLBACK"; then echo "[prestage] $NAME: primary URL failed, used fallback";
+  else echo "[prestage] FATAL: download of $NAME failed"; exit 1; fi
   if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
   printf '%s\\n' "$PUSH_OUT"
   if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
@@ -154,7 +230,7 @@ function main() {
   const mobileManifest = JSON.parse(fs.readFileSync(mobileManifestPath, 'utf8'))
   const integrationManifest = JSON.parse(fs.readFileSync(integrationManifestPath, 'utf8'))
   const manifest = resolvePinnedManifest(mobileManifest, integrationManifest)
-  const manifestB64 = Buffer.from(JSON.stringify(manifest)).toString('base64')
+  const manifestB64 = Buffer.from(JSON.stringify(normalizeManifest(manifest))).toString('base64')
 
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
@@ -167,4 +243,11 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { benchmarkModelsByTest, resolvePinnedManifest, buildScript, IOS_BUNDLE_ID }
+module.exports = {
+  benchmarkModelsByTest,
+  resolvePinnedManifest,
+  normalizeManifest,
+  expandPrestageList,
+  buildScript,
+  IOS_BUNDLE_ID
+}
