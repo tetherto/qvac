@@ -1,0 +1,153 @@
+name: 'Prebuild artifact materialize'
+description: >
+  Downloads the well-known `prebuilds` artifact and places it into a package's
+  working directory in the ONLY layout the runtime and the published npm tarball
+  accept, i.e. <workdir>/prebuilds/<platform>-<arch>/. Single source of truth for
+  that placement — do NOT inline per workflow.
+
+  Absorbs the one difference between the two producers. A per-package producer
+  (prebuilds-<pkg>.yml, one package per run) uploads a flat bundle of
+  <platform>-<arch>/ directories. The multi-package producer (prebuilds-nx.yml,
+  which can build several packages in ONE run and so must share the one
+  well-known artifact name) namespaces each package under <package>/. This action
+  detects which shape it got and strips the <package>/ level when present, so the
+  resulting on-disk layout is identical either way and existing callers keep
+  working with no change.
+
+  The published tarball ships `prebuilds` verbatim (package.json `files`) and the
+  runtime resolves prebuilds/<platform>-<arch>/<name>.bare via require.addon(),
+  so a stray <package>/ level would publish successfully and then break every
+  consumer at runtime. This action asserts that cannot happen.
+
+inputs:
+  workdir:
+    description: 'Package working directory, e.g. packages/asr-ggml'
+    required: true
+  package:
+    description: >
+      Package short-name to select out of a namespaced bundle. Optional — when
+      empty, or when the bundle carries no such subdirectory, the bundle is
+      treated as flat (the legacy producers' shape).
+    required: false
+    default: ''
+  platform:
+    description: 'Place only this platform (pair with arch). Empty places every platform.'
+    required: false
+    default: ''
+  arch:
+    description: 'Place only this arch (pair with platform).'
+    required: false
+    default: ''
+  artifact-name:
+    description: 'Artifact to download.'
+    required: false
+    default: 'prebuilds'
+  staging-subdir:
+    description: 'Staging directory name under RUNNER_TEMP.'
+    required: false
+    default: 'prebuilds-staging'
+
+runs:
+  using: composite
+  steps:
+    - name: Download prebuilds bundle
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ runner.temp }}/${{ inputs.staging-subdir }}
+
+    # Two implementations on purpose. Git Bash mangles RUNNER_TEMP on Windows
+    # ("C:\a\_temp" — \a and \_ read as escape sequences), which makes the source
+    # path invalid and the copy silently no-op, so win32 goes through PowerShell
+    # exactly as the integration-test-*.yml workflows already do.
+    - name: Place prebuilds (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        PACKAGE: ${{ inputs.package }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+        STAGING_SUBDIR: ${{ inputs.staging-subdir }}
+      run: |
+        set -euo pipefail
+        STAGING="${RUNNER_TEMP}/${STAGING_SUBDIR}"
+
+        SRC_ROOT="$STAGING"
+        if [ -n "$PACKAGE" ] && [ -d "${STAGING}/${PACKAGE}" ]; then
+          SRC_ROOT="${STAGING}/${PACKAGE}"
+          echo "Namespaced bundle — using '${PACKAGE}/' subtree"
+        else
+          echo "Flat bundle — using bundle root"
+        fi
+
+        DEST="${WORKDIR}/prebuilds"
+        mkdir -p "$DEST"
+
+        if [ -n "$PLATFORM" ] && [ -n "$ARCH" ]; then
+          SRC="${SRC_ROOT}/${PLATFORM}-${ARCH}"
+          if [ ! -d "$SRC" ]; then
+            echo "::error::No '${PLATFORM}-${ARCH}/' directory in the prebuilds bundle for '${PACKAGE:-<flat>}'."
+            exit 1
+          fi
+          cp -r "$SRC" "${DEST}/"
+        else
+          if [ -z "$(ls -A "$SRC_ROOT")" ]; then
+            echo "::error::Prebuilds bundle for '${PACKAGE:-<flat>}' is empty."
+            exit 1
+          fi
+          cp -r "${SRC_ROOT}/." "${DEST}/"
+        fi
+
+        if [ -n "$PACKAGE" ] && [ -d "${DEST}/${PACKAGE}" ]; then
+          echo "::error::Layout regression — '${DEST}/${PACKAGE}/' exists. Platform directories must sit directly under prebuilds/ or the published package cannot resolve its addon."
+          exit 1
+        fi
+
+        ls -la "$DEST"
+
+    - name: Place prebuilds (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        PACKAGE: ${{ inputs.package }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+        STAGING_SUBDIR: ${{ inputs.staging-subdir }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        $staging = Join-Path $env:RUNNER_TEMP $env:STAGING_SUBDIR
+
+        $srcRoot = $staging
+        if ($env:PACKAGE -and (Test-Path (Join-Path $staging $env:PACKAGE))) {
+          $srcRoot = Join-Path $staging $env:PACKAGE
+          Write-Output "Namespaced bundle - using '$($env:PACKAGE)/' subtree"
+        } else {
+          Write-Output "Flat bundle - using bundle root"
+        }
+
+        $dest = Join-Path $env:WORKDIR "prebuilds"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+        if ($env:PLATFORM -and $env:ARCH) {
+          $src = Join-Path $srcRoot "$($env:PLATFORM)-$($env:ARCH)"
+          if (-not (Test-Path $src)) {
+            Write-Output "::error::No '$($env:PLATFORM)-$($env:ARCH)/' directory in the prebuilds bundle."
+            exit 1
+          }
+          Copy-Item -Recurse -Force $src $dest
+        } else {
+          if (-not (Get-ChildItem -Force $srcRoot)) {
+            Write-Output "::error::Prebuilds bundle is empty."
+            exit 1
+          }
+          Copy-Item -Recurse -Force (Join-Path $srcRoot "*") $dest
+        }
+
+        if ($env:PACKAGE -and (Test-Path (Join-Path $dest $env:PACKAGE))) {
+          Write-Output "::error::Layout regression - '$dest\$($env:PACKAGE)' exists. Platform directories must sit directly under prebuilds/ or the published package cannot resolve its addon."
+          exit 1
+        }
+
+        Get-ChildItem $dest

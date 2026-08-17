@@ -29,10 +29,22 @@ on:
         default: "tetherto/qvac"
       artifact-name-prefix:
         description: >-
-          Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer.
+          Optional prefix for the per-matrix prebuild artifact name. Downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer.
         type: string
         required: false
         default: ""
+      artifact-subdir:
+        description: >-
+          Optional subdirectory to nest this call's prebuild content under, in both the per-matrix artifacts and any merged bundle. Empty (the default) keeps the historical flat `<platform>-<arch>/` layout used by the one-package-per-run callers. A multi-package caller (prebuilds-nx.yml) passes the package name so one merged bundle can carry every selected package without the packages overwriting each other; consumers strip the level again via the prebuild-artifact-materialize action.
+        type: string
+        required: false
+        default: ""
+      merge-artifacts:
+        description: >-
+          Upload the merged `prebuilds` bundle at the end of this call. A multi-package caller sets this false and runs a single run-level merge of its own, because artifacts are scoped to the workflow *run* and a called reusable workflow shares its caller's run, so one merge per package would collide on the shared name.
+        type: boolean
+        required: false
+        default: true
       linux-extra-packages:
         description: "Extra apt packages to install on linux runners"
         type: string
@@ -479,12 +491,42 @@ jobs:
 
           Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
 
+      # With artifact-subdir set, the artifact carries <subdir>/<platform>-<arch>/
+      # instead of <platform>-<arch>/, so a multi-package caller can merge every
+      # package into the one shared `prebuilds` name. upload-artifact has no
+      # "prefix" input, hence the staging copy. Skipped entirely when the subdir
+      # is empty, so the legacy callers' path is bit-for-bit unchanged.
+      - name: Stage prebuilds under artifact-subdir (Unix)
+        if: inputs.artifact-subdir != '' && matrix.platform != 'win32'
+        shell: bash
+        env:
+          SUBDIR: ${{ inputs.artifact-subdir }}
+        run: |
+          set -euo pipefail
+          DEST="${RUNNER_TEMP}/artifact-stage/${SUBDIR}"
+          mkdir -p "$DEST"
+          cp -r "${WORKDIR}/prebuilds/." "$DEST/"
+          ls -la "$DEST"
+
+      - name: Stage prebuilds under artifact-subdir (Windows)
+        if: inputs.artifact-subdir != '' && matrix.platform == 'win32'
+        shell: powershell
+        env:
+          SUBDIR: ${{ inputs.artifact-subdir }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dest = Join-Path (Join-Path $env:RUNNER_TEMP "artifact-stage") $env:SUBDIR
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item -Recurse -Force (Join-Path "$env:WORKDIR/prebuilds" "*") $dest
+          Get-ChildItem $dest
+
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ env.WORKDIR }}/prebuilds
+          path: ${{ inputs.artifact-subdir == '' && format('{0}/prebuilds', env.WORKDIR) || format('{0}/artifact-stage', runner.temp) }}
 
   merge:
+    if: inputs.merge-artifacts
     runs-on: ubuntu-latest
     needs: prebuild
     permissions:

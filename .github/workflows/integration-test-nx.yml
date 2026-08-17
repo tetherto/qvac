@@ -178,37 +178,18 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: npm install --ignore-scripts
 
-      - name: Download prebuilds bundle
-        if: '!inputs.prebuild_package'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      # Handles both bundle shapes and both host shells, and asserts the
+      # published layout. Packages that build no prebuilds of their own declare
+      # `needsPrebuilds: false` in their test:integration options.ci — there is
+      # no bundle subtree for them to wait on.
+      - name: Materialize prebuilds
+        if: '!inputs.prebuild_package && matrix.needsPrebuilds != false'
+        uses: ./.github/actions/prebuild-artifact-materialize
         with:
-          name: prebuilds
-          path: ${{ runner.temp }}/prebuilds-staging
-
-      - name: Move prebuilds from staging to workspace (Unix)
-        if: '!inputs.prebuild_package && matrix.platform != ''win32'''
-        shell: bash
-        run: |
-          SRC="${{ runner.temp }}/prebuilds-staging/${{ matrix.platform }}-${{ matrix.arch }}"
-          if [ ! -d "$SRC" ]; then
-            echo "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
-            exit 1
-          fi
-          mkdir -p ${{ matrix.workdir }}/prebuilds
-          cp -r "$SRC" ${{ matrix.workdir }}/prebuilds/
-
-      - name: Move prebuilds from staging to workspace (Windows)
-        if: '!inputs.prebuild_package && matrix.platform == ''win32'''
-        shell: powershell
-        run: |
-          $src = "${{ runner.temp }}\prebuilds-staging\${{ matrix.platform }}-${{ matrix.arch }}"
-          if (-not (Test-Path $src)) {
-            Write-Output "::error::No '${{ matrix.platform }}-${{ matrix.arch }}/' directory in the 'prebuilds' bundle."
-            exit 1
-          }
-          $dst = "${{ matrix.workdir }}/prebuilds"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          Copy-Item -Recurse -Force $src $dst
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Download prebuilds from package (Linux/macOS)
         if: 'inputs.prebuild_package && matrix.platform != ''win32'''

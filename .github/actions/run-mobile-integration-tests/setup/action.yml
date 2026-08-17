@@ -185,6 +185,28 @@ runs:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
       continue-on-error: true
 
+    # Normalize the multi-package producer's layout. prebuilds-nx.yml can build
+    # several packages in ONE run, so it namespaces every artifact (per-matrix
+    # AND merged) as <package>/<platform>-<arch>/ to share the run's artifact
+    # namespace. Both download paths above land that verbatim, one level too
+    # deep for the runtime, which resolves prebuilds/<platform>-<arch>/. Flatten
+    # it back. No-op for the per-package producers, which stay flat.
+    - name: Normalize namespaced prebuilds layout
+      if: inputs.skip-prebuilds != 'true'
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      env:
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+      run: |
+        set -euo pipefail
+        PKG="$(basename "$ADDON_WORKDIR")"
+        if [ -d "prebuilds/${PKG}" ]; then
+          echo "Namespaced bundle detected — lifting prebuilds/${PKG}/* up one level"
+          cp -r "prebuilds/${PKG}/." prebuilds/
+          rm -rf "prebuilds/${PKG}"
+        fi
+        ls -A prebuilds 2>/dev/null || echo "prebuilds/ empty or absent"
+
     # npm fallback — DISABLED for PR-triggered runs.
     # On a PR (pull_request / pull_request_target) the only acceptable
     # prebuild sources are CI artifacts (per-matrix `<prefix><platform>-*`
