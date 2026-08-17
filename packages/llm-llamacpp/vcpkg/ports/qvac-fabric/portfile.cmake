@@ -1,8 +1,10 @@
-vcpkg_from_github(
+# Validation-only pin at the QVAC-23195 fix head. This fetches by commit SHA and
+# needs no tarball hash, so repinning cannot fail on a stale SHA512 the way the
+# vcpkg_from_github form did.
+vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO tetherto/qvac-fabric-llm.cpp
-  REF 7e5b8816219d6ad6356921be19b172d6d8c001c7
-  SHA512 ce79a7d6df81d018af79bd44adeec2b65d6766efb30814f2493a4a10e681e287d66402b5d510720952bbcf226177b211ec030de5a85d5ce5cff8126c0f128c84
+  URL https://github.com/tetherto/qvac-fabric-llm.cpp.git
+  REF 6d40e0d2b10616568b7ce679ea5b0ec91625d5f7
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
