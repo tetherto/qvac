@@ -18,6 +18,7 @@ add_executable(
   test_cancel_stale_flag.cpp
   test_reload_cancel_state.cpp
   test_backend_selection.cpp
+  test_load_fit_normalization.cpp
   test_tune_config_map.cpp
   test_generation_params_apply.cpp
   test_llm_parsers.cpp
@@ -71,6 +72,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MediaLoadOrder.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp

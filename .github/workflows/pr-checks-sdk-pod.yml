@@ -235,6 +235,20 @@ jobs:
             test -n "$tarball" || { echo "::error::No SDK tarball found after pack"; exit 1; }
             tarball_abs="$(pwd)/$tarball"
 
+            # Pack the in-repo @qvac/inference so each consumer below redirects
+            # the SDK's transitive @qvac/inference to it via an npm `overrides`
+            # entry — sdk and inference ship lockstep, so the consumer resolves
+            # the engine at this commit rather than a published release.
+            inference_tgz=""
+            if [ -n "$(jq -r '.dependencies["@qvac/inference"] // empty' package.json)" ]; then
+              echo "::group::Pack in-repo @qvac/inference for consumer install"
+              ( cd "$WS/packages/inference" && bun install && bun pm pack --destination dist/ )
+              inference_tgz=$(ls "$WS"/packages/inference/dist/qvac-inference-*.tgz | head -n1)
+              test -n "$inference_tgz" || { echo "::error::No @qvac/inference tarball found after pack"; exit 1; }
+              echo "::notice::Consumer installs override @qvac/inference -> $inference_tgz"
+              echo "::endgroup::"
+            fi
+
             check_consumer() {
               local consumer="$1" label="$2"
               cd "$consumer"
@@ -270,6 +284,7 @@ jobs:
             npm init -y > /dev/null
             npm pkg set type=module > /dev/null
             if [ -f "$npmrc_src" ]; then cp "$npmrc_src" .npmrc; fi
+            if [ -n "$inference_tgz" ]; then npm pkg set "overrides.@qvac/inference=file:$inference_tgz"; fi
             npm install --no-fund --no-audit --ignore-scripts --loglevel=info "$tarball_abs" 2>&1 | tee install.log
             check_consumer "$consumer_default" "default"
 
@@ -279,6 +294,7 @@ jobs:
             npm init -y > /dev/null
             npm pkg set type=module > /dev/null
             if [ -f "$npmrc_src" ]; then cp "$npmrc_src" .npmrc; fi
+            if [ -n "$inference_tgz" ]; then npm pkg set "overrides.@qvac/inference=file:$inference_tgz"; fi
             npm install --no-fund --no-audit --ignore-scripts --omit=optional --loglevel=info "$tarball_abs" 2>&1 | tee install.log
             check_consumer "$consumer_lean" "lean (--omit=optional)"
           )

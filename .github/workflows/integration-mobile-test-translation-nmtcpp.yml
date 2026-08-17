@@ -98,10 +98,12 @@ jobs:
 
       - name: Provision NMT models for mobile tests
         working-directory: addon/${{ inputs.workdir || 'packages/translation-nmtcpp' }}
+        # Presign IndicTrans against the US bucket (its GGUF is mirrored under
+        # qvac_models_compiled/ggml/indictrans2/). Bergamot stays on its CDN.
         env:
           BERGAMOT_LANG_PAIR: ${{ inputs.bergamot_language_pair || 'enit' }}
-          AWS_REGION: eu-central-1
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          AWS_REGION: us-west-2
+          MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           chmod +x scripts/provision-mobile-models.sh
           scripts/provision-mobile-models.sh
