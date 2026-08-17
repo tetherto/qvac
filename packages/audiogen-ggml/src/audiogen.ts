@@ -71,7 +71,7 @@ export interface AudioGenBinding {
     outputCallback: AudioGenOutputCallback | null,
   ): object
   activate(handle: object | null): Promise<void>
-  runJob(handle: object | null, data: AudioGenJobData): void | Promise<void>
+  runJob(handle: object | null, data: AudioGenJobData): boolean | Promise<boolean>
   cancel(handle: object | null): Promise<void>
   destroyInstance(handle: object): Promise<void> | void
 }
@@ -94,8 +94,8 @@ export class AudioGenInterface {
     return this._binding.activate(this._handle)
   }
 
-  async runJob (data: AudioGenJobData): Promise<void> {
-    await this._binding.runJob(this._handle, data)
+  async runJob (data: AudioGenJobData): Promise<boolean> {
+    return this._binding.runJob(this._handle, data)
   }
 
   async cancel (): Promise<void> {

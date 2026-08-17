@@ -93,8 +93,8 @@ protected:
 
 /// KV rows loaded by loadCache must be cleaned up when admission fails
 /// after loadCache but before slots_[seqId].emplace. With the bug, the
-/// rows are orphaned; with the fix they are removed by either the reordering
-/// (loadCache moves after validatePromptPolicy, before cap-check) combined
+/// rows are orphaned; with the fix they are removed by the reordering
+/// (loadCache moves after prompt validation, before cap-check) combined
 /// with a RAII scope-exit guard that calls llama_memory_seq_rm on unwind.
 TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
   REQUIRE_MODEL(model_);
@@ -165,7 +165,7 @@ TEST_F(KvLeakOnAdmitFailureTest, KvRowsCleanedAfterAdmitFailurePostCache) {
       << leakedPosMax
       << ". "
          "llama_memory_seq_rm was never called. Fix: move loadCache after "
-         "validatePromptPolicy and add RAII guard to clean up on throw.";
+         "prompt validation and add RAII guard to clean up on throw.";
 
   // Stage 4: verify the slot is cleanly reusable.
   auto validOutputs = model->processPromptBatch(

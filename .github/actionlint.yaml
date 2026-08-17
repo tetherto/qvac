@@ -7,7 +7,6 @@
 self-hosted-runner:
   labels:
     - qvac-ci
-    - mac-mini-m4-gpu
     - qvac-macos26-arm64-gpu
     - qvac-ubuntu2204-x64
     - qvac-ubuntu2204-x64-gpu

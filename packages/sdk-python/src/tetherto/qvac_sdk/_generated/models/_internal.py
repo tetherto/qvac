@@ -7076,6 +7076,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
     streaming_right_lookahead_ms: Annotated[
         int | None, Field(alias="streamingRightLookaheadMs", ge=0, le=9007199254740991)
     ] = None
+    language: str | None = None
     streaming_spk_cache_enable: Annotated[
         bool | None, Field(alias="streamingSpkCacheEnable")
     ] = None

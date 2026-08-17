@@ -16,12 +16,22 @@ namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
 bool isQwen3Model(const ::llama_model* model);
+
+/**
+ * @brief Returns true when `architecture` is exactly `qwen3`
+ * (case-insensitive).
+ *
+ * Exact-match predicate that drives fixed-template selection in
+ * `getChatTemplateForModel` (via `isQwen3Model`). Deliberately narrower than
+ * `isQwen3ReasoningFamilyArchitecture`, which also matches `qwen35`/`qwen3moe`:
+ * only exact `qwen3` gets the hardcoded Qwen3 chat template. Exposed for unit
+ * testing without a real ::llama_model.
+ */
+bool isQwen3Architecture(std::string_view architecture);
 bool isHarmonyModel(const ::llama_model* model);
 bool isGemma4Model(const ::llama_model* model);
 llama_token getHarmonyCallToken(::llama_context* lctx);
 std::optional<std::string> getModelArchitecture(const ::llama_model* model);
-bool supportsToolsCompactForModelMetadata(
-    const std::optional<std::string>& architecture);
 
 // Reasoning channel markers for the model family, or std::nullopt
 // when the family has no recognised channel. Extend the table here
@@ -108,9 +118,6 @@ bool isMedPsyModel(const ::llama_model* model);
  */
 bool isGemma4Basename(std::string_view basename);
 
-std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
-    const std::optional<std::string>& architecture);
-
 /**
  * @brief Gets the appropriate chat template for a model
  *
@@ -119,20 +126,18 @@ std::optional<std::string> selectToolsCompactMarkerForModelMetadata(
  *   2. Models whose GGUF `general.basename` is "MedPsy" return an empty
  *      string so callers fall through to the embedded chat template, even
  *      when the architecture is reported as qwen3.
- *   3. Qwen3 models return either the tools-compact dynamic template or the
- *      fixed Qwen3 template based on the `toolsCompact` flag.
+ *   3. Qwen3 models return the fixed Qwen3 template.
  *   4. All other models return an empty string.
  */
 std::string getChatTemplateForModel(
-    const ::llama_model* model, const std::string& manualOverride,
-    bool toolsCompact);
+    const ::llama_model* model, const std::string& manualOverride);
 
 /**
  * @brief Gets the chat template for a model, applying Qwen3 fixes if Jinja is
  * enabled
  */
-std::string getChatTemplate(
-    const ::llama_model* model, const common_params& params, bool toolsCompact);
+std::string
+getChatTemplate(const ::llama_model* model, const common_params& params);
 
 /**
  * @brief Applies chat templates to generate a prompt, with fallback handling
