@@ -151,8 +151,8 @@ jobs:
         env:
           PKG: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "$PKG" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "$PKG" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -184,6 +184,11 @@ jobs:
           addon-npm-name: '@qvac/model-fit'
           prebuild-artifact-prefix: 'model-fit-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/model-fit@latest = published; @tetherto/model-fit@<dev>
+          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          package-version: ${{ inputs.platform != '' && inputs.package || '' }}
+          force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
       - name: Build mobile app
         id: build

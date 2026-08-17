@@ -198,8 +198,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -231,8 +231,11 @@ jobs:
           addon-npm-name: '@qvac/diffusion-cpp'
           prebuild-artifact-prefix: 'sd-cpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/diffusion-cpp@latest = published; @tetherto/diffusion-cpp@<dev>
+          # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
+          package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
+          force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}
 
       # Presign the already-seeded (by the seed-models job) US-bucket objects into
       # a map, then bake them into the manifest before the build. Presign-only: no

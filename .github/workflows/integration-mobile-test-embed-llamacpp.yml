@@ -196,8 +196,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -229,6 +229,11 @@ jobs:
           addon-npm-name: '@qvac/embed-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/embed-llamacpp@latest = published; @tetherto/embed-llamacpp@<dev>
+          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          package-version: ${{ inputs.platform != '' && inputs.package || '' }}
+          force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
       # committed — they are generated from test/integration/_benchmark-matrix.js.

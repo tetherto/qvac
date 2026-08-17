@@ -145,8 +145,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: inputs.platform != '' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -178,6 +178,11 @@ jobs:
           addon-npm-name: '@qvac/classification-ggml'
           prebuild-artifact-prefix: 'classification-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/classification-ggml@latest = published; @tetherto/classification-ggml@<dev>
+          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          package-version: ${{ inputs.platform != '' && inputs.package || '' }}
+          force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
       # The shared composite handles prebuild fan-out, but classification-ggml
       # also needs `weights/*.gguf` copied into `test/mobile/testAssets/<file>.gguf.bin`

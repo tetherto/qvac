@@ -192,6 +192,11 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/translation-nmtcpp' }}
           addon-npm-name: '@qvac/translation-nmtcpp'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/translation-nmtcpp@latest = published; @tetherto/translation-nmtcpp@<dev>
+          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          package-version: ${{ inputs.platform != '' && inputs.package || '' }}
+          force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
       - name: Build mobile app
         id: build

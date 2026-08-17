@@ -315,8 +315,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -369,8 +369,11 @@ jobs:
           # the candidate in this same run) is pulled in when the per-matrix
           # artifact is absent, so the baseline session would silently run the
           # candidate binary. See run-mobile-integration-tests/setup.
-          force-npm-prebuild: ${{ inputs.addon_npm_version != '' && 'true' || 'false' }}
-          package-version: ${{ inputs.addon_npm_version }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/llm-llamacpp@latest = published; @tetherto/llm-llamacpp@<dev>
+          # = this branch's GPR build). workflow_call keeps addon_npm_version/artifact-first.
+          force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.addon_npm_version != '') && 'true' || 'false' }}
+          package-version: ${{ inputs.platform != '' && inputs.package || inputs.addon_npm_version }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not

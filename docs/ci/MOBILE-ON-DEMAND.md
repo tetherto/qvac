@@ -25,7 +25,8 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 | **devices_custom** | A free-text field for one **or more** device models, comma-separated (e.g. `Pixel 9, Pixel 8`). When set, it **overrides** the dropdown. Use it for new/uncommon devices or to run several at once. |
 | **device_model_operator** | How the model name is matched: `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`) or `EQUALS` (that exact model only). |
 | **tests** | Optional test filter — see [below](#the-tests-filter). Empty = the full mobile suite. |
-| **ref** / **package** / … | Existing inputs (git ref, package spec, etc.) — unchanged. |
+| **package** (or **package_spec**) | Which build to actually put on the phone — see [below](#which-build-gets-tested). Default `@qvac/<addon>@latest` = the published release. |
+| **ref** | Git ref to check out for the **test harness / app** (not the native binary — see below). |
 
 ### Device selection: dropdown + free-text
 
@@ -105,6 +106,41 @@ The valid names live in the addon repo, under its mobile test folder:
 If in doubt, run once **without** a filter and open the Device Farm run's
 `bare_console.log` / the "Run → tests" legend on the job summary — it enumerates
 the `run*` names that executed, which you can then narrow with `tests`.
+
+### Which build gets tested
+
+A manual run does **not** compile the native addon — it installs a **prebuilt**
+one. Which prebuild depends on the `package` / `package_spec` input:
+
+- **Empty / default (`@qvac/<addon>@latest`)** → the **latest published** release
+  from npm. This is what you get if you just click Run.
+- **`@qvac/<addon>@1.2.3`** → that exact published npm version.
+- **`@tetherto/<addon>@<dev-version>`** → the **branch build** published to GitHub
+  Packages (GPR). This is how you test **your own branch's native code before it
+  is released**: push your branch (its prebuild/publish workflow puts a dev build
+  on GPR), then dispatch with `package: @tetherto/<addon>@<that dev version>`.
+
+> The **`ref`** input only changes the JS test harness + app that gets built; it
+> does **not** rebuild the native binary. To test unpublished native changes, pin
+> the GPR dev build via `package` as above — otherwise the run silently tests the
+> published `@latest`, not your branch.
+
+**Exceptions:**
+
+- **`inference-addon-cpp`** has no published package — it **compiles its `.bare`
+  natively in the same run from `ref`**, so a branch dispatch already tests that
+  branch's native code directly (no `package` input, none needed).
+- **`decoder-audio`** has no native prebuild of its own (it rides on
+  `bare-ffmpeg`'s), so its `package` input does not change what is tested.
+
+### One run at a time (per branch)
+
+Each mobile workflow has a concurrency guard: a new manual dispatch **cancels the
+previous in-flight dispatch of the same workflow on the same branch**, so you can
+never accidentally stack two Device Farm runs (and two bills). Dispatches on
+**different branches are independent** — that is what lets a few test branches run
+in parallel. The `workflow_call` paths (benchmarks / weekend / on-merge) are never
+cancelled by this.
 
 ## What changed on PRs
 

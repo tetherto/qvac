@@ -183,8 +183,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -216,6 +216,11 @@ jobs:
           addon-npm-name: '@qvac/vla-ggml'
           prebuild-artifact-prefix: 'vla-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/vla-ggml@latest = published; @tetherto/vla-ggml@<dev>
+          # = this branch's GPR build). workflow_call is untouched (artifact-first).
+          package-version: ${{ inputs.platform != '' && inputs.package || '' }}
+          force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}
 
       # OIDC session for the SmolVLA/GR00T S3 presign (the us-west-2 Device Farm
       # session is acquired separately in upload-to-devicefarm). Must run BEFORE

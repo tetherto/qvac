@@ -147,8 +147,8 @@ jobs:
       - name: Validate Dispatch Inputs
         if: inputs.platform != '' && github.event.inputs.package
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -180,8 +180,11 @@ jobs:
           addon-npm-name: '@qvac/bci-whispercpp'
           prebuild-artifact-prefix: 'bci-whispercpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/bci-whispercpp@latest = published; @tetherto/bci-whispercpp@<dev>
+          # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
+          package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
+          force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}
 
       # `npm run test:mobile:generate` downloads models + fixtures
       # (BCI signal traces, whisper weights) into test/mobile/testAssets/

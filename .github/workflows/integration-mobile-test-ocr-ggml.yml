@@ -213,8 +213,11 @@ jobs:
           addon-npm-name: '@qvac/ocr-ggml'
           prebuild-artifact-prefix: 'ggml-ocr-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # Manual dispatch (inputs.platform set): pin the build named in `package`
+          # (default @qvac/ocr-ggml@latest = published; @tetherto/ocr-ggml@<dev>
+          # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
+          package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
+          force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}
 
       - name: Build mobile app
         id: build
