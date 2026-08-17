@@ -148,6 +148,51 @@ never accidentally stack two Device Farm runs (and two bills). Dispatches on
 in parallel. The `workflow_call` paths (benchmarks / weekend / on-merge) are never
 cancelled by this.
 
+## Typical flow (worked example)
+
+A manual run targets **one platform at a time** (the `platform` input is `Android`
+*or* `iOS`), because each platform has its own device fleet. Covering both is just
+two dispatches. The usual pattern is two steps:
+
+### 1. Broad coverage — run the pool, per platform
+
+Run the full suite across the phones you care about (one dispatch per platform):
+
+```bash
+# Android — across the pool phones (one run per exact model)
+gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9, Google Pixel 8, Samsung Galaxy S25 Ultra" \
+  -f device_model_operator=EQUALS
+
+# iOS — the iPhone
+gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro" \
+  -f device_model_operator=EQUALS
+```
+
+These run in parallel and each reports its own verdict. (Once the workflow is on
+the default branch you can do the same from **Actions → Run workflow** in the UI.)
+
+### 2. Narrow after a failure — one device, one test
+
+When a device fails, don't re-run everything. Re-dispatch **just that device** with
+**just the failing test** (`tests` is a mocha `--grep` on the runner name — see
+[the tests filter](#the-tests-filter)):
+
+```bash
+# e.g. runChatterboxSpeedTest failed on the Pixel 8 — re-run only that
+gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 8" \
+  -f device_model_operator=EQUALS \
+  -f tests="runChatterboxSpeedTest"
+```
+
+This is the cheap, fast loop for reproducing/fixing a single failure without paying
+for the whole pool again.
+
 ## What changed on PRs
 
 - The `run-mobile-integration-tests` lane was removed from the `on-pr-*`
