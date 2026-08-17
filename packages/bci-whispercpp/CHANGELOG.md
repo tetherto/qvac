@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-17, which brings in
+  ggml-speech 2026-08-17. The engine sources for this package are unchanged; the
+  ggml update fixes an uncatchable abort in the OpenCL elementwise ops on a
+  non-contiguous input and speeds up pad, small-M matmul and argmax dispatches
+  on Adreno.
+
 ## [0.7.0] - 2026-08-06
 
 ### Changed

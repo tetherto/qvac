@@ -217,7 +217,7 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.39.3",
     "@qvac/logging": "^0.1.0",
-    "@qvac/ocr-ggml": "^0.13.1",
+    "@qvac/ocr-ggml": "^0.16.0",
     "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
     "@qvac/translation-nmtcpp": "^8.3.0",
