@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] - 2026-08-17
+## [Unreleased]
 
 ### Added
 
@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outside 0.5-30 s) rejects the load — there is no silent fallback to the
   baked voice. `instruct` composes with a cloned voice. Requires
   `speech-cpp` >= 2026-08-14.
+
+## [0.7.1] - 2026-08-17
+
+### Added
+
 - **Audio8 OpenCL GPU offload (Android / Adreno).** `useGPU: true` /
   `nGpuLayers > 0` now engages the OpenCL backend for Audio8 on Qualcomm Adreno
   devices, which previously declined to CPU. Requires `speech-cpp` >=
