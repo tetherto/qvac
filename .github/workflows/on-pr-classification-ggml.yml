@@ -125,7 +125,10 @@ jobs:
         uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@886582f4cb3ac15f8be9970abde70166d76f9ec7
         with:
           github-token: ${{ github.token }}
-          head-sha: ${{ github.event.pull_request.head.sha }}
+          # workflow_dispatch has no PR payload, and the action rejects an empty
+          # SHA outright — fall back the same way every other head-SHA consumer
+          # in this workflow does.
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Re-publish fabric-prebuilds for downstream jobs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
