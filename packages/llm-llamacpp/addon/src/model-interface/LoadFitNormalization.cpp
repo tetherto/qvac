@@ -28,7 +28,7 @@ using namespace qvac_lib_inference_addon_llama::logging;
 
 namespace {
 
-constexpr std::string_view kLegacyParserName = "commonParamsParse";
+constexpr std::string_view K_LEGACY_PARSER_NAME = "commonParamsParse";
 
 std::vector<std::string> split(const std::string& str, char delimiter) {
   auto trim = [](const std::string& value) -> std::string {
@@ -582,7 +582,7 @@ NormalizedLoad normalizeLoadForFit(
     } catch (...) {
       std::string errorMsg = string_format(
           "%s: invalid n_discarded value: %s\n",
-          kLegacyParserName.data(),
+          K_LEGACY_PARSER_NAME.data(),
           iter->second.c_str());
       throw qvac_errors::StatusError(
           ADDON_ID,
@@ -602,7 +602,7 @@ NormalizedLoad normalizeLoadForFit(
         string_format(
             "%s: both 'split-mode' and 'split_mode' are present; "
             "use one or the other.\n",
-            kLegacyParserName.data()));
+            K_LEGACY_PARSER_NAME.data()));
   }
   if (auto it = (hIt != configFilemap.end()) ? hIt : uIt;
       it != configFilemap.end()) {
@@ -618,7 +618,7 @@ NormalizedLoad normalizeLoadForFit(
           string_format(
               "%s: invalid split-mode '%s', must be 'none', 'layer', or "
               "'row'.\n",
-              kLegacyParserName.data(),
+              K_LEGACY_PARSER_NAME.data(),
               it->second.c_str()));
     }
     configFilemap.erase(it);
@@ -642,7 +642,7 @@ NormalizedLoad normalizeLoadForFit(
   if (deviceIt == configFilemap.end()) {
     std::string errorMsg = string_format(
         "%s: must specify a device: 'gpu' or 'cpu'.\n",
-        kLegacyParserName.data());
+        K_LEGACY_PARSER_NAME.data());
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, errorMsg);
   }
@@ -679,7 +679,7 @@ NormalizedLoad normalizeLoadForFit(
             string_format(
                 "%s: both 'mmproj-use-gpu' and 'mmproj_use_gpu' are present; "
                 "use one or the other.\n",
-                kLegacyParserName.data()));
+                K_LEGACY_PARSER_NAME.data()));
       }
       if (auto it = (hMmproj != configFilemap.end()) ? hMmproj : uMmproj;
           it != configFilemap.end()) {
@@ -695,7 +695,7 @@ NormalizedLoad normalizeLoadForFit(
               string_format(
                   "%s: invalid mmproj-use-gpu '%s', must be 'true'/'on'/'1' or "
                   "'false'/'off'/'0'.\n",
-                  kLegacyParserName.data(),
+                  K_LEGACY_PARSER_NAME.data(),
                   it->second.c_str()));
         }
         configFilemap.erase(it);
@@ -881,7 +881,9 @@ NormalizedLoad normalizeLoadForFit(
     }
     if (argToOptions.find(arg) == argToOptions.end()) {
       std::string errorMsg = string_format(
-          "%s: invalid argument: %s\n", kLegacyParserName.data(), arg.c_str());
+          "%s: invalid argument: %s\n",
+          K_LEGACY_PARSER_NAME.data(),
+          arg.c_str());
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
@@ -895,7 +897,7 @@ NormalizedLoad normalizeLoadForFit(
           string_format(
               "%s: %s variable is set, but will be overwritten by argument "
               "%s\n",
-              kLegacyParserName.data(),
+              K_LEGACY_PARSER_NAME.data(),
               opt.env,
               arg.c_str()));
     }
@@ -927,7 +929,7 @@ NormalizedLoad normalizeLoadForFit(
     } catch (std::exception& e) {
       std::string errorMsg = string_format(
           "%s: error while handling argument \"%s\": %s\n\n",
-          kLegacyParserName.data(),
+          K_LEGACY_PARSER_NAME.data(),
           arg.c_str(),
           e.what());
       throw qvac_errors::StatusError(
@@ -954,7 +956,7 @@ NormalizedLoad normalizeLoadForFit(
       !common_chat_verify_template(params.chat_template, params.use_jinja)) {
     std::string errorMsg = string_format(
         "%s: the supplied chat template is not supported: %s%s\n",
-        kLegacyParserName.data(),
+        K_LEGACY_PARSER_NAME.data(),
         params.chat_template.c_str(),
         params.use_jinja ? ""
                          : "\nnote: llama.cpp was started without --jinja, "
@@ -972,7 +974,7 @@ NormalizedLoad normalizeLoadForFit(
         Priority::WARNING,
         string_format(
             "%s: warning: minimum context size is 8, using minimum size.\n",
-            kLegacyParserName.data()));
+            K_LEGACY_PARSER_NAME.data()));
     params.n_ctx = kMinNCtx;
   }
   if (params.rope_freq_base != 0.0) {
@@ -980,7 +982,7 @@ NormalizedLoad normalizeLoadForFit(
         Priority::WARNING,
         string_format(
             "%s: changing RoPE frequency base to %g.\n",
-            kLegacyParserName.data(),
+            K_LEGACY_PARSER_NAME.data(),
             params.rope_freq_base));
   }
   if (params.rope_freq_scale != 0.0) {
@@ -988,7 +990,7 @@ NormalizedLoad normalizeLoadForFit(
         Priority::WARNING,
         string_format(
             "%s: scaling RoPE frequency by %g.\n",
-            kLegacyParserName.data(),
+            K_LEGACY_PARSER_NAME.data(),
             params.rope_freq_scale));
   }
 

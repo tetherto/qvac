@@ -317,12 +317,13 @@ TEST_F(TuneConfigMapTest, OpenCl_AllowsNonQuantizedCacheTypes) {
   configFilemap_["cache-type-k"] = "f16";
   configFilemap_["cache-type-v"] = "bf16";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      std::nullopt,
-      FtOverrides{},
-      /*isOpenCl=*/true));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/true));
 }
 
 TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
@@ -330,12 +331,13 @@ TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
   configFilemap_["cache-type-k"] = "q8_0";
   configFilemap_["cache-type-v"] = "q4_0";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      std::nullopt,
-      FtOverrides{},
-      /*isOpenCl=*/false));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false));
 }
 
 TEST_F(TuneConfigMapTest, NotOpenClNotMetal_AllowsTurboQuantCacheTypes) {
@@ -343,13 +345,14 @@ TEST_F(TuneConfigMapTest, NotOpenClNotMetal_AllowsTurboQuantCacheTypes) {
   configFilemap_["cache-type-k"] = "tbq4_0";
   configFilemap_["cache-type-v"] = "pq4_0";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      std::nullopt,
-      FtOverrides{},
-      /*isOpenCl=*/false,
-      /*isMetal=*/false));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false));
 }
 
 TEST_F(TuneConfigMapTest, Metal_RejectsTurboQuantCacheTypes) {
@@ -372,13 +375,14 @@ TEST_F(TuneConfigMapTest, Metal_AllowsStandardQuantizedCacheTypes) {
   configFilemap_["cache-type-k"] = "q8_0";
   configFilemap_["cache-type-v"] = "q4_0";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      std::nullopt,
-      FtOverrides{},
-      /*isOpenCl=*/false,
-      /*isMetal=*/true));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/true));
 }
 
 // ---- Finetuning: flash-attn disabled for any architecture ----
@@ -809,14 +813,15 @@ TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_NotGpu_Allowed) {
   configFilemap_["cache-type-k"] = "q8_0";
   configFilemap_["flash-attn"] = "on";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      830,
-      FtOverrides{},
-      /*isOpenCl=*/false,
-      /*isMetal=*/false,
-      /*isGpu=*/false));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/false));
 }
 
 TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedVCache_FlashAttnOff_Allowed) {
@@ -824,14 +829,15 @@ TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedVCache_FlashAttnOff_Allowed) {
   configFilemap_["cache-type-v"] = "q8_0";
   configFilemap_["flash-attn"] = "off";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      830,
-      FtOverrides{},
-      /*isOpenCl=*/false,
-      /*isMetal=*/false,
-      /*isGpu=*/true));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          830,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true));
 }
 
 TEST_F(TuneConfigMapTest, AdrenoOpenCl_QuantizedKCache_Rejected) {
@@ -861,14 +867,15 @@ TEST_F(TuneConfigMapTest, MixedQuantizedAsymmetric_WarnsButAllowed) {
   configFilemap_["cache-type-k"] = "q8_0";
   configFilemap_["cache-type-v"] = "q4_0";
 
-  EXPECT_NO_THROW(load_fit_normalization::tuneLoadConfigMap(
-      configFilemap_,
-      meta,
-      std::nullopt,
-      FtOverrides{},
-      /*isOpenCl=*/false,
-      /*isMetal=*/false,
-      /*isGpu=*/true));
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true));
 }
 
 // ---- Auto-default q8_0 KV on GPU backends (QVAC-21318) ----
