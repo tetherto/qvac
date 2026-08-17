@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.20.0] - 2026-08-14
+
+This release adds production LTX-2.3 Ingredients IC-LoRA video generation
+with reference-sheet conditioning and validated controls across the JavaScript
+and native addon surfaces.
+
+### Added
+
+#### LTX Ingredients reference-guided video
+
+- LTX video requests accept IC-LoRA adapters, runtime `lora_strength`, and
+  `reference_images`, with validation that rejects unsupported combinations.
+- LTX-2 scheduling is selected by default for LTX models and can be requested
+  explicitly; `stg_scale` and `stg_block` expose skip-layer guidance controls.
+- The `generate:ltx-coffee` example and pinned download workflow provide a
+  reproducible reference-conditioned Ingredients showcase.
+
+### Changed
+
+- `vae_auto_cpu_fallback` and its memory-ratio control expose automatic VAE
+  capacity fallback, while the dependency stack selects exact-stateful VAE
+  behavior for Vulkan.
+- `stable-diffusion-cpp` now resolves at `2026-07-03#7` from the
+  `tetherto/qvac-registry-vcpkg` registry. The package uses registry-backed
+  `stable-diffusion-cpp` and `ggml` dependencies without local overlays.
+- TypeScript declarations and generated bindings, JavaScript and C++ unit
+  tests, addon tests, and registry-backed native builds validate the new
+  request surface and dependency path.
+
+### Pull Requests
+
+- [#3551](https://github.com/tetherto/qvac/pull/3551) - QVAC-22534
+  Feature/ltx lora
+
 ## [0.19.0] - 2026-08-12
 
 This release adds ABot-World: a causal, interactive world model

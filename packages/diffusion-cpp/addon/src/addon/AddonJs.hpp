@@ -216,6 +216,21 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     }
   }
 
+  // `referenceImagesBuffers` -- LTX IC-LoRA reference images, one encoded
+  // PNG/JPEG buffer per reference. Pixel decoding and ownership happen in
+  // SdModel::processVideo() so the C API pointers stay valid through sampling.
+  auto referenceBufs =
+      inputObj.getOptionalProperty<js::Array>(env, "referenceImagesBuffers");
+  if (referenceBufs.has_value()) {
+    auto arr = referenceBufs.value();
+    const uint32_t n = arr.size(env);
+    job.referenceImagesBytes.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      auto elem = arr.get<js::TypedArray<uint8_t>>(env, i);
+      job.referenceImagesBytes.emplace_back(elem.as<std::vector<uint8_t>>(env));
+    }
+  }
+
   // Lifetime contract for the `[&instance]` captures below:
   //
   //   `instance` is a reference into the AddonJs that the inference-addon-cpp

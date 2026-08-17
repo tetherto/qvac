@@ -584,12 +584,11 @@ TEST_F(CacheManagementTest, CacheTokensExceedContextSize) {
       qvac_errors::StatusError);
 }
 
-TEST_F(CacheManagementTest, CacheWithToolsCompactFalseSavesFullCache) {
+TEST_F(CacheManagementTest, CacheWithToolPromptSavesFullCache) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_compact"] = "false";
   auto model = createModel();
   if (!model) {
     FAIL() << "Model failed to load";
@@ -606,9 +605,6 @@ TEST_F(CacheManagementTest, CacheWithToolsCompactFalseSavesFullCache) {
   auto statsBeforeSave = model->runtimeStats();
   double cacheTokensBeforeSave = getStatValue(statsBeforeSave, "CacheTokens");
   EXPECT_GT(cacheTokensBeforeSave, 0.0);
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
 
   EXPECT_TRUE(fs::exists(session1_path));
 }

@@ -428,6 +428,41 @@ runs:
           echo "found=false" >> "$GITHUB_OUTPUT"
         fi
 
+    # The prestage/download commands can echo presigned S3 URLs into the Device
+    # Farm test-spec / console output collected above. This repo is public and
+    # these artifacts are world-readable for 30 days, so redact the AWS SigV4
+    # credential fields before upload. Runner ::add-mask:: does not cover uploaded
+    # file contents, so this file-level scrub is required in addition to it.
+    - name: Scrub presigned credentials from console logs
+      if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        [ -d console-logs ] || exit 0
+        node -e '
+          const fs = require("fs")
+          const path = require("path")
+          const root = "console-logs"
+          // Neutralise the signature (the secret) and the access-key-id / session
+          // token that AWS SigV4 puts in the query string of a presigned URL. The
+          // value stops at the next query separator, whitespace or quote.
+          const re = /X-Amz-(Signature|Credential|Security-Token)=[^&\s"<>]+/gi
+          let scrubbed = 0
+          const walk = (dir) => {
+            for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, ent.name)
+              if (ent.isDirectory()) { walk(p); continue }
+              let text
+              try { text = fs.readFileSync(p, "utf8") } catch { continue }
+              if (!text.includes("X-Amz-")) continue
+              const out = text.replace(re, (m, f) => "X-Amz-" + f + "=REDACTED")
+              if (out !== text) { fs.writeFileSync(p, out); scrubbed++ }
+            }
+          }
+          walk(root)
+          console.log("[scrub] redacted presigned credentials in " + scrubbed + " file(s)")
+        '
+
     - name: Upload console logs
       id: upload_console_log
       if: always() && inputs.run-arns != '[]' && inputs.run-arns != ''

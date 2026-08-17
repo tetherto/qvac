@@ -13,6 +13,7 @@
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 
 namespace {
 
@@ -26,8 +27,8 @@ protected:
     config_["verbosity"] = "0";
   }
 
-  std::unique_ptr<LlamaModel> createModel() {
-    std::string path = test_common::BaseTestModelPath::get();
+  std::unique_ptr<LlamaModel> createModel(const std::string& modelPath) {
+    std::string path = modelPath;
     if (!std::filesystem::exists(path)) {
       return nullptr;
     }
@@ -35,6 +36,10 @@ protected:
     auto cfg = config_;
     return std::make_unique<LlamaModel>(
         std::move(path), std::move(projection), std::move(cfg));
+  }
+
+  std::unique_ptr<LlamaModel> createModel() {
+    return createModel(test_common::BaseTestModelPath::get());
   }
 
   std::unordered_map<std::string, std::string> config_;
@@ -51,10 +56,21 @@ protected:
 /// 4. Try to run inference
 /// 5. Expect success, not "failed to decode next token"
 TEST_F(ReloadCancelStateTest, InferenceWorksAfterFinetuneReload) {
-  auto model = createModel();
-  ASSERT_NE(model, nullptr) << "Test model not found, skipping";
+  using MP = test_common::TestModelPath;
+  MP qwen3Model(
+      "Qwen3-0.6B-Q8_0.gguf",
+      "QWEN3_MODEL_PATH",
+      MP::OnMissing::Skip,
+      "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF");
+  REQUIRE_MODEL(qwen3Model);
+
+  auto model = createModel(qwen3Model.path);
+  ASSERT_NE(model, nullptr) << qwen3Model.missingMessage();
 
   model->waitForLoadInitialization();
+  const auto inferenceSnapshot =
+      LlamaModelTestPeer::normalizedFitSnapshot(*model);
+  ASSERT_TRUE(inferenceSnapshot.has_value());
 
   // Simulate finetuning start: reload with finetune overrides
   // (In real code this happens in LlamaFinetuner::finetune() line 113)
@@ -65,18 +81,24 @@ TEST_F(ReloadCancelStateTest, InferenceWorksAfterFinetuneReload) {
       .contextLength = 256,
       .gpuSupportsF16OutProd = false,
       .flashAttn = false};
-  try {
-    model->reload(finetuneConfig);
-  } catch (const std::exception& e) {
-    GTEST_SKIP() << "model cannot enter finetune mode on this setup: "
-                 << e.what();
-  }
+  model->reload(finetuneConfig);
+  const auto finetuneSnapshot =
+      LlamaModelTestPeer::normalizedFitSnapshot(*model);
+  ASSERT_TRUE(finetuneSnapshot.has_value());
+  EXPECT_EQ(finetuneSnapshot->nCtx, 256U);
+  EXPECT_EQ(finetuneSnapshot->nBatch, 2U);
+  EXPECT_EQ(finetuneSnapshot->nUbatch, 1U);
+  EXPECT_NE(*finetuneSnapshot, *inferenceSnapshot);
 
   // Simulate finetuning completion: reload back to inference mode
   // (In real code this happens in LlamaFinetuner::finetune() line 410)
   // At this point activeSingleJobs_ is 0, so cancel() in reload()
   // won't call stop() on the old context.
   model->reload(FinetuneConfigOverrides{});
+  const auto restoredSnapshot =
+      LlamaModelTestPeer::normalizedFitSnapshot(*model);
+  ASSERT_TRUE(restoredSnapshot.has_value());
+  EXPECT_EQ(*restoredSnapshot, *inferenceSnapshot);
 
   // Try to run inference - this should work, not fail with
   // "[TextLlm] failed to decode next token"
