@@ -123,6 +123,13 @@ test('generateConfigHash: includes complete canonical tool definitions', async (
 
     t.not(originalHash, changedHash, 'same-named tools with different schemas use different caches')
     t.is(originalHash, reorderedHash, 'object-key insertion order does not affect cache identity')
+
+    const other = { ...calculator, name: 'search' }
+    t.not(
+      mod.generateConfigHash('system prompt', [calculator, other]),
+      mod.generateConfigHash('system prompt', [other, calculator]),
+      'tool-array order participates in cache identity'
+    )
   } finally {
     cleanup()
   }
