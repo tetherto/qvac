@@ -56,6 +56,8 @@ export interface GenerateOptions {
     keyscale?: string;
     /** Time signature, e.g. "4/4". */
     timesignature?: string;
+    /** Append BPM/tempo, time signature and key to the internal conditioning caption. */
+    augmentCaptionWithMetadata?: boolean;
     /** Target length in seconds; undefined lets the LM decide the full length. */
     duration?: number;
     /** LM sampling temperature (ACE-Step default: 0.85). */

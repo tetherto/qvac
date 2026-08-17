@@ -71,6 +71,9 @@ export async function* audioGenStream(
         ...(request.bpm !== undefined && { bpm: request.bpm }),
         ...(request.keyscale !== undefined && { keyscale: request.keyscale }),
         ...(request.timesignature !== undefined && { timesignature: request.timesignature }),
+        ...(request.augmentCaptionWithMetadata !== undefined && {
+          augmentCaptionWithMetadata: request.augmentCaptionWithMetadata
+        }),
         ...(request.duration !== undefined && { duration: request.duration })
       })
 

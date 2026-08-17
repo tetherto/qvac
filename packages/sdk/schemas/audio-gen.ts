@@ -32,6 +32,7 @@ const audioGenParamsShape = {
   bpm: z.number().int().positive().optional(),
   keyscale: z.string().min(1).optional(),
   timesignature: z.string().min(1).optional(),
+  augmentCaptionWithMetadata: z.boolean().optional(),
   duration: z
     .number()
     .positive()

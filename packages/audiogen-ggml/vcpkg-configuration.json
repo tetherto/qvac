@@ -1,9 +1,9 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "cd84b4186fc1ca61e8040cf65e1176bece3cb97b",
+    "baseline": "a2f5b720641a28ebd8fe77ccc6acd6f866efe603",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-22883/audiogen-repaint-flow-edit"
+    "reference": "QVAC-23762/metadata-aware-caption-conditioning"
   },
   "registries": [
     {

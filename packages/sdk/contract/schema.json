@@ -298,6 +298,9 @@
           "type": "string",
           "minLength": 1
         },
+        "augmentCaptionWithMetadata": {
+          "type": "boolean"
+        },
         "duration": {
           "description": "Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
           "type": "number",

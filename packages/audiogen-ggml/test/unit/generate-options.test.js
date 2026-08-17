@@ -18,7 +18,7 @@ function createHarness() {
   return { gen, received: () => received }
 }
 
-test('AudioGen.run forwards sampler, DCW and frozen-code controls', async (t) => {
+test('AudioGen.run forwards sampler, caption, DCW and frozen-code controls', async (t) => {
   const { gen, received } = createHarness()
   const audioCodes = new Int32Array([12095, 63487, 12741])
 
@@ -29,6 +29,7 @@ test('AudioGen.run forwards sampler, DCW and frozen-code controls', async (t) =>
     lmTopK: 0,
     lmCfgScale: 1.5,
     lmPhase1: false,
+    augmentCaptionWithMetadata: false,
     dcwEnabled: false,
     dcwScaler: 0,
     dcwHighScaler: 0,
@@ -44,6 +45,7 @@ test('AudioGen.run forwards sampler, DCW and frozen-code controls', async (t) =>
   t.is(job.lmTopK, 0, 'zero top-k is preserved')
   t.is(job.lmCfgScale, 1.5)
   t.is(job.lmPhase1, false, 'false Phase 1 flag is preserved')
+  t.is(job.augmentCaptionWithMetadata, false, 'false caption augmentation flag is preserved')
   t.is(job.dcwEnabled, false, 'false DCW flag is preserved')
   t.is(job.dcwScaler, 0, 'zero low-frequency scaler is preserved')
   t.is(job.dcwHighScaler, 0, 'zero high-frequency scaler is preserved')
@@ -68,6 +70,13 @@ test('AudioGen.run rejects invalid sampler and DCW controls before native dispat
   {
     const { gen } = createHarness()
     await t.exception(() => gen.run('test', { lmPhase1: 1 }), /lmPhase1 must be a boolean/)
+  }
+  {
+    const { gen } = createHarness()
+    await t.exception(
+      () => gen.run('test', { augmentCaptionWithMetadata: 'yes' }),
+      /augmentCaptionWithMetadata must be a boolean/
+    )
   }
   {
     const { gen } = createHarness()

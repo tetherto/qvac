@@ -160,6 +160,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.bpm = in.bpm;
   params.keyscale = in.keyscale;
   params.timesignature = in.timesignature;
+  params.augment_caption_with_metadata = in.augmentCaptionWithMetadata;
   // Pass duration straight through: >0 caps the track to that many seconds,
   // 0 (the default) lets LM Phase-1 decide the full song length.
   params.duration = in.duration;
