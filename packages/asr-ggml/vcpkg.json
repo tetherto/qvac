@@ -12,6 +12,7 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-17",
       "default-features": false,
       "features": [
         "whisper",
@@ -23,6 +24,7 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-17",
       "default-features": false,
       "features": [
         "whisper",
@@ -34,6 +36,7 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-17",
       "default-features": false,
       "features": [
         "whisper",

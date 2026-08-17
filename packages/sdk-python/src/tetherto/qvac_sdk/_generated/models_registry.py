@@ -4241,60 +4241,6 @@ PARAKEET_CTC_0_6B_Q8_0 = ModelConstant(
     params="0.6B",
 )
 
-PARAKEET_CTC_F16 = ModelConstant(
-    name="PARAKEET_CTC_F16",
-    src="registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
-    registry_path="qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
-    registry_source="s3",
-    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blob_block_offset=3248455,
-    blob_block_length=21061,
-    blob_byte_offset=212873512294,
-    model_id="indic-conformer-ctc.f16.gguf",
-    expected_size=1380198336,
-    sha256_checksum="78566cbce8fe23b85c5c956d3bd9125a351d6aedd43e8e38470ecb00075e3b37",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="f16",
-    params="600M",
-)
-
-PARAKEET_CTC_Q4_0 = ModelConstant(
-    name="PARAKEET_CTC_Q4_0",
-    src="registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
-    registry_path="qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
-    registry_source="s3",
-    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blob_block_offset=3269516,
-    blob_block_length=5973,
-    blob_byte_offset=214253710630,
-    model_id="indic-conformer-ctc.q4_0.gguf",
-    expected_size=391389696,
-    sha256_checksum="adf2dbe247896ab2812404a693f4c4b52145dc76811c88490e286d2efe6f5b32",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="q4_0",
-    params="600M",
-)
-
-PARAKEET_CTC_Q8_0 = ModelConstant(
-    name="PARAKEET_CTC_Q8_0",
-    src="registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
-    registry_path="qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
-    registry_source="s3",
-    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blob_block_offset=3275489,
-    blob_block_length=11221,
-    blob_byte_offset=214645100326,
-    model_id="indic-conformer-ctc.q8_0.gguf",
-    expected_size=735323136,
-    sha256_checksum="ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a",
-    addon="parakeet",
-    engine="parakeet-transcription",
-    quantization="q8_0",
-    params="600M",
-)
-
 PARAKEET_EOU_120M_V1_F16 = ModelConstant(
     name="PARAKEET_EOU_120M_V1_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
@@ -4347,6 +4293,60 @@ PARAKEET_EOU_120M_V1_Q8_0 = ModelConstant(
     engine="parakeet-transcription",
     quantization="q8_0",
     params="120M",
+)
+
+PARAKEET_INDIC_CONFORMER_CTC_F16 = ModelConstant(
+    name="PARAKEET_INDIC_CONFORMER_CTC_F16",
+    src="registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    registry_path="qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3248455,
+    blob_block_length=21061,
+    blob_byte_offset=212873512294,
+    model_id="indic-conformer-ctc.f16.gguf",
+    expected_size=1380198336,
+    sha256_checksum="78566cbce8fe23b85c5c956d3bd9125a351d6aedd43e8e38470ecb00075e3b37",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="f16",
+    params="600M",
+)
+
+PARAKEET_INDIC_CONFORMER_CTC_Q4_0 = ModelConstant(
+    name="PARAKEET_INDIC_CONFORMER_CTC_Q4_0",
+    src="registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    registry_path="qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3269516,
+    blob_block_length=5973,
+    blob_byte_offset=214253710630,
+    model_id="indic-conformer-ctc.q4_0.gguf",
+    expected_size=391389696,
+    sha256_checksum="adf2dbe247896ab2812404a693f4c4b52145dc76811c88490e286d2efe6f5b32",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0",
+    params="600M",
+)
+
+PARAKEET_INDIC_CONFORMER_CTC_Q8_0 = ModelConstant(
+    name="PARAKEET_INDIC_CONFORMER_CTC_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3275489,
+    blob_block_length=11221,
+    blob_byte_offset=214645100326,
+    model_id="indic-conformer-ctc.q8_0.gguf",
+    expected_size=735323136,
+    sha256_checksum="ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="600M",
 )
 
 PARAKEET_SORTFORMER_4SPK_V1_F16 = ModelConstant(
@@ -7555,12 +7555,12 @@ __all__ = [
     "PARAKEET_CTC_0_6B_F16",
     "PARAKEET_CTC_0_6B_Q4_0",
     "PARAKEET_CTC_0_6B_Q8_0",
-    "PARAKEET_CTC_F16",
-    "PARAKEET_CTC_Q4_0",
-    "PARAKEET_CTC_Q8_0",
     "PARAKEET_EOU_120M_V1_F16",
     "PARAKEET_EOU_120M_V1_Q4_0",
     "PARAKEET_EOU_120M_V1_Q8_0",
+    "PARAKEET_INDIC_CONFORMER_CTC_F16",
+    "PARAKEET_INDIC_CONFORMER_CTC_Q4_0",
+    "PARAKEET_INDIC_CONFORMER_CTC_Q8_0",
     "PARAKEET_SORTFORMER_4SPK_V1_F16",
     "PARAKEET_SORTFORMER_4SPK_V1_Q4_0",
     "PARAKEET_SORTFORMER_4SPK_V1_Q8_0",
