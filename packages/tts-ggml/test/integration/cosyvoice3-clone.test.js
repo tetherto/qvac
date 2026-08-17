@@ -12,7 +12,11 @@ const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
 const { loadCosyvoiceTTS, runCosyvoiceTTS } = require('../utils/runCosyvoiceTTS')
-const { ensureCosyvoiceModel, ensureCosyvoiceCloneModels } = require('../utils/downloadModel')
+const {
+  ensureCosyvoiceModel,
+  ensureCosyvoiceCloneModels,
+  cosyvoiceBaseFileNames
+} = require('../utils/downloadModel')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 
 const platform = os.platform()
@@ -35,15 +39,6 @@ const JFK_TRANSCRIPT =
 
 const CLONE_TEXT = 'Cloning now runs fully on device.'
 const CLONE_SEED = 1986
-
-const BASE_MODEL_FILES = [
-  'cosyvoice3-llm-q8_0.gguf',
-  'cosyvoice3-flow-f32.gguf',
-  'cosyvoice3-hift-f32.gguf',
-  'voice.gguf',
-  'vocab.json',
-  'merges.txt'
-]
 
 async function ensureCloneReadyModelDir(t) {
   const baseDir = getBaseDir()
@@ -155,10 +150,20 @@ test(
 
     const baseOnlyDir = path.join(getBaseDir(), 'models', 'cosyvoice3-base-only')
     fs.mkdirSync(baseOnlyDir, { recursive: true })
-    for (const name of BASE_MODEL_FILES) {
+    for (const name of cosyvoiceBaseFileNames()) {
+      const src = path.join(modelDir, name)
       const dst = path.join(baseOnlyDir, name)
-      // Hard links keep this free even for the multi-GB GGUFs (same volume).
-      if (!fs.existsSync(dst)) fs.linkSync(path.join(modelDir, name), dst)
+      if (fs.existsSync(dst)) continue
+      if (!fs.existsSync(src)) {
+        t.fail(`staged model dir is missing ${name}`)
+        return
+      }
+      try {
+        // Free for the multi-GB GGUFs, but only within one filesystem.
+        fs.linkSync(src, dst)
+      } catch (_e) {
+        fs.copyFileSync(src, dst)
+      }
     }
 
     const model = new TTSGgml({
@@ -166,10 +171,16 @@ test(
       files: { cosyvoiceModelDir: baseOnlyDir },
       referenceAudio: resolveRefWavPath({})
     })
-    await t.exception(
-      model.load(),
-      /s3tok/i,
-      'native load rejects a clone request when the model dir lacks the cloning GGUFs'
-    )
+    try {
+      await t.exception(
+        model.load(),
+        /s3tok/i,
+        'native load rejects a clone request when the model dir lacks the cloning GGUFs'
+      )
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
   }
 )

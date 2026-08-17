@@ -705,7 +705,7 @@ await model.run({ input: 'Hello from an on-device C++ pipeline.' })
 `instruct` counts toward the one-instruction rule, so combining it with
 `emotion` or `pace` throws.  An unknown `instruct` key or an invalid value
 throws at construction, listing the valid set; with nothing set the model runs
-zero-shot on the baked voice (or a [cloned one](#cosyvoice3-1) — `instruct`
+zero-shot on the baked voice (or a [cloned one](#cosyvoice3) — `instruct`
 composes with `referenceAudio`, the instruction driving dialect/style while
 the clone supplies the timbre).  Other CosyVoice3-only options: `promptText`
 (the reference transcript — see Voice cloning); `streamLeftContextTokens` is

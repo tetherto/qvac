@@ -1338,6 +1338,16 @@ const COSYVOICE_FILES = [
 ]
 
 /**
+ * The on-disk names of the CosyVoice3 base set, so callers that stage or
+ * mirror a model dir track the published tier instead of hardcoding it.
+ *
+ * @returns {string[]}
+ */
+function cosyvoiceBaseFileNames() {
+  return COSYVOICE_FILES.map((f) => f.name)
+}
+
+/**
  * Ensure the CosyVoice3 model directory is staged in a location the native
  * addon can read, and return that directory.  Mirrors ensureChatterboxModels /
  * ensureMecabDict (multi-file): prefer an already-staged local copy, otherwise
@@ -1915,6 +1925,7 @@ module.exports = {
   DEFAULT_PARLER_QUANT,
   ensureCosyvoiceModel,
   ensureCosyvoiceCloneModels,
+  cosyvoiceBaseFileNames,
   ensureMecabDict,
   ensureCangjieTsv,
   ensureLavaSREnhancerGguf,
