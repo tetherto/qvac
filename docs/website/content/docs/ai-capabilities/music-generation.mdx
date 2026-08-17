@@ -186,7 +186,7 @@ Both inputs accept either form:
 
 Inputs are capped at `AUDIOGEN_INPUT_MAX_SECONDS` (600 s) per clip. Malformed PCM — a byte length that is not whole stereo frames, non-finite samples, or a clip over the limit — fails the run with `INVALID_AUDIO_INPUT` before the engine is invoked; a missing file fails with `AUDIO_FILE_NOT_FOUND`.
 
-`sourceAudio` is required for cover tasks and is validated on the client before the request is sent. `audioCoverStrength` (0..1) is the fraction of DiT steps that keep the source context and must currently be `1` for `cover-nofsq`; `coverNoiseStrength` (0..1) blends the initial noise toward the source latent (`0` = pure noise, `1` ≈ source). The FSQ-roundtrip `cover` task is reserved by the engine but not implemented, so the SDK offers only `text2music` (default) and `cover-nofsq` (see `AUDIOGEN_TASK_TYPES`).
+`sourceAudio` is required for cover tasks and is validated on the client before the request is sent. `audioCoverStrength` (0..1) is the fraction of DiT steps that keep the source context; the engine does not implement partial source context yet, so for `cover-nofsq` the SDK rejects any value other than `1` (omit it or pass `1`). `coverNoiseStrength` (0..1) blends the initial noise toward the source latent (`0` = pure noise, `1` ≈ source). The FSQ-roundtrip `cover` task is reserved by the engine but not implemented, so the SDK offers only `text2music` (default) and `cover-nofsq` (see `AUDIOGEN_TASK_TYPES`).
 
 ## Cancellation
 

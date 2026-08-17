@@ -177,6 +177,50 @@ test('cover tasks require sourceAudio on both client and wire schemas', (t) => {
   )
 })
 
+test('cover-nofsq only accepts audioCoverStrength 1 while the engine lacks context switching', (t) => {
+  const base = {
+    modelId: 'model-1',
+    caption: 'orchestral arrangement with dramatic strings',
+    taskType: 'cover-nofsq',
+    sourceAudio: '/tmp/source.wav'
+  }
+  t.ok(audioGenClientParamsSchema.safeParse(base).success, 'omitted strength is accepted')
+  t.ok(
+    audioGenClientParamsSchema.safeParse({ ...base, audioCoverStrength: 1 }).success,
+    'explicit 1 is accepted'
+  )
+  const partial = audioGenClientParamsSchema.safeParse({ ...base, audioCoverStrength: 0.5 })
+  t.is(partial.success, false, 'values below 1 are rejected for cover-nofsq')
+  t.ok(
+    !partial.success &&
+      partial.error.issues.some(
+        (issue) =>
+          issue.path[0] === 'audioCoverStrength' &&
+          /requires audioCoverStrength 1/.test(issue.message)
+      )
+  )
+  t.ok(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'model-1',
+      caption: 'ambient electronic music',
+      audioCoverStrength: 0.5
+    }).success,
+    'text2music is not constrained by the cover-only rule'
+  )
+  t.is(
+    audioGenStreamRequestSchema.safeParse({
+      type: 'audioGenStream',
+      modelId: 'model-1',
+      caption: 'orchestral arrangement with dramatic strings',
+      taskType: 'cover-nofsq',
+      sourceAudio: { type: 'filePath', value: '/tmp/source.wav' },
+      audioCoverStrength: 0.25
+    }).success,
+    false,
+    'the wire schema enforces the same rule'
+  )
+})
+
 test('audioGenStreamRequestSchema accepts an optional requestId', (t) => {
   const request = audioGenStreamRequestSchema.parse({
     type: 'audioGenStream',

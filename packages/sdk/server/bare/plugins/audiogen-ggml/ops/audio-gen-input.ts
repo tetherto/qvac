@@ -89,7 +89,9 @@ async function decodeMonoFloat32(filePath: string, name: AudioGenAudioInputName)
   const chunks: Uint8Array[] = []
   let total = 0
   try {
-    const stream = await decodeAudioToStream(filePath, 'f32le', AUDIOGEN_INPUT_SAMPLE_RATE)
+    const stream = await decodeAudioToStream(filePath, 'f32le', {
+      sampleRate: AUDIOGEN_INPUT_SAMPLE_RATE
+    })
     for await (const chunk of stream as AsyncIterable<Uint8Array>) {
       total += chunk.byteLength
       if (total > MAX_DECODED_MONO_BYTES) {

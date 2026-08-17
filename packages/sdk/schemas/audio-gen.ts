@@ -153,15 +153,32 @@ const audioGenParamsShape = {
     .describe('Source audio to re-render; required for cover tasks.')
 }
 
-function requireSourceAudioForCoverTasks(
-  value: { taskType?: string | undefined; sourceAudio?: unknown },
+/**
+ * Cross-field rules for cover tasks: `sourceAudio` is mandatory, and the engine
+ * currently only implements full source context, so an explicit
+ * `audioCoverStrength` must be `1` until context switching lands upstream.
+ */
+function validateCoverTask(
+  value: {
+    taskType?: string | undefined
+    sourceAudio?: unknown
+    audioCoverStrength?: number | undefined
+  },
   ctx: z.RefinementCtx
 ) {
-  if (value.taskType === 'cover-nofsq' && value.sourceAudio === undefined) {
+  if (value.taskType !== 'cover-nofsq') return
+  if (value.sourceAudio === undefined) {
     ctx.addIssue({
       code: 'custom',
       path: ['sourceAudio'],
       message: "taskType 'cover-nofsq' requires sourceAudio"
+    })
+  }
+  if (value.audioCoverStrength !== undefined && value.audioCoverStrength !== 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['audioCoverStrength'],
+      message: "taskType 'cover-nofsq' currently requires audioCoverStrength 1"
     })
   }
 }
@@ -173,7 +190,7 @@ export const audioGenClientParamsSchema = z
     sourceAudio: audioGenClientAudioInputSchema.optional()
   })
   .strict()
-  .superRefine(requireSourceAudioForCoverTasks)
+  .superRefine(validateCoverTask)
 
 export const audioGenStreamRequestSchema = z
   .object({
@@ -182,7 +199,7 @@ export const audioGenStreamRequestSchema = z
     requestId: z.string().min(1).optional()
   })
   .strict()
-  .superRefine(requireSourceAudioForCoverTasks)
+  .superRefine(validateCoverTask)
 
 export const audioGenProgressSchema = z.object({
   stage: z.string(),
