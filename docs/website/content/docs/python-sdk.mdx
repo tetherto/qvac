@@ -154,3 +154,5 @@ Everything you normally need is imported flat from `tetherto.qvac_sdk`; model co
 | Notebook | `tetherto.qvac_sdk.notebook.SyncClient` — synchronous, numpy/pandas returns, live in-cell streaming |
 
 See [API reference](/reference/api) for the JS/TS surface; the Python API is generated from the same contract.
+
+The JS/TS `getLogger` and `profiler` facades are intentionally not ported — Python uses the standard library [`logging`](https://docs.python.org/3/library/logging.html) module and the per-call `profiled_call` (`tetherto.qvac_sdk.profiling`) instead. See the [Logging](/runtime/logging) and [Profiler](/runtime/profiler) pages.
