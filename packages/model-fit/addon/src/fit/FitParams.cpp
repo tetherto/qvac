@@ -10,6 +10,8 @@
 #include <gguf.h>
 #include <llama.h>
 
+#include "fit/FitResultContext.hpp"
+
 namespace model_fit {
 
 namespace {
@@ -448,12 +450,8 @@ FitResult runFit(const FitRequest& req) {
                                   : ""});
   }
 
-  // A fit that needed no reduction leaves n_ctx at the 0 it was handed, which
-  // means "the trained context" to llama but is not a plan a caller can use.
-  // Resolve it so every SUCCESS carries a concrete context.
-  if (out.fits && out.nCtx == 0) {
-    out.nCtx = trainedCtx;
-  }
+  // A fitted 0 means "the trained context", not a usable load plan.
+  detail::finalizeFitContext(out, trainedCtx);
 
   return out;
 }
