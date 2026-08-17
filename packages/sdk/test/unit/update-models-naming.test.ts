@@ -1576,3 +1576,12 @@ test('loadCurrentModels: parses single- and double-quoted catalogs alike', (t) =
     'each name paired with its own registryPath'
   )
 })
+
+test('codegen emits @/ schema imports, not tsc-alias relative .js paths', (t) => {
+  const output = generateModelsFileContent([])
+
+  t.ok(output.includes('@/schemas/registry'), 'registry import uses @/ alias')
+  t.ok(output.includes('@/schemas/engine-addon-map'), 'engine-addon-map import uses @/ alias')
+  t.ok(!output.includes('registry.js'), 'does not emit .js specifiers')
+  t.ok(!output.includes('../../schemas/'), 'does not emit relative schema paths')
+})
