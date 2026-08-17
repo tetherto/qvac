@@ -15,12 +15,17 @@ export function needsDecoding(filePath: string): boolean {
 
 const DECODER_TIMEOUT_MS = 10000
 
+/**
+ * Decode an audio file into a raw mono PCM stream at `sampleRate` Hz
+ * (the decoder's default is 16 kHz, which every transcription engine expects).
+ */
 export async function decodeAudioToStream(
   inputPath: string,
-  audioFormat: AudioFormat = 's16le'
+  audioFormat: AudioFormat = 's16le',
+  sampleRate?: number
 ): Promise<Readable> {
   const decoder = new FFmpegDecoder({
-    config: { audioFormat },
+    config: { audioFormat, ...(sampleRate !== undefined && { sampleRate }) },
     logger
   })
 

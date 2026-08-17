@@ -21,6 +21,31 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
+class AudioGenStreamRequestTaskType(Enum):
+    text2music = "text2music"
+    cover_nofsq = "cover-nofsq"
+
+
+class AudioGenStreamRequestReferenceAudioBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: str
+
+
+class AudioGenStreamRequestReferenceAudioFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: str
+
+
+class AudioGenStreamRequestSourceAudioBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: str
+
+
+class AudioGenStreamRequestSourceAudioFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: str
+
+
 class AudioGenStreamRequest(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -40,6 +65,114 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         Field(
             description="Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
             gt=0.0,
+        ),
+    ] = None
+    lm_temperature: Annotated[
+        float | None,
+        Field(
+            alias="lmTemperature",
+            description="LM sampling temperature (ACE-Step default: 0.85).",
+            ge=0.0,
+        ),
+    ] = None
+    lm_top_p: Annotated[
+        float | None,
+        Field(
+            alias="lmTopP",
+            description="LM nucleus-sampling probability (ACE-Step default: 0.9).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    lm_top_k: Annotated[
+        int | None,
+        Field(
+            alias="lmTopK",
+            description="LM top-k cutoff; 0 disables top-k filtering.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    lm_cfg_scale: Annotated[
+        float | None,
+        Field(
+            alias="lmCfgScale",
+            description="Classifier-free guidance scale used by the LM.",
+            ge=0.0,
+        ),
+    ] = None
+    lm_phase1: Annotated[
+        bool | None,
+        Field(
+            alias="lmPhase1",
+            description="Allow the LM to infer missing metadata before semantic-code generation.",
+        ),
+    ] = None
+    dcw_enabled: Annotated[
+        bool | None,
+        Field(
+            alias="dcwEnabled",
+            description="Apply the official ACE-Step Haar DCW correction during DiT sampling (default: true).",
+        ),
+    ] = None
+    dcw_scaler: Annotated[
+        float | None,
+        Field(
+            alias="dcwScaler",
+            description="DCW low-frequency correction strength (official default: 0.05).",
+            ge=0.0,
+        ),
+    ] = None
+    dcw_high_scaler: Annotated[
+        float | None,
+        Field(
+            alias="dcwHighScaler",
+            description="DCW high-frequency correction strength (official default: 0.02).",
+            ge=0.0,
+        ),
+    ] = None
+    task_type: Annotated[
+        AudioGenStreamRequestTaskType | None,
+        Field(
+            alias="taskType",
+            description="Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+            title="AudioGenStreamRequestTaskType",
+        ),
+    ] = None
+    audio_cover_strength: Annotated[
+        float | None,
+        Field(
+            alias="audioCoverStrength",
+            description="Fraction of DiT steps that keep the source context (0..1, default 1). cover-nofsq currently requires 1.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    cover_noise_strength: Annotated[
+        float | None,
+        Field(
+            alias="coverNoiseStrength",
+            description="Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    reference_audio: Annotated[
+        AudioGenStreamRequestReferenceAudioBase64
+        | AudioGenStreamRequestReferenceAudioFilePath
+        | None,
+        Field(
+            alias="referenceAudio",
+            description="Optional timbre reference audio; omit to keep the engine default.",
+        ),
+    ] = None
+    source_audio: Annotated[
+        AudioGenStreamRequestSourceAudioBase64
+        | AudioGenStreamRequestSourceAudioFilePath
+        | None,
+        Field(
+            alias="sourceAudio",
+            description="Source audio to re-render; required for cover tasks.",
         ),
     ] = None
     type: Literal["audioGenStream"] = "audioGenStream"
@@ -2028,6 +2161,11 @@ class CompletionStreamResponse(GeneratedBaseModel):
         | CompletionStreamResponseEventsItemCompletionDoneError
         | CompletionStreamResponseEventsItemCompletionDone
     ]
+
+
+class AudioGenTaskType(Enum):
+    text2_music = "text2music"
+    cover_nofsq = "cover-nofsq"
 
 
 class ModelType(Enum):

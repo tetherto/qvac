@@ -5,6 +5,7 @@ import {
   type AudioGenStreamResponse
 } from '@/schemas/audio-gen'
 import { getServerLogger } from '@/logging'
+import { resolveAudioGenPcm } from '@/server/bare/plugins/audiogen-ggml/ops/audio-gen-input'
 import { getModel } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
@@ -64,6 +65,12 @@ export async function* audioGenStream(
   let response!: Awaited<ReturnType<AudioGen['run']>>
   try {
     if (!ctx.signal.aborted) {
+      // Reference/source audio is decoded before the run is admitted so the
+      // model slot is never held by a request that fails on input decoding.
+      const [referenceAudio, sourceAudio] = await Promise.all([
+        request.referenceAudio && resolveAudioGenPcm(request.referenceAudio, 'referenceAudio'),
+        request.sourceAudio && resolveAudioGenPcm(request.sourceAudio, 'sourceAudio')
+      ])
       response = await model.run(request.caption, {
         ...(request.lyrics !== undefined && { lyrics: request.lyrics }),
         ...(request.seed !== undefined && { seed: request.seed }),
@@ -71,7 +78,24 @@ export async function* audioGenStream(
         ...(request.bpm !== undefined && { bpm: request.bpm }),
         ...(request.keyscale !== undefined && { keyscale: request.keyscale }),
         ...(request.timesignature !== undefined && { timesignature: request.timesignature }),
-        ...(request.duration !== undefined && { duration: request.duration })
+        ...(request.duration !== undefined && { duration: request.duration }),
+        ...(request.lmTemperature !== undefined && { lmTemperature: request.lmTemperature }),
+        ...(request.lmTopP !== undefined && { lmTopP: request.lmTopP }),
+        ...(request.lmTopK !== undefined && { lmTopK: request.lmTopK }),
+        ...(request.lmCfgScale !== undefined && { lmCfgScale: request.lmCfgScale }),
+        ...(request.lmPhase1 !== undefined && { lmPhase1: request.lmPhase1 }),
+        ...(request.dcwEnabled !== undefined && { dcwEnabled: request.dcwEnabled }),
+        ...(request.dcwScaler !== undefined && { dcwScaler: request.dcwScaler }),
+        ...(request.dcwHighScaler !== undefined && { dcwHighScaler: request.dcwHighScaler }),
+        ...(request.taskType !== undefined && { taskType: request.taskType }),
+        ...(request.audioCoverStrength !== undefined && {
+          audioCoverStrength: request.audioCoverStrength
+        }),
+        ...(request.coverNoiseStrength !== undefined && {
+          coverNoiseStrength: request.coverNoiseStrength
+        }),
+        ...(referenceAudio && { referenceAudio }),
+        ...(sourceAudio && { sourceAudio })
       })
 
       for await (const chunk of response.iterate()) {

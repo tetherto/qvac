@@ -16,6 +16,7 @@ import {
   PLUGIN_CLASSIFICATION
 } from './plugin'
 import { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
+import { AUDIOGEN_TASK_TYPES } from './audio-gen'
 
 /**
  * Every public constant `enum` from index.ts that downstream (non-JS)
@@ -63,5 +64,12 @@ export const constantsRegistry = {
   // source of truth every other consumer of SUPPORTED_AUDIO_FORMATS shares.
   SupportedAudioFormat: z.enum(
     Object.fromEntries(SUPPORTED_AUDIO_FORMATS.map((ext) => [ext.slice(1).toUpperCase(), ext]))
+  ),
+  // Varnames are derived from the task-type vocabulary ('cover-nofsq' ->
+  // 'COVER_NOFSQ') so they cannot drift from AUDIOGEN_TASK_TYPES.
+  AudioGenTaskType: z.enum(
+    Object.fromEntries(
+      AUDIOGEN_TASK_TYPES.map((taskType) => [taskType.toUpperCase().replace(/-/g, '_'), taskType])
+    )
   )
 } as const
