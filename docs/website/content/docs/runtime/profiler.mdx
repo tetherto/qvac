@@ -16,6 +16,10 @@ You can also enable profiling globally and use a per-call override to [opt out](
 `profiler` is a process-wide singleton — its state persists until the process exits.
 </Callout>
 
+<Callout type="info">
+**Python:** the process-wide `profiler` object is JS/TS-only and intentionally not ported. In the Python SDK, profile a single call with `profiled_call()` and the `__profiling` envelope helpers from `tetherto.qvac_sdk.profiling`, then aggregate the returned `ProfilingReport`s yourself.
+</Callout>
+
 ## `profiler`
 
 The `profiler` object provides the following methods:
