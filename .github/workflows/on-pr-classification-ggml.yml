@@ -154,7 +154,14 @@ jobs:
           workdir: packages/classification-ggml
 
   cpp-tests:
+    # resolve-fabric-prebuilds is skipped on every non-fabric-stack PR, and an
+    # if: without a status-check function carries an implicit success() over all
+    # of needs — which would skip this job there. always() suppresses it; the
+    # sanity-checks gate it also suppresses is restored explicitly below.
     if: |
+      always() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_cpp_tests == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
