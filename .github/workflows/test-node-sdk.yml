@@ -341,6 +341,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: first
+          TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
 
       - name: Preserve first Snap revision
@@ -356,6 +357,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: second
+          TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
 
       - name: Verify Snap refresh persistence
