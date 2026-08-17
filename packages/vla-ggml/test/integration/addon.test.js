@@ -437,6 +437,19 @@ function _buildFixtureInputs(name, hp) {
   throw new Error(`unknown fixture name: ${name}`)
 }
 
+// The addon queues native log lines and drains them onto the JS thread through
+// a uv_async handle, so they can land after the load promise settles. Waiting
+// for the load's terminal line makes reading the log deterministic: the queue
+// is FIFO, so once that line is present every earlier load line is too.
+async function _waitForNativeLine(lines, needle, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (lines.some((line) => line.includes(needle))) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
+}
+
 async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // Each iteration owns its own VlaModel and explicitly `unload()`s before
   // returning so memory-constrained mobile devices don't hold two copies of
@@ -448,10 +461,10 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // keeps them in file-backed pages the kernel can evict, while the alloc+copy
   // fallback commits the whole model to anonymous memory — the allocation iOS
   // intermittently refused at the jetsam ceiling (QVAC-23327). Collection is
-  // bounded since the load lines arrive first and the run keeps logging after.
+  // bounded so a long run cannot grow it without limit.
   const nativeLog = []
   const _collect = (...args) => {
-    if (nativeLog.length < 256) nativeLog.push(args.join(' '))
+    if (nativeLog.length < 4096) nativeLog.push(args.join(' '))
   }
   const model = new VlaModel({
     files: { model: [path.resolve(modelPath)] },
@@ -468,10 +481,17 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
     // `#ifndef _WIN32`), and an accelerator backend legitimately copies into
     // device-local memory, so only a CPU load elsewhere is required to map.
     if (backend === 'cpu' && _platform !== 'win32') {
-      t.ok(
-        nativeLog.some((line) => line.includes('mmap+host_ptr buffer ready')),
-        `CPU load mapped the weights instead of copying them (${tag})`
-      )
+      const drained = await _waitForNativeLine(nativeLog, 'model loaded successfully')
+      t.ok(drained, `native load log reached the test (${tag})`)
+      if (drained) {
+        const mapped = nativeLog.some((line) => line.includes('mmap+host_ptr buffer ready'))
+        if (!mapped) {
+          for (const line of nativeLog.filter((l) => l.includes('smolvla_load_model'))) {
+            t.comment(line)
+          }
+        }
+        t.ok(mapped, `CPU load mapped the weights instead of copying them (${tag})`)
+      }
     }
 
     const hp = model.hparams
