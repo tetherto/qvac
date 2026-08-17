@@ -18,7 +18,7 @@ fetchRetryMaxtimeout: 120000
 overrides:
   hyper-instrument>bare-v8: "^1.0.1"
 
-blockExoticSubdeps: false
+blockExoticSubdeps: true
 
 allowBuilds:
   cld: true

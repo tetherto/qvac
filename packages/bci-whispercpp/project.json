@@ -73,7 +73,7 @@
     "test:integration-mobile": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm run test:mobile:validate || true",
+        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
         "cwd": "packages/bci-whispercpp",
         "ci": {
           "npmName": "@qvac/bci-whispercpp",
