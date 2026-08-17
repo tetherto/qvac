@@ -24,8 +24,46 @@ on:
         description: "Full NPM package spec to test (optional for workflow_call)"
         type: string
         required: false
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below — it never runs the full default pool. The
+  # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Samsung S25 Ultra"
+          - "Pixel 9"
+          - "Pixel 8"
+          - "iPhone 17"
+          - "iPhone 16 Pro"
+          - "iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        type: choice
+        required: false
+        options: [CONTAINS, EQUALS]
+        default: CONTAINS
+      tests:
+        description: "Optional: run only tests whose NAME matches this regex (matched against mobile test runner names, e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref (branch/tag/SHA) to test"
         type: string
@@ -82,11 +120,42 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
+  # or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
   build-and-test:
-    needs: [authorize, authorize-dispatch]
+    # workflow_call: validate-devices is skipped; its `skipped` result keeps
+    # this job running exactly as before.
+    # workflow_dispatch: a bad/empty device selection blocks this job.
+    needs: [authorize, authorize-dispatch, validate-devices]
     if: |
       always() &&
-      (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success')
+      (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success') &&
+      (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped')
     name: Build ${{ matrix.platform }} and Run E2E Tests
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -99,14 +168,9 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: Android
-            os: ubuntu-22.04
-            runner: qvac-ubuntu2204-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+      # On workflow_dispatch, run only the chosen platform (devices come from
+      # the manual inputs). workflow_call runs both platforms as before.
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -327,6 +391,19 @@ jobs:
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # On a manual run with a test filter, override to a single grepped spec so
+      # only those tests run (and the sharded fan-out collapses to one spec).
+      # Empty filter / workflow_call keeps the auto-detected shard groups.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       # VLA reuses the LLAMACPP_EMBED Device Farm project + pool secrets
       # (see env-block comment above). The composite auto-detects
       # test-groups.json under <addon-workdir>/test/mobile/; VLA ships one
@@ -342,6 +419,7 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED }}
+          test-groups: ${{ steps.manual_tests.outputs.groups }}
           enables-perf: 'true'
           # 70-minute WDIO/Mocha session ceiling so the runner outlives
           # the per-test 60-minute ceiling enforced above.
@@ -360,6 +438,11 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # workflow_dispatch: fan the chosen shard(s) across the chosen device(s).
+          # workflow_call: default (dual-flagship input) keeps auto-sharded pool runs.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
