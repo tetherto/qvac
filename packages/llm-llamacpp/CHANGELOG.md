@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
 ## [0.43.0] - 2026-08-14
 
 This release removes the Qwen3-only dynamic tools feature behind
