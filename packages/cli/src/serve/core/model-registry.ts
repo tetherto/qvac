@@ -86,6 +86,7 @@ export interface ModelRegistry {
   setLoading: (modelId: string) => void
   setReady: (modelId: string, sdkModelId?: string) => void
   setError: (modelId: string, error: unknown) => void
+  markUnloaded: (modelId: string) => void
   remove: (modelId: string) => boolean
   isAllowed: (modelId: string, serveConfig: ServeConfig) => boolean
 }
@@ -157,6 +158,18 @@ export function createModelRegistry(): ModelRegistry {
     }
   }
 
+  // Reverse of a load: keep the alias registered so it can lazy-reload, but drop
+  // the SDK handle and return it to IDLE. Used by unload so DELETE stays
+  // reversible (the entry must survive for the next request to reload it).
+  function markUnloaded(modelId: string): void {
+    const entry = models.get(modelId)
+    if (entry) {
+      entry.state = STATES.IDLE
+      entry.error = null
+      entry.sdkModelId = null
+    }
+  }
+
   function remove(modelId: string): boolean {
     return models.delete(modelId)
   }
@@ -175,6 +188,7 @@ export function createModelRegistry(): ModelRegistry {
     setLoading,
     setReady,
     setError,
+    markUnloaded,
     remove,
     isAllowed
   }

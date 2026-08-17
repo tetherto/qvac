@@ -1,4 +1,5 @@
 import type { ModelRegistry, ServeConfig, ModelEntry } from '../core/model-registry.js'
+import type { LoadModelFn } from '../core/lifecycle.js'
 import type { Logger } from '../../logger.js'
 import type { VectorStoresStore } from '../adapters/openai/vector-stores-store.js'
 import type { EphemeralFilesStore } from '../adapters/openai/ephemeral-files-store.js'
@@ -27,6 +28,9 @@ export interface QvacContext {
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
   cancelOverride?: typeof sdk.cancel
+  /** Test seam — overrides the SDK model load when set, so lazy-load and preload
+   * can be exercised without a real (expensive) model load. */
+  loadModelOverride?: LoadModelFn
 }
 
 export interface QvacRequestModel {

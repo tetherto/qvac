@@ -59,6 +59,7 @@ export interface StartServerOptions {
   quiet?: boolean | undefined
   docs?: boolean | undefined
   transcribeOverride?: QvacContext['transcribeOverride']
+  loadModelOverride?: QvacContext['loadModelOverride']
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
@@ -112,6 +113,9 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     ffmpegAvailable,
     ...(options.transcribeOverride !== undefined
       ? { transcribeOverride: options.transcribeOverride }
+      : {}),
+    ...(options.loadModelOverride !== undefined
+      ? { loadModelOverride: options.loadModelOverride }
       : {})
   }
 
@@ -228,7 +232,12 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   // keeping the port closed until models are ready, matching the pre-Fastify
   // semantics that the e2e suite depends on.
   await app.ready()
-  await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
+  await preloadModels(
+    app.qvac.serveConfig,
+    app.qvac.registry,
+    app.qvac.logger,
+    app.qvac.loadModelOverride
+  )
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
   app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
 

@@ -146,7 +146,7 @@ The `serve.models` field is a map of model aliases to model entries. Keys are th
 | `src` | Explicit model source (URL or path). | `string` | Yes (if no `model`) |
 | `type` | Model type: `llm` \| `embeddings` \| `whisper` \| `parakeet` \| `nmt` \| `tts` \| `ocr` \| `whispercpp-audio-translation` \| `diffusion`. | `string` | Yes (if using `src`) |
 | `default` | Use as the default model for its endpoint category. | `boolean` | No (`false`) |
-| `preload` | Load model into memory on server startup. | `boolean` | No (`true` for constant entries, `false` for explicit) |
+| `preload` | Load the model at server startup. When `false`, it loads lazily on the first request that names it (cold start). | `boolean` | No (`true` for constant entries, `false` for explicit) |
 | `config` | Model config overrides (same as [`modelConfig` in `loadModel()`](/reference/api#loadmodel)). | `object` | No |
 
 Example:

@@ -12,7 +12,7 @@ import {
   formatTimedTranscription,
   isTimedTranscriptionFormat
 } from '../lib/transcription-response.js'
-import { resolveAndCheckModel } from '../plugins/require-model.js'
+import { resolveAndCheckModel, ensureReady } from '../plugins/require-model.js'
 import { logUnsupported } from '../plugins/log-unsupported.js'
 import {
   transcriptionsBody,
@@ -152,7 +152,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
       }
 
-      const { sdkModelId, alias, entry } = resolveAndCheckModel(
+      const { sdkModelId, alias, entry } = await resolveAndCheckModel(
         req,
         String(body.model),
         'transcription'
@@ -229,7 +229,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
       }
 
-      const { sdkModelId, alias, entry } = resolveAndCheckModel(
+      const { sdkModelId, alias, entry } = await resolveAndCheckModel(
         req,
         String(body.model),
         'audio-translation'
@@ -385,10 +385,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
 
       const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
-      const registryEntry = ctx.registry.getEntry(alias)
-      if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
-        throw new HttpError(503, 'model_not_ready', `Model "${modelName}" is not loaded yet.`)
-      }
+      const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName)
 
       const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
       const sampleRate = resolveSampleRate(registryEntry.config)

@@ -31,9 +31,9 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 
 | Method   | Path                             | Notes                                                                                                       |
 | -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/v1/models`                     | Lists **loaded** models                                                                                     |
+| `GET`    | `/v1/models`                     | Lists **all configured** models (loaded or not)                                                             |
 | `GET`    | `/v1/models/{id}`                | Model metadata                                                                                              |
-| `DELETE` | `/v1/models/{id}`                | Unload                                                                                                      |
+| `DELETE` | `/v1/models/{id}`                | Unload (reversible — the alias reloads on the next request)                                                 |
 | `POST`   | `/v1/chat/completions`           | Chat                                                                                                        |
 | `POST`   | `/v1/completions`                | Legacy text completions (single + multi-prompt; blocking + SSE)                                             |
 | `POST`   | `/v1/responses`                  | Responses API (blocking + SSE streaming); volatile, see below                                               |
@@ -66,6 +66,29 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 | `POST`   | `/v1/vector_stores/{id}/files`   | Attach + embed a previously-uploaded file                                                                   |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
+
+## Model loading & lifecycle
+
+Every model listed under `serve.models` is addressable by its alias. How and when
+it loads depends on `preload`:
+
+- `preload: true` — the model loads at server startup. The port stays closed
+  until every preload model is ready, so the first request is fast.
+- `preload: false` — the model loads lazily on the **first request** that names
+  it (cold start). That first request blocks while the model loads; later
+  requests are fast. Concurrent first requests share a single load.
+
+`preload` defaults to `true` for constant-form entries (`{ "model": "…" }`) and
+`false` for explicit `{ "src", "type" }` entries. To force a lazy model to warm
+at startup, pass `--model <alias>` on the command line.
+
+Because loading is transparent, `GET /v1/models` lists **all** configured
+aliases whether or not they are currently loaded — naming any of them in a
+request just works.
+
+`DELETE /v1/models/{id}` unloads a model and frees its resources but keeps the
+alias configured: the next request targeting it loads it again. There is no
+separate "load" endpoint — send a normal request (or set `preload: true`).
 
 ## Model source constants in config
 
@@ -182,7 +205,8 @@ suffix insertion, multi-choice `n`) are not implemented.
 | 400  | `unsupported_streaming` | Multi-prompt input combined with `"stream": true`                              |
 | 400  | `invalid_model_type`    | Alias is not a `chat` model                                                    |
 | 404  | `model_not_found`       | Unknown alias                                                                  |
-| 503  | `model_not_ready`       | Model not loaded yet                                                           |
+| 503  | `model_load_failed`     | Lazy load (cold start) of the model failed                                     |
+| 503  | `model_not_ready`       | Model still loading                                                            |
 | 500  | `completion_error`      | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`
