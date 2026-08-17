@@ -267,9 +267,9 @@ that includes:
 
 CI runs automatically on PR open/sync:
 
-- **Direct vcpkg consumers** (`llm-llamacpp`, `embed-llamacpp`, `ocr-ggml`,
-  `translation-nmtcpp`, `vla-ggml`) pick up the overlay at compile time when the
-  PR updates each package's `vcpkg-configuration.json` (covered by the existing
+- **Direct vcpkg consumers** — every package whose `vcpkg.json` still lists the
+  `qvac-fabric` port — pick up the overlay at compile time when the PR updates
+  that package's `vcpkg-configuration.json` (covered by the existing
   `packages/<pkg>/**` path filters).
 - **`packages/fabric`** builds `@qvac/fabric` prebuilds and publishes a
   `fabric-prebuilds` artifact.
@@ -284,6 +284,6 @@ Author checklist:
 | Overlay | Keep `vcpkg-overlays/ports/qvac-fabric/portfile.cmake` REF in sync with the `qvac-fabric-llm.cpp` branch under test |
 | Lockstep | Run `verify-qvac-fabric-lockstep` — every `packages/*/vcpkg.json` that still lists `qvac-fabric` must satisfy `version>=` |
 | Combined PR | When changing consumer code *and* fabric APIs, ensure both `on-pr-fabric` and the consumer `on-pr-*` workflow run (paths must include overlay and consumer package) |
-| Manifest | When a package migrates to `@qvac/fabric`, move it from `vcpkg_direct` to `npm_runtime` in `.github/fabric-consumers.json` |
+| Manifest | When a package migrates to `@qvac/fabric`, add it to `npm_runtime` in `.github/fabric-consumers.json` — that list drives the consumer smoke matrix |
 
 See `docs/architecture/qips/fabric-stack-ci.md` for the full CI design.
