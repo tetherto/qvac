@@ -442,8 +442,20 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // returning so memory-constrained mobile devices don't hold two copies of
   // the weights at once. `t.teardown` would defer release to end-of-test,
   // which on Android/iOS pushes us past the device-farm OOM limit.
+  //
+  // The native load log is captured so the assertion below can check *how* the
+  // weights were placed, not just that the load returned: the mmap fast path
+  // keeps them in file-backed pages the kernel can evict, while the alloc+copy
+  // fallback commits the whole model to anonymous memory — the allocation iOS
+  // intermittently refused at the jetsam ceiling (QVAC-23327). Collection is
+  // bounded since the load lines arrive first and the run keeps logging after.
+  const nativeLog = []
+  const _collect = (...args) => {
+    if (nativeLog.length < 256) nativeLog.push(args.join(' '))
+  }
   const model = new VlaModel({
     files: { model: [path.resolve(modelPath)] },
+    logger: { error: _collect, warn: _collect, info: _collect, debug: _collect },
     opts: { stats: true }
   })
 
@@ -451,6 +463,16 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
 
   try {
     await model.load({ backend })
+
+    // Windows has no mmap path to take (smolvla.cpp guards it with
+    // `#ifndef _WIN32`), and an accelerator backend legitimately copies into
+    // device-local memory, so only a CPU load elsewhere is required to map.
+    if (backend === 'cpu' && _platform !== 'win32') {
+      t.ok(
+        nativeLog.some((line) => line.includes('mmap+host_ptr buffer ready')),
+        `CPU load mapped the weights instead of copying them (${tag})`
+      )
+    }
 
     const hp = model.hparams
     t.ok(hp.chunkSize > 0)
