@@ -41,6 +41,36 @@ requested model(s) actually exist on Device Farm for the chosen platform. A typo
 or an empty selection fails immediately, so you never pay for a wasted build or a
 run that can't be scheduled.
 
+### Valid device names
+
+A device name is matched as a **`MODEL`** value on Device Farm (per
+`device_model_operator`: `CONTAINS` matches any model containing your value,
+`EQUALS` matches that exact model). These are the models the pipeline is known to
+use today — safe values to pass:
+
+| Platform | Known-good `MODEL` values | Manufacturer |
+|----------|---------------------------|--------------|
+| Android  | `Pixel 9`, `Pixel 8`, `S25 Ultra` (Samsung Galaxy S25 Ultra) | `Google` / `Samsung` |
+| iOS      | `iPhone 17`, `iPhone 16 Pro`, `iPhone 15` | `Apple` |
+
+The dropdown offers a common subset; `devices_custom` accepts any of the above (or
+any other model that exists on the fleet). **This table can drift** as the fleet
+changes, so the authoritative list is Device Farm itself. Two ways to see it:
+
+1. **Let the workflow tell you (easiest).** Dispatch the run with a made-up device
+   (e.g. `devices_custom: nope`). The `validate-devices` job fails fast and prints
+   **`Available <PLATFORM> device models:`** — the full, current model list for that
+   platform. No build or Device Farm run is charged.
+2. **Query AWS directly** (needs Device Farm read access; region is `us-west-2`):
+
+```bash
+aws devicefarm list-devices \
+  --filters '[{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}]' \
+  --query 'devices[].model' --output json | jq -r '.[]' | sort -u
+```
+
+Swap `ANDROID` for `IOS` for the iOS list.
+
 ### The `tests` filter
 
 The `tests` input runs **only the tests you name**, so you don't pay to run the
@@ -58,6 +88,23 @@ For sharded addons (e.g. `llm-llamacpp`, `ocr-ggml`), a `tests` filter collapses
 the many shards into a single filtered run — a big cost saving. Leaving it empty
 on a sharded addon runs the **full** shard set pinned to your chosen device(s),
 which is many runs.
+
+#### Where to find the test names (per addon)
+
+The valid names live in the addon repo, under its mobile test folder:
+
+- **Sharded addons** (they ship `test/mobile/test-groups.json`): the exact grep
+  strings are the values inside that file — e.g.
+  `packages/llm-llamacpp/test/mobile/test-groups.json`,
+  `packages/ocr-ggml/test/mobile/test-groups.json`. Every listed test is a valid
+  `tests` value; a group's whole set is those names joined with `|`.
+- **All addons**: the runnable names are the `run*` functions declared in the
+  generated `packages/<addon>/test/mobile/integration.auto.cjs` (grep for
+  `async function run`). These are exactly what the mobile run greps against.
+
+If in doubt, run once **without** a filter and open the Device Farm run's
+`bare_console.log` / the "Run → tests" legend on the job summary — it enumerates
+the `run*` names that executed, which you can then narrow with `tests`.
 
 ## What changed on PRs
 

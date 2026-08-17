@@ -45,7 +45,7 @@ on:
         options: [Android, iOS]
         default: Android
       device:
-        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'."
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'. Valid names + how to find them: docs/ci/MOBILE-ON-DEMAND.md."
         type: choice
         required: false
         options:
@@ -58,7 +58,7 @@ on:
           - "iPhone 15"
         default: "(custom)"
       devices_custom:
-        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once."
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
         type: string
         required: false
         default: ""
@@ -69,7 +69,7 @@ on:
         options: [CONTAINS, EQUALS]
         default: CONTAINS
       tests:
-        description: "Optional: run only tests whose NAME matches this regex (matched against mobile test runner names, e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite."
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
         required: false
         default: ""
