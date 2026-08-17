@@ -182,7 +182,9 @@ const cover = audioGen({
 Both inputs accept either form:
 
 - A **file path** (string). The SDK decodes `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` files server-side to 48 kHz float PCM (down-mixed to mono and duplicated onto both channels). Any other extension is read as raw interleaved stereo 48 kHz Float32 LE PCM, matching `ffmpeg -f f32le -ar 48000 -ac 2`.
-- A **`Buffer` / `Uint8Array`** holding raw interleaved stereo 48 kHz Float32 LE PCM. The `AUDIOGEN_INPUT_SAMPLE_RATE` (48000) and `AUDIOGEN_INPUT_CHANNELS` (2) constants describe that layout. Malformed PCM fails the run with `INVALID_AUDIO_INPUT` before the engine is invoked.
+- A **`Buffer` / `Uint8Array`** holding raw interleaved stereo 48 kHz Float32 LE PCM. The `AUDIOGEN_INPUT_SAMPLE_RATE` (48000) and `AUDIOGEN_INPUT_CHANNELS` (2) constants describe that layout.
+
+Inputs are capped at `AUDIOGEN_INPUT_MAX_SECONDS` (600 s) per clip. Malformed PCM — a byte length that is not whole stereo frames, non-finite samples, or a clip over the limit — fails the run with `INVALID_AUDIO_INPUT` before the engine is invoked; a missing file fails with `AUDIO_FILE_NOT_FOUND`.
 
 `sourceAudio` is required for cover tasks and is validated on the client before the request is sent. `audioCoverStrength` (0..1) is the fraction of DiT steps that keep the source context and must currently be `1` for `cover-nofsq`; `coverNoiseStrength` (0..1) blends the initial noise toward the source latent (`0` = pure noise, `1` ≈ source). The FSQ-roundtrip `cover` task is reserved by the engine but not implemented, so the SDK offers only `text2music` (default) and `cover-nofsq` (see `AUDIOGEN_TASK_TYPES`).
 

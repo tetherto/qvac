@@ -4,7 +4,11 @@ import os from 'bare-os'
 import path from 'bare-path'
 import { AudioGen } from '@qvac/audiogen-ggml'
 import type { AudiogenOutputChunk, AudiogenStats, GenerateOptions } from '@qvac/audiogen-ggml'
-import { AUDIOGEN_INPUT_CHANNELS, AUDIOGEN_INPUT_SAMPLE_RATE } from '@/schemas/audio-gen'
+import {
+  AUDIOGEN_INPUT_CHANNELS,
+  AUDIOGEN_INPUT_MAX_SECONDS,
+  AUDIOGEN_INPUT_SAMPLE_RATE
+} from '@/schemas/audio-gen'
 import { resolveAudioGenPcm } from '@/server/bare/plugins/audiogen-ggml/ops/audio-gen-input'
 import { audioGenStream } from '@/server/bare/plugins/audiogen-ggml/ops/audio-gen-stream'
 import {
@@ -89,6 +93,33 @@ test('resolveAudioGenPcm rejects bytes that are not whole stereo Float32 frames'
     resolveAudioGenPcm({ type: 'base64', value: '' }, 'sourceAudio')
   )
   t.ok(emptyError instanceof InvalidAudioInputError, 'empty payload is rejected')
+})
+
+test('resolveAudioGenPcm rejects non-finite samples and oversized clips before the engine', async (t) => {
+  const nanBytes = stereoFloat32Bytes([0.25, Number.NaN])
+  const nanError = await rejection(
+    resolveAudioGenPcm({ type: 'base64', value: nanBytes.toString('base64') }, 'referenceAudio')
+  )
+  t.ok(nanError instanceof InvalidAudioInputError, 'NaN sample is rejected')
+  t.ok(/finite/.test((nanError as Error).message))
+
+  const dir = createTempDir()
+  t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+  // One frame past the limit; the file is stat()-ed and rejected before it is
+  // read into memory, so a sparse file keeps the test cheap.
+  const oversizedPath = path.join(dir, 'too-long.f32le')
+  const limitBytes =
+    AUDIOGEN_INPUT_MAX_SECONDS * AUDIOGEN_INPUT_SAMPLE_RATE * AUDIOGEN_INPUT_CHANNELS * 4
+  fs.writeFileSync(oversizedPath, Buffer.alloc(0))
+  fs.truncateSync(oversizedPath, limitBytes + 8)
+  const oversizedError = await rejection(
+    resolveAudioGenPcm({ type: 'filePath', value: oversizedPath }, 'sourceAudio')
+  )
+  t.ok(oversizedError instanceof InvalidAudioInputError, 'clip over the limit is rejected')
+  t.ok(
+    new RegExp(`${AUDIOGEN_INPUT_MAX_SECONDS} s`).test((oversizedError as Error).message),
+    'error reports the limit'
+  )
 })
 
 test('resolveAudioGenPcm reads raw PCM files and reports missing files', async (t) => {
@@ -269,6 +300,70 @@ test('audioGen plugin operation omits unset controls and audio from the addon ca
   }
 
   t.alike(capturedOptions, { seed: 42 }, 'only explicitly provided options reach the addon')
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
+test('audioGen plugin operation cancelled while decoding audio never starts the native run', async (t) => {
+  const modelId = 'audio-gen-operation-cancel-during-decode'
+  const requestId = 'audio-gen-request-cancel-during-decode'
+  const dir = createTempDir()
+  t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+
+  // A real WAV so the request spends several event-loop turns inside the
+  // FFmpeg decode, which is where the abort lands.
+  const inputRate = 44100
+  const frames = new Int16Array(inputRate * 2)
+  for (let index = 0; index < frames.length; index++) {
+    frames[index] = Math.round(Math.sin((2 * Math.PI * 220 * index) / inputRate) * 12000)
+  }
+  const wavPath = path.join(dir, 'reference.wav')
+  writeWav(wavPath, inputRate, 1, frames)
+
+  let runCalls = 0
+  let cancelCalls = 0
+  const model = new AudioGen({
+    files: {
+      textEncModel: 'text-encoder.gguf',
+      lmModel: 'lm.gguf',
+      ditModel: 'dit.gguf',
+      vaeModel: 'vae.gguf'
+    }
+  })
+  model.run = async function () {
+    runCalls++
+    return createResponse([{ progress: { stage: 'dit', step: 1, total: 1 } }], {})
+  }
+  model.cancel = async function () {
+    cancelCalls++
+  }
+  registerModel(modelId, {
+    model: model as unknown as AnyModel,
+    path: '',
+    config: {},
+    modelType: ModelType.audiogenGgml
+  })
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioGenStream({
+    type: 'audioGenStream',
+    requestId,
+    modelId,
+    caption: 'slow blues with warm electric guitar',
+    referenceAudio: { type: 'filePath', value: wavPath }
+  })
+  const firstPromise = stream.next()
+  // Let the generator enter the decode, then abort while it is still running.
+  await new Promise((resolve) => setImmediate(resolve))
+  t.is(runCalls, 0, 'decode is still in flight')
+  t.is(getRequestRegistry().cancel({ requestId }), 1)
+
+  const first = await firstPromise
+  t.alike(first.value, { type: 'audioGenStream', done: true, stopReason: 'cancelled' })
+  t.is(runCalls, 0, 'the native run was never started after the abort')
+  t.ok(cancelCalls >= 1, 'the abort bridge still reached model.cancel()')
+  t.ok((await stream.next()).done)
   t.is(getRequestRegistry().get(requestId), null)
 })
 

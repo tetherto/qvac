@@ -9,6 +9,12 @@ const base64Schema = z.string().min(1)
 export const AUDIOGEN_INPUT_SAMPLE_RATE = 48000
 /** Channel count (interleaved stereo) the ACE-Step engine expects for input audio. */
 export const AUDIOGEN_INPUT_CHANNELS = 2
+/**
+ * Longest reference/source clip the SDK accepts (10 minutes). Bounds the PCM
+ * the server materializes per input — a 48 kHz stereo Float32 clip weighs
+ * 384 KB per second — so a request cannot exhaust the inference process.
+ */
+export const AUDIOGEN_INPUT_MAX_SECONDS = 600
 
 /**
  * ACE-Step task discriminators reachable through the SDK. `text2music` is the

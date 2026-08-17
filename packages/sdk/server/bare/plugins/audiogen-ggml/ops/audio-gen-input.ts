@@ -1,6 +1,7 @@
 import fs from 'bare-fs'
 import {
   AUDIOGEN_INPUT_CHANNELS,
+  AUDIOGEN_INPUT_MAX_SECONDS,
   AUDIOGEN_INPUT_SAMPLE_RATE,
   type AudioGenAudioInput
 } from '@/schemas/audio-gen'
@@ -9,6 +10,12 @@ import { AudioFileNotFoundError, InvalidAudioInputError } from '@/utils/errors-s
 
 const FLOAT32_BYTES = Float32Array.BYTES_PER_ELEMENT
 const STEREO_FRAME_BYTES = FLOAT32_BYTES * AUDIOGEN_INPUT_CHANNELS
+/** Upper bound for raw stereo input bytes (base64 payloads and raw PCM files). */
+const MAX_STEREO_BYTES =
+  AUDIOGEN_INPUT_MAX_SECONDS * AUDIOGEN_INPUT_SAMPLE_RATE * STEREO_FRAME_BYTES
+/** Upper bound for the mono float stream the FFmpeg decoder may emit. */
+const MAX_DECODED_MONO_BYTES =
+  AUDIOGEN_INPUT_MAX_SECONDS * AUDIOGEN_INPUT_SAMPLE_RATE * FLOAT32_BYTES
 
 export type AudioGenAudioInputName = 'referenceAudio' | 'sourceAudio'
 
@@ -17,12 +24,16 @@ export type AudioGenAudioInputName = 'referenceAudio' | 'sourceAudio'
  * Float32 PCM the ACE-Step engine consumes.
  *
  * - `base64` inputs (client `Buffer`/`Uint8Array`) must already be raw
- *   interleaved stereo 48 kHz Float32 LE PCM; they are copied into an aligned
- *   `Float32Array` without conversion.
+ *   interleaved stereo 48 kHz Float32 LE PCM; they are handed over as-is
+ *   (a copy is made only when the bytes are not 4-byte aligned).
  * - `filePath` inputs with a decodable extension (`.wav`, `.mp3`, `.m4a`,
  *   `.ogg`, `.flac`, `.aac`) are decoded through the SDK's FFmpeg decoder to
  *   48 kHz mono float PCM and duplicated onto both channels. Any other
- *   extension is read as raw interleaved stereo 48 kHz Float32 LE PCM.
+ *   extension is streamed in as raw interleaved stereo 48 kHz Float32 LE PCM.
+ *
+ * Every path is bounded by `AUDIOGEN_INPUT_MAX_SECONDS` and rejects
+ * non-finite samples, so malformed or oversized input fails with
+ * `InvalidAudioInputError` before the engine is invoked.
  */
 export async function resolveAudioGenPcm(
   input: AudioGenAudioInput,
@@ -33,14 +44,10 @@ export async function resolveAudioGenPcm(
       return toStereoFloat32(Buffer.from(input.value, 'base64'), name)
     case 'filePath': {
       const filePath = input.value
-      try {
-        fs.accessSync(filePath)
-      } catch (error: unknown) {
-        throw new AudioFileNotFoundError(filePath, error)
-      }
       if (!needsDecoding(filePath)) {
-        return toStereoFloat32(readBytes(filePath), name)
+        return toStereoFloat32(await readRawPcmFile(filePath, name), name)
       }
+      await assertFileExists(filePath)
       return monoToStereo(await decodeMonoFloat32(filePath, name), name)
     }
     default:
@@ -48,26 +55,58 @@ export async function resolveAudioGenPcm(
   }
 }
 
-function readBytes(filePath: string) {
-  const contents = fs.readFileSync(filePath)
-  return typeof contents === 'string' ? Buffer.from(contents) : contents
+async function assertFileExists(filePath: string) {
+  try {
+    await fs.promises.access(filePath)
+  } catch (error: unknown) {
+    throw new AudioFileNotFoundError(filePath, error)
+  }
+}
+
+/** Stream a raw PCM file into memory without blocking the event loop, capped by size. */
+async function readRawPcmFile(filePath: string, name: AudioGenAudioInputName) {
+  let stats: { size: number }
+  try {
+    stats = await fs.promises.stat(filePath)
+  } catch (error: unknown) {
+    throw new AudioFileNotFoundError(filePath, error)
+  }
+  assertWithinLimit(stats.size, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name, filePath)
+
+  const chunks: Uint8Array[] = []
+  let total = 0
+  const stream = fs.createReadStream(filePath) as unknown as AsyncIterable<Uint8Array>
+  for await (const chunk of stream) {
+    total += chunk.byteLength
+    // The file may grow between stat() and the read; keep the bound authoritative.
+    assertWithinLimit(total, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name, filePath)
+    chunks.push(chunk)
+  }
+  return chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks, total)
 }
 
 async function decodeMonoFloat32(filePath: string, name: AudioGenAudioInputName) {
-  const chunks: Buffer[] = []
+  const chunks: Uint8Array[] = []
+  let total = 0
   try {
     const stream = await decodeAudioToStream(filePath, 'f32le', AUDIOGEN_INPUT_SAMPLE_RATE)
-    for await (const chunk of stream as AsyncIterable<Buffer | Uint8Array>) {
-      chunks.push(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength))
+    for await (const chunk of stream as AsyncIterable<Uint8Array>) {
+      total += chunk.byteLength
+      if (total > MAX_DECODED_MONO_BYTES) {
+        // Stop pulling more PCM; the decoder tears down with the stream.
+        ;(stream as unknown as { destroy(): void }).destroy()
+        assertWithinLimit(total, MAX_DECODED_MONO_BYTES, FLOAT32_BYTES, name, filePath)
+      }
+      chunks.push(chunk)
     }
   } catch (error) {
+    if (error instanceof InvalidAudioInputError) throw error
     throw new InvalidAudioInputError(`${name} could not be decoded from ${filePath}`, error)
   }
-  const bytes = Buffer.concat(chunks)
-  if (bytes.byteLength === 0 || bytes.byteLength % FLOAT32_BYTES !== 0) {
+  if (total === 0 || total % FLOAT32_BYTES !== 0) {
     throw new InvalidAudioInputError(`${name} decoded to no usable audio from ${filePath}`)
   }
-  return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+  return asFloat32(chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks, total))
 }
 
 function monoToStereo(mono: Float32Array, name: AudioGenAudioInputName) {
@@ -77,6 +116,7 @@ function monoToStereo(mono: Float32Array, name: AudioGenAudioInputName) {
   const stereo = new Float32Array(mono.length * AUDIOGEN_INPUT_CHANNELS)
   for (let frame = 0; frame < mono.length; frame++) {
     const sample = mono[frame]!
+    if (!Number.isFinite(sample)) throw nonFiniteError(name)
     stereo[frame * AUDIOGEN_INPUT_CHANNELS] = sample
     stereo[frame * AUDIOGEN_INPUT_CHANNELS + 1] = sample
   }
@@ -90,7 +130,41 @@ function toStereoFloat32(bytes: Uint8Array, name: AudioGenAudioInputName) {
         `(byte length a multiple of ${STEREO_FRAME_BYTES}, got ${bytes.byteLength})`
     )
   }
-  // Copy into a fresh, 4-byte aligned buffer: pooled Buffers can sit at an
-  // arbitrary byteOffset, which a Float32Array view would reject.
+  assertWithinLimit(bytes.byteLength, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name)
+  const pcm = asFloat32(bytes)
+  for (let index = 0; index < pcm.length; index++) {
+    if (!Number.isFinite(pcm[index]!)) throw nonFiniteError(name)
+  }
+  return pcm
+}
+
+/**
+ * View the bytes as Float32 without copying when they are 4-byte aligned
+ * (fresh Buffers from base64/file reads and `Buffer.concat` are); only a
+ * misaligned pooled slice needs to be copied out.
+ */
+function asFloat32(bytes: Uint8Array) {
+  if (bytes.byteOffset % FLOAT32_BYTES === 0) {
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / FLOAT32_BYTES)
+  }
   return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+}
+
+function assertWithinLimit(
+  bytes: number,
+  limit: number,
+  frameBytes: number,
+  name: AudioGenAudioInputName,
+  filePath?: string
+) {
+  if (bytes <= limit) return
+  const seconds = Math.round(bytes / frameBytes / AUDIOGEN_INPUT_SAMPLE_RATE)
+  throw new InvalidAudioInputError(
+    `${name}${filePath ? ` (${filePath})` : ''} is about ${seconds} s long; ` +
+      `the limit is ${AUDIOGEN_INPUT_MAX_SECONDS} s`
+  )
+}
+
+function nonFiniteError(name: AudioGenAudioInputName) {
+  return new InvalidAudioInputError(`${name} must contain only finite samples`)
 }

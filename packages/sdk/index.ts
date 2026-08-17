@@ -161,6 +161,7 @@ export {
   AUDIOGEN_TASK_TYPES,
   AUDIOGEN_INPUT_SAMPLE_RATE,
   AUDIOGEN_INPUT_CHANNELS,
+  AUDIOGEN_INPUT_MAX_SECONDS,
   type AudioGenTaskType,
   type AudioGenAudioInput,
   type AudioGenClientParams,
