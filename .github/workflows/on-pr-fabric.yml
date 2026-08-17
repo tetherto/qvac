@@ -340,6 +340,9 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   fabric-prebuilds-publish:
+    # Must stay downstream of prebuild: this artifact's name matches the
+    # `fabric-*` glob reusable-prebuilds' merge job uses to collect the matrix
+    # uploads, so publishing it earlier would fold the bundle into itself.
     needs:
       - fork-approval
       - prebuild
