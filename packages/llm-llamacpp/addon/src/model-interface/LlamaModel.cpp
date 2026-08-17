@@ -1806,9 +1806,19 @@ void LlamaModel::commonParamsParse(
     }
   }
   if (loadMode.has_value()) {
-    try {
-      params.load_mode = llama_load_mode_from_str(loadMode->c_str());
-    } catch (const std::invalid_argument&) {
+    // Validate with a local table instead of llama_load_mode_from_str: that
+    // helper reports unknown values by throwing std::invalid_argument, and
+    // exceptions thrown inside the fabric DLL do not reliably match
+    // catch-by-type across the module boundary on Windows. The vocabulary
+    // mirrors llama_load_mode_from_str.
+    static const std::unordered_map<std::string, llama_load_mode> kLoadModes = {
+        {"none", LLAMA_LOAD_MODE_NONE},
+        {"mmap", LLAMA_LOAD_MODE_MMAP},
+        {"mlock", LLAMA_LOAD_MODE_MLOCK},
+        {"mmap+mlock", LLAMA_LOAD_MODE_MMAP_MLOCK},
+        {"dio", LLAMA_LOAD_MODE_DIRECT_IO}};
+    const auto mode = kLoadModes.find(loadMode.value());
+    if (mode == kLoadModes.end()) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
@@ -1818,6 +1828,7 @@ void LlamaModel::commonParamsParse(
               "'mmap+mlock' or 'dio', got: %s",
               loadMode->c_str()));
     }
+    params.load_mode = mode->second;
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
