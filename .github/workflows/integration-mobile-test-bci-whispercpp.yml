@@ -88,7 +88,7 @@ jobs:
   # or an empty selection costs nothing. Skipped for workflow_call.
   validate-devices:
     name: Validate device selection
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.platform != ''
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 5
@@ -112,9 +112,11 @@ jobs:
 
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    # workflow_call: validate-devices is skipped, so this runs as before.
+    # workflow_call: validate-devices is skipped; the `skipped` branch of the
+    # condition keeps this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection blocks this job.
     needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -128,11 +130,11 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, run only the chosen platform (devices come from
       # the manual inputs). workflow_call runs both platforms as before.
-      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
       - name: Validate Dispatch Inputs
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        if: inputs.platform != '' && github.event.inputs.package
         run: |
           if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* is allowed."
@@ -200,7 +202,7 @@ jobs:
       # so only those tests run. Empty filter / workflow_call is unchanged.
       - name: Resolve manual test filter
         id: manual_tests
-        if: github.event_name == 'workflow_dispatch' && inputs.tests != ''
+        if: inputs.platform != '' && inputs.tests != ''
         shell: bash
         env:
           TESTS: ${{ inputs.tests }}
@@ -236,9 +238,9 @@ jobs:
           test-specs: ${{ steps.upload.outputs.test-specs }}
           # workflow_dispatch: fan out across the chosen device(s).
           # workflow_call: unchanged default (dual-flagship) behaviour.
-          scheduling-mode: ${{ github.event_name == 'workflow_dispatch' && 'manual-devices' || 'dual-flagship' }}
-          device-models: ${{ github.event_name == 'workflow_dispatch' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
-          device-model-operator: ${{ github.event_name == 'workflow_dispatch' && inputs.device_model_operator || '' }}
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
