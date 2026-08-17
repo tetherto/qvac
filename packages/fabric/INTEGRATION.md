@@ -260,7 +260,9 @@ When developing `qvac-fabric` on a test branch in `qvac-fabric-llm.cpp`, open a 
 that includes:
 
 1. A vcpkg overlay port at `vcpkg-overlays/ports/qvac-fabric/` pointing at that branch
-   or SHA.
+   or SHA, plus the `vcpkg-configuration.json` edit that registers that directory as an
+   overlay for each package meant to build against it. The port on its own changes no
+   build; registering it is what swaps the registry version for the branch under test.
 2. Updates to `packages/fabric` (and any direct vcpkg consumers that need coordinated
    bumps).
 3. Optional consumer addon changes that call new fabric APIs.
@@ -283,7 +285,7 @@ Author checklist:
 |------|--------|
 | Overlay | Keep `vcpkg-overlays/ports/qvac-fabric/portfile.cmake` REF in sync with the `qvac-fabric-llm.cpp` branch under test |
 | Lockstep | Run `verify-qvac-fabric-lockstep` — every `packages/*/vcpkg.json` that still lists `qvac-fabric` must satisfy `version>=` |
-| Combined PR | When changing consumer code *and* fabric APIs, ensure both `on-pr-fabric` and the consumer `on-pr-*` workflow run (paths must include overlay and consumer package) |
+| Combined PR | When changing consumer code *and* fabric APIs, ensure both `on-pr-fabric` and the consumer `on-pr-*` workflow run. The `vcpkg-configuration.json` edit is the trigger — it sits under the consumer's own `packages/<pkg>/**` path filter, whereas a change confined to `vcpkg-overlays/` starts nothing |
 | Manifest | When a package migrates to `@qvac/fabric`, add it to `npm_runtime` in `.github/fabric-consumers.json` — that list drives the consumer smoke matrix |
 
 See `docs/architecture/qips/fabric-stack-ci.md` for the full CI design.
