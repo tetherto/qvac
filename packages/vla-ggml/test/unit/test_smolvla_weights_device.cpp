@@ -8,9 +8,8 @@
 // load still resolves a device and satisfies both fast-path gates, so the
 // fallback cannot silently come back.
 
-#include <gtest/gtest.h>
-
 #include <ggml-backend.h>
+#include <gtest/gtest.h>
 
 #include "model-interface/smolvla.hpp"
 
