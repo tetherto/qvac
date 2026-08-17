@@ -19,7 +19,7 @@ TEST(GenerationParamsApplyTest, NoReasoningBudgetOverrideLeavesSamplingState) {
   common_params_sampling sampling;
   sampling.reasoning_budget_tokens = 12;
   sampling.reasoning_budget_start = tokens({1, 2});
-  sampling.reasoning_budget_end = tokens({3});
+  sampling.reasoning_budget_end = {tokens({3})};
   sampling.reasoning_budget_forced = tokens({4, 5});
   int nPredict = 32;
 
@@ -29,7 +29,7 @@ TEST(GenerationParamsApplyTest, NoReasoningBudgetOverrideLeavesSamplingState) {
 
   EXPECT_EQ(sampling.reasoning_budget_tokens, 12);
   EXPECT_EQ(sampling.reasoning_budget_start, tokens({1, 2}));
-  EXPECT_EQ(sampling.reasoning_budget_end, tokens({3}));
+  EXPECT_EQ(sampling.reasoning_budget_end, std::vector<llama_tokens>{tokens({3})});
   EXPECT_EQ(sampling.reasoning_budget_forced, tokens({4, 5}));
 }
 
@@ -37,7 +37,7 @@ TEST(GenerationParamsApplyTest, PositiveReasoningBudgetUpdatesOnlyTokenCap) {
   common_params_sampling sampling;
   sampling.reasoning_budget_tokens = -1;
   sampling.reasoning_budget_start = tokens({10});
-  sampling.reasoning_budget_end = tokens({11});
+  sampling.reasoning_budget_end = {tokens({11})};
   sampling.reasoning_budget_forced = tokens({12});
   int nPredict = 32;
 
@@ -47,7 +47,7 @@ TEST(GenerationParamsApplyTest, PositiveReasoningBudgetUpdatesOnlyTokenCap) {
 
   EXPECT_EQ(sampling.reasoning_budget_tokens, 16);
   EXPECT_EQ(sampling.reasoning_budget_start, tokens({10}));
-  EXPECT_EQ(sampling.reasoning_budget_end, tokens({11}));
+  EXPECT_EQ(sampling.reasoning_budget_end, std::vector<llama_tokens>{tokens({11})});
   EXPECT_EQ(sampling.reasoning_budget_forced, tokens({12}));
 }
 
@@ -55,7 +55,7 @@ TEST(GenerationParamsApplyTest, ZeroReasoningBudgetClearsBudgetSamplerState) {
   common_params_sampling sampling;
   sampling.reasoning_budget_tokens = 16;
   sampling.reasoning_budget_start = tokens({10});
-  sampling.reasoning_budget_end = tokens({11});
+  sampling.reasoning_budget_end = {tokens({11})};
   sampling.reasoning_budget_forced = tokens({12});
   int nPredict = 32;
 
@@ -75,7 +75,7 @@ TEST(
   common_params_sampling sampling;
   sampling.reasoning_budget_tokens = 16;
   sampling.reasoning_budget_start = tokens({10});
-  sampling.reasoning_budget_end = tokens({11});
+  sampling.reasoning_budget_end = {tokens({11})};
   sampling.reasoning_budget_forced = tokens({12});
   int nPredict = 32;
 
@@ -96,7 +96,7 @@ TEST(
   params.reasoning_budget = 0;
   params.sampling.reasoning_budget_tokens = 16;
   params.sampling.reasoning_budget_start = tokens({10});
-  params.sampling.reasoning_budget_end = tokens({11});
+  params.sampling.reasoning_budget_end = {tokens({11})};
   params.sampling.reasoning_budget_forced = tokens({12});
   params.sampling.generation_prompt = "<assistant><think>";
 
@@ -116,7 +116,7 @@ TEST(
   params.reasoning_budget = 8;
   params.sampling.reasoning_budget_tokens = -1;
   params.sampling.reasoning_budget_start = tokens({10});
-  params.sampling.reasoning_budget_end = tokens({11});
+  params.sampling.reasoning_budget_end = {tokens({11})};
   params.sampling.reasoning_budget_forced = tokens({12});
   params.sampling.generation_prompt = "<assistant><think>";
 

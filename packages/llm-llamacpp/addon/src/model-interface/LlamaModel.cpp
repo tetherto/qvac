@@ -1784,36 +1784,40 @@ void LlamaModel::commonParamsParse(
     configFilemap.erase(jit);
   }
 
-  // The current llama.cpp common-argument parser does not expose --no-mmap,
-  // so map this addon's string configuration directly to the native model
-  // parameter instead of forwarding it through the generic argument parser.
-  std::optional<bool> noMmap;
-  for (const std::string& key : {"no-mmap", "no_mmap"}) {
+  // Map the addon's load-mode string configuration directly to the native
+  // model parameter (the generic argument parser is bypassed for it). The
+  // accepted values mirror llama_load_mode_from_str: 'none', 'mmap',
+  // 'mlock', 'mmap+mlock' and 'dio'. When absent, llama.cpp's default
+  // (mmap) applies.
+  std::optional<std::string> loadMode;
+  for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
       std::string value = it->second;
       std::ranges::transform(value, value.begin(), ::tolower);
-      const bool enabled = value.empty() || value == "true";
-      if (!enabled && value != "false") {
+      if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
             ADDON_ID,
             qvac_errors::general_error::toString(
                 qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "no-mmap must be true or false, got: %s", it->second.c_str()));
+            "load-mode and load_mode must have the same value");
       }
-      if (noMmap.has_value() && noMmap.value() != enabled) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            "no-mmap and no_mmap must have the same value");
-      }
-      noMmap = enabled;
+      loadMode = value;
       configFilemap.erase(it);
     }
   }
-  if (noMmap.value_or(false)) {
-    params.load_mode = LLAMA_LOAD_MODE_NONE;
+  if (loadMode.has_value()) {
+    try {
+      params.load_mode = llama_load_mode_from_str(loadMode->c_str());
+    } catch (const std::invalid_argument&) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "load-mode must be one of 'none', 'mmap', 'mlock', "
+              "'mmap+mlock' or 'dio', got: %s",
+              loadMode->c_str()));
+    }
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja

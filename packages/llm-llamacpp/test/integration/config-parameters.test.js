@@ -97,12 +97,19 @@ const scenarios = [
     expectSuccess: true
   },
   {
-    name: 'no_mmap disables memory-mapped model loading',
+    name: 'load_mode none disables memory-mapped model loading',
     overrides: {
-      no_mmap: 'true',
+      load_mode: 'none',
       n_predict: '16'
     },
     expectSuccess: true
+  },
+  {
+    name: 'load-mode rejects unknown values with a clear error',
+    overrides: {
+      'load-mode': 'bogus'
+    },
+    expectLoadFailure: /load-mode must be one of/
   },
   {
     name: 'Zero temperature produces deterministic output',
