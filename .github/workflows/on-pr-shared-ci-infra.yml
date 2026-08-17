@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
+      - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - "scripts/perf-report/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
@@ -34,6 +35,8 @@ jobs:
           node-version: lts/*
       - name: Run cache-models action unit tests
         run: node --test .github/actions/cache-models/test/*.test.mjs
+      - name: Run seed-and-presign action unit tests
+        run: node --test .github/actions/run-mobile-integration-tests/seed-and-presign-models/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without
