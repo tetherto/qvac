@@ -1,7 +1,7 @@
 {
   "name": "tts-cpp",
-  "version-date": "2026-08-13",
-  "description": "OVERLAY, NOT FOR MERGE. tts-cpp pinned at qvac-ext-lib-whisper.cpp ce4ce297 (PR #143), which admits OpenCL to the Audio8 GPU allowlist. Needs the ggml-speech overlay beside it.",
+  "version-date": "2026-08-17",
+  "description": "OVERLAY, NOT FOR MERGE. tts-cpp pinned at qvac-ext-lib-whisper.cpp ad2af02c (PR #143), which admits OpenCL to the Audio8 GPU allowlist. Needs the ggml-speech overlay beside it.",
   "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/engines/tts",
   "license": "MIT",
   "dependencies": [
