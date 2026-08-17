@@ -1,0 +1,77 @@
+# Consolidates the 13 prebuilds-<pkg>.yml files.
+name: "Prebuilds (nx)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+        default: "tetherto/qvac"
+      base-ref:
+        required: false
+        type: string
+        default: "main"
+      head-ref:
+        required: false
+        type: string
+        default: "HEAD"
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Determine affected packages (nx project.json, transitive)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      any: ${{ steps.compute.outputs.any }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: build
+          base-ref: ${{ inputs.base-ref }}
+          head-ref: ${{ inputs.head-ref }}
+
+  prebuild:
+    name: Prebuild (${{ matrix.package }})
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.matrix || '[]') }}
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/reusable-prebuilds.yml
+    with:
+      workdir: ${{ matrix.workdir }}
+      ref: ${{ inputs.ref }}
+      repository: ${{ inputs.repository || 'tetherto/qvac' }}
+      artifact-name-prefix: ${{ matrix.artifactNamePrefix }}
+      linux-extra-packages: ${{ matrix.linuxExtraPackages }}
+      mac-brew-packages: ${{ matrix.macBrewPackages }}
+      setup-python-on-windows: ${{ matrix.setupPythonOnWindows == true }}
+      include-vulkan-sdk: ${{ matrix.includeVulkanSdk == true }}
+      include-rocm: ${{ matrix.includeRocm == true }}
+      extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
+      platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
+    secrets: inherit
