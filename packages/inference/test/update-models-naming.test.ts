@@ -1518,6 +1518,62 @@ test('diffusion: FLUX.2 VAE — vae tag produces _VAE suffix', (t) => {
 })
 
 // ---------------------------------------------------------------------------
+// Parakeet: English CTC vs Indic Conformer CTC
+// ---------------------------------------------------------------------------
+
+test('parakeet: English CTC GGUF keeps PARAKEET_CTC_<params>_<quant>', (t) => {
+  const coreKey = Buffer.from('aa'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'CC-BY-4.0',
+    name: '',
+    sizeBytes: 731222912,
+    sha256: 'aa'.repeat(32),
+    quantization: 'q8_0',
+    params: '0.6B',
+    tags: ['transcription', 'parakeet', 'ctc'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 731222912
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_CTC_0_6B_Q8_0')
+})
+
+test('parakeet: Indic Conformer CTC GGUF includes INDIC_CONFORMER in the name', (t) => {
+  const coreKey = Buffer.from('bb'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'Apache-2.0',
+    name: '',
+    sizeBytes: 1380198336,
+    sha256: 'bb'.repeat(32),
+    quantization: 'f16',
+    params: '600M',
+    tags: ['transcription', 'parakeet', 'ctc'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 1380198336
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_INDIC_CONFORMER_CTC_F16')
+})
+
+// ---------------------------------------------------------------------------
 // loadCurrentModels: quote styles
 // ---------------------------------------------------------------------------
 

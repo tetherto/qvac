@@ -40,6 +40,7 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
@@ -367,6 +368,12 @@ resources.define('parakeet-ctc', {
   constant: PARAKEET_CTC_0_6B_Q4_0,
   type: 'parakeet-transcription',
   config: {}
+})
+
+resources.define('parakeet-indic-conformer', {
+  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  type: 'parakeet-transcription',
+  config: { language: 'hi' }
 })
 
 resources.define('parakeet-sortformer', {
