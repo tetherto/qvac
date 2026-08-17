@@ -151,7 +151,7 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts"
   },
   "engines": {
     "bare": "^1.30.3"

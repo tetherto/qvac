@@ -16,7 +16,7 @@ on:
       max_deletions_per_run:
         description: "Max branches to delete in a single run"
         type: number
-        default: 50
+        default: 200
 
 permissions:
   contents: read
@@ -46,4 +46,4 @@ jobs:
       # Raised above the reusable default (10) so the weekly run keeps pace with this
       # monorepo's branch churn instead of accumulating a backlog; a manual dispatch
       # can override for a one-off larger drain.
-      max_deletions_per_run: ${{ github.event_name == 'workflow_dispatch' && inputs.max_deletions_per_run || 50 }}
+      max_deletions_per_run: ${{ github.event_name == 'workflow_dispatch' && inputs.max_deletions_per_run || 200 }}

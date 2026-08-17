@@ -8540,7 +8540,7 @@
     "quantization": "UD-Q4_K_XL",
     "params": "27B",
     "licenseId": "Apache-2.0",
-    "tags": ["generation", "instruct", "multimodal", "qwen3.8", "video-instruct"],
+    "tags": ["generation", "multimodal", "qwen3.8", "instruct", "video-instruct"],
     "notes": "Pair with the F16 mmproj entry for image and video input.",
     "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
   },
@@ -8551,7 +8551,7 @@
     "quantization": "UD-Q8_K_XL",
     "params": "27B",
     "licenseId": "Apache-2.0",
-    "tags": ["generation", "instruct", "multimodal", "qwen3.8", "video-instruct"],
+    "tags": ["generation", "multimodal", "qwen3.8", "instruct", "video-instruct"],
     "notes": "Pair with the F16 mmproj entry for image and video input.",
     "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
   },
@@ -8562,7 +8562,7 @@
     "quantization": "f16",
     "params": "27B",
     "licenseId": "Apache-2.0",
-    "tags": ["generation", "instruct", "multimodal", "qwen3.8", "video-instruct"],
+    "tags": ["generation", "multimodal", "qwen3.8", "instruct", "video-instruct"],
     "notes": "Required for image and video input.",
     "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
   }
