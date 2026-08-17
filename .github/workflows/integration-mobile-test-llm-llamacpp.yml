@@ -119,8 +119,48 @@ on:
       test-failed:
         description: "Test cases failed."
         value: ${{ jobs.build-and-test.outputs.test-failed }}
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below. LLM is sharded, so leaving 'tests' empty runs the
+  # FULL shard set pinned to the chosen device(s) (many runs) — set a 'tests'
+  # filter to run only what you need. The workflow_call path (benchmarks /
+  # weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Samsung S25 Ultra"
+          - "Pixel 9"
+          - "Pixel 8"
+          - "iPhone 17"
+          - "iPhone 16 Pro"
+          - "iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        type: choice
+        required: false
+        options: [CONTAINS, EQUALS]
+        default: CONTAINS
+      tests:
+        description: "Optional test filter. A mocha --grep regex matched against the mobile test-runner names (the run* functions in test/mobile, e.g. 'runLlmSpeedTest'); combine several with '|'. Empty = the full sharded suite (many runs)."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref (branch/tag/SHA) to test"
         type: string
@@ -148,6 +188,33 @@ on:
         default: false
 
 jobs:
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE seed-models/build or any Device Farm run,
+  # so a typo or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
   # One non-matrixed writer mirrors the mobile model set into the US bucket, so
   # the two platform legs below never download/upload the same multi-GB objects
   # concurrently. Each leg then only presigns (fast, no S3 write) for itself.
@@ -201,7 +268,11 @@ jobs:
 
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    needs: seed-models
+    # validate-devices is skipped on workflow_call (its `skipped` result keeps
+    # this job running once seed-models succeeds); on a manual run a bad/empty
+    # device selection blocks the build before it starts.
+    needs: [seed-models, validate-devices]
+    if: ${{ !cancelled() && needs.seed-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: ${{ inputs.job_timeout_minutes || 150 }}
@@ -221,9 +292,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Default (platforms='') runs both, preserving behaviour for every existing
-        # caller; a caller may pass platforms='Android' or 'iOS' to run a single one.
-        include: ${{ fromJSON(inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
+        # workflow_dispatch (inputs.platform set) runs the ONE chosen platform.
+        # workflow_call is unchanged: platforms='' runs both, platforms='Android'
+        # or 'iOS' runs a single one.
+        include: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]') || inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -413,6 +485,19 @@ jobs:
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # On a manual run with a test filter, collapse the sharded suite to a single
+      # grepped spec so only the matching tests run. Empty filter / workflow_call
+      # keeps the auto-detected shards.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
       # than the others. Sharded mode is wired automatically: the composite
@@ -436,7 +521,9 @@ jobs:
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
-          test-groups: ${{ inputs.test_groups }}
+          # A manual test filter wins; else the caller's test_groups override
+          # (empty => auto-detect the sharded test-groups.json).
+          test-groups: ${{ steps.manual_tests.outputs.groups != '' && steps.manual_tests.outputs.groups || inputs.test_groups }}
           extra-device-env: ${{ inputs.device_env }}
           # Host pre-stages this shard's models so the phone never downloads
           # from huggingface.co. iOS uses pymobiledevice3 into Documents/;
@@ -451,7 +538,11 @@ jobs:
           device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
           android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
           ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
-          scheduling-mode: ${{ inputs.device_model != '' && 'single-device' || 'dual-flagship' }}
+          # workflow_dispatch pins the run to the chosen device(s) (manual-devices).
+          # workflow_call is unchanged: single-device when device_model is set,
+          # else the sharded/dual-flagship default.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || (inputs.device_model != '' && 'single-device' || 'dual-flagship') }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
           device-model: ${{ inputs.device_model }}
           device-model-operator: ${{ inputs.device_model_operator }}
           device-manufacturer: ${{ inputs.device_manufacturer }}
