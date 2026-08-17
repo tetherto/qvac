@@ -70,14 +70,17 @@ on:
         required: false
         default: ""
 
-# Guards the workflow_dispatch path so two manual dispatches don't run — and bill
-# — concurrent Device Farm runs. The workflow_call path is additionally covered by
-# the caller's own concurrency. NOTE: the group key is a literal, NOT
-# `github.workflow` — under workflow_call that resolves to the CALLER's name and
-# would collide with on-pr-inference-addon-cpp.yml's concurrency group.
 concurrency:
-  group: mobile-df-inference-addon-cpp-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks — and
+  # bills — a second Device Farm run. Different branches map to different groups, so
+  # the same addon can still be tested on 2-3 branches in parallel. workflow_call
+  # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
+  # inputs.platform is only ever set on a manual dispatch. github.workflow is used
+  # ONLY on the dispatch branch (where it resolves to this workflow's own name); the
+  # call branch uses run_id, so it can never collide with a caller's group.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
 
 env:
   ADDON_WORKDIR: packages/inference-addon-cpp/mobile

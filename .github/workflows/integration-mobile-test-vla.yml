@@ -89,8 +89,15 @@ env:
 # secrets and rename here when VLA needs an isolated Device Farm budget.
 
 concurrency:
-  group: integration-mobile-test-vla-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks a
+  # second Device Farm run. Different branches map to different groups, so the
+  # same addon can still be tested on 2-3 branches in parallel. workflow_call
+  # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
+  # inputs.platform is only ever set on a manual dispatch, and under workflow_call
+  # github.* resolves to the CALLER, so run_id keeps each call self-contained.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
   # Defense-in-depth gate for workflow_dispatch. The repository's PR entry
