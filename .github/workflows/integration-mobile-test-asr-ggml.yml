@@ -42,8 +42,46 @@ on:
         type: boolean
         required: false
         default: false
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below — it never runs the full default pool. The
+  # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Samsung S25 Ultra"
+          - "Pixel 9"
+          - "Pixel 8"
+          - "iPhone 17"
+          - "iPhone 16 Pro"
+          - "iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        type: choice
+        required: false
+        options: [CONTAINS, EQUALS]
+        default: CONTAINS
+      tests:
+        description: "Optional: run only tests whose NAME matches this regex (matched against mobile test runner names, e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite."
+        type: string
+        required: false
+        default: ""
       ref:
         description: "Git ref (branch/tag/SHA) to test"
         type: string
@@ -73,12 +111,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
+  # or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
   # NOTE: continue-on-error: true matches the parent families' workflows.
   # on-pr-asr-ggml.yml's merge-guard treats `success || skipped` as a pass, so
   # a hard Device Farm failure does not gate merge today. Tighten once the
   # Device Farm provisioning + signing + runner pool is stable.
   build-and-test:
     name: Build ${{ matrix.platform }} (${{ matrix.engine && format('{0} {1} {2}', matrix.engine, matrix.model || matrix.model_type, matrix.use_gpu && 'gpu' || 'cpu') || 'functional' }}) and Run E2E Tests
+    # workflow_call: validate-devices is skipped; the `skipped` branch of the
+    # condition keeps this job running exactly as before.
+    # workflow_dispatch: a bad/empty device selection blocks this job.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     environment: release
     # Device Farm monitoring can consume 150 minutes for functional runs and
@@ -115,7 +185,7 @@ jobs:
       # test-groups" step below maps each row to the single runner function in
       # test/mobile/perf-tests.json that is hard-parameterised for exactly that
       # combination, and passes it as the Mocha grep.
-      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
       - name: Harden runner
@@ -381,6 +451,18 @@ jobs:
           echo "Benchmark grep: $RUNNER"
           printf 'groups=[{"name":"perf","grep":"%s"}]\n' "$RUNNER" >> "$GITHUB_OUTPUT"
 
+      # On a manual run with a test filter, override to a single grepped spec
+      # so only those tests run. Empty filter / workflow_call is unchanged.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
@@ -398,7 +480,8 @@ jobs:
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET }}
           # Empty on normal runs => action auto-detects test-groups.json.
           # Set on benchmark runs => only the selected benchmark runner.
-          test-groups: ${{ steps.perf_groups.outputs.groups }}
+          # A manual test filter (workflow_dispatch) takes precedence over both.
+          test-groups: ${{ steps.manual_tests.outputs.groups != '' && steps.manual_tests.outputs.groups || steps.perf_groups.outputs.groups }}
           # Both functional shards include performance runners; their names end
           # in "-perf" so the shared action enables performance bridging.
           enables-perf: 'true'
@@ -418,8 +501,12 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
-          scheduling-mode: dual-flagship
+          # workflow_dispatch: fan out across the chosen device(s).
+          # workflow_call: unchanged dual-flagship behaviour.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
           multi-spec-dual-flagship: ${{ !inputs.run_rtf_benchmarks && 'true' || 'false' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
