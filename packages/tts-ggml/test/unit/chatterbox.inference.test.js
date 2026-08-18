@@ -66,6 +66,10 @@ test('Chatterbox: run returns audio output and stats', async (t) => {
     outputs.some((d) => d.outputArray),
     'Response should contain outputArray payload'
   )
+  t.ok(
+    outputs.every((d) => d.outputArray instanceof Int16Array),
+    'Response outputArray should be an Int16Array'
+  )
   t.ok(response.stats.totalSamples > 0, 'Response stats should include total samples')
   t.ok(events.length > 0, 'Raw addon callback should have been called')
   t.ok(
@@ -103,6 +107,17 @@ test('Chatterbox: reload reloads configuration', async (t) => {
   await after.await()
 
   t.ok(after.stats.audioDurationMs > 0, 'Reloaded model should still produce stats')
+  await model.unload()
+})
+
+test('Chatterbox: reload rejects an invalid output sample rate', async (t) => {
+  const model = createMockedModel()
+  await model.load()
+
+  await t.exception(
+    model.reload({ outputSampleRate: 7999 }),
+    /outputSampleRate must be between 8000 and 192000/
+  )
   await model.unload()
 })
 

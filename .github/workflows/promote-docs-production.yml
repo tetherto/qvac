@@ -1,17 +1,35 @@
 name: Promote docs to production
 
-# Manually promote the reviewed docs on `main` to the `docs-production` branch,
+run-name: Promote docs-production to ${{ inputs.commit }}
+
+# Manually promote a reviewed commit of `main` to the `docs-production` branch,
 # which the hosting provider (Sevalla) watches to deploy the production docs site.
 #
-# This workflow ONLY fast-forwards docs-production to the current main commit:
+# The commit to promote is chosen at dispatch time, so the promoted state is the
+# one the operator inspected on staging — not whatever `main` happens to point at
+# when the environment approval finally lands.
+#
+# Two jobs, on purpose:
+#   - `preflight` runs ungated and rejects every bad request up front, so a
+#     reviewer is only ever asked to approve a promotion that will succeed;
+#   - `promote` is gated on the `docs-production` environment and does nothing
+#     but fast-forward the branch and push it.
+#
+# This workflow ONLY fast-forwards docs-production to the requested commit:
 #   - it never runs automatically on a merge to main,
 #   - it never opens a PR,
 #   - it never creates a new commit on docs-production,
-#   - it fails (does not merge) if docs-production has diverged from main.
+#   - it refuses any commit that is not already contained in main,
+#   - it fails (does not merge) if the fast-forward is not possible.
 # See docs/website/docs-workflow.md ("Production (manual promotion)") for the model.
 
 on:
   workflow_dispatch:
+    inputs:
+      commit:
+        description: Commit to promote — any revision already merged to main (full SHA recommended)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -22,12 +40,110 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  promote:
-    name: Fast-forward docs-production to main
+  preflight:
+    name: Validate the requested commit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      target_sha: ${{ steps.validate.outputs.target_sha }}
+      promote: ${{ steps.validate.outputs.promote }}
+    steps:
+      - name: Checkout docs-production
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: docs-production
+          # Full history so the fast-forward check can see the relationship
+          # between docs-production and main.
+          fetch-depth: 0
+          # This job only inspects history; it must never be able to push.
+          persist-credentials: false
+
+      - name: Validate the requested commit
+        id: validate
+        shell: bash
+        env:
+          TARGET: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin main docs-production
+
+          if ! target_sha="$(git rev-parse --quiet --verify "${TARGET}^{commit}")"; then
+            echo "::error::'${TARGET}' is not a commit known to this repository."
+            exit 1
+          fi
+
+          main_sha="$(git rev-parse origin/main)"
+          production_sha="$(git rev-parse origin/docs-production)"
+
+          {
+            echo "### Promotion preflight"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| requested | \`${TARGET}\` |"
+            echo "| resolved | \`${target_sha}\` |"
+            echo "| docs-production | \`${production_sha}\` |"
+            echo "| main | \`${main_sha}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Only a commit already reviewed and merged to main may reach production.
+          # Without this check the dispatch input would be a path to deploy
+          # arbitrary unreviewed code straight to the production site.
+          if ! git merge-base --is-ancestor "$target_sha" "$main_sha"; then
+            echo "::error::${target_sha} is not contained in main; only a commit already merged to main can be promoted."
+            exit 1
+          fi
+
+          if [ "$target_sha" = "$production_sha" ]; then
+            echo "promote=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::docs-production is already at ${target_sha}; nothing to promote."
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "docs-production is already at this commit. Nothing to promote, no approval needed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # A commit behind docs-production would make `git merge --ff-only`
+          # report "Already up to date" and push nothing — a rollback attempt
+          # that silently succeeds. Reject it explicitly instead.
+          if git merge-base --is-ancestor "$target_sha" "$production_sha"; then
+            echo "::error::${target_sha} is behind docs-production; this workflow only moves the branch forward. Roll back deliberately, outside this promotion."
+            exit 1
+          fi
+
+          # Anything left that is not a descendant of docs-production means the
+          # branches have diverged. Catch it here rather than after the approval:
+          # divergence must be repaired in a separate, deliberate step.
+          if ! git merge-base --is-ancestor "$production_sha" "$target_sha"; then
+            echo "::error::docs-production has diverged from main; fast-forward promotion is not possible. Realign the branches before promoting."
+            exit 1
+          fi
+
+          echo "target_sha=${target_sha}" >> "$GITHUB_OUTPUT"
+          echo "promote=true" >> "$GITHUB_OUTPUT"
+
+          {
+            echo ""
+            echo "Commits to promote:"
+            echo ""
+            echo '```'
+            git log --oneline "${production_sha}..${target_sha}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    name: Fast-forward docs-production to the requested commit
+    needs: preflight
+    if: needs.preflight.outputs.promote == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Gate the promotion: the job pauses for approval by a required reviewer
     # (configured on the docs-production environment) before it can push.
+    # Every check has already run in `preflight`, so an approval here is only
+    # ever requested for a promotion that is known to be valid.
     environment: docs-production
+    permissions:
+      contents: write
     steps:
       # docs-production is a restricted ref (Restrict updates). The default
       # GITHUB_TOKEN cannot be a ruleset bypass actor, so the push runs as a
@@ -44,31 +160,54 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: docs-production
-          # Full history so the fast-forward check can see the relationship
-          # between docs-production and main.
           fetch-depth: 0
           # Persist the App token so the fast-forward push authenticates as the
           # App (the docs-production ruleset bypass identity).
           persist-credentials: true
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Fast-forward docs-production to origin/main
+      - name: Fast-forward docs-production and push
         shell: bash
+        env:
+          TARGET_SHA: ${{ needs.preflight.outputs.target_sha }}
         run: |
           set -euo pipefail
 
           git fetch --no-tags origin main docs-production
 
-          echo "main            = $(git rev-parse --short origin/main)"
-          echo "docs-production = $(git rev-parse --short origin/docs-production)"
-          echo "commits to promote:"
-          git log --oneline origin/docs-production..origin/main
+          # Re-assert the security invariant after the approval wait: preflight
+          # validated the target, but the gate holds for an unbounded time.
+          if ! git merge-base --is-ancestor "$TARGET_SHA" origin/main; then
+            echo "::error::${TARGET_SHA} is no longer contained in main; refusing to promote."
+            exit 1
+          fi
 
-          # --ff-only: promote ONLY when docs-production can fast-forward to main.
-          # If the branches have diverged, this fails instead of creating a merge
-          # commit or resolving conflicts — divergence must be repaired in a
-          # separate, deliberate step (out of scope for this promotion).
-          if ! git merge --ff-only origin/main; then
+          production_sha="$(git rev-parse origin/docs-production)"
+
+          echo "promoting       = ${TARGET_SHA}"
+          echo "docs-production = ${production_sha}"
+
+          if [ "$TARGET_SHA" = "$production_sha" ]; then
+            echo "::notice::docs-production is already at ${TARGET_SHA}; nothing to push."
+            exit 0
+          fi
+
+          # `git merge --ff-only` reports "Already up to date" and exits 0 when
+          # the target is contained in HEAD, so a docs-production that advanced
+          # past the target while the approval was pending would end in a green
+          # run that pushed nothing. Fail instead of reporting a promotion that
+          # did not happen.
+          if git merge-base --is-ancestor "$TARGET_SHA" "$production_sha"; then
+            echo "::error::docs-production advanced past ${TARGET_SHA} while the approval was pending (it is now at ${production_sha}); nothing was pushed. Dispatch a new promotion for the commit you want."
+            exit 1
+          fi
+
+          # --ff-only: promote ONLY when docs-production can fast-forward to the
+          # target. Preflight proved it could, and the two checks above rule out
+          # the branch having moved forward — so a failure here means
+          # docs-production received a commit that is not on main. That is real
+          # divergence, and it must be repaired deliberately.
+          if ! git merge --ff-only "$TARGET_SHA"; then
             echo "::error::docs-production has diverged from main; fast-forward promotion is not possible. Realign the branches before promoting."
             exit 1
           fi

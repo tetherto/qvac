@@ -2,8 +2,6 @@
 
 #include <llama.h>
 
-class ToolsCompactController;
-
 using ContextSliderMemoryHandle =
     decltype(llama_get_memory(static_cast<llama_context*>(nullptr)));
 
@@ -47,8 +45,7 @@ struct ContextSlideOutcome {
 /// Attempts to slide the context window during prefill (eval) phase.
 ///
 /// This handles the case where adding nTokensToAppend would overflow the
-/// context. It tries to discard tokens from the middle (after firstMsgTokens)
-/// while respecting the tools_compact anchor via ToolsCompactController.
+/// context. It tries to discard tokens from the middle (after firstMsgTokens).
 ///
 /// On success (Slid), the KV cache has been modified and newNPast reflects the
 /// new position. On NotNeeded, no action was taken. On Overflow, the caller
@@ -60,7 +57,6 @@ struct ContextSlideOutcome {
 /// @param firstMsgTokens Number of tokens in the first message (protected)
 /// @param nTokensToAppend Number of tokens about to be appended
 /// @param nDiscarded     Maximum tokens the caller allows to discard
-/// @param tools          Controller for tools_compact anchor management
 /// @param ops            Indirection over llama context/memory operations
 /// @param effectiveCtx   Per-sequence token ceiling to slide against. When
 ///                       <= 0, falls back to the whole-context size reported
@@ -71,14 +67,12 @@ struct ContextSlideOutcome {
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
     llama_pos firstMsgTokens, llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps(),
     llama_pos effectiveCtx = -1);
 
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
-    ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps());
 
 /// Attempts to slide the context window during generation phase.
@@ -91,7 +85,6 @@ ContextSlideOutcome trySlidePrefill(
 /// @param nPast          Current token position in the context
 /// @param firstMsgTokens Number of tokens in the first message (protected)
 /// @param nDiscarded     Maximum tokens the caller allows to discard
-/// @param tools          Controller for tools_compact anchor management
 /// @param ops            Indirection over llama context/memory operations
 /// @param effectiveCtx   Per-sequence token ceiling to slide against. When
 ///                       <= 0, falls back to the whole-context size reported
@@ -102,7 +95,6 @@ ContextSlideOutcome trySlidePrefill(
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
     llama_pos firstMsgTokens, llama_pos nDiscarded,
-    ToolsCompactController& tools,
     const IContextSliderOps& ops = defaultContextSliderOps(),
     llama_pos effectiveCtx = -1, llama_pos nCacheTokens = -1);
 
@@ -121,7 +113,7 @@ struct CompactRangeOutcome {
 
 /// Drops `[startPos, endPos)` from `seqId`'s KV cache and shifts the tail
 /// `[endPos, nPast)` down. Pure primitive; the caller owns policy
-/// (overflow checks, `firstMsgTokens` / tools_compact accounting).
+/// (overflow checks, `firstMsgTokens` accounting).
 /// Returns NoOp for empty / out-of-range inputs without touching the cache.
 CompactRangeOutcome compactKvRange(
     llama_context* lctx, llama_seq_id seqId, llama_pos startPos,

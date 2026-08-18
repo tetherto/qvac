@@ -9,6 +9,14 @@ anything with `error/warning/info/debug` methods, i.e. a stdlib
 
 The registry is module-global keyed by model id, same as the JS client's
 `activeStreams` map.
+
+Intentional divergence: the JS SDK's top-level `getLogger` facade (a bespoke
+`Logger` with levels, transports, and a namespace cache) is deliberately not
+ported. Python uses the standard library `logging` module instead -- a
+`logging.Handler` is the `LogTransport` equivalent -- which is why the dispatch
+above targets any stdlib-`Logger`-shaped object. The log-stream surface
+(`logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`, `SDK_ALL_LOG_ID`) is
+the part that has no stdlib equivalent, so that is what this module provides.
 """
 
 from __future__ import annotations

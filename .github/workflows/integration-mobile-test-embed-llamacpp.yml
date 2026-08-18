@@ -50,8 +50,53 @@ on:
         default: '@qvac/embed-llamacpp@latest'
 
 jobs:
+  # One non-matrixed writer mirrors embed's models into the US bucket, so the two
+  # platform legs below never download/upload the same objects concurrently. Each
+  # leg then only presigns (fast, no S3 write) for itself.
+  seed-models:
+    name: Seed embed models (US bucket)
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      # node is job-managed on the self-hosted runners (only on PATH after this
+      # step); the seed action shells out to node, so it must run first.
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Seed embed models into US bucket (mirror-only)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/packages/embed-llamacpp/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/embed/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          hf-token: ${{ secrets.HF_TOKEN }}
+          mode: seed
+
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
+    needs: seed-models
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: ${{ inputs.job_timeout_minutes || 120 }}
@@ -93,7 +138,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -108,7 +153,7 @@ jobs:
           addon-workdir: 'packages/embed-llamacpp'
           addon-npm-name: '@qvac/embed-llamacpp'
           prebuild-artifact-prefix: 'llama-cpp-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
       # committed — they are generated from test/integration/_benchmark-matrix.js.
@@ -136,6 +181,18 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Presign the already-seeded (by the seed-models job) US-bucket objects into
+      # a map the prestage steps below consume. Presign-only: no S3 write, fresh
+      # URLs minted per leg right before this leg builds and runs.
+      - name: Presign embed models (US bucket)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/packages/embed-llamacpp/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/embed/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          output-map: ${{ runner.temp }}/embed-url-map.json
+          mode: presign
+
       # Generate the model pre-stage script. The Device Farm host has reliable
       # network; it downloads embed's models and pushes them to a platform-local
       # staging dir so the phone never fetches from huggingface.co
@@ -144,6 +201,9 @@ jobs:
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/packages/embed-llamacpp
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
+        env:
+          PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -156,6 +216,9 @@ jobs:
         id: ios_prestage
         if: matrix.platform == 'iOS'
         working-directory: addon/packages/embed-llamacpp
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
+        env:
+          PRESTAGE_URL_MAP: ${{ runner.temp }}/embed-url-map.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {

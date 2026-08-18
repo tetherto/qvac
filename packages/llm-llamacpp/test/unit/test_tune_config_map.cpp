@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
-#include "model-interface/LlamaModel.hpp"
+#include "model-interface/LoadFitNormalization.hpp"
 #include "test_common.hpp"
 
 using test_common::MockModelMetaData;
@@ -19,7 +19,7 @@ protected:
 TEST_F(TuneConfigMapTest, NonBitnet_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "llama");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, std::nullopt);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
@@ -29,7 +29,7 @@ TEST_F(TuneConfigMapTest, NonBitnet_FlashAttnDefaultsOn) {
 TEST_F(TuneConfigMapTest, OneBitButNotBitnetArch_FlashAttnDefaultsOn) {
   MockModelMetaData meta(true, "llama");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
@@ -39,7 +39,7 @@ TEST_F(TuneConfigMapTest, OneBitButNotBitnetArch_FlashAttnDefaultsOn) {
 TEST_F(TuneConfigMapTest, BitnetArchButNotOneBit_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
@@ -51,7 +51,7 @@ TEST_F(TuneConfigMapTest, BitnetArchButNotOneBit_FlashAttnDefaultsOn) {
 TEST_F(TuneConfigMapTest, Bitnet_NoAdreno_FlashAttnDisabled) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, std::nullopt);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
@@ -60,7 +60,7 @@ TEST_F(TuneConfigMapTest, Bitnet_NoAdreno_FlashAttnDisabled) {
 TEST_F(TuneConfigMapTest, Bitnet_NoAdreno_UbatchUnchanged) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, std::nullopt);
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
@@ -70,7 +70,7 @@ TEST_F(TuneConfigMapTest, Bitnet_NoAdreno_UbatchUnchanged) {
 TEST_F(TuneConfigMapTest, Bitnet_Adreno740_FlashAttnDisabled) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 740);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 740);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
@@ -79,7 +79,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno740_FlashAttnDisabled) {
 TEST_F(TuneConfigMapTest, Bitnet_Adreno740_UbatchUnchanged) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 740);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 740);
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
@@ -89,7 +89,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno740_UbatchUnchanged) {
 TEST_F(TuneConfigMapTest, Bitnet_Adreno830_FlashAttnDisabled) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
@@ -98,7 +98,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_FlashAttnDisabled) {
 TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UbatchSetTo128) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -107,7 +107,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Bitnet_Adreno800_UbatchSetTo128) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 800);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 800);
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -119,7 +119,7 @@ TEST_F(TuneConfigMapTest, Bitnet_UserSetFlashAttnHyphen_Respected) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["flash-attn"] = "on";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
 }
@@ -128,7 +128,7 @@ TEST_F(TuneConfigMapTest, Bitnet_UserSetFlashAttnUnderscore_Respected) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["flash_attn"] = "on";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_.count("flash-attn"), 0);
   EXPECT_EQ(configFilemap_["flash_attn"], "on");
@@ -138,7 +138,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchHyphen_ClampedTo128) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["ubatch-size"] = "256";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
 }
@@ -147,7 +147,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchHyphen_SmallRespected) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["ubatch-size"] = "64";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "64");
 }
@@ -157,7 +157,7 @@ TEST_F(
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["ubatch_size"] = "256";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
   EXPECT_EQ(configFilemap_.count("ubatch_size"), 0);
@@ -167,7 +167,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_UserSetUbatchUnderscore_Respected) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["ubatch_size"] = "64";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "64");
   EXPECT_EQ(configFilemap_.count("ubatch_size"), 0);
@@ -177,7 +177,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_InvalidUbatch_FallsBackToDefault) {
   MockModelMetaData meta(true, "bitnet");
   configFilemap_["ubatch-size"] = "auto";
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830);
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
 }
@@ -187,7 +187,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno830_InvalidUbatch_FallsBackToDefault) {
 TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {
   MockModelMetaData meta(true, "bitnet");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 799);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 799);
 
   EXPECT_EQ(configFilemap_.count("ubatch-size"), 0);
 }
@@ -197,7 +197,7 @@ TEST_F(TuneConfigMapTest, Bitnet_Adreno799_UbatchUnchanged) {
 TEST_F(TuneConfigMapTest, OpenCl_NonBitnet_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "llama");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
@@ -208,7 +208,7 @@ TEST_F(TuneConfigMapTest, OpenCl_UserSetFlashAttnHyphen_Respected) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["flash-attn"] = "on";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true);
 
   EXPECT_EQ(configFilemap_["flash-attn"], "on");
@@ -218,7 +218,7 @@ TEST_F(TuneConfigMapTest, OpenCl_UserSetFlashAttnUnderscore_Respected) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["flash_attn"] = "on";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true);
 
   EXPECT_EQ(configFilemap_.count("flash-attn"), 0);
@@ -228,7 +228,7 @@ TEST_F(TuneConfigMapTest, OpenCl_UserSetFlashAttnUnderscore_Respected) {
 TEST_F(TuneConfigMapTest, NotOpenCl_NonBitnet_FlashAttnDefaultsOn) {
   MockModelMetaData meta(false, "llama");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/false);
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
@@ -245,7 +245,7 @@ TEST_F(TuneConfigMapTest, OpenCl_RejectsQ8_0KCache) {
   // llama_kv_cache::update on a KV-cache shift on Adreno (no ggml-opencl
   // F32->quantized requantize kernel).
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -261,7 +261,7 @@ TEST_F(TuneConfigMapTest, OpenCl_RejectsQ4_0VCacheUnderscore) {
   // QVAC-21318: q4_0 hits the same shift crash as q8_0 on Adreno OpenCL
   // (CI-confirmed, run 28448086915) — rejected too.
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -275,7 +275,7 @@ TEST_F(TuneConfigMapTest, OpenCl_RejectsUnsupportedQuantizedKCache) {
   configFilemap_["cache-type-k"] = "q5_0";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true),
       qvac_errors::StatusError);
 }
@@ -285,7 +285,7 @@ TEST_F(TuneConfigMapTest, OpenCl_RejectsUnsupportedQuantizedVCacheUnderscore) {
   configFilemap_["cache_type_v"] = "iq4_nl";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true),
       qvac_errors::StatusError);
 }
@@ -295,7 +295,7 @@ TEST_F(TuneConfigMapTest, OpenCl_RejectsTurboQuantKCache) {
   configFilemap_["cache-type-k"] = "tbq4_0";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true),
       qvac_errors::StatusError);
 }
@@ -307,7 +307,7 @@ TEST_F(TuneConfigMapTest, OpenCl_RejectsUnlistedKvType) {
   configFilemap_["cache-type-k"] = "q6_K";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_, meta, std::nullopt, FtOverrides{}, /*isOpenCl=*/true),
       qvac_errors::StatusError);
 }
@@ -318,7 +318,7 @@ TEST_F(TuneConfigMapTest, OpenCl_AllowsNonQuantizedCacheTypes) {
   configFilemap_["cache-type-v"] = "bf16";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -332,7 +332,7 @@ TEST_F(TuneConfigMapTest, NotOpenCl_AllowsStandardQuantizedCacheTypes) {
   configFilemap_["cache-type-v"] = "q4_0";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -346,7 +346,7 @@ TEST_F(TuneConfigMapTest, NotOpenClNotMetal_AllowsTurboQuantCacheTypes) {
   configFilemap_["cache-type-v"] = "pq4_0";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -360,7 +360,7 @@ TEST_F(TuneConfigMapTest, Metal_RejectsTurboQuantCacheTypes) {
   configFilemap_["cache-type-k"] = "tbq4_0";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -376,7 +376,7 @@ TEST_F(TuneConfigMapTest, Metal_AllowsStandardQuantizedCacheTypes) {
   configFilemap_["cache-type-v"] = "q4_0";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -390,7 +390,7 @@ TEST_F(TuneConfigMapTest, Metal_AllowsStandardQuantizedCacheTypes) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_FlashAttnDisabled) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
 
   ASSERT_EQ(configFilemap_.count("flash-attn"), 1);
@@ -401,7 +401,7 @@ TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttn_ForcedOff) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["flash-attn"] = "on";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
@@ -411,7 +411,7 @@ TEST_F(TuneConfigMapTest, Finetuning_UserSetFlashAttnUnderscore_ForcedOff) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["flash_attn"] = "on";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["flash-attn"], "off");
@@ -422,7 +422,7 @@ TEST_F(TuneConfigMapTest, Finetuning_FlashAttnExplicitlyEnabled_ForcedOn) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["flash-attn"] = "off";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -436,7 +436,7 @@ TEST_F(TuneConfigMapTest, Finetuning_FlashAttnExplicitlyEnabled_ForcedOn) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno830_UbatchSetTo128) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 830, FtOverrides{.active = true});
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
@@ -446,7 +446,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno830_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno800_UbatchSetTo128) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 800, FtOverrides{.active = true});
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
@@ -456,7 +456,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno800_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Finetuning_Qwen3_Adreno830_UbatchSetTo128) {
   MockModelMetaData meta(false, "qwen3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 830, FtOverrides{.active = true});
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
@@ -468,7 +468,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Qwen3_Adreno830_UbatchSetTo128) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno740_UbatchFromOverrides) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 740, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -477,7 +477,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno740_UbatchFromOverrides) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno799_UbatchFromOverrides) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 799, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -488,7 +488,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Gemma3_Adreno799_UbatchFromOverrides) {
 TEST_F(TuneConfigMapTest, Finetuning_Gemma3_NoAdreno_UbatchFromOverrides) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -500,7 +500,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Adreno830_OverridesUserUbatchHyphen) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["ubatch-size"] = "256";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 830, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -510,7 +510,7 @@ TEST_F(TuneConfigMapTest, Finetuning_Adreno830_OverridesUserUbatchUnderscore) {
   MockModelMetaData meta(false, "gemma3");
   configFilemap_["ubatch_size"] = "64";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, 830, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -523,7 +523,8 @@ TEST_F(TuneConfigMapTest, Finetuning_ContextLengthInjected) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true, .contextLength = 256};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   ASSERT_EQ(configFilemap_.count("ctx-size"), 1);
   EXPECT_EQ(configFilemap_["ctx-size"], "256");
@@ -533,7 +534,8 @@ TEST_F(TuneConfigMapTest, Finetuning_BatchSizeInjected) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true, .batchSize = 64};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   ASSERT_EQ(configFilemap_.count("batch-size"), 1);
   EXPECT_EQ(configFilemap_["batch-size"], "64");
@@ -543,7 +545,8 @@ TEST_F(TuneConfigMapTest, Finetuning_MicroBatchSizeInjected) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true, .microBatchSize = 16};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "16");
@@ -557,7 +560,8 @@ TEST_F(TuneConfigMapTest, Finetuning_AllParamsInjected) {
       .microBatchSize = 16,
       .contextLength = 256};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["ctx-size"], "256");
   EXPECT_EQ(configFilemap_["batch-size"], "64");
@@ -568,7 +572,8 @@ TEST_F(TuneConfigMapTest, Finetuning_DefaultParamsInjected) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["ctx-size"], "128");
   EXPECT_EQ(configFilemap_["batch-size"], "128");
@@ -580,7 +585,8 @@ TEST_F(TuneConfigMapTest, Finetuning_OverridesUserCtxSizeHyphen) {
   configFilemap_["ctx-size"] = "512";
   FtOverrides ov{.active = true, .contextLength = 256};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["ctx-size"], "256");
 }
@@ -590,7 +596,8 @@ TEST_F(TuneConfigMapTest, Finetuning_OverridesUserCtxSizeUnderscore) {
   configFilemap_["ctx_size"] = "512";
   FtOverrides ov{.active = true, .contextLength = 256};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["ctx-size"], "256");
   EXPECT_EQ(configFilemap_.count("ctx_size"), 0);
@@ -601,7 +608,8 @@ TEST_F(TuneConfigMapTest, Finetuning_OverridesUserBatchSizeHyphen) {
   configFilemap_["batch-size"] = "128";
   FtOverrides ov{.active = true, .batchSize = 64};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["batch-size"], "64");
 }
@@ -611,7 +619,8 @@ TEST_F(TuneConfigMapTest, Finetuning_OverridesUserBatchSizeUnderscore) {
   configFilemap_["batch_size"] = "128";
   FtOverrides ov{.active = true, .batchSize = 64};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["batch-size"], "64");
   EXPECT_EQ(configFilemap_.count("batch_size"), 0);
@@ -622,7 +631,7 @@ TEST_F(TuneConfigMapTest, Finetuning_MicroBatchOverridesAdrenoDefault) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true, .microBatchSize = 32};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, ov);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830, ov);
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "32");
@@ -633,7 +642,7 @@ TEST_F(TuneConfigMapTest, Finetuning_DefaultMicroBatch_Adreno830) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, 830, ov);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, 830, ov);
 
   ASSERT_EQ(configFilemap_.count("ubatch-size"), 1);
   EXPECT_EQ(configFilemap_["ubatch-size"], "128");
@@ -643,7 +652,7 @@ TEST_F(TuneConfigMapTest, Finetuning_DefaultMicroBatch_Adreno830) {
 TEST_F(TuneConfigMapTest, NotFinetuning_NoOverridesApplied) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, std::nullopt);
 
   EXPECT_EQ(configFilemap_.count("ctx-size"), 0);
   EXPECT_EQ(configFilemap_.count("batch-size"), 0);
@@ -656,7 +665,8 @@ TEST_F(TuneConfigMapTest, Finetuning_NoF16OutProd_CacheTypesSetToF32) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true, .gpuSupportsF16OutProd = false};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   ASSERT_EQ(configFilemap_.count("cache-type-k"), 1);
   EXPECT_EQ(configFilemap_["cache-type-k"], "f32");
@@ -668,7 +678,8 @@ TEST_F(TuneConfigMapTest, Finetuning_SupportsF16OutProd_CacheTypesUnchanged) {
   MockModelMetaData meta(false, "gemma3");
   FtOverrides ov{.active = true, .gpuSupportsF16OutProd = true};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
   EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
@@ -677,7 +688,7 @@ TEST_F(TuneConfigMapTest, Finetuning_SupportsF16OutProd_CacheTypesUnchanged) {
 TEST_F(TuneConfigMapTest, Finetuning_DefaultOverrides_CacheTypesUnchanged) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_, meta, std::nullopt, FtOverrides{.active = true});
 
   EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
@@ -689,7 +700,8 @@ TEST_F(TuneConfigMapTest, Finetuning_NoF16_UserSetCacheTypeK_Respected) {
   configFilemap_["cache-type-k"] = "q8_0";
   FtOverrides ov{.active = true, .gpuSupportsF16OutProd = false};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_["cache-type-k"], "q8_0");
   ASSERT_EQ(configFilemap_.count("cache-type-v"), 1);
@@ -701,7 +713,8 @@ TEST_F(TuneConfigMapTest, Finetuning_NoF16_UserSetCacheTypeV_Respected) {
   configFilemap_["cache-type-v"] = "q8_0";
   FtOverrides ov{.active = true, .gpuSupportsF16OutProd = false};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   ASSERT_EQ(configFilemap_.count("cache-type-k"), 1);
   EXPECT_EQ(configFilemap_["cache-type-k"], "f32");
@@ -714,7 +727,8 @@ TEST_F(
   configFilemap_["cache_type_k"] = "q8_0";
   FtOverrides ov{.active = true, .gpuSupportsF16OutProd = false};
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt, ov);
+  load_fit_normalization::tuneLoadConfigMap(
+      configFilemap_, meta, std::nullopt, ov);
 
   EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
   EXPECT_EQ(configFilemap_["cache_type_k"], "q8_0");
@@ -723,7 +737,7 @@ TEST_F(
 TEST_F(TuneConfigMapTest, NotFinetuning_CacheTypesUnchanged) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(configFilemap_, meta, std::nullopt);
+  load_fit_normalization::tuneLoadConfigMap(configFilemap_, meta, std::nullopt);
 
   EXPECT_EQ(configFilemap_.count("cache-type-k"), 0);
   EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
@@ -741,7 +755,7 @@ TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_FlashAttnOn_Rejected) {
 
   // isOpenCl=false, isMetal=false, isGpu=true, adreno=830 -> Vulkan on Adreno.
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           830,
@@ -760,7 +774,7 @@ TEST_F(
   configFilemap_["flash-attn"] = "on";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           830,
@@ -781,7 +795,7 @@ TEST_F(
   configFilemap_["flash_attn"] = "on";
 
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           830,
@@ -800,7 +814,7 @@ TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedKCache_NotGpu_Allowed) {
   configFilemap_["flash-attn"] = "on";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           830,
@@ -816,7 +830,7 @@ TEST_F(TuneConfigMapTest, AdrenoVulkan_QuantizedVCache_FlashAttnOff_Allowed) {
   configFilemap_["flash-attn"] = "off";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           830,
@@ -834,7 +848,7 @@ TEST_F(TuneConfigMapTest, AdrenoOpenCl_QuantizedKCache_Rejected) {
   // requantize copy has no ggml-opencl kernel and aborts in
   // llama_kv_cache::update (true for q8_0 and q4_0).
   EXPECT_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           830,
@@ -854,7 +868,7 @@ TEST_F(TuneConfigMapTest, MixedQuantizedAsymmetric_WarnsButAllowed) {
   configFilemap_["cache-type-v"] = "q4_0";
 
   EXPECT_NO_THROW(
-      LlamaModel::tuneConfigMap(
+      load_fit_normalization::tuneLoadConfigMap(
           configFilemap_,
           meta,
           std::nullopt,
@@ -873,7 +887,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_VulkanGpu_DefaultsQ8_0) {
   configFilemap_["flash-attn"] = "on";
 
   // Plain (non-Adreno) GPU: isGpu=true, not OpenCL/Metal, no adreno version.
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -894,7 +908,7 @@ TEST_F(
   MockModelMetaData meta(false, "llama");
   configFilemap_["flash_attn"] = "on";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -913,7 +927,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_OpenClGpu_StaysF16) {
   // OpenCL is excluded from the q8_0 auto-default: quantized KV-cache shifts
   // abort on Adreno, so f16 stays the default (an explicit quantized type is
   // rejected too — see OpenCl_RejectsQ8_0KCache).
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -930,7 +944,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_MetalGpu_DefaultsQ8_0) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["flash-attn"] = "on";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -947,7 +961,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_Cpu_StaysF16) {
   MockModelMetaData meta(false, "llama");
 
   // isGpu=false (CPU) -> no auto-default; KV types left to llama.cpp (f16).
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -964,7 +978,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_UserSetKCache_NotOverridden) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-k"] = "f16";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -982,7 +996,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_UserSetVCache_KNotDefaulted) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["cache-type-v"] = "f16";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -1000,7 +1014,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_FlashAttnOff_NotApplied) {
   MockModelMetaData meta(false, "llama");
   configFilemap_["flash-attn"] = "off";
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -1016,7 +1030,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_FlashAttnOff_NotApplied) {
 TEST_F(TuneConfigMapTest, AutoDefault_Finetuning_NotApplied) {
   MockModelMetaData meta(false, "gemma3");
 
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       std::nullopt,
@@ -1034,7 +1048,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoVulkan_NotApplied) {
 
   // Defensive: Adreno 800+ on Vulkan must not be auto-defaulted to quant KV
   // (no fabric scalar-FA fix on this branch).
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       830,
@@ -1053,7 +1067,7 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
   // Adreno (OpenCL) keeps the f16 default — quantized KV-cache shifts abort
   // there, and an explicit quantized type is rejected as well (see
   // AdrenoOpenCl_QuantizedKCache_Rejected).
-  LlamaModel::tuneConfigMap(
+  load_fit_normalization::tuneLoadConfigMap(
       configFilemap_,
       meta,
       830,

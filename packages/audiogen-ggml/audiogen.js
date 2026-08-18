@@ -16,7 +16,7 @@ class AudioGenInterface {
         return this._binding.activate(this._handle);
     }
     async runJob(data) {
-        await this._binding.runJob(this._handle, data);
+        return this._binding.runJob(this._handle, data);
     }
     async cancel() {
         return this._binding.cancel(this._handle);

@@ -4,11 +4,17 @@ import tseslint from 'typescript-eslint'
 import importPlugin from 'eslint-plugin-import'
 
 export default [
-  // Generated output, native build artifacts, and everything `standard` lints.
+  // Generated output, native build artifacts, and JS covered by lunte/prettier.
   {
     ignores: [
       'index.js',
       'index.d.ts',
+      'process.js',
+      'process.d.ts',
+      'process-internal.js',
+      'process-internal.d.ts',
+      'process-runner.js',
+      'process-runner.d.ts',
       'binding.js',
       'build/**',
       'prebuilds/**',
