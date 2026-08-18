@@ -46,7 +46,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: vla-
       linux-extra-packages: libxi-dev libxtst-dev libxrandr-dev
       include-vulkan-sdk: true
       # Cross-compile the ROCm/HIP backend (gfx1151) into the linux-x64 prebuild.

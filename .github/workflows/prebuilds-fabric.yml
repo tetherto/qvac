@@ -42,6 +42,5 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: fabric-
       include-vulkan-sdk: true
     secrets: inherit

@@ -40,6 +40,5 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: ggml-ocr-
       include-vulkan-sdk: true
     secrets: inherit

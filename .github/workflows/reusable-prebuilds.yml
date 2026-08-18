@@ -27,24 +27,14 @@ on:
         type: string
         required: false
         default: "tetherto/qvac"
-      artifact-name-prefix:
-        description: >-
-          Optional prefix for the per-matrix prebuild artifact name. Downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer.
-        type: string
-        required: false
-        default: ""
-      artifact-subdir:
-        description: >-
-          Optional subdirectory to nest this call's prebuild content under, in both the per-matrix artifacts and any merged bundle. Empty (the default) keeps the historical flat `<platform>-<arch>/` layout used by the one-package-per-run callers. A multi-package caller (prebuilds-nx.yml) passes the package name so one merged bundle can carry every selected package without the packages overwriting each other; consumers strip the level again via the prebuild-artifact-materialize action.
-        type: string
-        required: false
-        default: ""
-      merge-artifacts:
-        description: >-
-          Upload the merged `prebuilds` bundle at the end of this call. A multi-package caller sets this false and runs a single run-level merge of its own, because artifacts are scoped to the workflow *run* and a called reusable workflow shares its caller's run, so one merge per package would collide on the shared name.
-        type: boolean
-        required: false
-        default: true
+      # Artifact identity is DERIVED from the package (basename of `workdir`),
+      # never passed in: per-leg artifacts are
+      # `prebuild--<package>--<platform>-<arch><tags>` and the merged bundle is
+      # `prebuilds--<package>`. The old hand-maintained `artifact-name-prefix`
+      # table was not collision-free (embed-llamacpp and llm-llamacpp both
+      # declared `llama-cpp-`; translation-nmtcpp declared nothing), and the
+      # artifact service ACCEPTS duplicate names, so a shared name silently
+      # produced two same-named artifacts and an ambiguous download.
       linux-extra-packages:
         description: "Extra apt packages to install on linux runners"
         type: string
@@ -176,6 +166,22 @@ jobs:
           echo "Matrix platform: $MATRIX_PLATFORM"
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
+
+      # Single source of truth for artifact identity. Both the artifact NAME and
+      # (when namespacing is on) the content subdirectory come from this one
+      # value, so the two can never disagree and no caller maintains a prefix.
+      - name: Resolve package name from workdir
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="$(basename "$WORKDIR")"
+          if [ -z "$name" ] || [ "$name" = "." ] || [ "$name" = "/" ]; then
+            echo "::error::Cannot derive a package name from workdir '$WORKDIR'."
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "package=$name"
 
       - name: Setup build host (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
@@ -491,55 +497,50 @@ jobs:
 
           Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
 
-      # With artifact-subdir set, the artifact carries <subdir>/<platform>-<arch>/
-      # instead of <platform>-<arch>/, so a multi-package caller can merge every
-      # package into the one shared `prebuilds` name. upload-artifact has no
-      # "prefix" input, hence the staging copy. Skipped entirely when the subdir
-      # is empty, so the legacy callers' path is bit-for-bit unchanged.
-      - name: Stage prebuilds under artifact-subdir (Unix)
-        if: inputs.artifact-subdir != '' && matrix.platform != 'win32'
-        shell: bash
-        env:
-          SUBDIR: ${{ inputs.artifact-subdir }}
-        run: |
-          set -euo pipefail
-          DEST="${RUNNER_TEMP}/artifact-stage/${SUBDIR}"
-          mkdir -p "$DEST"
-          cp -r "${WORKDIR}/prebuilds/." "$DEST/"
-          ls -la "$DEST"
-
-      - name: Stage prebuilds under artifact-subdir (Windows)
-        if: inputs.artifact-subdir != '' && matrix.platform == 'win32'
-        shell: powershell
-        env:
-          SUBDIR: ${{ inputs.artifact-subdir }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $dest = Join-Path (Join-Path $env:RUNNER_TEMP "artifact-stage") $env:SUBDIR
-          New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          Copy-Item -Recurse -Force (Join-Path "$env:WORKDIR/prebuilds" "*") $dest
-          Get-ChildItem $dest
-
+      # Name carries the package, so two packages building in the same run can
+      # never land on the same artifact name. Content stays FLAT
+      # (<platform>-<arch>/), which is what the runtime resolves and what the
+      # published tarball must contain, so no consumer has anything to strip.
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: ${{ inputs.artifact-name-prefix }}${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
-          path: ${{ inputs.artifact-subdir == '' && format('{0}/prebuilds', env.WORKDIR) || format('{0}/artifact-stage', runner.temp) }}
+          name: prebuild--${{ steps.pkg.outputs.name }}--${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          path: ${{ env.WORKDIR }}/prebuilds
 
   merge:
-    if: inputs.merge-artifacts
     runs-on: ubuntu-latest
     needs: prebuild
     permissions:
       contents: write
     steps:
-      - name: Download all build artifacts
+      # Same derivation as the build job — the package is the single source of
+      # truth for artifact identity on both sides.
+      - name: Resolve package name from workdir
+        id: pkg
+        shell: bash
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          name="$(basename "$WORKDIR")"
+          if [ -z "$name" ] || [ "$name" = "." ] || [ "$name" = "/" ]; then
+            echo "::error::Cannot derive a package name from workdir '$WORKDIR'."
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # Pattern-scoped to THIS package's legs. Downloading everything (the old
+      # behaviour) folded in unrelated artifacts, and in a multi-package run it
+      # raced: each package's merge picked up whatever existed at that moment,
+      # including the other package's merged bundle.
+      - name: Download this package's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
+          pattern: prebuild--${{ steps.pkg.outputs.name }}--*
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: prebuilds
+          name: prebuilds--${{ steps.pkg.outputs.name }}
           path: prebuilds
