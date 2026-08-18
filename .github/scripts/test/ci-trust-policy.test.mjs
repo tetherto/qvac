@@ -1589,11 +1589,16 @@ test('mobile validate-devices fails fast on an unknown tests filter and an overs
   assert.match(action, /map\(select\(length > 0\)\) \| unique/)
   assert.match(action, /MAX_DEVICES=10/)
   // Gustavo: a `tests` filter that matches zero known runners is rejected here
-  // (before any build) so a typo can't run zero tests and pass green. Runner
-  // names come from the addon's test-groups.json.
+  // (before any build) so a typo can't run zero tests and pass green. Multi-spec
+  // addons source runner names + shard count from their test-groups.json...
   assert.match(action, /RUNNERS_JSON=\$\(jq -c/)
   assert.match(action, /grep -Ec -- "\$TESTS"/)
   assert.match(action, /matches none of the/)
+  // ...and single-spec addons (Bugbot P1: previously skipped) validate the SAME
+  // filter against their committed integration.auto.cjs runner declarations.
+  assert.match(action, /runner-source-path/)
+  assert.match(action, /RUNNER_SOURCE_PATH/)
+  assert.match(action, /async function run\[A-Za-z0-9_\]\+/)
   // iancris: spec-count-aware run-count cap, enforced before build/upload spend
   // (specs = 1 when a tests filter is given, else the platform's group count).
   assert.match(action, /SPEC_COUNT=\$GROUP_COUNT/)
@@ -1601,14 +1606,18 @@ test('mobile validate-devices fails fast on an unknown tests filter and an overs
   assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
 })
 
-test('mobile monitor maps both flagship runs back to each test spec', () => {
+test('mobile monitor maps each run back to its spec for any per-spec fan-out', () => {
   const action = read(
     '.github/actions/run-mobile-integration-tests/monitor-test-run/action.yml',
   )
   assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
   assert.match(action, /spec_index_for_run\(\)/)
-  assert.match(action, /RUN_COUNT" -eq \$\(\(SPEC_COUNT \* 2\)\)/)
-  assert.match(action, /echo \$\(\(run_index \/ 2\)\)/)
+  // Bugbot P3: the legend generalises runs_per_spec = RUN_COUNT / SPEC_COUNT so
+  // it labels dual-flagship (2), single-pool (1) AND manual fan-outs with >2
+  // devices correctly, instead of only special-casing the *2 shape.
+  assert.match(action, /RUN_COUNT % SPEC_COUNT/)
+  assert.match(action, /per_spec=\$\(\(RUN_COUNT \/ SPEC_COUNT\)\)/)
+  assert.match(action, /echo \$\(\(run_index \/ per_spec\)\)/)
   assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/)
 })
 

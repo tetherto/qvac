@@ -105,13 +105,38 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js
+            packages/inference-addon-cpp/tests/integration_js
           sparse-checkout-cone-mode: false
+      # inference-addon-cpp ships no committed test-groups.json / integration.auto.cjs
+      # (both are generated from the desktop suites at build time). Regenerate JUST
+      # the runner map here — pure fs, no native build — so validate-devices can
+      # reject a bad tests filter and count the real shard fan-out (one shard per
+      # desktop suite) BEFORE the expensive build. This only runs on dispatch
+      # (inputs.platform != ''), i.e. on repo-branch code — the same code the build
+      # job compiles — so it adds no new trust boundary. A generator hiccup degrades
+      # gracefully to device-only validation instead of blocking the run.
+      - name: Generate mobile runner map (tests-filter + shard-count source)
+        id: gen_groups
+        shell: bash
+        run: |
+          set -uo pipefail
+          if node -e "const{expectedEntries,expectedTestGroups}=require('./packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js');process.stdout.write(expectedTestGroups(expectedEntries()))" > inference-mobile-test-groups.json 2> gen.err; then
+            echo "path=inference-mobile-test-groups.json" >> "$GITHUB_OUTPUT"
+            echo "Generated runner map with $(jq '.android | keys | length' inference-mobile-test-groups.json) shard(s):"
+            jq -r '[.android[] | .[]] | unique | .[] | "  - " + .' inference-mobile-test-groups.json
+          else
+            echo "::warning::Could not generate the inference-addon-cpp runner map ($(tr '\n' ' ' < gen.err)); falling back to device-only validation (no tests-filter / shard-count check)."
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
       - name: Validate requested devices
         uses: ./.github/actions/run-mobile-integration-tests/validate-devices
         with:
           platform: ${{ inputs.platform }}
           devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
           device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: ${{ steps.gen_groups.outputs.path }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
   # Resolve the framework revision ONCE, before any fork code runs. `setup` (inside

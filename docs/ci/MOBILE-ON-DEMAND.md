@@ -42,7 +42,11 @@ front (so you never pay for a wasted build or an unschedulable run):
 
 - the requested model(s) **exist** on Device Farm for the chosen platform;
 - the `tests` filter (if any) **matches at least one real runner** — a typo that
-  would otherwise run zero tests and pass green is rejected here (sharded addons);
+  would otherwise run zero tests and pass green is rejected here. This now covers
+  **every addon**: sharded addons validate against their `test-groups.json`,
+  single-spec addons against their committed `test/mobile/integration.auto.cjs`,
+  and `inference-addon-cpp` regenerates its runner map (one shard per desktop
+  suite) at validation time;
 - the **total run count** (`specs × devices`) is within the cap (see
   [Run-count cap](#run-count-cap-fail-fast)).
 
@@ -105,12 +109,14 @@ the many shards into a single filtered run — a big cost saving. Leaving it emp
 on a sharded addon runs the **full** shard set pinned to your chosen device(s),
 which is many runs.
 
-**A typo can't waste money or pass green.** For sharded addons the `validate-devices`
-job matches your filter against the real runner names *before* any build, and
-fails fast (printing the known runners) if it matches none — so a mistyped filter
-can't reach the device, select zero tests, and report a false pass. Model
-pre-staging follows the same regex: only the models the matched runners need are
-staged; anything unmatched is simply fetched on-device.
+**A typo can't waste money or pass green.** For **every** addon the
+`validate-devices` job matches your filter against the real runner names *before*
+any build, and fails fast (printing the known runners) if it matches none — so a
+mistyped filter can't reach the device, select zero tests, and report a false
+pass. Model pre-staging follows the same regex: only the models the matched
+runners need are staged; anything unmatched is simply fetched on-device (a
+partial pattern like `runBenchmarkPerf` stages every shard it selects, not
+nothing).
 
 #### Where to find the test names (per addon)
 
@@ -220,7 +226,9 @@ scheduler as a backstop):
 - **≤ 10 unique devices** per dispatch.
 - **≤ 40 total Device Farm runs**, where `runs = specs × devices`. `specs` is the
   number of shards for the platform when `tests` is empty, or **1** when you pass a
-  `tests` filter (a filter collapses the run to a single grepped spec).
+  `tests` filter (a filter collapses the run to a single grepped spec). Single-spec
+  addons are always `specs = 1`; `inference-addon-cpp` counts one shard per desktop
+  suite (regenerated at validation time), so its fan-out is bounded correctly too.
 
 So the broad example above (3 devices, no filter) is fine on every addon — e.g.
 `tts-ggml` has 9 Android shards → `9 × 3 = 27` runs. Broad coverage on a

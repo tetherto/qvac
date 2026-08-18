@@ -113,18 +113,30 @@ function expandPrestageList(man, grep) {
   const urls = man.urls || {}
   const fallbacks = man.fallbacks || {}
   const byTest = man.tests || {}
-  const tests = grep
-    ? grep
-        .split('|')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : Object.keys(byTest)
-  const missing = tests.filter((t) => t.startsWith('runBenchmarkPerf') && !byTest[t])
-  if (missing.length)
-    throw new Error('[prestage] missing benchmark mapping(s): ' + missing.join(', '))
+  const names = Object.keys(byTest)
+  // grep is a mocha --grep REGEX over runner NAMES (same semantics as on-device
+  // mocha and as validate-devices), NOT a list of literal |-separated keys.
+  // Match it against the known runners so a partial pattern (e.g.
+  // "runBenchmarkPerf" or "Chat") stages every shard it selects instead of
+  // silently nothing. Empty grep => every shard. An invalid regex or a pattern
+  // that matches no runner stages nothing (device downloads its own models);
+  // validate-devices already rejects a zero-match filter before we get here, so
+  // this only stays defensive.
+  let matched
+  if (grep) {
+    let re = null
+    try {
+      re = new RegExp(grep)
+    } catch (e) {
+      re = null
+    }
+    matched = re ? names.filter((n) => re.test(n)) : []
+  } else {
+    matched = names
+  }
   const seen = new Set()
   const rows = []
-  for (const t of tests) {
+  for (const t of matched) {
     for (const name of byTest[t] || []) {
       if (!seen.has(name)) {
         seen.add(name)

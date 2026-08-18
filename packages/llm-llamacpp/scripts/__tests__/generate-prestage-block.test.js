@@ -156,7 +156,8 @@ test('buildScript embeds the resolved manifest (android default)', () => {
 
   assert.match(script, new RegExp(encoded))
   assert.match(script, /PRESTAGE_DIR=\/data\/local\/tmp\/prestaged-models/)
-  assert.match(script, /missing benchmark mapping/)
+  // Embedded selector treats the shard grep as a regex over runner names.
+  assert.match(script, /new RegExp\(grep\)/)
   assert.match(script, /adb push/)
   assert.doesNotMatch(script, /pymobiledevice3/)
 })
@@ -166,7 +167,7 @@ test('buildScript ios backend uses pymobiledevice3 apps push into Documents', ()
   const script = buildScript(encoded, 'ios')
 
   assert.match(script, new RegExp(encoded))
-  assert.match(script, /missing benchmark mapping/)
+  assert.match(script, /new RegExp\(grep\)/)
   assert.match(script, /pymobiledevice3 apps push/)
   assert.match(script, /Documents\/\$NAME/)
   assert.match(script, /unset SUDO_UID SUDO_GID/)
@@ -240,25 +241,42 @@ test('normalize -> expand round-trips each shard to its {name,url} rows', () => 
   ])
 })
 
-test('expandPrestageList honours a multi-test grep and dedupes overlap', () => {
+test('expandPrestageList honours a multi-test grep (regex alternation) and dedupes overlap', () => {
   const normalized = normalizeManifest({
     runA: [{ name: 'shared.gguf', url: 'u://shared' }],
     runB: [{ name: 'shared.gguf', url: 'u://shared' }],
     runC: [{ name: 'only-c.gguf', url: 'u://c' }]
   })
 
-  assert.deepEqual(expandPrestageList(normalized, 'runA | runB'), [
+  assert.deepEqual(expandPrestageList(normalized, 'runA|runB'), [
     { name: 'shared.gguf', url: 'u://shared' }
   ])
 })
 
-test('expandPrestageList throws when a benchmark shard has no mapping', () => {
+test('expandPrestageList treats grep as a regex, so a partial pattern selects every matching shard', () => {
+  const normalized = normalizeManifest({
+    runBenchmarkPerf_1b_q4: [{ name: '1b.gguf', url: 'u://1b' }],
+    runBenchmarkPerf_3b_q4: [{ name: '3b.gguf', url: 'u://3b' }],
+    runBasicCompletionTest: [{ name: 'basic.gguf', url: 'u://basic' }]
+  })
+
+  // Partial regex over the benchmark family — used to fail (literal split found
+  // no exact "runBenchmarkPerf" key and staged nothing); now stages both shards.
+  assert.deepEqual(expandPrestageList(normalized, 'runBenchmarkPerf'), [
+    { name: '1b.gguf', url: 'u://1b' },
+    { name: '3b.gguf', url: 'u://3b' }
+  ])
+})
+
+test('expandPrestageList stages nothing (no throw) for a zero-match or invalid grep', () => {
   const normalized = normalizeManifest({ runOther: [{ name: 'm.gguf', url: 'u://m' }] })
 
-  assert.throws(
-    () => expandPrestageList(normalized, 'runBenchmarkPerf_1b_q4'),
-    /missing benchmark mapping/
-  )
+  // A grep that matches no known runner: device falls back to its own download.
+  // validate-devices already rejects this before device-farm spend; here we
+  // just prove prestage stays graceful instead of throwing on a billed device.
+  assert.deepEqual(expandPrestageList(normalized, 'runBenchmarkPerf_1b_q4'), [])
+  // An invalid regex must not crash the pre_test phase either.
+  assert.deepEqual(expandPrestageList(normalized, '('), [])
 })
 
 test('commonPrelude embeds expandPrestageList verbatim (no host/CI drift)', () => {

@@ -134,6 +134,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            packages/audiogen-ggml/test/mobile/test-groups.json
           sparse-checkout-cone-mode: false
           path: trusted-actions
           persist-credentials: false
@@ -143,6 +144,11 @@ jobs:
           platform: ${{ inputs.platform }}
           devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
           device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          # test-groups.json is data (runner names + shard count), so it comes
+          # from the same default-branch checkout as the action for this
+          # release-environment job.
+          test-groups-path: trusted-actions/packages/audiogen-ggml/test/mobile/test-groups.json
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
   # NOTE: continue-on-error: true matches the sibling mobile addons
