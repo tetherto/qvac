@@ -25,6 +25,11 @@
   short-lived isolated worklet, which is exactly the load/terminate cycle those
   fixes cover.
 
+### Pull Requests
+
+- [#3926](https://github.com/tetherto/qvac/pull/3926) - chore[notask]: bump
+  model-fit to inference-addon-cpp 1.3.3
+
 ## [0.2.1] - 2026-08-18
 
 Records a fix that was left out of `0.2.0`. It merged (#3890) before the
