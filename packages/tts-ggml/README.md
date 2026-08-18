@@ -67,6 +67,7 @@ obvious for each job.
 | Voice cloning at 44.1 kHz with nothing pre-baked | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Clones from a reference wav **and its transcript**, encoded in-process — no enrolment step, no voice profile. Whole-utterance only (no native chunk streaming). |
 | Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
 | Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in GPU offload (Metal on Apple, Vulkan on Linux/Windows, OpenCL/Adreno on Android); native 24 kHz. |
+| Zero-shot / cross-lingual cloning (multilingual) | CosyVoice3 dir + `cosyvoice3-s3tok-*.gguf` + `cosyvoice3-campplus-*.gguf` | Clones from a reference wav; its transcript (`promptText`) selects zero-shot, omitting it selects cross-lingual (timbre only, any target language). Composes with `instruct`. |
 | Description-conditioned English (caption / emotion) | `parler-mini-v1-q8_0.gguf` | Recommended English Parler checkpoint for caption / emotion control. |
 | Voice cloning with noisy input audio | Any engine above + `lavasr-denoiser.gguf` | Post-process (batch path); cleans before optional enhancement. See [Speech enhancement (LavaSR)](#speech-enhancement-lavasr). |
 | 48 kHz bandwidth-extended output | Any engine above + `lavasr-enhancer.gguf` | Post-process, not a TTS engine. Optional `lavasr-denoiser.gguf` first (batch path). |
@@ -84,7 +85,7 @@ here, so this guide does not go stale when backends change.
 | `chatterbox-t3-mtl` + `s3gen-mtl` | Multilingual | ~2.0 GB | 24 kHz | Reference wav / voice dir | Sentence + native chunk |
 | `parler-indic-q8_0` | 21 Indic | ~1.3 GB | 44.1 kHz | `voice` / `emotion` / description | Sentence streaming |
 | `parler-mini-v1-q8_0` | English | ~1.2 GB | 44.1 kHz | Description / templates | Sentence streaming |
-| CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir | 24 kHz | `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts |
+| CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir (+ ~300 MB to clone) | 24 kHz | Reference wav (zero-shot / cross-lingual) + `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts |
 | `audio8-lm-q8_0` + codec halves | Text-led (no `language` option) | ~0.7 GB (+ ~120 MB to clone) | 44.1 kHz | Reference wav + transcript, per call too | Sentence streaming |
 
 ### Legacy Supertonic v1 / v2
@@ -159,6 +160,9 @@ cosyvoice3/
   cosyvoice3-hift-*.gguf   (~83 MB f32 — CausalHiFT vocoder)
   voice.gguf               (baked default voice: timbre + prompt tensors)
   vocab.json  merges.txt   (Qwen2 BPE tokenizer)
+  cosyvoice3-s3tok-*.gguf  (~275 MB q8_0 / ~497 MB f16 — speech tokenizer;
+                            voice cloning only)
+  cosyvoice3-campplus-*.gguf (~28 MB f32 — CAM++ speaker encoder; cloning only)
 
 # Audio8 (Audio8-AI/Audio8_TTS; 44.1 kHz, DualAR + neural codec) — three
 # GGUFs, published per quant tier; the encoder is only needed to clone a voice
@@ -371,6 +375,56 @@ The engine caches the codes for the most recent reference, so repeating one
 across calls skips the encoder.  Per-call fields also ride on the
 `runStream` / `runStreaming` options, pinned for the whole response so the
 cache stays hot across chunks.
+
+### CosyVoice3
+
+CosyVoice3 clones **zero-shot or cross-lingual**, selected by whether the
+reference's transcript is provided — the same rule as the upstream
+frontends.  At `load()` the native front-end tokenizes the recording
+(speech_tokenizer_v3), extracts the CAM++ speaker embedding and the prompt
+mel, and replaces the baked default voice; the one-time bake costs about a
+second of CPU for a short clip.
+
+Zero-shot — transcript given, so the LM is prompted with the transcript and
+the reference's speech tokens (best fidelity in the reference's language):
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_COSYVOICE3,
+  files: { cosyvoiceModelDir: './models/cosyvoice3' },
+  referenceAudio: './voices/me.wav',
+  promptText: 'Exactly what the recording says, verbatim.'
+})
+```
+
+Cross-lingual — no transcript, timbre-only conditioning through the flow
+(best when synthesizing a different language than the reference):
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_COSYVOICE3,
+  files: { cosyvoiceModelDir: './models/cosyvoice3' },
+  referenceAudio: './voices/me.wav'
+})
+```
+
+`examples/cosyvoice-tts.js` demonstrates both modes end to end
+(`--reference-audio` / `--prompt-text`).
+
+The recording must be 0.5-30 s (hard limits; 5-15 s of clean speech clones
+most reliably) with finite samples; multichannel input is downmixed to mono
+by the engine.  Cloning needs the two add-on GGUFs —
+`cosyvoice3-s3tok-*.gguf` (speech tokenizer, f16 or q8_0) and
+`cosyvoice3-campplus-*.gguf` (speaker encoder) — auto-discovered under
+`files.cosyvoiceModelDir` by those name prefixes, or passed explicitly as
+`files.cosyvoiceS3tokModel` / `files.cosyvoiceCampplusModel`.  They are
+required **only** when `referenceAudio` is set; every failure (missing
+GGUFs, unreadable or out-of-range audio) rejects the load rather than
+silently keeping the baked voice.  `instruct` composes with a cloned voice:
+the instruction drives dialect/style while the clone supplies the timbre.
+The reference is fixed at construction: there is no per-call reference
+(unlike Audio8), and `reload()` re-bakes the *same* recording rather than
+accepting a new one, so changing voices means constructing a new instance.
 
 ## Speech enhancement (LavaSR)
 
@@ -654,8 +708,10 @@ await model.run({ input: 'Hello from an on-device C++ pipeline.' })
 `instruct` counts toward the one-instruction rule, so combining it with
 `emotion` or `pace` throws.  An unknown `instruct` key or an invalid value
 throws at construction, listing the valid set; with nothing set the model runs
-zero-shot on the baked voice.  Other CosyVoice3-only options: `promptText`
-(reference transcript for the baked voice); `streamLeftContextTokens` is
+zero-shot on the baked voice (or a [cloned one](#cosyvoice3) — `instruct`
+composes with `referenceAudio`, the instruction driving dialect/style while
+the clone supplies the timbre).  Other CosyVoice3-only options: `promptText`
+(the reference transcript — see Voice cloning); `streamLeftContextTokens` is
 reserved / not yet effective (the pinned engine accepts but does not read it).
 CosyVoice3 emits native **24 kHz** and runs on **CPU** by default; GPU offload
 is opt-in via `useGPU` / `nGpuLayers` on Metal (Apple), Vulkan (desktop
@@ -709,7 +765,9 @@ a one-off encode when a new reference recording is supplied.
 | `files.s3genModel`        | string     | —          | Overrides `modelDir` for S3Gen |
 | `files.supertonicModel`   | string     | —          | Supertonic GGUF (overrides `modelDir`) |
 | `files.parlerModel`       | string     | —          | Parler GGUF — mini/large/indic variant (overrides `modelDir`) |
-| `files.cosyvoiceModelDir` | string     | —          | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + `vocab.json` + `merges.txt`); routes to CosyVoice3 |
+| `files.cosyvoiceModelDir` | string     | —          | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + `vocab.json` + `merges.txt`, plus the cloning add-on GGUFs when cloning); routes to CosyVoice3 |
+| `files.cosyvoiceS3tokModel` | string   | —          | CosyVoice3 speech_tokenizer_v3 GGUF; needed only with `referenceAudio` (auto-discovered in the model dir as `cosyvoice3-s3tok-*.gguf`) |
+| `files.cosyvoiceCampplusModel` | string | —         | CosyVoice3 CAM++ speaker-encoder GGUF; needed only with `referenceAudio` (auto-discovered as `cosyvoice3-campplus-*.gguf`) |
 | `files.cosyvoiceLlmModelPath` / `cosyvoiceFlowModelPath` / `cosyvoiceHiftModelPath` | string | — | Per-component overrides for the CosyVoice3 model dir |
 | `files.audio8Lm`          | string     | —          | Audio8 DualAR language model GGUF (overrides `modelDir`) |
 | `files.audio8CodecDecoder`| string     | —          | Audio8 codec synthesis half — codes to wav (overrides `modelDir`) |
@@ -717,7 +775,7 @@ a one-off encode when a new reference recording is supplied.
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
 | `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
 | `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'cosyvoice3'`, `'parler'` or `'audio8'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_COSYVOICE3` / `ENGINE_PARLER` / `ENGINE_AUDIO8`); auto-detected from the GGUFs present otherwise |
-| `referenceAudio`          | string     | —          | Mono wav for voice cloning (Chatterbox: ≥ 5 s; Audio8: also needs `referenceText`).  Audio8 accepts it per call too |
+| `referenceAudio`          | string     | —          | Wav to clone (Chatterbox: mono, ≥ 5 s; CosyVoice3: 0.5-30 s, multichannel downmixed to mono, needs the s3tok + campplus GGUFs; Audio8: also needs `referenceText`).  Audio8 accepts it per call too |
 | `referenceText`           | string     | —          | Audio8-only: what `referenceAudio` says, verbatim.  Required whenever a reference is set; accepted per call |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling) |
@@ -741,7 +799,7 @@ a one-off encode when a new reference recording is supplied.
 | `minNewTokens`            | number     | GGUF default | Parler-only minimum tokens before EOS (`-1` = model default) |
 | `normalizeNumbers`        | boolean    | `true`     | Parler-only: expand digits before tokenization (English words; script-native digits on indic) — parler voices raw digits badly |
 | `instruct`                | object \| string | —    | CosyVoice3-only: instruction controls (`dialect` / `volume` / `style`, resolved by precedence in that order) or a raw instruction string; an unknown key or invalid value throws, and it counts toward the one-instruction rule (see [CosyVoice3 instruct](#cosyvoice3-instruct)) |
-| `promptText`              | string     | —          | CosyVoice3-only: reference transcript for the baked voice |
+| `promptText`              | string     | —          | CosyVoice3-only: verbatim transcript of `referenceAudio` — set for zero-shot cloning, omit for cross-lingual; without a reference it overrides the baked voice's transcript |
 | `streamLeftContextTokens` | number     | —          | CosyVoice3-only: intended native chunk-streaming left-context tokens. Reserved / not yet effective — the pinned engine accepts but does not read it |
 | `mecabDictDir`            | string     | —          | Chatterbox MTL Japanese (`ja`): compiled MeCab/IPAdic dictionary directory |
 | `cangjieTsvPath`          | string     | —          | Chatterbox MTL Chinese (`zh`): `Cangjie5_TC` TSV path |
