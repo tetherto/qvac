@@ -87,7 +87,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -102,7 +102,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/decoder-audio' }}
           addon-npm-name: '@qvac/decoder-audio'
           skip-prebuilds: 'true'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build mobile app
         id: build

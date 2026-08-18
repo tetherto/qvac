@@ -85,6 +85,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp
@@ -144,6 +145,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LoadFitNormalization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuner.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaFinetuningHelpers.cpp

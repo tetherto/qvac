@@ -58,6 +58,15 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      repository:
+        description: >-
+          Repo to check out (owner/name) alongside test-version. Defaults to
+          this repo. Callers passing a fork's ref MUST set this too: a branch
+          name that only exists in the fork cannot be fetched from here, and one
+          that also exists here would silently build the wrong code.
+        required: false
+        type: string
+        default: ""
       plugins:
         description: >-
           Optional comma-separated SDK plugin specifiers (e.g.
@@ -86,10 +95,7 @@ on:
       # not fail at the workflow_call boundary; the jobs that consume them have
       # environment access. AWS auth uses OIDC, so AWS_ACCESS_KEY_ID /
       # AWS_SECRET_ACCESS_KEY are not declared.
-      # PAT_TOKEN and AWS_OIDC_ROLE_ARN remain required:true because they are
-      # repo-level.
-      PAT_TOKEN:
-        required: true
+      # AWS_OIDC_ROLE_ARN remains required:true because it is repo-level.
       NPM_TOKEN:
         required: false
       MQTT_PROTOCOL:
@@ -111,6 +117,7 @@ permissions:
   actions: read
   id-token: write
   contents: read
+  packages: read
 
 jobs:
   report-start:
@@ -146,7 +153,7 @@ jobs:
       runId: ${{ steps.runid.outputs.runId }}
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -159,8 +166,10 @@ jobs:
         working-directory: .
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -254,14 +263,14 @@ jobs:
           const path = require('path');
 
           if (!process.env.NPM_TOKEN) { console.log('NPM_TOKEN is empty'); process.exit(1); }
-          if (!process.env.PAT_TOKEN) { console.log('PAT_TOKEN is empty'); process.exit(1); }
+          if (!process.env.GITHUB_TOKEN) { console.log('GITHUB_TOKEN is empty'); process.exit(1); }
 
           const lines = [
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
@@ -467,7 +476,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           sparse-checkout: ${{ inputs.working-directory }}/device-farm
 
       - name: Download APK artifact
@@ -672,7 +683,7 @@ jobs:
     timeout-minutes: 120
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -681,8 +692,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           sparse-checkout: |
             ${{ inputs.project-directory }}
             .github/actions/sdk-e2e-fail-on-failures
@@ -706,7 +719,7 @@ jobs:
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');

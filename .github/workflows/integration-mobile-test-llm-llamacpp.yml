@@ -148,8 +148,60 @@ on:
         default: false
 
 jobs:
+  # One non-matrixed writer mirrors the mobile model set into the US bucket, so
+  # the two platform legs below never download/upload the same multi-GB objects
+  # concurrently. Each leg then only presigns (fast, no S3 write) for itself.
+  seed-models:
+    name: Seed LLM models (US bucket)
+    runs-on: qvac-ubuntu2204-x64
+    environment: release
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout addon repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: addon
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Compute LLM mobile model set
+        id: mobileset
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          NAMES=$(node -e "const {resolvePinnedManifest}=require('./scripts/generate-prestage-block.js');const fs=require('fs');const mob=JSON.parse(fs.readFileSync('test/mobile/model-manifest.json','utf8'));const integ=JSON.parse(fs.readFileSync('test/integration/models.manifest.json','utf8'));const r=resolvePinnedManifest(mob,integ);const s=new Set();for(const a of Object.values(r))for(const e of a)s.add(e.name);process.stdout.write([...s].join(','))")
+          echo "names=$NAMES" >> "$GITHUB_OUTPUT"
+          echo "LLM mobile model set: $NAMES"
+
+      - name: Seed LLM models into US bucket (mirror-only)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/packages/llm-llamacpp/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/llm/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          hf-token: ${{ secrets.HF_TOKEN }}
+          model-names: ${{ steps.mobileset.outputs.names }}
+          mode: seed
+
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
+    needs: seed-models
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: ${{ inputs.job_timeout_minutes || 150 }}
@@ -194,7 +246,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -233,7 +285,7 @@ jobs:
           # candidate binary. See run-mobile-integration-tests/setup.
           force-npm-prebuild: ${{ inputs.addon_npm_version != '' && 'true' || 'false' }}
           package-version: ${{ inputs.addon_npm_version }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
       # committed — they are generated from test/integration/_benchmark-matrix.js.
@@ -279,6 +331,29 @@ jobs:
           npm run test:mobile:generate
           echo "bootstrapped: staged files + regenerated mobile test list"
 
+      # Compute the models this addon stages on mobile (mobile manifest +
+      # benchmark matrix) so the seed skips desktop-only giants in the manifest.
+      - name: Compute LLM mobile model set
+        id: mobileset
+        working-directory: addon/packages/llm-llamacpp
+        run: |
+          NAMES=$(node -e "const {resolvePinnedManifest}=require('./scripts/generate-prestage-block.js');const fs=require('fs');const mob=JSON.parse(fs.readFileSync('test/mobile/model-manifest.json','utf8'));const integ=JSON.parse(fs.readFileSync('test/integration/models.manifest.json','utf8'));const r=resolvePinnedManifest(mob,integ);const s=new Set();for(const a of Object.values(r))for(const e of a)s.add(e.name);process.stdout.write([...s].join(','))")
+          echo "names=$NAMES" >> "$GITHUB_OUTPUT"
+          echo "LLM mobile model set: $NAMES"
+
+      # Presign the already-seeded (by the seed-models job) US-bucket objects into
+      # a map the prestage steps below consume. Presign-only: no S3 write, fresh
+      # URLs minted per leg right before this leg builds and runs.
+      - name: Presign LLM models (US bucket)
+        uses: ./.github/actions/run-mobile-integration-tests/seed-and-presign-models
+        with:
+          manifest-path: addon/packages/llm-llamacpp/test/integration/models.manifest.json
+          s3-prefix: qvac_models_compiled/mobile-pilot/llm/
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          output-map: ${{ runner.temp }}/llm-url-map.json
+          model-names: ${{ steps.mobileset.outputs.names }}
+          mode: presign
+
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
@@ -312,6 +387,9 @@ jobs:
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/packages/llm-llamacpp
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
+        env:
+          PRESTAGE_URL_MAP: ${{ runner.temp }}/llm-url-map.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -324,6 +402,9 @@ jobs:
         id: ios_prestage
         if: matrix.platform == 'iOS'
         working-directory: addon/packages/llm-llamacpp
+        # Repoint staged models to the US-bucket presigned URLs from the seed step.
+        env:
+          PRESTAGE_URL_MAP: ${{ runner.temp }}/llm-url-map.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/ios-prestage-block.txt"
           {

@@ -37,7 +37,7 @@ export interface ResolveSessionOptions {
 }
 
 export interface ResolveSession {
-  resolvePrimaryModelPath(modelSrc: unknown): Promise<string>
+  resolvePrimaryModelPath(modelSrc: unknown, fallbackSrc?: string): Promise<string>
   createResolveContext(modelSrc: string, modelType: string, modelName?: string): ResolveContext
   getAggregateResult(): ResolveResult | undefined
   cancelAll(): void
@@ -56,20 +56,21 @@ export function createResolveSession(options: ResolveSessionOptions): ResolveSes
     ...(requestBinding !== undefined && { requestBinding })
   }
 
-  async function resolvePrimaryModelPath(modelSrc: unknown) {
+  async function resolvePrimaryModelPath(modelSrc: unknown, fallbackSrc?: string) {
     if (profilingEnabled) {
       const result = await resolveModelPathWithStats(
         modelSrc,
         progressCallback,
         seed,
         signal,
-        downloadHooks
+        downloadHooks,
+        fallbackSrc
       )
       primaryResult = result
       resolveResults.push(result)
       return result.path
     }
-    return resolveModelPath(modelSrc, progressCallback, seed, signal, downloadHooks)
+    return resolveModelPath(modelSrc, progressCallback, seed, signal, downloadHooks, fallbackSrc)
   }
 
   async function resolveForPlugin(src: unknown) {

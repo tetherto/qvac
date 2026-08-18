@@ -6,7 +6,7 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10069.0.0",
+      "version>=": "10069.1.0",
       "features": [
         "hip-backend"
       ]

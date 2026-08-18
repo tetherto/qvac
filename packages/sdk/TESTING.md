@@ -4,11 +4,11 @@ The SDK test suite is split into three clearly separated buckets. Each bucket ha
 
 ## Buckets
 
-| Bucket                | Runtime                                 | Framework                 | Location     | Command                                     |
-| --------------------- | --------------------------------------- | ------------------------- | ------------ | ------------------------------------------- |
-| **Unit**              | Bun / Node                              | brittle                   | `test/unit/` | `bun run test:unit`                         |
-| **Server (Bare)**     | Bare                                    | brittle                   | `test/bare/` | `bun run test:bare`                         |
-| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @tetherto/qvac-test-suite | `e2e/`       | See [below](#e2e--clientconsumer-e2e-tests) |
+| Bucket                | Runtime                                 | Framework             | Location     | Command                                     |
+| --------------------- | --------------------------------------- | --------------------- | ------------ | ------------------------------------------- |
+| **Unit**              | Bun / Node                              | brittle               | `test/unit/` | `bun run test:unit`                         |
+| **Server (Bare)**     | Bare                                    | brittle               | `test/bare/` | `bun run test:bare`                         |
+| **Client (consumer)** | Node (desktop) / Electron / RN (mobile) | @qvac/qvac-test-suite | `e2e/`       | See [below](#e2e--clientconsumer-e2e-tests) |
 
 ## Where new tests must land
 
@@ -46,7 +46,7 @@ Tests that exercise **server-side code requiring the Bare runtime** — addon pl
 
 Tests that exercise the **full SDK from the consumer perspective** — loadModel, completion, transcription, etc.
 These run on desktop Node, packaged Electron apps, and real devices (iOS, Android) via the
-`@tetherto/qvac-test-suite` framework.
+`@qvac/qvac-test-suite` framework.
 
 **Belongs here if:**
 

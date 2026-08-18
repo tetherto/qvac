@@ -1,6 +1,13 @@
 import { generateExportName } from './naming'
 import type { ProcessedModel } from './types'
 
+// tsc-alias rewrites `@/…` specifiers in this file's compiled output,
+// including inside the catalog template string. Build the alias at runtime
+// so generated catalogs keep source `@/` imports (what Prettier expects).
+function catalogAliasSpecifier(modulePath: string) {
+  return ['@', '/', modulePath].join('')
+}
+
 export function generateModelsFileContent(models: ProcessedModel[]): string {
   const usedNames = new Set<string>()
   const named = new Map<ProcessedModel, string>()
@@ -100,8 +107,8 @@ function generateFileContentWithNames(
 import type {
   ModelRegistryEngine,
   ModelRegistryEntryAddon,
-} from "@/schemas/registry";
-import type { ENGINE_TO_ADDON } from "@/schemas/engine-addon-map";
+} from "${catalogAliasSpecifier('schemas/registry')}";
+import type { ENGINE_TO_ADDON } from "${catalogAliasSpecifier('schemas/engine-addon-map')}";
 
 type AddonOfEngine<E extends ModelRegistryEngine> = (typeof ENGINE_TO_ADDON)[E];
 

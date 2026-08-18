@@ -101,6 +101,9 @@ function assertFitResult (value: unknown): asserts value is FitResult {
         throw new TypeError("Fit process result reason must be 'fits' for status 0")
       }
       assertFitPlan(value, true)
+      if ((value['nCtx'] as number) <= 0) {
+        throw new TypeError('Fit process result nCtx must be greater than 0 for status 0')
+      }
       return
     case 1:
       if (value['fits'] !== false) {
