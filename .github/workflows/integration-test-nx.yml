@@ -220,7 +220,7 @@ jobs:
           Remove-Item $TARBALL
 
       - name: Run integration tests (Unix, tee'd)
-        if: matrix.useTeeLogging && matrix.platform != 'win32' && matrix.runIntegrationTests != false
+        if: matrix.useTeeLogging && matrix.platform != 'win32'
         working-directory: ${{ matrix.workdir }}
         shell: bash
         env:
@@ -237,7 +237,7 @@ jobs:
           exit "${PIPESTATUS[0]}"
 
       - name: Run integration tests (Windows, tee'd)
-        if: matrix.useTeeLogging && matrix.platform == 'win32' && matrix.runIntegrationTests != false
+        if: matrix.useTeeLogging && matrix.platform == 'win32'
         working-directory: ${{ matrix.workdir }}
         shell: powershell
         env:
@@ -247,7 +247,7 @@ jobs:
           npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} | Tee-Object test-output.log
 
       - name: Run integration tests
-        if: '!matrix.useTeeLogging && matrix.runIntegrationTests != false'
+        if: '!matrix.useTeeLogging'
         working-directory: ${{ matrix.workdir }}
         env:
           QVAC_ENV_NAME: ${{ matrix.envVarName }}

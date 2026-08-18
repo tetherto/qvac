@@ -49,7 +49,6 @@
         "ci": {
           "envVarName": "GITHUB_TOKEN",
           "envSecretName": "PAT_TOKEN",
-          "runIntegrationTests": true,
           "runRtfBenchmarks": false,
           "rtfBenchmark": {
             "command": "node scripts/run-rtf-benchmark-matrix.js",
