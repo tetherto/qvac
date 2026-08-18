@@ -136,12 +136,6 @@ resources.define('tools', {
   config: { ctx_size: 4096, tools: true }
 })
 
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
-})
-
 resources.define('ocr', {
   constant: OCR_LATIN,
   type: 'ggml-ocr',
@@ -548,6 +542,10 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^parakeet-indic-conformer-/,
+      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
+    ),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'

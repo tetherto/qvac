@@ -4,11 +4,10 @@ name: Mobile Integration Tests (AudioGen GGML)
 # the shared .github/actions/run-mobile-integration-tests composite (same layer
 # tts-ggml / parakeet / the other mobile addons use).
 #
-# The on-device test/mobile/test.cjs downloads the ACE-Step GGUFs from the
-# registry at runtime (no host-side adb prestage), so there is no model manifest
-# or prestage machinery here — a benchmark row simply asks for a different DiT
-# variant. Device Farm project + iOS pool fall back to the shared ONNX_TTS ARNs
-# until dedicated audiogen ARNs are provisioned.
+# Android pre-stages the ACE-Step GGUFs from the Device Farm host and adb-pushes
+# them before Appium starts, avoiding multi-gigabyte phone-side downloads. iOS
+# retains its proven on-device registry path. Device Farm project + iOS pool
+# fall back to the shared ONNX_TTS ARNs until dedicated audiogen ARNs exist.
 
 on:
   workflow_call:
@@ -142,6 +141,32 @@ jobs:
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Configure AWS credentials for Android model pre-stage
+        if: matrix.platform == 'Android'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-duration-seconds: 7200
+
+      - name: Generate model pre-stage commands (Android)
+        id: prestage
+        if: matrix.platform == 'Android'
+        working-directory: addon/${{ inputs.workdir || 'packages/audiogen-ggml' }}
+        shell: bash
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_PRESIGN_EXPIRES_IN: '7200'
+        run: |
+          node scripts/generate-mobile-prestage-block.js \
+            android "${{ matrix.dit_variant || 'turbo-q4' }}" \
+            > "$RUNNER_TEMP/audiogen-prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/audiogen-prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       # The benchmark runner is deliberately absent from test-groups.json, so it
       # never runs on a normal PR. A benchmark run builds the device-farm groups
       # from perf-tests.json instead, so ONLY the benchmark executes. Adding a
@@ -181,8 +206,10 @@ jobs:
           # travels in the config file the runner pushes and os.setEnv()s before
           # the tests load. One row = one (variant, provider) combination.
           extra-device-env: ${{ inputs.run_rtf_benchmarks && format('QVAC_AUDIOGEN_GGML_BENCHMARK_DIT_VARIANT={0};QVAC_AUDIOGEN_GGML_BENCHMARK_USE_GPU={1};QVAC_AUDIOGEN_GGML_BENCHMARK_WARMUP_RUNS={2};QVAC_AUDIOGEN_GGML_BENCHMARK_RUNS={3};QVAC_AUDIOGEN_GGML_BENCHMARK_DURATION_S={4};QVAC_AUDIOGEN_GGML_BENCHMARK_DEVICE={5}-device-farm;QVAC_AUDIOGEN_GGML_BENCHMARK_RUNNER=aws-device-farm-{5};QVAC_AUDIOGEN_GGML_BENCHMARK_LABEL={5}-{0}-{6}', matrix.dit_variant, matrix.use_gpu && '1' || '0', matrix.warmup, matrix.runs, matrix.duration, matrix.platform, matrix.use_gpu && 'gpu' || 'cpu') || '' }}
-          # Model load + diffusion of a ~3 GB GGUF set plus the on-device
-          # registry download; give it a generous per-test budget.
+          # Android gets the host-generated block above; iOS keeps its existing
+          # on-device registry download. No shared action changes are required.
+          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          # Keep enough budget for iOS download and both platforms' model load.
           mocha-timeout-ms: '3600000'
           wdio-waitfor-timeout-ms: '600000'
 
