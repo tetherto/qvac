@@ -68,14 +68,14 @@ public:
 
   int buildIvf(int nLists, int nIter) noexcept;
 
-  // Top-k search. Caller owns out arrays of size n_q * k.
+  // Top-k search. Caller owns out arrays of size nQ * k.
   int search(
-      const float* queries, int n_q, int k, float* outScores,
+      const float* queries, int nQ, int k, float* outScores,
       uint64_t* outIds) const noexcept;
 
   // Top-k search restricted to the caller-supplied allowlist.
   int searchFiltered(
-      const float* queries, int n_q, int k, const uint64_t* allowedIds,
+      const float* queries, int nQ, int k, const uint64_t* allowedIds,
       int nAllowed, float* outScores, uint64_t* outIds) const noexcept;
 
   // Creates a reusable filter for repeated allowlist searches.
@@ -83,11 +83,11 @@ public:
   createFilter(const uint64_t* allowedIds, int nAllowed) const noexcept;
 
   int searchPreparedFiltered(
-      const VectorIndexFilter& filter, const float* queries, int n_q, int k,
+      const VectorIndexFilter& filter, const float* queries, int nQ, int k,
       float* outScores, uint64_t* outIds) const noexcept;
 
   int searchIvf(
-      const float* queries, int n_q, int k, int nProbe, float* outScores,
+      const float* queries, int nQ, int k, int nProbe, float* outScores,
       uint64_t* outIds) const noexcept;
 
   // Persists to disk. Returns 0 on success.

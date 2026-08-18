@@ -6,39 +6,54 @@
 // LlamaLazyInitializeBackend symbols (lifecycle isolation requirement of
 // the POC).
 
+#include <cstdint>
+
 #include <ggml-vector-index.h>
 
 namespace qvac_lib_infer_llamacpp_embed::vector_index_errors {
 
 constexpr const char* ADDON_ID = "IdMapIndex";
 
-inline const char* toString(int code) noexcept {
+enum class VecIndexError : std::int32_t {
+  Ok = GGML_VEC_INDEX_OK,
+  InvalidArgument = GGML_VEC_INDEX_E_INVALID_ARG,
+  Duplicate = GGML_VEC_INDEX_E_DUPLICATE,
+  NotFound = GGML_VEC_INDEX_E_NOT_FOUND,
+  Io = GGML_VEC_INDEX_E_IO,
+  BadMagic = GGML_VEC_INDEX_E_BAD_MAGIC,
+  BadVersion = GGML_VEC_INDEX_E_BAD_VERSION,
+  OutOfMemory = GGML_VEC_INDEX_E_OOM,
+  PartialCompact = GGML_VEC_INDEX_E_PARTIAL_COMPACT,
+  NotDurable = GGML_VEC_INDEX_E_NOT_DURABLE,
+  Internal = GGML_VEC_INDEX_E_INTERNAL,
+};
+
+constexpr const char* toString(VecIndexError code) noexcept {
   switch (code) {
-  case GGML_VEC_INDEX_OK:
+  case VecIndexError::Ok:
     return "OK";
-  case GGML_VEC_INDEX_E_INVALID_ARG:
+  case VecIndexError::InvalidArgument:
     return "InvalidArgument";
-  case GGML_VEC_INDEX_E_DUPLICATE:
+  case VecIndexError::Duplicate:
     return "DuplicateId";
-  case GGML_VEC_INDEX_E_NOT_FOUND:
+  case VecIndexError::NotFound:
     return "NotFound";
-  case GGML_VEC_INDEX_E_IO:
+  case VecIndexError::Io:
     return "IOError";
-  case GGML_VEC_INDEX_E_BAD_MAGIC:
+  case VecIndexError::BadMagic:
     return "BadMagic";
-  case GGML_VEC_INDEX_E_BAD_VERSION:
+  case VecIndexError::BadVersion:
     return "BadVersion";
-  case GGML_VEC_INDEX_E_OOM:
+  case VecIndexError::OutOfMemory:
     return "OutOfMemory";
-  case GGML_VEC_INDEX_E_PARTIAL_COMPACT:
+  case VecIndexError::PartialCompact:
     return "PartialCompact";
-  case GGML_VEC_INDEX_E_NOT_DURABLE:
+  case VecIndexError::NotDurable:
     return "NotDurable";
-  case GGML_VEC_INDEX_E_INTERNAL:
+  case VecIndexError::Internal:
     return "InternalError";
-  default:
-    return "UnknownError";
   }
+  return "UnknownError";
 }
 
 } // namespace qvac_lib_infer_llamacpp_embed::vector_index_errors

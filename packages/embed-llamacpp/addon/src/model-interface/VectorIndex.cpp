@@ -1,31 +1,61 @@
 #include "VectorIndex.hpp"
 
+#include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 namespace qvac_lib_infer_llamacpp_embed {
 
 namespace {
 
-ggml_vec_index_t*
-create_index(int dim, int bitWidth, const std::string& storage) {
+enum class StorageType { Default, Q4, Q8, F32, TurboVecQ2, TurboVecQ4 };
+
+constexpr std::optional<StorageType>
+parseStorageType(std::string_view storage) noexcept {
   if (storage.empty()) {
-    if (bitWidth == 2) {
-      return ggml_vec_index_create_turbovec_q2(dim);
-    }
-    return ggml_vec_index_create(dim, bitWidth);
+    return StorageType::Default;
   }
-  if ((storage == "q4" && bitWidth == 4) ||
-      (storage == "q8" && bitWidth == 8) ||
-      (storage == "f32" && bitWidth == 32)) {
-    return ggml_vec_index_create(dim, bitWidth);
+  if (storage == "q4") {
+    return StorageType::Q4;
   }
-  if (storage == "turbovec-q4") {
-    return bitWidth == 4 ? ggml_vec_index_create_turbovec_q4(dim) : nullptr;
+  if (storage == "q8") {
+    return StorageType::Q8;
+  }
+  if (storage == "f32") {
+    return StorageType::F32;
   }
   if (storage == "turbovec-q2") {
-    return bitWidth == 2 ? ggml_vec_index_create_turbovec_q2(dim) : nullptr;
+    return StorageType::TurboVecQ2;
   }
+  if (storage == "turbovec-q4") {
+    return StorageType::TurboVecQ4;
+  }
+  return std::nullopt;
+}
+
+ggml_vec_index_t* createIndex(int dim, int bitWidth, std::string_view storage) {
+  const auto type = parseStorageType(storage);
+  if (!type.has_value()) {
+    return nullptr;
+  }
+
+  switch (*type) {
+  case StorageType::Default:
+    return bitWidth == 2 ? ggml_vec_index_create_turbovec_q2(dim)
+                         : ggml_vec_index_create(dim, bitWidth);
+  case StorageType::Q4:
+    return bitWidth == 4 ? ggml_vec_index_create(dim, 4) : nullptr;
+  case StorageType::Q8:
+    return bitWidth == 8 ? ggml_vec_index_create(dim, 8) : nullptr;
+  case StorageType::F32:
+    return bitWidth == 32 ? ggml_vec_index_create(dim, 32) : nullptr;
+  case StorageType::TurboVecQ2:
+    return bitWidth == 2 ? ggml_vec_index_create_turbovec_q2(dim) : nullptr;
+  case StorageType::TurboVecQ4:
+    return bitWidth == 4 ? ggml_vec_index_create_turbovec_q4(dim) : nullptr;
+  }
+
   return nullptr;
 }
 
@@ -59,7 +89,7 @@ VectorIndexFilter::operator=(VectorIndexFilter&& other) noexcept {
 }
 
 VectorIndex::VectorIndex(int dim, int bitWidth, const std::string& storage)
-    : handle_(create_index(dim, bitWidth, storage)) {
+    : handle_(createIndex(dim, bitWidth, storage)) {
   if (handle_ == nullptr) {
     throw std::invalid_argument("ggml_vec_index_create rejected dim/storage");
   }
@@ -123,16 +153,16 @@ int VectorIndex::buildIvf(int nLists, int nIter) noexcept {
 }
 
 int VectorIndex::search(
-    const float* queries, int n_q, int k, float* outScores,
+    const float* queries, int nQ, int k, float* outScores,
     uint64_t* outIds) const noexcept {
-  return ggml_vec_index_search(handle_, queries, n_q, k, outScores, outIds);
+  return ggml_vec_index_search(handle_, queries, nQ, k, outScores, outIds);
 }
 
 int VectorIndex::searchFiltered(
-    const float* queries, int n_q, int k, const uint64_t* allowedIds,
+    const float* queries, int nQ, int k, const uint64_t* allowedIds,
     int nAllowed, float* outScores, uint64_t* outIds) const noexcept {
   return ggml_vec_index_search_filtered(
-      handle_, queries, n_q, k, allowedIds, nAllowed, outScores, outIds);
+      handle_, queries, nQ, k, allowedIds, nAllowed, outScores, outIds);
 }
 
 VectorIndexFilter VectorIndex::createFilter(
@@ -143,17 +173,17 @@ VectorIndexFilter VectorIndex::createFilter(
 }
 
 int VectorIndex::searchPreparedFiltered(
-    const VectorIndexFilter& filter, const float* queries, int n_q, int k,
+    const VectorIndexFilter& filter, const float* queries, int nQ, int k,
     float* outScores, uint64_t* outIds) const noexcept {
   return ggml_vec_index_search_prepared_filtered(
-      handle_, filter.raw(), queries, n_q, k, outScores, outIds);
+      handle_, filter.raw(), queries, nQ, k, outScores, outIds);
 }
 
 int VectorIndex::searchIvf(
-    const float* queries, int n_q, int k, int nProbe, float* outScores,
+    const float* queries, int nQ, int k, int nProbe, float* outScores,
     uint64_t* outIds) const noexcept {
   return ggml_vec_index_search_ivf(
-      handle_, queries, n_q, k, nProbe, outScores, outIds);
+      handle_, queries, nQ, k, nProbe, outScores, outIds);
 }
 
 int VectorIndex::write(const std::string& path) noexcept {
