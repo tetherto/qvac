@@ -9,7 +9,8 @@ import {
   getModelsCacheDir,
   getShardedModelCacheDir,
   generateShortHash,
-  extractAndValidateShardedArchive
+  extractAndValidateShardedArchive,
+  measureChecksum
 } from '@/server/utils'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
@@ -25,7 +26,10 @@ import {
 import type { ResolveResult, DownloadResult, DownloadHooks } from './types'
 import type { AbortSignal } from 'bare-abort-controller'
 import {
+  ChecksumValidationFailedError,
+  DownloadCancelledError,
   InferenceCancelledError,
+  ModelFileNotFoundError,
   ModelLoadFailedError,
   ModelNotFoundError,
   SeedingNotSupportedError
@@ -115,18 +119,102 @@ function buildResult(
   return { path: pathOrResult, sourceType }
 }
 
+// A fallback is a non-P2P source: only HTTP URLs and file paths are valid.
+// registry:// and pear:// are rejected.
+export async function resolveFallbackModel(
+  fallbackSrc: string,
+  expectedChecksum: string | undefined,
+  progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
+  mode: ResolveMode,
+  signal: AbortSignal | undefined,
+  hooks: DownloadHooks | undefined
+): Promise<ResolveResult> {
+  if (fallbackSrc.startsWith('registry://') || fallbackSrc.startsWith('pear://')) {
+    throw new ModelLoadFailedError('fallbackSrc must be an HTTP URL or a local file path.')
+  }
+
+  // seed applies only to hyperdrive sources, which a fallback can never be.
+  const result = await resolveModelPathCore(
+    fallbackSrc,
+    progressCallback,
+    false,
+    mode,
+    signal,
+    hooks
+  )
+
+  // Report a missing fallback file as a not-found error before checksumming.
+  try {
+    await fsPromises.access(result.path)
+  } catch {
+    throw new ModelFileNotFoundError(result.path)
+  }
+
+  if (expectedChecksum && expectedChecksum.length === 64) {
+    const actualChecksum = await measureChecksum(result.path, hooks)
+    if (actualChecksum !== expectedChecksum) {
+      // http downloads are cached under the models dir; drop a corrupt one.
+      if (result.sourceType === 'http') {
+        await fsPromises.unlink(result.path).catch(() => {})
+      }
+      throw new ChecksumValidationFailedError(fallbackSrc)
+    }
+  }
+
+  return result
+}
+
+// Registry download with optional fallback. A user-initiated cancel always
+// propagates. On any other primary failure: a fallback is taken when present;
+// otherwise a known model surfaces a neutral error and an unknown one rethrows.
+export async function resolveRegistryModel(params: {
+  hasFallback: boolean
+  isKnownModel: boolean
+  downloadPrimary: () => Promise<ResolveResult>
+  resolveFallback: () => Promise<ResolveResult>
+  buildUnreachableError: (cause: unknown) => Error
+}): Promise<ResolveResult> {
+  try {
+    return await params.downloadPrimary()
+  } catch (error) {
+    if (error instanceof InferenceCancelledError || error instanceof DownloadCancelledError) {
+      throw error
+    }
+    if (params.hasFallback) {
+      return params.resolveFallback()
+    }
+    const isCorrectnessError =
+      error instanceof ChecksumValidationFailedError ||
+      error instanceof ModelNotFoundError ||
+      error instanceof ModelFileNotFoundError
+    if (params.isKnownModel && !isCorrectnessError) {
+      throw params.buildUnreachableError(error)
+    }
+    throw error
+  }
+}
+
 async function resolveModelPathCore(
   modelSrc: unknown,
   progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
   seed: boolean | undefined,
   mode: ResolveMode,
   signal: AbortSignal | undefined,
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  fallbackSrc?: string
 ): Promise<ResolveResult> {
   if (signal?.aborted) {
     throw new InferenceCancelledError(hooks?.requestBinding?.requestId ?? 'unknown')
   }
   const srcString = modelInputToSrcSchema.parse(modelSrc)
+
+  // A fallback is validated against the catalog checksum, which exists only for
+  // built-in registry models. Other sources have no checksum to validate against.
+  if (fallbackSrc !== undefined && !srcString.startsWith('registry://')) {
+    throw new ModelLoadFailedError(
+      'fallbackSrc is only supported when modelSrc is a built-in registry model.'
+    )
+  }
 
   // Empty modelSrc is reserved for plugins that ship bundled weights
   // (e.g. `@qvac/classification-ggml`). The handler skips this resolver
@@ -158,26 +246,70 @@ async function resolveModelPathCore(
     const explicitMetadata = getExplicitRegistryMetadata(modelSrc)
     const expectedChecksum = modelMetadata?.sha256Checksum ?? explicitMetadata?.sha256Checksum
 
-    const result =
-      mode === 'stats'
-        ? await downloadModelFromRegistryWithStats(
-            registryPath,
-            registrySource,
-            progressCallback,
-            expectedChecksum,
-            hooks,
-            explicitMetadata
-          )
-        : await downloadModelFromRegistry(
-            registryPath,
-            registrySource,
-            progressCallback,
-            expectedChecksum,
-            hooks,
-            explicitMetadata
-          )
-    logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`)
-    return buildResult(result, 'registry')
+    // An uncatalogued registry path carries no checksum to validate a fallback against.
+    if (fallbackSrc !== undefined && !modelMetadata) {
+      throw new ModelLoadFailedError(
+        'fallbackSrc is only supported when modelSrc is a built-in registry model.'
+      )
+    }
+
+    // A single-file fallback cannot satisfy a sharded or companion-set model.
+    if (
+      fallbackSrc !== undefined &&
+      (modelMetadata?.shardMetadata || modelMetadata?.companionSet)
+    ) {
+      throw new ModelLoadFailedError(
+        'fallbackSrc is not supported for sharded or multi-file models.'
+      )
+    }
+
+    return resolveRegistryModel({
+      hasFallback: fallbackSrc !== undefined,
+      isKnownModel: modelMetadata !== undefined,
+      downloadPrimary: async () => {
+        const result =
+          mode === 'stats'
+            ? await downloadModelFromRegistryWithStats(
+                registryPath,
+                registrySource,
+                progressCallback,
+                expectedChecksum,
+                hooks,
+                explicitMetadata
+              )
+            : await downloadModelFromRegistry(
+                registryPath,
+                registrySource,
+                progressCallback,
+                expectedChecksum,
+                hooks,
+                explicitMetadata
+              )
+        logger.info(`Loaded Model to ${isDownloadResult(result) ? result.path : result}`)
+        return buildResult(result, 'registry')
+      },
+      resolveFallback: () => {
+        logger.info(
+          `Registry download failed for ${registryPath}; trying fallbackSrc: ${fallbackSrc}`
+        )
+        return resolveFallbackModel(
+          fallbackSrc!,
+          expectedChecksum,
+          progressCallback,
+          mode,
+          signal,
+          hooks
+        )
+      },
+      buildUnreachableError: (cause) =>
+        new ModelLoadFailedError(
+          `Could not download "${modelMetadata?.modelId}" from the registry on this network ` +
+            `(${cause instanceof Error ? cause.message : String(cause)}). ` +
+            'If the registry is not reliably reachable here, pass a fallbackSrc ' +
+            '(an HTTP URL or local file path) to load this model from an alternate source.',
+          cause
+        )
+    })
   }
 
   // Validate seeding is only used with hyperdrive models
@@ -243,9 +375,18 @@ export async function resolveModelPath(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  fallbackSrc?: string
 ): Promise<string> {
-  const result = await resolveModelPathCore(modelSrc, progressCallback, seed, 'base', signal, hooks)
+  const result = await resolveModelPathCore(
+    modelSrc,
+    progressCallback,
+    seed,
+    'base',
+    signal,
+    hooks,
+    fallbackSrc
+  )
   return result.path
 }
 
@@ -254,7 +395,8 @@ export async function resolveModelPathWithStats(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   seed?: boolean,
   signal?: AbortSignal,
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  fallbackSrc?: string
 ): Promise<ResolveResult> {
-  return resolveModelPathCore(modelSrc, progressCallback, seed, 'stats', signal, hooks)
+  return resolveModelPathCore(modelSrc, progressCallback, seed, 'stats', signal, hooks, fallbackSrc)
 }
