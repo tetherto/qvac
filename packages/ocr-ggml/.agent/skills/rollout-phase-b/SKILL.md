@@ -1,6 +1,6 @@
 ---
 name: rollout-phase-b
-description: Phase B of a qvac-fabric rollout — tag the merged fabric commit, publish to registry, create 1 bundled consumer PR (vcpkg bumps + package versions + changelogs for all 7 consumers), post one Slack message. Pass --bump-only to resume a part-done rollout and do just the version + changelog work. Pass --on-top-of-pr to first revert the overlay commit Phase A placed on an open PR.
+description: Phase B of a qvac-fabric rollout — tag the merged fabric commit, publish to registry, land the consumer side (vcpkg bumps + package versions + changelogs for all 7 consumers) as one PR, post one Slack message. Pass --bump-only to resume a part-done rollout and do just the version + changelog work. Pass --on-top-of-pr to put the whole consumer side onto an open PR — revert the overlay commit Phase A placed there AND land the bumps on that same PR, instead of opening a separate bundled PR.
 argument-hint: "<fabric-version> <merge-commit-sha> [--bump-only] [--on-top-of-pr <pr-url>]"
 ---
 
@@ -92,7 +92,8 @@ Expected tag state — **flag it, never resolve it yourself**:
 ### Where the overlay is, and the safety net
 
 `--on-top-of-pr <pr-url>` says Phase A put its overlay commit on an open PR rather than a dedicated
-validation branch. Step 5b reverts it.
+validation branch. Step 5b reverts it — **and B2's bumps land on that same PR**, not on a new one.
+See the mode table at the head of B2; the flag governs the whole consumer side, not just the revert.
 
 **If the flag is absent, still look.** Run the completeness sweep in Step 5b against the working repo
 before proceeding. If it finds overlay artefacts, **stop** — name exactly what was found and which
@@ -127,7 +128,14 @@ Phase B — confirm before proceeding:
   release branch   temp-10069
   merge commit     63bfbdea0    (derived: temp-10069 HEAD)
                    "Merge pull request #204 …"   2026-08-06
-  mode             full (B1 + B2)
+  mode             full (B1 + B2) — bumps land on a new branch off origin/main
+```
+
+The `mode` row must name **where the bumps will land**, so a wrong target is caught before anything is
+pushed. In `--on-top-of-pr` mode it reads:
+
+```
+  mode             full (B1 + B2) — bumps land on PR #3725, no separate PR
 ```
 
 `--bump-only` shows the version, that `v<VERSION>` exists, and that the registry has published it —
@@ -174,7 +182,9 @@ consumers. Everything the mode skips, it first verifies was actually done.
 
 Combining it with `--on-top-of-pr` is legitimate — the overlay outlives a part-done rollout as easily
 as a whole one. In that combination Step 5b still runs, before the bumps, and preflight check 6 is
-what it satisfies.
+what it satisfies. The bumps land on the **target PR** here too, and checks 2 and 7 below need the
+merge-base treatment (Step 5b's `$BASE`) rather than `origin/main`, since the target branch is not cut
+fresh from main.
 
 ### Preflight — verify, then stop or proceed
 
@@ -189,12 +199,12 @@ rollout usually has more than one gap, and drip-feeding them wastes a round trip
 | # | Check | How |
 |---|---|---|
 | 1 | Working repo is the real code repo on the right remote | `git -C <repo> remote -v` → `tetherto/qvac` |
-| 2 | On a branch off `origin/main` — not `main`, not `release-*` | `git -C <repo> rev-parse --abbrev-ref HEAD` |
+| 2 | On a branch off `origin/main` — not `main`, not `release-*` (in `--on-top-of-pr` mode: on the target PR's head branch) | `git -C <repo> rev-parse --abbrev-ref HEAD` |
 | 3 | Fabric tag `v<VERSION>` exists | `git -C <fabric-repo> ls-remote --tags <remote> "v<VERSION>"` |
 | 4 | `qvac-fabric <VERSION>` is published to the registry | see command below — non-null result means published |
 | 5 | All 7 `vcpkg.json` `"version>="` already equal `<VERSION>` | read each `packages/<consumer>/vcpkg.json` |
 | 6 | Overlay fully removed | the completeness sweep in Step 5b, repo-wide — not just the 7 |
-| 7 | No `default-registry.baseline` drift | `git -C <repo> diff origin/main -- "packages/*/vcpkg-configuration.json"` → empty |
+| 7 | No `default-registry.baseline` drift | `git -C <repo> diff $BASE -- "packages/*/vcpkg-configuration.json"` → empty (`$BASE` = `origin/main`, or the merge base in `--on-top-of-pr` mode) |
 | 8 | Per consumer: `origin/main` `package.json` version vs npm | `npm view @qvac/<pkg> dist-tags.latest` |
 
 **Check 4** — request the raw blob so no base64 decoding is needed:
@@ -248,8 +258,10 @@ Two cases that look like failures and are not:
 **Step 7 sub-step 3 (Phase A C++ fixes) cannot be verified mechanically.** Do not claim a check you
 did not perform. Instead print the non-manifest diff and have the user confirm:
 ```bash
-git -C <repo> diff --stat origin/main -- "packages/*/addon" "packages/*/src"
+git -C <repo> diff --stat $BASE -- "packages/*/addon" "packages/*/src"
 ```
+(`$BASE` = `origin/main`, or the merge base in `--on-top-of-pr` mode — on a target PR branch
+`origin/main` folds in the author's own C++ and makes this unreadable.)
 
 ### On success — apply the bumps
 
@@ -273,11 +285,13 @@ Apply the 14 edits (7 × `package.json` + 7 × `CHANGELOG.md`), then **stop and 
 committing**. Print:
 
 1. a summary table — `pkg · old → new · level`;
-2. `git -C <repo> diff --stat origin/main`.
+2. `git -C <repo> diff --stat $BASE` — or, in `--on-top-of-pr` mode, `git diff --cached --stat`,
+   since the target branch carries the author's work and can never reduce to the 14 files.
 
 Assert the diff touches **only** `package.json` and `CHANGELOG.md` across the 7 packages — anything
 else means something got swept in. Then ask the user to confirm before continuing into Step 9
-(commit / push) and Step 10 (PR). Never commit unattended in this mode.
+(commit / push) and Step 10 (PR — or, in `--on-top-of-pr` mode, updating the target PR instead of
+creating one). Never commit unattended in this mode.
 
 ---
 
@@ -307,30 +321,122 @@ vcpkg hash /tmp/fabric-tag.tgz
   vcpkg --x-builtin-registry-versions-dir=versions x-add-version qvac-fabric
   ```
 
-### Step 4: Verify portfile locally before opening registry PR
+#### Then clean up after `x-add-version` — the diff must stay minimal
 
-Note: commands below assume macOS + Apple Silicon. On Linux, swap `brew install` for your package manager; on Intel Mac or Linux, swap `--triplet arm64-osx` for the matching triplet (e.g. `x64-osx`, `x64-linux`).
+`x-add-version` writes `"port-version": 0` into the new entry, and may **retro-add it to entries that
+are already published**. Both are noise. Delete the field from the new entry, and revert any change to
+an existing entry.
+
+The rule: **omit `port-version` when it is 0** — absent already means 0. Include it **only when
+non-zero**, which a `<VERSION>#1` port rebuild genuinely needs.
+
+Do not argue from file-local style. The file's entries are inconsistent (some carry the field, some
+do not), so "most of them have it" is not evidence that it is required — and normalizing a published
+entry to match is a drive-by edit to something live.
+
+Prove it is unnecessary with the idempotency re-run, after the edit:
 ```bash
-brew install pkg-config
-git clone https://github.com/microsoft/vcpkg /tmp/vcpkg --depth 1
-/tmp/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-VCPKG_ROOT=/tmp/vcpkg GH_TOKEN=$(gh auth token) \
-  /tmp/vcpkg/vcpkg install qvac-fabric \
-  --overlay-ports=<path-to-qvac-registry-vcpkg-clone>/ports \
-  --triplet arm64-osx
+vcpkg --x-builtin-registry-versions-dir=versions x-add-version qvac-fabric --verbose
+# expect: "version <VERSION> is already in …versions/q-/qvac-fabric.json"
+#         "No files were updated for qvac-fabric"
 ```
-Success = SHA512 verified + build passes. Only then open the PR.
+That output means vcpkg considers the entry complete and correct. If it instead rewrites the file or
+demands `--overwrite-version`, the entry really is wrong — fix it rather than forcing it.
+
+`vcpkg x-add-version --verify` **does not exist** (`error: unexpected switch: --verify`). The
+idempotency re-run above is the check; do not go looking for a `--verify` flag.
+
+**Assert this diff shape before pushing.** Anything beyond it is noise:
+```
+ports/qvac-fabric/portfile.cmake | 2 +-      (SHA512 only)
+ports/qvac-fabric/vcpkg.json     | 2 +-      (version only)
+versions/baseline.json           | 2 +-      (baseline string only)
+versions/q-/qvac-fabric.json     | 4 ++++    (pure insertion)
+```
+A `+4/-2`-shaped hunk in `qvac-fabric.json` means an existing entry was modified — revert that part.
+Leave `baseline.json`'s pre-existing per-entry `port-version` keys alone: that file's convention is
+its own, and the rollout changes only the baseline string.
+
+After **any** amend, re-assert the recorded git-tree — it must equal the `git-tree` in the new entry:
+```bash
+git rev-parse HEAD:ports/qvac-fabric
+```
+
+### Step 4: Verify the portfile locally — mandatory, isolated, and reported
+
+This step is not optional and not satisfiable by a green exit code. Read the trap first.
+
+#### The false pass — a clean exit here usually means nothing was built
+
+vcpkg's install plan is satisfied by **any** installed version of the port. A shared install root
+holding an older `qvac-fabric` short-circuits the whole thing:
+
+```
+The following packages are already installed:
+    qvac-fabric[core,llama]:x64-linux@9840.0.1
+Total install time: 156 us
+All requested installations completed successfully in: 156 us
+```
+
+That is **exit 0 having verified nothing** — no download, no hash check, no compile, and the new
+version never mentioned. A fast, clean, cheerful exit is the *failure* signature here, not success.
+(The same reason `--overwrite-version` does not re-install locally: only a clean root rebuilds.)
+
+#### Always isolate the roots
+
+An existing local vcpkg checkout is fine — it is the **install root** that must be fresh, not the
+tool. Isolation is the part that matters; pick the host triplet for whatever machine you are on.
+
+```bash
+GH_TOKEN=$(gh auth token) vcpkg install qvac-fabric \
+  --overlay-ports=<path-to-qvac-registry-vcpkg-clone>/ports \
+  --triplet <host-triplet> \
+  --x-install-root=<tmp>/vcpkg-installed \
+  --x-buildtrees-root=<tmp>/vcpkg-bt \
+  --x-packages-root=<tmp>/vcpkg-pkg
+```
+
+#### Positive assertions — all three must appear, each naming `<VERSION>`
+
+| Must appear in the log | Proves |
+|---|---|
+| `Downloading …/archive/v<VERSION>.tar.gz` + `Successfully downloaded` | the new tag was actually fetched |
+| `Building qvac-fabric[…]@<VERSION>` | the plan resolved the *new* version, not a cached one |
+| `All requested installations completed successfully` | the port builds |
+
+A SHA512 mismatch is a hard failure *before* the build, so reaching "Building" is itself the hash
+gate passing. Sanity-check the elapsed time too: a real build is minutes. Microseconds or seconds
+means you hit the false pass above.
+
+#### Re-verification after an amend
+
+If `git rev-parse HEAD:ports/qvac-fabric` is **unchanged**, the build result still holds — a
+`versions/`-only amend (e.g. removing `port-version`) needs no re-run. If the `ports/` tree changed,
+re-run this step.
 
 ### Step 5: Open registry PR
 Push branch to `tetherto/qvac-registry-vcpkg`, create PR.
+
+**Report the verification when you present the PR.** State that it was built locally and how: version
+built, triplet, features, that the install root was isolated, and that the three Step 4 assertions
+held. A registry PR handed over without that line is incomplete — the reviewer cannot tell a real
+verification from the false pass above.
+
+If Step 4 was skipped or could not run, **say so explicitly**. Silence reads as "verified".
 
 ### Step 5b: Strip the overlay from the target PR — `--on-top-of-pr` only
 
 Skip this step entirely in the default mode; Step 8 covers the validation-branch case.
 
-**Why here.** The revert lands after B1 has published `<VERSION>` and before B2's bump, so the target
-PR spends the shortest possible window unable to resolve the new fabric at all. Reverting earlier is
-not wrong, just a longer window.
+**Why here.** The revert lands after B1 has published `<VERSION>`, and it is immediately followed by
+B2's bump **on the same branch, in the same push** (5b.5 below). The overlay comes off and the floors
+go up as one transition, so the PR never sits in a state where it resolves neither the overlay nor the
+new version.
+
+**Before the target PR is closed or merged.** If it has been closed or already merged by the time you
+get here, `--on-top-of-pr` has nothing to attach to: fall back to the default separate-PR path
+(Steps 6–10 as written), and **say plainly in the report that the fallback was used and why**. The tag
+is already pushed at this point — do not stall the rollout waiting on a decision.
 
 1. **Check out the target PR at its current head.** `gh pr checkout <n> --repo tetherto/qvac`, then
    pull. Commits may well have landed since Phase A — do not assume the head you saw then.
@@ -356,12 +462,17 @@ not wrong, just a longer window.
 4. **The completeness sweep.** Every check runs; report all failures together. It is deliberately
    repo-wide rather than scoped to the 7 consumers:
 
+   **Diff against the merge base, not `origin/main`'s tip** — set it once and reuse:
+   ```bash
+   BASE=$(git merge-base origin/main HEAD)
+   ```
+
    | Check | Passes when |
    |---|---|
    | the revert is the exact inverse of the overlay | `git diff <overlay-sha>^ HEAD -- vcpkg-overlays "packages/*/vcpkg-configuration.json"` → empty |
-   | port subtree gone | `git diff origin/main -- vcpkg-overlays` → empty |
+   | port subtree gone | `git diff $BASE -- vcpkg-overlays` → empty |
    | no key left anywhere | `git grep -l "overlay-ports" -- "**/vcpkg-configuration.json"` → no output |
-   | no baseline drift | `git diff origin/main -- "packages/*/vcpkg-configuration.json"` → empty |
+   | no baseline drift | `git diff $BASE -- "packages/*/vcpkg-configuration.json"` → empty |
    | nothing left behind | `git status --porcelain` → clean |
 
    The first check is the strongest — it asserts the tree is byte-identical to before the overlay
@@ -372,21 +483,51 @@ not wrong, just a longer window.
    and only the `ports/qvac-fabric` subtree is rollout scaffolding. The second check passing is what
    proves you removed the one and not the other.
 
-5. **Confirm with the user, then push.** This is someone else's PR. Show the revert diffstat and the
-   sweep results, get confirmation, then push to the PR's head branch. The push re-triggers the PR's
-   CI, now resolving `qvac-fabric` from the registry again.
+   **Why the merge base and not `origin/main`.** A long-lived target PR forked a while ago, so
+   `git diff origin/main` reports everything main has landed *since* — which reads as drift the
+   rollout caused. Real instance: `packages/diffusion-cpp/vcpkg-configuration.json` appeared to have
+   lost a `"reference": "main"` key, which was actually PR #3551 landing on main post-fork.
 
-6. **Say what the PR builds against now.** With the overlay gone and the floors not yet bumped, the
-   target PR resolves the **previously published** fabric until B2's bundled PR merges and the PR
-   picks it up. That is expected, not a regression — but it does mean the PR's green after this push
-   is not evidence about `<VERSION>`, and someone will otherwise read it as though it were.
+   Reading a hit: a package **outside the 7 consumers**, or a key other than `baseline`, is almost
+   always a staleness artifact. Re-measure against `$BASE` before reporting it as drift — and never
+   "fix" it, since it is not yours.
+
+5. **Do NOT push the revert on its own.** Go straight into B2 (Step 7) on this same branch and commit
+   the bumps as a **separate commit**, then push **once** — two commits, one push, one CI trigger.
+
+   Pushing the revert alone leaves the PR resolving the *previously published* fabric until a later
+   push, which is both a wasted CI run and a green that means nothing about `<VERSION>`.
+
+   The push itself needs confirmation: this is someone else's PR. Show the revert diffstat, the bump
+   diffstat, and the sweep results, get confirmation, then push to the PR's head branch.
+
+6. **Say what the PR builds against now.** With the overlay gone and the floors at `<VERSION>`, the
+   target PR resolves `<VERSION>` from the registry as soon as the registry PR merges. Until it does,
+   the PR's CI is **red on an unresolvable `version>=`** — expected, and the same condition Step 10's
+   CI note describes. Retrigger after the registry PR merges.
+
+   Say this out loud rather than letting someone read the red as a real failure, or the eventual green
+   as evidence gathered before the registry landed.
 
 ---
 
-## B2 — Bundled Consumer PR (ONE PR for all 7 consumers)
+## B2 — The consumer bumps (ONE PR for all 7 consumers)
 
 **Rule:** One PR carries everything: the 7 `vcpkg.json` bumps, any C++ changes from Phase A, the 7
 `package.json` bumps, and the 7 `CHANGELOG.md` entries. Do not split per package.
+
+**Which PR that is depends on the mode:**
+
+| Mode | Where the consumer bumps land |
+|---|---|
+| default | a new branch off `origin/main` → a new bundled PR (Steps 6, 9, 10 as written) |
+| `--on-top-of-pr` | the **target PR's head branch**, as a second commit alongside the Step 5b revert. **No new branch, no new PR.** |
+
+`--on-top-of-pr` exists precisely so the consumer code needing the new fabric and the fabric bump meet
+*on the same PR*. Opening a separate bump PR recreates the problem the flag was added to solve — the
+target PR's CI keeps building against the old published fabric, and the two only meet after the whole
+rollout lands (see `/rollout-phase-a`'s "Two modes"). If you find yourself running `git checkout -b`
+in this mode, stop.
 
 ### Step 6: Branch from `origin/main` — NOT from the Phase A branch
 ```bash
@@ -394,10 +535,39 @@ git fetch origin
 git checkout -b TICKET/bump-fabric-<VERSION> origin/main
 ```
 
+**`--on-top-of-pr`: skip this step.** You are already on the target PR's head branch from Step 5b.
+Do not branch from `origin/main` and do not create `TICKET/bump-fabric-<VERSION>`.
+
 ### Step 7: For each of the 7 consumers, on this one branch:
 
 1. **Check the current `package.json` version on `origin/main`** — other PRs may have landed since
    Phase A; do NOT assume the version from Phase A.
+
+   **`--on-top-of-pr`: `origin/main` is the wrong base to read, and the failure is silent until
+   merge time.** Read the version off the **target branch**, and compare every one of the 7 against
+   `origin/main` before bumping anything:
+
+   ```bash
+   for p in embed-llamacpp fabric llm-llamacpp model-fit ocr-ggml translation-nmtcpp vla-ggml; do
+     printf "%-20s branch=%-8s main=%s\n" "$p" \
+       "$(git show HEAD:packages/$p/package.json | jq -r .version)" \
+       "$(git show origin/main:packages/$p/package.json | jq -r .version)"
+   done
+   ```
+
+   | Outcome | Meaning | Do |
+   |---|---|---|
+   | equal | branch is current for that package | bump normally |
+   | branch **behind** main | the branch predates a release | **update the branch with `origin/main` first**, then re-read |
+   | branch **ahead** of main | the PR already bumped that package | do **not** double-bump — fold the fabric changelog line into the entry the PR already added |
+
+   Bumping across a stale base ships a wrong number and a conflict. Real instance: a target branch
+   read `llm-llamacpp` 0.42.0 while `origin/main` was 0.43.0, so a naive bump produced
+   `0.42.0 → 0.44.0` with **no 0.43.0 CHANGELOG entry**, and a modify/modify conflict against main's
+   own `0.42.0 → 0.43.0` the moment the PR merged.
+
+   Updating someone else's branch changes their PR's history — confirm the method (merge vs rebase)
+   with the user before doing it.
 
 2. **Bump `vcpkg.json` `"version>="`** to `<VERSION>`.
 
@@ -454,8 +624,11 @@ git checkout -b TICKET/bump-fabric-<VERSION> origin/main
 
 ### Step 8: Check overlay absent
 Run **Step 5b's completeness sweep** on this branch too — it is the same invariant, and keeping one
-definition stops the two drifting apart. In `--on-top-of-pr` mode Step 5b already cleaned the target
-PR; this branch is cut fresh from `origin/main`, so the sweep should pass untouched.
+definition stops the two drifting apart. In the default mode this branch is cut fresh from
+`origin/main`, so the sweep should pass untouched and `$BASE` is just `origin/main`.
+
+In `--on-top-of-pr` mode Step 5b already cleaned the target PR — re-run the sweep after the bump
+commit to confirm it stayed clean, keeping the `$BASE` merge-base form.
 
 `vcpkg-overlays/ports/qvac-fabric/` and the `"overlay-ports"` blocks must NOT exist on this branch.
 If the Phase A branch was merged to main, remove them here: `git rm -r vcpkg-overlays/ports/qvac-fabric`
@@ -469,6 +642,19 @@ git push origin TICKET/bump-fabric-<VERSION>
 ```
 `origin` = `tetherto/qvac` (cloned directly, not a fork).
 
+Assert the change is exactly the 21 files (7 × `vcpkg.json` + `package.json` + `CHANGELOG.md`), plus
+any Phase A C++ from Step 7 sub-step 3.
+
+**`--on-top-of-pr`: assert on the commit, not on `origin/main`.** The branch carries the PR author's
+own work, so `git diff --stat origin/main` can never reduce to the 21 files and the assertion is
+meaningless there. Use the bump commit itself:
+```bash
+git show --stat HEAD          # after committing
+git diff --cached --stat      # before committing
+```
+Then push to the **target PR's head branch** — one push carrying the 5b revert and this commit
+together, after the confirmation in 5b.5.
+
 ### Step 10: Create PR
 Title: `TICKET feat[api]: bump qvac-fabric to <VERSION> across consumers`
 Body: link fabric PR + registry PR.
@@ -481,6 +667,21 @@ self-explanatory (what bumped, to which `<VERSION>`, across which addons).
 **Gotcha:** never rename a branch that has an open PR via the API — GitHub orphans/closes the PR
 (head ref disappears, can't reopen). Create the PR with the final branch name.
 
+#### `--on-top-of-pr` — do NOT create a PR
+
+The target PR *is* the consumer PR. Creating another one is the mistake this mode exists to prevent.
+Instead:
+
+- The push already happened in 5b.5. Nothing to open.
+- **Update the target PR's body** (or add a comment) with the rollout facts: the fabric PR and tag,
+  the registry PR link, the 7 version bumps, and the CI-red-until-the-registry-merges note.
+- **Tell the user the blast radius changed**, because it is easy to miss: the target PR now also
+  carries **7 package releases**, so squash-merging it publishes them. Its title/tags may need to
+  reflect an API-affecting change, and if the PR belongs to someone else, the author needs to know
+  their feature PR is now also a release PR.
+- Escape hatch, as in 5b: if the target PR turned out closed or already merged, fall back to the
+  default path above and say the fallback was used.
+
 ---
 
 ## Post Slack message (once both PRs open)
@@ -491,4 +692,15 @@ Registry PR: https://github.com/tetherto/qvac-registry-vcpkg/pull/<N>
 Consumer bump (all 7 packages — vcpkg + package versions + changelogs, single PR):
 • https://github.com/tetherto/qvac/pull/<N>
 ```
+
+In `--on-top-of-pr` mode there is no separate bump PR — the consumer line points at the target PR, and
+should say the bump rides it so nobody goes looking for a second one:
+
+```
+Please review the <feature name>.
+Registry PR: https://github.com/tetherto/qvac-registry-vcpkg/pull/<N>
+Consumer bump rides the feature PR (all 7 packages — vcpkg + package versions + changelogs):
+• https://github.com/tetherto/qvac/pull/<N>  ← also publishes the 7 packages when squash-merged
+```
+
 If you have no Slack access, print the message (with the links) to the console so the user can post it.

@@ -44,8 +44,9 @@ every consumer is likewise an error, not an empty success.
 
 ## Prerequisites
 
-- The bundled consumer bump PR (the `rollout-phase-b` output — e.g. qvac#3334) is
-  **merged to `<base-branch>`**. The target versions live on `origin/<base-branch>`.
+- The consumer bump is **merged to `<base-branch>`** — either `rollout-phase-b`'s own bundled PR
+  (e.g. qvac#3334) or, in `--on-top-of-pr` mode, the feature PR the bumps rode in on (e.g.
+  qvac#3725). The target versions live on `origin/<base-branch>`.
 - For each consumer **in the release set**, `origin/<base-branch>`'s `package.json` version is
   **higher** than the current npm `latest` (i.e. npm is one bump behind). If not, the version
   bump PR hasn't merged yet — stop.
