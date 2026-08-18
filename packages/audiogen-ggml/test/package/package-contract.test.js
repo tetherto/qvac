@@ -4,6 +4,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { spawnSync } = require('child_process')
+const { builtinModules } = require('module')
 const test = require('brittle')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
@@ -13,6 +14,9 @@ const REPOSITORY_DOWNLOAD_COMMAND =
   'node scripts/download-audiogen-ggml-models.js --output ./models'
 const IS_WINDOWS = process.platform === 'win32'
 const NPM_COMMAND = IS_WINDOWS ? 'npm.cmd' : 'npm'
+const PACKAGE_NAME = '@qvac/audiogen-ggml'
+const IMPORT_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
+const BUILTIN_MODULES = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]))
 const BENCHMARK_PATHS = [
   'package/benchmarks/RTF-BENCHMARKS.md',
   'package/test/utils/benchmark-report.js',
@@ -43,6 +47,78 @@ function run(command, args, cwd) {
     throw new Error(`${command} failed: ${result.stderr || result.stdout}`)
   }
   return result.stdout
+}
+
+function installTarball(consumerRoot, tarballPath) {
+  fs.mkdirSync(consumerRoot)
+  fs.writeFileSync(
+    path.join(consumerRoot, 'package.json'),
+    `${JSON.stringify({ name: 'audiogen-package-consumer', private: true }, null, 2)}\n`
+  )
+  run(
+    NPM_COMMAND,
+    [
+      'install',
+      '--ignore-scripts',
+      '--omit=dev',
+      '--no-audit',
+      '--no-fund',
+      '--no-package-lock',
+      tarballPath
+    ],
+    consumerRoot
+  )
+}
+
+function packageNameFromSpecifier(specifier) {
+  return specifier.startsWith('@')
+    ? specifier.split('/').slice(0, 2).join('/')
+    : specifier.split('/')[0]
+}
+
+function importedModules(source) {
+  return [...source.matchAll(IMPORT_PATTERN)].map((match) => match[1])
+}
+
+function isExternalModule(specifier) {
+  return (
+    !specifier.startsWith('.') &&
+    !specifier.startsWith('/') &&
+    !BUILTIN_MODULES.has(specifier) &&
+    packageNameFromSpecifier(specifier) !== PACKAGE_NAME
+  )
+}
+
+function assertDeclaredImports(t, packageRoot, entries, packageJson) {
+  const declaredModules = new Set([
+    ...Object.keys(packageJson.dependencies || {}),
+    ...Object.keys(packageJson.peerDependencies || {})
+  ])
+  const scriptEntries = entries.filter(
+    (entry) => entry.startsWith('package/') && /\.(?:c?js|mjs)$/.test(entry)
+  )
+  scriptEntries.forEach((entry) => {
+    const source = fs.readFileSync(path.join(packageRoot, entry.slice('package/'.length)), 'utf8')
+    importedModules(source)
+      .filter(isExternalModule)
+      .forEach((specifier) => {
+        const moduleName = packageNameFromSpecifier(specifier)
+        t.ok(declaredModules.has(moduleName), `${entry} declares ${moduleName}`)
+      })
+  })
+}
+
+function assertRuntimePathsResolve(t, consumerRoot) {
+  const probe = `
+require.resolve('@qvac/audiogen-ggml')
+require.resolve('@qvac/audiogen-ggml/test/benchmark-runner')
+require.resolve('bare-process')
+`
+  const result = spawnSync(process.execPath, ['-e', probe], {
+    cwd: consumerRoot,
+    encoding: 'utf8'
+  })
+  t.is(result.status, 0, result.stderr || result.stdout)
 }
 
 function assertRequiredPaths(t, entries) {
@@ -125,6 +201,15 @@ test('published package contains only consumer contract files', (t) => {
     packedPackage.peerDependenciesMeta['@qvac/registry-client'].optional,
     'package marks the downloader runtime as an optional peer'
   )
+  t.is(
+    packedPackage.dependencies['bare-process'],
+    '^4.2.2',
+    'package installs the benchmark process runtime'
+  )
+  assertDeclaredImports(t, packedPackageRoot, entries, packedPackage)
+  const consumerRoot = path.join(temporaryDirectory, 'consumer')
+  installTarball(consumerRoot, tarballPath)
+  assertRuntimePathsResolve(t, consumerRoot)
   const downloaderPath = path.join(packedPackageRoot, DOWNLOADER_PATH)
   const help = runDownloader(downloaderPath, packedPackageRoot)
   t.ok(help.includes(COMMAND_NAME), 'downloader help uses stable command')
