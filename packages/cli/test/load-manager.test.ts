@@ -108,7 +108,7 @@ describe('load-manager', () => {
     assert.equal(reg.getEntry('c')?.state, reg.STATES.READY)
   })
 
-  it('times out a slow load, cancels it, and marks ERROR', async () => {
+  it('times out a slow load, cancels it, and resets to IDLE', async () => {
     const reg = registry('m')
     const never = deferred<string>()
     const mgr = createLoadManager(
@@ -118,7 +118,8 @@ describe('load-manager', () => {
       () => () => never.promise
     )
     await assert.rejects(() => mgr.load('m'), ModelLoadTimeoutError)
-    assert.equal(reg.getEntry('m')?.state, reg.STATES.ERROR)
+    // A timeout is not a fault — the entry is retriable, not stuck in ERROR.
+    assert.equal(reg.getEntry('m')?.state, reg.STATES.IDLE)
   })
 
   it('marks ERROR and rethrows on load failure, then retries next call', async () => {
@@ -163,7 +164,9 @@ describe('load-manager', () => {
     gate.resolve('sdk-late')
     await Promise.all([pA, pB])
     assert.equal(unloadedWith, 'sdk-late')
-    assert.equal(reg.getEntry('m')?.state, reg.STATES.ERROR)
+    // A disconnect-cancel resets to IDLE (not ERROR), so the model listing
+    // doesn't misreport a user-initiated cancel as a failure.
+    assert.equal(reg.getEntry('m')?.state, reg.STATES.IDLE)
   })
 
   it('timeout cancels the in-flight SDK load', async () => {
@@ -178,7 +181,7 @@ describe('load-manager', () => {
     })
     await assert.rejects(() => mgr.load('m'), ModelLoadTimeoutError)
     assert.equal(cancelledWith, 'req-t')
-    assert.equal(reg.getEntry('m')?.state, reg.STATES.ERROR)
+    assert.equal(reg.getEntry('m')?.state, reg.STATES.IDLE)
   })
 
   it('does not cancel a shared load while another caller still waits', async () => {

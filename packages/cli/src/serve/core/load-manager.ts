@@ -187,7 +187,18 @@ export function createLoadManager(
       registry.setReady(alias, sdkModelId)
       logger.info(`Model "${alias}" loaded (SDK modelId: ${sdkModelId}).`)
     } catch (err) {
-      registry.setError(alias, err)
+      // A timeout or a client-disconnect cancel is not a fault: reset to IDLE
+      // (retriable, and not shown as `error` in the model listing) but log it so
+      // the event isn't silent. Genuine load failures stay ERROR.
+      if (rec.timedOut) {
+        logger.warn(`Load of "${alias}" timed out; left unloaded (retry on next request).`)
+        registry.markUnloaded(alias)
+      } else if (rec.cancelRequested) {
+        logger.info(`Load of "${alias}" cancelled (client disconnected); left unloaded.`)
+        registry.markUnloaded(alias)
+      } else {
+        registry.setError(alias, err)
+      }
       throw err
     } finally {
       if (timer) clearTimeout(timer)

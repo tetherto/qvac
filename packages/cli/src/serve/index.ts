@@ -106,12 +106,23 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     }
   })
 
+  // The load fn resolves the override lazily via this ref, so the manager can be
+  // built before the context (loadManager is a real required field, no placeholder)
+  // while tests can still swap the override post-build through the accessor below.
+  const overrideRef: { current: QvacContext['loadModelOverride'] } = {
+    current: options.loadModelOverride
+  }
+  const loadManager = createLoadManager(
+    registry,
+    logger,
+    { concurrency: serveConfig.load.concurrency, timeoutMs: serveConfig.load.timeoutMs },
+    () => overrideRef.current ?? defaultLoadFn
+  )
+
   const qvacContext: QvacContext = {
     registry,
     serveConfig,
-    // Assigned immediately below; the manager's load fn reads
-    // `qvacContext.loadModelOverride` lazily so tests can set it post-build.
-    loadManager: undefined as unknown as QvacContext['loadManager'],
+    loadManager,
     logger,
     vectorStores,
     ephemeralFiles,
@@ -122,17 +133,13 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     ...(options.transcribeOverride !== undefined
       ? { transcribeOverride: options.transcribeOverride }
       : {}),
-    ...(options.loadModelOverride !== undefined
-      ? { loadModelOverride: options.loadModelOverride }
-      : {})
+    get loadModelOverride() {
+      return overrideRef.current
+    },
+    set loadModelOverride(fn) {
+      overrideRef.current = fn
+    }
   }
-
-  qvacContext.loadManager = createLoadManager(
-    registry,
-    logger,
-    { concurrency: serveConfig.load.concurrency, timeoutMs: serveConfig.load.timeoutMs },
-    () => qvacContext.loadModelOverride ?? defaultLoadFn
-  )
 
   const app = Fastify({
     logger: false,
