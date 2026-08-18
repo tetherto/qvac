@@ -85,6 +85,7 @@ jobs:
       plugins: ${{ matrix.combo.plugins }}
       overlay-prebuild-addon: ${{ inputs.addon }}
       test-version: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
       suite: smoke
       consumer-timeout: 1200
       device-farm-timeout: 90

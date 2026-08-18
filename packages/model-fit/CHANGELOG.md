@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.1] - 2026-08-18
+
+Records a fix that was left out of `0.2.0`. It merged (#3890) before the
+`model-fit-v0.2.0` tag was cut, so the code already shipped in `0.2.0` — this
+release carries no source change of its own, only the entry that should have
+been in that one.
+
+### Fixed
+
+- Reject a successful fit whose context could not be resolved. `runFit` already
+  rewrote a fitted `nCtx` of 0 — llama's encoding for "use the trained context"
+  — to the model's declared context length, but when that GGUF metadata was
+  itself unavailable the zero survived and the caller was handed a `SUCCESS`
+  carrying `nCtx: 0`: a verdict with no load plan it could replay. Such a result
+  is now `ERROR` / `model-unreadable`, which is what the missing metadata
+  actually means. The resolution moved out of `runFit` into
+  `detail::finalizeFitContext` (`addon/src/fit/FitResultContext.cpp`) so it can
+  be tested without a model, covered by a new `ModelFitContextUnit` test built
+  under `BUILD_TESTING`.
+
+- Reject a malformed successful response in the process codec.
+  `parseFitProcessResponse` accepted a `completed` result with `status: 0` and a
+  non-positive `nCtx`, so a child that answered with an unresolved context put
+  it straight into a supervisor's hands. Defence in depth rather than a live
+  path: with the fix above the runner can no longer produce one.
+
+### Pull Requests
+
+- [#3890](https://github.com/tetherto/qvac/pull/3890) - QVAC-22630 fix: reject
+  unresolved successful fit contexts
+
 ## [0.2.0] - 2026-08-17
 
 ### Changed
