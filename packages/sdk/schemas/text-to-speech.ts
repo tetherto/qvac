@@ -81,6 +81,42 @@ export const TTS_PARLER_EMOTIONS = [
   'surprise'
 ] as const
 
+// Canonical cross-engine pace vocabulary (@qvac/tts-ggml `PACES`, unified in
+// QVAC-23154). `moderate` is the neutral pace: on CosyVoice3 it disengages the
+// pace conditioning channel entirely (plain zero-shot synthesis).
+export const TTS_PACES = ['slow', 'moderate', 'fast'] as const
+
+// CosyVoice3 supports a subset of the cross-engine emotion vocabulary and the
+// full canonical pace vocabulary.
+export const TTS_COSYVOICE3_EMOTIONS = ['anger', 'happy', 'neutral', 'sad'] as const
+
+// CosyVoice3 structured-instruct control vocabulary (@qvac/tts-ggml
+// `CosyvoiceInstruct`). Exactly one control renders per synthesis, resolved by
+// precedence dialect > volume > style.
+export const TTS_COSYVOICE3_INSTRUCT_DIALECTS = [
+  'cantonese',
+  'northeastern',
+  'gansu',
+  'guizhou',
+  'henan',
+  'hubei',
+  'hunan',
+  'jiangxi',
+  'minnan',
+  'ningxia',
+  'shanxi',
+  'shaanxi',
+  'shandong',
+  'shanghai',
+  'sichuan',
+  'tianjin',
+  'yunnan'
+] as const
+
+export const TTS_COSYVOICE3_INSTRUCT_VOLUMES = ['loud', 'soft'] as const
+
+export const TTS_COSYVOICE3_INSTRUCT_STYLES = ['peppa', 'robot'] as const
+
 // Supertonic languages not already present in the Chatterbox set, used to keep
 // TTS_LANGUAGES a true union across engines without duplicates.
 const TTS_SUPERTONIC_ONLY_LANGUAGES = [
@@ -109,6 +145,8 @@ export const TTS_LANGUAGES = [
 const ttsChatterboxLanguageSchema = z.enum(TTS_CHATTERBOX_LANGUAGES)
 const ttsSupertonicLanguageSchema = z.enum(TTS_SUPERTONIC_LANGUAGES)
 const ttsParlerEmotionSchema = z.enum(TTS_PARLER_EMOTIONS)
+const ttsCosyvoice3EmotionSchema = z.enum(TTS_COSYVOICE3_EMOTIONS)
+const ttsPaceSchema = z.enum(TTS_PACES)
 const ttsIntegerSchema = z.number().int()
 const ttsNonNegativeIntegerSchema = ttsIntegerSchema.nonnegative()
 const ttsPositiveIntegerSchema = ttsIntegerSchema.positive()
@@ -128,7 +166,9 @@ const ttsParlerDescriptionFieldsShape = {
   voice: z.string().min(1).optional(),
   emotion: ttsParlerEmotionSchema.optional(),
   pitch: z.string().min(1).optional(),
-  pace: z.string().min(1).optional(),
+  // Canonical cross-engine vocabulary since @qvac/tts-ggml 0.7 (QVAC-23154);
+  // free-form pace strings are rejected natively.
+  pace: ttsPaceSchema.optional(),
   expressivity: z.string().min(1).optional(),
   noise: z.string().min(1).optional(),
   reverb: z.string().min(1).optional(),
@@ -253,10 +293,106 @@ export const ttsParlerRuntimeConfigSchema = z
   })
   .superRefine(refineParlerRuntimeConfig)
 
+// CosyVoice3 structured instruct: a raw string passes through to the engine as
+// the exact instruction text (advanced escape hatch); the object form renders
+// exactly one trained control by precedence dialect > volume > style.
+// The string branch trims first: the addon trims too, so a whitespace-only
+// instruction would otherwise silently degrade to zero-shot synthesis.
+const ttsCosyvoice3InstructSchema = z.union([
+  z.string().trim().min(1),
+  z
+    .object({
+      dialect: z.enum(TTS_COSYVOICE3_INSTRUCT_DIALECTS).optional(),
+      volume: z.enum(TTS_COSYVOICE3_INSTRUCT_VOLUMES).optional(),
+      style: z.enum(TTS_COSYVOICE3_INSTRUCT_STYLES).optional()
+    })
+    .strict()
+    .refine(
+      (value) =>
+        value.dialect !== undefined || value.volume !== undefined || value.style !== undefined,
+      { message: 'instruct requires at least one of dialect, volume, or style.' }
+    )
+])
+
+type TtsCosyvoice3RefinementInput = {
+  emotion?: string | undefined
+  pace?: string | undefined
+  instruct?: unknown
+  outputSampleRate?: number | undefined
+  streamChunkTokens?: number | undefined
+}
+
+// CosyVoice3 is trained on one instruction per synthesis: at most one of
+// `emotion`, a non-moderate `pace`, or `instruct` may be engaged at once
+// (`pace: 'moderate'` disengages the pace channel).
+function refineCosyvoice3ConditioningControls(
+  config: TtsCosyvoice3RefinementInput,
+  ctx: z.RefinementCtx
+) {
+  const engaged: string[] = []
+  if (config.emotion !== undefined) engaged.push('emotion')
+  if (config.pace !== undefined && config.pace !== 'moderate') engaged.push('pace')
+  if (config.instruct !== undefined) engaged.push('instruct')
+
+  if (engaged.length > 1) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [engaged[1]!],
+      message:
+        `CosyVoice3 accepts one conditioning control per synthesis; got ${engaged.join(', ')}. ` +
+        'Set exactly one (pace "moderate" disengages the pace channel).'
+    })
+  }
+}
+
+function refineCosyvoice3NativeStreamingRate(
+  config: TtsCosyvoice3RefinementInput,
+  ctx: z.RefinementCtx
+) {
+  const nativeStreamingEnabled = (config.streamChunkTokens ?? 0) > 0
+  if (
+    nativeStreamingEnabled &&
+    config.outputSampleRate !== undefined &&
+    config.outputSampleRate !== 24000
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['outputSampleRate'],
+      message:
+        'CosyVoice3 native streaming emits at 24000 Hz; omit outputSampleRate, use 24000, ' +
+        'enable the LavaSR enhancer (which resamples seam-free), or disable native streaming.'
+    })
+  }
+}
+
+function refineCosyvoice3RuntimeConfig(config: TtsCosyvoice3RefinementInput, ctx: z.RefinementCtx) {
+  refineCosyvoice3ConditioningControls(config, ctx)
+  refineCosyvoice3NativeStreamingRate(config, ctx)
+}
+
+const ttsCosyvoice3RuntimeConfigShape = {
+  ttsEngine: z.literal('cosyvoice3'),
+  emotion: ttsCosyvoice3EmotionSchema.optional(),
+  pace: ttsPaceSchema.optional(),
+  instruct: ttsCosyvoice3InstructSchema.optional(),
+  useGPU: z.boolean().optional(),
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  streamChunkTokens: ttsNonNegativeInt32Schema.optional(),
+  streamFirstChunkTokens: ttsNonNegativeInt32Schema.optional(),
+  threads: ttsPositiveInt32Schema.optional(),
+  nGpuLayers: ttsInt32Schema.optional(),
+  seed: ttsInt32Schema.optional()
+}
+
+export const ttsCosyvoice3RuntimeConfigSchema = z
+  .object(ttsCosyvoice3RuntimeConfigShape)
+  .superRefine(refineCosyvoice3RuntimeConfig)
+
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
-  ttsParlerRuntimeConfigSchema
+  ttsParlerRuntimeConfigSchema,
+  ttsCosyvoice3RuntimeConfigSchema
 ])
 
 // Optional LavaSR post-processing model sources, shared across engines. Supply
@@ -283,6 +419,44 @@ export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.ex
 })
 
 export const ttsParlerLoadConfigSchema = ttsParlerRuntimeConfigSchema
+
+type TtsCosyvoice3LoadRefinementInput = TtsCosyvoice3RefinementInput & {
+  lavasrEnhancerModelSrc?: ModelSrcInput | undefined
+  lavasrDenoiserModelSrc?: ModelSrcInput | undefined
+}
+
+function refineCosyvoice3LoadConfig(
+  config: TtsCosyvoice3LoadRefinementInput,
+  ctx: z.RefinementCtx
+) {
+  refineCosyvoice3ConditioningControls(config, ctx)
+
+  // With the LavaSR enhancer active the addon resamples seam-free, so the
+  // 24 kHz native-streaming restriction only applies without it.
+  if (config.lavasrEnhancerModelSrc === undefined) {
+    refineCosyvoice3NativeStreamingRate(config, ctx)
+  }
+
+  if (config.lavasrDenoiserModelSrc !== undefined && (config.streamChunkTokens ?? 0) > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['lavasrDenoiserModelSrc'],
+      message:
+        'The LavaSR denoiser is batch-only; disable native streaming (streamChunkTokens) to use it.'
+    })
+  }
+}
+
+// CosyVoice3 loads from a model *directory* (LLM/flow/HiFT GGUFs plus
+// voice.gguf, vocab.json and merges.txt). The primary `modelSrc` is the LLM
+// GGUF, whose registry companion set co-locates the remaining files, so the
+// load config only adds the optional LavaSR post-processing sources.
+export const ttsCosyvoice3LoadConfigSchema = z
+  .object({
+    ...ttsCosyvoice3RuntimeConfigShape,
+    ...ttsLavasrLoadFieldsShape
+  })
+  .superRefine(refineCosyvoice3LoadConfig)
 
 type TtsTokenizerAssetRefinementInput = {
   ttsEngine?: string
@@ -318,7 +492,8 @@ export const ttsLoadConfigSchema = z
   .discriminatedUnion('ttsEngine', [
     ttsChatterboxLoadConfigSchema,
     ttsSupertonicLoadConfigSchema,
-    ttsParlerLoadConfigSchema
+    ttsParlerLoadConfigSchema,
+    ttsCosyvoice3LoadConfigSchema
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -360,7 +535,8 @@ export const ttsConfigSchema = z
   .discriminatedUnion('ttsEngine', [
     ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
     ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
-    ttsParlerLoadConfigSchema.strict()
+    ttsParlerLoadConfigSchema.strict(),
+    ttsCosyvoice3LoadConfigSchema.strict()
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -439,9 +615,13 @@ export type TtsLanguage = (typeof TTS_LANGUAGES)[number]
 export type TtsChatterboxLanguage = (typeof TTS_CHATTERBOX_LANGUAGES)[number]
 export type TtsSupertonicLanguage = (typeof TTS_SUPERTONIC_LANGUAGES)[number]
 export type TtsParlerEmotion = (typeof TTS_PARLER_EMOTIONS)[number]
+export type TtsPace = (typeof TTS_PACES)[number]
+export type TtsCosyvoice3Emotion = (typeof TTS_COSYVOICE3_EMOTIONS)[number]
+export type TtsCosyvoice3Instruct = z.infer<typeof ttsCosyvoice3InstructSchema>
 export type TtsChatterboxLoadConfig = z.infer<typeof ttsChatterboxLoadConfigSchema>
 export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSchema>
 export type TtsParlerLoadConfig = z.infer<typeof ttsParlerLoadConfigSchema>
+export type TtsCosyvoice3LoadConfig = z.infer<typeof ttsCosyvoice3LoadConfigSchema>
 export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>
 /** @deprecated Use {@link TtsChatterboxLoadConfig} */
 export type TtsChatterboxConfig = TtsChatterboxLoadConfig
@@ -450,6 +630,7 @@ export type TtsSupertonicConfig = TtsSupertonicLoadConfig
 export type TtsChatterboxRuntimeConfig = z.infer<typeof ttsChatterboxRuntimeConfigSchema>
 export type TtsSupertonicRuntimeConfig = z.infer<typeof ttsSupertonicRuntimeConfigSchema>
 export type TtsParlerRuntimeConfig = z.infer<typeof ttsParlerRuntimeConfigSchema>
+export type TtsCosyvoice3RuntimeConfig = z.infer<typeof ttsCosyvoice3RuntimeConfigSchema>
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>
 export type TtsConfig = z.infer<typeof ttsConfigSchema>
 export type TtsClientParamsInput = z.input<typeof ttsClientParamsSchema>
