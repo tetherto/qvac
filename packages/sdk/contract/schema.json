@@ -2742,6 +2742,72 @@
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
       "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
+    "constants.TtsCosyvoice3Emotion": {
+      "title": "TtsCosyvoice3Emotion",
+      "type": "string",
+      "enum": ["anger", "happy", "neutral", "sad"],
+      "x-enum-varnames": ["ANGER", "HAPPY", "NEUTRAL", "SAD"]
+    },
+    "constants.TtsCosyvoice3InstructDialect": {
+      "title": "TtsCosyvoice3InstructDialect",
+      "type": "string",
+      "enum": [
+        "cantonese",
+        "northeastern",
+        "gansu",
+        "guizhou",
+        "henan",
+        "hubei",
+        "hunan",
+        "jiangxi",
+        "minnan",
+        "ningxia",
+        "shanxi",
+        "shaanxi",
+        "shandong",
+        "shanghai",
+        "sichuan",
+        "tianjin",
+        "yunnan"
+      ],
+      "x-enum-varnames": [
+        "CANTONESE",
+        "NORTHEASTERN",
+        "GANSU",
+        "GUIZHOU",
+        "HENAN",
+        "HUBEI",
+        "HUNAN",
+        "JIANGXI",
+        "MINNAN",
+        "NINGXIA",
+        "SHANXI",
+        "SHAANXI",
+        "SHANDONG",
+        "SHANGHAI",
+        "SICHUAN",
+        "TIANJIN",
+        "YUNNAN"
+      ]
+    },
+    "constants.TtsCosyvoice3InstructStyle": {
+      "title": "TtsCosyvoice3InstructStyle",
+      "type": "string",
+      "enum": ["peppa", "robot"],
+      "x-enum-varnames": ["PEPPA", "ROBOT"]
+    },
+    "constants.TtsCosyvoice3InstructVolume": {
+      "title": "TtsCosyvoice3InstructVolume",
+      "type": "string",
+      "enum": ["loud", "soft"],
+      "x-enum-varnames": ["LOUD", "SOFT"]
+    },
+    "constants.TtsPace": {
+      "title": "TtsPace",
+      "type": "string",
+      "enum": ["slow", "moderate", "fast"],
+      "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
+    },
     "constants.Verbosity": {
       "title": "Verbosity",
       "type": "number",
@@ -10743,7 +10809,8 @@
                         },
                         "pace": {
                           "type": "string",
-                          "minLength": 1
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerPace"
                         },
                         "expressivity": {
                           "type": "string",
@@ -10833,6 +10900,275 @@
                       "required": ["ttsEngine"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigParler"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "cosyvoice3"
+                        },
+                        "emotion": {
+                          "type": "string",
+                          "enum": ["anger", "happy", "neutral", "sad"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"
+                        },
+                        "pace": {
+                          "type": "string",
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"
+                        },
+                        "instruct": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "dialect": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cantonese",
+                                    "northeastern",
+                                    "gansu",
+                                    "guizhou",
+                                    "henan",
+                                    "hubei",
+                                    "hunan",
+                                    "jiangxi",
+                                    "minnan",
+                                    "ningxia",
+                                    "shanxi",
+                                    "shaanxi",
+                                    "shandong",
+                                    "shanghai",
+                                    "sichuan",
+                                    "tianjin",
+                                    "yunnan"
+                                  ],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"
+                                },
+                                "volume": {
+                                  "type": "string",
+                                  "enum": ["loud", "soft"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"
+                                },
+                                "style": {
+                                  "type": "string",
+                                  "enum": ["peppa", "robot"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct"
+                            }
+                          ]
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "streamChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "streamFirstChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3"
                     }
                   ]
                 }
@@ -14970,7 +15306,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechRequestPace"
         },
         "expressivity": {
           "type": "string",
@@ -15107,7 +15444,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechStreamRequestPace"
         },
         "expressivity": {
           "type": "string",
