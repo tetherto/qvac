@@ -271,6 +271,38 @@
       ],
       "sha256": "ddc1be0331c403269b5eced1806c1a3f4a952f0d70b44e58da83bc846b5c8c5c",
       "bytes": 49564032
+    },
+    "visionpsy-nano-460m-q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
+      ],
+      "sha256": "fc70a6c6eed7d2f82ed48cbd52cc7118b249eff8b91112ef9cbfca6813a1eefa",
+      "bytes": 436676000,
+      "warm": false
+    },
+    "mmproj-visionpsy-nano-460m-q8.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
+      ],
+      "sha256": "92f1bb80acaba3e7b59b6534f47447b830330bc9051018d6d8b5d768e58503c2",
+      "bytes": 108782144,
+      "warm": false
+    },
+    "visionpsy-nano-460m-flash-q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf"
+      ],
+      "sha256": "66d84c0f552c96ec6734d8cef7f0a3192f4f2df2cd781a193339df194f501a12",
+      "bytes": 436676000,
+      "warm": false
+    },
+    "mmproj-visionpsy-nano-460m-flash-q8.gguf": {
+      "urls": [
+        "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf"
+      ],
+      "sha256": "bbb0691873a4e638f6928898b3c3be9a4730bd4ced301197726a4fcb549695d0",
+      "bytes": 108782144,
+      "warm": false
     }
   }
 }

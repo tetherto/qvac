@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.44.0] - 2026-08-17
+
+### Added
+
+- `image_no_upscale` in the addon load config — an idefics3-style preprocessing
+  override forwarded to the vision context, accepting `"on"` or `"off"`. Left
+  unset, the model's own GGUF value is used unchanged. This is what separates the
+  VisionPsy Flash checkpoint from the base one, whose mmprojs are otherwise
+  indistinguishable: a Flash checkpoint loaded without it silently runs base
+  preprocessing, which changes the image token count and so moves both accuracy
+  and encode time.
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule), which is what supplies
+  `image_no_upscale` on `common_params` and `mtmd_context_params`.
+
 ## [0.43.0] - 2026-08-14
 
 This release removes the Qwen3-only dynamic tools feature behind

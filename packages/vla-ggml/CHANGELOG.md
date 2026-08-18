@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
 ## [0.19.0] - 2026-08-10
 
 ### Changed

@@ -15,6 +15,7 @@ import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
+  ttsCosyvoice3LoadConfigSchema,
   ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
 } from './text-to-speech'
@@ -93,6 +94,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
       ttsChatterboxLoadConfigSchema,
       ttsSupertonicLoadConfigSchema,
       ttsParlerLoadConfigSchema,
+      ttsCosyvoice3LoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],
