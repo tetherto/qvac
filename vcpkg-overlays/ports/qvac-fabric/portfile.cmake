@@ -1,6 +1,9 @@
-# Validation-only pin at the QVAC-23195 fix head. This fetches by commit SHA and
-# needs no tarball hash, so repinning cannot fail on a stale SHA512 the way the
-# vcpkg_from_github form did.
+# Validation-only pin at the QVAC-23195 fix head, shared by every qvac-fabric
+# consumer so all addons build against the same PR commit. This fetches by commit
+# SHA and needs no tarball hash, so repinning cannot fail on a stale SHA512 the
+# way the vcpkg_from_github form did.
+#
+# Do not merge: the registry port must be the source of truth on main.
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp.git
