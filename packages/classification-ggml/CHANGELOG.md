@@ -13,6 +13,17 @@ and this project adheres to
 
 - Declared the runtime modules used by the published integration and mobile test files.
 
+## [0.19.0] - 2026-08-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.4.0` -> `^0.5.0`, which carries `qvac-fabric`
+  `10069.0.0` -> `10069.1.0` (VisionPsy Nano support and its Flash preprocessing rule).
+  This package consumes the shared runtime via npm rather than building the vcpkg port,
+  so the range bump is what picks up the new fabric. A caret on a `0.x` version locks
+  the minor, so `^0.4.0` would not have resolved `0.5.0` on its own. No API change for
+  this package.
+
 ## [0.18.0] - 2026-08-10
 
 ### Changed

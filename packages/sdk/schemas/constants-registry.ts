@@ -15,6 +15,20 @@ import {
   PLUGIN_CLASSIFICATION
 } from './plugin'
 import { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
+import {
+  TTS_PACES,
+  TTS_COSYVOICE3_EMOTIONS,
+  TTS_COSYVOICE3_INSTRUCT_DIALECTS,
+  TTS_COSYVOICE3_INSTRUCT_VOLUMES,
+  TTS_COSYVOICE3_INSTRUCT_STYLES
+} from './text-to-speech'
+
+// Uppercases each vocabulary value into its varname (e.g. 'slow' -> 'SLOW'),
+// mirroring the SupportedAudioFormat derivation so names can't drift from the
+// single source-of-truth array.
+function enumFromVocabulary<const T extends readonly string[]>(values: T) {
+  return z.enum(Object.fromEntries(values.map((value) => [value.toUpperCase(), value])))
+}
 
 /**
  * Every public constant `enum` from index.ts that downstream (non-JS)
@@ -61,5 +75,10 @@ export const constantsRegistry = {
   // source of truth every other consumer of SUPPORTED_AUDIO_FORMATS shares.
   SupportedAudioFormat: z.enum(
     Object.fromEntries(SUPPORTED_AUDIO_FORMATS.map((ext) => [ext.slice(1).toUpperCase(), ext]))
-  )
+  ),
+  TtsPace: enumFromVocabulary(TTS_PACES),
+  TtsCosyvoice3Emotion: enumFromVocabulary(TTS_COSYVOICE3_EMOTIONS),
+  TtsCosyvoice3InstructDialect: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_DIALECTS),
+  TtsCosyvoice3InstructVolume: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_VOLUMES),
+  TtsCosyvoice3InstructStyle: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_STYLES)
 } as const
