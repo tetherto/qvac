@@ -100,7 +100,6 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/classification-ggml' }}
           addon-npm-name: '@qvac/classification-ggml'
-          prebuild-artifact-prefix: 'classification-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       # The shared composite handles prebuild fan-out, but classification-ggml

@@ -77,14 +77,10 @@ jobs:
       workdir: ${{ matrix.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository || 'tetherto/qvac' }}
-      artifact-name-prefix: ${{ matrix.artifactNamePrefix }}
-      # This leaf can build several packages in ONE run (nx-affected), and every
-      # selected package shares that run's artifact namespace. Namespace each
-      # package's content and merge exactly once, at run level (below) — one
-      # merge per package would collide on the shared `prebuilds` name, which
-      # upload-artifact rejects outright.
-      artifact-subdir: ${{ matrix.package }}
-      merge-artifacts: false
+      # No artifact naming passed: the reusable derives both the per-leg names
+      # (prebuild-<package>-<platform>-<arch>) and the merged bundle name
+      # (prebuilds-<package>) from the package itself, so several packages can
+      # build in one run without sharing an artifact name.
       linux-extra-packages: ${{ matrix.linuxExtraPackages }}
       mac-brew-packages: ${{ matrix.macBrewPackages }}
       setup-python-on-windows: ${{ matrix.setupPythonOnWindows == true }}
@@ -94,30 +90,10 @@ jobs:
       platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
     secrets: inherit
 
-  # One merge for the whole run, across every selected package. Content arrives
-  # already namespaced as <package>/<platform>-<arch>/, so consumers pull their
-  # own package's subtree out of the single well-known `prebuilds` bundle (see
-  # the prebuild-artifact-materialize action, which also strips that level again
-  # before anything is published).
-  #
-  # !cancelled() rather than the implicit success(): with fail-fast disabled, one
-  # package's failed build must not deny the packages that did build their
-  # bundle. A package absent from the merged bundle is precisely the per-package
-  # signal consumers gate on.
-  merge:
-    name: Merge prebuild bundles
-    needs: [matrix, prebuild]
-    if: always() && !cancelled() && needs.matrix.outputs.any == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download every per-matrix prebuild artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          path: prebuilds
-          merge-multiple: true
-
-      - name: Upload merged bundle
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
-        with:
-          name: prebuilds
-          path: prebuilds
+  # No merge job here on purpose. The reusable merges each package's own legs
+  # into `prebuilds-<package>`, which is correct however this leaf is invoked —
+  # once with every affected package (on-pr) or once per package (on-merge-nx
+  # matrixes its prebuild job and calls this leaf per package). A merge at this
+  # level would run once per CALL rather than once per run, so in the on-merge
+  # topology it produced one same-named bundle per package, each racing to
+  # collect whatever artifacts existed at that moment.

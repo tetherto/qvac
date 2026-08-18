@@ -39,7 +39,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: bci-whispercpp-
       linux-extra-packages: libopenblas-dev liblapack-dev libfftw3-dev
       mac-brew-packages: openblas lapack fftw
       include-vulkan-sdk: true

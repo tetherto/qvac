@@ -127,7 +127,6 @@ jobs:
           platform: ${{ matrix.platform.platform }}
           addon-workdir: ${{ matrix.package.workdir }}
           addon-npm-name: ${{ matrix.package.npmName }}
-          prebuild-artifact-prefix: ${{ matrix.package.prebuildArtifactPrefix }}
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       - name: Extra pre-build step

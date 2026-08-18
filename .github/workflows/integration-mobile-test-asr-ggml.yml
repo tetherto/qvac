@@ -199,7 +199,6 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/asr-ggml' }}
           addon-npm-name: '@qvac/asr-ggml'
-          prebuild-artifact-prefix: 'asr-ggml-'
           pat-token: ${{ secrets.PAT_TOKEN }}
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}

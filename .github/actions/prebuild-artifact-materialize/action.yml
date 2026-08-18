@@ -1,23 +1,22 @@
 name: 'Prebuild artifact materialize'
 description: >
-  Downloads the well-known `prebuilds` artifact and places it into a package's
-  working directory in the ONLY layout the runtime and the published npm tarball
-  accept, i.e. <workdir>/prebuilds/<platform>-<arch>/. Single source of truth for
-  that placement — do NOT inline per workflow.
+  Downloads a package's prebuild bundle and places it into that package's working
+  directory in the ONLY layout the runtime and the published npm tarball accept,
+  i.e. <workdir>/prebuilds/<platform>-<arch>/. Single source of truth for that
+  placement — do NOT inline per workflow.
 
-  Absorbs the one difference between the two producers. A per-package producer
-  (prebuilds-<pkg>.yml, one package per run) uploads a flat bundle of
-  <platform>-<arch>/ directories. The multi-package producer (prebuilds-nx.yml,
-  which can build several packages in ONE run and so must share the one
-  well-known artifact name) namespaces each package under <package>/. This action
-  detects which shape it got and strips the <package>/ level when present, so the
-  resulting on-disk layout is identical either way and existing callers keep
-  working with no change.
+  Artifact identity is DERIVED from the package, never configured. The producer
+  (reusable-prebuilds.yml) uploads per-leg artifacts as
+  prebuild-<package>-<platform>-<arch> and the merged bundle as
+  prebuilds-<package>; this action asks for prebuilds-<package>. That is what
+  lets several packages build in one workflow run: artifacts are scoped to the
+  RUN and a called reusable workflow shares its caller's run, and the artifact
+  service ACCEPTS duplicate names rather than rejecting them, so a shared name
+  silently yields two same-named artifacts and an ambiguous download.
 
-  The published tarball ships `prebuilds` verbatim (package.json `files`) and the
-  runtime resolves prebuilds/<platform>-<arch>/<name>.bare via require.addon(),
-  so a stray <package>/ level would publish successfully and then break every
-  consumer at runtime. This action asserts that cannot happen.
+  There is deliberately no fallback to the historical shared `prebuilds` name:
+  the workflows that produced it are retired in this same change, and keeping a
+  fallback would let a run silently consume another package's bundle.
 
 inputs:
   workdir:
@@ -25,9 +24,8 @@ inputs:
     required: true
   package:
     description: >
-      Package short-name to select out of a namespaced bundle. Optional — when
-      empty, or when the bundle carries no such subdirectory, the bundle is
-      treated as flat (the legacy producers' shape).
+      Package short-name, i.e. the packages/<dir> name. Used to build the
+      artifact name. Defaults to basename(workdir).
     required: false
     default: ''
   platform:
@@ -38,23 +36,32 @@ inputs:
     description: 'Place only this arch (pair with platform).'
     required: false
     default: ''
-  artifact-name:
-    description: 'Artifact to download.'
-    required: false
-    default: 'prebuilds'
-  staging-subdir:
-    description: 'Staging directory name under RUNNER_TEMP.'
-    required: false
-    default: 'prebuilds-staging'
 
 runs:
   using: composite
   steps:
+    - name: Resolve package and artifact name
+      id: id
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        PACKAGE: ${{ inputs.package }}
+      run: |
+        set -euo pipefail
+        pkg="${PACKAGE:-$(basename "$WORKDIR")}"
+        if [ -z "$pkg" ] || [ "$pkg" = "." ] || [ "$pkg" = "/" ]; then
+          echo "::error::Cannot determine the package for workdir '$WORKDIR'."
+          exit 1
+        fi
+        echo "package=$pkg" >> "$GITHUB_OUTPUT"
+        echo "artifact=prebuilds-$pkg" >> "$GITHUB_OUTPUT"
+        echo "package=$pkg artifact=prebuilds-$pkg"
+
     - name: Download prebuilds bundle
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
-        name: ${{ inputs.artifact-name }}
-        path: ${{ runner.temp }}/${{ inputs.staging-subdir }}
+        name: ${{ steps.id.outputs.artifact }}
+        path: ${{ runner.temp }}/prebuilds-staging
 
     # Two implementations on purpose. Git Bash mangles RUNNER_TEMP on Windows
     # ("C:\a\_temp" — \a and \_ read as escape sequences), which makes the source
@@ -65,89 +72,76 @@ runs:
       shell: bash
       env:
         WORKDIR: ${{ inputs.workdir }}
-        PACKAGE: ${{ inputs.package }}
+        PACKAGE: ${{ steps.id.outputs.package }}
         PLATFORM: ${{ inputs.platform }}
         ARCH: ${{ inputs.arch }}
-        STAGING_SUBDIR: ${{ inputs.staging-subdir }}
       run: |
         set -euo pipefail
-        STAGING="${RUNNER_TEMP}/${STAGING_SUBDIR}"
-
-        SRC_ROOT="$STAGING"
-        if [ -n "$PACKAGE" ] && [ -d "${STAGING}/${PACKAGE}" ]; then
-          SRC_ROOT="${STAGING}/${PACKAGE}"
-          echo "Namespaced bundle — using '${PACKAGE}/' subtree"
-        else
-          echo "Flat bundle — using bundle root"
-        fi
-
+        STAGING="${RUNNER_TEMP}/prebuilds-staging"
         DEST="${WORKDIR}/prebuilds"
         mkdir -p "$DEST"
 
         if [ -n "$PLATFORM" ] && [ -n "$ARCH" ]; then
-          SRC="${SRC_ROOT}/${PLATFORM}-${ARCH}"
+          SRC="${STAGING}/${PLATFORM}-${ARCH}"
           if [ ! -d "$SRC" ]; then
-            echo "::error::No '${PLATFORM}-${ARCH}/' directory in the prebuilds bundle for '${PACKAGE:-<flat>}'."
+            echo "::error::No '${PLATFORM}-${ARCH}/' directory in the prebuilds bundle for '${PACKAGE}'. Its prebuild did not produce one."
             exit 1
           fi
           cp -r "$SRC" "${DEST}/"
         else
-          if [ -z "$(ls -A "$SRC_ROOT")" ]; then
-            echo "::error::Prebuilds bundle for '${PACKAGE:-<flat>}' is empty."
+          if [ ! -d "$STAGING" ] || [ -z "$(ls -A "$STAGING")" ]; then
+            echo "::error::Prebuilds bundle for '${PACKAGE}' is missing or empty."
             exit 1
           fi
-          cp -r "${SRC_ROOT}/." "${DEST}/"
+          cp -r "${STAGING}/." "${DEST}/"
         fi
 
-        if [ -n "$PACKAGE" ] && [ -d "${DEST}/${PACKAGE}" ]; then
-          echo "::error::Layout regression — '${DEST}/${PACKAGE}/' exists. Platform directories must sit directly under prebuilds/ or the published package cannot resolve its addon."
-          exit 1
-        fi
-
-        ls -la "$DEST"
+        # The published tarball ships `prebuilds` verbatim (package.json `files`)
+        # and require.addon() resolves prebuilds/<platform>-<arch>/<name>.bare, so
+        # any extra directory level here would publish fine and then break every
+        # consumer at runtime. Fail instead of shipping it.
+        for d in "$DEST"/*/; do
+          base="$(basename "$d")"
+          case "$base" in
+            *-*) : ;;
+            *) echo "::error::'${base}/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."; exit 1 ;;
+          esac
+        done
+        ls -A "$DEST"
 
     - name: Place prebuilds (Windows)
       if: runner.os == 'Windows'
       shell: powershell
       env:
         WORKDIR: ${{ inputs.workdir }}
-        PACKAGE: ${{ inputs.package }}
+        PACKAGE: ${{ steps.id.outputs.package }}
         PLATFORM: ${{ inputs.platform }}
         ARCH: ${{ inputs.arch }}
-        STAGING_SUBDIR: ${{ inputs.staging-subdir }}
       run: |
         $ErrorActionPreference = "Stop"
-        $staging = Join-Path $env:RUNNER_TEMP $env:STAGING_SUBDIR
-
-        $srcRoot = $staging
-        if ($env:PACKAGE -and (Test-Path (Join-Path $staging $env:PACKAGE))) {
-          $srcRoot = Join-Path $staging $env:PACKAGE
-          Write-Output "Namespaced bundle - using '$($env:PACKAGE)/' subtree"
-        } else {
-          Write-Output "Flat bundle - using bundle root"
-        }
-
+        $staging = Join-Path $env:RUNNER_TEMP "prebuilds-staging"
         $dest = Join-Path $env:WORKDIR "prebuilds"
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
         if ($env:PLATFORM -and $env:ARCH) {
-          $src = Join-Path $srcRoot "$($env:PLATFORM)-$($env:ARCH)"
+          $src = Join-Path $staging "$($env:PLATFORM)-$($env:ARCH)"
           if (-not (Test-Path $src)) {
-            Write-Output "::error::No '$($env:PLATFORM)-$($env:ARCH)/' directory in the prebuilds bundle."
+            Write-Output "::error::No '$($env:PLATFORM)-$($env:ARCH)/' directory in the prebuilds bundle for '$($env:PACKAGE)'."
             exit 1
           }
           Copy-Item -Recurse -Force $src $dest
         } else {
-          if (-not (Get-ChildItem -Force $srcRoot)) {
-            Write-Output "::error::Prebuilds bundle is empty."
+          if (-not (Test-Path $staging) -or -not (Get-ChildItem -Force $staging)) {
+            Write-Output "::error::Prebuilds bundle for '$($env:PACKAGE)' is missing or empty."
             exit 1
           }
-          Copy-Item -Recurse -Force (Join-Path $srcRoot "*") $dest
+          Copy-Item -Recurse -Force (Join-Path $staging "*") $dest
         }
 
-        if ($env:PACKAGE -and (Test-Path (Join-Path $dest $env:PACKAGE))) {
-          Write-Output "::error::Layout regression - '$dest\$($env:PACKAGE)' exists. Platform directories must sit directly under prebuilds/ or the published package cannot resolve its addon."
-          exit 1
+        foreach ($d in Get-ChildItem -Directory $dest) {
+          if ($d.Name -notlike "*-*") {
+            Write-Output "::error::'$($d.Name)/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."
+            exit 1
+          }
         }
-
         Get-ChildItem $dest

@@ -143,7 +143,6 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/vla-ggml'
           addon-npm-name: '@qvac/vla-ggml'
-          prebuild-artifact-prefix: 'vla-'
           pat-token: ${{ secrets.PAT_TOKEN }}
 
       # VLA-specific eu-central-1 OIDC session for the SmolVLA S3 presign.
