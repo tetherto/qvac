@@ -195,7 +195,7 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.43.0",
     "@qvac/ocr-ggml": "^0.13.1",
-    "@qvac/translation-nmtcpp": "^8.3.0",
+    "@qvac/translation-nmtcpp": "^0.8.0",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.17.0"
   },
@@ -251,7 +251,7 @@
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.43.0",
     "@qvac/ocr-ggml": "^0.13.1",
-    "@qvac/translation-nmtcpp": "^8.3.0",
+    "@qvac/translation-nmtcpp": "^0.8.0",
     "@qvac/tts-ggml": "^0.6.0",
     "@qvac/vla-ggml": "^0.17.0",
     "@types/brittle": "^3.5.0",
