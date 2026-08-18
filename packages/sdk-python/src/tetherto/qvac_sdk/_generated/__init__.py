@@ -9,6 +9,7 @@ from __future__ import annotations
 from .models import (
     AudioGenStreamRequest,
     AudioGenStreamResponse,
+    AudioGenTaskType,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -102,6 +103,7 @@ from .models.translate import Request as TranslateRequest
 __all__ = [
     "AudioGenStreamRequest",
     "AudioGenStreamResponse",
+    "AudioGenTaskType",
     "BatchCompletionStreamRequest",
     "BatchCompletionStreamResponse",
     "BciTranscribeRequest",

@@ -669,7 +669,9 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
-    new AudioGenExecutor(resources),
+    new AudioGenExecutor(resources, {
+      resolveAudioAsset: (fileName) => path.resolve(process.cwd(), 'assets/audio', fileName)
+    }),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),
