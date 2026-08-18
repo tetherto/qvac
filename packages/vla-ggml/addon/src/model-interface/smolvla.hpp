@@ -281,16 +281,10 @@ struct ggml_tensor* buildDenoiseStepGraph(
 void computeSinusoidalTimeEmbeddingCached(
     float timestep, const float* invPeriods, int dimension, float* out);
 
-// Resolve the device that owns `buft`, falling back to the CPU device when
-// the buffer type carries no device of its own. ggml declares the CPU buffer
-// type with `/* .device = */ NULL` (see the FIXME in ggml-backend.cpp
-// `ggml_backend_cpu_buffer_type`), so a plain `ggml_backend_buft_get_device`
-// yields nullptr for every CPU load and the caller cannot read the device
-// capabilities it needs. qvac-fabric's own loader carries the same fallback
-// in `create_backend_buffers` (src/llama-model.cpp).
-//
-// Exposed for the unit test that guards the mmap fast path against
-// regressing back to a NULL device.
+// Resolve the device that owns `buft`, falling back to the CPU device: ggml
+// declares the CPU buffer type with a NULL device, so the plain lookup yields
+// nullptr on every CPU load and its capabilities cannot be read. Exposed so a
+// unit test can guard the mmap fast path against that regression.
 ggml_backend_dev_t smolvlaResolveDevice(ggml_backend_buffer_type_t buft);
 
 // Load model from GGUF file. `force_cpu`: skip GPU device selection.

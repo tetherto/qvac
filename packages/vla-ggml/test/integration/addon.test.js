@@ -456,12 +456,10 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // the weights at once. `t.teardown` would defer release to end-of-test,
   // which on Android/iOS pushes us past the device-farm OOM limit.
   //
-  // The native load log is captured so the assertion below can check *how* the
-  // weights were placed, not just that the load returned: the mmap fast path
-  // keeps them in file-backed pages the kernel can evict, while the alloc+copy
-  // fallback commits the whole model to anonymous memory — the allocation iOS
-  // intermittently refused at the jetsam ceiling (QVAC-23327). Collection is
-  // bounded so a long run cannot grow it without limit.
+  // The native load log is captured so the assertion below can check how the
+  // weights were placed, not just that the load returned: the alloc+copy
+  // fallback commits the whole model to anonymous memory, which iOS refuses
+  // near its jetsam limit (QVAC-23327). Collection is bounded on purpose.
   const nativeLog = []
   const _collect = (...args) => {
     if (nativeLog.length < 4096) nativeLog.push(args.join(' '))

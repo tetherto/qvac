@@ -1,12 +1,10 @@
 // Guards the device resolution that gates smolvlaLoadModel's mmap fast path.
 //
-// ggml declares the CPU buffer type with `/* .device = */ NULL`, so reading
-// device capabilities straight off the buffer type yields nothing on a CPU
-// load: the fast path is skipped and every weight byte is committed to
-// anonymous memory. For a multi-GB GGUF on iOS that allocation sits at the
-// jetsam ceiling and is intermittently refused. These tests assert that a CPU
-// load still resolves a device and satisfies both fast-path gates, so the
-// fallback cannot silently come back.
+// ggml declares the CPU buffer type with a NULL device, so reading
+// capabilities straight off the buffer type skips the fast path on every CPU
+// load and commits the whole model to anonymous memory — an allocation iOS
+// refuses near its jetsam limit. These tests assert a CPU load still resolves
+// a device and satisfies both gates.
 
 #include <ggml-backend.h>
 #include <gtest/gtest.h>

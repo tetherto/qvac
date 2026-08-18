@@ -1214,10 +1214,9 @@ ggml_backend_dev_t smolvlaResolveDevice(ggml_backend_buffer_type_t buft) {
     return dev;
   }
   // The CPU buffer type ships with a NULL device, so resolve it by type.
-  // Skipping this made the mmap fast path below unreachable on every CPU
-  // load: `caps.buffer_from_host_ptr` was never read, and the full weight
-  // set went to anonymous memory instead of a file-backed mapping — a 1.9 GB
-  // commit that iOS refuses once the process approaches its jetsam limit.
+  // Without this the fast path below is unreachable on every CPU load and the
+  // whole weight set lands in anonymous memory, which iOS refuses once the
+  // process approaches its jetsam limit.
   return ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
 }
 
