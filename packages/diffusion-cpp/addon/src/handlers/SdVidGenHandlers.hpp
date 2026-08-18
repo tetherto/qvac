@@ -40,21 +40,25 @@ struct SdVidGenConfig {
   // Default 480 x 832 (portrait, phone-screen friendly). Wan 2.1 T2V 1.3B is
   // trained on 832 x 480 landscape; the model handles both orientations
   // equally well, so we default to portrait for mobile-first display.
-  // Override via params.width / params.height. Must be multiples of 8.
+  // Override via params.width / params.height. Native model-aware validation
+  // enforces the loaded model's spatial grid.
   int width = 480;
   int height = 832;
+  bool widthExplicit = false;
+  bool heightExplicit = false;
 
   // -- Frame count -----------------------------------------------------------
-  // Wan latent temporal packing requires (4 * k + 1) total frames where
-  // k >= 1. Validated in the handler; default 33 == ~2 s at the default
-  // fps of 16 (33 / 16 ~= 2.06 s).
+  // Temporal packing is model-specific (Wan 4*k+1, LTX 8*k+1, H3 17*k+5)
+  // and is validated after the loaded GGUF is identified. Default 33 is
+  // ~2 s at the default 16 fps.
   int videoFrames = 33;
+  bool videoFramesExplicit = false;
 
   // -- Frames per second ----------------------------------------------------
-  // Not part of sd_vid_gen_params_t -- consumed only by the addon's AVI
-  // muxer when emitting the final video. Upstream generate_video() treats
-  // frames as a pure sequence; fps is presentational metadata.
+  // Passed to generate_video() and used as a requested muxing rate. The addon
+  // queries the public runtime API for the model's effective muxing rate.
   int fps = 16;
+  bool fpsExplicit = false;
 
   // -- Reproducibility -------------------------------------------------------
   int64_t seed = -1; // -1 = random
@@ -62,12 +66,18 @@ struct SdVidGenConfig {
   // -- Low-noise expert (only expert on Wan 2.1) ----------------------------
   // Mapped to sd_vid_gen_params_t::sample_params.
   int sampleSteps = 30;
+  bool sampleStepsExplicit = false;
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
   // LTX-2 needs its own shift-based sigma schedule (LTX2_SCHEDULER); the Wan
   // default above is only applied when the caller did not ask for a scheduler.
   bool schedulerExplicit = false;
   float cfgScale = 6.0f;                              // guidance.txt_cfg
+  bool cfgScaleExplicit = false;
+  // Distilled guidance is used by MiniMax-H3. It is otherwise ignored by
+  // current Wan/LTX video models.
+  float guidance = 0.0f;
+  bool guidanceExplicit = false;
   // Image-conditioning guidance for img2vid. Mirrors the image
   // path's SdGenConfig::imgCfgScale exactly:
   //   -1.0f (default sentinel): fall through to cfgScale (txt_cfg), so a
