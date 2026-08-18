@@ -9,9 +9,9 @@ interface HistoryMessage {
 }
 
 /**
- * Static tools mode: prepend tools right after the system message (or at the
- * very start when no system message is present). The tool block stays in the
- * kv-cache for the whole chat session.
+ * Prepend tools right after the system message (or at the very start when no
+ * system message is present). The tool block stays in the kv-cache for the
+ * whole chat session.
  */
 export function prependToolsToHistory(
   history: HistoryMessage[],
@@ -24,19 +24,6 @@ export function prependToolsToHistory(
   }
 
   return [...tools, ...history]
-}
-
-/**
- * Dynamic tools mode: append tools after the last history message. The
- * addon's compact-tools mode anchors the block after the last user message
- * and trims it from the kv-cache once the tool-call chain resolves, so a
- * subsequent turn can ship a different tool set without poisoning the cache.
- */
-export function appendToolsToHistory(
-  history: HistoryMessage[],
-  tools: Tool[]
-): Array<HistoryMessage | Tool> {
-  return [...history, ...tools]
 }
 
 export function detectToolDialect(modelId: string): ToolDialect {

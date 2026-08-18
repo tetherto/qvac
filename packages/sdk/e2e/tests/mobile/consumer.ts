@@ -136,12 +136,6 @@ resources.define('tools', {
   config: { ctx_size: 4096, tools: true }
 })
 
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
-})
-
 resources.define('ocr', {
   constant: OCR_LATIN,
   type: 'ggml-ocr',
