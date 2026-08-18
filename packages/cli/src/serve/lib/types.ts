@@ -1,5 +1,5 @@
 import type { ModelRegistry, ServeConfig, ModelEntry } from '../core/model-registry.js'
-import type { LoadModelFn } from '../core/lifecycle.js'
+import type { LoadManager, LoadModelFn } from '../core/load-manager.js'
 import type { Logger } from '../../logger.js'
 import type { VectorStoresStore } from '../adapters/openai/vector-stores-store.js'
 import type { EphemeralFilesStore } from '../adapters/openai/ephemeral-files-store.js'
@@ -12,6 +12,7 @@ import type { ParsedFile } from './multipart.js'
 export interface QvacContext {
   registry: ModelRegistry
   serveConfig: ServeConfig
+  loadManager: LoadManager
   logger: Logger
   vectorStores: VectorStoresStore
   ephemeralFiles: EphemeralFilesStore

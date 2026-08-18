@@ -90,6 +90,31 @@ request just works.
 alias configured: the next request targeting it loads it again. There is no
 separate "load" endpoint — send a normal request (or set `preload: true`).
 
+`GET /v1/models` (and `GET /v1/models/{id}`) include a non-standard `state`
+field (`idle` | `loading` | `ready` | `error`) so a client can see load state
+without triggering a load. OpenAI clients ignore the extra field.
+
+### Load management (`serve.load`)
+
+Tune lazy-load behavior under `serve.load` in `qvac.config.*` (each has a CLI
+flag override):
+
+| Field                | Default | CLI flag                         | Meaning                                                                                                                                  |
+| -------------------- | ------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `lazy`               | `true`  | `--no-lazy-load`                 | When `false`, requests never trigger a load; an unloaded model returns `503 model_not_loaded`. Only `preload: true` models serve.        |
+| `concurrency`        | `1`     | `--load-concurrency <n>`         | Max simultaneous loads across different aliases. `1` mirrors startup preload and bounds memory when many models lazy-load under traffic. |
+| `timeoutMs`          | `null`  | `--load-timeout <ms>`            | Per-load deadline. On expiry the load is cancelled and the request gets `503 model_load_timeout`. `null` = unbounded.                    |
+| `cancelOnDisconnect` | `true`  | `--no-cancel-load-on-disconnect` | When `true`, a client disconnecting mid-load cancels the load — but only once no other request is still waiting on that same load.       |
+
+```json
+{
+  "serve": {
+    "load": { "lazy": true, "concurrency": 1, "timeoutMs": 600000, "cancelOnDisconnect": true },
+    "models": { "my-llm": { "model": "QWEN3_600M_INST_Q4" } }
+  }
+}
+```
+
 ## Model source constants in config
 
 `serve.models[*].config` fields ending in `ModelSrc` accept SDK model constant
@@ -205,8 +230,10 @@ suffix insertion, multi-choice `n`) are not implemented.
 | 400  | `unsupported_streaming` | Multi-prompt input combined with `"stream": true`                              |
 | 400  | `invalid_model_type`    | Alias is not a `chat` model                                                    |
 | 404  | `model_not_found`       | Unknown alias                                                                  |
+| 503  | `model_not_loaded`      | Model not loaded and lazy loading is disabled (`serve.load.lazy: false`)       |
 | 503  | `model_load_failed`     | Lazy load (cold start) of the model failed                                     |
-| 503  | `model_not_ready`       | Model still loading                                                            |
+| 503  | `model_load_timeout`    | Lazy load exceeded `serve.load.timeoutMs`                                      |
+| 503  | `model_not_ready`       | Rare fallback: load reported done but the model is not READY                   |
 | 500  | `completion_error`      | SDK / engine failure                                                           |
 
 ## `POST /v1/responses`

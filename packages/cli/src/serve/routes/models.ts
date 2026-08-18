@@ -3,6 +3,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { HttpError } from '../lib/http-error.js'
 import { unloadModel } from '../core/lifecycle.js'
+import type { ModelState } from '../core/model-registry.js'
 
 const modelIdParams = z.object({ id: z.string().min(1) })
 
@@ -11,11 +12,14 @@ interface ModelObject {
   object: 'model'
   created: number
   owned_by: string
+  // Non-standard QVAC extension. OpenAI clients ignore unknown fields; QVAC
+  // clients use it to see load state (idle/loading/ready/error) without loading.
+  state: ModelState
 }
 
 // Every configured alias is usable — it lazy-loads on first request — so all of
-// them are listed, whether or not they are currently loaded. `created` uses the
-// registry entry's timestamp once the alias has been registered.
+// them are listed, whether or not they are currently loaded. `created` and
+// `state` come from the registry entry once the alias has been registered.
 function toModelObject(app: FastifyInstance, alias: string): ModelObject {
   const entry = app.qvac.registry.getEntry(alias)
   const createdMs = entry?.createdAt ?? Date.now()
@@ -23,7 +27,8 @@ function toModelObject(app: FastifyInstance, alias: string): ModelObject {
     id: alias,
     object: 'model',
     created: Math.floor(createdMs / 1000),
-    owned_by: 'qvac'
+    owned_by: 'qvac',
+    state: entry?.state ?? app.qvac.registry.STATES.IDLE
   }
 }
 
@@ -50,7 +55,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/v1/models',
     {
-      schema: { tags: ['Models'], summary: 'List ready models', description: descriptions.list }
+      schema: {
+        tags: ['Models'],
+        summary: 'List configured models',
+        description: descriptions.list
+      }
     },
     // lunte-disable-next-line require-await
     async () => ({
@@ -97,7 +106,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       if (!entry) {
         throw new HttpError(404, 'model_not_found', `Model "${id}" not found.`)
       }
-      await unloadModel(id, app.qvac.registry, app.qvac.logger)
+      await unloadModel(id, app.qvac.registry, app.qvac.logger, app.qvac.loadManager)
       return { id, object: 'model' as const, deleted: true }
     }
   )

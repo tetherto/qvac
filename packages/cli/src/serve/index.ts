@@ -23,6 +23,7 @@ import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from './
 import { resolveServeApiKey } from './api-key.js'
 import { checkNetworkExposure, validateServeStartup } from './startup.js'
 import { createModelRegistry } from './core/model-registry.js'
+import { createLoadManager, defaultLoadFn } from './core/load-manager.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
 import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
@@ -58,6 +59,10 @@ export interface StartServerOptions {
    * when other tooling consumes stdout. */
   quiet?: boolean | undefined
   docs?: boolean | undefined
+  lazyLoad?: boolean | undefined
+  loadConcurrency?: number | undefined
+  loadTimeoutMs?: number | null | undefined
+  cancelLoadOnDisconnect?: boolean | undefined
   transcribeOverride?: QvacContext['transcribeOverride']
   loadModelOverride?: QvacContext['loadModelOverride']
 }
@@ -104,6 +109,9 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
   const qvacContext: QvacContext = {
     registry,
     serveConfig,
+    // Assigned immediately below; the manager's load fn reads
+    // `qvacContext.loadModelOverride` lazily so tests can set it post-build.
+    loadManager: undefined as unknown as QvacContext['loadManager'],
     logger,
     vectorStores,
     ephemeralFiles,
@@ -118,6 +126,13 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
       ? { loadModelOverride: options.loadModelOverride }
       : {})
   }
+
+  qvacContext.loadManager = createLoadManager(
+    registry,
+    logger,
+    { concurrency: serveConfig.load.concurrency, timeoutMs: serveConfig.load.timeoutMs },
+    () => qvacContext.loadModelOverride ?? defaultLoadFn
+  )
 
   const app = Fastify({
     logger: false,
@@ -236,7 +251,7 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
     app.qvac.serveConfig,
     app.qvac.registry,
     app.qvac.logger,
-    app.qvac.loadModelOverride
+    app.qvac.loadManager
   )
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
   app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
-import type { FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { transcribe, textToSpeech } from '@qvac/sdk'
 import type { TranscribeSegment } from '@qvac/sdk'
@@ -385,7 +385,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
 
       const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
-      const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName)
+      const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, req)
 
       const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
       const sampleRate = resolveSampleRate(registryEntry.config)
@@ -496,24 +496,31 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
     // lunte-disable-next-line require-await
     async () => ({
       object: 'list' as const,
-      data: app.qvac.registry
-        .getReady()
+      // All configured speech models, loaded or not — each lazy-loads on first
+      // request, so they must appear here (e.g. Open WebUI's TTS selector) the
+      // same way they appear in `/v1/models`.
+      data: [...app.qvac.serveConfig.models.values()]
         .filter((entry) => entry.endpointCategory === 'speech')
-        .map(toModelObject)
+        .map((entry) => toModelObject(app, entry.alias))
     })
   )
 }
 
-function toModelObject(entry: ModelEntry): {
+function toModelObject(
+  app: FastifyInstance,
+  alias: string
+): {
   id: string
   object: 'model'
   created: number
   owned_by: string
 } {
+  const entry = app.qvac.registry.getEntry(alias)
+  const createdMs = entry?.createdAt ?? Date.now()
   return {
-    id: entry.id,
+    id: alias,
     object: 'model',
-    created: Math.floor(entry.createdAt / 1000),
+    created: Math.floor(createdMs / 1000),
     owned_by: 'qvac'
   }
 }

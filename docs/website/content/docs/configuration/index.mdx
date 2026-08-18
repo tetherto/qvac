@@ -167,6 +167,17 @@ Example:
 }
 ```
 
+#### `LoadOptions` (`serve.load`)
+
+Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve openai`.
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `lazy` | When `false`, requests never trigger a load; an unloaded model returns `503 model_not_loaded`. Only preloaded models serve. CLI: `--no-lazy-load`. | `boolean` | No | `true` |
+| `concurrency` | Max simultaneous loads across different aliases. `1` mirrors startup preload and bounds memory under lazy request-time loads. CLI: `--load-concurrency`. | `number` | No | `1` |
+| `timeoutMs` | Per-load deadline in ms; on expiry the load is cancelled and the request gets `503 model_load_timeout`. `null` = unbounded. CLI: `--load-timeout`. | `number \| null` | No | `null` |
+| `cancelOnDisconnect` | When `true`, a client disconnecting mid-load cancels the load — but only once no other request is still waiting on that same load. CLI: `--no-cancel-load-on-disconnect`. | `boolean` | No | `true` |
+
 #### `OpenAIOptions`
 
 Optional OpenAI-adapter settings. Currently only `audio.speech` is configurable:

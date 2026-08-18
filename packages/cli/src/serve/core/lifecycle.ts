@@ -1,42 +1,13 @@
-import {
-  loadModel as sdkLoadModel,
-  unloadModel as sdkUnloadModel,
-  close as sdkClose
-} from '@qvac/sdk'
-import type { ModelConstant } from '@qvac/sdk'
+import { unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
 import type { ModelRegistry, ServeConfig } from './model-registry.js'
+import type { LoadManager } from './load-manager.js'
 import type { Logger } from '../../logger.js'
-
-/** SDK loader, overridable in tests. `@qvac/sdk`'s `loadModel` is heavily
- * overloaded; this is the shape serve actually calls it with (a free-form
- * `modelType` string), returning a bare model-id promise. */
-export type LoadModelFn = (opts: {
-  modelSrc: string | ModelConstant
-  modelType: string
-  modelConfig: Record<string, unknown>
-}) => Promise<string>
-
-const defaultLoad: LoadModelFn = (opts) => sdkLoadModel(opts)
-
-// Dedups concurrent loads of the same alias so the first request that names a
-// `preload: false` model loads it once and every other in-flight request awaits
-// the same load. Keyed by registry so servers sharing a process stay isolated.
-const inflightLoads = new WeakMap<ModelRegistry, Map<string, Promise<void>>>()
-
-function inflightFor(registry: ModelRegistry): Map<string, Promise<void>> {
-  let map = inflightLoads.get(registry)
-  if (!map) {
-    map = new Map()
-    inflightLoads.set(registry, map)
-  }
-  return map
-}
 
 export async function preloadModels(
   serveConfig: ServeConfig,
   registry: ModelRegistry,
   logger: Logger,
-  loadOverride?: LoadModelFn
+  loadManager: LoadManager
 ): Promise<void> {
   const toPreload: string[] = []
 
@@ -56,7 +27,8 @@ export async function preloadModels(
 
   for (const alias of toPreload) {
     try {
-      await loadModel(alias, registry, logger, loadOverride)
+      // No signal: a preload is a permanent waiter, never disconnect-cancelled.
+      await loadManager.load(alias)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to preload "${alias}": ${message}`)
@@ -64,72 +36,27 @@ export async function preloadModels(
   }
 }
 
-export function loadModel(
-  alias: string,
-  registry: ModelRegistry,
-  logger: Logger,
-  loadOverride?: LoadModelFn
-): Promise<void> {
-  const entry = registry.getEntry(alias)
-  if (!entry) return Promise.reject(new Error(`Model "${alias}" not registered`))
-
-  if (entry.state === registry.STATES.READY) {
-    logger.debug(`Model "${alias}" already loaded.`)
-    return Promise.resolve()
-  }
-
-  const pending = inflightFor(registry)
-  const existing = pending.get(alias)
-  if (existing) {
-    logger.debug(`Model "${alias}" is already loading, awaiting in-flight load.`)
-    return existing
-  }
-
-  const load = runLoad(alias, registry, logger, loadOverride ?? defaultLoad).finally(() => {
-    pending.delete(alias)
-  })
-  pending.set(alias, load)
-  return load
-}
-
-async function runLoad(
-  alias: string,
-  registry: ModelRegistry,
-  logger: Logger,
-  loadFn: LoadModelFn
-): Promise<void> {
-  const entry = registry.getEntry(alias)
-  if (!entry) throw new Error(`Model "${alias}" not registered`)
-
-  const displaySrc = typeof entry.modelSrc === 'string' ? entry.modelSrc : entry.modelSrc.src
-  logger.info(`Loading model "${alias}" from ${displaySrc}...`)
-  registry.setLoading(alias)
-
-  try {
-    const sdkModelId = await loadFn({
-      modelSrc: entry.modelSrc,
-      modelType: entry.sdkType,
-      modelConfig: entry.config
-    })
-    registry.setReady(alias, sdkModelId)
-    logger.info(`Model "${alias}" loaded (SDK modelId: ${sdkModelId}).`)
-  } catch (err) {
-    registry.setError(alias, err)
-    throw err
-  }
-}
-
 export async function unloadModel(
   alias: string,
   registry: ModelRegistry,
-  logger: Logger
+  logger: Logger,
+  loadManager: LoadManager
 ): Promise<void> {
   const entry = registry.getEntry(alias)
   if (!entry) throw new Error(`Model "${alias}" not found`)
 
-  if (entry.sdkModelId) {
+  // If a load is in flight, wait for it to settle first — otherwise we would
+  // unload nothing (sdkModelId still null) and the in-flight load would set the
+  // model back to READY right after DELETE reported success.
+  if (loadManager.isLoading(alias)) {
+    logger.info(`Waiting for in-flight load of "${alias}" to settle before unload...`)
+    await loadManager.settled(alias)
+  }
+
+  const current = registry.getEntry(alias)
+  if (current?.sdkModelId) {
     try {
-      await sdkUnloadModel({ modelId: entry.sdkModelId })
+      await sdkUnloadModel({ modelId: current.sdkModelId })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`SDK unload for "${alias}" failed: ${message}`)
