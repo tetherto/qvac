@@ -585,3 +585,8 @@ async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unus
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUtf8OutputTest')) return __FILTERED
   return runIntegrationModule('../integration/utf8-output.test.js', options)
 }
+
+async function runVisionpsyImageNoUpscaleTokensTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionpsyImageNoUpscaleTokensTest')) return __FILTERED
+  return runIntegrationModule('../integration/visionpsy-image-no-upscale-tokens.test.js', options)
+}

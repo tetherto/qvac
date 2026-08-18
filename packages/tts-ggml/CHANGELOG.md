@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-08-18
+
+### Fixed
+
+- **Consumer installs dedupe hyperdb again.** `@qvac/registry-client` (a
+  runtime dependency since 0.7.0, powering `download-models:registry`) is
+  bumped from `^0.4.0` to `^0.6.1` so its transitive `hyperdb` rides the
+  v6 line shared by the rest of the @qvac ecosystem. 0.7.0/0.7.1 installs
+  resolved two hyperdb copies (4.x + 6.x), violating the SDK pod check
+  single-copy invariant for shared P2P packages. The `QVACRegistryClient`
+  surface the download script uses is unchanged.
+
+### Added
+
+- **CosyVoice3 zero-shot / cross-lingual voice cloning.** Setting
+  `referenceAudio` now clones that recording's voice natively: the engine
+  tokenizes it (speech_tokenizer_v3), extracts the CAM++ speaker embedding
+  and prompt mel at `load()`, and replaces the baked default voice.
+  `promptText` selects the mode per the upstream frontends — the verbatim
+  transcript engages zero-shot, omitting it engages cross-lingual
+  (timbre-only conditioning for a different target language). Requires the
+  cloning add-on GGUFs (`cosyvoice3-s3tok-*.gguf` ~275 MB q8_0 / ~497 MB
+  f16, `cosyvoice3-campplus-*.gguf` ~28 MB), auto-discovered under
+  `files.cosyvoiceModelDir` or passed as `files.cosyvoiceS3tokModel` /
+  `files.cosyvoiceCampplusModel`; they are needed only when cloning. Every
+  bake failure (missing GGUFs, unreadable / non-finite audio, duration
+  outside 0.5-30 s) rejects the load — there is no silent fallback to the
+  baked voice. `instruct` composes with a cloned voice. Requires
+  `speech-cpp` >= 2026-08-14.
+
 ## [0.7.1] - 2026-08-17
 
 ### Added

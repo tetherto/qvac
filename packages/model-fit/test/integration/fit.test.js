@@ -332,9 +332,7 @@ test('a context floor beyond what the model declares is rejected', async functio
 test('a successful plan always carries a concrete context', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
-  // nCtx: 0 lets the fitter choose. llama encodes "use the trained context" as
-  // 0, so without resolution a SUCCESS could hand back nCtx: 0 — not a plan any
-  // caller can act on.
+  // Unresolved context metadata is not a usable load plan.
   const res = fitParams({ modelPath, nCtx: 0, marginMiB: 1024 })
 
   if (res.fits) {

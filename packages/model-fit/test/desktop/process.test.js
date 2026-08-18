@@ -197,6 +197,21 @@ test('fit process response parsing accepts completed FitResults', (t) => {
   })
 })
 
+test('fit process response parsing rejects zero-context successes', async (t) => {
+  const result = completedFitResult()
+  result.nCtx = 0
+
+  await t.exception.all(
+    () =>
+      parseFitProcessResponse({
+        version: FIT_PROCESS_PROTOCOL_VERSION,
+        status: 'completed',
+        result
+      }),
+    /Fit process result nCtx must be greater than 0 for status 0/
+  )
+})
+
 test('fit process response parsing accepts invocation errors', (t) => {
   const response = parseFitProcessResponse({
     version: FIT_PROCESS_PROTOCOL_VERSION,

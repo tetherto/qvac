@@ -330,9 +330,8 @@ test('completion: kv-cache resends the tool block after a turn that could not re
 
 // With `n_discarded > 0` the addon may slide its context window, and the
 // discard region opens exactly where a static tool block sits — the protected
-// prefix ends at the primed system prompt, and the clamp that would guard the
-// block only runs in dynamic mode. While the block can be evicted it has to
-// travel with every turn.
+// prefix ends at the primed system prompt. While the block can be evicted it
+// has to travel with every turn.
 test('completion: kv-cache resends the tool block when the context window can slide', async (t) => {
   await setIsolatedHome()
   clearRegistry()

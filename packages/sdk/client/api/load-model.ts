@@ -83,6 +83,7 @@ export function loadModel<S extends ModelDescriptor>(
  *     "tts-ggml", ...). May be omitted when `modelSrc` is a registry descriptor
  *     that already carries the engine.
  *   - modelConfig: Model-specific configuration options (companion sources, model parameters, etc.)
+ *   - fallbackSrc: For a built-in catalog model, an HTTP URL or local file path to load from when the registry is unreachable (validated against the model checksum)
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
  * @param rpcOptions - Optional RPC options including per-call profiling configuration
@@ -158,6 +159,13 @@ export function loadModel<S extends ModelDescriptor>(
  *   modelSrc: "/path/to/model.gguf",
  *   modelType: "llamacpp-completion",
  *   logger // Pass logger in options
+ * });
+ *
+ * // Catalog model with an alternate source used when the registry is unreachable
+ * import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+ * const resilientId = await loadModel({
+ *   modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+ *   fallbackSrc: "https://mirror.example.com/llama-3.2-1b-instruct-q4_0.gguf"
  * });
  * ```
  */

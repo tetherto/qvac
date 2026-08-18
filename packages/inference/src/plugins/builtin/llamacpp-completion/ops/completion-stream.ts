@@ -9,7 +9,6 @@ import type {
   ToolCall,
   ToolDialect
 } from '@/schemas/index'
-import { TOOLS_MODE } from '@/schemas/tools'
 import {
   logCacheDisabled,
   logCacheInit,
@@ -29,11 +28,7 @@ import {
   type TurnHandle
 } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/runtime/disposable-scope'
-import {
-  appendToolsToHistory,
-  detectToolDialect,
-  prependToolsToHistory
-} from '@/utils/tool-integration'
+import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
@@ -205,30 +200,19 @@ type HistoryMsg = {
   attachments?: { path: string }[] | undefined
 }
 
-type ToolPlacement = 'static' | 'dynamic'
-
 /**
- * Attach the tool block to a turn payload at the position its placement
- * requires.
- *
- * Static mirrors the no-kv-cache path (`prependToolsToHistory`) and keeps the
- * block ahead of the conversation. Dynamic must leave it immediately after the
- * last anchor message, which is what the addon's `ToolsCompactController`
- * validates before it will anchor and later trim the block.
+ * Attach the tool block ahead of a turn payload, mirroring the no-kv-cache
+ * path (`prependToolsToHistory`).
  */
-function withToolBlock(
-  messages: ChatHistory[],
-  toolBlock: ChatHistory[],
-  placement: ToolPlacement
-): ChatHistory[] {
+function withToolBlock(messages: ChatHistory[], toolBlock: ChatHistory[]): ChatHistory[] {
   if (toolBlock.length === 0) return messages
-  return placement === 'static' ? [...toolBlock, ...messages] : [...messages, ...toolBlock]
+  return [...toolBlock, ...messages]
 }
 
 interface CachePayload {
   messages: ChatHistory[]
   /**
-   * Whether the prefix will hold a rendered static tool block once this turn
+   * Whether the prefix will hold a rendered tool block once this turn
    * commits — either it already did, or this payload carries one the template
    * will render.
    */
@@ -251,12 +235,10 @@ function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boo
 /**
  * Pick the messages that need to reach the model for the next turn.
  *
- * `placement` selects both the slicing strategy and where the tool block sits
- * in the payload. Tools are never baked into the primed prefix — a prefix with
- * no user turn is not a renderable conversation for every template — so they
- * travel with a turn instead.
+ * Tools are never baked into the primed prefix — a prefix with no user turn is
+ * not a renderable conversation for every template — so they travel with a
+ * turn instead.
  *
- * Static placement:
  *   - Empty history: nothing to slice; send whatever non-system messages
  *     exist. (The call site always reports the cache as existing, so this
  *     is the only way into this branch.)
@@ -269,20 +251,6 @@ function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boo
  *     the bad boundary doesn't propagate into the next turn.
  *   - The tool block travels only with the turn that writes it into the
  *     cache; see `skipToolBlock` below.
- *
- * Dynamic placement:
- *   - The addon anchors the tool block after the last user message and
- *     trims tools + the assistant's tool-call output from the cache once
- *     the chain resolves. After that trim, the cache only holds messages
- *     up to the last user turn, so we ship the right slice
- *     plus the (possibly new) tool set:
- *       * tool-chain continuation (last role is "tool"): send the trailing
- *         consecutive tool messages, no tool block — tools are still
- *         anchored in the cache from the previous round.
- *       * new user turn after a chain (prev role is "assistant"): send
- *         [assistant, user] so the model sees its own final reply before
- *         the new prompt, then re-anchor the tool block.
- *       * otherwise: send just the last message + tool block.
  */
 function prepareMessagesForCache(
   session: KvCacheSession,
@@ -290,7 +258,6 @@ function prepareMessagesForCache(
   cacheExists: boolean,
   history: HistoryMsg[],
   tools?: Tool[],
-  placement: ToolPlacement = 'static',
   toolBlockEvictable = false
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
@@ -298,76 +265,43 @@ function prepareMessagesForCache(
   if (!(cacheExists && history.length > 0)) {
     const historyWithoutSystem = history.filter((msg) => msg.role !== 'system')
     return {
-      messages: withToolBlock(transformMessages(historyWithoutSystem), toolBlock, placement),
-      toolBlockCached: placement === 'static' && rendersToolBlock(historyWithoutSystem, toolBlock)
+      messages: withToolBlock(transformMessages(historyWithoutSystem), toolBlock),
+      toolBlockCached: rendersToolBlock(historyWithoutSystem, toolBlock)
     }
   }
 
-  if (placement === 'static') {
-    // Static path — slice from the turn's `savedCount` so callers can
-    // stage multiple messages between completions. `decideCachedHistorySlice`
-    // also guards against the QVAC-17780 stale-count regression: if the
-    // saved boundary would slice the history down to an empty payload
-    // (e.g. after a cancelled mid-decode), it falls back to the full
-    // non-system history and signals the caller to drop the bad entry.
-    // The session owns the entry; `dropStaleSavedCount` clears it
-    // without touching the on-disk file (the file is still trustworthy
-    // — only the boundary count is wrong).
-    const { messages, clearStaleCount } = decideCachedHistorySlice(
-      turn.savedCount,
-      cacheExists,
-      history
-    )
+  // Slice from the turn's `savedCount` so callers can
+  // stage multiple messages between completions. `decideCachedHistorySlice`
+  // also guards against the QVAC-17780 stale-count regression: if the
+  // saved boundary would slice the history down to an empty payload
+  // (e.g. after a cancelled mid-decode), it falls back to the full
+  // non-system history and signals the caller to drop the bad entry.
+  // The session owns the entry; `dropStaleSavedCount` clears it
+  // without touching the on-disk file (the file is still trustworthy
+  // — only the boundary count is wrong).
+  const { messages, clearStaleCount } = decideCachedHistorySlice(
+    turn.savedCount,
+    cacheExists,
+    history
+  )
 
-    if (clearStaleCount) {
-      session.dropStaleSavedCount(turn)
-    }
-
-    // Static never trims the block back out of the cache, so re-sending it
-    // every turn would leave one copy per turn and grow the prefix with the
-    // conversation. Skip it only when the prefix is known to hold a rendered
-    // one: `toolBlockCached` records that a previous turn actually got it into
-    // the cache, which a committed message count does not prove. A stale
-    // boundary means we are resending the whole conversation anyway, and an
-    // evictable block can no longer be assumed present.
-    const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
-    const blockToSend = skipToolBlock ? [] : toolBlock
-
-    return {
-      messages: withToolBlock(transformMessages(messages), blockToSend, placement),
-      toolBlockCached: skipToolBlock || rendersToolBlock(messages, blockToSend)
-    }
+  if (clearStaleCount) {
+    session.dropStaleSavedCount(turn)
   }
 
-  // Dynamic path. The addon trimmed tools after the previous round, so the
-  // cache no longer holds the saved-count we'd rely on for slicing — pick
-  // the right fragment based on the role of the last history message. Nothing
-  // tool-specific survives that trim, so the prefix never counts as holding a
-  // block and every turn re-anchors its own.
-  const lastMsg = history[history.length - 1]!
-
-  if (lastMsg.role === 'tool') {
-    const trailingTools: HistoryMsg[] = []
-    for (let i = history.length - 1; i >= 0; i--) {
-      const msg = history[i]!
-      if (msg.role !== 'tool') break
-      trailingTools.unshift(msg)
-    }
-    return { messages: transformMessages(trailingTools), toolBlockCached: false }
-  }
-
-  if (lastMsg.role === 'user') {
-    const prevMsg = history[history.length - 2]
-    const tail = prevMsg?.role === 'assistant' ? [prevMsg, lastMsg] : [lastMsg]
-    return {
-      messages: withToolBlock(transformMessages(tail), toolBlock, placement),
-      toolBlockCached: false
-    }
-  }
+  // The block is never trimmed back out of the cache, so re-sending it every
+  // turn would leave one copy per turn and grow the prefix with the
+  // conversation. Skip it only when the prefix is known to hold a rendered
+  // one: `toolBlockCached` records that a previous turn actually got it into
+  // the cache, which a committed message count does not prove. A stale
+  // boundary means we are resending the whole conversation anyway, and an
+  // evictable block can no longer be assumed present.
+  const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
+  const blockToSend = skipToolBlock ? [] : toolBlock
 
   return {
-    messages: withToolBlock(transformMessages([lastMsg]), toolBlock, placement),
-    toolBlockCached: false
+    messages: withToolBlock(transformMessages(messages), blockToSend),
+    toolBlockCached: skipToolBlock || rendersToolBlock(messages, blockToSend)
   }
 }
 
@@ -458,16 +392,12 @@ export async function* completion(
 
   const modelConfig = getModelConfig(modelId)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
-  const toolsMode = (modelConfig as { toolsMode?: string }).toolsMode
   const toolsActive = !!tools?.length && toolsEnabled
-  const dynamicTools = toolsActive && toolsMode === TOOLS_MODE.dynamic
-  const staticTools = toolsActive && !dynamicTools
   // Sliding is opt-in (`n_discarded` defaults to 0). Once on, the addon's
-  // discard window opens at the end of the primed prefix — which is where a
-  // static tool block sits, since the prime is the system prompt alone — and
-  // the clamp that would protect it only runs in dynamic mode. So while
-  // sliding is possible the block cannot be assumed to survive, and it has to
-  // travel with every turn.
+  // discard window opens at the end of the primed prefix — which is where the
+  // tool block sits, since the prime is the system prompt alone — and nothing
+  // protects it. So while sliding is possible the block cannot be assumed to
+  // survive, and it has to travel with every turn.
   const toolBlockEvictable = ((modelConfig as { n_discarded?: number }).n_discarded ?? 0) > 0
 
   const dialect =
@@ -536,10 +466,8 @@ export async function* completion(
   if (!kvCache) {
     // KV-cache disabled — straight passthrough, no session involvement.
     let historyWithTools: Array<HistoryMsg | Tool> = history
-    if (staticTools && tools) {
+    if (toolsActive && tools) {
       historyWithTools = prependToolsToHistory(history, tools)
-    } else if (dynamicTools && tools) {
-      historyWithTools = appendToolsToHistory(history, tools)
     }
 
     const transformedHistory = transformMessages(historyWithTools)
@@ -564,11 +492,10 @@ export async function* completion(
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
-  // Static bakes the tool block into the cache on the turn that first sends it
-  // and never trims it, so a late or changed tool set has to land on a fresh
-  // cache rather than a warm prefix holding the old block. Dynamic trims its
-  // block after each chain, so nothing tool-specific survives in its cache.
-  const configHash = generateConfigHash(systemPromptFromHistory, staticTools ? tools : undefined)
+  // The tool block is baked into the cache on the turn that first sends it and
+  // never trimmed, so a late or changed tool set has to land on a fresh cache
+  // rather than a warm prefix holding the old block.
+  const configHash = generateConfigHash(systemPromptFromHistory, toolsActive ? tools : undefined)
 
   const systemPromptToUse =
     systemPromptFromHistory ||
@@ -622,7 +549,6 @@ export async function* completion(
     /* cacheExists */ true,
     history,
     toolsActive ? tools : undefined,
-    dynamicTools ? 'dynamic' : 'static',
     toolBlockEvictable
   )
   const messagesToSend = payload.messages
