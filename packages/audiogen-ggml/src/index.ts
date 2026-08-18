@@ -143,7 +143,10 @@ export interface GenerateOptions {
 
 /** PCM accepted by the source-driven editing API. */
 export interface AudioEditSource {
-  /** Interleaved stereo PCM. Int16 output chunks can be reused directly. */
+  /**
+   * Interleaved stereo PCM. Float32 samples must be finite and in `[-1, 1]`.
+   * Int16 output chunks can be reused directly.
+   */
   pcm: Float32Array | Int16Array
   sampleRate: number
   channels: number
@@ -154,6 +157,7 @@ export interface AudioEditPrompt {
   lyrics?: string
 }
 
+/** v1 Flow-Edit. Supported on turbo DiT only (`turbo-q4`, `turbo-q8`). */
 export interface FlowEditOptions {
   /** Description of the unedited source audio. */
   from: AudioEditPrompt
@@ -168,9 +172,15 @@ export interface FlowEditOptions {
 }
 
 export interface RepaintOptions extends AudioEditPrompt {
-  /** Repaint region start in seconds. */
+  /**
+   * Repaint region start in seconds. Must lie inside the source duration and
+   * leave at least one latent frame (`1/25` s) before `end`.
+   */
   start: number
-  /** Repaint region end in seconds. Omit to repaint through the source end. */
+  /**
+   * Repaint region end in seconds. Omit to repaint through the source end.
+   * Must not exceed the source duration.
+   */
   end?: number
   mode?: RepaintMode
   /** Balanced-mode preservation strength in [0, 1]. */
@@ -294,6 +304,10 @@ function optionalFiniteNumber (
 }
 
 const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq'])
+const AUDIO_LATENT_RATE = 25
+const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE
+const REPAINT_RANGE_EPSILON_SECONDS = 1e-5
+const FLOW_EDIT_TURBO_VARIANTS = 'turbo-q4, turbo-q8'
 
 function optionalTaskType (value: string | undefined): string | undefined {
   if (value === undefined) return undefined
@@ -308,6 +322,55 @@ function requireFinitePcm (value: Float32Array, name: string): void {
     if (!Number.isFinite(sample)) {
       throw invalidInput(`${name} must contain only finite samples`)
     }
+  }
+}
+
+function requireNormalizedPcm (value: Float32Array, name: string): void {
+  for (const sample of value) {
+    if (!Number.isFinite(sample) || sample < -1 || sample > 1) {
+      throw invalidInput(`${name} must contain finite samples in [-1, 1]`)
+    }
+  }
+}
+
+function int16ToNormalizedFloat32 (pcm: Int16Array): Float32Array {
+  const converted = new Float32Array(pcm.length)
+  for (let i = 0; i < pcm.length; ++i) {
+    const sample = pcm[i]
+    converted[i] = sample < 0 ? sample / 32768 : sample / 32767
+  }
+  return converted
+}
+
+function isSftDit (
+  ditVariant: DitVariant | undefined,
+  ditModelPath: string | undefined
+): boolean {
+  if (ditVariant === 'sft') return true
+  if (ditModelPath === undefined) return false
+  const file = ditModelPath.split(/[/\\]/).pop() ?? ''
+  return /(?:^|[^a-z])sft(?:[^a-z]|$)/i.test(file.replace(/\.gguf$/i, ''))
+}
+
+function sourceDurationSeconds (source: AudioEditSource): number {
+  return source.pcm.length / source.channels / source.sampleRate
+}
+
+function requireRepaintRange (
+  source: AudioEditSource,
+  start: number,
+  end: number
+): void {
+  const duration = sourceDurationSeconds(source)
+  const resolvedEnd = end === -1 ? duration : end
+  if (start > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint.start must be within the source duration')
+  }
+  if (end !== -1 && end > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint.end must be within the source duration')
+  }
+  if (resolvedEnd - start < LATENT_FRAME_SECONDS - REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint range must span at least one latent frame')
   }
 }
 
@@ -346,15 +409,10 @@ function requireEditSource (source: AudioEditSource): Float32Array {
     throw invalidInput('edit source pcm must be interleaved stereo')
   }
   if (source.pcm instanceof Float32Array) {
-    requireFinitePcm(source.pcm, 'edit source pcm')
+    requireNormalizedPcm(source.pcm, 'edit source pcm')
     return source.pcm
   }
-  const pcm = new Float32Array(source.pcm.length)
-  for (let i = 0; i < source.pcm.length; ++i) {
-    const sample = source.pcm[i]
-    pcm[i] = sample < 0 ? sample / 32768 : sample / 32767
-  }
-  return pcm
+  return int16ToNormalizedFloat32(source.pcm)
 }
 
 function requirePrompt (prompt: AudioEditPrompt, name: string): AudioEditPrompt {
@@ -398,12 +456,18 @@ export class AudioEditSession {
 
   constructor (
     private readonly _source: AudioEditSource,
-    private readonly _runner: EditRunner
+    private readonly _runner: EditRunner,
+    private readonly _allowFlowEdit: boolean
   ) {}
 
-  /** Append a Flow-Edit operation. */
+  /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
   flowEdit (options: FlowEditOptions): this {
     if (this._started) throw invalidInput('cannot modify an edit session after run()')
+    if (!this._allowFlowEdit) {
+      throw invalidInput(
+        `flowEdit is supported on turbo DiT variants only (${FLOW_EDIT_TURBO_VARIANTS})`
+      )
+    }
     if (typeof options !== 'object' || options === null) {
       throw invalidInput('flowEdit options must be an object')
     }
@@ -446,6 +510,7 @@ export class AudioEditSession {
     if (end !== -1 && end <= start) {
       throw invalidInput('repaint.end must be greater than repaint.start')
     }
+    requireRepaintRange(this._source, start, end)
     if (!Object.values(RepaintMode).includes(mode)) {
       throw invalidInput('repaint.mode must be conservative|balanced|aggressive')
     }
@@ -497,6 +562,7 @@ export class AudioGen {
   private readonly _runExclusive: RunExclusive
   private readonly _configuration: AudioGenConfigurationParams
   private readonly _logger: QvacLogger
+  private readonly _ditVariant: DitVariant | undefined
   private _lifecycleRevision: number
   private _destroyed: boolean
   private _cancelPromise: Promise<void> | null
@@ -506,6 +572,7 @@ export class AudioGen {
     this._logger = new QvacLogger(options.logger)
     const files = options.files ?? {}
     const config = options.config ?? {}
+    this._ditVariant = files.ditVariant
 
     // DiT selection: an explicit `ditModel` path always wins; otherwise a
     // `ditVariant` enum picks which DiT GGUF to load from `modelDir` (the three
@@ -611,10 +678,13 @@ export class AudioGen {
   /**
    * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
    * be repeated and are executed in the exact order in which they are chained.
+   * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
    */
   edit (source: AudioEditSource): AudioEditSession {
-    return new AudioEditSession(source, async (audio, operations, options) =>
-      this._runEdit(audio, operations, options)
+    return new AudioEditSession(
+      source,
+      async (audio, operations, options) => this._runEdit(audio, operations, options),
+      !isSftDit(this._ditVariant, this._configuration.ditModelPath)
     )
   }
 

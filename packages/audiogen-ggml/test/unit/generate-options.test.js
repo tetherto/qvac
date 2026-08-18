@@ -3,9 +3,18 @@
 const test = require('brittle')
 const { AudioEditOperationType, AudioGen, RepaintMode } = require('../../index.js')
 
-function createHarness() {
+const EDIT_SAMPLE_RATE = 48000
+const EDIT_CHANNELS = 2
+
+function stereoSource(seconds, fill = 0) {
+  const pcm = new Float32Array(EDIT_SAMPLE_RATE * seconds * EDIT_CHANNELS)
+  if (fill !== 0) pcm.fill(fill)
+  return { pcm, sampleRate: EDIT_SAMPLE_RATE, channels: EDIT_CHANNELS }
+}
+
+function createHarness(files) {
   let received
-  const gen = new AudioGen()
+  const gen = new AudioGen(files ? { files } : {})
   gen.addon = {
     runJob(data) {
       received = data
@@ -183,7 +192,7 @@ test('AudioGen.run rejects non-finite referenceAudio samples', async (t) => {
 
 test('AudioGen.edit chains Flow-Edit and Repaint operations in exact order', async (t) => {
   const { gen, received } = createHarness()
-  const pcm = new Float32Array([0.1, -0.1, 0.2, -0.2])
+  const pcm = stereoSource(2, 0.1).pcm
 
   const response = await gen
     .edit({ pcm, sampleRate: 48000, channels: 2 })
@@ -234,7 +243,11 @@ test('AudioGen.edit chains Flow-Edit and Repaint operations in exact order', asy
 
 test('AudioGen.edit accepts Int16 output PCM and converts it for native', async (t) => {
   const { gen, received } = createHarness()
-  const input = new Int16Array([32767, -32768, 16384, -16384])
+  const input = new Int16Array(EDIT_SAMPLE_RATE * 0.04 * EDIT_CHANNELS)
+  input[0] = 32767
+  input[1] = -32768
+  input[2] = 16384
+  input[3] = -16384
 
   const response = await gen
     .edit({ pcm: input, sampleRate: 48000, channels: 2 })
@@ -251,11 +264,16 @@ test('AudioGen.edit accepts Int16 output PCM and converts it for native', async 
 
 test('AudioGen.edit validates source and operation-specific ranges', async (t) => {
   const { gen } = createHarness()
+  const source = stereoSource(1)
 
   await t.exception(
     () =>
       gen
-        .edit({ pcm: new Float32Array([0, 0]), sampleRate: 44100, channels: 2 })
+        .edit({
+          pcm: new Float32Array(44100 * EDIT_CHANNELS),
+          sampleRate: 44100,
+          channels: EDIT_CHANNELS
+        })
         .repaint({ caption: 'test', start: 0 })
         .run(),
     /sampleRate must be 48000/
@@ -263,7 +281,7 @@ test('AudioGen.edit validates source and operation-specific ranges', async (t) =
 
   t.exception(
     () =>
-      gen.edit({ pcm: new Float32Array([0, 0]), sampleRate: 48000, channels: 2 }).flowEdit({
+      gen.edit(source).flowEdit({
         from: { caption: 'source' },
         to: { caption: 'target' },
         nMin: 0.8,
@@ -273,21 +291,100 @@ test('AudioGen.edit validates source and operation-specific ranges', async (t) =
   )
 
   t.exception(
-    () =>
-      gen
-        .edit({ pcm: new Float32Array([0, 0]), sampleRate: 48000, channels: 2 })
-        .repaint({ caption: 'test', start: 4, end: 2 }),
+    () => gen.edit(source).repaint({ caption: 'test', start: 4, end: 2 }),
     /end must be greater/
   )
 })
 
+test('AudioGen.edit rejects Float32 PCM outside [-1, 1] and accepts the bounds', async (t) => {
+  const { gen } = createHarness()
+
+  const high = stereoSource(1).pcm
+  high[0] = 1.0001
+  await t.exception(
+    () =>
+      gen
+        .edit({ pcm: high, sampleRate: EDIT_SAMPLE_RATE, channels: EDIT_CHANNELS })
+        .repaint({ caption: 'test', start: 0 })
+        .run(),
+    /finite samples in \[-1, 1\]/
+  )
+
+  const low = stereoSource(1).pcm
+  low[1] = -1.0001
+  await t.exception(
+    () =>
+      gen
+        .edit({ pcm: low, sampleRate: EDIT_SAMPLE_RATE, channels: EDIT_CHANNELS })
+        .repaint({ caption: 'test', start: 0 })
+        .run(),
+    /finite samples in \[-1, 1\]/
+  )
+
+  const { gen: bounded, received } = createHarness()
+  const pcm = stereoSource(1).pcm
+  pcm[0] = 1
+  pcm[1] = -1
+  const response = await bounded
+    .edit({ pcm, sampleRate: EDIT_SAMPLE_RATE, channels: EDIT_CHANNELS })
+    .repaint({ caption: 'test', start: 0 })
+    .run()
+  await response.await()
+  t.is(received().sourceAudio[0], 1)
+  t.is(received().sourceAudio[1], -1)
+})
+
+test('AudioGen.edit rejects Repaint ranges outside the source duration', (t) => {
+  const { gen } = createHarness()
+  const source = stereoSource(1)
+
+  t.exception(
+    () => gen.edit(source).repaint({ caption: 'test', start: 0, end: 1.5 }),
+    /repaint.end must be within the source duration/
+  )
+  t.exception(
+    () => gen.edit(source).repaint({ caption: 'test', start: 1.5 }),
+    /repaint.start must be within the source duration/
+  )
+})
+
+test('AudioGen.edit rejects Repaint ranges shorter than one latent frame', (t) => {
+  const { gen } = createHarness()
+  const source = stereoSource(1)
+
+  t.exception(
+    () => gen.edit(source).repaint({ caption: 'test', start: 0, end: 0.02 }),
+    /at least one latent frame/
+  )
+  t.exception(
+    () => gen.edit(source).repaint({ caption: 'test', start: 0.99 }),
+    /at least one latent frame/
+  )
+})
+
+test('AudioGen.edit rejects FlowEdit on sft DiT and allows turbo variants', (t) => {
+  const sft = createHarness({ modelDir: '/tmp/acestep-models', ditVariant: 'sft' }).gen
+  const source = stereoSource(1)
+  t.exception(
+    () =>
+      sft.edit(source).flowEdit({
+        from: { caption: 'source' },
+        to: { caption: 'target' }
+      }),
+    /turbo DiT variants only/
+  )
+
+  const turbo = createHarness({ modelDir: '/tmp/acestep-models', ditVariant: 'turbo-q8' }).gen
+  turbo.edit(source).flowEdit({
+    from: { caption: 'source' },
+    to: { caption: 'target' }
+  })
+  t.pass('turbo-q8 FlowEdit is accepted')
+})
+
 test('AudioEditSession requires operations and is single-use', async (t) => {
   const { gen } = createHarness()
-  const source = {
-    pcm: new Float32Array([0, 0]),
-    sampleRate: 48000,
-    channels: 2
-  }
+  const source = stereoSource(1)
 
   await t.exception(() => gen.edit(source).run(), /requires at least one/)
 

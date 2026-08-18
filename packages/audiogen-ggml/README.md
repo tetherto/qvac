@@ -210,11 +210,13 @@ const response = await gen
 ```
 
 The source must be interleaved stereo PCM at 48 kHz. Both normalized
-`Float32Array` and addon-output `Int16Array` values are accepted. Repaint
-preserves PCM outside its selected range; omitting `end` repaints through the
-end of the source. Flow-Edit changes musical/lyrical conditioning over its
-`nMin`/`nMax` diffusion window. Repainting an entire track is supported with
-`start: 0` and no `end`.
+`Float32Array` samples in `[-1, 1]` and addon-output `Int16Array` values are
+accepted. Out-of-range Float32 samples are rejected. Repaint preserves PCM
+outside its selected range; `start`/`end` must stay inside the source duration
+and span at least one latent frame (`1/25` s). Omitting `end` repaints through
+the end of the source. Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`) and
+changes musical/lyrical conditioning over its `nMin`/`nMax` diffusion window.
+Repainting an entire track is supported with `start: 0` and no `end`.
 
 ### Turning PCM into a file
 

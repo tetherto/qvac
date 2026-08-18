@@ -107,6 +107,77 @@ function verifyEditRun(t, data, source, stage, label) {
   t.is(data.stages.includes('lm'), false, `${label}: LM bypassed`)
 }
 
+function concatInt16(chunks) {
+  let sampleCount = 0
+  for (const chunk of chunks) sampleCount += chunk.length
+  const pcm = new Int16Array(sampleCount)
+  let offset = 0
+  for (const chunk of chunks) {
+    pcm.set(chunk, offset)
+    offset += chunk.length
+  }
+  return pcm
+}
+
+function floatToPreservedInt16(sample) {
+  const scale = sample < 0 ? 32768 : 32767
+  let value = Math.round(sample * scale)
+  if (value > 32767) value = 32767
+  if (value < -32768) value = -32768
+  return value
+}
+
+function maxPreservedDiff(output, source, startSec, endSec, sampleRate, channels) {
+  const start = Math.floor(startSec * sampleRate) * channels
+  const end = Math.floor(endSec * sampleRate) * channels
+  let maxDiff = 0
+  for (let i = start; i < end && i < output.length && i < source.length; i++) {
+    const diff = Math.abs(output[i] - floatToPreservedInt16(source[i]))
+    if (diff > maxDiff) maxDiff = diff
+  }
+  return maxDiff
+}
+
+function verifyRepaintPreserved(t, data, source, start, end, label) {
+  const output = concatInt16(data.chunks)
+  const duration = source.length / COVER_CHANNELS / COVER_SAMPLE_RATE
+  const resolvedEnd = end < 0 ? duration : end
+  const margin = 1 / 25
+  const beforeEnd = Math.max(0, start - margin)
+  const afterStart = Math.min(duration, resolvedEnd + margin)
+  // Peak-normalization of the whole track would move every preserved sample by
+  // thousands of LSBs. VAE reconstruction of unmasked frames stays far below that.
+  const preservedLimit = 2500
+  if (beforeEnd > 0) {
+    const beforeDiff = maxPreservedDiff(
+      output,
+      source,
+      0,
+      beforeEnd,
+      COVER_SAMPLE_RATE,
+      COVER_CHANNELS
+    )
+    t.ok(
+      beforeDiff < preservedLimit,
+      `${label}: samples before the repaint interval match the source (maxDiff=${beforeDiff})`
+    )
+  }
+  if (afterStart < duration) {
+    const afterDiff = maxPreservedDiff(
+      output,
+      source,
+      afterStart,
+      duration,
+      COVER_SAMPLE_RATE,
+      COVER_CHANNELS
+    )
+    t.ok(
+      afterDiff < preservedLimit,
+      `${label}: samples after the repaint interval match the source (maxDiff=${afterDiff})`
+    )
+  }
+}
+
 async function runRepaintVariants(t, gen, source) {
   for (const variant of REPAINT_CASES) {
     const response = await gen
@@ -122,6 +193,7 @@ async function runRepaintVariants(t, gen, source) {
       .run({ seed: COVER_SEED })
     const { data } = await collectAudioGenResponse(response)
     verifyEditRun(t, data, source, 'repaint', variant.label)
+    verifyRepaintPreserved(t, data, source, variant.start, variant.end, variant.label)
   }
 }
 
