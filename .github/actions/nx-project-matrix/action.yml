@@ -81,11 +81,18 @@ runs:
             continue
           fi
           ROOT=$(echo "$PROJECT_JSON" | jq -r '.root')
-          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" '
+          # Whether this package produces a prebuild bundle is DERIVED from its
+          # own build target, not declared per target: a package has prebuilds
+          # exactly when `build.options.ci` exists (that is what prebuilds-nx.yml
+          # builds from). Consumers gate on `matrix.hasPrebuilds == true`, so a
+          # package like decoder-audio, whose native code comes transitively from
+          # a dependency, needs no flag anywhere.
+          HAS_PREBUILDS=$(echo "$PROJECT_JSON" | jq -c 'if .targets.build.options.ci then true else false end')
+          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" --argjson hasPrebuilds "$HAS_PREBUILDS" '
             (.platforms // [{}]) as $platforms
             | (del(.platforms)) as $rest
             | $platforms
-            | map({package: $pkg, workdir: $workdir} + $rest + .)
+            | map({package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds} + $rest + .)
           ')
           ROWS=$(jq -c --argjson new "$PKG_ROWS" '. + $new' <<< "$ROWS")
         done
