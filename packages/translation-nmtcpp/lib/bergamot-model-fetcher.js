@@ -23,11 +23,15 @@ const path = require("bare-path");
 const FIREFOX_RECORDS_URL = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records";
 const FIREFOX_ATTACHMENT_BASE = "https://firefox-settings-attachments.cdn.mozilla.net";
 const MODULE_NOT_FOUND_CODE = "MODULE_NOT_FOUND";
+const MISSING_MODULE_PATTERN = /^(?:MODULE_NOT_FOUND:\s*)?Cannot find (?:module|package) ['"]([^'"]+)['"]/;
+function missingModuleSpecifier(error) {
+    return MISSING_MODULE_PATTERN.exec(error.message)?.[1];
+}
 function isMissingModuleError(error, moduleName) {
     return (error instanceof Error &&
         "code" in error &&
         error.code === MODULE_NOT_FOUND_CODE &&
-        error.message.includes(moduleName));
+        missingModuleSpecifier(error) === moduleName);
 }
 function loadBareFetch() {
     try {

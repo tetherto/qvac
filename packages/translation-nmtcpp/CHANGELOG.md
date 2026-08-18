@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Declare the filesystem and URL modules required by the published model
-  fetchers and mobile runtime.
-- Declare lazy model downloader integrations as optional peers and report how
-  to install them when a download is requested.
+- Declare all runtime modules required by the published model fetchers, mobile
+  tests, and integration tests.
+- Declare lazy model downloader integrations as optional peers, report how to
+  install them when requested, and preserve nested missing-module errors.
 
 ## [0.9.0] - 2026-08-17
 

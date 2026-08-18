@@ -64,13 +64,19 @@ interface RegistryClient {
 
 type RegistryClientConstructor = new () => RegistryClient;
 const MODULE_NOT_FOUND_CODE = "MODULE_NOT_FOUND";
+const MISSING_MODULE_PATTERN =
+  /^(?:MODULE_NOT_FOUND:\s*)?Cannot find (?:module|package) ['"]([^'"]+)['"]/;
+
+function missingModuleSpecifier(error: Error): string | undefined {
+  return MISSING_MODULE_PATTERN.exec(error.message)?.[1];
+}
 
 function isMissingModuleError(error: unknown, moduleName: string): boolean {
   return (
     error instanceof Error &&
     "code" in error &&
     error.code === MODULE_NOT_FOUND_CODE &&
-    error.message.includes(moduleName)
+    missingModuleSpecifier(error) === moduleName
   );
 }
 
