@@ -3,10 +3,16 @@
 
 from ._internal import (
     AudioGenStreamRequest,
+    AudioGenStreamRequestReferenceAudioBase64,
+    AudioGenStreamRequestReferenceAudioFilePath,
+    AudioGenStreamRequestSourceAudioBase64,
+    AudioGenStreamRequestSourceAudioFilePath,
+    AudioGenStreamRequestTaskType,
     AudioGenStreamResponse,
     AudioGenStreamResponseProgress,
     AudioGenStreamResponseStats,
     AudioGenStreamResponseStopReason,
+    AudioGenTaskType,
     BatchCompletionStreamRequest,
     BatchCompletionStreamRequestPromptsItem,
     BatchCompletionStreamRequestPromptsItemGenerationParams,
@@ -776,10 +782,16 @@ from ._internal import (
 
 __all__ = [
     "AudioGenStreamRequest",
+    "AudioGenStreamRequestReferenceAudioBase64",
+    "AudioGenStreamRequestReferenceAudioFilePath",
+    "AudioGenStreamRequestSourceAudioBase64",
+    "AudioGenStreamRequestSourceAudioFilePath",
+    "AudioGenStreamRequestTaskType",
     "AudioGenStreamResponse",
     "AudioGenStreamResponseProgress",
     "AudioGenStreamResponseStats",
     "AudioGenStreamResponseStopReason",
+    "AudioGenTaskType",
     "BatchCompletionStreamRequest",
     "BatchCompletionStreamRequestPromptsItem",
     "BatchCompletionStreamRequestPromptsItemGenerationParams",
