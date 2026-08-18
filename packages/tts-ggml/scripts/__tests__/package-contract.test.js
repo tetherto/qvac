@@ -37,7 +37,10 @@ test('enhanced examples have package scripts', () => {
 })
 
 test('published commands include their runtime files', () => {
-  assert.equal(packageJson.dependencies['@qvac/registry-client'], '^0.4.0')
+  // ^0.6.1 keeps the transitive hyperdb on the v6 line shared by the rest of
+  // the @qvac ecosystem; 0.4.x pinned hyperdb@4 and broke the SDK consumer
+  // install check's single-copy invariant.
+  assert.equal(packageJson.dependencies['@qvac/registry-client'], '^0.6.1')
   const files = packedFileNames()
   assert.ok(files.has(registryScript))
   assert.ok(files.has('examples/chatterbox-enhanced.js'))

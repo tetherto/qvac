@@ -165,12 +165,6 @@ resources.define('tools', {
   config: { ctx_size: 4096, tools: true }
 })
 
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
-})
-
 resources.define('tools-qwen35', {
   constant: QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',

@@ -34,7 +34,7 @@ await downloadAsset({ assetSrc: QWEN3_4B_INST_Q4_K_M });
 const modelId = await loadModel({ modelSrc: QWEN3_4B_INST_Q4_K_M });
 ```
 
-The SDK instance that performs each call must use the same [`cacheDirectory`](/configuration#options). The initial download still requires registry access; this workflow prepares an application for later offline startup rather than providing a fallback source when the registry is unreachable.
+The SDK instance that performs each call must use the same [`cacheDirectory`](/configuration#options). The initial download still requires registry access; this workflow prepares an application for later offline startup. To load a catalog model from an alternate source when the registry itself is unreachable, see [Fall back to an alternate source](#fall-back-to-an-alternate-source).
 
 If an application manages its own model files, pass a local path and an explicit model type instead:
 
@@ -46,6 +46,23 @@ const modelId = await loadModel({
 ```
 
 Local-path loading does not associate the file with a catalog constant or validate it against catalog checksum metadata. Applications using this path are responsible for provisioning and integrity checks.
+
+## Fall back to an alternate source
+
+On some networks the registry is not reliably reachable, and a `loadModel()` call using a catalog constant can fail before the model arrives. Pass `fallbackSrc` — an HTTP URL or a local file path — to load the same model from an alternate source when the registry download does not succeed:
+
+```ts
+import { loadModel, QWEN3_4B_INST_Q4_K_M } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_4B_INST_Q4_K_M,
+  fallbackSrc: "https://mirror.example.com/qwen3-4b-instruct-q4_k_m.gguf",
+});
+```
+
+The model loaded from `fallbackSrc` is validated against the catalog model's checksum before use, so an alternate source is trusted to the same degree as the registry copy. Download progress for the fallback is reported through the same `onProgress` callback.
+
+`fallbackSrc` is supported only when `modelSrc` is a built-in catalog constant — the constant supplies the checksum to validate against. A local-path or URL `modelSrc` has no catalog checksum, so `fallbackSrc` is rejected for those. When a catalog model cannot be downloaded and no `fallbackSrc` was given, the error suggests supplying one.
 
 ## Cancel a specific call by `requestId`
 
