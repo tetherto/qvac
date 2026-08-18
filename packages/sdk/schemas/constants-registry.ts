@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { ModelType } from './model-types'
-import { TOOLS_MODE } from './tools'
 import { VERBOSITY } from './llamacpp-config'
 import {
   PLUGIN_LLM,
@@ -44,7 +43,6 @@ import { AUDIOGEN_TASK_TYPES } from './audio-gen'
  */
 export const constantsRegistry = {
   ModelType: z.enum(ModelType),
-  ToolsMode: z.enum(TOOLS_MODE),
   Verbosity: z.enum(VERBOSITY),
   PluginId: z.enum({
     LLM: PLUGIN_LLM,

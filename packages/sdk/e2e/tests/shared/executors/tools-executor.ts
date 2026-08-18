@@ -20,13 +20,12 @@ export class ToolsExecutor extends AbstractModelExecutor<typeof toolsTests> {
         description: string
         parameters: Record<string, unknown>
       }>
-      toolsMode?: 'static' | 'dynamic'
       toolDialect?: ToolDialect
       resourceKey?: string
       stream?: boolean
       expectedToolCall?: { name: string; argKeys?: string[] }
     }
-    const resourceKey = p.resourceKey ?? (p.toolsMode === 'dynamic' ? 'tools-dynamic' : 'tools')
+    const resourceKey = p.resourceKey ?? 'tools'
     const toolsModelId = await this.resources.ensureLoaded(resourceKey)
 
     try {
