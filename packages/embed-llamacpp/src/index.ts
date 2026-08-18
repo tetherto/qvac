@@ -19,7 +19,7 @@ import {
   type GGMLConfig,
 } from "./addon";
 import type ActualIdMapIndex from "./idMapIndex";
-import type { IdMapIndexFilter as ActualIdMapIndexFilter, IdMapIndexOptions } from "./idMapIndex";
+import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
 
 export type {
   GGMLConfig,
@@ -46,52 +46,8 @@ function loadIdMapIndex() {
   return require("./idMapIndex") as typeof ActualIdMapIndex;
 }
 
-const LazyIdMapIndex = class {
-  constructor(options: IdMapIndexOptions) {
-    return new (loadIdMapIndex())(options);
-  }
-
-  static load(path: string) {
-    return loadIdMapIndex().load(path);
-  }
-
-  static loadMmap(path: string) {
-    return loadIdMapIndex().loadMmap(path);
-  }
-
-  static loadWithDelta(snapshotPath: string, deltaPath: string) {
-    return loadIdMapIndex().loadWithDelta(snapshotPath, deltaPath);
-  }
-
-  static get Filter() {
-    return IdMapIndexFilter;
-  }
-
-  static get IdMapIndex() {
-    return IdMapIndex;
-  }
-
-  static get IdMapIndexFilter() {
-    return IdMapIndexFilter;
-  }
-
-  static [Symbol.hasInstance](instance: object) {
-    return instance instanceof loadIdMapIndex();
-  }
-};
-
-const LazyIdMapIndexFilter = class {
-  private constructor() {
-    throw new TypeError("IdMapIndexFilter instances must be created by IdMapIndex.prepareFilter()");
-  }
-
-  static [Symbol.hasInstance](instance: object) {
-    return instance instanceof loadIdMapIndex().IdMapIndexFilter;
-  }
-};
-
-export const IdMapIndex = LazyIdMapIndex as unknown as typeof ActualIdMapIndex;
-export const IdMapIndexFilter = LazyIdMapIndexFilter as unknown as typeof ActualIdMapIndexFilter;
+export declare const IdMapIndex: typeof ActualIdMapIndex;
+export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 
 export interface GGMLBertArgs {
   files: { model: string[] };
@@ -319,15 +275,25 @@ export class GGMLBert {
 export default GGMLBert;
 
 const cjsExports = GGMLBert as typeof GGMLBert & {
+  default?: typeof GGMLBert;
   pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
-  IdMapIndex?: typeof IdMapIndex;
-  IdMapIndexFilter?: typeof IdMapIndexFilter;
+  readonly IdMapIndex?: typeof IdMapIndex;
+  readonly IdMapIndexFilter?: typeof IdMapIndexFilter;
 };
+cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
-cjsExports.IdMapIndex = IdMapIndex;
-cjsExports.IdMapIndexFilter = IdMapIndexFilter;
+Object.defineProperties(cjsExports, {
+  IdMapIndex: {
+    enumerable: true,
+    get: loadIdMapIndex,
+  },
+  IdMapIndexFilter: {
+    enumerable: true,
+    get: () => loadIdMapIndex().IdMapIndexFilter,
+  },
+});
 module.exports = cjsExports;

@@ -257,6 +257,23 @@ test('IdMapIndex sub-export does not boot the BERT runtime', (t) => {
   }
 })
 
+test('IdMapIndex root export resolves the class without loading the native binding', (t) => {
+  const cachedEntries = preserveCacheEntries(MODULE_PATHS)
+  try {
+    for (const modulePath of MODULE_PATHS) evictFromCache(modulePath)
+    const rootModule = require('../../index.js')
+    t.absent(findCacheKey(MODULE_PATHS[0]), 'IdMapIndex module starts unloaded')
+    t.absent(findCacheKey(MODULE_PATHS[1]), 'native binding starts unloaded')
+
+    const RootIdMapIndex = rootModule.IdMapIndex
+    t.ok(findCacheKey(MODULE_PATHS[0]), 'accessing the root export loads the class module')
+    t.absent(findCacheKey(MODULE_PATHS[1]), 'accessing the class does not load the native binding')
+    t.is(RootIdMapIndex, require('../../idMapIndex'), 'root getter returns the direct constructor')
+  } finally {
+    restoreCacheEntries(MODULE_PATHS, cachedEntries)
+  }
+})
+
 for (const bitWidth of [4, 8, 32]) {
   test(`IdMapIndex: ${bitWidth}-bit add + search + remove + persistence round-trip`, (t) => {
     runRoundTrip(t, bitWidth)
@@ -339,10 +356,53 @@ test('IdMapIndex: ESM wrappers expose named exports', async (t) => {
   t.ok(idMapModule.IdMapIndexFilter, 'subpath named filter export exists')
   const rootModule = await import('../../index.mjs')
   t.is(rootModule.default, rootModule.GGMLBert, 'root default and named GGMLBert match')
-  t.is(typeof rootModule.IdMapIndex, 'function', 'root named IdMapIndex export exists')
+  t.is(rootModule.IdMapIndex, idMapModule.IdMapIndex, 'root and subpath constructors match')
+  t.is(
+    rootModule.IdMapIndexFilter,
+    idMapModule.IdMapIndexFilter,
+    'root and subpath filter constructors match'
+  )
   const idx = new rootModule.IdMapIndex({ dim: DIM })
   t.ok(idx instanceof idMapModule.IdMapIndex, 'root and subpath use the same class')
   idx.dispose()
+})
+
+test('IdMapIndex: root constructor preserves subclass semantics', (t) => {
+  const rootModule = require('../../index.js')
+  const DirectIdMapIndex = require('../../idMapIndex')
+  const RootIdMapIndex = rootModule.IdMapIndex
+
+  class ExtendedIdMapIndex extends RootIdMapIndex {
+    extendedMethod() {
+      return 'extended'
+    }
+  }
+
+  const idx = new ExtendedIdMapIndex({ dim: DIM })
+  t.is(RootIdMapIndex, DirectIdMapIndex, 'CommonJS root and subpath constructors match')
+  t.is(RootIdMapIndex.prototype, DirectIdMapIndex.prototype, 'constructor prototypes match')
+  t.is(Object.getPrototypeOf(idx), ExtendedIdMapIndex.prototype, 'subclass prototype is preserved')
+  t.is(idx.extendedMethod(), 'extended', 'subclass methods remain available')
+  idx.dispose()
+})
+
+test('IdMapIndex: CommonJS TypeScript default import works without interop', (t) => {
+  const consumer = require('../types/consumer-cjs.test.js')
+  const idMapModule = require('../../idMapIndex')
+  const rootModule = require('../../index.js')
+
+  t.is(
+    consumer.getRootDefaultImport(),
+    rootModule,
+    'package root default import resolves to GGMLBert'
+  )
+  t.is(consumer.getDefaultImport(), IdMapIndex, 'CommonJS default import resolves to the class')
+  t.is(idMapModule.IdMapIndex, IdMapIndex, 'named class export remains aligned')
+  t.is(
+    idMapModule.IdMapIndexFilter,
+    IdMapIndex.IdMapIndexFilter,
+    'named filter export remains aligned'
+  )
 })
 
 test('IdMapIndex: rejects numeric arguments outside int32 range', (t) => {

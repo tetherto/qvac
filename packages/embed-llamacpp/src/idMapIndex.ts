@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- The native Bare binding is resolved through CommonJS. */
-const binding = require('./binding') as IdMapIndexBinding
-/* eslint-enable @typescript-eslint/no-require-imports */
-
 const HANDLE = Symbol('IdMapIndex.handle')
 const FILTER_HANDLE = Symbol('IdMapIndexFilter.handle')
 const FILTER_OWNER = Symbol('IdMapIndexFilter.owner')
@@ -70,6 +66,14 @@ interface IdMapIndexBinding {
   idx_len(handle: NativeHandle): number
   idx_dim(handle: NativeHandle): number
   idx_bit_width(handle: NativeHandle): IdMapIndexBitWidth
+}
+
+let binding: IdMapIndexBinding | undefined
+
+function loadBinding() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- The native Bare binding is resolved lazily through CommonJS.
+  binding ??= require('./binding') as IdMapIndexBinding
+  return binding
 }
 
 export type IdMapIndexBitWidth = 2 | 4 | 8 | 32
@@ -178,7 +182,7 @@ export class IdMapIndexFilter {
     if (owner === null || filterHandle === null) {
       throw new Error('IdMapIndexFilter has been disposed')
     }
-    return binding.idx_search_prepared_filtered(ensureHandle(owner), filterHandle, queries, k)
+    return loadBinding().idx_search_prepared_filtered(ensureHandle(owner), filterHandle, queries, k)
   }
 
   /** Release the prepared native filter. This operation is idempotent. */
@@ -189,7 +193,7 @@ export class IdMapIndexFilter {
     }
 
     const owner = this[FILTER_OWNER]
-    binding.idx_filter_dispose(filterHandle)
+    loadBinding().idx_filter_dispose(filterHandle)
     this[FILTER_HANDLE] = null
     this[FILTER_OWNER] = null
     owner?.[FILTERS].delete(this)
@@ -230,7 +234,7 @@ export default class IdMapIndex {
         'IdMapIndex: TurboVec dim must be divisible by 8 and no greater than 1024'
       )
     }
-    this[HANDLE] = binding.idx_create({ dim, bitWidth, storage })
+    this[HANDLE] = loadBinding().idx_create({ dim, bitWidth, storage })
   }
 
   /**
@@ -241,7 +245,7 @@ export default class IdMapIndex {
    */
   static load(path: string) {
     requireNonEmptyPath(path, 'IdMapIndex.load: path')
-    return IdMapIndex.fromHandle(binding.idx_load(path))
+    return IdMapIndex.fromHandle(loadBinding().idx_load(path))
   }
 
   /**
@@ -251,7 +255,7 @@ export default class IdMapIndex {
    */
   static loadMmap(path: string) {
     requireNonEmptyPath(path, 'IdMapIndex.loadMmap: path')
-    return IdMapIndex.fromHandle(binding.idx_load_mmap(path))
+    return IdMapIndex.fromHandle(loadBinding().idx_load_mmap(path))
   }
 
   /**
@@ -264,7 +268,7 @@ export default class IdMapIndex {
   static loadWithDelta(snapshotPath: string, deltaPath: string) {
     requireNonEmptyPath(snapshotPath, 'IdMapIndex.loadWithDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'IdMapIndex.loadWithDelta: deltaPath')
-    return IdMapIndex.fromHandle(binding.idx_load_with_delta(snapshotPath, deltaPath))
+    return IdMapIndex.fromHandle(loadBinding().idx_load_with_delta(snapshotPath, deltaPath))
   }
 
   private static fromHandle(handle: NativeHandle) {
@@ -281,7 +285,7 @@ export default class IdMapIndex {
    */
   addWithIds(vectors: Float32Array, ids: BigUint64Array) {
     this.validateBatch('addWithIds', vectors, ids)
-    binding.idx_add(ensureHandle(this), vectors, ids)
+    loadBinding().idx_add(ensureHandle(this), vectors, ids)
     this.disposeFilters()
   }
 
@@ -299,7 +303,7 @@ export default class IdMapIndex {
     this.validateBatch('addLogged', vectors, ids)
     requireNonEmptyPath(deltaPath, 'addLogged: deltaPath')
     try {
-      binding.idx_add_logged(ensureHandle(this), vectors, ids, deltaPath)
+      loadBinding().idx_add_logged(ensureHandle(this), vectors, ids, deltaPath)
     } finally {
       this.disposeFilters()
     }
@@ -314,7 +318,7 @@ export default class IdMapIndex {
    */
   search(queries: Float32Array, k: number) {
     this.validateSearch('search', queries, k)
-    return binding.idx_search(ensureHandle(this), queries, k)
+    return loadBinding().idx_search(ensureHandle(this), queries, k)
   }
 
   /** Exact search restricted to the supplied external IDs. */
@@ -323,7 +327,7 @@ export default class IdMapIndex {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('searchFiltered: allowedIds must be a BigUint64Array')
     }
-    return binding.idx_search_filtered(ensureHandle(this), queries, k, allowedIds)
+    return loadBinding().idx_search_filtered(ensureHandle(this), queries, k, allowedIds)
   }
 
   /**
@@ -334,7 +338,10 @@ export default class IdMapIndex {
     if (!(allowedIds instanceof BigUint64Array)) {
       throw new TypeError('prepareFilter: allowedIds must be a BigUint64Array')
     }
-    const filter = createFilter(this, binding.idx_filter_create(ensureHandle(this), allowedIds))
+    const filter = createFilter(
+      this,
+      loadBinding().idx_filter_create(ensureHandle(this), allowedIds)
+    )
     this[FILTERS].add(filter)
     return filter
   }
@@ -350,7 +357,7 @@ export default class IdMapIndex {
     if (!isNonNegativeInt32(nIter)) {
       throw new TypeError('buildIvf: nIter must be a non-negative int32')
     }
-    binding.idx_build_ivf(ensureHandle(this), nLists, nIter)
+    loadBinding().idx_build_ivf(ensureHandle(this), nLists, nIter)
   }
 
   /**
@@ -362,13 +369,13 @@ export default class IdMapIndex {
     if (!isPositiveInt32(nProbe)) {
       throw new TypeError('searchIvf: nProbe must be a positive int32')
     }
-    return binding.idx_search_ivf(ensureHandle(this), queries, k, nProbe)
+    return loadBinding().idx_search_ivf(ensureHandle(this), queries, k, nProbe)
   }
 
   /** Remove an ID, returning false when it is not present. */
   remove(id: bigint) {
     this.validateId('remove', id)
-    const removed = binding.idx_remove(ensureHandle(this), id)
+    const removed = loadBinding().idx_remove(ensureHandle(this), id)
     if (removed) {
       this.disposeFilters()
     }
@@ -386,7 +393,7 @@ export default class IdMapIndex {
     this.validateId('removeLogged', id)
     requireNonEmptyPath(deltaPath, 'removeLogged: deltaPath')
     try {
-      return binding.idx_remove_logged(ensureHandle(this), id, deltaPath)
+      return loadBinding().idx_remove_logged(ensureHandle(this), id, deltaPath)
     } finally {
       this.disposeFilters()
     }
@@ -394,19 +401,19 @@ export default class IdMapIndex {
 
   /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
   compact() {
-    binding.idx_compact(ensureHandle(this))
+    loadBinding().idx_compact(ensureHandle(this))
     this.disposeFilters()
   }
 
   /** Return whether the index contains an external ID. */
   contains(id: bigint) {
     this.validateId('contains', id)
-    return binding.idx_contains(ensureHandle(this), id)
+    return loadBinding().idx_contains(ensureHandle(this), id)
   }
 
   /** Best-effort warmup of TurboVec rotation and codebook state. */
   prepare() {
-    binding.idx_prepare(ensureHandle(this))
+    loadBinding().idx_prepare(ensureHandle(this))
   }
 
   /**
@@ -416,7 +423,7 @@ export default class IdMapIndex {
    */
   write(path: string) {
     requireNonEmptyPath(path, 'write: path')
-    binding.idx_write(ensureHandle(this), path)
+    loadBinding().idx_write(ensureHandle(this), path)
   }
 
   /**
@@ -429,7 +436,7 @@ export default class IdMapIndex {
     requireNonEmptyPath(snapshotPath, 'compactDelta: snapshotPath')
     requireNonEmptyPath(deltaPath, 'compactDelta: deltaPath')
     try {
-      binding.idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath)
+      loadBinding().idx_compact_delta(ensureHandle(this), snapshotPath, deltaPath)
     } finally {
       this.disposeFilters()
     }
@@ -437,17 +444,17 @@ export default class IdMapIndex {
 
   /** Number of live entries. */
   get length() {
-    return binding.idx_len(ensureHandle(this))
+    return loadBinding().idx_len(ensureHandle(this))
   }
 
   /** Vector dimensionality. */
   get dim() {
-    return binding.idx_dim(ensureHandle(this))
+    return loadBinding().idx_dim(ensureHandle(this))
   }
 
   /** Effective storage bit width. */
   get bitWidth() {
-    return binding.idx_bit_width(ensureHandle(this))
+    return loadBinding().idx_bit_width(ensureHandle(this))
   }
 
   /** Release filters and native index resources. This operation is idempotent. */
@@ -458,7 +465,7 @@ export default class IdMapIndex {
     }
 
     this.disposeFilters()
-    binding.idx_dispose(handle)
+    loadBinding().idx_dispose(handle)
     this[HANDLE] = null
   }
 
@@ -501,4 +508,8 @@ export default class IdMapIndex {
 
 export { IdMapIndex }
 
-module.exports = IdMapIndex
+const cjsExports = IdMapIndex as typeof IdMapIndex & { default: typeof IdMapIndex }
+cjsExports.default = IdMapIndex
+cjsExports.IdMapIndex = IdMapIndex
+cjsExports.IdMapIndexFilter = IdMapIndexFilter
+module.exports = cjsExports

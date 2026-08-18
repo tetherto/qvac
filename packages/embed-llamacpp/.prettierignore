@@ -15,4 +15,5 @@ index.js
 addon.js
 addonLogging.js
 idMapIndex.js
+test/types/consumer-cjs.test.js
 *.d.ts
