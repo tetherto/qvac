@@ -482,6 +482,62 @@ test('CosyVoice3: referenceAudio forwards for zero-shot cloning', (t) => {
   t.is(params.promptText, 'hi there')
 })
 
+test('CosyVoice3: referenceAudio without cloning models or a model dir throws', (t) => {
+  // The clone consistency assert must fail closed at construction: with no
+  // model dir to discover the s3tok/campplus GGUFs under and no explicit
+  // paths, the native bake could never succeed.
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_COSYVOICE3,
+        referenceAudio: '/abs/ref.wav',
+        files: {
+          cosyvoiceLlmModel: './llm.gguf',
+          cosyvoiceFlowModel: './flow.gguf',
+          cosyvoiceHiftModel: './hift.gguf'
+        }
+      }),
+    /cosyvoiceS3tokModel/,
+    'clone request with unresolvable cloning models is rejected'
+  )
+})
+
+test('CosyVoice3: referenceAudio with explicit s3tok + campplus paths is accepted', (t) => {
+  // The other side of the clone assert: explicit cloning-model paths satisfy
+  // it without a model dir, and both forward to the addon.
+  let model
+  t.execution(() => {
+    model = new TTSGgml({
+      engine: TTSGgml.ENGINE_COSYVOICE3,
+      referenceAudio: '/abs/ref.wav',
+      files: {
+        cosyvoiceLlmModel: './llm.gguf',
+        cosyvoiceFlowModel: './flow.gguf',
+        cosyvoiceHiftModel: './hift.gguf',
+        cosyvoiceS3tokModel: './cosyvoice3-s3tok-q8_0.gguf',
+        cosyvoiceCampplusModel: './cosyvoice3-campplus-f32.gguf'
+      }
+    })
+  }, 'explicit cloning-model paths satisfy the clone assert')
+  const params = model._buildTtsParams()
+  t.is(params.cosyvoiceS3tokModelPath, './cosyvoice3-s3tok-q8_0.gguf')
+  t.is(params.cosyvoiceCampplusModelPath, './cosyvoice3-campplus-f32.gguf')
+})
+
+test('CosyVoice3: promptText alone (no referenceAudio) stays legal', (t) => {
+  // Without a reference it is the baked-voice transcript override, not a
+  // clone request, so the cloning models are not required.
+  t.execution(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_COSYVOICE3,
+        promptText: 'transcript override for the baked voice',
+        files: { cosyvoiceModelDir: './models/cv3' }
+      }),
+    'promptText without referenceAudio needs no cloning models'
+  )
+})
+
 test('CosyVoice3: synthesis returns audio output and stats (mocked)', async (t) => {
   const events = []
   const model = createMockedCosyvoiceModel({

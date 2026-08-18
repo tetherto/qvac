@@ -108,6 +108,7 @@ test('TranscribeStreamSession: interface includes destroy()', (t) => {
   let destroyed = false
 
   const session: TranscribeStreamSession = {
+    stats: Promise.resolve(undefined),
     write(_chunk: Buffer) {},
     end() {},
     destroy() {
@@ -152,6 +153,7 @@ test('TranscribeStreamSession: destroy() tears down both streams', (t) => {
   }
 
   const session: TranscribeStreamSession = {
+    stats: Promise.resolve(undefined),
     write(chunk: Buffer) {
       writable.write(chunk)
     },
@@ -386,6 +388,7 @@ test('duplex integration: session single-use iteration guard', async (t) => {
   })()
 
   const session: TranscribeStreamSession = {
+    stats: Promise.resolve(undefined),
     write() {},
     end() {},
     destroy() {},

@@ -231,7 +231,13 @@ async function downloadFileWithRetries(urls, dest, opts) {
       } catch (_) {}
 
       const attemptsLeft = retries - attempt
-      if (attemptsLeft > 0 && isTransientError(err)) {
+      // A 403/404 (e.g. an expired presigned URL) is not "transient", but with a
+      // fallback URL configured it must rotate to the next source instead of
+      // giving up on urls[0]. Single-URL callers keep failing fast so genuine
+      // permission errors are not masked by pointless retries.
+      const canTryAnotherSource =
+        urlList.length > 1 && (err.statusCode === 403 || err.statusCode === 404)
+      if (attemptsLeft > 0 && (isTransientError(err) || canTryAnotherSource)) {
         console.log(
           `[download] Attempt ${attempt + 1} failed (${err.message}), retrying (${attemptsLeft} left)...`
         )

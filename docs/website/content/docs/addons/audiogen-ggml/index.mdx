@@ -7,7 +7,7 @@ schemaType: APIReference
 
 ## Overview
 
-[`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml) is a Bare native addon for generating music from captions, lyrics, and musical controls. It runs ACE-Step 1.5 locally with CPU inference or optional Metal/Vulkan acceleration and returns interleaved stereo Int16 PCM.
+[`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml) is a Bare native addon for generating music from captions, lyrics, and musical controls, optionally conditioned on a reference recording or re-rendering an existing song as a cover. It runs ACE-Step 1.5 locally with CPU inference or optional Metal/Vulkan acceleration (desktop, Android, and iOS prebuilds) and returns interleaved stereo Int16 PCM.
 
 <Callout type="info">
   SDK consumers should use [`audioGen()` through
@@ -77,4 +77,10 @@ const stats = await response.await();
 await model.destroy();
 ```
 
-For runtime controls, supported encoders, cancellation, and complete examples, see the [package README](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml#readme).
+`destroy()` is terminal: create a new `AudioGen` instance instead of calling `load()` again on a destroyed one.
+
+## Reference and cover audio
+
+`run()` also accepts `referenceAudio` (timbre conditioning) and, with `taskType: "cover-nofsq"`, `sourceAudio` plus `audioCoverStrength` / `coverNoiseStrength`. Both PCM inputs are `Float32Array` values holding finite, normalized samples in interleaved stereo order at 48 kHz; the addon does not resample or convert channels. Through the SDK, `audioGen()` accepts file paths (decoded for you) or raw PCM buffers — see [Music generation](/ai-capabilities/music-generation#reference-audio-and-covers).
+
+For runtime controls, LM sampling and DCW parameters, supported encoders, cancellation, and complete examples, see the [package README](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml#readme).

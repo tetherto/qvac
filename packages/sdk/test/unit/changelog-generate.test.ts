@@ -259,6 +259,67 @@ test('extractBeforeAfter: returns null when no patterns found', (t) => {
   t.absent(extractBeforeAfter('No migration examples here.'))
 })
 
+test('extractBeforeAfter: a z in the breaking section does not end it', (t) => {
+  const body = [
+    '## 💥 Breaking Changes',
+    '',
+    'Managed mode no longer materializes the key in argv.',
+    '',
+    '**BEFORE:**',
+    "createQvac({ apiKey: 'k' })",
+    '',
+    '**AFTER:**',
+    'await createQvac()',
+    '',
+    '## 🧪 How was it tested?',
+    '',
+    'zebra'
+  ].join('\n')
+
+  const result = extractBeforeAfter(body)
+  t.ok(result, 'the pair after "materializes" is still found')
+  t.ok(result.includes("createQvac({ apiKey: 'k' })"))
+  t.ok(result.includes('await createQvac()'))
+  t.absent(result.includes('zebra'), 'the section ends at the next heading')
+})
+
+test('extractBeforeAfter: a later section does not leak into the breaking scope', (t) => {
+  const body = [
+    '## 💥 Breaking Changes',
+    '',
+    '**BEFORE:**',
+    'oldCall()',
+    '',
+    '**AFTER:**',
+    'newCall()',
+    '',
+    '## 🧪 How was it tested?',
+    '',
+    'ran the full unit suite'
+  ].join('\n')
+
+  const result = extractBeforeAfter(body)
+  t.ok(result)
+  t.absent(result.includes('ran the full unit suite'), 'scope stays inside Breaking Changes')
+  t.absent(result.includes('How was it tested'), 'the next heading is not carried over')
+})
+
+test('extractBeforeAfter: a breaking section at the end of the body is kept whole', (t) => {
+  const body = [
+    '## 💥 Breaking Changes',
+    '',
+    '**BEFORE:**',
+    'oldSize()',
+    '',
+    '**AFTER:**',
+    'newSize() // normalizes'
+  ].join('\n')
+
+  const result = extractBeforeAfter(body)
+  t.ok(result)
+  t.ok(result.includes('newSize() // normalizes'), 'the section runs to end of input')
+})
+
 // ============================================================
 // SDK Wrapper: extractModelNames
 // ============================================================

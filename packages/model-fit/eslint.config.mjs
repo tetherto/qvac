@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint'
 import importPlugin from 'eslint-plugin-import'
 
 export default [
-  // Generated output, native build artifacts, and everything `standard` lints.
+  // Generated output, native build artifacts, and JS covered by lunte/prettier.
   {
     ignores: [
       'index.js',
