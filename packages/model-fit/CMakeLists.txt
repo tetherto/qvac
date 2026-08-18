@@ -58,6 +58,7 @@ endif()
 set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/fit/FitParams.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/fit/FitResultContext.cpp
 )
 
 target_sources(${model-fit} PRIVATE ${ADDON_SOURCES})
@@ -82,6 +83,18 @@ target_link_libraries(
 
 target_compile_definitions(${model-fit} PUBLIC JS_LOGGER)
 target_compile_definitions(${model-fit} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+
+if(BUILD_TESTING)
+  enable_testing()
+
+  add_executable(
+    model-fit-context-test
+    test/unit/FitResultContext.test.cpp
+    addon/src/fit/FitResultContext.cpp
+  )
+  target_include_directories(model-fit-context-test PRIVATE ${PROJECT_SOURCE_DIR}/addon/src)
+  add_test(NAME ModelFitContextUnit COMMAND model-fit-context-test)
+endif()
 
 # NOTE: do not link msvcrt.lib here. It is the *dynamic* CRT import library, and
 # the monorepo ships Windows addons against the static runtime (QVAC-21100) so a

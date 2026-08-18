@@ -144,19 +144,20 @@ jobs:
       # Needed on Android always (functional multi-spec default matrix +
       # benchmark matrix both pre-stage there) and on iOS only for the
       # benchmark matrix, where it now also pre-stages via pymobiledevice3.
+      # us-west-2 so the presigned model URLs target the US bucket region.
       - name: Configure AWS credentials via OIDC
         if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
+          aws-region: us-west-2
 
       - name: Generate TTS-GGML mobile model manifest
         if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
         working-directory: addon/${{ inputs.workdir || 'packages/tts-ggml' }}
         shell: bash
         env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_S3_BUCKET: tether-ai-dev-us
         run: |
           node scripts/generate-mobile-model-manifest.js
           ls -lh test/mobile/testAssets/

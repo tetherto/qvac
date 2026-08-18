@@ -233,13 +233,14 @@ jobs:
           force-npm-prebuild: ${{ (inputs.prebuild_package != '' || inputs.package_spec != '') && 'true' || 'false' }}
 
       # The release environment authorizes GitHub OIDC to assume the scoped AWS
-      # role used for model-manifest signing and Device Farm; no long-lived AWS
-      # keys are stored. Parakeet models need presigning on every run.
+      # role (no long-lived keys); us-west-2 so the presigned parakeet URLs
+      # target the Device-Farm-local US bucket.
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
+          aws-region: us-west-2
+          role-duration-seconds: 7200
 
       # Presigns the PARAKEET GGUF URLs and stores a local manifest consumed by
       # generate-prestage-block.js below. Whisper models are NOT in the manifest
@@ -252,7 +253,10 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/asr-ggml' }}
         shell: bash
         env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          # US mirror bucket + region (parakeet/indic GGUFs are mirrored under
+          # qvac_models_compiled/ggml/ by the EU->US sync job).
+          MODEL_S3_BUCKET: tether-ai-dev-us
+          AWS_REGION: us-west-2
         run: |
           set -euo pipefail
           node scripts/generate-mobile-model-manifest.js

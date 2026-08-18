@@ -15,6 +15,8 @@
 // the tests fetch them from the QVAC model registry on-device at runtime into
 // `<testDir>/models/` (same client the desktop suite uses). A pre-side-loaded
 // set under `<testDir>/models` or `$AUDIOGEN_MODEL_DIR` is used as-is if present.
+// Android Device Farm also pre-stages the same set under /data/local/tmp so the
+// phone does not spend its per-test budget downloading ~3 GB over mobile Wi-Fi.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -39,6 +41,14 @@ const TURBO_STEPS = 8
 const TURBO_SHIFT = 3.0
 const SMOKE_DURATION_S = 10
 const SMOKE_CAPTION = 'Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook'
+const GPU_DEVICE = 1
+const VULKAN_BACKEND = 3
+const OPENCL_BACKEND = 4
+const GPU_BACKEND_NAMES = {
+  [VULKAN_BACKEND]: 'Vulkan',
+  [OPENCL_BACKEND]: 'OpenCL'
+}
+const ANDROID_PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-audiogen-models'
 
 // The four stage filenames a variant needs on disk. Defaults to the smoke's
 // turbo-q4; testRtfBenchmark passes the variant its matrix row asks for.
@@ -101,6 +111,7 @@ function _candidateDirs () {
       candidates.push(process.env.AUDIOGEN_MODEL_DIR)
     }
   } catch (_e) {}
+  candidates.push(ANDROID_PRESTAGED_MODEL_DIR)
   if (global.testDir) candidates.push(path.join(global.testDir, 'models'))
   if (typeof dirPath === 'string' && dirPath) candidates.push(path.join(dirPath, 'models'))
   return candidates
@@ -316,9 +327,23 @@ function _pcmEnergy (pcm) {
   return { peak, rms: samples > 0 ? Math.sqrt(sumSquares / samples) : 0 }
 }
 
+function _requireGpuBackend (stats) {
+  const backendDevice = stats && stats.backendDevice
+  const backendId = stats && stats.backendId
+  const backendName = GPU_BACKEND_NAMES[backendId]
+  console.log('[audiogen/GPU] backendDevice=' + backendDevice +
+    ' backendId=' + backendId + (backendName ? ' (' + backendName + ')' : ''))
+  if (backendDevice !== GPU_DEVICE || backendName === undefined) {
+    throw new Error(
+      'useGPU:true must run on Vulkan or OpenCL; got ' +
+      backendDevice + '/' + backendId)
+  }
+  return backendName
+}
+
 // End-to-end generation of a short turbo clip. Returns interleaved Int16 PCM so
 // the runner can play it back on device. The Android GPU variant additionally
-// requires the resolved backend to be Vulkan and rejects silent output.
+// requires a supported GPU backend and rejects silent output.
 async function _testGenerateMusic (useGPU) {
   const { gen, modelDir } = await _loadGenWithRetry(3, useGPU)
 
@@ -356,17 +381,7 @@ async function _testGenerateMusic (useGPU) {
       'generation produced silent or invalid audio (peak=' + energy.peak.toFixed(4) +
       ', rms=' + energy.rms.toFixed(5) + ')')
   }
-  if (useGPU) {
-    const backendDevice = stats && stats.backendDevice
-    const backendId = stats && stats.backendId
-    console.log('[audiogen/GPU] backendDevice=' + backendDevice +
-      ' backendId=' + backendId + (backendId === 3 ? ' (Vulkan)' : ''))
-    if (backendDevice !== 1 || backendId !== 3) {
-      throw new Error(
-        'useGPU:true must run on Vulkan (backendDevice=1, backendId=3); got ' +
-        backendDevice + '/' + backendId)
-    }
-  }
+  const executionTarget = useGPU ? _requireGpuBackend(stats) + ' GPU' : 'CPU'
 
   // The runner's playAudio() expects a base64 WAV string, which it writes to a
   // temp .wav and plays through the device speaker. Also persist a copy so we
@@ -381,7 +396,7 @@ async function _testGenerateMusic (useGPU) {
     sampleRate,
     channels,
     fullText:
-      (useGPU ? 'Vulkan GPU' : 'CPU') + ' generated ' + durationS.toFixed(1) +
+      executionTarget + ' generated ' + durationS.toFixed(1) +
       's (' + totalSamples + ' samples @ ' + sampleRate + ' Hz x' + channels +
       ', peak=' + energy.peak.toFixed(4) + ', rms=' + energy.rms.toFixed(5) +
       ') in ' + (elapsedMs / 1000).toFixed(1) + 's'
@@ -466,7 +481,7 @@ async function testRtfBenchmark () {
   }
 }
 
-async function testGenerateMusic () {
+async function testGenerateMusicOnCpu () {
   return _testGenerateMusic(false)
 }
 
@@ -476,7 +491,8 @@ async function testGenerateMusicOnGpu () {
 
 module.exports = {
   testLoadModels,
-  testGenerateMusic,
+  testGenerateMusicOnCpu,
   testGenerateMusicOnGpu,
-  testRtfBenchmark
+  testRtfBenchmark,
+  _requireGpuBackend
 }
