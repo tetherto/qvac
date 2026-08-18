@@ -2070,11 +2070,6 @@ class SupportedAudioFormat(Enum):
     raw = ".raw"
 
 
-class ToolsMode(Enum):
-    static = "static"
-    dynamic = "dynamic"
-
-
 class Verbosity(Enum):
     error = 0
     warn = 1
@@ -6380,11 +6375,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
     number_3 = 3
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode(Enum):
-    static = "static"
-    dynamic = "dynamic"
-
-
 class MainGpu(RootModel[int]):
     root: Annotated[int, Field(ge=0, le=9007199254740991)]
 
@@ -6477,14 +6467,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     n_discarded: float | None = None
     parallel: Annotated[int | None, Field(ge=1, le=9007199254740991)] = None
     tools: bool | None = None
-    tools_mode: Annotated[
-        LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode | None,
-        Field(
-            alias="toolsMode",
-            description='Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.',
-            title="LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode",
-        ),
-    ] = None
     cache_type_k: Annotated[str | None, Field(alias="cache-type-k")] = None
     cache_type_v: Annotated[str | None, Field(alias="cache-type-v")] = None
     main_gpu: Annotated[

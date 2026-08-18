@@ -35,14 +35,23 @@ struct CosyvoiceConfig {
   std::string llmModelPath;   // Qwen2.5 LM (text -> speech tokens)
   std::string flowModelPath;  // DiT conditional-flow-matching (tokens -> mel)
   std::string hiftModelPath;  // CausalHiFT vocoder (mel -> 24 kHz PCM)
-  std::string s3tokModelPath; // supervised S3 speech tokenizer (zero-shot)
-  std::string campplusModelPath; // CAM++ speaker encoder (zero-shot)
+  // Voice-cloning add-on GGUFs, needed only with referenceAudio (discovered
+  // under modelDir as cosyvoice3-s3tok*.gguf / cosyvoice3-campplus*.gguf
+  // when unset).
+  std::string s3tokModelPath;    // speech_tokenizer_v3 speech tokenizer
+  std::string campplusModelPath; // CAM++ speaker encoder
 
   /**
-   * Zero-shot voice cloning: reference wav + its transcript. RESERVED / not
-   * yet effective — the native path needs the S3 speech tokenizer + CAM++
-   * speaker encoder, which are not ported yet; the engine warns and falls back
-   * to the baked voice. Plumbed for API stability.
+   * Zero-shot / cross-lingual voice cloning. referenceAudio: recording of
+   * the target speaker (0.5-30 s hard limits; multichannel input is
+   * downmixed to mono); the engine tokenizes it, extracts the speaker
+   * embedding and prompt mel at load, replacing the baked voice, and THROWS
+   * when the cloning GGUFs are missing or the audio is unusable (no silent
+   * fallback). promptText selects the mode: the verbatim transcript =
+   * zero-shot, empty = cross-lingual (timbre only). Without referenceAudio,
+   * promptText still overrides the baked voice's transcript metadata. Each
+   * engine construction re-bakes whatever reference it is given, so a JS
+   * reload repeats the same bake rather than switching voices.
    */
   std::string referenceAudio;
   std::string promptText;

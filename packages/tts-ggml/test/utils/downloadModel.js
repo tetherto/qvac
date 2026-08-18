@@ -1338,6 +1338,16 @@ const COSYVOICE_FILES = [
 ]
 
 /**
+ * The on-disk names of the CosyVoice3 base set, so callers that stage or
+ * mirror a model dir track the published tier instead of hardcoding it.
+ *
+ * @returns {string[]}
+ */
+function cosyvoiceBaseFileNames() {
+  return COSYVOICE_FILES.map((f) => f.name)
+}
+
+/**
  * Ensure the CosyVoice3 model directory is staged in a location the native
  * addon can read, and return that directory.  Mirrors ensureChatterboxModels /
  * ensureMecabDict (multi-file): prefer an already-staged local copy, otherwise
@@ -1387,6 +1397,82 @@ async function ensureCosyvoiceModel(options = {}) {
   console.log(
     ' Assemble one offline with ' +
       'qvac-ext-lib-whisper.cpp/tts-cpp/scripts/assemble-cosyvoice3-model.py.'
+  )
+  return { success: false, modelDir: requestedDir, targetDir: requestedDir }
+}
+
+// A deliberately SEPARATE tier from COSYVOICE_FILES: hasAllGgufsIn is
+// all-or-nothing, so folding these in would invalidate every existing staged
+// CosyVoice3 dir and force the ~300 MB download on tests that never clone.
+const REGISTRY_DATE_COSYVOICE_CLONE = '2026-08-14'
+const COSYVOICE_CLONE_REGISTRY_PREFIX = `qvac_models_compiled/ggml/cosy_voice/${REGISTRY_DATE_COSYVOICE_CLONE}`
+
+const COSYVOICE_CLONE_FILES = [
+  {
+    // q8_0 keeps the CI download small and exercises the dtype-adopting
+    // tokenizer weight loader; the registry also publishes an f16 tier.
+    name: 'cosyvoice3-s3tok-q8_0.gguf',
+    minSize: 50_000_000,
+    maxSize: 1_000_000_000,
+    registryPath: `${COSYVOICE_CLONE_REGISTRY_PREFIX}/cosyvoice3-s3tok-q8_0.gguf`,
+    registrySource: REGISTRY_SOURCE
+  },
+  {
+    name: 'cosyvoice3-campplus-f32.gguf',
+    minSize: 1_000_000,
+    maxSize: 100_000_000,
+    registryPath: `${COSYVOICE_CLONE_REGISTRY_PREFIX}/cosyvoice3-campplus-f32.gguf`,
+    registrySource: REGISTRY_SOURCE
+  }
+]
+
+/**
+ * Ensure the CosyVoice3 voice-cloning add-on GGUFs are staged INSIDE a staged
+ * CosyVoice3 model dir (the engine auto-discovers them there by the
+ * cosyvoice3-s3tok* / cosyvoice3-campplus* name prefixes), and return that
+ * dir.  Call after ensureCosyvoiceModel; pass its `modelDir` as `targetDir`.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.targetDir] - staged CosyVoice3 model dir
+ *   (default ./models/cosyvoice3).
+ * @returns {Promise<{ success: boolean, modelDir: string, targetDir: string }>}
+ */
+async function ensureCosyvoiceCloneModels(options = {}) {
+  const requestedDir = options.targetDir || path.join(getBaseDir(), 'models', COSYVOICE_DIRNAME)
+  console.log(`Ensuring CosyVoice3 cloning add-on GGUFs (requested dir: ${requestedDir})...`)
+
+  const candidateDirs = [requestedDir]
+  if (isMobile && platform === 'android') {
+    for (const d of ANDROID_CANDIDATE_DIRS) {
+      const cd = path.join(d, COSYVOICE_DIRNAME)
+      if (!candidateDirs.includes(cd)) candidateDirs.push(cd)
+    }
+  } else {
+    for (const d of desktopFallbackDirs()) {
+      const cd = path.join(d, COSYVOICE_DIRNAME)
+      if (!candidateDirs.includes(cd)) candidateDirs.push(cd)
+    }
+  }
+
+  for (const dir of candidateDirs) {
+    // The returned dir feeds the engine's whole-directory discovery, so a
+    // clone-only cache would resolve and then fail on the missing LM.
+    if (hasAllGgufsIn(dir, COSYVOICE_CLONE_FILES) && hasAllGgufsIn(dir, COSYVOICE_FILES)) {
+      console.log(` ✓ using CosyVoice3 cloning GGUFs at ${dir}`)
+      return { success: true, modelDir: dir, targetDir: dir }
+    }
+  }
+
+  if (await tryFetchGgufsFromRegistry(COSYVOICE_CLONE_FILES, requestedDir)) {
+    return { success: true, modelDir: requestedDir, targetDir: requestedDir }
+  }
+
+  console.log(' CosyVoice3 cloning GGUFs not found locally and registry fetch failed.')
+  console.log(` Expected these files under ${requestedDir}:`)
+  for (const f of COSYVOICE_CLONE_FILES) console.log(`   ${f.name}  (${f.registryPath})`)
+  console.log(
+    ' Convert offline with qvac-ext-lib-whisper.cpp/engines/tts/scripts/' +
+      'convert-s3tokenizer-v3-to-gguf.py and convert-campplus-to-gguf.py.'
   )
   return { success: false, modelDir: requestedDir, targetDir: requestedDir }
 }
@@ -1838,6 +1924,8 @@ module.exports = {
   parlerQuantFromVariant,
   DEFAULT_PARLER_QUANT,
   ensureCosyvoiceModel,
+  ensureCosyvoiceCloneModels,
+  cosyvoiceBaseFileNames,
   ensureMecabDict,
   ensureCangjieTsv,
   ensureLavaSREnhancerGguf,
