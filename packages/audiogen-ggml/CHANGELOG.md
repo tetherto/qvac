@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-08-17#1` so vcpkg installs the ACE-Step
+  edit API (`edit_plan`, FlowEdit, Repaint) instead of port-version 0 of the
+  same date.
+
 ### Added
 
 - Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
