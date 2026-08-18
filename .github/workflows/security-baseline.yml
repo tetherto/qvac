@@ -89,6 +89,16 @@ jobs:
           .github/scripts/test/ci-trust-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
 
+      # The co-load inventory drifts when the SDK swaps an addon, not when the
+      # co-load package changes, so this has to run on every PR rather than
+      # behind the co-load label. It only reads files (no npm install), and a
+      # stale inventory makes the co-load gate report on an addon the SDK no
+      # longer ships.
+      - name: Run co-load addon inventory tests
+        run: >-
+          node --test
+          packages/ggml-coload-smoke/test/addons.unit.test.js
+
       # The trust-policy suite asserts on workflow *text*, so it stays green even
       # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
       # PR, and pull_request_target workflows load from the base branch, so this
