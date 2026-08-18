@@ -12,7 +12,6 @@
 
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
-
 #include "model-interface/acestep/AcestepConfig.hpp"
 
 namespace tts_cpp::acestep {

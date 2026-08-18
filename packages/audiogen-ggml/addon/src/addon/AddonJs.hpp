@@ -271,8 +271,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       };
       auto optionalNumber = [&](const char* key, double fallback) {
         js_value_t* raw = operation.getProperty(env, key);
-        if (js::is<js::Undefined>(env, raw) ||
-            js::is<js::Null>(env, raw)) {
+        if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
           return fallback;
         }
         if (!js::is<js::Number>(env, raw)) {
@@ -293,11 +292,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       if (operationType == "flow-edit") {
         AcestepModel::FlowEditInput flow;
         flow.sourceCaption = requiredString("sourceCaption");
-        flow.sourceLyrics =
-            optionalString("sourceLyrics", "[Instrumental]");
+        flow.sourceLyrics = optionalString("sourceLyrics", "[Instrumental]");
         flow.targetCaption = requiredString("targetCaption");
-        flow.targetLyrics =
-            optionalString("targetLyrics", "[Instrumental]");
+        flow.targetLyrics = optionalString("targetLyrics", "[Instrumental]");
         flow.nMin = static_cast<float>(optionalNumber("nMin", 0.0));
         flow.nMax = static_cast<float>(optionalNumber("nMax", 1.0));
         flow.nAvg = static_cast<int>(optionalNumber("nAvg", 1.0));
@@ -308,11 +305,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
         AcestepModel::RepaintInput repaint;
         repaint.caption = requiredString("caption");
         repaint.lyrics = optionalString("lyrics", "[Instrumental]");
-        repaint.start =
-            static_cast<float>(optionalNumber("start", 0.0));
+        repaint.start = static_cast<float>(optionalNumber("start", 0.0));
         repaint.end = static_cast<float>(optionalNumber("end", -1.0));
-        repaint.strength =
-            static_cast<float>(optionalNumber("strength", 0.5));
+        repaint.strength = static_cast<float>(optionalNumber("strength", 0.5));
         const std::string mode = optionalString("mode", "balanced");
         if (mode == "conservative") {
           repaint.mode = AcestepModel::RepaintMode::Conservative;

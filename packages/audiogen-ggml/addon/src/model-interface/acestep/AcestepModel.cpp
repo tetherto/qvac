@@ -199,15 +199,15 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
     edit.end_seconds = repaint.end;
     edit.strength = repaint.strength;
     switch (repaint.mode) {
-      case RepaintMode::Conservative:
-        edit.mode = tts_cpp::acestep::RepaintMode::Conservative;
-        break;
-      case RepaintMode::Balanced:
-        edit.mode = tts_cpp::acestep::RepaintMode::Balanced;
-        break;
-      case RepaintMode::Aggressive:
-        edit.mode = tts_cpp::acestep::RepaintMode::Aggressive;
-        break;
+    case RepaintMode::Conservative:
+      edit.mode = tts_cpp::acestep::RepaintMode::Conservative;
+      break;
+    case RepaintMode::Balanced:
+      edit.mode = tts_cpp::acestep::RepaintMode::Balanced;
+      break;
+    case RepaintMode::Aggressive:
+      edit.mode = tts_cpp::acestep::RepaintMode::Aggressive;
+      break;
     }
     params.edit_plan.emplace_back(std::move(edit));
   }
