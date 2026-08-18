@@ -9,7 +9,10 @@ import { KeetIcon } from '@/components/keet-icon';
 
 // Launcher page for the QVAC Keet room. Lives outside `(docs)` so it renders
 // without the docs chrome (nav/sidebar) — this is a landing surface, not a
-// docs article.
+// docs article. The site-wide announcement bar from the root layout is kept
+// intentionally: this page is itself a QVAC surface targeting a QVAC audience
+// (users arriving from the README badge or socials to join the community), so
+// the project news the bar carries is on-topic here.
 //
 // Why this page exists:
 //   External surfaces like the repo README on GitHub cannot link straight to
