@@ -50,7 +50,7 @@ on:
         type: string
         default: manifest
       inference-dependency-spec:
-        description: "Resolved inference package spec for gpr/npm"
+        description: "Resolved inference package spec for npm"
         required: false
         type: string
         default: ""

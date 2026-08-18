@@ -3,10 +3,10 @@ description: Apply the centrally resolved inference package to an SDK E2E checko
 
 inputs:
   source:
-    description: "Inference source: branch, gpr, npm, or manifest"
+    description: "Inference source: branch, npm, or manifest"
     required: true
   dependency-spec:
-    description: "Resolved package spec for gpr/npm; empty for branch/manifest"
+    description: "Resolved npm package spec; empty for branch/manifest"
     required: false
     default: ""
   artifact-name:

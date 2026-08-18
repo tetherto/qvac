@@ -183,12 +183,10 @@ Non-obvious inputs:
   - `branch` builds and packs `packages/inference` from `test-version`. The resulting tarball is produced once
     and reused by desktop, Electron, Snap, Android, and iOS jobs, so SDK and inference changes from that ref are
     tested together.
-  - `gpr` resolves `@tetherto/inference-mono` from GitHub Packages. Set `inference-version` to an exact
-    prerelease or dist-tag; blank means `dev`.
   - `npm` resolves the public `@qvac/inference` package. Set `inference-version` to a version/range or dist-tag;
     blank means `latest`.
   - `manifest` preserves the dependency already declared in `packages/sdk/package.json`.
-- GPR/npm selectors are resolved to one immutable version before platform fan-out. The exact branch SHA/package
+- The npm selector is resolved to one immutable version before platform fan-out. The exact branch SHA/package
   version is shown in the workflow summary and PR test comments.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
 - `desktop-platforms`, `electron-platforms`, and `snap-platforms` — advanced JSON runner overrides,
