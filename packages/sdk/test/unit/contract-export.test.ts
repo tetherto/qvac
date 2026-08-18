@@ -172,7 +172,8 @@ test('no generated title falls back to a bare positional number', (t) => {
   // technical term baked into a property name (`imageBase64` -> `...Base64`),
   // never a positional ordinal — so any trailing-digit title must end in one
   // of a short, closed list of known real terms, not just any digit run.
-  const KNOWN_NUMERIC_TERMS = ['Base64']
+  // Cosyvoice3 is a TTS engine name whose digit is part of the brand.
+  const KNOWN_NUMERIC_TERMS = ['Base64', 'Cosyvoice3']
 
   const { schemaDocument } = buildContract()
   const defs = schemaDocument.$defs as Record<string, JsonSchema>
