@@ -381,6 +381,13 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: sudo snap install --dangerous snap/dist/qvac-sdk-e2e.snap
 
+      - name: Connect Snap GPU interfaces
+        if: inputs.consumer == 'snap'
+        run: |
+          sudo snap connect qvac-sdk-e2e:opengl
+          sudo snap connect qvac-sdk-e2e:hardware-observe
+          snap connections qvac-sdk-e2e
+
       - name: Determine Snap model requirements
         id: snap-model-requirements
         if: inputs.consumer == 'snap'
