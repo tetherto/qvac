@@ -30,9 +30,9 @@ name: NOTICE drift
 # preflight rejects). Until then every run warns "generation did not complete"
 # instead of producing drift results — it just never blocks.
 #
-# Fork PRs are skipped: NOTICE generation needs org secrets (PAT_TOKEN for the
-# private qvac-registry-vcpkg + GitHub Packages, NPM_TOKEN for npm) that fork PRs
-# never receive. The push-to-main and weekly scheduled runs are the backstop.
+# Fork PRs are skipped: NOTICE generation needs the NPM_TOKEN org secret that
+# fork PRs never receive. The push-to-main and weekly scheduled runs are the
+# backstop.
 #
 # Scope note: "all packages the generator covers" is used as the shipping set
 # today. Narrowing to the locked C1/C4 shipping rows is gated on QVAC-19052
@@ -101,10 +101,11 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      # generate-notice.js reads GH_TOKEN for GitHub API (private vcpkg registry
-      # portfiles + repo license lookups) and GitHub Packages npm auth. The repo
-      # PAT_TOKEN has the cross-repo read scope the built-in GITHUB_TOKEN lacks.
-      GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      # generate-notice.js reads GH_TOKEN for GitHub API (vcpkg registry
+      # portfiles + repo license lookups). qvac-registry-vcpkg is public and the
+      # scan only enumerates top-level packages/* (never packages/sdk/e2e, the
+      # sole @tetherto consumer), so GITHUB_TOKEN is sufficient.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # NPM_TOKEN must be provisioned as a repo/org secret for the generator's
       # preflight to pass (an unset secret renders as an empty string, which the
       # generator rejects). Until then the regenerate step below fails and, in

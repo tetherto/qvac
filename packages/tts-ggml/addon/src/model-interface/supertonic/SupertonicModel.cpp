@@ -18,6 +18,7 @@
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/DenoiserLoader.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
@@ -36,6 +37,18 @@ void detail::applyVulkanPipelineCache(
   }
 }
 
+void detail::validateNoPerCallControls(
+    const std::string& emotion, const std::string& pace) {
+  if (emotion.empty() && pace.empty())
+    return;
+  const std::string channel = emotion.empty() ? "pace" : "emotion";
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "supertonic applies '" + channel +
+          "' when the engine is built, so it cannot change per call; set it "
+          "in the configuration or reload instead");
+}
+
 namespace {
 
 using qvac_errors::createTTSError;
@@ -50,6 +63,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.steps.has_value())   opts.steps = *cfg.steps;
   if (cfg.speed.has_value())   opts.speed = *cfg.speed;
+  opts.pace = cfg.pace;
   if (cfg.seed.has_value())    opts.seed  = *cfg.seed;
   if (cfg.threads.has_value()) opts.n_threads = *cfg.threads;
   if (cfg.nGpuLayers.has_value()) {
@@ -202,7 +216,7 @@ void SupertonicModel::loadLocked() {
   // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
   // Pass the engine's *resolved* device, not the requested switch: if the
   // engine fell back to CPU, keep the enhancer on CPU too instead of forcing it
-  // onto the GPU. Shared with Chatterbox via loadEnhancer so the two loaders
+  // onto the GPU. Shared with the other engines via loadEnhancer so the loaders
   // can't drift.
   LoadedEnhancer loaded = loadEnhancer(
       cfg_.enhancerGgufPath,
@@ -212,22 +226,8 @@ void SupertonicModel::loadLocked() {
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
 
-  // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
-  // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
-  // older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
-  // clean InitializationFailed error.
-  if (!cfg_.denoiserGgufPath.empty()) {
-    try {
-      denoiser_ = tts_cpp::lavasr::Denoiser::load(cfg_.denoiserGgufPath);
-    } catch (const std::exception& e) {
-      denoiser_.reset();
-      throw createTTSError(
-          TTSErrorCode::InitializationFailed,
-          std::string("SupertonicModel::load: lavasr denoiser: ") + e.what());
-    }
-  } else {
-    denoiser_.reset();
-  }
+  denoiser_ = loadDenoiser(
+      cfg_.denoiserGgufPath, "SupertonicModel::load: lavasr denoiser: ");
 }
 
 void SupertonicModel::unloadLocked() {

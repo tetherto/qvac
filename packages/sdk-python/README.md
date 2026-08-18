@@ -10,21 +10,38 @@ a given python-sdk release makes clear exactly which SDK it targets.
 
 ## Install
 
-Getting started is two steps: install the Python package, then make the QVAC
-**worker** available. The package is a thin client — all inference runs in the
-worker (the QVAC runtime, `@qvac/sdk`), so **the worker must be installed for
-anything to run**.
+The fastest path is a **self-contained** install — one command, no separate
+worker, no Node.js. It pulls a per-platform wheel that bundles the QVAC worker
+(the `@qvac/sdk` runtime) and the Bare runtime, from the matching GitHub
+release (these wheels are far too large for PyPI, so they live as release
+assets):
 
-**1. Install the package**
+```bash
+# Replace <version> with the release you want, e.g. sdk-v0.17.0:
+pip install tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v<version>
+```
+
+pip selects the bundled wheel for your platform and pulls the pure-Python deps
+(`pydantic`, `bare-rpc`, `compact-encoding`) from PyPI. Then
+`async with Client() as client: ...` just works — the bundled worker is found
+automatically, zero configuration. Optional extras: `vla` (numpy),
+`notebook` (numpy + pandas).
+
+> Bundled wheels ship for **darwin-arm64, linux-x64, linux-arm64, win32-x64**.
+> On any other platform pip falls back to the thin wheel below.
+
+### Thin install (any platform)
+
+If there's no bundled wheel for your platform, or you'd rather run a shared
+system worker, install the thin client from PyPI and provide the worker
+separately:
 
 ```bash
 pip install tetherto-qvac-sdk
 ```
 
-That pulls the wire transport (`bare-rpc`, `compact-encoding`) from PyPI.
-Optional extras: `vla` (numpy), `notebook` (numpy + pandas).
-
-**2. Install the worker** (one time) — either route works; both need Node.js:
+Then install the worker once (either route needs Node.js):
 
 ```bash
 # via Python — fetches the exact worker version this package speaks and caches
@@ -32,16 +49,31 @@ Optional extras: `vla` (numpy), `notebook` (numpy + pandas).
 python -m tetherto.qvac_sdk install-worker
 
 # or via npm — install the @qvac/sdk version that MATCHES this package (they
-# share a version, so use your installed tetherto-qvac-sdk version here;
-# Client() warns on a mismatch):
-npm install -g @qvac/sdk@0.15.0
+# share a version; Client() warns on a mismatch):
+npm install -g @qvac/sdk@<your tetherto-qvac-sdk version>
 ```
 
-That's it — `Client()` finds the worker automatically (see "Worker resolution"
-below for the full lookup order, including pointing `QVAC_SDK_DIR` at a
-locally-built `@qvac/sdk` for development). The Python route is the recommended
-first run: it pins the worker to the exact version this package was generated
-against, so you never have to track the version yourself.
+`Client()` then finds the worker automatically (see "Worker resolution" below
+for the full lookup order, including pointing `QVAC_SDK_DIR` at a locally-built
+`@qvac/sdk` for development). The Python route pins the worker to the exact
+version this package was generated against, so you never track it yourself.
+
+### Upgrading
+
+To upgrade **and keep the bundled worker**, re-run the install with `-f`
+pointing at the **new** release tag:
+
+```bash
+pip install -U tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v<newversion>
+```
+
+A plain `pip install -U tetherto-qvac-sdk` (no `-f`, or a stale tag) upgrades to
+the **thin** PyPI wheel: pip applies no priority between locations and just
+takes the highest version it can see, which on PyPI is the `py3-none-any`
+wheel — you'd then need `install-worker`. To switch an already-installed thin
+build to the bundled wheel at the **same** version, add `--force-reinstall`
+(pip treats a version as satisfied regardless of which wheel is installed).
 
 ## Quickstart
 
@@ -110,6 +142,21 @@ Audio generation currently uses the raw `audio_gen_stream` stub rather than an
 ergonomic Python `audio_gen()` wrapper. Build an `AudioGenStreamRequest`, iterate
 the progress and base64 PCM frames, and assemble the output audio. See
 [`examples/audiogen.py`](./examples/audiogen.py).
+
+### Intentional divergences from `@qvac/sdk`
+
+Two top-level JS/TS facades are deliberately not ported; Python uses the ecosystem
+equivalent instead.
+
+- **`getLogger`** — use the standard library `logging` module. A `logging.Handler`
+  is the `LogTransport` equivalent, and the log-stream surface that has no stdlib
+  counterpart (`logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`,
+  `SDK_ALL_LOG_ID`) is already exported above.
+- **`profiler`** (process-wide aggregation + `exportTable`/`exportJSON`) — use the
+  per-call `profiled_call` and the `__profiling` envelope helpers in
+  `tetherto.qvac_sdk.profiling`, aggregating the returned `ProfilingReport`s
+  yourself. The global profiler is not a Client-API capability and would only
+  collect useful data after instrumenting the full streaming client.
 
 ## Notebook / data science
 

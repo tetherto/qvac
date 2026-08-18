@@ -7,6 +7,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-08-10
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.3.1` -> `^0.4.0`, which carries `qvac-fabric`
+  `9840.1.1` -> `10069.0.0` (b10069 rebase). This package consumes the shared runtime
+  via npm rather than building the vcpkg port, so the range bump is what picks up the
+  new fabric. A caret on a `0.x` version locks the minor, so `^0.3.1` would not have
+  resolved `0.4.0` on its own. No API change for this package.
+
+## [0.17.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
 ## [0.16.0] - 2026-08-05
 
 This release adds Google FuzzTest coverage for the image preprocessor and wires

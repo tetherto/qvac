@@ -1,13 +1,34 @@
-# Data Flows: @qvac/asr-ggml (Whisper engine)
+# Data Flows: @qvac/asr-ggml
 
-> **⚠️ Staleness Warning:** These diagrams were generated from the codebase at a point in time and may become outdated as the code evolves. When debugging or verifying behavior, regenerate these diagrams from the current source code rather than relying on this document as the sole source of truth.
+Every public call enters `ASRGgml`, which resolves the engine at construction
+time and delegates to one driver for the instance lifetime:
 
-> **Heritage document.** These flows trace the **whisper engine** as it stood
-> before the whisper + parakeet merge, when the JS entrypoint was a single
-> `TranscriptionWhispercpp` class. The sequences still hold; the entrypoint is
-> now `ASRGgml` delegating to `WhisperDriver`, so read
-> `TranscriptionWhispercpp` below as "`ASRGgml` + `WhisperDriver`". See
-> [`engines.md`](engines.md) for the current orchestrator/driver split.
+```mermaid
+flowchart LR
+    App --> ASR[ASRGgml]
+    ASR -->|engine: whisper| WD[WhisperDriver]
+    ASR -->|engine: parakeet| PD[ParakeetDriver]
+    WD --> WI[WhisperInterface]
+    PD --> PI[ParakeetInterface]
+    WI --> Native[Shared native addon]
+    PI --> Native
+    Native --> WM[WhisperModel]
+    Native --> PM[ParakeetModel]
+    WM --> Whisper[whisper.cpp]
+    PM --> Parakeet[parakeet-cpp]
+```
+
+`ASRGgml` owns model-path validation, shared state, inference and lifecycle
+queues, the `JobHandler`, and open-session exclusion. `WhisperDriver` and
+`ParakeetDriver` own engine config validation, audio normalization, native
+lifecycle calls, and event mapping into shared transcript, VAD, end-of-turn,
+backend, and runtime-stat shapes.
+
+The detailed sequences below follow the Whisper branch. Where they use the
+former `TranscriptionWhispercpp` name, read it as `ASRGgml` followed by
+`WhisperDriver`. The Parakeet branch follows the same public lifecycle but
+uses `ParakeetInterface`, `ParakeetModel`, and native EOU/Sortformer events.
+See [`engines.md`](engines.md) for the current driver contract.
 
 ---
 

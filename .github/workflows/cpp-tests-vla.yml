@@ -90,14 +90,14 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
@@ -265,8 +265,8 @@ jobs:
           # matching oracle, so nothing is lost by keeping the two separate.
           aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
           aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"   test/groot-oracle/activations_v4.safetensors
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/groot-q8_vf16.gguf"            model/vla/groot/groot-multi-q8_vf16.gguf
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-07-23/activations_sweep.safetensors" test/groot-oracle/activations_sweep.safetensors
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf"            model/vla/groot/groot-multi-q8_vf16.gguf
+          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/activations_sweep.safetensors" test/groot-oracle/activations_sweep.safetensors
           ls -la model/vla/groot/ test/groot-oracle/
 
       - name: Run C++ tests

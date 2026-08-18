@@ -77,6 +77,91 @@ async function loadSession() {
   return { fs, path, mod, utils, retention, cleanup, writeFakeCache }
 }
 
+test('generateConfigHash: includes complete canonical tool definitions', async (t) => {
+  const { mod, cleanup } = await loadSession()
+  try {
+    const calculator = {
+      type: 'function',
+      name: 'calculator',
+      description: 'Performs arithmetic',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: { type: 'string', enum: ['add', 'subtract'] },
+          value: { type: 'number' }
+        },
+        required: ['operation', 'value']
+      }
+    }
+    const changedSchema = {
+      ...calculator,
+      parameters: {
+        ...calculator.parameters,
+        properties: {
+          ...calculator.parameters.properties,
+          operation: { type: 'string', enum: ['multiply', 'divide'] }
+        }
+      }
+    }
+    const reorderedKeys = {
+      parameters: {
+        required: ['operation', 'value'],
+        properties: {
+          value: { type: 'number' },
+          operation: { enum: ['add', 'subtract'], type: 'string' }
+        },
+        type: 'object'
+      },
+      description: 'Performs arithmetic',
+      name: 'calculator',
+      type: 'function'
+    }
+
+    const originalHash = mod.generateConfigHash('system prompt', [calculator])
+    const changedHash = mod.generateConfigHash('system prompt', [changedSchema])
+    const reorderedHash = mod.generateConfigHash('system prompt', [reorderedKeys])
+
+    t.not(originalHash, changedHash, 'same-named tools with different schemas use different caches')
+    t.is(originalHash, reorderedHash, 'object-key insertion order does not affect cache identity')
+
+    const other = { ...calculator, name: 'search' }
+    t.not(
+      mod.generateConfigHash('system prompt', [calculator, other]),
+      mod.generateConfigHash('system prompt', [other, calculator]),
+      'tool-array order participates in cache identity'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
+// `configHash` is the on-disk `.bin` filename, so the digest of a tool-free
+// session is a compatibility surface: any change to the hash payload or its
+// serialization renames every plain-chat cache file and re-primes it cold.
+// Pinning the shipped digests keeps that a deliberate decision.
+test('generateConfigHash: no-tools digests stay pinned', async (t) => {
+  const { mod, cleanup } = await loadSession()
+  try {
+    t.is(
+      mod.generateConfigHash('you are a helpful assistant.', undefined),
+      '3f5906d163f40776',
+      'omitted tools keep the shipped digest'
+    )
+    t.is(
+      mod.generateConfigHash('you are a helpful assistant.', []),
+      '3f5906d163f40776',
+      'an empty tool array hashes like omitted tools'
+    )
+    t.is(
+      mod.generateConfigHash(null, undefined),
+      '99ba47708d700919',
+      'a missing system prompt keeps the shipped digest'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: beginTurn primes the cache on first use, reuses on second', async (t) => {
   const { mod, cleanup, writeFakeCache } = await loadSession()
   try {
@@ -103,7 +188,8 @@ test('kv-cache-session: beginTurn primes the cache on first use, reuses on secon
 
     await session.commitTurn(firstTurn, {
       kind: 'static',
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     const secondTurn = await session.beginTurn({
@@ -144,7 +230,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
     // Simulate that the addon wrote the file.
     fs.writeFileSync(turn.cachePath, 'fake-cache-bytes')
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 7 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 7, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
@@ -237,7 +323,8 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
     await session.commitTurn(turn, {
       kind: 'autoRename',
       targetCachePath: target.cachePath,
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     t.is(fs.existsSync(turn.cachePath), false, 'source file moved')
@@ -757,7 +844,7 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
     // error where the file was removed externally.
     fs.unlinkSync(turn.cachePath)
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 5 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 5, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),

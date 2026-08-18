@@ -68,6 +68,11 @@ export {
   type ResourceMetric,
   type GraphicsDriver,
   type GraphicsDriverCapabilities,
+  type BackendProbeResult,
+  type BackendDevice,
+  type BackendDriver,
+  type BackendFallback,
+  type InferenceBackendDiagnostics,
   type CPUResourceCapabilities,
   type GPUResourceCapabilities,
   type SystemResourceCapabilities,
@@ -77,8 +82,6 @@ export {
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
-  TOOLS_MODE,
-  type ToolsMode,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -154,6 +157,7 @@ export {
 } from '@/schemas/engine-addon-map'
 export { generateProfileId } from '@/profiling/clock'
 export { readModelExecutionMs } from '@/profiling/model-execution'
+export { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 export {
   PUBLIC_MODEL_TYPES,
   ModelTypeAliases,
@@ -190,5 +194,5 @@ export { getLogger, LOG_ID, ALL_LOG_ID } from '@/logging/index'
 export type { Logger, LogTransport, LoggerOptions } from '@/logging/index'
 
 // Profiler
-export { profiler } from '@/profiling/index'
+export { profiler, attachBackendDiagnostics } from '@/profiling/index'
 export type { ProfilerRuntimeOptions, ProfilerExport } from '@/profiling/index'

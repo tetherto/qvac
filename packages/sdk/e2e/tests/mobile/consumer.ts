@@ -1,9 +1,10 @@
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@tetherto/qvac-test-suite/mobile'
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor } from '@qvac/qvac-test-suite/mobile'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
+  LLAMA_3_2_1B_INST_Q4_0_SHARD,
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
@@ -21,6 +22,7 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
   TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -135,12 +137,6 @@ resources.define('tools', {
   config: { ctx_size: 4096, tools: true }
 })
 
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
-})
-
 resources.define('ocr', {
   constant: OCR_LATIN,
   type: 'ggml-ocr',
@@ -180,6 +176,13 @@ resources.define('echo', {
 resources.define('sharded-embeddings', {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: 'llamacpp-embedding',
+  skipPreDownload: true
+})
+
+resources.define('sharded-llm', {
+  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
   skipPreDownload: true
 })
 
@@ -294,6 +297,30 @@ resources.define('tts-parler-indic', {
     topK: 1,
     maxFrames: 430,
     normalizeNumbers: true
+  }
+})
+
+resources.define('tts-cosyvoice3', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42
+  }
+})
+
+// Same model with native chunk streaming engaged, so the streaming e2e can
+// exercise the native 24 kHz chunk path rather than generic SDK streaming.
+resources.define('tts-cosyvoice3-native-stream', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10
   }
 })
 
@@ -540,6 +567,10 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^parakeet-indic-conformer-/,
+      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
+    ),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'

@@ -16,6 +16,10 @@ You can also enable profiling globally and use a per-call override to [opt out](
 `profiler` is a process-wide singleton — its state persists until the process exits.
 </Callout>
 
+<Callout type="info">
+**Python:** the process-wide `profiler` object is JS/TS-only and intentionally not ported. In the Python SDK, profile a single call with `profiled_call()` and the `__profiling` envelope helpers from `tetherto.qvac_sdk.profiling`, then aggregate the returned `ProfilingReport`s yourself.
+</Callout>
+
 ## `profiler`
 
 The `profiler` object provides the following methods:
@@ -46,6 +50,7 @@ import { profiler } from "@qvac/sdk";
 profiler.enable({
   mode: "verbose",                 // "summary" (default) | "verbose"
   includeServerBreakdown: true,    // include server-side timing in responses
+  includeResourceGauges: true,     // attach one local resource sample per operation
   operationFilters: ["completion"], // only profile these operations (empty = all)
 });
 ```
@@ -61,6 +66,7 @@ await embed(
     profiling: {
       enabled: true,
       includeServerBreakdown: true,
+      includeResourceGauges: true,
       mode: "verbose",
     },
   },
@@ -68,6 +74,37 @@ await embed(
 ```
 
 See [Support](#support) for the list of functions that accept the `profiling` option.
+
+### Resource gauges
+
+Resource gauges are opt-in. Set `includeResourceGauges: true` globally or for
+one call to attach a timestamped local CPU, memory, and GPU sample to each
+profiled operation event:
+
+```ts
+profiler.enable({
+  mode: "verbose",
+  includeResourceGauges: true,
+});
+
+// Run SDK operations, then inspect recentEvents[].resources.
+const profile = profiler.exportJSON();
+```
+
+The gauges reuse the `ResourceMetric<T>` status, source, and scope semantics
+from `getSystemResources`. Unsupported metrics stay explicit rather than
+becoming zero. `resources.sampledAt` uses the same monotonic clock as the
+profiling event's `ts`, so the timestamps can be compared directly.
+`resources.origin` distinguishes the current `local` worker from a delegated
+`provider` worker. Samples are emitted through `profiler.onRecord`; they appear
+in `exportJSON().recentEvents` only in `verbose` mode. Enabling gauges in
+`summary` mode still pays the sampling cost without retaining the samples.
+Profiling-disabled operations and calls that do not opt in perform no resource
+sampling. Resource gauges are operation-scoped diagnostics returned to the
+requesting SDK, not exported telemetry, and do not affect model admission.
+Enabling them adds one CPU query and one query per GPU to each profiled
+operation's response path. If the worker resource collector is not initialized,
+the event omits the resource block.
 
 ### Opt-out
 
@@ -90,7 +127,7 @@ The following SDK operations support profiling:
 
 ### Global
 
-The following script enables profiling globally, loads a model, runs a completion, and exports timing data in all available formats:
+The following script enables profiling globally, loads a model, runs a completion, and exports timing data while also capturing resource gauges and backend diagnostics:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -133,5 +170,5 @@ The following script keeps the profiler disabled globally and selectively profil
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
 </Callout>

@@ -86,7 +86,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -94,20 +94,20 @@ jobs:
         working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
         run: npm run test:mobile:validate || true
 
-      # Model provisioning: presigned URLs so the device can download detector
-      # and recognizer models at runtime. Must happen before build-mobile-app
-      # because testAssets/ is bundled into the app during the build step.
-      - name: Configure AWS credentials (eu-central-1) for model download
+      # Presign detector/recognizer models against the US bucket before the build
+      # (testAssets/ is bundled into the app during the build step).
+      - name: Configure AWS credentials (us-west-2) for model download
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: eu-central-1
+          aws-region: us-west-2
           role-duration-seconds: 7200
 
       - name: Generate presigned URLs for OCR models
         working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
         env:
-          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+          MODEL_S3_BUCKET: tether-ai-dev-us
+          AWS_REGION: us-west-2
           OUTPUT_DIR: ${{ github.workspace }}/addon/${{ inputs.workdir || 'packages/ocr-ggml' }}/test/mobile/testAssets
         run: |
           mkdir -p test/mobile/testAssets
@@ -136,7 +136,7 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/ocr-ggml' }}
           addon-npm-name: '@qvac/ocr-ggml'
           prebuild-artifact-prefix: 'ggml-ocr-'
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           package-version: ${{ inputs.prebuild_package }}
           force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
 
@@ -155,15 +155,28 @@ jobs:
 
       # Runs after the presigned URLs were written (ocr-ggml-model-urls.json), so
       # we bake them into a host script that downloads the 4 GGUF OCR models and
-      # adb-pushes them to /data/local/tmp; the phone copies them instead of
-      # fetching from the time-limited presigned S3. ocr-ggml is sharded but the
-      # model set is small, so all 4 are staged onto every shard's device.
+      # pushes them to a platform-local staging dir; the phone copies them
+      # instead of fetching from the time-limited presigned S3. ocr-ggml is
+      # sharded but the model set is small, so all 4 are staged onto every
+      # shard's device.
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
         working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
         run: |
-          node scripts/generate-prestage-block.js > "$RUNNER_TEMP/prestage-block.txt"
+          node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
+          {
+            echo "block<<PRESTAGE_EOF"
+            cat "$RUNNER_TEMP/prestage-block.txt"
+            echo "PRESTAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate model pre-stage commands (iOS)
+        id: ios_prestage
+        if: matrix.platform == 'iOS'
+        working-directory: addon/${{ inputs.workdir || 'packages/ocr-ggml' }}
+        run: |
+          node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {
             echo "block<<PRESTAGE_EOF"
             cat "$RUNNER_TEMP/prestage-block.txt"
@@ -185,8 +198,8 @@ jobs:
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
           enables-perf: 'true'
           mocha-timeout-ms: '1800000'
-          # Android host pre-stages the 4 GGUF OCR models; empty on iOS.
-          extra-pre-test-commands: ${{ steps.prestage.outputs.block }}
+          # Host pre-stages the 4 GGUF OCR models before device tests.
+          extra-pre-test-commands: ${{ matrix.platform == 'iOS' && steps.ios_prestage.outputs.block || steps.prestage.outputs.block }}
 
       - name: Schedule Device Farm test runs
         id: schedule

@@ -8,12 +8,10 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
-  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
-  type ToolCallWithCall,
-  type ToolsMode
+  type ToolCallWithCall
 } from '@/schemas/tools'
 export * from '@/schemas/delegate'
 export * from '@/schemas/model-ops'
@@ -39,6 +37,7 @@ export * from '@/schemas/ocr'
 export * from '@/schemas/sdcpp-config'
 export * from '@/schemas/vla'
 export * from '@/schemas/classification'
+export * from '@/schemas/audio-gen'
 export * from '@/schemas/lifecycle'
 export { ERROR_CODES, REGISTRY_ERROR_CODES } from '@/schemas/errors'
 export { ERR_CODES as RAG_ERROR_CODES } from '@qvac/rag/errors'
@@ -58,7 +57,10 @@ export {
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
   MODEL_EXECUTION_KEY,
+  BACKEND_DIAGNOSTICS_KEY,
   profilerModeSchema,
+  profilerGPUResourceGaugeSchema,
+  profilerResourceGaugeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,
   operationEventSchema,
@@ -71,7 +73,9 @@ export {
   type OperationEvent,
   type ProfilingRequestMeta,
   type ProfilingResponseMeta,
-  type PerCallProfiling
+  type PerCallProfiling,
+  type ProfilerGPUResourceGauge,
+  type ProfilerResourceGauge
 } from '@/schemas/profiling'
 export { runtimeContextSchema, type RuntimeContext } from '@/schemas/runtime-context'
 export * from '@/schemas/model-info'

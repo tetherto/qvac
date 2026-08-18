@@ -15,6 +15,8 @@
 // the tests fetch them from the QVAC model registry on-device at runtime into
 // `<testDir>/models/` (same client the desktop suite uses). A pre-side-loaded
 // set under `<testDir>/models` or `$AUDIOGEN_MODEL_DIR` is used as-is if present.
+// Android Device Farm also pre-stages the same set under /data/local/tmp so the
+// phone does not spend its per-test budget downloading ~3 GB over mobile Wi-Fi.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -39,10 +41,19 @@ const TURBO_STEPS = 8
 const TURBO_SHIFT = 3.0
 const SMOKE_DURATION_S = 10
 const SMOKE_CAPTION = 'Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook'
+const GPU_DEVICE = 1
+const VULKAN_BACKEND = 3
+const OPENCL_BACKEND = 4
+const GPU_BACKEND_NAMES = {
+  [VULKAN_BACKEND]: 'Vulkan',
+  [OPENCL_BACKEND]: 'OpenCL'
+}
+const ANDROID_PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-audiogen-models'
 
-// The four turbo-q4 stage filenames the smoke needs on disk.
-function _stageFilenames () {
-  const f = modelFilenames(SMOKE_VARIANT)
+// The four stage filenames a variant needs on disk. Defaults to the smoke's
+// turbo-q4; testRtfBenchmark passes the variant its matrix row asks for.
+function _stageFilenames (variant = SMOKE_VARIANT) {
+  const f = modelFilenames(variant)
   return [f.textEnc, f.lm, f.dit, f.vae]
 }
 
@@ -88,8 +99,8 @@ function _ggufOk (p) {
   return magic === null || magic === 'GGUF'
 }
 
-function _hasAllStages (dir) {
-  return _stageFilenames().every((name) => _ggufOk(path.join(dir, name)))
+function _hasAllStages (dir, variant = SMOKE_VARIANT) {
+  return _stageFilenames(variant).every((name) => _ggufOk(path.join(dir, name)))
 }
 
 // Candidate dirs that may already hold a side-loaded model set, in order.
@@ -100,6 +111,7 @@ function _candidateDirs () {
       candidates.push(process.env.AUDIOGEN_MODEL_DIR)
     }
   } catch (_e) {}
+  candidates.push(ANDROID_PRESTAGED_MODEL_DIR)
   if (global.testDir) candidates.push(path.join(global.testDir, 'models'))
   if (typeof dirPath === 'string' && dirPath) candidates.push(path.join(dirPath, 'models'))
   return candidates
@@ -113,10 +125,10 @@ function _downloadDir () {
 }
 
 // Resolve the model dir: use a complete side-loaded set if present, otherwise
-// download the turbo-q4 GGUFs from the registry into `<testDir>/models`.
-async function _ensureModels () {
+// download the variant's GGUFs from the registry into `<testDir>/models`.
+async function _ensureModels (variant = SMOKE_VARIANT) {
   for (const dir of _candidateDirs()) {
-    if (dir && _hasAllStages(dir)) {
+    if (dir && _hasAllStages(dir, variant)) {
       console.log('[audiogen-mobile] using models in ' + dir)
       return dir
     }
@@ -135,8 +147,8 @@ async function _ensureModels () {
     )
   }
 
-  const files = modelFilenames(SMOKE_VARIANT)
-  const manifest = modelManifest(SMOKE_VARIANT)
+  const files = modelFilenames(variant)
+  const manifest = modelManifest(variant)
   const entries = [
     { name: files.textEnc, registryPath: manifest.textEnc },
     { name: files.lm, registryPath: manifest.lm },
@@ -144,7 +156,7 @@ async function _ensureModels () {
     { name: files.vae, registryPath: manifest.vae }
   ]
 
-  console.log('[audiogen-mobile] downloading turbo-q4 GGUFs into ' + outDir)
+  console.log('[audiogen-mobile] downloading ' + variant + ' GGUFs into ' + outDir)
   const client = new QVACRegistryClient()
   try {
     await client.ready()
@@ -181,7 +193,7 @@ async function _ensureModels () {
     } catch (_e) {}
   }
 
-  if (!_hasAllStages(outDir)) {
+  if (!_hasAllStages(outDir, variant)) {
     throw new Error('ACE-Step model download incomplete in ' + outDir)
   }
   return outDir
@@ -193,7 +205,7 @@ function _findGguf (dir, needle) {
   return hit ? path.join(dir, hit) : undefined
 }
 
-function _makeGen (modelDir) {
+function _makeGen (modelDir, useGPU = false) {
   return new AudioGen({
     files: {
       modelDir,
@@ -202,14 +214,14 @@ function _makeGen (modelDir) {
     config: {
       inferenceSteps: TURBO_STEPS,
       shift: TURBO_SHIFT,
-      useGPU: false
+      useGPU
     }
   })
 }
 
 // Delete the downloaded stage GGUFs so the next _ensureModels re-fetches them.
-function _clearStages (dir) {
-  for (const name of _stageFilenames()) {
+function _clearStages (dir, variant = SMOKE_VARIANT) {
+  for (const name of _stageFilenames(variant)) {
     try { fs.unlinkSync(path.join(dir, name)) } catch (_e) {}
   }
 }
@@ -220,11 +232,11 @@ function _clearStages (dir) {
 // ("failed to load VAE GGUF" / "DiT load failed"). On such a failure we wipe the
 // models and re-download once more before giving up, so a flaky transfer doesn't
 // fail the run. Returns the loaded generator + its model dir.
-async function _loadGenWithRetry (maxAttempts = 3) {
+async function _loadGenWithRetry (maxAttempts = 3, useGPU = false) {
   let lastErr
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const modelDir = await _ensureModels()
-    const gen = _makeGen(modelDir)
+    const gen = _makeGen(modelDir, useGPU)
     try {
       await gen.load()
       return { gen, modelDir }
@@ -299,10 +311,41 @@ async function testLoadModels () {
   }
 }
 
+function _pcmEnergy (pcm) {
+  if (pcm.length % 2 !== 0) {
+    throw new Error('PCM buffer length must be a multiple of 2 bytes (Int16), got ' + pcm.length)
+  }
+  let peak = 0
+  let sumSquares = 0
+  const samples = pcm.length / 2
+  for (let offset = 0; offset < pcm.length; offset += 2) {
+    const value = pcm.readInt16LE(offset) / 32768
+    const abs = Math.abs(value)
+    if (abs > peak) peak = abs
+    sumSquares += value * value
+  }
+  return { peak, rms: samples > 0 ? Math.sqrt(sumSquares / samples) : 0 }
+}
+
+function _requireGpuBackend (stats) {
+  const backendDevice = stats && stats.backendDevice
+  const backendId = stats && stats.backendId
+  const backendName = GPU_BACKEND_NAMES[backendId]
+  console.log('[audiogen/GPU] backendDevice=' + backendDevice +
+    ' backendId=' + backendId + (backendName ? ' (' + backendName + ')' : ''))
+  if (backendDevice !== GPU_DEVICE || backendName === undefined) {
+    throw new Error(
+      'useGPU:true must run on Vulkan or OpenCL; got ' +
+      backendDevice + '/' + backendId)
+  }
+  return backendName
+}
+
 // End-to-end generation of a short turbo clip. Returns interleaved Int16 PCM so
-// the runner can play it back on device.
-async function testGenerateMusic () {
-  const { gen, modelDir } = await _loadGenWithRetry()
+// the runner can play it back on device. The Android GPU variant additionally
+// requires a supported GPU backend and rejects silent output.
+async function _testGenerateMusic (useGPU) {
+  const { gen, modelDir } = await _loadGenWithRetry(3, useGPU)
 
   const chunks = []
   let sampleRate = 48000
@@ -320,7 +363,7 @@ async function testGenerateMusic () {
       item.outputArray.byteOffset,
       item.outputArray.byteOffset + item.outputArray.byteLength)))
   }
-  await response.await()
+  const stats = await response.await()
   const elapsedMs = Date.now() - t0
 
   await gen.destroy()
@@ -328,8 +371,17 @@ async function testGenerateMusic () {
   const pcm = Buffer.concat(chunks)
   const totalSamples = pcm.length / 2
   const durationS = totalSamples / channels / sampleRate
+  const energy = _pcmEnergy(pcm)
 
   if (totalSamples <= 0) throw new Error('generation produced no audio samples')
+  if (sampleRate !== 48000) throw new Error('expected 48 kHz output, got ' + sampleRate)
+  if (channels !== 2) throw new Error('expected stereo output, got ' + channels + ' channels')
+  if (energy.peak <= 0.1 || energy.rms <= 0.005) {
+    throw new Error(
+      'generation produced silent or invalid audio (peak=' + energy.peak.toFixed(4) +
+      ', rms=' + energy.rms.toFixed(5) + ')')
+  }
+  const executionTarget = useGPU ? _requireGpuBackend(stats) + ' GPU' : 'CPU'
 
   // The runner's playAudio() expects a base64 WAV string, which it writes to a
   // temp .wav and plays through the device speaker. Also persist a copy so we
@@ -344,9 +396,103 @@ async function testGenerateMusic () {
     sampleRate,
     channels,
     fullText:
-      'generated ' + durationS.toFixed(1) + 's (' + totalSamples + ' samples @ ' +
-      sampleRate + ' Hz x' + channels + ') in ' + (elapsedMs / 1000).toFixed(1) + 's'
+      executionTarget + ' generated ' + durationS.toFixed(1) +
+      's (' + totalSamples + ' samples @ ' + sampleRate + ' Hz x' + channels +
+      ', peak=' + energy.peak.toFixed(4) + ', rms=' + energy.rms.toFixed(5) +
+      ') in ' + (elapsedMs / 1000).toFixed(1) + 's'
   }
 }
 
-module.exports = { testLoadModels, testGenerateMusic }
+// --- RTF benchmark -------------------------------------------------------
+//
+// Only benchmark runs execute this: it is listed in perf-tests.json, not in
+// test-groups.json, so normal PR runs never pay for it. The workflow selects the
+// DiT variant / GPU flag by pushing QVAC_AUDIOGEN_GGML_BENCHMARK_* to the device
+// (the mobile action's `extra-device-env` input, which os.setEnv()s each key
+// before the tests load), so one Device Farm row = one benchmark configuration.
+
+// How many times to redo the whole benchmark after a model-load failure. A
+// download can pass _ggufOk (right magic, big enough) yet be truncated mid-data,
+// which only surfaces when the native loader parses it; wipe and re-fetch once
+// before giving up rather than losing the row to a flaky transfer.
+const _BENCHMARK_LOAD_ATTEMPTS = 2
+
+// Reached by package subpath for the same reason as the addon import above, and
+// required lazily so that if it fails to resolve on a device only the benchmark
+// row fails — the functional smoke above must stay unaffected. This is the same
+// measurement the desktop RTF benchmark runs, so the two lanes cannot drift.
+function _benchmarkRunner () {
+  return require('@qvac/audiogen-ggml/test/benchmark-runner')
+}
+
+// A rejected measurement is a real result, not a bad download: re-fetching ~3 GB
+// would not change it.
+function _isLoadFailure (err) {
+  if (err && err.name === 'BenchmarkResultError') return false
+  const message = (err && err.message) || ''
+  return /load|gguf|model/i.test(message)
+}
+
+// Model resolution hook handed to the shared runner: reuses the smoke's
+// validating downloader instead of the desktop registry helper, so the
+// benchmark gets the same GGUF integrity checks and per-file retries.
+function _benchmarkEnsureModels (settings) {
+  return _ensureModels(settings.ditVariant)
+}
+
+async function _runBenchmarkWithRetry (runRtfBenchmark, settings) {
+  let lastErr
+  for (let attempt = 1; attempt <= _BENCHMARK_LOAD_ATTEMPTS; attempt++) {
+    try {
+      return await runRtfBenchmark(settings, { ensureModels: _benchmarkEnsureModels })
+    } catch (e) {
+      lastErr = e
+      if (attempt === _BENCHMARK_LOAD_ATTEMPTS || !_isLoadFailure(e)) throw e
+      console.log('[audiogen-mobile] benchmark attempt ' + attempt + '/' +
+        _BENCHMARK_LOAD_ATTEMPTS + ' failed (' + (e && e.message) +
+        '); clearing models for a clean re-download')
+      _clearStages(_downloadDir(), settings.ditVariant)
+    }
+  }
+  throw lastErr
+}
+
+// On-device RTF benchmark. Numbers leave the device through the
+// [PERF_REPORT_START] / [PERF_CHUNK] markers the runner prints, which the
+// workflow's extract-addon-perf step scrapes out of bare_console.log.
+async function testRtfBenchmark () {
+  const {
+    readBenchmarkSettings,
+    runRtfBenchmark,
+    emitCanonicalReport,
+    describeSummary
+  } = _benchmarkRunner()
+
+  const settings = readBenchmarkSettings()
+  console.log('[audiogen-mobile] RTF benchmark: ' + settings.ditVariant +
+    ' useGPU=' + settings.useGPU + ' runs=' + settings.numRuns)
+
+  const result = await _runBenchmarkWithRetry(runRtfBenchmark, settings)
+  emitCanonicalReport(settings, result.summary, result.backend)
+
+  return {
+    summary: { total: 1, passed: 1, failed: 0 },
+    fullText: describeSummary(settings, result.summary, result.backend)
+  }
+}
+
+async function testGenerateMusicOnCpu () {
+  return _testGenerateMusic(false)
+}
+
+async function testGenerateMusicOnGpu () {
+  return _testGenerateMusic(true)
+}
+
+module.exports = {
+  testLoadModels,
+  testGenerateMusicOnCpu,
+  testGenerateMusicOnGpu,
+  testRtfBenchmark,
+  _requireGpuBackend
+}

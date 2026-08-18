@@ -52,6 +52,7 @@ export {
   state,
   vla,
   vlaHparams,
+  vlaSetEmbodiment,
   vlaPreprocessImage,
   vlaPadState,
   VLA_DEFAULT_IMAGE_SIZE,
@@ -80,6 +81,7 @@ export {
   type BatchCompletionRun,
   type BatchPrompt,
   type EmbedStats,
+  type TranscribeStats,
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
@@ -103,6 +105,16 @@ export {
   type TtsParlerEmotion,
   type TtsParlerLoadConfig,
   type TtsParlerRuntimeConfig,
+  TTS_PACES,
+  TTS_COSYVOICE3_EMOTIONS,
+  TTS_COSYVOICE3_INSTRUCT_DIALECTS,
+  TTS_COSYVOICE3_INSTRUCT_VOLUMES,
+  TTS_COSYVOICE3_INSTRUCT_STYLES,
+  type TtsPace,
+  type TtsCosyvoice3Emotion,
+  type TtsCosyvoice3Instruct,
+  type TtsCosyvoice3LoadConfig,
+  type TtsCosyvoice3RuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
@@ -130,6 +142,11 @@ export {
   type ResourceMetric,
   type GraphicsDriver,
   type GraphicsDriverCapabilities,
+  type BackendProbeResult,
+  type BackendDevice,
+  type BackendDriver,
+  type BackendFallback,
+  type InferenceBackendDiagnostics,
   type CPUResourceCapabilities,
   type GPUResourceCapabilities,
   type SystemResourceCapabilities,
@@ -139,8 +156,6 @@ export {
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
-  TOOLS_MODE,
-  type ToolsMode,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
@@ -168,6 +183,8 @@ export {
   type VlaConfig,
   type VlaClientRunParams,
   type VlaClientRunResult,
+  type VlaEmbodimentSelection,
+  type VlaEmbodimentSelector,
   type VlaHparams,
   type VlaStats,
   definePlugin,
@@ -261,5 +278,11 @@ export { getLogger, SDK_LOG_ID, SDK_ALL_LOG_ID } from './logging'
 export type { Logger, LogTransport, LoggerOptions } from './logging'
 
 // Profiler exports
-export { profiler } from './profiling'
-export type { ProfilerRuntimeOptions, ProfilerExport } from './profiling'
+export { profiler, attachBackendDiagnostics } from './profiling'
+export type {
+  ProfilerRuntimeOptions,
+  ProfilerExport,
+  ProfilingEvent,
+  ProfilerGPUResourceGauge,
+  ProfilerResourceGauge
+} from './profiling'

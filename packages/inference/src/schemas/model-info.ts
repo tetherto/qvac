@@ -72,6 +72,7 @@ export const modelInfoSchema = z.object({
       'tts',
       'ocr',
       'diffusion',
+      'audiogen',
       'vla',
       'classification',
       'other'

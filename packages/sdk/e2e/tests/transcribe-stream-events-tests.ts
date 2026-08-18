@@ -1,7 +1,7 @@
 // Tests for transcribeStream({ emitVadEvents, endOfTurnSilenceMs }) wire
 // behaviour: VAD state events + end-of-turn events interleaved with
 // text/segment frames.
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 const AUDIO_FIXTURE = 'diarization-sample-16k.wav'
 

@@ -15,7 +15,6 @@
 #include "addon/LlmErrors.hpp"
 
 class LlamaBatch;
-struct PromptLayout;
 
 enum class GenerationStopReason : uint8_t {
   None,
@@ -34,6 +33,19 @@ static_assert(static_cast<uint8_t>(GenerationStopReason::Antiprompt) == 2);
 static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
 static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
 static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
+
+[[nodiscard]] constexpr bool
+isKnownReasoningTruncation(GenerationStopReason reason) {
+  return reason == GenerationStopReason::PredictionLimit ||
+         reason == GenerationStopReason::SequenceLimit ||
+         reason == GenerationStopReason::ContextOverflow;
+}
+
+[[nodiscard]] constexpr GenerationStopReason
+stopReasonAfterRequestRollback(GenerationStopReason reason) {
+  return isKnownReasoningTruncation(reason) ? reason
+                                            : GenerationStopReason::None;
+}
 
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
@@ -120,7 +132,7 @@ struct PrefillPlan {
 /// `TextLlmContext` implements both interfaces.
 ///
 /// Method ordering below mirrors a sequence's lifecycle:
-///   `validatePromptPolicy` -> `loadCache` -> `preparePrefill`
+///   `loadCache` -> `preparePrefill`
 ///   -> `snapshotPreRequestCursor` -> `snapshotPreRequestRollbackAnchor`
 ///   -> `onPrefillComplete` -> N x `onLogitsReady`
 ///   -> (`onGenerationFinished` | `onCancel`) -> `onSequenceEnd` ->
@@ -173,14 +185,6 @@ public:
   /// token cap enforced for drivers that cannot slide, since they never
   /// recover a slot that reaches its ceiling.
   [[nodiscard]] virtual bool supportsSliding() const = 0;
-
-  /// Reject prompts that violate per-sequence admission policy (size,
-  /// layout, KV-cache state). Called once per `submit` before any state
-  /// is mutated; a thrown `StatusError` aborts admission cleanly.
-  virtual void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const = 0;
 
   /// Tokenize the prompt and stage it for prefill (without running
   /// generation). Returns the text tokens still pending decode by the

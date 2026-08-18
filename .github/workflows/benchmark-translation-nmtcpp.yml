@@ -43,6 +43,11 @@ on:
         required: false
         default: false
         type: boolean
+      is_quantized_model:
+        description: 'Use quantized (q4_0) GGML models for the qvac translator'
+        required: false
+        default: false
+        type: boolean
       hyperparams:
         description: 'Hyperparameter preset for translation'
         required: false
@@ -51,6 +56,11 @@ on:
         options:
           - default
           - fast
+      platforms:
+        description: 'Comma-separated platforms: linux-x64, macos-arm64, windows-x64. Non-linux platforms only support the qvac/qvac_bergamot translators and trigger the full prebuild matrix; prefer a small pair list when selecting them.'
+        required: false
+        default: 'linux-x64'
+        type: string
 
   workflow_call:
     inputs:
@@ -93,6 +103,11 @@ on:
         required: false
         default: false
         type: boolean
+      is_quantized_model:
+        description: 'Use quantized (q4_0) GGML models for the qvac translator'
+        required: false
+        default: false
+        type: boolean
       hyperparams:
         description: 'Hyperparameter preset for translation'
         required: false
@@ -113,15 +128,87 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       datasets: ${{ steps.set-matrix.outputs.datasets }}
       datasets_cache_key: ${{ steps.set-matrix.outputs.datasets_cache_key }}
+      platforms: ${{ steps.platforms.outputs.ids }}
+      need_build: ${{ steps.platforms.outputs.need_build }}
+      need_prebuild: ${{ steps.platforms.outputs.need_prebuild }}
     steps:
+      - name: Plan platform matrix
+        id: platforms
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+          TRANSLATORS: ${{ inputs.translators }}
+        run: |
+          PLATFORMS="${PLATFORMS:-linux-x64}"
+          ROWS=""
+          IDS=""
+          NEED_BUILD=false
+          NEED_PREBUILD=false
+          SEEN=""
+          for p in $(echo "$PLATFORMS" | tr ',' ' '); do
+            case " $SEEN " in
+              *" $p "*) continue ;;
+            esac
+            SEEN="$SEEN $p"
+            case "$p" in
+              linux-x64)
+                ROW='{"id":"linux-x64","runner":"ubuntu-24.04","source":"build"}'
+                NEED_BUILD=true
+                ;;
+              macos-arm64)
+                ROW='{"id":"macos-arm64","runner":"qvac-macos26-arm64-gpu","source":"prebuild","artifact":"darwin-arm64"}'
+                NEED_PREBUILD=true
+                ;;
+              windows-x64)
+                ROW='{"id":"windows-x64","runner":"qvac-win25-x64-gpu","source":"prebuild","artifact":"win32-x64"}'
+                NEED_PREBUILD=true
+                ;;
+              *)
+                echo "ERROR: unknown platform: $p" >&2
+                exit 1
+                ;;
+            esac
+            if [ -n "$ROWS" ]; then ROWS="$ROWS,"; fi
+            ROWS="$ROWS$ROW"
+            if [ -n "$IDS" ]; then IDS="$IDS,"; fi
+            IDS="$IDS$p"
+          done
+          if [ -z "$ROWS" ]; then
+            echo "ERROR: no platforms selected" >&2
+            exit 1
+          fi
+          # The bespoke Bergamot build and the baseline translators' python
+          # deps are linux-only; non-linux lanes run prebuild binaries, so
+          # they only support the qvac-family translators.
+          if [ "$NEED_PREBUILD" = "true" ]; then
+            for t in $(echo "${TRANSLATORS:-qvac_bergamot}" | tr ',' ' '); do
+              case "$t" in
+                qvac|qvac_bergamot) ;;
+                *)
+                  echo "ERROR: translator '$t' only runs on linux-x64; drop non-linux platforms or restrict translators to qvac,qvac_bergamot" >&2
+                  exit 1
+                  ;;
+              esac
+            done
+          fi
+          {
+            echo "rows=[$ROWS]"
+            echo "ids=$IDS"
+            echo "need_build=$NEED_BUILD"
+            echo "need_prebuild=$NEED_PREBUILD"
+          } >> "$GITHUB_OUTPUT"
+          echo "Planned platforms: $IDS (need_build=$NEED_BUILD, need_prebuild=$NEED_PREBUILD)"
+
       - name: Parse language pairs and datasets
         id: set-matrix
+        env:
+          PLATFORM_ROWS: ${{ steps.platforms.outputs.rows }}
         run: |
           # Convert comma-separated pairs to JSON array
           pairs_input="${{ inputs.pairs }}"
           pairs_array=$(echo "$pairs_input" | tr ',' '\n' | sed 's/^ *//;s/ *$//' | jq -R -s -c 'split("\n")[:-1]')
-          echo "matrix={\"pair\":$pairs_array}" >> $GITHUB_OUTPUT
+          echo "matrix={\"pair\":$pairs_array,\"platform\":$PLATFORM_ROWS}" >> $GITHUB_OUTPUT
           echo "Parsed pairs: $pairs_array"
+          echo "matrix={\"pair\":$pairs_array,\"platform\":$PLATFORM_ROWS}" | cut -d= -f2- | jq -e . > /dev/null
 
           # Build dataset list from boolean inputs
           datasets=""
@@ -150,6 +237,7 @@ jobs:
 
   build:
     needs: setup
+    if: needs.setup.outputs.need_build == 'true'
     runs-on: ubuntu-22.04
     environment: release
     timeout-minutes: 60
@@ -204,24 +292,19 @@ jobs:
       - name: Update apt sources
         run: sudo apt-get update
 
-      - name: Download Vulkan SDK
-        run: |
-          sudo apt install -y xz-utils
-          wget -q -O /tmp/vulkansdk.tar.xz https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz
-          cd ~
-          mkdir -p vulkan
-          cd vulkan
-          tar xf /tmp/vulkansdk.tar.xz --strip-components=1
+      - name: Install xz-utils
+        run: sudo apt install -y xz-utils
 
-      - name: Setup Vulkan SDK path
-        run: |
-          VULKAN_SDK=~/vulkan/x86_64
-          echo "VULKAN_SDK=$VULKAN_SDK" >> $GITHUB_ENV
+      - name: Setup Vulkan SDK
+        uses: tetherto/qvac/.github/actions/setup-vulkan-sdk@0bbdca93da303a0b1634ba14a89cec085621078d
+        with:
+          platform: linux
+          arch: x64
 
       - name: Configure git
         shell: bash
         run: |
-          GIT_PAT="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          GIT_PAT="${{ secrets.GITHUB_TOKEN }}"
           git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
           git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
           git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
@@ -304,6 +387,17 @@ jobs:
           bare-make build
           bare-make install
 
+      - name: Upload vcpkg configure logs on failure
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: vcpkg-buildtrees-logs
+          path: |
+            /usr/local/share/vcpkg/buildtrees/*/config-*.log
+            /usr/local/share/vcpkg/buildtrees/*/install-*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
@@ -320,13 +414,26 @@ jobs:
             ${{ env.PKG_DIR }}/node_modules/
           retention-days: 1
 
+  # macOS / Windows evaluation lanes reuse the canonical prebuild pipeline
+  # instead of duplicating the bespoke (linux-only) Bergamot build here.
+  prebuild:
+    needs: setup
+    if: needs.setup.outputs.need_prebuild == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-translation-nmtcpp.yml
+    secrets: inherit
+
   evaluate:
-    needs: [setup, build]
+    needs: [setup, build, prebuild]
     if: |
       always() &&
       needs.setup.result == 'success' &&
-      (needs.build.result == 'success' || needs.build.result == 'skipped')
-    runs-on: ubuntu-24.04
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    runs-on: ${{ matrix.platform.runner }}
     environment: release
     timeout-minutes: 120
     strategy:
@@ -334,12 +441,25 @@ jobs:
       max-parallel: 9 # Limit concurrent jobs to avoid resource contention
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
 
-    name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }}
+    name: Evaluate ${{ matrix.pair }} with ${{ inputs.translators }} (${{ matrix.platform.id }})
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
       id-token: write
 
     steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Windows - enable git long paths
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: git config --global core.longpaths true
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -354,19 +474,59 @@ jobs:
         run: npm install -g --force bare-runtime
 
       - name: Download build artifact
-        if: needs.build.result == 'success'
+        if: matrix.platform.source == 'build' && needs.build.result == 'success'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: ${{ env.PKG_DIR }}
 
+      - name: Download prebuild artifact
+        if: matrix.platform.source == 'prebuild'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ matrix.platform.artifact }}
+          path: ${{ env.PKG_DIR }}/prebuilds
+
+      - name: Configure git
+        if: matrix.platform.source == 'prebuild'
+        run: |
+          GIT_PAT="${{ secrets.GITHUB_TOKEN }}"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://${GIT_PAT}:x-oauth-basic@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Install npm dependencies
+        if: matrix.platform.source == 'prebuild'
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
       - name: Set up Python
+        if: runner.environment == 'github-hosted'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: '3.10'
           cache: pip
 
+      # actions/setup-python hard-fails on the self-hosted GPU runners (its
+      # tarball hardcodes an unwritable toolcache path); use the runner's own
+      # Python via a venv instead. Same pattern as benchmark-ocr-ggml.
+      - name: Set up Python venv (self-hosted)
+        if: runner.environment != 'github-hosted'
+        run: |
+          set -e
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+          "$PY" -m venv "$GITHUB_WORKSPACE/.qe-venv"
+          if [ -x "$GITHUB_WORKSPACE/.qe-venv/bin/python" ]; then
+            PYBIN="$GITHUB_WORKSPACE/.qe-venv/bin/python"
+          else
+            PYBIN="$GITHUB_WORKSPACE/.qe-venv/Scripts/python"
+          fi
+          echo "PYBIN=$PYBIN" >> "$GITHUB_ENV"
+          "$PYBIN" -m pip install --upgrade pip
+
       - name: Install system dependencies
+        if: matrix.platform.id == 'linux-x64'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -376,8 +536,60 @@ jobs:
             ccache \
             libunwind-dev
 
+      - name: Install Python dependencies (hosted)
+        if: runner.environment == 'github-hosted'
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          echo "PYBIN=python" >> "$GITHUB_ENV"
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Python dependencies (self-hosted)
+        if: runner.environment != 'github-hosted'
+        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
+        run: |
+          "$PYBIN" -m pip install -r requirements-qvac.txt
+          if [ "${{ inputs.metric_comet }}" = "true" ]; then
+            "$PYBIN" -m pip install "unbabel-comet>=2.2.6"
+          fi
+
+      # Python's subprocess on Windows cannot resolve the extension-less npm
+      # shim; point the translator wrappers at bare.cmd explicitly.
+      - name: Resolve bare runtime path
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BARE_BIN="$(npm prefix -g)/bare.cmd"
+          else
+            BARE_BIN="bare"
+          fi
+          echo "BARE_BIN=$BARE_BIN" >> "$GITHUB_ENV"
+          "$BARE_BIN" -v
+
+      - name: Install AWS CLI on macOS (runners without a preinstalled aws)
+        if: runner.os == 'macOS' && contains(format(',{0},', inputs.translators), ',qvac,')
+        run: |
+          if command -v aws >/dev/null 2>&1; then
+            aws --version
+            exit 0
+          fi
+          for p in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+            if [ -x "$p" ]; then
+              dirname "$p" >> "$GITHUB_PATH"
+              exit 0
+            fi
+          done
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+          rm -rf /tmp/awscli-expanded
+          pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-expanded
+          mkdir -p "$HOME/.local"
+          rm -rf "$HOME/.local/aws-cli"
+          mv /tmp/awscli-expanded/aws-cli.pkg/Payload/aws-cli "$HOME/.local/aws-cli"
+          rm -rf /tmp/awscli-expanded /tmp/AWSCLIV2.pkg
+          echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+          "$HOME/.local/aws-cli/aws" --version
+
       - name: Configure AWS credentials via OIDC
-        if: needs.setup.outputs.qvac_needed == 'true'
+        if: contains(format(',{0},', inputs.translators), ',qvac,')
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -500,6 +712,7 @@ jobs:
           restore-keys: datasets-
 
       - name: Free up disk space
+        if: matrix.platform.id == 'linux-x64'
         run: |
           echo "Disk space before cleanup:"
           df -h
@@ -572,7 +785,7 @@ jobs:
           echo "Fetching model index from Mozilla..."
           RECORDS=$(curl -sS "$RECORDS_URL")
 
-          URLS=$(echo "$RECORDS" | python3 -c "
+          URLS=$(echo "$RECORDS" | "$PYBIN" -c "
           import sys, json
           data = json.load(sys.stdin)
           for r in data.get('data', []):
@@ -601,12 +814,6 @@ jobs:
 
           echo "Bergamot models installed to ~/.local/share/bergamot/models/firefox/"
         continue-on-error: true
-
-      - name: Install Python dependencies
-        working-directory: ${{ env.PKG_DIR }}/benchmarks/quality_eval
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
 
       - name: Build metrics list
         id: metrics
@@ -671,6 +878,11 @@ jobs:
             batch_flag="--batch"
           fi
 
+          quantized_flag=""
+          if [ "${{ inputs.is_quantized_model }}" = "true" ]; then
+            quantized_flag="--is-quantized-model"
+          fi
+
           # Loop through each selected dataset
           IFS=',' read -ra DATASETS <<< "${{ needs.setup.outputs.datasets }}"
           for dataset in "${DATASETS[@]}"; do
@@ -678,7 +890,7 @@ jobs:
             echo "Evaluating on dataset: $dataset"
             echo "=========================================="
 
-            python evaluate.py \
+            "$PYBIN" evaluate.py \
               --pairs "${{ matrix.pair }}" \
               --translators "${{ inputs.translators }}" \
               --dataset "$dataset" \
@@ -695,7 +907,8 @@ jobs:
               --topp "$TOPP" \
               --maxlength "$MAXLENGTH" \
               $pivot_flag \
-              $batch_flag
+              $batch_flag \
+              $quantized_flag
           done
         env:
           PYTHONUNBUFFERED: 1
@@ -704,15 +917,15 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: always()
         with:
-          name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}
-          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results/${{ matrix.pair }}
+          name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}-${{ matrix.platform.id }}
+          path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/results
           retention-days: 30
 
       - name: Upload evaluation logs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         if: failure()
         with:
-          name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}
+          name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}-${{ matrix.platform.id }}
           path: |
             ${{ env.PKG_DIR }}/benchmarks/quality_eval/*.log
           retention-days: 7
@@ -838,4 +1051,62 @@ jobs:
         with:
           name: consolidated-results-${{ inputs.translators }}
           path: all-results
+          retention-days: 90
+
+  summarize:
+    needs: [setup, evaluate, consolidate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: always() && needs.setup.result == 'success'
+
+    steps:
+      - name: Checkout summarizer
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            scripts/perf-report/summarize-nmt-quality.js
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Download all evaluation artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          path: all-results
+          pattern: results-*
+
+      - name: Render unified summary table
+        run: |
+          metrics=""
+          if [ "${{ inputs.metric_chrfpp }}" = "true" ]; then
+            metrics="chrfpp"
+          fi
+          if [ "${{ inputs.metric_comet }}" = "true" ]; then
+            metrics="${metrics:+$metrics,}comet"
+          fi
+
+          node scripts/perf-report/summarize-nmt-quality.js \
+            --dir all-results \
+            --pairs "${{ inputs.pairs }}" \
+            --translators "${{ inputs.translators }}" \
+            --datasets "${{ needs.setup.outputs.datasets }}" \
+            --metrics "$metrics" \
+            --device cpu \
+            --platforms "${{ needs.setup.outputs.platforms }}" \
+            --output nmt-benchmark-summary.md \
+            --output-json nmt-benchmark-summary.json
+
+      - name: Add summary
+        run: cat nmt-benchmark-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unified summary
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: nmtcpp-benchmark-summary-${{ inputs.translators }}
+          path: |
+            nmt-benchmark-summary.md
+            nmt-benchmark-summary.json
           retention-days: 90

@@ -9,6 +9,8 @@ const test = require('brittle')
 const fs = require('bare-fs')
 // prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
 // prestage-uses: multimodal-large — LARGE_MULTIMODAL_CONFIG, passed explicitly below
+// prestage-ignore: SmolVLM2-500M-Video-Instruct-Q8_0.gguf — opt-in via QVAC_VLM_MODEL=smolvlm2 only
+// prestage-ignore: mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf — opt-in via QVAC_VLM_MODEL=smolvlm2 only
 const {
   DEVICE_CONFIGS,
   LARGE_MULTIMODAL_CONFIG,

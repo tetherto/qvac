@@ -64,6 +64,9 @@ export function Provider({ children }: { children: ReactNode }) {
       search={{
         SearchDialog,
       }}
+      theme={{
+        hotKey: false,
+      }}
     >
       {children}
     </RootProvider>

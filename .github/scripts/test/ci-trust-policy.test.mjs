@@ -879,9 +879,24 @@ test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording'
 
 test('audit-called-out privileged checkouts are pinned to event head SHA', () => {
   const mergeGuard = read('.github/workflows/pr-gate-merge.yml')
+  // Merge Guard verifies prebuilds, it does not trigger them: it must not call a
+  // prebuild workflow, and must not privileged-checkout the PR head repo for
+  // prebuild verification. Its verify-prebuilds job only READS commit statuses on
+  // the immutable event head SHA (never a mutable ref).
+  assert.doesNotMatch(
+    mergeGuard,
+    /uses:\s+\.\/\.github\/workflows\/prebuilds-/,
+    'Merge Guard must not call a prebuild workflow (verify, do not trigger)',
+  )
+  assert.doesNotMatch(
+    mergeGuard,
+    /head\.repo\.full_name/,
+    'Merge Guard must not privileged-checkout the PR head repo',
+  )
   assert.match(
     mergeGuard,
-    /repository:\s+\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}\n\s+ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+    /HEAD_SHA:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+    'verify-prebuilds reads statuses from the immutable event head SHA',
   )
 
   const sanityChecks = read('.github/actions/sanity-checks/action.yaml')
@@ -892,6 +907,23 @@ test('audit-called-out privileged checkouts are pinned to event head SHA', () =>
   assert.doesNotMatch(
     sanityChecks,
     /PR_HEAD_REF|PR_FORK_URL|refs\/pr\/head/,
+  )
+})
+
+test('audiogen mobile actions come from an isolated default-branch checkout', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
+  const trustedActionUses = workflow.match(
+    /uses:\s+\.\/trusted-actions\/\.github\/actions\/run-mobile-integration-tests\//g,
+  ) || []
+
+  assert.match(
+    workflow,
+    /name:\s+Checkout composite action source[\s\S]*?repository:\s+\$\{\{ github\.repository \}\}[\s\S]*?ref:\s+\$\{\{ github\.event\.repository\.default_branch \}\}[\s\S]*?path:\s+trusted-actions[\s\S]*?persist-credentials:\s+false/,
+  )
+  assert.equal(trustedActionUses.length, 9)
+  assert.doesNotMatch(
+    workflow,
+    /uses:\s+\.\/\.github\/actions\/run-mobile-integration-tests\//,
   )
 })
 
@@ -943,8 +975,176 @@ test('infer-base changes reach the required merge-guard status check', () => {
   assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
   assert.match(
     guard,
-    /sanity-checks-status:\s*\$\{\{\s*needs\.sanity-checks\.result/,
+    /sanity-checks-status:[\s\S]*?needs\.sanity-checks\.result/,
     'merge guard reports the sanity-checks result',
+  )
+})
+
+test('merge guard fails closed when the PR was not authorized', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  const guard = jobBlock(source, 'qvac-merge-guard')
+
+  // The aggregate must wait on the full authorization chain so an unapproved
+  // fork cannot pass via skipped=success on the gated jobs.
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bfork-approval\b/,
+    'merge guard must depend on fork-approval',
+  )
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bauthorize\b/,
+    'merge guard must depend on authorize',
+  )
+
+  // Each gated status input must require fork-approval success, authorize
+  // success, AND allowed == 'true' before a skip is treated as a pass.
+  for (const input of [
+    'sanity-checks-status',
+    'build-status',
+    'general-checks-status',
+  ]) {
+    const line = guard
+      .split('\n')
+      .find((l) => l.trim().startsWith(`${input}:`))
+    assert.ok(line, `merge guard defines ${input}`)
+    assert.match(
+      line,
+      /needs\.fork-approval\.result == 'success'/,
+      `${input} must require fork-approval success (fail closed)`,
+    )
+    assert.match(
+      line,
+      /needs\.authorize\.result == 'success'/,
+      `${input} must require authorize success (fail closed)`,
+    )
+    assert.match(
+      line,
+      /needs\.authorize\.outputs\.allowed == 'true'/,
+      `${input} must require authorize to allow the PR (fail closed)`,
+    )
+  }
+})
+
+test('merge guard cancels superseded in-flight runs', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  // verify-prebuilds uses a static per-run freshness threshold, so an older
+  // run started before a prebuild label must be cancelled rather than allowed
+  // to trust a pre-label skipped=success. That relies on concurrency
+  // cancel-in-progress; assert it stays enabled.
+  const concurrency = source
+    .split('\n')
+    .slice(
+      source.split('\n').findIndex((l) => l.startsWith('concurrency:')),
+    )
+    .slice(0, 12)
+    .join('\n')
+  assert.match(
+    concurrency,
+    /cancel-in-progress:\s*true/,
+    'Merge Guard must cancel superseded in-flight runs (verify-only gate)',
+  )
+})
+
+test('verify-prebuilds binds a prebuild status to its producing on-pr run', () => {
+  const source = read('.github/workflows/pr-gate-merge.yml')
+  const verify = jobBlock(source, 'verify-prebuilds')
+
+  // The gate reads workflow runs (to bind a status to its producing run) and
+  // delegates the decision to a single, unit-tested module checked out from the
+  // trusted default branch (never PR head code).
+  assert.match(verify, /actions:\s*read/, 'verify-prebuilds can read workflow runs')
+  assert.match(
+    verify,
+    /sparse-checkout:\s*\.github\/scripts\/prebuild-status/,
+    'verify-prebuilds checks out only the prebuild-status scripts',
+  )
+  assert.match(
+    verify,
+    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
+    'verify-prebuilds checks out the trusted default branch, never PR head',
+  )
+  assert.match(
+    verify,
+    /run:\s*node \.github\/scripts\/prebuild-status\/verify\.mjs/,
+    'verify-prebuilds runs the shared verify script',
+  )
+  assert.match(
+    verify,
+    /PR_UPDATED_AT:\s*\$\{\{ github\.event\.pull_request\.updated_at \}\}/,
+    'verify-prebuilds passes the PR event timestamp as the freshness threshold',
+  )
+
+  // Timestamp alone is insufficient: a superseded pre-label run can post a
+  // fresh-looking skipped success, so the module binds the status to the run
+  // that produced it (target_url -> run -> on-pr-<pkg> workflow -> created_at).
+  const lib = read('.github/scripts/prebuild-status/lib.mjs')
+  assert.match(lib, /target_url/, 'lib reads the producing run from the status target_url')
+  assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
+  assert.match(
+    lib,
+    /on-pr-\$\{pkg\}\.yml/,
+    'lib checks the producing run is the on-pr-<pkg> workflow',
+  )
+  assert.match(
+    lib,
+    /createdMs \/ 1000\) >= prUpdatedEpoch/,
+    'lib rejects a producing run created before this PR event',
+  )
+})
+
+test('publish-prebuild-status stamps its run URL into target_url', () => {
+  const workflowDirectory = join(root, '.github/workflows')
+  const offenders = readdirSync(workflowDirectory)
+    .filter((name) => /^on-pr-.*\.yml$/.test(name))
+    .filter((name) => {
+      const text = readFileSync(join(workflowDirectory, name), 'utf8')
+      if (!text.includes('publish-prebuild-status')) return false
+      // A publish job must define RUN_URL from github.run_id, pass its context,
+      // and delegate to the shared publish script (which stamps target_url), so
+      // Merge Guard can bind the status to this run.
+      const hasRunUrl =
+        /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
+          text,
+        )
+      const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text)
+      const runsScript = /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(text)
+      // A skipped prebuild must be distinguishable from a failure-induced skip,
+      // so the publish job forwards ci-router's result + run_prebuilds decision.
+      const hasSkipGuard =
+        /CI_ROUTER_RESULT:\s*\$\{\{ needs\.ci-router\.result \}\}/.test(text) &&
+        /RUN_PREBUILDS:\s*\$\{\{ needs\.ci-router\.outputs\.run_prebuilds \}\}/.test(text)
+      return !(hasRunUrl && hasContext && runsScript && hasSkipGuard)
+    })
+  assert.deepEqual(
+    offenders,
+    [],
+    'every on-pr publish-prebuild-status must run the shared publish script with RUN_URL, CONTEXT, and the ci-router skip guard',
+  )
+
+  // The shared script is what actually stamps the run URL into target_url.
+  const publish = read('.github/scripts/prebuild-status/publish.mjs')
+  assert.match(
+    publish,
+    /target_url=\$\{runUrl\}/,
+    'publish.mjs stamps the run URL into the status target_url',
+  )
+
+  // Fail-closed on failure-induced skips: publish.mjs forwards ci-router's
+  // result + run_prebuilds, and the shared decision only trusts a skip that was
+  // ci-router's deliberate no-label choice (not a skip caused by an upstream
+  // failure). Otherwise a crashed label-detection job would read as a green
+  // prebuild to Merge Guard.
+  assert.match(
+    publish,
+    /resolvePublishState\(\s*process\.env\.PREBUILD_RESULT,\s*process\.env\.REUSE_HIT,\s*process\.env\.CI_ROUTER_RESULT,\s*process\.env\.RUN_PREBUILDS,?\s*\)/,
+    'publish.mjs passes ci-router result + run_prebuilds into the state decision',
+  )
+  const lib = read('.github/scripts/prebuild-status/lib.mjs')
+  assert.match(
+    lib,
+    /ciRouterResult === 'success' && runPrebuilds === 'false'/,
+    'resolvePublishState only treats a skip as success for a legit no-label skip',
   )
 })
 
@@ -1298,5 +1498,229 @@ test('tts-ggml Android per-test wait remains below its Mocha ceiling', () => {
     androidWaitMs < mochaTimeoutMs,
     `android per-test wait (${androidWaitMs} ms) must remain below ` +
       `Mocha timeout (${mochaTimeoutMs} ms)`,
+  )
+})
+
+test('asr-ggml per-test wait remains below its Mocha ceiling', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+
+  function integerValue(key) {
+    const match = workflow.match(new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, 'm'))
+    assert.ok(match, `${key} must be a literal integer`)
+    return Number(match[1])
+  }
+
+  const perTestWaitMs =
+    integerValue('per-test-timeout-minutes') * MILLISECONDS_PER_MINUTE
+  const mochaTimeoutMs = integerValue('mocha-timeout-ms')
+
+  assert.ok(
+    perTestWaitMs < mochaTimeoutMs,
+    `ASR per-test wait (${perTestWaitMs} ms) must remain below ` +
+      `Mocha timeout (${mochaTimeoutMs} ms)`,
+  )
+})
+
+test('mobile scheduler preserves automatic sharding and supports explicit multi-spec dual flagship', () => {
+  const action = read(
+    '.github/actions/run-mobile-integration-tests/schedule-test-run/action.yml',
+  )
+  const llmWorkflow = read('.github/workflows/integration-mobile-test-llm-llamacpp.yml')
+  const validationIndex = action.indexOf('test-specs must be a non-empty array')
+  const schedulingStartedIndex = action.indexOf('SCHEDULING_STARTED=1')
+
+  assert.match(action, /multi-spec-dual-flagship:[\s\S]*?default:\s*"false"/)
+  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
+  assert.match(action, /length > 0/)
+  assert.ok(
+    validationIndex >= 0 && validationIndex < schedulingStartedIndex,
+    'invalid or empty specs fail before rollback ownership starts',
+  )
+  assert.match(action, /APP_UPLOAD_ID="\$\{APP_ARN##\*\/\}"/)
+  assert.match(
+    action,
+    /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{\{ github\.run_id \}\}\.\$\{\{ github\.run_attempt \}\}-\$\{APP_UPLOAD_ID\}"/,
+  )
+  assert.match(
+    action,
+    /if \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
+  )
+  assert.match(action, /for IDX in \$\(seq 0 \$\(\(SPEC_COUNT - 1\)\)\); do/)
+  assert.match(action, /RUN_NAME_PREFIX="\$\{RUN_NAME_BASE\}-\$\{GROUP_NAME\}"/)
+  assert.match(
+    action,
+    /RUN_ARNS_JSON=\$\(echo "\$RUN_ARNS_JSON" \| jq --arg a "\$RUN_ARN_1" --arg b "\$RUN_ARN_2" '\. \+ \[\$a,\$b\]'\)/,
+  )
+  assert.match(action, /S25 Ultra/)
+  assert.match(action, /Pixel 9/)
+  assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/)
+  assert.match(action, /iPhone 17/)
+  assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/)
+})
+
+test('mobile monitor maps both flagship runs back to each test spec', () => {
+  const action = read(
+    '.github/actions/run-mobile-integration-tests/monitor-test-run/action.yml',
+  )
+  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
+  assert.match(action, /spec_index_for_run\(\)/)
+  assert.match(action, /RUN_COUNT" -eq \$\(\(SPEC_COUNT \* 2\)\)/)
+  assert.match(action, /echo \$\(\(run_index \/ 2\)\)/)
+  assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/)
+})
+
+test('mobile shards pass grep explicitly and retain host-phase failure logs', () => {
+  const uploadAction = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/action.yml',
+  )
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  assert.match(uploadAction, /export GROUP_GREP_B64=/)
+  assert.match(
+    generateTestspec,
+    /base64 -d > \/tmp\/qvacShardGrep\.txt/,
+  )
+  assert.match(
+    generateTestspec,
+    /DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH:-/,
+  )
+  assert.match(collectLogs, /\*Test\*spec\*output\*/)
+  assert.match(collectLogs, /\*Standard\*Output\*/)
+  assert.match(collectLogs, /Host phase log:/)
+})
+
+test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+  const matrices = workflow.match(
+    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+  )
+  const jobName = workflow.match(/^\s{4}name:\s*(.+)$/m)
+
+  assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
+  assert.ok(jobName, 'build-and-test job must have a name')
+  const benchmarkMatrix = JSON.parse(matrices[1])
+  const functionalMatrix = JSON.parse(matrices[2])
+  assert.deepEqual(
+    functionalMatrix.include.map((entry) => entry.platform),
+    ['Android', 'iOS'],
+  )
+  assert.equal(benchmarkMatrix.include.length, 25)
+  assert.equal(
+    benchmarkMatrix.include.filter((entry) => entry.platform === 'Android').length,
+    13,
+  )
+  assert.equal(
+    benchmarkMatrix.include.filter((entry) => entry.platform === 'iOS').length,
+    12,
+  )
+  assert.match(
+    workflow,
+    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
+  )
+  assert.match(workflow, /egress-policy:\s*audit/)
+  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  assert.match(workflow, /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/)
+  assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
+  assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/)
+  assert.match(jobName[1], /matrix\.engine/)
+  assert.match(jobName[1], /matrix\.variant/)
+  assert.match(jobName[1], /matrix\.use_gpu/)
+  assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/)
+  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  assert.match(
+    workflow,
+    /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
+  )
+  assert.match(
+    workflow,
+    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
+  )
+  assert.match(
+    workflow,
+    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
+  )
+})
+
+test('asr-ggml functional mobile workflow opts into dual flagship per engine shard', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+  const matrices = workflow.match(
+    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+  )
+
+  assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
+  const benchmarkMatrix = JSON.parse(matrices[1])
+  const functionalMatrix = JSON.parse(matrices[2])
+  assert.equal(benchmarkMatrix.include.length, 16)
+  assert.deepEqual(
+    functionalMatrix.include.map((entry) => entry.platform),
+    ['Android', 'iOS'],
+  )
+  assert.match(
+    workflow,
+    /concurrency:\s*\n\s+group:[\s\S]*?\n\s+cancel-in-progress:\s*true/,
+  )
+  assert.match(
+    workflow,
+    /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
+  )
+  assert.match(
+    workflow,
+    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
+  )
+  assert.match(workflow, /egress-policy:\s*audit/)
+  assert.match(
+    workflow,
+    /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,
+  )
+  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  assert.match(
+    workflow,
+    /PACKAGE_SPEC:\s*\$\{\{ github\.event\.inputs\.package_spec \}\}[\s\S]*?if \[\[ ! "\$PACKAGE_SPEC"/,
+  )
+  assert.doesNotMatch(
+    workflow,
+    /if \[\[ ! "\$\{\{ github\.event\.inputs\.package_spec \}\}"/,
+  )
+  assert.match(
+    workflow,
+    /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/,
+  )
+  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  assert.match(
+    workflow,
+    /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
+  )
+  assert.match(
+    workflow,
+    /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
+  )
+  assert.match(
+    workflow,
+    /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 210 \|\| 180 \}\}/,
+  )
+  assert.match(
+    workflow,
+    /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
   )
 })

@@ -1,5 +1,96 @@
 # Changelog
 
+## [0.44.0] - 2026-08-17
+
+### Added
+
+- `image_no_upscale` in the addon load config — an idefics3-style preprocessing
+  override forwarded to the vision context, accepting `"on"` or `"off"`. Left
+  unset, the model's own GGUF value is used unchanged. This is what separates the
+  VisionPsy Flash checkpoint from the base one, whose mmprojs are otherwise
+  indistinguishable: a Flash checkpoint loaded without it silently runs base
+  preprocessing, which changes the image token count and so moves both accuracy
+  and encode time.
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule), which is what supplies
+  `image_no_upscale` on `common_params` and `mtmd_context_params`.
+
+## [0.43.0] - 2026-08-14
+
+This release removes the Qwen3-only dynamic tools feature behind
+`tools_compact`. Regular static tool calling remains supported and continues to
+use the fixed Qwen3 chat template.
+
+### Breaking Changes
+
+- The `tools_compact` load option is no longer supported. Configurations that
+  pass it now fail model loading as an unsupported option; remove the key and
+  keep tool definitions in the normal prompt flow.
+- Tool definitions are no longer added mid-conversation and trimmed from the KV
+  cache after a tool-call chain. This removes the Qwen3-specific cache behavior
+  that depended on context-sliding anchor bookkeeping.
+
+### Changed
+
+- Qwen3 tool calling now always uses the fixed chat template, so tool definitions
+  remain in the prompt throughout the conversation. General context sliding,
+  M-RoPE sliding, reasoning-block compaction, and static tool calling are
+  unchanged.
+
+### Removed
+
+- The `nPastBeforeTools` and `toolsTrimmed` runtime debug statistics, which only
+  reported dynamic tool compaction state, have been removed.
+
+### Pull Requests
+
+- [#3373](https://github.com/tetherto/qvac/pull/3373) - QVAC-22567 feat[bc]:
+  remove dynamic tools (tools_compact) from llm-llamacpp addon
+
+## [0.42.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`.
+
+- **`split-mode: 'row'` is no longer effective on any shipped backend.** Row
+  split needs a backend exposing `ggml_backend_split_buffer_type`, and at
+  qvac-fabric v10069 only SYCL still does — CUDA dropped it and moved tensor
+  parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR` this package does not
+  expose. Vulkan, Metal and OpenCL never provided it. qvac-fabric also stopped
+  treating `row` as `layer` on those backends and now **fails the model load**
+  with `device <name> does not support split buffers`, so the addon degrades
+  `row` -> `layer` itself before loading and logs a `WARNING`. Models keep
+  loading and `row` keeps behaving like `layer` as it did on Vulkan/Metal
+  before, but the fallback is now explicit rather than implicit in qvac-fabric.
+  Callers who set `split-mode: 'row'` for real tensor parallelism no longer get
+  it. See `docs/multi-gpu.md`.
+
+## [0.41.0] - 2026-08-07
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now
+  live under `src/` and the published root JavaScript entrypoints (`index.js`,
+  `addon.js`, `batchHandler.js`, `addonLogging.js`) and their `.d.ts`
+  declarations are generated from them and committed. Runtime behaviour and the
+  CommonJS export shape are unchanged.
+- The package is exported with `export =` rather than a default export, which
+  gives CommonJS consumers a real construct signature (`import LlmLlamacpp =
+  require('@qvac/llm-llamacpp')` previously failed with TS2351). A consequence
+  is that `import LlmLlamacpp from '@qvac/llm-llamacpp'` now requires
+  `esModuleInterop` or `allowSyntheticDefaultImports`; without either,
+  TypeScript reports TS1259.
+- `addon` is a public member of the published type instead of `protected`. An
+  interface cannot express `protected`, and the property was already public at
+  runtime, so this widens what the declarations support rather than changing
+  behaviour.
+- `BatchResponse.on` accepts the inherited `EventEmitter` event map in addition
+  to the `"output"` overload. Callback types for `"output"` are unchanged, but
+  an unrecognised event name no longer fails to compile.
+- `./addonLogging` additionally exports `setLogger` and `releaseLogger` as named
+  bindings, so ESM named imports resolve. The default export is unchanged.
+
 ## [0.40.0] - 2026-08-06
 
 One model instance can now serve several requests at once. Every `run()` call is

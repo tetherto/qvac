@@ -2,9 +2,9 @@ name: Mobile Test — Schedule Device Farm Run
 description: |
   Phase 4 of the mobile integration test pipeline.
 
-  Three scheduling modes (selected automatically):
+  Four scheduling modes (selected automatically):
 
-  1. Sharded (test-specs has >1 entry):
+  1. Sharded (test-specs has >1 entry without the multi-spec dual opt-in):
        Schedule one Device Farm run per spec, all against the addon's own
        device pool (android-device-pool-arn / ios-device-pool-arn). Used by
        LLM (12 iOS + 7 Android shards) and OCR (perf + regular).
@@ -13,9 +13,9 @@ description: |
        Schedule one Device Farm run against the addon's pool. Used by Embed
        to match its main behaviour (single-run on a chosen pool).
 
-  3. Dual-flagship (test-specs has 1 entry AND scheduling-mode=dual-flagship,
-     the default):
-       Schedule two parallel runs targeting flagship devices via filter:
+  3. Dual-flagship (test-specs has 1 entry by default, or any number of entries
+     when scheduling-mode=dual-flagship and multi-spec-dual-flagship=true):
+       Schedule two parallel runs per spec targeting flagship devices via filter:
        Samsung S25 Ultra + Pixel 9 (Android), or ios-device-pool-arn pool +
        iPhone 17 (iOS). Used by Whisper, NMT, TTS, Diffusion, Parakeet,
        Decoder.
@@ -55,12 +55,17 @@ inputs:
   test-specs:
     description: |
       JSON array from upload-to-devicefarm: [{ "name", "grep", "arn" }].
-      Length 1 => default mode (single spec), length >1 => sharded mode.
+      Length 1 => default mode. Length >1 => sharded mode unless
+      multi-spec dual-flagship is explicitly enabled.
     required: true
   scheduling-mode:
-    description: "dual-flagship | single-pool | single-device (only honored when test-specs has 1 entry)"
+    description: "dual-flagship | single-pool | single-device"
     required: false
     default: "dual-flagship"
+  multi-spec-dual-flagship:
+    description: "Set true with scheduling-mode=dual-flagship to schedule two flagship runs per spec. Default false preserves sharded-pool behavior for existing multi-spec callers."
+    required: false
+    default: "false"
   device-model:
     description: "single-device mode: MODEL filter value, e.g. 'Pixel 9', 'iPhone 17 Pro' (matched per device-model-operator)"
     required: false
@@ -101,11 +106,14 @@ runs:
         TEST_PACKAGE_ARN: ${{ inputs.test-package-upload-arn }}
         TEST_SPECS_JSON: ${{ inputs.test-specs }}
         SCHEDULING_MODE: ${{ inputs.scheduling-mode }}
+        MULTI_SPEC_DUAL_FLAGSHIP: ${{ inputs.multi-spec-dual-flagship }}
         DEVICE_MODEL: ${{ inputs.device-model }}
         DEVICE_MODEL_OPERATOR: ${{ inputs.device-model-operator }}
         DEVICE_MANUFACTURER: ${{ inputs.device-manufacturer }}
         JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
       run: |
+        set -euo pipefail
+
         # The run-id/attempt suffix makes the name UNIQUE to this workflow attempt.
         # That is what lets the rollback below safely stop runs by name: a re-run of
         # the same PR gets a different base, so the sweep can never touch another
@@ -116,7 +124,12 @@ runs:
         else
           RUN_NAME_BASE="PR-${{ github.event.pull_request.number || github.run_number }}-${PLATFORM}"
         fi
-        RUN_NAME_BASE="${RUN_NAME_BASE}-${{ github.run_id }}.${{ github.run_attempt }}"
+        APP_UPLOAD_ID="${APP_ARN##*/}"
+        if [ -z "$APP_UPLOAD_ID" ]; then
+          echo "ERROR: app-upload-arn must end with an upload identifier" >&2
+          exit 1
+        fi
+        RUN_NAME_BASE="${RUN_NAME_BASE}-${{ github.run_id }}.${{ github.run_attempt }}-${APP_UPLOAD_ID}"
 
         # Partial-scheduling rollback.
         #
@@ -217,9 +230,20 @@ runs:
             --query 'run.arn' --output text
         }
 
+        if ! echo "$TEST_SPECS_JSON" | jq -e '
+          type == "array" and
+          length > 0 and
+          all(.[];
+            (.name | type == "string" and length > 0) and
+            (.arn | type == "string" and length > 0)
+          )
+        ' >/dev/null; then
+          echo "ERROR: test-specs must be a non-empty array of entries with non-empty name and arn strings" >&2
+          exit 1
+        fi
         SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
         echo "Test spec count: $SPEC_COUNT"
-        echo "Scheduling mode hint (used only for single-spec runs): $SCHEDULING_MODE"
+        echo "Scheduling mode hint: ${SCHEDULING_MODE:-automatic}"
 
         RUN_ARNS_JSON='[]'
 
@@ -228,7 +252,7 @@ runs:
         # clean up and no reason to spend an API call.
         SCHEDULING_STARTED=1
 
-        if [ "$SPEC_COUNT" -gt 1 ]; then
+        if [ "$SPEC_COUNT" -gt 1 ] && { [ "$SCHEDULING_MODE" != "dual-flagship" ] || [ "$MULTI_SPEC_DUAL_FLAGSHIP" != "true" ]; }; then
           # Sharded mode: each group runs against the addon's pool.
           if [ "$PLATFORM" = "Android" ]; then
             POOL_ARN="$ANDROID_POOL_ARN"
@@ -296,29 +320,45 @@ runs:
           echo "  ${RUN_NAME_BASE}-${SAFE_MODEL} -> $RUN_ARN"
           RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg arn "$RUN_ARN" '. + [$arn]')
         else
-          # Default dual-flagship: same spec, two device targets.
-          SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r '.[0].arn')
           if [ "$PLATFORM" = "Android" ]; then
             SAMSUNG_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Samsung"]},{"attribute":"MODEL","operator":"CONTAINS","values":["S25 Ultra"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
             PIXEL_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Google"]},{"attribute":"MODEL","operator":"CONTAINS","values":["Pixel 9"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["ANDROID"]}],"maxDevices":1}'
-            RUN_ARN_1=$(schedule_run_with_filter "${RUN_NAME_BASE}-Samsung" "$SAMSUNG_FILTER" "$SPEC_ARN")
-            record_created_run "$RUN_ARN_1"
-            RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-Pixel"   "$PIXEL_FILTER"   "$SPEC_ARN")
-            record_created_run "$RUN_ARN_2"
           else
             if [ -z "$IOS_POOL_ARN" ]; then
               echo "ERROR: dual-flagship iOS requires ios-device-pool-arn" >&2
               exit 1
             fi
             IPHONE17_FILTER='{"filters":[{"attribute":"MANUFACTURER","operator":"EQUALS","values":["Apple"]},{"attribute":"MODEL","operator":"CONTAINS","values":["iPhone 17"]},{"attribute":"PLATFORM","operator":"EQUALS","values":["IOS"]}],"maxDevices":1}'
-            RUN_ARN_1=$(schedule_run_with_pool   "$IOS_POOL_ARN"     "$RUN_NAME_BASE"           "$SPEC_ARN")
-            record_created_run "$RUN_ARN_1"
-            RUN_ARN_2=$(schedule_run_with_filter "${RUN_NAME_BASE}-iPhone17" "$IPHONE17_FILTER" "$SPEC_ARN")
-            record_created_run "$RUN_ARN_2"
           fi
-          echo "  Run 1: $RUN_ARN_1"
-          echo "  Run 2: $RUN_ARN_2"
-          RUN_ARNS_JSON=$(jq -n --arg a "$RUN_ARN_1" --arg b "$RUN_ARN_2" '[$a,$b]')
+
+          for IDX in $(seq 0 $((SPEC_COUNT - 1))); do
+            GROUP_NAME=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].name")
+            SPEC_ARN=$(echo "$TEST_SPECS_JSON" | jq -r ".[$IDX].arn")
+            RUN_NAME_PREFIX="$RUN_NAME_BASE"
+            if [ "$SPEC_COUNT" -gt 1 ]; then
+              RUN_NAME_PREFIX="${RUN_NAME_BASE}-${GROUP_NAME}"
+            fi
+
+            if [ "$PLATFORM" = "Android" ]; then
+              RUN_NAME_1="${RUN_NAME_PREFIX}-Samsung"
+              RUN_NAME_2="${RUN_NAME_PREFIX}-Pixel"
+              RUN_ARN_1=$(schedule_run_with_filter "$RUN_NAME_1" "$SAMSUNG_FILTER" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_1"
+              RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME_2" "$PIXEL_FILTER" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_2"
+            else
+              RUN_NAME_1="$RUN_NAME_PREFIX"
+              RUN_NAME_2="${RUN_NAME_PREFIX}-iPhone17"
+              RUN_ARN_1=$(schedule_run_with_pool "$IOS_POOL_ARN" "$RUN_NAME_1" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_1"
+              RUN_ARN_2=$(schedule_run_with_filter "$RUN_NAME_2" "$IPHONE17_FILTER" "$SPEC_ARN")
+              record_created_run "$RUN_ARN_2"
+            fi
+
+            echo "  $RUN_NAME_1 -> $RUN_ARN_1"
+            echo "  $RUN_NAME_2 -> $RUN_ARN_2"
+            RUN_ARNS_JSON=$(echo "$RUN_ARNS_JSON" | jq --arg a "$RUN_ARN_1" --arg b "$RUN_ARN_2" '. + [$a,$b]')
+          done
         fi
 
         RUN_COUNT=$(echo "$RUN_ARNS_JSON" | jq 'length')

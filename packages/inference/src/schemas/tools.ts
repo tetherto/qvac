@@ -1,23 +1,5 @@
 import { z } from 'zod'
 
-/**
- * `static` (default) — tools are prepended once after the system message and
- * shared across the chat session.
- * `dynamic` — tools are anchored after the last user message and trimmed
- * from the kv-cache once the tool-call chain resolves, so each user prompt
- * can carry its own tool set without poisoning the cache.
- *
- * Implementation detail: maps to the addon's `tools_compact` boolean. We
- * use the higher-level `static`/`dynamic` naming so the addon-side
- * mapping can change without breaking the public API.
- */
-export const TOOLS_MODE = {
-  static: 'static',
-  dynamic: 'dynamic'
-} as const
-
-export type ToolsMode = (typeof TOOLS_MODE)[keyof typeof TOOLS_MODE]
-
 const jsonSchemaEnumValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
 
 export const toolSchema = z.object({

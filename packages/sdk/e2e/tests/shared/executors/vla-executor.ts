@@ -1,10 +1,12 @@
-import { vla, vlaHparams, vlaPadState, vlaPreprocessImage } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { vla, vlaHparams, vlaPadState, vlaPreprocessImage, vlaSetEmbodiment } from '@qvac/sdk'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { vlaTests } from '../../vla-tests.js'
 
 interface VlaParams {
   inputs?: 'synthetic' | 'synthetic-wrong-img-size'
+  switchCatId?: number
+  switchNumCameras?: number
 }
 
 interface HparamsShape {
@@ -18,20 +20,27 @@ interface HparamsShape {
   stateInputMode?: 'continuous' | 'discrete'
   imageInputMode?: 'pixels' | 'patches'
   imagePatchElems?: number
+  selectedEmbodimentTag?: string
+  selectedEmbodimentCatId?: number
 }
 
-// GR00T (LIBERO) patch-input layout. GR00T reports `tokenizerMaxLength: 0`, so
-// the prompt length is fixed by the model rather than read from hparams: 2
-// cameras × 64 merged image tokens (256 patches, 2×2 merge) = 128 image tokens
-// plus text = 148. The Qwen3-VL image placeholder id is 151655.
+// GR00T patch-input layout. GR00T reports `tokenizerMaxLength: 0` — the prompt
+// length follows the image count, not a hparam: one run of 64 merged image
+// tokens (256 patches, 2×2 merge) plus a text separator per camera, then a
+// ~20-token text tail (mirrors the addon's own multi-camera prompt builder, so
+// it holds for any embodiment's camera count, not just LIBERO's 2). The
+// Qwen3-VL image placeholder id is 151655.
 const GROOT_IMAGE_TOKEN_ID = 151655
 const GROOT_MERGED_TOKENS_PER_IMAGE = 64
-const GROOT_PROMPT_LENGTH = 148
+const GROOT_PROMPT_TEXT_TAIL = 20
 
-// pi05 tests bind to the `vla-pi05` resource, GR00T to `vla-groot`, SmolVLA to
-// `vla`. The resource is derived from the testId so a single executor drives all.
+// pi05 tests bind to the `vla-pi05` resource, GR00T to `vla-groot` /
+// `vla-groot-multi`, SmolVLA to `vla`. The resource is derived from the testId
+// so a single executor drives all. The multi check must precede the plain
+// groot one — `vla-groot-multi-` also matches the `vla-groot-` prefix.
 function depForTest(testId: string): string {
   if (testId.startsWith('vla-pi05-')) return 'vla-pi05'
+  if (testId.startsWith('vla-groot-multi-')) return 'vla-groot-multi'
   if (testId.startsWith('vla-groot-')) return 'vla-groot'
   return 'vla'
 }
@@ -47,6 +56,9 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
       }
       if (/-invalid-img-size$/.test(test.testId)) {
         return [test.testId, this.runInvalidImgSize.bind(this, dep)]
+      }
+      if (/-set-embodiment$/.test(test.testId)) {
+        return [test.testId, this.runSetEmbodiment.bind(this, dep)]
       }
       return [test.testId, this.runSyntheticInference.bind(this, dep)]
     })
@@ -74,7 +86,10 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
       const images = Array.from({ length: numCameras }, () =>
         new Float32Array(patchElems).fill(0.02)
       )
-      const tokens = new Int32Array(GROOT_PROMPT_LENGTH)
+      // Prompt length follows the camera count (a 4-camera embodiment needs
+      // 4 image-token runs, which LIBERO's fixed 148 cannot hold).
+      const promptLength = numCameras * (GROOT_MERGED_TOKENS_PER_IMAGE + 1) + GROOT_PROMPT_TEXT_TAIL
+      const tokens = new Int32Array(promptLength)
       let w = 0
       for (let cam = 0; cam < numCameras; cam++) {
         for (let k = 0; k < GROOT_MERGED_TOKENS_PER_IMAGE && w < tokens.length; k++) {
@@ -83,7 +98,7 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
         if (w < tokens.length) tokens[w++] = 1000 + cam
       }
       for (; w < tokens.length; w++) tokens[w] = 1000 + w
-      const mask = new Uint8Array(GROOT_PROMPT_LENGTH).fill(1)
+      const mask = new Uint8Array(promptLength).fill(1)
       return {
         images,
         imgWidth: size,
@@ -165,6 +180,86 @@ export class VlaExecutor extends AbstractModelExecutor<typeof vlaTests> {
       return {
         passed: false,
         output: `vla inference failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  // Runtime embodiment switch round-trip on the multi-embodiment GR00T GGUF:
+  // switch via the `{ catId, numCameras }` object selector (exercising the
+  // camera-count override spelling), run with inputs rebuilt from the
+  // refreshed hparams (the camera count follows the new embodiment), verify
+  // an unknown tag is rejected without disturbing the active embodiment, then
+  // switch back by plain cat_id — covering both selector spellings. The
+  // restore runs in a finally so a throw mid-test cannot leave the shared
+  // vla-groot-multi resource on the switched embodiment for later tests.
+  async runSetEmbodiment(
+    dep: string,
+    params: VlaParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    try {
+      const modelId = await this.ensureModel(dep)
+      const { hparams: initial } = await vlaHparams({ modelId })
+      const initialCatId = (initial as HparamsShape).selectedEmbodimentCatId
+      const switchCatId = params.switchCatId ?? 24
+      const switchNumCameras = params.switchNumCameras
+
+      let sw: HparamsShape | undefined
+      let ranOnSwitched = false
+      let unknownTagRejected = false
+      let activeCatIdAfterReject: number | undefined
+      let restoredCatId: number | undefined
+      try {
+        const { hparams: switched } = await vlaSetEmbodiment({
+          modelId,
+          embodiment:
+            switchNumCameras !== undefined
+              ? { catId: switchCatId, numCameras: switchNumCameras }
+              : switchCatId
+        })
+        sw = switched as HparamsShape
+
+        const inputs = this.buildSyntheticInputs(sw)
+        const { actions } = await vla({ modelId, ...inputs })
+        ranOnSwitched = actions.length === sw.chunkSize * sw.actionDim
+
+        try {
+          await vlaSetEmbodiment({ modelId, embodiment: 'qvac_e2e_no_such_embodiment' })
+        } catch {
+          unknownTagRejected = true
+        }
+        const { hparams: afterReject } = await vlaHparams({ modelId })
+        activeCatIdAfterReject = (afterReject as HparamsShape).selectedEmbodimentCatId
+      } finally {
+        try {
+          const { hparams: restored } = await vlaSetEmbodiment({
+            modelId,
+            embodiment: initialCatId ?? 0
+          })
+          restoredCatId = (restored as HparamsShape).selectedEmbodimentCatId
+        } catch {
+          // Leave restoredCatId undefined — the expectation's restore check
+          // fails visibly rather than masking the original error.
+        }
+      }
+
+      return ValidationHelpers.validate(
+        {
+          initialCatId,
+          switchedCatId: sw?.selectedEmbodimentCatId,
+          switchedTag: sw?.selectedEmbodimentTag,
+          switchedNumCameras: sw?.numCameras,
+          ranOnSwitched,
+          unknownTagRejected,
+          activeCatIdAfterReject,
+          restoredCatId
+        },
+        expectation
+      )
+    } catch (error) {
+      return {
+        passed: false,
+        output: `vla set-embodiment test failed: ${error instanceof Error ? error.message : String(error)}`
       }
     }
   }

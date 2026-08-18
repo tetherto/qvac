@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+EXPECTED_HEAD_SHA="${MOCK_EXPECTED_HEAD_SHA:-}"
+EXPECTED_RUNS_URL="repos/${GITHUB_REPOSITORY}/actions/workflows/on-pr-fabric.yml/runs?head_sha=${EXPECTED_HEAD_SHA}&per_page=20"
+EXPECTED_RUN_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242"
+EXPECTED_ARTIFACTS_URL="repos/${GITHUB_REPOSITORY}/actions/runs/4242/artifacts"
+
+# Provenance fields of the mocked run. Defaults describe a run the consumer must
+# accept; tests override them to describe one it must reject.
+RUN_HEAD_SHA="${MOCK_RUN_HEAD_SHA:-$EXPECTED_HEAD_SHA}"
+RUN_PATH="${MOCK_RUN_PATH:-.github/workflows/on-pr-fabric.yml}"
+RUN_EVENT="${MOCK_RUN_EVENT:-pull_request_target}"
+RUN_HEAD_REPO="${MOCK_RUN_HEAD_REPO:-$GITHUB_REPOSITORY}"
+RUN_PULL_REQUESTS="${MOCK_RUN_PULL_REQUESTS:-[]}"
+
+if [ "${1:-}" = "api" ]; then
+  # detect-fabric-stack resolves the merge base here. The mock answers with a
+  # SHA the test controls, so drift between the base tip and the branch point
+  # can be driven rather than waited for.
+  case "${2:-}" in
+    repos/*/compare/*)
+      if [ -n "${MOCK_COMPARE_MERGE_BASE:-}" ]; then
+        printf '%s\n' "$MOCK_COMPARE_MERGE_BASE"
+        exit 0
+      fi
+      ;;
+  esac
+
+  if [ "$2" = "$EXPECTED_RUNS_URL" ]; then
+    printf '%s\n' '4242'
+  elif [ "$2" = "$EXPECTED_RUN_URL" ]; then
+    printf '{"id":4242,"head_sha":"%s","path":"%s","event":"%s","head_repository":{"full_name":"%s"},"pull_requests":%s}\n' \
+      "$RUN_HEAD_SHA" "$RUN_PATH" "$RUN_EVENT" "$RUN_HEAD_REPO" "$RUN_PULL_REQUESTS"
+  elif [ "$2" = "$EXPECTED_ARTIFACTS_URL" ]; then
+    printf '%s\n' "$MOCK_EXPECTED_ARTIFACT"
+  else
+    printf 'Unexpected gh api URL: %s\n' "$2" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+if [ "${1:-}" = "run" ] && [ "${2:-}" = "download" ]; then
+  shift 2
+  download_dir=
+  artifact=
+  repo=
+  run_id=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dir)
+        download_dir="$2"
+        shift 2
+        ;;
+      --name)
+        artifact="$2"
+        shift 2
+        ;;
+      --repo)
+        repo="$2"
+        shift 2
+        ;;
+      *)
+        run_id="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [ -z "$download_dir" ]; then
+    printf '%s\n' 'Missing --dir in gh run download' >&2
+    exit 1
+  fi
+  if [ "$run_id" != "4242" ] || [ "$artifact" != "$MOCK_EXPECTED_ARTIFACT" ] || [ "$repo" != "$GITHUB_REPOSITORY" ]; then
+    printf 'Unexpected gh run download selection: run=%s artifact=%s repo=%s\n' "$run_id" "$artifact" "$repo" >&2
+    exit 1
+  fi
+
+  mkdir -p "$download_dir"
+  touch "$download_dir/mock-download-complete"
+  exit 0
+fi
+
+printf 'Unexpected gh invocation: %s\n' "$*" >&2
+exit 1

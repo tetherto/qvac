@@ -15,7 +15,6 @@
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
-struct PromptLayout;
 struct mtmd_context;
 
 struct GenerationParams {
@@ -242,11 +241,12 @@ public:
    * The generate response method. It generates the response token by token.
    *
    * @param outputCallback - the output callback.
-   * @return - ok=false for context overflow; cancelled=true when generation
-   * was stopped by user cancellation; rollbackOk=false when a cancellation
-   * or prediction-limit truncation inside reasoning could not restore the
-   * pre-request recurrent state and callers must skip cache persistence for
-   * this request.
+   * @return - cancelled=true when generation was stopped by user cancellation;
+   * rollbackOk=false when a cancellation or prediction-limit truncation inside
+   * reasoning could not restore the pre-request recurrent state and callers
+   * must skip cache persistence for this request. Generation-time context
+   * exhaustion is a successful terminal outcome exposed through runtime stats;
+   * prompt admission overflow still throws before this method runs.
    */
   virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;
@@ -471,21 +471,6 @@ public:
    *
    */
   virtual void resetMedia() {};
-
-  /// Validates an incoming prompt against any policy-level constraints
-  /// (size, layout, KV-cache state). Default is a no-op; concrete
-  /// contexts (`TextLlmContext`, `MtmdLlmContext`) override as needed.
-  /// Used by both the legacy single-prompt path and the per-slot
-  /// continuous-batching path before admission.
-  virtual void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const {
-    (void)chatMsgs;
-    (void)tools;
-    (void)layout;
-    (void)hasKvCacheContext;
-  }
 
   /// Loaded multimodal (mmproj) context this LLM context can hand to
   /// per-slot batch drivers, or null for text-only contexts. Used by the
