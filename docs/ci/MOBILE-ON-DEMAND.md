@@ -158,10 +158,13 @@ one. Which prebuild depends on the `package` / `package_spec` input:
 > silently tests the published `@latest`, not your branch.
 >
 > The `tests`-filter / shard-count validation reads the runner list from the
-> **same `ref`** the build executes, so if your branch renames or adds runners (or
-> shards), `validate-devices` checks against your branch's list — a stale
-> default-branch copy can't wave a mistyped filter through. The composite actions
-> themselves always run from the trusted workflow ref, never from `ref`.
+> **same commit** the build executes, so if your branch renames or adds runners
+> (or shards), `validate-devices` checks against your branch's list — a stale
+> default-branch copy can't wave a mistyped filter through. A blank `ref` pins to
+> the **exact commit** that triggered the run (`github.sha`), shared by every job,
+> so a push mid-run can't make validation and build inspect different code. The
+> composite actions themselves always run from the trusted workflow ref, never
+> from `ref`.
 
 **Exceptions:**
 

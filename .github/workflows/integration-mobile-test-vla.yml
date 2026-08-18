@@ -147,7 +147,7 @@ jobs:
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
       # Validate the tests filter + shard fan-out against test-groups.json from
-      # the SAME ref the build executes (inputs.ref || github.ref), not the
+      # the SAME ref the build executes (inputs.ref || github.sha), not the
       # workflow ref, so a branch that renames/adds runners or shards can't pass
       # stale validation. Data only — nothing here is executed; the composite
       # action stays on the trusted workflow ref checked out above.
@@ -155,7 +155,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             packages/vla-ggml/test/mobile/test-groups.json
@@ -217,7 +217,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0

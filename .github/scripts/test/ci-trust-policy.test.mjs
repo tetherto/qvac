@@ -1624,14 +1624,21 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
   assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
   for (const path of MOBILE_TEST_WORKFLOWS) {
     const src = read(path)
-    // Validation data comes from the SAME ref the build compiles, into a
-    // dedicated dir. Most addons build from `inputs.ref || github.ref`;
-    // inference builds from the immutable `pull_request.head.sha || inputs.ref`
-    // (github.ref deliberately excluded) and its runner-map checkout matches.
+    // Validation data comes from the SAME immutable commit the build compiles,
+    // into a dedicated dir. Most addons pin to `inputs.ref || github.sha`
+    // (github.sha is the constant triggering commit, so a mid-run push can't
+    // make validation and build diverge); inference uses the equivalent
+    // `pull_request.head.sha || inputs.ref`. github.ref (mutable) is never used
+    // for a checkout ref — only as a concurrency-group key.
     assert.match(
       src,
-      /ref: \$\{\{ (inputs\.ref \|\| github\.ref|github\.event\.pull_request\.head\.sha \|\| inputs\.ref) \}\}/,
-      `${path} must check out validation data from the same ref the build uses`,
+      /ref: \$\{\{ (inputs\.ref \|\| github\.sha|github\.event\.pull_request\.head\.sha \|\| inputs\.ref) \}\}/,
+      `${path} must check out validation data from the same immutable ref the build uses`,
+    )
+    assert.doesNotMatch(
+      src,
+      /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/,
+      `${path} must not resolve a checkout to the mutable github.ref`,
     )
     assert.match(
       src,
@@ -1661,8 +1668,24 @@ test('audiogen keeps the composite action on the default branch but reads data f
   // only the JSON data follows the tested ref.
   const src = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
   assert.match(src, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
-  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
+  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.sha \}\}/)
   assert.match(src, /test-groups-path: validation-data\//)
+})
+
+test('translation validation data and build check out the SAME repository', () => {
+  // Final-review P2: translation's build hardcodes the tetherto/qvac fallback,
+  // so its validation-data checkout must use the identical fallback — otherwise
+  // a blank-`repository` fork dispatch validates the fork but builds tetherto.
+  const src = read('.github/workflows/integration-mobile-test-translation-nmtcpp.yml')
+  const repoLines = src.match(/repository: \$\{\{ inputs\.repository \|\| [^\n]+/g) || []
+  assert.ok(repoLines.length >= 2, 'expected both data + build repository lines')
+  for (const line of repoLines) {
+    assert.match(
+      line,
+      /inputs\.repository \|\| 'tetherto\/qvac'/,
+      `translation must not fall back to github.repository (found: ${line})`,
+    )
+  }
 })
 
 test('inference generates its runner map in an unprivileged job and fails closed', () => {

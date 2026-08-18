@@ -140,14 +140,14 @@ jobs:
       # The composite action stays pinned to the default branch above (the
       # release-environment supply-chain guard). test-groups.json is DATA only
       # (runner names + shard count, never executed), so it must come from the
-      # SAME ref the build executes (inputs.ref || github.ref) — otherwise a
+      # SAME ref the build executes (inputs.ref || github.sha) — otherwise a
       # branch that renames/adds runners or shards would pass stale default-branch
       # validation and could run zero tests.
       - name: Checkout validation data (matches the built ref)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             packages/audiogen-ggml/test/mobile/test-groups.json
@@ -225,7 +225,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
