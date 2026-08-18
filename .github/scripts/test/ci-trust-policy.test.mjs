@@ -1594,6 +1594,10 @@ test('mobile validate-devices fails fast on an unknown tests filter and an overs
   assert.match(action, /RUNNERS_JSON=\$\(jq -c/)
   assert.match(action, /grep -Ec -- "\$TESTS"/)
   assert.match(action, /matches none of the/)
+  // Re-review P2: the mocha-safe charset allowlist the workflows enforce at the
+  // sink is ALSO enforced here (before the build) so an anchored/invalid pattern
+  // fails fast instead of wasting build minutes only to be rejected afterwards.
+  assert.match(action, /grep -Eq '\^\[A-Za-z0-9_ \|\(\)\.\*\+-\]\+\$'/)
   // ...and single-spec addons (Bugbot P1: previously skipped) validate the SAME
   // filter against their committed integration.auto.cjs runner declarations.
   assert.match(action, /runner-source-path/)
@@ -1620,11 +1624,14 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
   assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
   for (const path of MOBILE_TEST_WORKFLOWS) {
     const src = read(path)
-    // Validation data comes from the tested ref, into a dedicated dir.
+    // Validation data comes from the SAME ref the build compiles, into a
+    // dedicated dir. Most addons build from `inputs.ref || github.ref`;
+    // inference builds from the immutable `pull_request.head.sha || inputs.ref`
+    // (github.ref deliberately excluded) and its runner-map checkout matches.
     assert.match(
       src,
-      /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/,
-      `${path} must check out validation data from inputs.ref || github.ref`,
+      /ref: \$\{\{ (inputs\.ref \|\| github\.ref|github\.event\.pull_request\.head\.sha \|\| inputs\.ref) \}\}/,
+      `${path} must check out validation data from the same ref the build uses`,
     )
     assert.match(
       src,
@@ -1671,8 +1678,11 @@ test('inference generates its runner map in an unprivileged job and fails closed
   assert.match(mapJob, /permissions:\n\s+contents: read/)
   assert.doesNotMatch(mapJob, /id-token: write/)
   assert.doesNotMatch(mapJob, /environment:/)
-  // It regenerates from the tested ref and fails closed (no fallback).
-  assert.match(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
+  // It regenerates from the SAME immutable commit the build compiles
+  // (github.ref is deliberately NOT a fallback, so a mid-run push can't make
+  // validation inspect different code than the build), and fails closed.
+  assert.match(mapJob, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.ref \}\}/)
+  assert.doesNotMatch(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
   assert.match(mapJob, /set -euo pipefail/)
   assert.doesNotMatch(src, /falling back to device-only/)
   // validate-devices consumes the artifact as data and hard-fails if the map

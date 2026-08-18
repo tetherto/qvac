@@ -146,6 +146,14 @@ runs:
         fi
 
         if [ -n "${TESTS:-}" ]; then
+          # Same mocha-safe charset allowlist the workflows enforce at the sink,
+          # applied HERE (before the ~90-120 min build) so a disallowed pattern
+          # (e.g. an anchored '^runFoo') fails fast instead of building first and
+          # only being rejected by the per-workflow allowlist afterwards.
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
           if [ "$RUNNER_COUNT" -gt 0 ]; then
             # The tests filter is a mocha --grep regex matched against runner
             # NAMES (same semantics as on-device mocha). Fail fast if it matches

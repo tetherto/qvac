@@ -95,10 +95,12 @@ The `tests` input runs **only the tests you name**, so you don't pay to run the
 whole suite. It is **by test name, not by file name.**
 
 - It is a **[mocha](https://mochajs.org/) `--grep` regex**, matched against the
-  mobile **test-runner names** — the `run*` functions in the addon's
-  `test/mobile` tests (for sharded addons these are the names listed in
-  `test/mobile/test-groups.json`). Examples: `runChatterboxSpeedTest`,
-  `runLlmSpeedTest`.
+  mobile **test-runner names** in the addon's `test/mobile` tests (for sharded
+  addons these are the names listed in `test/mobile/test-groups.json`). Most
+  addons name these `run*` (e.g. `runChatterboxSpeedTest`, `runLlmSpeedTest`),
+  but the exact names are addon-specific — audiogen, for instance, uses
+  `testLoadModels`, `testGenerateMusicOnGpu`. Always check the addon's runner
+  source (or its `test-groups.json`) for the exact names to pass.
 - Combine several with `|`, e.g. `runLlmSpeedTest|runLlmMemoryTest`. A partial
   pattern works too: `runChatterbox` runs (and pre-stages models for) every
   runner whose name matches.

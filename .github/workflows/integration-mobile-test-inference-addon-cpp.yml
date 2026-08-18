@@ -92,8 +92,10 @@ jobs:
   # run, so a typo or an empty selection costs nothing. Skipped for workflow_call.
   # inference-addon-cpp ships no committed test-groups.json / integration.auto.cjs
   # (both are generated from the desktop suites). Regenerate JUST the runner map
-  # here — pure fs, no native build — from the SAME ref the build compiles
-  # (inputs.ref || github.ref), so validate-devices can reject a bad tests filter
+  # here — pure fs, no native build — from the SAME immutable commit the build
+  # compiles (github.event.pull_request.head.sha || inputs.ref; github.ref is
+  # deliberately NOT a fallback so a push mid-run can't make validation inspect
+  # different code than the build), so validate-devices can reject a bad tests filter
   # and count the real shard fan-out (one shard per desktop suite) BEFORE the
   # expensive build. This job is UNPRIVILEGED (no environment, no id-token)
   # precisely because it runs repo-branch code; the privileged validate-devices
@@ -112,7 +114,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js
