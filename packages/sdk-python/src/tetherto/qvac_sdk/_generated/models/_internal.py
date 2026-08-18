@@ -6507,6 +6507,13 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionDelegate | None,
         Field(title="LoadModelSrcRequestLlamacppCompletionDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -6749,6 +6756,13 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
         LoadModelSrcRequestWhispercppTranscriptionDelegate | None,
         Field(title="LoadModelSrcRequestWhispercppTranscriptionDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -6962,6 +6976,13 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
         LoadModelSrcRequestBciWhispercppTranscriptionDelegate | None,
         Field(title="LoadModelSrcRequestBciWhispercppTranscriptionDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -7117,6 +7138,13 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestParakeetTranscriptionDelegate | None,
         Field(title="LoadModelSrcRequestParakeetTranscriptionDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -7281,6 +7309,13 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingDelegate | None,
         Field(title="LoadModelSrcRequestLlamacppEmbeddingDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -7889,6 +7924,13 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestNmtcppTranslationDelegate | None,
         Field(title="LoadModelSrcRequestNmtcppTranslationDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -8614,6 +8656,13 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         LoadModelSrcRequestTtsGgmlDelegate | None,
         Field(title="LoadModelSrcRequestTtsGgmlDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -8777,6 +8826,13 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestGgmlOcrDelegate | None,
         Field(title="LoadModelSrcRequestGgmlOcrDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -9644,6 +9700,13 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
         LoadModelSrcRequestSdcppGenerationDelegate | None,
         Field(title="LoadModelSrcRequestSdcppGenerationDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -9932,6 +9995,13 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
         LoadModelSrcRequestAudiogenGgmlDelegate | None,
         Field(title="LoadModelSrcRequestAudiogenGgmlDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10081,6 +10151,13 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
         LoadModelSrcRequestGgmlVlaDelegate | None,
         Field(title="LoadModelSrcRequestGgmlVlaDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10157,6 +10234,13 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
         LoadModelSrcRequestGgmlClassificationDelegate | None,
         Field(title="LoadModelSrcRequestGgmlClassificationDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -10232,6 +10316,13 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelCustomPluginRequestDelegate | None,
         Field(title="LoadModelCustomPluginRequestDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
