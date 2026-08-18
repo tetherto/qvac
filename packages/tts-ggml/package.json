@@ -124,11 +124,6 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/transcription-whispercpp": "^0.10.1",
-    "bare-process": "^4.2.2",
-    "bare-subprocess": "^5.2.1",
-    "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -145,11 +140,19 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.2",
+    "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "@qvac/registry-client": "^0.6.1",
+    "@qvac/transcription-whispercpp": "^0.10.1",
     "bare-fs": "^4.5.6",
+    "bare-https": "^3.0.0",
     "bare-os": "^3.8.0",
-    "bare-path": "^3.0.0"
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^5.2.1",
+    "bare-url": "^2.4.3",
+    "brittle": "^3.17.0"
   },
   "types": "index.d.ts"
 }

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Declare the filesystem and URL modules required by the published model
+  fetchers and mobile runtime.
+- Declare lazy model downloader integrations as optional peers and report how
+  to install them when a download is requested.
+
 ## [0.9.0] - 2026-08-17
 
 ### Changed

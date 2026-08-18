@@ -20,6 +20,16 @@ const FIREFOX_RECORDS_URL =
   "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records";
 const FIREFOX_ATTACHMENT_BASE =
   "https://firefox-settings-attachments.cdn.mozilla.net";
+const MODULE_NOT_FOUND_CODE = "MODULE_NOT_FOUND";
+
+function isMissingModuleError(error: unknown, moduleName: string): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    error.code === MODULE_NOT_FOUND_CODE &&
+    error.message.includes(moduleName)
+  );
+}
 
 interface FirefoxAttachment {
   location?: string;
@@ -46,6 +56,19 @@ type BareFetch = (
   url: string,
   options?: { redirect?: string; follow?: number },
 ) => Promise<BareFetchResponse>;
+
+function loadBareFetch(): BareFetch {
+  try {
+    const loadModule: (id: string) => unknown = require;
+    return loadModule("bare-fetch") as BareFetch;
+  } catch (error) {
+    if (!isMissingModuleError(error, "bare-fetch")) throw error;
+    throw new Error(
+      "Install bare-fetch to download Bergamot translation models",
+      { cause: error },
+    );
+  }
+}
 
 /** Filenames expected for a Bergamot language pair. */
 export interface BergamotFileNames {
@@ -144,8 +167,7 @@ async function downloadFile(url: string, destPath: string): Promise<number> {
     return fs.statSync(destPath).size;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-fetch is loaded lazily so production installs without it stay usable.
-  const fetch = require("bare-fetch") as BareFetch;
+  const fetch = loadBareFetch();
 
   const response = await fetch(url, { redirect: "follow", follow: 5 });
   if (!response.ok) {
@@ -165,8 +187,7 @@ export async function downloadBergamotFromFirefox(
   dstLang: string,
   destDir: string,
 ): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-fetch is loaded lazily so production installs without it stay usable.
-  const fetch = require("bare-fetch") as BareFetch;
+  const fetch = loadBareFetch();
 
   console.log(
     `[bergamot-fetcher] Downloading ${srcLang}-${dstLang} from Firefox Remote Settings CDN...`,

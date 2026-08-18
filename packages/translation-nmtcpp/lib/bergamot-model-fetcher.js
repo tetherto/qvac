@@ -22,6 +22,24 @@ const path = require("bare-path");
 // ============================================================================
 const FIREFOX_RECORDS_URL = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/translations-models/records";
 const FIREFOX_ATTACHMENT_BASE = "https://firefox-settings-attachments.cdn.mozilla.net";
+const MODULE_NOT_FOUND_CODE = "MODULE_NOT_FOUND";
+function isMissingModuleError(error, moduleName) {
+    return (error instanceof Error &&
+        "code" in error &&
+        error.code === MODULE_NOT_FOUND_CODE &&
+        error.message.includes(moduleName));
+}
+function loadBareFetch() {
+    try {
+        const loadModule = require;
+        return loadModule("bare-fetch");
+    }
+    catch (error) {
+        if (!isMissingModuleError(error, "bare-fetch"))
+            throw error;
+        throw new Error("Install bare-fetch to download Bergamot translation models", { cause: error });
+    }
+}
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -97,8 +115,7 @@ async function downloadFile(url, destPath) {
     if (_isDownloadedFile(destPath)) {
         return fs.statSync(destPath).size;
     }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-fetch is loaded lazily so production installs without it stay usable.
-    const fetch = require("bare-fetch");
+    const fetch = loadBareFetch();
     const response = await fetch(url, { redirect: "follow", follow: 5 });
     if (!response.ok) {
         throw new Error(`HTTP ${response.status} downloading ${url}`);
@@ -112,8 +129,7 @@ async function downloadFile(url, destPath) {
  * This is the same source Firefox itself uses for translation models.
  */
 async function downloadBergamotFromFirefox(srcLang, dstLang, destDir) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-fetch is loaded lazily so production installs without it stay usable.
-    const fetch = require("bare-fetch");
+    const fetch = loadBareFetch();
     console.log(`[bergamot-fetcher] Downloading ${srcLang}-${dstLang} from Firefox Remote Settings CDN...`);
     const res = await fetch(FIREFOX_RECORDS_URL);
     if (!res.ok)

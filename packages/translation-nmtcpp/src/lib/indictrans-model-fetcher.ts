@@ -62,6 +62,34 @@ interface RegistryClient {
   ): Promise<{ artifact: { path: string } }>;
 }
 
+type RegistryClientConstructor = new () => RegistryClient;
+const MODULE_NOT_FOUND_CODE = "MODULE_NOT_FOUND";
+
+function isMissingModuleError(error: unknown, moduleName: string): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    error.code === MODULE_NOT_FOUND_CODE &&
+    error.message.includes(moduleName)
+  );
+}
+
+function loadRegistryClient(): RegistryClientConstructor {
+  try {
+    const loadModule: (id: string) => unknown = require;
+    const { QVACRegistryClient } = loadModule("@qvac/registry-client") as {
+      QVACRegistryClient: RegistryClientConstructor;
+    };
+    return QVACRegistryClient;
+  } catch (error) {
+    if (!isMissingModuleError(error, "@qvac/registry-client")) throw error;
+    throw new Error(
+      "Install @qvac/registry-client to download IndicTrans translation models",
+      { cause: error },
+    );
+  }
+}
+
 /**
  * Downloads an IndicTrans model file from the QVAC model registry.
  */
@@ -69,11 +97,6 @@ export async function downloadIndicTransFromRegistry(
   modelKey: string,
   destPath: string,
 ): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- registry client is loaded lazily so production installs without it stay usable.
-  const { QVACRegistryClient } = require("@qvac/registry-client") as {
-    QVACRegistryClient: new () => RegistryClient;
-  };
-
   const modelInfo = INDICTRANS_MODELS[modelKey];
   if (!modelInfo) {
     throw new Error(
@@ -81,6 +104,7 @@ export async function downloadIndicTransFromRegistry(
     );
   }
 
+  const QVACRegistryClient = loadRegistryClient();
   console.log(
     `[indictrans-fetcher] Downloading ${modelInfo.filename} from QVAC registry...`,
   );

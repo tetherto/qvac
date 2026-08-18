@@ -2,6 +2,8 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const { builtinModules } = require('node:module')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
 const packageJson = require('../../package.json')
@@ -11,6 +13,10 @@ const legacyTextStreamAccumulator = require('../../lib/textStreamAccumulator.js'
 
 const packageRoot = path.resolve(__dirname, '../..')
 const registryScript = 'scripts/download-tts-ggml-models.js'
+const runtimeExtensions = new Set(['.cjs', '.js', '.mjs'])
+const externalSpecifierPattern =
+  /(?:require\s*\(\s*|import\s*\(\s*|(?:import|export)\s+(?:[^'"]*?\s+from\s+)?)(['"])([^'"]+)\1/g
+const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)])
 
 function packedFileNames() {
   const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
@@ -19,6 +25,49 @@ function packedFileNames() {
   })
   assert.equal(result.status, 0, result.stderr)
   return new Set(JSON.parse(result.stdout)[0].files.map(({ path: filePath }) => filePath))
+}
+
+function packageName(specifier) {
+  return specifier.startsWith('@')
+    ? specifier.split('/').slice(0, 2).join('/')
+    : specifier.split('/')[0]
+}
+
+function declaredRuntimePackages() {
+  return new Set([
+    ...Object.keys(packageJson.dependencies || {}),
+    ...Object.keys(packageJson.optionalDependencies || {}),
+    ...Object.keys(packageJson.peerDependencies || {})
+  ])
+}
+
+function externalSpecifiers(source) {
+  const specifiers = []
+  for (const match of source.matchAll(externalSpecifierPattern)) {
+    const specifier = match[2]
+    if (!specifier.startsWith('.') && !specifier.startsWith('/') && !nodeBuiltins.has(specifier)) {
+      specifiers.push(specifier)
+    }
+  }
+  return specifiers
+}
+
+function undeclaredImports(filePath, declaredPackages) {
+  if (!runtimeExtensions.has(path.extname(filePath))) return []
+  const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
+  return externalSpecifiers(source)
+    .map(packageName)
+    .filter((name) => name !== packageJson.name && !declaredPackages.has(name))
+    .map((name) => `${filePath}: ${name}`)
+}
+
+function undeclaredPublishedImports(files) {
+  const declaredPackages = declaredRuntimePackages()
+  const undeclared = []
+  for (const filePath of files) {
+    undeclared.push(...undeclaredImports(filePath, declaredPackages))
+  }
+  return [...new Set(undeclared)].sort()
 }
 
 test('enhanced examples have package scripts', () => {
@@ -46,6 +95,10 @@ test('published commands include their runtime files', () => {
   assert.ok(files.has('examples/chatterbox-enhanced.js'))
   assert.ok(files.has('examples/supertonic-enhanced.js'))
   assert.ok(files.has('examples/parler-enhanced.js'))
+})
+
+test('published runtime files declare their external imports', () => {
+  assert.deepEqual(undeclaredPublishedImports(packedFileNames()), [])
 })
 
 test('package root exposes runtime and type entry points', () => {
