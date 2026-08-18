@@ -24,6 +24,7 @@
 #include "LlamaFinetuningParams.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "LlmContext.hpp"
+#include "LoadFitNormalization.hpp"
 #include "ModelMetadata.hpp"
 #include "common/chat.h"
 #include "inference-addon-cpp/BlobsStream.hpp"
@@ -37,15 +38,6 @@
 using namespace qvac_lib_inference_addon_cpp::model;
 
 namespace batching = qvac_lib_inference_addon_llama::batching;
-
-struct FinetuneConfigOverrides {
-  bool active{false};
-  int64_t batchSize{128};
-  int64_t microBatchSize{128};
-  int64_t contextLength{128};
-  bool gpuSupportsF16OutProd{true};
-  bool flashAttn{false};
-};
 
 class LlamaModel : public IModel,
                    public IModelAsyncLoad,
@@ -64,31 +56,6 @@ public:
   /// the parent directory of @p modelPath.
   static void
   resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
-
-  /// @brief Apply specific parameter defaults based on model metadata
-  /// and detected Adreno GPU version by inserting entries into configFilemap.
-  /// Must be called before commonParamsParse so inserted entries are processed.
-  ///
-  /// @param configFilemap The user-supplied config map (will be written to).
-  /// @param metadata Model metadata (architecture, quantization info).
-  /// @param adrenoVersion Detected Adreno GPU version, if any.
-  /// @param finetuneOverrides If set, finetuning mode is active with these
-  /// context/batch params and GPU caps.
-  /// @param isOpenCl True when the chosen GPU backend is OpenCL; gates the
-  /// OpenCL KV-cache policy — rejects ALL quantized KV types, only f32/f16/bf16
-  /// are safe (quantized KV-cache shifts abort in llama_kv_cache::update on
-  /// Adreno because ggml-opencl has no F32->quantized requantize kernel).
-  /// @param isMetal True when the chosen GPU backend is Metal; used to reject
-  /// unsupported TurboQuant/PolarQuant KV-cache types.
-  /// @param isGpu True when any GPU backend was selected (OpenCL, Metal, or
-  /// Vulkan); used (together with !isOpenCl) to default the KV-cache to q8_0 on
-  /// Metal/Vulkan GPUs when the caller has not picked a cache type. OpenCL is
-  /// excluded because quantized KV-cache shifts abort on Adreno.
-  static void tuneConfigMap(
-      std::unordered_map<std::string, std::string>& configFilemap,
-      const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-      const FinetuneConfigOverrides& finetuneOverrides = {},
-      bool isOpenCl = false, bool isMetal = false, bool isGpu = false);
 
   /**
    * The Constructor for llama model.
@@ -385,6 +352,8 @@ private:
 
     // configuration values parsed from configFilemap
     llama_pos configuredNDiscarded_ = 0;
+    std::optional<load_fit_normalization::NormalizedFitSnapshot>
+        normalizedFitSnapshot_;
     std::optional<CacheManager> cacheManager_;
 
     /// Mode flags for the most recent `processPrompt*` call, used by
@@ -428,11 +397,6 @@ private:
   };
 
   ResolvedPrompt resolveChatAndTools(const Prompt& prompt);
-
-  void commonParamsParse(
-      const std::string& modelPath,
-      std::unordered_map<std::string, std::string>& configFilemap,
-      common_params& params, std::optional<int>& outAdrenoVersion);
 
   /**
    * The Format prompt method. It formats the prompt json to chat messages.
@@ -543,7 +507,7 @@ private:
   void validateBitnetQuantization();
 
   // Guarded by stateMtx_: written and read exclusively inside
-  // setInitLoader() / init() → commonParamsParse(), both of which run
+  // setInitLoader() / init() → normalizeLoadForFit(), both of which run
   // under the stateMtx_ unique_lock. Callers set it via reload()'s
   // newFinetuneOverrides parameter to avoid any unsynchronised window.
   FinetuneConfigOverrides pendingFinetuneOverrides_;
