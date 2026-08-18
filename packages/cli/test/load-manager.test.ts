@@ -33,6 +33,20 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+const tick = () => new Promise((r) => setTimeout(r, 0))
+
+// A stub loader whose returned promise carries a `requestId`, so cancel-by-id
+// can be asserted the same way it works against the real SDK.
+function gatedLoad(requestId: string) {
+  const gate = deferred<string>()
+  const load: LoadModelFn = () => {
+    const p = gate.promise as Promise<string> & { requestId?: string }
+    p.requestId = requestId
+    return p
+  }
+  return { load, gate }
+}
+
 const OPTS = { concurrency: 4, timeoutMs: null }
 
 describe('load-manager', () => {
@@ -120,6 +134,51 @@ describe('load-manager', () => {
     await mgr.load('m')
     assert.equal(reg.getEntry('m')?.state, reg.STATES.READY)
     assert.equal(attempt, 2)
+  })
+
+  it('cancels the SDK load when the last waiter aborts, and unloads a late completion', async () => {
+    const reg = registry('m')
+    const { load, gate } = gatedLoad('req-x')
+    let cancelledWith: string | null = null
+    let unloadedWith: string | null = null
+    const mgr = createLoadManager(reg, logger, OPTS, () => load, {
+      cancel: (rid) => {
+        cancelledWith = rid
+        return Promise.resolve()
+      },
+      unload: (id) => {
+        unloadedWith = id
+        return Promise.resolve()
+      }
+    })
+    const acA = new AbortController()
+    const acB = new AbortController()
+    const pA = mgr.load('m', acA.signal).catch(() => {})
+    const pB = mgr.load('m', acB.signal).catch(() => {})
+    await tick()
+    acA.abort()
+    acB.abort()
+    assert.equal(cancelledWith, 'req-x')
+    // The SDK load completes anyway (cancel raced it) — the model must be unloaded.
+    gate.resolve('sdk-late')
+    await Promise.all([pA, pB])
+    assert.equal(unloadedWith, 'sdk-late')
+    assert.equal(reg.getEntry('m')?.state, reg.STATES.ERROR)
+  })
+
+  it('timeout cancels the in-flight SDK load', async () => {
+    const reg = registry('m')
+    const { load } = gatedLoad('req-t')
+    let cancelledWith: string | null = null
+    const mgr = createLoadManager(reg, logger, { concurrency: 1, timeoutMs: 20 }, () => load, {
+      cancel: (rid) => {
+        cancelledWith = rid
+        return Promise.resolve()
+      }
+    })
+    await assert.rejects(() => mgr.load('m'), ModelLoadTimeoutError)
+    assert.equal(cancelledWith, 'req-t')
+    assert.equal(reg.getEntry('m')?.state, reg.STATES.ERROR)
   })
 
   it('does not cancel a shared load while another caller still waits', async () => {

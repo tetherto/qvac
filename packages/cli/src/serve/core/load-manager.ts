@@ -19,6 +19,16 @@ export type LoadModelFn = (opts: {
 
 export const defaultLoadFn: LoadModelFn = (opts) => sdkLoadModel(opts)
 
+/** SDK cancel/unload, injectable so the cancel + timeout paths can be tested
+ * without a live SDK. */
+export interface LoadManagerDeps {
+  cancel?: (requestId: string) => Promise<void>
+  unload?: (modelId: string) => Promise<void>
+}
+
+const defaultCancel = (requestId: string): Promise<void> => sdkCancel({ requestId })
+const defaultUnload = (modelId: string): Promise<void> => sdkUnloadModel({ modelId })
+
 export class ModelLoadTimeoutError extends Error {
   constructor(alias: string, timeoutMs: number) {
     super(`Loading model "${alias}" timed out after ${timeoutMs}ms`)
@@ -64,8 +74,11 @@ export function createLoadManager(
   registry: ModelRegistry,
   logger: Logger,
   options: LoadManagerOptions,
-  getLoadFn: () => LoadModelFn
+  getLoadFn: () => LoadModelFn,
+  deps: LoadManagerDeps = {}
 ): LoadManager {
+  const cancelFn = deps.cancel ?? defaultCancel
+  const unloadFn = deps.unload ?? defaultUnload
   const inflight = new Map<string, InflightLoad>()
 
   const concurrency = Math.max(1, options.concurrency)
@@ -88,7 +101,7 @@ export function createLoadManager(
 
   function cancelSdk(alias: string, rec: InflightLoad): void {
     if (!rec.requestId) return
-    sdkCancel({ requestId: rec.requestId }).catch((err) => {
+    cancelFn(rec.requestId).catch((err) => {
       const message = err instanceof Error ? err.message : String(err)
       logger.warn(`Cancel of in-flight load "${alias}" failed: ${message}`)
     })
@@ -147,7 +160,7 @@ export function createLoadManager(
       loaded.then(
         (id) => {
           if (rec.cancelRequested || rec.timedOut) {
-            sdkUnloadModel({ modelId: id }).catch(() => {})
+            unloadFn(id).catch(() => {})
           }
         },
         () => {}
