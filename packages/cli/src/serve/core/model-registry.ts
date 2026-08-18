@@ -86,8 +86,6 @@ export interface ResolvedModelEntry {
 export interface ModelRegistry {
   STATES: typeof STATES
   getEntry: (modelId: string) => ModelEntry | null
-  getAll: () => ModelEntry[]
-  getReady: () => ModelEntry[]
   register: (
     alias: string,
     opts: {
@@ -101,7 +99,6 @@ export interface ModelRegistry {
   setReady: (modelId: string, sdkModelId?: string) => void
   setError: (modelId: string, error: unknown) => void
   markUnloaded: (modelId: string) => void
-  isAllowed: (modelId: string, serveConfig: ServeConfig) => boolean
 }
 
 export function createModelRegistry(): ModelRegistry {
@@ -109,14 +106,6 @@ export function createModelRegistry(): ModelRegistry {
 
   function getEntry(modelId: string): ModelEntry | null {
     return models.get(modelId) ?? null
-  }
-
-  function getAll(): ModelEntry[] {
-    return Array.from(models.values())
-  }
-
-  function getReady(): ModelEntry[] {
-    return getAll().filter((m) => m.state === STATES.READY)
   }
 
   function register(
@@ -183,21 +172,13 @@ export function createModelRegistry(): ModelRegistry {
     }
   }
 
-  function isAllowed(modelId: string, serveConfig: ServeConfig): boolean {
-    if (serveConfig.models.size === 0) return true
-    return serveConfig.models.has(modelId)
-  }
-
   return {
     STATES,
     getEntry,
-    getAll,
-    getReady,
     register,
     setLoading,
     setReady,
     setError,
-    markUnloaded,
-    isAllowed
+    markUnloaded
   }
 }
