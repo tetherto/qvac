@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- diagnostic touch: select embed-llamacpp to reproduce the shared llama-cpp- artifact name collision -->
+<!-- diagnostic touch: select embed-llamacpp to verify package-derived artifact names -->
 
 ## [0.30.1] - 2026-07-30
 
