@@ -46,11 +46,11 @@ on:
         required: true
         type: string
       device-pools:
-        description: 'JSON array of device pools [{name, arn}]'
+        description: 'JSON array of device pools [{name, arn, p?, r?}]. Set p=true and r=false for private pools; r=false alone marks manual-only public pools.'
         required: true
         type: string
       device-pool-name:
-        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, a random AWS-available pool from device-pools is chosen."
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, an available private pool is preferred before the public fallback."
         required: false
         type: string
         default: ""
