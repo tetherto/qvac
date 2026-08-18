@@ -10,6 +10,10 @@ import {
   makeParlerEmotionComparisonHandler,
   makeParlerTtsHandler
 } from '../../shared/utils/tts-parler-helpers.js'
+import {
+  makeCosyvoice3EmotionComparisonHandler,
+  makeCosyvoice3TtsHandler
+} from '../../shared/utils/tts-cosyvoice3-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
@@ -33,6 +37,12 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
       }
       if (test.testId.startsWith('tts-parler-')) {
         return [test.testId, this.makeParler(dep)]
+      }
+      if (test.testId === 'tts-cosyvoice3-emotion-conditioning') {
+        return [test.testId, this.makeCosyvoice3EmotionComparison(dep)]
+      }
+      if (test.testId.startsWith('tts-cosyvoice3-')) {
+        return [test.testId, this.makeCosyvoice3(dep)]
       }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
@@ -75,6 +85,22 @@ export class MobileTtsExecutor extends ModelAssetExecutor<typeof ttsTests> {
 
   private makeParlerEmotionComparison(dep: string) {
     return makeParlerEmotionComparisonHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeCosyvoice3(dep: string) {
+    return makeCosyvoice3TtsHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeCosyvoice3EmotionComparison(dep: string) {
+    return makeCosyvoice3EmotionComparisonHandler<Expectation, TestResult>({
       dependency: dep,
       ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
       validate: (output, expectation) => ValidationHelpers.validate(output, expectation)

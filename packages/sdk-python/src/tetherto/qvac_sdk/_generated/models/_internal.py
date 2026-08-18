@@ -2070,6 +2070,49 @@ class SupportedAudioFormat(Enum):
     raw = ".raw"
 
 
+class TtsCosyvoice3Emotion(Enum):
+    anger = "anger"
+    happy = "happy"
+    neutral = "neutral"
+    sad = "sad"
+
+
+class TtsCosyvoice3InstructDialect(Enum):
+    cantonese = "cantonese"
+    northeastern = "northeastern"
+    gansu = "gansu"
+    guizhou = "guizhou"
+    henan = "henan"
+    hubei = "hubei"
+    hunan = "hunan"
+    jiangxi = "jiangxi"
+    minnan = "minnan"
+    ningxia = "ningxia"
+    shanxi = "shanxi"
+    shaanxi = "shaanxi"
+    shandong = "shandong"
+    shanghai = "shanghai"
+    sichuan = "sichuan"
+    tianjin = "tianjin"
+    yunnan = "yunnan"
+
+
+class TtsCosyvoice3InstructStyle(Enum):
+    peppa = "peppa"
+    robot = "robot"
+
+
+class TtsCosyvoice3InstructVolume(Enum):
+    loud = "loud"
+    soft = "soft"
+
+
+class TtsPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class Verbosity(Enum):
     error = 0
     warn = 1
@@ -8592,6 +8635,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
     surprise = "surprise"
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigParlerPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class MaxFrames(RootModel[int]):
     root: Annotated[int, Field(ge=10, le=2147483647)]
 
@@ -8611,7 +8660,10 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"),
     ] = None
     pitch: Annotated[str | None, Field(min_length=1)] = None
-    pace: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerPace | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerPace"),
+    ] = None
     expressivity: Annotated[str | None, Field(min_length=1)] = None
     noise: Annotated[str | None, Field(min_length=1)] = None
     reverb: Annotated[str | None, Field(min_length=1)] = None
@@ -8641,6 +8693,214 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         int | None, Field(alias="minNewTokens", ge=-1, le=2147483647)
     ] = None
     normalize_numbers: Annotated[bool | None, Field(alias="normalizeNumbers")] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion(Enum):
+    anger = "anger"
+    happy = "happy"
+    neutral = "neutral"
+    sad = "sad"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
+class Instruct(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect(Enum):
+    cantonese = "cantonese"
+    northeastern = "northeastern"
+    gansu = "gansu"
+    guizhou = "guizhou"
+    henan = "henan"
+    hubei = "hubei"
+    hunan = "hunan"
+    jiangxi = "jiangxi"
+    minnan = "minnan"
+    ningxia = "ningxia"
+    shanxi = "shanxi"
+    shaanxi = "shaanxi"
+    shandong = "shandong"
+    shanghai = "shanghai"
+    sichuan = "sichuan"
+    tianjin = "tianjin"
+    yunnan = "yunnan"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume(Enum):
+    loud = "loud"
+    soft = "soft"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle(Enum):
+    peppa = "peppa"
+    robot = "robot"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    dialect: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"),
+    ] = None
+    volume: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"),
+    ] = None
+    style: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"),
+    ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[Literal["cosyvoice3"], Field(alias="ttsEngine")] = (
+        "cosyvoice3"
+    )
+    emotion: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"),
+    ] = None
+    pace: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"),
+    ] = None
+    instruct: (
+        Instruct | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct | None
+    ) = None
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    stream_chunk_tokens: Annotated[
+        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
+    ] = None
+    stream_first_chunk_tokens: Annotated[
+        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    lavasr_enhancer_model_src: Annotated[
+        str
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
+        | None,
+        Field(alias="lavasrEnhancerModelSrc"),
+    ] = None
+    lavasr_denoiser_model_src: Annotated[
+        str
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
+        | None,
+        Field(alias="lavasrDenoiserModelSrc"),
+    ] = None
 
 
 class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
@@ -8675,7 +8935,8 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config_: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
-        | LoadModelSrcRequestTtsGgmlModelConfigParler,
+        | LoadModelSrcRequestTtsGgmlModelConfigParler
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3,
         Field(alias="modelConfig"),
     ]
 
@@ -11613,6 +11874,12 @@ class TextToSpeechRequestEmotion(Enum):
     surprise = "surprise"
 
 
+class TextToSpeechRequestPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class TextToSpeechRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -11634,7 +11901,9 @@ class TextToSpeechRequest(GeneratedBaseModel):
         TextToSpeechRequestEmotion | None, Field(title="TextToSpeechRequestEmotion")
     ] = None
     pitch: Annotated[str | None, Field(min_length=1)] = None
-    pace: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[
+        TextToSpeechRequestPace | None, Field(title="TextToSpeechRequestPace")
+    ] = None
     expressivity: Annotated[str | None, Field(min_length=1)] = None
     noise: Annotated[str | None, Field(min_length=1)] = None
     reverb: Annotated[str | None, Field(min_length=1)] = None
@@ -11693,6 +11962,12 @@ class TextToSpeechStreamRequestEmotion(Enum):
     surprise = "surprise"
 
 
+class TextToSpeechStreamRequestPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class TextToSpeechStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -11720,7 +11995,10 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         Field(title="TextToSpeechStreamRequestEmotion"),
     ] = None
     pitch: Annotated[str | None, Field(min_length=1)] = None
-    pace: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[
+        TextToSpeechStreamRequestPace | None,
+        Field(title="TextToSpeechStreamRequestPace"),
+    ] = None
     expressivity: Annotated[str | None, Field(min_length=1)] = None
     noise: Annotated[str | None, Field(min_length=1)] = None
     reverb: Annotated[str | None, Field(min_length=1)] = None

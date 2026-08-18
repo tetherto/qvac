@@ -21,6 +21,7 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
   TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -345,6 +346,30 @@ resources.define('tts-parler-indic', {
     topK: 1,
     maxFrames: 430,
     normalizeNumbers: true
+  }
+})
+
+resources.define('tts-cosyvoice3', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42
+  }
+})
+
+// Same model with native chunk streaming engaged, so the streaming e2e can
+// exercise the native 24 kHz chunk path rather than generic SDK streaming.
+resources.define('tts-cosyvoice3-native-stream', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10
   }
 })
 
