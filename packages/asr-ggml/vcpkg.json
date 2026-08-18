@@ -12,38 +12,38 @@
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-18",
       "default-features": false,
       "features": [
-        "opencl",
+        "whisper",
         "parakeet",
-        "vulkan",
-        "whisper"
-      ],
-      "platform": "android",
-      "version>=": "2026-08-18"
-    },
-    {
-      "name": "speech-cpp",
-      "default-features": false,
-      "features": [
         "coreml",
-        "metal",
-        "parakeet",
-        "whisper"
+        "metal"
       ],
-      "platform": "osx | ios",
-      "version>=": "2026-08-18"
+      "platform": "osx | ios"
     },
     {
       "name": "speech-cpp",
+      "version>=": "2026-08-18",
       "default-features": false,
       "features": [
+        "whisper",
         "parakeet",
         "vulkan",
-        "whisper"
+        "opencl"
       ],
-      "platform": "!(osx | ios | android)",
-      "version>=": "2026-08-18"
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-18",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "vulkan"
+      ],
+      "platform": "!(osx | ios | android)"
     },
     {
       "name": "vcpkg-cmake",

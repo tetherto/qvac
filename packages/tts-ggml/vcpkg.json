@@ -10,34 +10,34 @@
     },
     {
       "name": "speech-cpp",
-      "default-features": false,
-      "features": [
-        "opencl",
-        "tts",
-        "vulkan"
-      ],
-      "platform": "android",
-      "version>=": "2026-08-18"
-    },
-    {
-      "name": "speech-cpp",
-      "default-features": false,
-      "features": [
-        "metal",
-        "tts"
-      ],
-      "platform": "osx | ios",
-      "version>=": "2026-08-18"
-    },
-    {
-      "name": "speech-cpp",
+      "version>=": "2026-08-18",
       "default-features": false,
       "features": [
         "tts",
+        "metal"
+      ],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-18",
+      "default-features": false,
+      "features": [
+        "tts",
+        "vulkan",
+        "opencl"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-18",
+      "default-features": false,
+      "features": [
+        "tts",
         "vulkan"
       ],
-      "platform": "!(osx | ios | android)",
-      "version>=": "2026-08-18"
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {
@@ -52,12 +52,12 @@
       "dependencies": [
         {
           "name": "speech-cpp",
+          "version>=": "2026-08-18",
           "default-features": false,
           "features": [
             "vulkan"
           ],
-          "platform": "!(osx | ios)",
-          "version>=": "2026-08-18"
+          "platform": "!(osx | ios)"
         }
       ]
     }
