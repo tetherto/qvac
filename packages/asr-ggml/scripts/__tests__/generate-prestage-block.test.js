@@ -234,7 +234,7 @@ test('buildScript selects Parakeet and Whisper models from the explicit shard gr
   assert.match(script, /base64 -d > "\$TMP_ROOT\/whisper-manifest\.json"/)
   assert.match(script, /cat "\$TMP_ROOT\/qvacShardGrep\.txt"/)
   assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
-  assert.match(selectionCode, /missing model mapping for runner/)
+  assert.match(selectionCode, /matched no known runner/)
   assert.match(selectionCode, /invalid .* model mapping for runner/)
   assert.match(selectionCode, /seen\[kind\]\.get\(model\.name\)/)
   assert.match(script, /parakeet-prestage-list\.tsv/)
@@ -298,7 +298,7 @@ test('complete prestage script deduplicates selected Parakeet models', () => {
 
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.curlLog.trim().split('\n').length, 1)
-  assert.match(result.stderr, /1 parakeet \+ 0 whisper model\(s\) for 2 test\(s\)/)
+  assert.match(result.stderr, /1 parakeet \+ 0 whisper model\(s\) for grep/)
 })
 
 test('complete prestage script accepts an explicitly model-free runner', () => {
@@ -309,17 +309,23 @@ test('complete prestage script accepts an explicitly model-free runner', () => {
 
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.curlLog, '')
-  assert.match(result.stderr, /0 parakeet \+ 0 whisper model\(s\) for 1 test\(s\)/)
+  assert.match(result.stderr, /0 parakeet \+ 0 whisper model\(s\) for grep/)
 })
 
-test('complete prestage script rejects missing grep and unknown mappings', () => {
+test('complete prestage script rejects a missing grep but tolerates an unknown mapping', () => {
   const missingGrep = runCompleteScript()
   assert.notEqual(missingGrep.status, 0)
   assert.match(missingGrep.stdout, /FATAL: shard grep is required/)
 
+  // A grep that matches no known runner (a typo, or a renamed/removed test) is
+  // NOT fatal on device: warn and stage nothing so the run still executes and
+  // the device downloads what it needs. validate-devices rejects such a filter
+  // earlier for manual dispatches, so a false-green can't slip through there.
   const unknownMapping = runCompleteScript({ grep: 'runRenamedParakeetTest' })
-  assert.notEqual(unknownMapping.status, 0)
-  assert.match(unknownMapping.stderr, /missing model mapping for runner: runRenamedParakeetTest/)
+  assert.equal(unknownMapping.status, 0, unknownMapping.stderr)
+  assert.equal(unknownMapping.curlLog, '')
+  assert.match(unknownMapping.stderr, /matched no known runner/)
+  assert.match(unknownMapping.stderr, /0 parakeet \+ 0 whisper model\(s\) for grep/)
 })
 
 test('complete prestage script rejects malformed manifest entries', () => {

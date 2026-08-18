@@ -37,10 +37,17 @@ You can pick a device two ways, and they combine:
   devices and any model name (handy for a device that isn't in the dropdown yet).
   If you fill this in, it wins over the dropdown.
 
-Before any build or Device Farm run, a fast **`validate-devices`** job checks the
-requested model(s) actually exist on Device Farm for the chosen platform. A typo
-or an empty selection fails immediately, so you never pay for a wasted build or a
-run that can't be scheduled.
+Before any build or Device Farm run, a fast **`validate-devices`** job checks, up
+front (so you never pay for a wasted build or an unschedulable run):
+
+- the requested model(s) **exist** on Device Farm for the chosen platform;
+- the `tests` filter (if any) **matches at least one real runner** — a typo that
+  would otherwise run zero tests and pass green is rejected here (sharded addons);
+- the **total run count** (`specs × devices`) is within the cap (see
+  [Run-count cap](#run-count-cap-fail-fast)).
+
+A typo, an empty selection, an unknown test filter, or an oversized fan-out fails
+immediately and for free.
 
 ### Valid device names
 
@@ -88,13 +95,22 @@ whole suite. It is **by test name, not by file name.**
   `test/mobile` tests (for sharded addons these are the names listed in
   `test/mobile/test-groups.json`). Examples: `runChatterboxSpeedTest`,
   `runLlmSpeedTest`.
-- Combine several with `|`, e.g. `runLlmSpeedTest|runLlmMemoryTest`.
+- Combine several with `|`, e.g. `runLlmSpeedTest|runLlmMemoryTest`. A partial
+  pattern works too: `runChatterbox` runs (and pre-stages models for) every
+  runner whose name matches.
 - Leave it **empty** to run the full mobile suite.
 
 For sharded addons (e.g. `llm-llamacpp`, `ocr-ggml`), a `tests` filter collapses
 the many shards into a single filtered run — a big cost saving. Leaving it empty
 on a sharded addon runs the **full** shard set pinned to your chosen device(s),
 which is many runs.
+
+**A typo can't waste money or pass green.** For sharded addons the `validate-devices`
+job matches your filter against the real runner names *before* any build, and
+fails fast (printing the known runners) if it matches none — so a mistyped filter
+can't reach the device, select zero tests, and report a false pass. Model
+pre-staging follows the same regex: only the models the matched runners need are
+staged; anything unmatched is simply fetched on-device.
 
 #### Where to find the test names (per addon)
 
@@ -194,6 +210,23 @@ gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
 
 This is the cheap, fast loop for reproducing/fixing a single failure without paying
 for the whole pool again.
+
+### Run-count cap (fail-fast)
+
+To stop a single dispatch from spraying the whole fleet, two safety rails are
+enforced by `validate-devices` **before any build** (and re-checked by the
+scheduler as a backstop):
+
+- **≤ 10 unique devices** per dispatch.
+- **≤ 40 total Device Farm runs**, where `runs = specs × devices`. `specs` is the
+  number of shards for the platform when `tests` is empty, or **1** when you pass a
+  `tests` filter (a filter collapses the run to a single grepped spec).
+
+So the broad example above (3 devices, no filter) is fine on every addon — e.g.
+`tts-ggml` has 9 Android shards → `9 × 3 = 27` runs. Broad coverage on a
+shard-heavy addon may hit the cap (e.g. `llm-llamacpp` iOS has 13 shards →
+`13 × 3 = 39`); if you exceed it, either **add a `tests` filter** (drops `specs`
+to 1) or **reduce devices**. Both caps fail fast and free.
 
 ## What changed on PRs
 

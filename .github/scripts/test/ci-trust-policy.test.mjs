@@ -1571,9 +1571,34 @@ test('mobile scheduler preserves automatic sharding and supports explicit multi-
   assert.match(action, /map\(select\(length > 0\)\) \| unique/)
   // ... and bounded so a fat-fingered list cannot spray the whole fleet.
   assert.match(action, /MAX_DEVICES=10/)
-  assert.match(action, /MAX_RUNS=20/)
+  // Backstop cap: validate-devices enforces the same ceiling earlier (before
+  // build/upload) from the addon's test-groups.json; 40 covers the documented
+  // broad-coverage flow (e.g. 3 devices x the heaviest shard set).
+  assert.match(action, /MAX_RUNS=40/)
   assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
   assert.match(action, /for MIDX in \$\(seq 0 \$\(\(MODEL_COUNT - 1\)\)\); do/)
+})
+
+test('mobile validate-devices fails fast on an unknown tests filter and an oversized fan-out', () => {
+  const action = read(
+    '.github/actions/run-mobile-integration-tests/validate-devices/action.yml',
+  )
+  // Device existence check (unchanged).
+  assert.match(action, /aws devicefarm list-devices/)
+  // The device list is de-duplicated + capped, matching the scheduler.
+  assert.match(action, /map\(select\(length > 0\)\) \| unique/)
+  assert.match(action, /MAX_DEVICES=10/)
+  // Gustavo: a `tests` filter that matches zero known runners is rejected here
+  // (before any build) so a typo can't run zero tests and pass green. Runner
+  // names come from the addon's test-groups.json.
+  assert.match(action, /RUNNERS_JSON=\$\(jq -c/)
+  assert.match(action, /grep -Ec -- "\$TESTS"/)
+  assert.match(action, /matches none of the/)
+  // iancris: spec-count-aware run-count cap, enforced before build/upload spend
+  // (specs = 1 when a tests filter is given, else the platform's group count).
+  assert.match(action, /SPEC_COUNT=\$GROUP_COUNT/)
+  assert.match(action, /MAX_RUNS=40/)
+  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
 })
 
 test('mobile monitor maps both flagship runs back to each test spec', () => {

@@ -369,7 +369,7 @@ test('functional prestage mappings cover every configured mobile shard runner', 
   assert.deepEqual(Object.keys(mappings).sort(), configured.sort())
 })
 
-test('selectFunctionalEntries resolves grep mappings and deduplicates shared targets', () => {
+test('selectFunctionalEntries regex-matches runner names and deduplicates shared targets', () => {
   const mappings = functionalModelsByTest(FUNCTIONAL_MANIFEST)
   const entries = selectFunctionalEntries(mappings, 'runAddonTest|runMultipleRunsTest')
 
@@ -377,11 +377,21 @@ test('selectFunctionalEntries resolves grep mappings and deduplicates shared tar
     entries.map((entry) => entry.targetName),
     ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf', 'supertonic.gguf']
   )
-  assert.throws(() => selectFunctionalEntries(mappings, ''), /grep is required/)
-  assert.throws(
-    () => selectFunctionalEntries(mappings, 'runMissingTest'),
-    /Missing functional mapping/
+
+  // The grep is a mocha --grep regex over runner NAMES: a partial pattern
+  // stages every runner it matches, not just an exact manifest key.
+  const chatterbox = selectFunctionalEntries(mappings, 'runChatterboxSpeed')
+  assert.deepEqual(
+    chatterbox.map((entry) => entry.targetName),
+    ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf']
   )
+
+  // Graceful, non-throwing: an empty grep, a zero-match typo, an invalid regex,
+  // and a runner mapped to no models all stage nothing so the device just
+  // downloads whatever it needs and the run still executes.
+  assert.deepEqual(selectFunctionalEntries(mappings, ''), [])
+  assert.deepEqual(selectFunctionalEntries(mappings, 'runMissingTest'), [])
+  assert.deepEqual(selectFunctionalEntries(mappings, '('), [])
   assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
 })
 
@@ -407,8 +417,8 @@ test('functional prestage script reads the explicit shard grep and deduplicates 
   assertBashSyntax(script)
   assert.match(script, /cat \/tmp\/qvacShardGrep\.txt/)
   assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
-  assert.match(script, /functional shard grep is required/)
-  assert.match(script, /missing functional mapping/)
+  assert.match(script, /no functional shard grep/)
+  assert.match(script, /matched no known runner/)
   assert.match(script, /seen\.has\(m\.targetName\)/)
   assert.match(script, /adb push/)
 })
@@ -442,6 +452,23 @@ test('functional selector executes deduplication and accepts a zero-model Parler
       ''
     ].join('\n')
   )
+
+  // A partial regex stages every matching runner's models on device too.
+  const partial = run('runChatterboxSpeed')
+  assert.equal(partial.status, 0, partial.stderr)
+  assert.equal(
+    readFileSync(listPath, 'utf8'),
+    [
+      'chatterbox-t3-turbo.gguf\thttps://s3/cb-t3.gguf',
+      'chatterbox-s3gen.gguf\thttps://s3/cb-s3.gguf',
+      ''
+    ].join('\n')
+  )
+
+  // A typo (or a runner with no models) is not fatal: exit 0, stage nothing.
+  const typo = run('runNopeTest')
+  assert.equal(typo.status, 0, typo.stderr)
+  assert.equal(readFileSync(listPath, 'utf8'), '')
 
   const parler = run('runParlerTest')
   assert.equal(parler.status, 0, parler.stderr)

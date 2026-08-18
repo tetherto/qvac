@@ -1,10 +1,16 @@
 name: Mobile Test — Validate Manual Device Selection
 description: |
-  Fail-fast guard for the on-demand (workflow_dispatch) mobile path.
-  Confirms the dispatcher supplied at least one device and that
-  every requested MODEL exists in the AWS Device Farm fleet for the target
-  platform — BEFORE any Device Farm run is scheduled, so a typo or an empty
-  selection costs nothing instead of silently falling back to the full pool.
+  Fail-fast guard for the on-demand (workflow_dispatch) mobile path. BEFORE any
+  build or Device Farm run, it confirms:
+    * at least one device was supplied and every requested MODEL exists in the
+      AWS Device Farm fleet for the target platform (so a typo or empty
+      selection costs nothing instead of falling back to the full pool);
+    * (multi-spec addons) the optional `tests` mocha --grep filter matches at
+      least one real runner NAME — a typo must not reach WebdriverIO, select
+      zero tests, and pass green (false green);
+    * (multi-spec addons) the total run count (specs x devices) is within the
+      cap, computed from the addon's test-groups.json, so an oversized fan-out
+      is rejected here rather than after build/upload spend.
 
   The MODEL match mirrors schedule-test-run's device filter exactly:
     * CONTAINS (default): the requested value is a case-sensitive substring of
@@ -25,6 +31,14 @@ inputs:
     description: "MODEL match operator: CONTAINS (default) or EQUALS. Must match what schedule-test-run is given."
     required: false
     default: "CONTAINS"
+  tests:
+    description: "Optional mocha --grep filter (a regex over runner NAMES). When set together with test-groups-path, it is validated to match at least one known runner so a typo fails fast (free) instead of producing an empty, false-green Device Farm run."
+    required: false
+    default: ""
+  test-groups-path:
+    description: "Path to the addon's test/mobile/test-groups.json (multi-spec addons only). When set, enables runner-name validation of 'tests' and a spec-count-aware run-count cap before any build/schedule spend."
+    required: false
+    default: ""
   aws-role-to-assume:
     description: "AWS IAM role ARN for OIDC (needs devicefarm:ListDevices)."
     required: true
@@ -48,6 +62,8 @@ runs:
         PLATFORM: ${{ inputs.platform }}
         DEVICES: ${{ inputs.devices }}
         MODEL_OPERATOR: ${{ inputs.device-model-operator }}
+        TESTS: ${{ inputs.tests }}
+        TEST_GROUPS_PATH: ${{ inputs.test-groups-path }}
       run: |
         set -euo pipefail
 
@@ -73,6 +89,61 @@ runs:
           echo "::error::$MODEL_COUNT unique devices requested, cap is $MAX_DEVICES. Narrow the selection."
           exit 1
         fi
+
+        # Multi-spec addons pass their test-groups.json so we can (1) reject a
+        # `tests` filter that matches no real runner — a typo would otherwise
+        # reach WebdriverIO, select zero tests, and pass green (false green) —
+        # and (2) know how many specs a run will fan out into, so the total
+        # Device Farm run count is capped HERE (before any build/upload spend)
+        # instead of only inside the scheduler. Single-spec addons omit the
+        # path: SPEC_COUNT stays 1 and only the device cap applies.
+        SPEC_COUNT=1
+        if [ -n "${TEST_GROUPS_PATH:-}" ]; then
+          if [ ! -f "$TEST_GROUPS_PATH" ]; then
+            echo "::error::test-groups file not found at '$TEST_GROUPS_PATH' — cannot validate the tests filter or run count."
+            exit 1
+          fi
+          PLAT_KEY=$([ "$PLATFORM" = "Android" ] && echo android || echo ios)
+          # Every runner NAME that runs on this platform, deduped. Groups map to
+          # arrays of runner names, so recursive strings gives the flat set.
+          RUNNERS_JSON=$(jq -c --arg p "$PLAT_KEY" '(.[$p] // {}) | [.. | strings] | unique' "$TEST_GROUPS_PATH")
+          RUNNER_COUNT=$(echo "$RUNNERS_JSON" | jq 'length')
+          GROUP_COUNT=$(jq --arg p "$PLAT_KEY" '(.[$p] // {}) | keys | length' "$TEST_GROUPS_PATH")
+          if [ "$RUNNER_COUNT" -eq 0 ]; then
+            echo "::error::No runner names found in '$TEST_GROUPS_PATH' for '$PLAT_KEY'."
+            exit 1
+          fi
+
+          if [ -n "${TESTS:-}" ]; then
+            # The tests filter is a mocha --grep regex matched against runner
+            # NAMES (same semantics as on-device mocha). Fail fast if it matches
+            # none of them.
+            MATCHED=$(echo "$RUNNERS_JSON" | jq -r '.[]' | grep -Ec -- "$TESTS" || true)
+            if [ "$MATCHED" -eq 0 ]; then
+              echo "::error::tests filter '$TESTS' matches none of the $RUNNER_COUNT known $PLAT_KEY runner(s) — a typo would run zero tests and pass green. It is a mocha --grep on runner NAMES. Known runners:"
+              echo "$RUNNERS_JSON" | jq -r '.[]' | sort -u | sed 's/^/  - /'
+              exit 1
+            fi
+            echo "tests filter '$TESTS' matches $MATCHED of $RUNNER_COUNT $PLAT_KEY runner(s); the run collapses to a single grepped spec."
+            SPEC_COUNT=1
+          else
+            SPEC_COUNT=$GROUP_COUNT
+            echo "No tests filter: the run fans out over $SPEC_COUNT $PLAT_KEY spec(s)."
+          fi
+        fi
+
+        # Total Device Farm runs = specs x devices. Reject an oversized fan-out
+        # here (before build/upload) — the scheduler enforces the same ceiling
+        # as an authoritative backstop. 40 covers the documented broad-coverage
+        # flow (e.g. 3 devices x the heaviest shard set) while still blocking a
+        # runaway spray.
+        MAX_RUNS=40
+        TOTAL_RUNS=$((SPEC_COUNT * MODEL_COUNT))
+        if [ "$TOTAL_RUNS" -gt "$MAX_RUNS" ]; then
+          echo "::error::$SPEC_COUNT spec(s) x $MODEL_COUNT device(s) = $TOTAL_RUNS Device Farm runs exceeds the cap of $MAX_RUNS. Add a tests filter (-f tests=...) to collapse to one spec, or reduce devices."
+          exit 1
+        fi
+        echo "Run-count check OK: $SPEC_COUNT spec(s) x $MODEL_COUNT device(s) = $TOTAL_RUNS run(s) (cap $MAX_RUNS)."
 
         PLAT_UPPER=$([ "$PLATFORM" = "Android" ] && echo ANDROID || echo IOS)
         FILTER=$(jq -nc --arg plat "$PLAT_UPPER" '[{attribute:"PLATFORM", operator:"EQUALS", values:[$plat]}]')

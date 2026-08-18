@@ -200,22 +200,38 @@ function functionalModelsByTest(manifest) {
   }
 }
 
+// The shard grep is a mocha --grep regex over runner NAMES (test-groups.json
+// values, or the manual `tests` dispatch input). Match it against the known
+// runner keys and stage the union of their models — so a partial pattern like
+// `runChatterbox` correctly stages every runner it will run on device, not just
+// an exact key. A grep that matches nothing (a typo, or a runner mapped to no
+// models such as runParlerTest) is NOT fatal: warn and stage nothing so the
+// device downloads what it needs and the run still executes. validate-devices
+// already rejects a manual filter that matches zero runners, so this is a net.
 function selectFunctionalEntries(modelsByTest, grep) {
-  const tests = (grep || '')
-    .split('|')
-    .map((testName) => testName.trim())
-    .filter(Boolean)
-  if (tests.length === 0) {
-    throw new Error('Functional shard grep is required')
+  const pattern = (grep || '').trim()
+  if (!pattern) {
+    console.error('[prestage] WARN: no functional shard grep — staging nothing')
+    return []
   }
-  const missing = tests.filter(
-    (testName) => !Object.prototype.hasOwnProperty.call(modelsByTest, testName)
-  )
-  if (missing.length > 0) {
-    throw new Error(`Missing functional mapping(s): ${missing.join(', ')}`)
+  let re
+  try {
+    re = new RegExp(pattern)
+  } catch (err) {
+    console.error(
+      `[prestage] WARN: invalid tests grep /${pattern}/ (${err.message}); staging nothing`
+    )
+    return []
+  }
+  const runners = Object.keys(modelsByTest).filter((testName) => re.test(testName))
+  if (runners.length === 0) {
+    console.error(
+      `[prestage] WARN: tests grep /${pattern}/ matched no known runner; staging nothing`
+    )
+    return []
   }
   const seen = new Set()
-  return tests
+  return runners
     .flatMap((testName) => modelsByTest[testName])
     .filter((entry) => {
       if (seen.has(entry.targetName)) return false
@@ -322,8 +338,12 @@ done < /tmp/prestage-list.tsv
 echo "[prestage] done"`
 }
 
+// Device-side mirror of selectFunctionalEntries (serialized into the pre_test
+// host block): regex-match the grep against runner NAMES, stage the union of
+// their models, and degrade gracefully (warn + stage nothing) on an empty /
+// invalid grep or a zero-match pattern instead of failing the run.
 function buildFunctionalSelectionCode() {
-  return "const fs=require('fs');const input=process.env.FUNCTIONAL_MANIFEST_PATH||'/tmp/model-manifest.json';const output=process.env.FUNCTIONAL_LIST_PATH||'/tmp/prestage-list.tsv';const man=JSON.parse(fs.readFileSync(input,'utf8'));const g=process.env.GREP||'';if(!g)throw new Error('[prestage] functional shard grep is required');const tests=g.split('|').map(s=>s.trim()).filter(Boolean);const missing=tests.filter(t=>!Object.prototype.hasOwnProperty.call(man,t));if(missing.length)throw new Error('[prestage] missing functional mapping(s): '+missing.join(', '));const seen=new Set();const out=[];for(const t of tests){for(const m of man[t]){if(!seen.has(m.targetName)){seen.add(m.targetName);out.push(m.targetName+'\\t'+m.url)}}}fs.writeFileSync(output,out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+tests.length+' test(s)')"
+  return "const fs=require('fs');const input=process.env.FUNCTIONAL_MANIFEST_PATH||'/tmp/model-manifest.json';const output=process.env.FUNCTIONAL_LIST_PATH||'/tmp/prestage-list.tsv';const man=JSON.parse(fs.readFileSync(input,'utf8'));const g=(process.env.GREP||'').trim();let re=null;if(!g){console.error('[prestage] WARN: no functional shard grep — staging nothing')}else{try{re=new RegExp(g)}catch(e){console.error('[prestage] WARN: invalid tests grep /'+g+'/ ('+e.message+'); staging nothing')}}const runners=re?Object.keys(man).filter(k=>re.test(k)):[];if(re&&runners.length===0)console.error('[prestage] WARN: tests grep /'+g+'/ matched no known runner; staging nothing');const seen=new Set();const out=[];for(const t of runners){for(const m of man[t]){if(!seen.has(m.targetName)){seen.add(m.targetName);out.push(m.targetName+'\\t'+m.url)}}}fs.writeFileSync(output,out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+runners.length+' test(s)')"
 }
 
 function buildFunctionalPrestageScript(manifestB64) {

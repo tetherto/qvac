@@ -367,8 +367,13 @@ runs:
             echo "ERROR: manual-devices mode: $MODEL_COUNT unique devices requested, cap is $MAX_DEVICES. Narrow the selection." >&2
             exit 1
           fi
+          # Authoritative backstop for the fan-out. validate-devices enforces
+          # the same ceiling earlier (before build/upload) using the addon's
+          # test-groups.json; this keeps the guard even if the scheduler is
+          # reached by another path. 40 covers the documented broad-coverage
+          # flow (e.g. 3 devices x the heaviest shard set).
           TOTAL_RUNS=$((SPEC_COUNT * MODEL_COUNT))
-          MAX_RUNS=20
+          MAX_RUNS=40
           if [ "$TOTAL_RUNS" -gt "$MAX_RUNS" ]; then
             echo "ERROR: manual-devices mode: $SPEC_COUNT spec(s) x $MODEL_COUNT device(s) = $TOTAL_RUNS Device Farm runs exceeds the cap of $MAX_RUNS. Filter tests (-f tests=...) or reduce devices." >&2
             exit 1

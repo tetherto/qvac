@@ -135,6 +135,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            packages/asr-ggml/test/mobile/test-groups.json
           sparse-checkout-cone-mode: false
       - name: Validate requested devices
         uses: ./.github/actions/run-mobile-integration-tests/validate-devices
@@ -142,6 +143,8 @@ jobs:
           platform: ${{ inputs.platform }}
           devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
           device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: packages/asr-ggml/test/mobile/test-groups.json
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
   # NOTE: continue-on-error: true matches the parent families' workflows.
