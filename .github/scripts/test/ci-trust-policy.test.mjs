@@ -827,6 +827,47 @@ test('mobile SDK callers forward the AWS OIDC role to Device Farm jobs', () => {
   MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole)
 })
 
+// Any indent, so reindenting a workflow header cannot quietly move a caller
+// into the exempt branch below.
+const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m
+
+// The key alone is not enough: `repository: ''` and `repository: ${{
+// github.repository }}` both parse yet leave the callee falling back to this
+// repo, which is the bug. The value has to carry the caller's own repository,
+// either directly (`inputs.repository`) or via a context job that derives it.
+const FORWARDS_REPOSITORY_RE =
+  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m
+
+function declaresRepositoryInput(path) {
+  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)))
+}
+
+function assertPinsRepositoryWithRef(reusable, { path, job }) {
+  const block = withoutComments(job.text)
+  if (!/^\s*test-version:/m.test(block)) return
+  if (!declaresRepositoryInput(path)) return
+  assert.match(
+    block,
+    FORWARDS_REPOSITORY_RE,
+    `${path} job "${job.name}" passes test-version to ${reusable} without forwarding its own repository, so a fork ref would resolve against this repo`,
+  )
+}
+
+test('mobile SDK callers that can target a fork forward the repository too', () => {
+  // These workflows check out `test-version` from `inputs.repository ||
+  // github.repository`. A caller that can be pointed at a fork but forwards
+  // only the ref makes them resolve that ref against THIS repo: a fork-only
+  // branch fails to fetch, and a branch name that also exists here silently
+  // builds the wrong code while still reporting on the caller's addon.
+  // Callers with no `repository` input of their own are same-repo by
+  // construction and stay exempt.
+  MOBILE_SDK_WORKFLOWS.forEach((reusable) => {
+    const callers = callersOf(reusable)
+    assertEveryCallWasParsed(reusable, callers)
+    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller))
+  })
+})
+
 test('npm integration uses a dedicated run label, not verified', () => {
   const source = read('.github/workflows/public-reusable-npm.yml')
   const integrationStep = source.slice(
