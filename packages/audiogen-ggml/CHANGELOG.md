@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Raise the `speech-cpp` floor to `2026-08-17#1` so vcpkg installs the ACE-Step
-  edit API (`edit_plan`, FlowEdit, Repaint) instead of port-version 0 of the
-  same date.
-
 ### Added
 
 - Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
@@ -35,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `strength`: balanced-mode preservation in `[0, 1]` (default `0.5`)
 - `run({ seed })` on the edit session seeds the first operation; each later
   operation uses `seed + index`.
+
+## [0.2.3] - 2026-08-18
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-18, which brings in ggml-speech
+  2026-08-18. The update prevents unsupported wide OpenCL GEMV workgroups on
+  Adreno devices and hardens padded DIAG_MASK_INF launches and diagnostics.
+
+### Fixed
+
+- Declare `bare-process` as a runtime dependency for the published benchmark
+  runner and its shipped utilities.
 
 ## [0.2.2] - 2026-08-17
 
