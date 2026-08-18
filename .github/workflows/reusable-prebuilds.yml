@@ -29,8 +29,8 @@ on:
         default: "tetherto/qvac"
       # Artifact identity is DERIVED from the package (basename of `workdir`),
       # never passed in: per-leg artifacts are
-      # `prebuild--<package>--<platform>-<arch><tags>` and the merged bundle is
-      # `prebuilds--<package>`. The old hand-maintained `artifact-name-prefix`
+      # `prebuild-<package>-<platform>-<arch><tags>` and the merged bundle is
+      # `prebuilds-<package>`. The old hand-maintained `artifact-name-prefix`
       # table was not collision-free (embed-llamacpp and llm-llamacpp both
       # declared `llama-cpp-`; translation-nmtcpp declared nothing), and the
       # artifact service ACCEPTS duplicate names, so a shared name silently
@@ -167,9 +167,9 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      # Single source of truth for artifact identity. Both the artifact NAME and
-      # (when namespacing is on) the content subdirectory come from this one
-      # value, so the two can never disagree and no caller maintains a prefix.
+      # Single source of truth for artifact identity: the per-leg name and the
+      # merged bundle name both derive from this one value, so no caller
+      # maintains a prefix and the two can never disagree.
       - name: Resolve package name from workdir
         id: pkg
         shell: bash
@@ -503,7 +503,7 @@ jobs:
       # published tarball must contain, so no consumer has anything to strip.
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: prebuild--${{ steps.pkg.outputs.name }}--${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
+          name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
 
   merge:
@@ -535,12 +535,12 @@ jobs:
       - name: Download this package's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          pattern: prebuild--${{ steps.pkg.outputs.name }}--*
+          pattern: prebuild-${{ steps.pkg.outputs.name }}-*
           path: prebuilds
           merge-multiple: true
 
       - name: Upload merged artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: prebuilds--${{ steps.pkg.outputs.name }}
+          name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds

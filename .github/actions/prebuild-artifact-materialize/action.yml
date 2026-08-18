@@ -7,8 +7,8 @@ description: >
 
   Artifact identity is DERIVED from the package, never configured. The producer
   (reusable-prebuilds.yml) uploads per-leg artifacts as
-  prebuild--<package>--<platform>-<arch> and the merged bundle as
-  prebuilds--<package>; this action asks for prebuilds--<package>. That is what
+  prebuild-<package>-<platform>-<arch> and the merged bundle as
+  prebuilds-<package>; this action asks for prebuilds-<package>. That is what
   lets several packages build in one workflow run: artifacts are scoped to the
   RUN and a called reusable workflow shares its caller's run, and the artifact
   service ACCEPTS duplicate names rather than rejecting them, so a shared name
@@ -54,8 +54,8 @@ runs:
           exit 1
         fi
         echo "package=$pkg" >> "$GITHUB_OUTPUT"
-        echo "artifact=prebuilds--$pkg" >> "$GITHUB_OUTPUT"
-        echo "package=$pkg artifact=prebuilds--$pkg"
+        echo "artifact=prebuilds-$pkg" >> "$GITHUB_OUTPUT"
+        echo "package=$pkg artifact=prebuilds-$pkg"
 
     - name: Download prebuilds bundle
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1

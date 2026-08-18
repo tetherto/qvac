@@ -31,7 +31,7 @@ inputs:
     description: "NPM package name (used for npm fallback prebuild download)"
     required: true
   # No prebuild-artifact-prefix input: per-leg artifact names are derived from the
-  # package as prebuild--<package>--<platform>-<arch>, with <package> taken from
+  # package as prebuild-<package>-<platform>-<arch>, with <package> taken from
   # addon-workdir. The old hand-maintained prefixes were not unique
   # (embed-llamacpp and llm-llamacpp both used `llama-cpp-`; translation-nmtcpp
   # had none), and duplicate artifact names are accepted rather than rejected.
@@ -150,8 +150,8 @@ runs:
         set -euo pipefail
         pkg="$(basename "$ADDON_WORKDIR")"
         echo "package=$pkg" >> "$GITHUB_OUTPUT"
-        echo "leg_prefix=prebuild--$pkg--" >> "$GITHUB_OUTPUT"
-        echo "merged=prebuilds--$pkg" >> "$GITHUB_OUTPUT"
+        echo "leg_prefix=prebuild-$pkg-" >> "$GITHUB_OUTPUT"
+        echo "merged=prebuilds-$pkg" >> "$GITHUB_OUTPUT"
         echo "package=$pkg"
 
     - name: Download Android prebuilds (from artifacts)
@@ -191,7 +191,7 @@ runs:
         fi
 
     # Fallback for the cache-hit path: pull this package's merged bundle
-    # (prebuilds--<package>, produced by reusable-prebuilds.yml; contains every
+    # (prebuilds-<package>, produced by reusable-prebuilds.yml; contains every
     # platform dir, including android-*/ios-*). This keeps mobile E2E running
     # against the PR's own binaries on JS-only pushes instead of @latest from
     # npm. No-op for addons / runs that never produced this artifact (e.g.

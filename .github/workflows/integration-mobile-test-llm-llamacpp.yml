@@ -213,7 +213,7 @@ jobs:
           # tests); the setup action derives the artifact names from
           # addon-workdir.
           # Baseline leg (pinned version): force the npm prebuild and ignore ALL
-          # CI artifacts. Without this the merged prebuilds--<package> artifact
+          # CI artifacts. Without this the merged prebuilds-<package> artifact
           # (built from the candidate in this same run) is pulled in when the
           # per-matrix artifact is absent, so the baseline session would silently
           # run the candidate binary. See run-mobile-integration-tests/setup.
