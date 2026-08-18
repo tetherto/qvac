@@ -12,7 +12,7 @@ alwaysApply: false
 
 `packages/sdk/index.ts` re-exports plain constants alongside RPC methods —
 `ModelType`, `MODEL_TYPES`, `PLUGIN_LLM` and friends, `SUPPORTED_AUDIO_FORMATS`,
-`TOOLS_MODE`, `VERBOSITY`. Non-JS SDKs (Python, ...) are generated from
+`VERBOSITY`. Non-JS SDKs (Python, ...) are generated from
 `packages/sdk/contract/{schema.json,manifest.json,models.json}` — they never
 read `index.ts` directly. A constant that isn't in `schema.json`'s `$defs`
 is invisible to every other language, no matter how prominently it's

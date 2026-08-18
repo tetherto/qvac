@@ -219,7 +219,7 @@ export interface BeginCustomTurnInput {
   kind: 'custom'
   /** User-provided session key (`completion({ kvCache: "session-a" })`). */
   customKey: string
-  /** Hash of system prompt + (static) tool names. */
+  /** Hash of system prompt + complete tool definitions. */
   configHash: string
   /**
    * Prime the cache by sending the system prompt to the addon. Tools are not
@@ -233,7 +233,7 @@ export interface BeginCustomTurnInput {
 
 export interface BeginAutoTurnInput {
   kind: 'auto'
-  /** Hash of system prompt + (static) tool names. */
+  /** Hash of system prompt + complete tool definitions. */
   configHash: string
   /** Conversation history used to compute the pre-response cache key. */
   history: CacheMessage[]

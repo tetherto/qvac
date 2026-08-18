@@ -48,7 +48,7 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
           - os: macos-15-intel
             platform: darwin
             arch: x64
@@ -90,14 +90,14 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |

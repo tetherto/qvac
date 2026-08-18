@@ -73,18 +73,12 @@ jobs:
           # unreliable for sustained GPU compute (the DocTR pipeline runs
           # correctly on real Apple-silicon hardware but non-deterministically
           # aborts / returns garbage on the hosted VM), so the darwin Metal leg
-          # ran on the shared self-hosted qvac-macos26-arm64-gpu runner that
+          # runs on the shared self-hosted qvac-macos26-arm64-gpu runner that
           # diffusion-cpp also uses for its GPU tests.
-          # Moved to GitHub-hosted macos-26 (matches the self-hosted fleet's
-          # actual macOS 26 install, per qvac-devops ansible) since the
-          # self-hosted mac fleet is not being kept registered for now —
-          # GitHub-hosted is not really suited for this leg (heavy sustained
-          # GPU compute on virtualized Metal), so watch this leg for the
-          # flakiness described above.
-          - os: macos-26
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64
@@ -101,10 +95,10 @@ jobs:
         shell: powershell
         run: |
           git config --global core.longpaths true
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 
-      # Self-hosted runners (e.g. qvac-win25-x64-gpu) keep their workspace
+      # Self-hosted runners (e.g. qvac-macos26-arm64-gpu) keep their workspace
       # between jobs; wipe it before checkout so each run starts clean. No-op on
       # GitHub-hosted runners. See docs/ci/SELF-HOSTED-RUNNERS.md.
       - name: Manual Workspace Cleanup
@@ -118,7 +112,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # EasyOCR + Doctr GGUFs live in S3 under date-stamped snapshot
       # directories. Bump the date segments below when new snapshots are
@@ -173,9 +167,9 @@ jobs:
           sudo apt update
           sudo apt install -y g++-13
 
-      # GitHub-hosted macOS runners ship the AWS CLI already; this is a
-      # user-local (no sudo) fallback in case that ever changes. Mirrors
-      # integration-test-vla.yml.
+      # The self-hosted qvac-macos26-arm64-gpu runner may not ship the AWS CLI
+      # (hosted macOS runners do). Install it user-local (no sudo) so the S3
+      # model download below works. Mirrors integration-test-vla.yml.
       - if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
         name: Install AWS CLI on macOS (user-local fallback for runners without pre-installed aws)
         shell: bash

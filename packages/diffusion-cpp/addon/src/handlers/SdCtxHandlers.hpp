@@ -93,6 +93,8 @@ struct SdCtxConfig {
       false; // keep_clip_on_cpu:      keep CLIP encoder in CPU RAM
   bool keepVaeOnCpu =
       false; // keep_vae_on_cpu:       keep VAE decoder in CPU RAM
+  bool vaeAutoCpuFallback = false; // preflight oversized VAE GPU graphs
+  float vaeAutoCpuFallbackMemoryRatio = 0.9f;
   // Upstream defaults to true to save memory for pure text-to-image, but the
   // addon supports image-conditioned jobs through a reusable context. Keep the
   // encoder available so img2img/fusion/hires paths can encode input images.

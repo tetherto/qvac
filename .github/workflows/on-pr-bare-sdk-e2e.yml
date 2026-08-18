@@ -119,13 +119,14 @@ jobs:
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
 
       # PR head — the code under test. Safe only because the gates above passed.
-      # PAT_TOKEN lets the checkout reach the fork on external PRs.
+      # GITHUB_TOKEN is sufficient here: qvac is public, so a read-only checkout
+      # of a fork's PR head works without an elevated token.
       - name: Checkout PR head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
