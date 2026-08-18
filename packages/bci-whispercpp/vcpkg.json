@@ -12,34 +12,34 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-17",
       "default-features": false,
       "features": [
-        "whisper",
         "opencl",
-        "vulkan"
+        "vulkan",
+        "whisper"
       ],
-      "platform": "android"
+      "platform": "android",
+      "version>=": "2026-08-18"
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-17",
       "default-features": false,
       "features": [
-        "whisper",
-        "vulkan"
+        "metal",
+        "whisper"
       ],
-      "platform": "!(osx | ios | android)"
+      "platform": "osx | ios",
+      "version>=": "2026-08-18"
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-17",
       "default-features": false,
       "features": [
-        "whisper",
-        "metal"
+        "vulkan",
+        "whisper"
       ],
-      "platform": "osx | ios"
+      "platform": "!(osx | ios | android)",
+      "version>=": "2026-08-18"
     }
   ],
   "features": {
