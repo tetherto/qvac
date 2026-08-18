@@ -218,10 +218,16 @@ jobs:
   # Packages whose tests gate publish itself (today: decoder-audio only).
   # `packages` is explicit (this package only) — bypasses nx-affected inside
   # the leaf entirely, same owner-only guarantee as the dorny selection above.
+  # `needs: prebuild` is ordering, not gating — the leaf materializes this
+  # package's bundle, so build must precede test. Not gated on
+  # needs.prebuild.result, which is the matrix-wide aggregate; per-package
+  # correctness comes from the bundle subtree check in the action.
   pre-publish-integration:
     name: Pre-publish integration (${{ matrix.package }})
-    needs: detect
-    if: needs.detect.outputs.pre-publish-rows != '[]'
+    needs: [detect, prebuild]
+    if: >-
+      always() && !cancelled() &&
+      needs.detect.outputs.pre-publish-rows != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -238,10 +244,13 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
+  # Same ordering-only dependency on prebuild.
   pre-publish-mobile:
     name: Pre-publish mobile integration (${{ matrix.package }})
-    needs: detect
-    if: needs.detect.outputs.pre-publish-rows != '[]'
+    needs: [detect, prebuild]
+    if: >-
+      always() && !cancelled() &&
+      needs.detect.outputs.pre-publish-rows != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -284,11 +293,10 @@ jobs:
       - prebuild
       - pre-publish-integration
       - pre-publish-mobile
+    # Per-package gates live in the steps below: needs.<job>.result is the
+    # matrix-wide aggregate, and `matrix` is unavailable in a job-level if:.
     if: >-
       always() && !cancelled() &&
-      (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') &&
-      (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
-      (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
       (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
@@ -300,9 +308,59 @@ jobs:
       contents: read
       packages: write
     steps:
-      # TEST-ONLY: prebuild is stubbed, so there is no `prebuilds` artifact to
-      # download and nothing real to publish. Echo only; the job still exists
-      # with its real matrix/if wiring so its .result propagates as normal.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Enforce this package's pre-publish test gate
+        if: startsWith(matrix.testGateMode, 'pre-publish')
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+          INTEGRATION_RESULT: ${{ needs.pre-publish-integration.result }}
+          MOBILE_RESULT: ${{ needs.pre-publish-mobile.result }}
+        run: |
+          set -euo pipefail
+          for r in "$INTEGRATION_RESULT" "$MOBILE_RESULT"; do
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::${PACKAGE} gates its publish on its own pre-publish tests, which came back '$r'."
+              exit 1
+            fi
+          done
+
+      - name: Materialize prebuilds
+        if: matrix.hasPrebuilds == true
+        uses: ./.github/actions/prebuild-artifact-materialize
+        with:
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+
+      # Guards the failure mode that is invisible until the package is on npm:
+      # package.json ships `prebuilds` verbatim and require.addon() resolves
+      # prebuilds/<platform>-<arch>/, so a stray package level publishes fine
+      # and then breaks every consumer.
+      - name: Assert publishable prebuilds layout
+        if: matrix.hasPrebuilds == true
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          echo "prebuilds/ contents:"
+          ls -A prebuilds
+          if [ -d "prebuilds/${PACKAGE}" ]; then
+            echo "::error::prebuilds/${PACKAGE}/ would ship — runtime resolves prebuilds/<platform>-<arch>/."
+            exit 1
+          fi
+          for d in prebuilds/*/; do
+            case "$(basename "$d")" in
+              *-*) : ;;
+              *) echo "::error::unexpected non platform-arch entry in prebuilds/: $d"; exit 1 ;;
+            esac
+          done
+          echo "layout OK"
+
+      # TEST-ONLY: only the actual GPR publish is stubbed. Everything deciding
+      # whether this package may publish, and the layout it would ship, is real.
       - name: Publish to GitHub Package Registry (stubbed)
         run: echo "STUB publish-gpr package=${{ matrix.package }} tag=${{ needs.publish-logic.outputs.gpr_tag }}"
 
@@ -315,11 +373,11 @@ jobs:
       - prebuild
       - pre-publish-integration
       - pre-publish-mobile
+    # Prebuild/pre-publish gates are per package, in steps. release-merge-guard
+    # stays here: on release-* the detect identity gate already hard-failed
+    # unless exactly one package was selected.
     if: >-
       always() && !cancelled() &&
-      (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') &&
-      (needs.pre-publish-integration.result == 'success' || needs.pre-publish-integration.result == 'skipped') &&
-      (needs.pre-publish-mobile.result == 'success' || needs.pre-publish-mobile.result == 'skipped') &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
       (needs.publish-logic.outputs.publish_release == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
@@ -334,9 +392,32 @@ jobs:
       packages: write
       id-token: write
     steps:
-      # TEST-ONLY: checkout / artifact download / build / dist-tag / real npm
-      # publish all replaced with an echo. Job keeps its real needs/if/matrix
-      # wiring so its .result feeds post-build-gate exactly as in production.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Enforce this package's pre-publish test gate
+        if: startsWith(matrix.testGateMode, 'pre-publish')
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+          INTEGRATION_RESULT: ${{ needs.pre-publish-integration.result }}
+          MOBILE_RESULT: ${{ needs.pre-publish-mobile.result }}
+        run: |
+          set -euo pipefail
+          for r in "$INTEGRATION_RESULT" "$MOBILE_RESULT"; do
+            if [ "$r" != "success" ] && [ "$r" != "skipped" ]; then
+              echo "::error::${PACKAGE} gates its publish on its own pre-publish tests, which came back '$r'."
+              exit 1
+            fi
+          done
+
+      - name: Materialize prebuilds
+        if: matrix.hasPrebuilds == true
+        uses: ./.github/actions/prebuild-artifact-materialize
+        with:
+          workdir: ${{ matrix.workdir }}
+          package: ${{ matrix.package }}
+
+      # TEST-ONLY: only the real npm publish is stubbed.
       - name: Publish to npm (stubbed)
         id: publish
         run: |
