@@ -178,12 +178,17 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: npm install --ignore-scripts
 
-      # Handles both bundle shapes and both host shells, and asserts the
-      # published layout. Packages that build no prebuilds of their own declare
-      # `needsPrebuilds: false` in their test:integration options.ci — there is
-      # no bundle subtree for them to wait on.
+      # hasPrebuilds is derived by nx-project-matrix from the package's own build
+      # target, so a package whose native code comes transitively from a
+      # dependency (decoder-audio -> bare-ffmpeg) never waits for a bundle that
+      # nothing produces.
+      #
+      # Compared POSITIVELY on purpose: GitHub's loose equality casts both null
+      # and false to 0, so `matrix.x != false` is FALSE for any row missing `x`,
+      # which silently skips the step for every package instead of just the
+      # opted-out one.
       - name: Materialize prebuilds
-        if: '!inputs.prebuild_package && matrix.needsPrebuilds != false'
+        if: '!inputs.prebuild_package && matrix.hasPrebuilds == true'
         uses: ./.github/actions/prebuild-artifact-materialize
         with:
           workdir: ${{ matrix.workdir }}
