@@ -7,9 +7,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.19.1] - 2026-08-18
 
 ### Fixed
+
+- The addon now actually builds against the `qvac-lib-inference-addon-cpp` `1.3.3`
+  its manifest already asked for, rather than `1.2.4`. `vcpkg.json` carried both a
+  `"version>=": "1.3.3"` constraint and an `overrides` entry pinning the same port
+  to `1.2.4`, and a vcpkg override wins over a constraint — so this was the only one
+  of the shared runtime's twelve consumers not resolving 1.3.3, and 0.17.0's note
+  about aligning that floor did not describe what was built here. The pin was added
+  in 0.16.0 for a narrower reason: the registry-baseline bump that made
+  `abseil 20260526.0` available to the new fuzz feature would have carried the header
+  library from 1.2.4 to 1.3.2 as a side effect, and 1.3.2 was unvalidated for this
+  package at the time. That reason is spent — 1.3.3 is both what the constraint
+  requires and the registry baseline's default version for the port, so dropping the
+  override resolves exactly that version rather than leaving resolution to drift.
+
+  No public API change. `runJob()` keeps returning a Boolean admission result on the
+  untagged single-job path this addon uses, and `ClassificationModel` implements
+  plain `IModel`, so none of 1.3.0's job-scheduling interfaces apply to it. What the
+  addon does pick up is teardown and cancellation hardening in the shared runtime:
+  `AddonCpp` destroys its scheduler before stopping the output callback, so teardown
+  terminal events are still delivered; `destroyInstance` destroys the instance
+  outside the instance-registry mutex, so an output callback that re-enters a binding
+  during teardown cannot deadlock (both 1.3.0); `JsAsyncTask` defers environment
+  teardown until queued completions finish (1.3.2), releases its work captures on the
+  JavaScript loop before settling its promise, and no longer retains the model at all
+  for a `cancel()` with no live jobs (both 1.3.3) — the path `unload()` takes here.
 
 - Declared the runtime modules used by the published integration and mobile test files.
 
