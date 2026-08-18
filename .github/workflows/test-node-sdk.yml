@@ -386,6 +386,8 @@ jobs:
         run: |
           sudo snap connect qvac-sdk-e2e:opengl
           sudo snap connect qvac-sdk-e2e:hardware-observe
+          sudo snap connect qvac-sdk-e2e:graphics-core22 mesa-core22:graphics-core22
+          snap list mesa-core22
           snap connections qvac-sdk-e2e
 
       - name: Determine Snap model requirements
