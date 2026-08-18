@@ -1,4 +1,6 @@
 {
+  "name": "qvac-translation-nmtcpp",
+  "version-string": "0.8.0",
   "dependencies": [
     {
       "name": "bergamot-translator",
