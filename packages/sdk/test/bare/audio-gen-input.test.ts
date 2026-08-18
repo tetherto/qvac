@@ -122,6 +122,23 @@ test('resolveAudioGenPcm rejects non-finite samples and oversized clips before t
   )
 })
 
+test('resolveAudioGenPcm rejects oversized decodable files before invoking the decoder', async (t) => {
+  const dir = createTempDir()
+  t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const limitBytes =
+    AUDIOGEN_INPUT_MAX_SECONDS * AUDIOGEN_INPUT_SAMPLE_RATE * AUDIOGEN_INPUT_CHANNELS * 4
+  const hugeWavPath = path.join(dir, 'two-hours.wav')
+  fs.writeFileSync(hugeWavPath, Buffer.alloc(0))
+  fs.truncateSync(hugeWavPath, limitBytes + 1)
+  const started = Date.now()
+  const error = await rejection(
+    resolveAudioGenPcm({ type: 'filePath', value: hugeWavPath }, 'sourceAudio')
+  )
+  t.ok(error instanceof InvalidAudioInputError, 'oversized file is rejected')
+  t.ok(/before decoding/.test((error as Error).message), 'rejected without decoding')
+  t.ok(Date.now() - started < 1000, 'the file was not read into memory')
+})
+
 test('resolveAudioGenPcm reads raw PCM files and reports missing files', async (t) => {
   const dir = createTempDir()
   t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))

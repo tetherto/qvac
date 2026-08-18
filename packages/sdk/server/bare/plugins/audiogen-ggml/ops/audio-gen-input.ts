@@ -47,7 +47,7 @@ export async function resolveAudioGenPcm(
       if (!needsDecoding(filePath)) {
         return toStereoFloat32(await readRawPcmFile(filePath, name), name)
       }
-      await assertFileExists(filePath)
+      await assertDecodableFileSize(filePath, name)
       return monoToStereo(await decodeMonoFloat32(filePath, name), name)
     }
     default:
@@ -55,22 +55,33 @@ export async function resolveAudioGenPcm(
   }
 }
 
-async function assertFileExists(filePath: string) {
+async function statInput(filePath: string) {
   try {
-    await fs.promises.access(filePath)
+    return await fs.promises.stat(filePath)
   } catch (error: unknown) {
     throw new AudioFileNotFoundError(filePath, error)
   }
 }
 
+/**
+ * The FFmpeg decoder buffers the whole input file before emitting PCM, so the
+ * file itself is bounded up front: no encoded container for a clip within
+ * `AUDIOGEN_INPUT_MAX_SECONDS` exceeds the size of that clip as raw stereo
+ * Float32 PCM.
+ */
+async function assertDecodableFileSize(filePath: string, name: AudioGenAudioInputName) {
+  const stats = await statInput(filePath)
+  if (stats.size <= MAX_STEREO_BYTES) return
+  throw new InvalidAudioInputError(
+    `${name} (${filePath}) is ${Math.round(stats.size / 1_000_000)} MB; ` +
+      `files over ${Math.round(MAX_STEREO_BYTES / 1_000_000)} MB cannot fit the ` +
+      `${AUDIOGEN_INPUT_MAX_SECONDS} s limit and are rejected before decoding`
+  )
+}
+
 /** Stream a raw PCM file into memory without blocking the event loop, capped by size. */
 async function readRawPcmFile(filePath: string, name: AudioGenAudioInputName) {
-  let stats: { size: number }
-  try {
-    stats = await fs.promises.stat(filePath)
-  } catch (error: unknown) {
-    throw new AudioFileNotFoundError(filePath, error)
-  }
+  const stats = await statInput(filePath)
   assertWithinLimit(stats.size, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name, filePath)
 
   const chunks: Uint8Array[] = []
@@ -78,7 +89,6 @@ async function readRawPcmFile(filePath: string, name: AudioGenAudioInputName) {
   const stream = fs.createReadStream(filePath) as unknown as AsyncIterable<Uint8Array>
   for await (const chunk of stream) {
     total += chunk.byteLength
-    // The file may grow between stat() and the read; keep the bound authoritative.
     assertWithinLimit(total, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name, filePath)
     chunks.push(chunk)
   }
@@ -95,7 +105,6 @@ async function decodeMonoFloat32(filePath: string, name: AudioGenAudioInputName)
     for await (const chunk of stream as AsyncIterable<Uint8Array>) {
       total += chunk.byteLength
       if (total > MAX_DECODED_MONO_BYTES) {
-        // Stop pulling more PCM; the decoder tears down with the stream.
         ;(stream as unknown as { destroy(): void }).destroy()
         assertWithinLimit(total, MAX_DECODED_MONO_BYTES, FLOAT32_BYTES, name, filePath)
       }

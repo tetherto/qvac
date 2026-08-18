@@ -114,6 +114,10 @@ export function decoderResponseToStream(
   }
   armTimeout()
 
+  outputStream.on('close', () => {
+    settle()
+  })
+
   response
     .onUpdate((output) => {
       hasReceivedData = true

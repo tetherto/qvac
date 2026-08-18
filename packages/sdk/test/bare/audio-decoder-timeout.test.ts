@@ -87,6 +87,20 @@ test('decoder stream fails once the decoder goes silent for the inactivity windo
   t.is(settled, 1, 'the decoder is released after the timeout')
 })
 
+test('destroying the decoder stream early releases the decoder', async (t) => {
+  let settled = 0
+  const stream = decoderResponseToStream(fakeResponse(50, 10), {
+    inputPath: 'abandoned.wav',
+    inactivityTimeoutMs: 1000,
+    onSettled: () => settled++
+  })
+  const iterator = (stream as unknown as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]()
+  await iterator.next()
+  ;(stream as unknown as { destroy(): void }).destroy()
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  t.is(settled, 1, 'close settles the bridge and releases the decoder once')
+})
+
 test('a long WAV decodes fully with an inactivity window far below its total decode time', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audio-decoder-timeout-'))
   t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
