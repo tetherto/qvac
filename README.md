@@ -135,19 +135,15 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-2. Install the package:
+2. Install the package (self-contained — bundles the QVAC worker and Bare runtime, no Node.js required):
 
 ```bash
-pip install tetherto-qvac-sdk
+# Replace <version> with the release you want, e.g. sdk-v0.17.0:
+pip install tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v<version>
 ```
 
-3. Install the worker (requires Node.js and npm — `install-worker` shells out to `npm install`):
-
-```bash
-python -m tetherto.qvac_sdk install-worker
-```
-
-4. Create the `quickstart.py` script:
+3. Create the `quickstart.py` script:
 
 ```python
 import asyncio
@@ -194,7 +190,7 @@ if __name__ == "__main__":
     sys.exit(asyncio.run(main()))
 ```
 
-5. Run the quickstart script:
+4. Run the quickstart script:
 
 ```bash
 python quickstart.py
