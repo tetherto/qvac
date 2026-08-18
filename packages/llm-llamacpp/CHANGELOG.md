@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.45.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (fixes MoE models
+  emitting garbage on Adreno 830 OpenCL, and re-enables the GPU MoE kernels that
+  were falling back to CPU; no API change for this package).
+
 ## [0.44.0] - 2026-08-17
 
 ### Added
