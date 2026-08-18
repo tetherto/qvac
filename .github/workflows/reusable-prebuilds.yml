@@ -2,7 +2,7 @@
 #
 # Encapsulates the canonical prebuild matrix and step sequence shared by most
 # qvac native packages. Callers wire it via `uses:` at the job level and
-# pass `secrets: inherit` so the reusable can read PAT_TOKEN, AWS_OIDC_ROLE_ARN
+# pass `secrets: inherit` so the reusable can read AWS_OIDC_ROLE_ARN
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
@@ -188,7 +188,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup AWS + Windows CLI
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f

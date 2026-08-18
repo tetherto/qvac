@@ -76,6 +76,21 @@ test('buildParakeetEngineConfig removes undefined addon fields', (t) => {
   })
 })
 
+test('buildParakeetEngineConfig forwards Indic Conformer language', (t) => {
+  const config = buildParakeetEngineConfig({
+    language: 'hi',
+    useGPU: true
+  })
+
+  t.alike(config, {
+    engine: 'parakeet',
+    parakeetConfig: {
+      language: 'hi',
+      useGPU: true
+    }
+  })
+})
+
 test('ASR reload config builders keep engine-specific wrappers', (t) => {
   t.alike(
     buildWhisperReloadConfig({
@@ -89,9 +104,10 @@ test('ASR reload config builders keep engine-specific wrappers', (t) => {
       }
     }
   )
-  t.alike(buildParakeetReloadConfig({ streamingChunkMs: 480 }), {
+  t.alike(buildParakeetReloadConfig({ streamingChunkMs: 480, language: 'ta' }), {
     parakeetConfig: {
-      streamingChunkMs: 480
+      streamingChunkMs: 480,
+      language: 'ta'
     }
   })
 })

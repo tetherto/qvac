@@ -19,8 +19,7 @@ function createManagedServe(config: ManagedServeHostConfig): Promise<PossiblyInc
         config: {
           ctx_size: config.ctxSize,
           reasoning_budget: config.reasoningBudget,
-          tools: config.tools,
-          toolsMode: 'static'
+          tools: config.tools
         },
         default: true
       }

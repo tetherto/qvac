@@ -53,10 +53,10 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: macos-26
+          - os: mac-mini-m4
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
           # @qvac/fabric hard-imports vulkan-1.dll on Windows; qvac-win25-x64-gpu has
           # the Vulkan loader installed (same env as llm-llamacpp and other fabric
           # consumers being migrated).
@@ -76,7 +76,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bare runtime
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
