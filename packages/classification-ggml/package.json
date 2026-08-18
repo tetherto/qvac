@@ -19,9 +19,10 @@
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/MobileNetGraph.cpp",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "npm run test:types && npm run test:integration",
+    "test": "npm run test:types && npm run test:package && npm run test:integration",
+    "test:package": "node --test test/package/package-contract.test.js",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:package",
     "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
@@ -71,8 +72,6 @@
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@types/node": "^24.2.1",
-    "bare-url": "^2.1.6",
-    "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -90,7 +89,11 @@
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",
     "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0"
+    "bare-os": "^3.6.2",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.16.5"
   },
   "engines": {
     "bare": ">=1.24.0"

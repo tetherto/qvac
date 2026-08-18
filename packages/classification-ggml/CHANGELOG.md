@@ -36,6 +36,8 @@ and this project adheres to
   JavaScript loop before settling its promise, and no longer retains the model at all
   for a `cancel()` with no live jobs (both 1.3.3) — the path `unload()` takes here.
 
+- Declared the runtime modules used by the published integration and mobile test files.
+
 ## [0.19.0] - 2026-08-18
 
 ### Changed
