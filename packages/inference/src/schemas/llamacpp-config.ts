@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
-import { TOOLS_MODE } from '@/schemas/tools'
 
 /**
  * Upper bound for `reasoning_budget`. Mirrors the llm-llamacpp addon, which
@@ -51,12 +50,6 @@ export const llmConfigBaseSchema = z.object({
    */
   parallel: z.number().int().min(1).optional(),
   tools: z.boolean().optional(),
-  toolsMode: z
-    .enum([TOOLS_MODE.static, TOOLS_MODE.dynamic])
-    .describe(
-      'Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.'
-    )
-    .optional(),
   'cache-type-k': z.string().optional(),
   'cache-type-v': z.string().optional(),
   'main-gpu': z.union([z.number().int().min(0), z.enum(['integrated', 'dedicated'])]).optional(),

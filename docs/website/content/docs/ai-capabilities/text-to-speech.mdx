@@ -31,6 +31,7 @@ The response does not include a sample rate. Use the rate implied by the loaded 
 | Chatterbox              | 24,000 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | Supertonic              | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | Parler                  | 44,100 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 44,100 Hz |
+| CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
 
 ## Models
@@ -160,11 +161,69 @@ async for response in text_to_speech(transport, request):
     samples.extend(response.buffer)
 ```
 
+### CosyVoice3
+
+CosyVoice3 uses the **LLM GGUF** as the top-level `modelSrc`; its registry
+companion set auto-downloads the flow and HiFT GGUFs, the baked `voice.gguf`,
+and the tokenizer files alongside it. Speech is synthesized with the baked
+default voice — the engine's reference-audio path is reserved and voice
+cloning is not yet exposed — and emits native 24 kHz audio.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "cosyvoice3",
+    seed: 42,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text: "Hey, how are you doing today?",
+  inputType: "text",
+  stream: false,
+  emotion: "happy",
+});
+
+const pcm = await result.buffer;
+```
+
+Conditioning uses one of three controls:
+
+- `emotion` — `anger`, `happy`, `neutral`, or `sad`.
+- `pace` — `slow`, `moderate`, or `fast`; `moderate` engages nothing and
+  takes the plain zero-shot path.
+- `instruct` — a raw instruction string, or a structured object with
+  `dialect`, `volume` (`loud` / `soft`), or `style` (`peppa` / `robot`),
+  resolved by precedence `dialect > volume > style`. Supported dialects:
+  `cantonese`, `northeastern`, `gansu`, `guizhou`, `henan`, `hubei`, `hunan`,
+  `jiangxi`, `minnan`, `ningxia`, `shanxi`, `shaanxi`, `shandong`,
+  `shanghai`, `sichuan`, `tianjin`, and `yunnan`.
+
+<Callout type="warn">
+  CosyVoice3 accepts **one conditioning control per synthesis** — an
+  `emotion`, a non-`moderate` `pace`, or an `instruct`. Combining them is
+  rejected at load and request validation. `emotion` and `pace` can also be
+  set per request on `textToSpeech()`; `instruct` is load-time only.
+</Callout>
+
+Set `streamChunkTokens` above zero for native chunk streaming
+(`streamFirstChunkTokens` tunes the first chunk only). Native streaming emits
+at 24 kHz, so omit `outputSampleRate` or set it to `24000` unless the LavaSR
+enhancer is loaded. `useGPU` offloads to Metal on macOS/iOS, Vulkan on
+desktop Linux/Windows, and OpenCL on Adreno Android devices; `threads`,
+`nGpuLayers`, `seed`, and `outputSampleRate` (8,000–192,000 Hz) work as on
+the other engines. CosyVoice3 also supports [LavaSR](#lavasr)
+post-processing via `lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
+`lavasrDenoiserModelSrc` (batch-only; runs before the enhancer).
+
 For model constants, see [SDK — Models](/introduction#models).
 
 ### LavaSR
 
-With either Chatterbox or Supertonic, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag.
+With Chatterbox, Supertonic, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag.
 
 - `lavasrDenoiserModelSrc` — a denoiser GGUF that cleans the speech (noise reduction). It runs **first** and is rate-preserving. Constants: `TTS_DENOISER_LAVASR_FP16`, `TTS_DENOISER_LAVASR_FP32`.
 - `lavasrEnhancerModelSrc` — an enhancer GGUF that neurally bandwidth-extends the output to **48 kHz**. It runs **after** the denoiser. Constants: `TTS_ENHANCER_LAVASR_FP16`, `TTS_ENHANCER_LAVASR_FP32`.
@@ -268,6 +327,34 @@ plays it:
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/parler.ts title="tts-parler.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### CosyVoice3
+
+The following script loads the registry-hosted CosyVoice3 model (the LLM GGUF
+downloads its flow/HiFT, voice, and tokenizer companions automatically),
+applies per-request emotion conditioning, saves the PCM output, and plays it:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/cosyvoice3.js title="tts-cosyvoice3.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/cosyvoice3.ts title="tts-cosyvoice3.ts" lineNumbers
 
 ```
 

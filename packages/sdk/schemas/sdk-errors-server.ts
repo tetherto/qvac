@@ -44,6 +44,7 @@ export const SDK_SERVER_ERROR_CODES = {
   INFERENCE_CANCELLED: 52419,
   REQUEST_REJECTED_BY_POLICY: 52420,
   CONTEXT_OVERFLOW: 52421,
+  INVALID_AUDIO_INPUT: 52422,
 
   // RAG Operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -312,6 +313,10 @@ const serverErrorDefinitions: ErrorCodesMap = {
       const model = modelId ? ` for model "${modelId}"` : ''
       return `${prompt}${ctx}${model}. Reduce the prompt size or start a new conversation.`
     }
+  },
+  [SDK_SERVER_ERROR_CODES.INVALID_AUDIO_INPUT]: {
+    name: 'INVALID_AUDIO_INPUT',
+    message: (details?: string) => `Invalid audio input${details ? `: ${details}` : ''}`
   },
 
   // RAG Operations (52,800-52,999)
