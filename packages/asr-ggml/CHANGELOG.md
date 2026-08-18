@@ -12,7 +12,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
-## [Unreleased]
+## [0.3.2] - 2026-08-18
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-18, which brings in ggml-speech
+  2026-08-18. The update prevents unsupported wide OpenCL GEMV workgroups on
+  Adreno devices and hardens padded DIAG_MASK_INF launches and diagnostics.
 
 ### Fixed
 
