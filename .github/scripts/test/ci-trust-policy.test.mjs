@@ -1606,6 +1606,82 @@ test('mobile validate-devices fails fast on an unknown tests filter and an overs
   assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
 })
 
+const MOBILE_TEST_WORKFLOWS = workflowPaths().filter((path) =>
+  /integration-mobile-test-.*\.ya?ml$/.test(path),
+)
+
+test('mobile validate-devices reads its filter/shard data from the tested ref, not the workflow ref', () => {
+  // Re-review P1/P2: the build checks out addon code from `inputs.ref ||
+  // github.ref`, so the validator must read test-groups.json /
+  // integration.auto.cjs from the SAME ref — otherwise a branch that
+  // renames/adds runners passes stale validation and can run zero tests.
+  // The executable composite action stays on the trusted workflow ref, so the
+  // data file must NEVER be sparse-checked-out alongside it.
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
+  for (const path of MOBILE_TEST_WORKFLOWS) {
+    const src = read(path)
+    // Validation data comes from the tested ref, into a dedicated dir.
+    assert.match(
+      src,
+      /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/,
+      `${path} must check out validation data from inputs.ref || github.ref`,
+    )
+    assert.match(
+      src,
+      /path: validation-data/,
+      `${path} must isolate validation data in validation-data/`,
+    )
+    // The path handed to the validator points at that dir, never a raw
+    // workflow-ref checkout path.
+    assert.match(
+      src,
+      /(test-groups-path|runner-source-path): validation-data\//,
+      `${path} must validate against the tested-ref data copy`,
+    )
+    // The data file is never co-located on the trusted composite-action
+    // checkout (that would pin validation to the workflow ref again).
+    assert.doesNotMatch(
+      src,
+      /run-mobile-integration-tests\n\s+packages\/[^\n]*\/test\/mobile\//,
+      `${path} must not sparse-checkout mobile test data on the action checkout`,
+    )
+  }
+})
+
+test('audiogen keeps the composite action on the default branch but reads data from the tested ref', () => {
+  // audiogen runs validate-devices in the `release` environment, so the
+  // executable action stays pinned to the default branch (supply-chain guard);
+  // only the JSON data follows the tested ref.
+  const src = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
+  assert.match(src, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
+  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
+  assert.match(src, /test-groups-path: validation-data\//)
+})
+
+test('inference generates its runner map in an unprivileged job and fails closed', () => {
+  const src = read(
+    '.github/workflows/integration-mobile-test-inference-addon-cpp.yml',
+  )
+  // The generator runs repo-branch code, so it must hold no secrets.
+  const mapJob = src.slice(
+    src.indexOf('  resolve-runner-map:'),
+    src.indexOf('  validate-devices:'),
+  )
+  assert.ok(mapJob.length > 0, 'resolve-runner-map job must exist')
+  assert.match(mapJob, /permissions:\n\s+contents: read/)
+  assert.doesNotMatch(mapJob, /id-token: write/)
+  assert.doesNotMatch(mapJob, /environment:/)
+  // It regenerates from the tested ref and fails closed (no fallback).
+  assert.match(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
+  assert.match(mapJob, /set -euo pipefail/)
+  assert.doesNotMatch(src, /falling back to device-only/)
+  // validate-devices consumes the artifact as data and hard-fails if the map
+  // could not be produced, before any build or Device Farm spend.
+  assert.match(src, /needs\.resolve-runner-map\.result != 'success'/)
+  assert.match(src, /Failing closed/)
+  assert.match(src, /test-groups-path: validation-data\/inference-mobile-test-groups\.json/)
+})
+
 test('mobile monitor maps each run back to its spec for any per-spec fan-out', () => {
   const action = read(
     '.github/actions/run-mobile-integration-tests/monitor-test-run/action.yml',

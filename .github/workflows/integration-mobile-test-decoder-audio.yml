@@ -111,8 +111,23 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      # Validate the tests filter against the runner list from the SAME ref the
+      # build executes (inputs.ref || github.ref), not the workflow ref, so a
+      # branch that renames/adds runners can't pass stale validation. Data only —
+      # nothing here is executed; the composite action stays on the trusted
+      # workflow ref checked out above.
+      - name: Checkout validation data (matches the built ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
             packages/decoder-audio/test/mobile/integration.auto.cjs
           sparse-checkout-cone-mode: false
+          path: validation-data
+          persist-credentials: false
       - name: Validate requested devices
         uses: ./.github/actions/run-mobile-integration-tests/validate-devices
         with:
@@ -120,9 +135,10 @@ jobs:
           devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
           device-model-operator: ${{ inputs.device_model_operator }}
           tests: ${{ inputs.tests }}
-          # Single-spec addon: validate the tests filter against the committed
-          # runner list so a typo fails fast instead of a billed false-green run.
-          runner-source-path: packages/decoder-audio/test/mobile/integration.auto.cjs
+          # Single-spec addon: validate the tests filter against the runner list
+          # (checked out from the tested ref above) so a typo fails fast instead
+          # of a billed false-green run.
+          runner-source-path: validation-data/packages/decoder-audio/test/mobile/integration.auto.cjs
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
   build-and-test:

@@ -154,6 +154,12 @@ one. Which prebuild depends on the `package` / `package_spec` input:
 > that gets built; it does **not** rebuild the native binary. To test unpublished
 > native changes, pin the GPR dev build via `package` as above — otherwise the run
 > silently tests the published `@latest`, not your branch.
+>
+> The `tests`-filter / shard-count validation reads the runner list from the
+> **same `ref`** the build executes, so if your branch renames or adds runners (or
+> shards), `validate-devices` checks against your branch's list — a stale
+> default-branch copy can't wave a mistyped filter through. The composite actions
+> themselves always run from the trusted workflow ref, never from `ref`.
 
 **Exceptions:**
 

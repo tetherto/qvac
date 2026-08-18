@@ -90,9 +90,58 @@ jobs:
   # Manual (workflow_dispatch) runs must name a device that exists on Device
   # Farm. This gate fails fast BEFORE the (~90 min) build or any Device Farm
   # run, so a typo or an empty selection costs nothing. Skipped for workflow_call.
+  # inference-addon-cpp ships no committed test-groups.json / integration.auto.cjs
+  # (both are generated from the desktop suites). Regenerate JUST the runner map
+  # here — pure fs, no native build — from the SAME ref the build compiles
+  # (inputs.ref || github.ref), so validate-devices can reject a bad tests filter
+  # and count the real shard fan-out (one shard per desktop suite) BEFORE the
+  # expensive build. This job is UNPRIVILEGED (no environment, no id-token)
+  # precisely because it runs repo-branch code; the privileged validate-devices
+  # job only consumes its JSON output as data. Dispatch-only (inputs.platform
+  # != ''); it fails CLOSED so a generator hiccup blocks the run instead of
+  # silently degrading to a device-only check that would run without a filter.
+  resolve-runner-map:
+    name: Resolve mobile runner map
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout runner-map source (from the tested ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js
+            packages/inference-addon-cpp/tests/integration_js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Generate mobile runner map (tests-filter + shard-count source)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const{expectedEntries,expectedTestGroups}=require('./packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js');process.stdout.write(expectedTestGroups(expectedEntries()))" > inference-mobile-test-groups.json
+          echo "Generated runner map with $(jq '.android | keys | length' inference-mobile-test-groups.json) shard(s):"
+          jq -r '[.android[] | .[]] | unique | .[] | "  - " + .' inference-mobile-test-groups.json
+      - name: Upload runner map
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: inference-runner-map
+          path: inference-mobile-test-groups.json
+          if-no-files-found: error
+          retention-days: 1
+
   validate-devices:
     name: Validate device selection
-    if: inputs.platform != ''
+    # Depends on the unprivileged generator. Runs on dispatch even when that job
+    # FAILED (via !cancelled()) so the guard step below can fail CLOSED — a
+    # skipped validate-devices would be tolerated by the build gate and silently
+    # run without any tests-filter / shard-count check.
+    needs: [resolve-runner-map]
+    if: ${{ !cancelled() && inputs.platform != '' }}
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 5
@@ -100,35 +149,22 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Fail closed if the runner map could not be generated
+        if: needs.resolve-runner-map.result != 'success'
+        run: |
+          echo "::error::runner-map generation failed (result: ${{ needs.resolve-runner-map.result }}); cannot validate the tests filter or shard count. Failing closed before any build or Device Farm spend."
+          exit 1
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
-            packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js
-            packages/inference-addon-cpp/tests/integration_js
           sparse-checkout-cone-mode: false
-      # inference-addon-cpp ships no committed test-groups.json / integration.auto.cjs
-      # (both are generated from the desktop suites at build time). Regenerate JUST
-      # the runner map here — pure fs, no native build — so validate-devices can
-      # reject a bad tests filter and count the real shard fan-out (one shard per
-      # desktop suite) BEFORE the expensive build. This only runs on dispatch
-      # (inputs.platform != ''), i.e. on repo-branch code — the same code the build
-      # job compiles — so it adds no new trust boundary. A generator hiccup degrades
-      # gracefully to device-only validation instead of blocking the run.
-      - name: Generate mobile runner map (tests-filter + shard-count source)
-        id: gen_groups
-        shell: bash
-        run: |
-          set -uo pipefail
-          if node -e "const{expectedEntries,expectedTestGroups}=require('./packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js');process.stdout.write(expectedTestGroups(expectedEntries()))" > inference-mobile-test-groups.json 2> gen.err; then
-            echo "path=inference-mobile-test-groups.json" >> "$GITHUB_OUTPUT"
-            echo "Generated runner map with $(jq '.android | keys | length' inference-mobile-test-groups.json) shard(s):"
-            jq -r '[.android[] | .[]] | unique | .[] | "  - " + .' inference-mobile-test-groups.json
-          else
-            echo "::warning::Could not generate the inference-addon-cpp runner map ($(tr '\n' ' ' < gen.err)); falling back to device-only validation (no tests-filter / shard-count check)."
-            echo "path=" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Download runner map (data from the tested ref)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: inference-runner-map
+          path: validation-data
       - name: Validate requested devices
         uses: ./.github/actions/run-mobile-integration-tests/validate-devices
         with:
@@ -136,7 +172,7 @@ jobs:
           devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
           device-model-operator: ${{ inputs.device_model_operator }}
           tests: ${{ inputs.tests }}
-          test-groups-path: ${{ steps.gen_groups.outputs.path }}
+          test-groups-path: validation-data/inference-mobile-test-groups.json
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
   # Resolve the framework revision ONCE, before any fork code runs. `setup` (inside
