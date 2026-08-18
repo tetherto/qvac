@@ -262,8 +262,10 @@ Generation is sampled by default: `temperature` (default `0.7`), `topK`
 (`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
 and ignores all three, and `maxFrames` caps generation in codec frames
 (~21.5 frames per second of audio). `seed`, `threads`, `nGpuLayers`, and
-`outputSampleRate` work as on the other engines; `useGPU` offloads to Vulkan
-on desktop Linux/Windows only.
+`outputSampleRate` work as on the other engines; `useGPU` offloads to Metal
+on macOS/iOS, Vulkan on desktop Linux/Windows, and OpenCL on Android/Adreno —
+elsewhere it falls back to CPU and sets `stats.gpuUnsupported` in the
+response.
 
 <Callout type="warn">
   Audio8 has no `emotion`, `pace`, or description fields (at load or per
