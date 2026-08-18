@@ -36,6 +36,14 @@ function buildCosyvoiceLoadOptions(params = {}) {
     opts: { stats: true }
   }
   if (params.nGpuLayers !== undefined) options.nGpuLayers = params.nGpuLayers
+  if (params.referenceAudio !== undefined) options.referenceAudio = params.referenceAudio
+  if (params.promptText !== undefined) options.promptText = params.promptText
+  if (params.cosyvoiceS3tokModel !== undefined) {
+    options.files.cosyvoiceS3tokModel = params.cosyvoiceS3tokModel
+  }
+  if (params.cosyvoiceCampplusModel !== undefined) {
+    options.files.cosyvoiceCampplusModel = params.cosyvoiceCampplusModel
+  }
   // instruct2 control (dialect / volume / style / raw string) stays a
   // constructor-level option; emotion and pace are the cross-engine options and
   // also work on reload() and per call.

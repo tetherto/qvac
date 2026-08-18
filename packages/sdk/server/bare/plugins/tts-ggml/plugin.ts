@@ -17,10 +17,12 @@ import {
   type ResolveContext,
   type ResolveResult,
   type TtsChatterboxLoadConfig,
+  type TtsCosyvoice3LoadConfig,
   type TtsParlerLoadConfig,
   type TtsSupertonicLoadConfig,
   type TtsRuntimeConfig,
   type TtsChatterboxRuntimeConfig,
+  type TtsCosyvoice3RuntimeConfig,
   type TtsParlerRuntimeConfig,
   type TtsSupertonicRuntimeConfig
 } from '@/schemas'
@@ -124,6 +126,23 @@ async function resolveSupertonicConfig(
 
 function resolveParlerConfig(config: TtsParlerLoadConfig): ResolveResult<TtsRuntimeConfig> {
   return { config, artifacts: {} }
+}
+
+// CosyVoice3's multi-file layout (flow/HiFT GGUFs, voice.gguf, vocab.json,
+// merges.txt) rides the primary model's registry companion set, so only the
+// optional LavaSR post-processing sources need resolution here.
+async function resolveCosyvoice3Config(
+  config: TtsCosyvoice3LoadConfig,
+  ctx: ResolveContext
+): Promise<ResolveResult<TtsRuntimeConfig>> {
+  const { lavasrEnhancerModelSrc, lavasrDenoiserModelSrc, ...runtime } = config
+  const lavasrArtifacts = await resolveLavasrArtifacts(
+    lavasrEnhancerModelSrc,
+    lavasrDenoiserModelSrc,
+    ctx
+  )
+
+  return { config: runtime, artifacts: lavasrArtifacts }
 }
 
 // Build the optional LavaSR `files` entries from resolved artifacts. Supplying
@@ -282,6 +301,67 @@ function createParlerModel(
   return { model }
 }
 
+// Rebuild the structured instruct without explicit-undefined keys so it
+// satisfies the addon's exactOptionalPropertyTypes constructor typing.
+function toAddonInstruct(instruct: NonNullable<TtsCosyvoice3RuntimeConfig['instruct']>) {
+  if (typeof instruct === 'string') return instruct
+  return {
+    ...(instruct.dialect !== undefined ? { dialect: instruct.dialect } : {}),
+    ...(instruct.volume !== undefined ? { volume: instruct.volume } : {}),
+    ...(instruct.style !== undefined ? { style: instruct.style } : {})
+  }
+}
+
+function createCosyvoice3Model(
+  modelId: string,
+  config: TtsCosyvoice3RuntimeConfig,
+  params: CreateModelParams,
+  artifacts: Record<string, string | undefined>
+): PluginModelResult {
+  const cosyvoiceLlmModel = params.modelPath
+  if (!cosyvoiceLlmModel) {
+    throw new TtsArtifactsRequiredError()
+  }
+
+  const logger = createStreamLogger(modelId, ModelType.ttsGgml)
+
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_COSYVOICE3,
+    // The LLM GGUF's registry companion set co-locates the flow/HiFT GGUFs,
+    // voice.gguf, vocab.json and merges.txt next to it, so its containing
+    // directory is the addon's model dir.
+    files: {
+      cosyvoiceModelDir: dirname(cosyvoiceLlmModel),
+      cosyvoiceLlmModel,
+      ...lavasrFiles(artifacts)
+    },
+    ...(config.emotion !== undefined ? { emotion: config.emotion } : {}),
+    ...(config.pace !== undefined ? { pace: config.pace } : {}),
+    ...(config.instruct !== undefined ? { instruct: toAddonInstruct(config.instruct) } : {}),
+    ...(config.streamChunkTokens !== undefined
+      ? { streamChunkTokens: config.streamChunkTokens }
+      : {}),
+    ...(config.streamFirstChunkTokens !== undefined
+      ? { streamFirstChunkTokens: config.streamFirstChunkTokens }
+      : {}),
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
+    config: {
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {})
+    },
+    logger,
+    opts: { stats: true },
+    exclusiveRun: true
+  })
+
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
+  return { model }
+}
+
 export const ttsPlugin = definePlugin({
   modelType: ModelType.ttsGgml,
   displayName: 'TTS (GGML)',
@@ -295,6 +375,9 @@ export const ttsPlugin = definePlugin({
     if (ttsEngine === 'parler') {
       return resolveParlerConfig(cfg as TtsParlerLoadConfig)
     }
+    if (ttsEngine === 'cosyvoice3') {
+      return resolveCosyvoice3Config(cfg as TtsCosyvoice3LoadConfig, ctx)
+    }
     if (ttsEngine === 'supertonic') {
       return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx)
     }
@@ -307,6 +390,9 @@ export const ttsPlugin = definePlugin({
 
     if (config.ttsEngine === 'parler') {
       return createParlerModel(params.modelId, config, params)
+    }
+    if (config.ttsEngine === 'cosyvoice3') {
+      return createCosyvoice3Model(params.modelId, config, params, artifacts)
     }
     if (config.ttsEngine === 'supertonic') {
       return createSupertonicModel(params.modelId, config, params, artifacts)
