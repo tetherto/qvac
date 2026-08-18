@@ -69,25 +69,43 @@ if (VCPKG_TARGET_IS_ANDROID)
   include(${CMAKE_CURRENT_LIST_DIR}/android-vulkan-version.cmake)
   resolve_vulkan_headers_version(vulkan_version)
   resolve_vulkan_headers_sha512("${vulkan_version}" vulkan_headers_sha512)
+  set(spirv_headers_version "vulkan-sdk-1.4.350.1")
+  set(spirv_headers_sha512
+      "789fb10aa0c3a08934a6067dab1da09e93880e7c75575bf6054dc51df35416feb5daff73c7a3faf1681a2b33275315e44ef3665617fe75cdd18b991a8b7e9991")
   message(STATUS "Using Vulkan C++ wrappers from version: ${vulkan_version}")
   vcpkg_download_distfile(VULKAN_HEADERS_ARCHIVE
     URLS "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v${vulkan_version}.tar.gz"
     FILENAME "KhronosGroup-Vulkan-Headers-v${vulkan_version}.tar.gz"
     SHA512 "${vulkan_headers_sha512}"
   )
+  vcpkg_download_distfile(SPIRV_HEADERS_ARCHIVE
+    URLS "https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/${spirv_headers_version}.tar.gz"
+    FILENAME "KhronosGroup-SPIRV-Headers-${spirv_headers_version}.tar.gz"
+    SHA512 "${spirv_headers_sha512}"
+  )
   file(ARCHIVE_EXTRACT
     INPUT "${VULKAN_HEADERS_ARCHIVE}"
     DESTINATION "${SOURCE_PATH}"
     PATTERNS "*.hpp"
   )
+  file(ARCHIVE_EXTRACT
+    INPUT "${SPIRV_HEADERS_ARCHIVE}"
+    DESTINATION "${SOURCE_PATH}"
+    PATTERNS "*/include/*"
+  )
   file(RENAME
     "${SOURCE_PATH}/Vulkan-Headers-${vulkan_version}"
     "${SOURCE_PATH}/ggml/src/ggml-vulkan/vulkan_cpp_wrapper"
   )
+  file(RENAME
+    "${SOURCE_PATH}/SPIRV-Headers-${spirv_headers_version}"
+    "${SOURCE_PATH}/ggml/src/ggml-vulkan/spirv_headers_wrapper"
+  )
 
   # The pinned fabric source fetches Vulkan-Headers for Android, but that
-  # archive no longer contains the Vulkan-Hpp C++ bindings. Add the wrappers
-  # downloaded above to ggml-vulkan's private include paths.
+  # archive no longer contains the Vulkan-Hpp C++ bindings. Its SPIRV-Headers
+  # FetchContent path also misses spirv.hpp in CI, so add both downloaded
+  # wrapper trees to ggml-vulkan's private include paths.
   set(vulkan_cmake_file
       "${SOURCE_PATH}/ggml/src/ggml-vulkan/CMakeLists.txt")
   file(READ "${vulkan_cmake_file}" vulkan_cmake_contents)
@@ -99,6 +117,20 @@ if (VCPKG_TARGET_IS_ANDROID)
             "${spirv_headers_SOURCE_DIR}/include")]=]
       [=[        target_include_directories(ggml-vulkan PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_cpp_wrapper/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/spirv_headers_wrapper/include"
+            "${vulkan_headers_SOURCE_DIR}/include"
+            "${spirv_headers_SOURCE_DIR}/include")]=]
+    )
+  elseif(NOT vulkan_cmake_contents MATCHES "spirv_headers_wrapper/include")
+    vcpkg_replace_string(
+      "${vulkan_cmake_file}"
+      [=[        target_include_directories(ggml-vulkan PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_cpp_wrapper/include"
+            "${vulkan_headers_SOURCE_DIR}/include"
+            "${spirv_headers_SOURCE_DIR}/include")]=]
+      [=[        target_include_directories(ggml-vulkan PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_cpp_wrapper/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/spirv_headers_wrapper/include"
             "${vulkan_headers_SOURCE_DIR}/include"
             "${spirv_headers_SOURCE_DIR}/include")]=]
     )
