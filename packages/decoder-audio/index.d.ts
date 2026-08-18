@@ -29,6 +29,11 @@ export interface DecoderOutput {
   outputArray: ArrayBuffer
 }
 
+export interface RunOptions {
+  /** When aborted, the returned response fails with the abort reason. */
+  signal?: AbortSignal
+}
+
 interface RuntimeStats {
   decodeTimeMs: number
   inputBytes: number
@@ -48,7 +53,7 @@ declare class FFmpegDecoder {
 
   load(): Promise<void>
   unload(): Promise<void>
-  run(audioStream: AsyncIterable<Buffer>): QvacResponse<DecoderOutput>
+  run(audioStream: AsyncIterable<Buffer>, runOptions?: RunOptions): QvacResponse<DecoderOutput>
 
   runtimeStats(): RuntimeStats
 }
