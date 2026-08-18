@@ -514,6 +514,11 @@ jobs:
     needs:
       - resolve-framework
       - build
+    # Explicit skip-tolerant gate: on a single-platform dispatch the opposite
+    # prebuild is skipped, and that skip would otherwise propagate through the
+    # `build` needs-closure and skip this job (a silent false green — no
+    # on-device run). Run whenever both direct needs actually succeeded.
+    if: ${{ !cancelled() && needs.resolve-framework.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     environment: release
     # Exceeds the 30m default: waits on the AWS Device Farm run (queue + device
