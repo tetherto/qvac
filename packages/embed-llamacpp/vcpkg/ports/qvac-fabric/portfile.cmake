@@ -84,6 +84,25 @@ if (VCPKG_TARGET_IS_ANDROID)
     "${SOURCE_PATH}/Vulkan-Headers-${vulkan_version}"
     "${SOURCE_PATH}/ggml/src/ggml-vulkan/vulkan_cpp_wrapper"
   )
+
+  # The pinned fabric source fetches Vulkan-Headers for Android, but that
+  # archive no longer contains the Vulkan-Hpp C++ bindings. Add the wrappers
+  # downloaded above to ggml-vulkan's private include paths.
+  set(vulkan_cmake_file
+      "${SOURCE_PATH}/ggml/src/ggml-vulkan/CMakeLists.txt")
+  file(READ "${vulkan_cmake_file}" vulkan_cmake_contents)
+  if(NOT vulkan_cmake_contents MATCHES "vulkan_cpp_wrapper/include")
+    vcpkg_replace_string(
+      "${vulkan_cmake_file}"
+      [=[        target_include_directories(ggml-vulkan PRIVATE
+            "${vulkan_headers_SOURCE_DIR}/include"
+            "${spirv_headers_SOURCE_DIR}/include")]=]
+      [=[        target_include_directories(ggml-vulkan PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/vulkan_cpp_wrapper/include"
+            "${vulkan_headers_SOURCE_DIR}/include"
+            "${spirv_headers_SOURCE_DIR}/include")]=]
+    )
+  endif()
 endif()
 
 set(PLATFORM_OPTIONS)
