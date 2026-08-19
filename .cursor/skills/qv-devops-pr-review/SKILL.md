@@ -1,6 +1,6 @@
 ---
 name: qv-devops-pr-review
-description: PR review for DevOps changes — runs the generic /qv-pr-review flow then layers a structured GitHub Actions security audit (action pinning, permissions, OIDC, hardened runner, secrets handling). Use when reviewing a PR that touches DevOps paths or invoking /qv-devops-pr-review.
+description: PR review for DevOps changes — runs the generic /qv-pr-review flow then layers a structured GitHub Actions security audit (action pinning, permissions, OIDC, secrets handling). Use when reviewing a PR that touches DevOps paths or invoking /qv-devops-pr-review.
 disable-model-invocation: true
 ---
 
@@ -65,15 +65,14 @@ For every `.github/workflows/*.yml` and `.github/actions/**/action.yml` in the p
 | A4 | If the workflow uses `pull_request_target`, none of its jobs check out PR HEAD via `actions/checkout@... ref: ${{ github.event.pull_request.head.sha }}` or `${{ github.head_ref }}`. | github-actions.mdc § Triggers and untrusted input | High |
 | A5 | No direct interpolation of `${{ github.event.pull_request.title }}`, `body`, `head_ref`, `commits[*].message`, or any `github.event.*` user-controlled field inside `run:` blocks. They MUST be piped via `env:`. | github-actions.mdc § Triggers and untrusted input | High |
 | A6 | If the workflow has `id-token: write`, OIDC is consumed by an auth action (`google-github-actions/auth`, `aws-actions/configure-aws-credentials`, `azure/login`) — not used for token forging that reaches a long-lived credential. | github-actions.mdc § OIDC | Medium |
-| A7 | Sensitive workflows (touch secrets, publish artifacts, deploy, or `id-token: write`) run `step-security/harden-runner` as the first step. Missing → finding. | github-actions.mdc § Hardened runners | Medium |
-| A8 | No `${{ secrets.X }}` interpolated directly inside a `run:` block. Pass via `env:` or action `with:` instead. | secrets-and-credentials.mdc § Access in workflows | High |
-| A9 | No `set -x` / `bash -x` in steps that touch secrets; no `printenv`, `env`, `cat`, or `echo` of a secret value, even for "debugging". | secrets-and-credentials.mdc § Access in workflows | High |
-| A10 | Concurrency block is declared. Release/state-mutating workflows have `cancel-in-progress: false`. | github-actions.mdc § Concurrency | Medium |
-| A11 | Every job has `timeout-minutes`. Default budget 30; >30 needs a justifying comment. | github-actions.mdc § Failure handling | Low |
-| A12 | `continue-on-error: true` is NOT set on Tier-1 checks (lint, format, type-check, security scans, tests). | github-actions.mdc § Failure handling | Medium |
-| A13 | Outputs use `$GITHUB_OUTPUT`, never the deprecated `::set-output::`. | github-actions.mdc § Outputs and step IDs | Low |
-| A14 | When `actions/cache` is used, cache writes are gated on non-fork triggers (`push` / `workflow_dispatch` / `merge_group`) — not blanket on `pull_request`. | github-actions.mdc § Caching | Medium |
-| A15 | Workflow filename matches the existing repo conventions (`on-pr-*.yml`, `on-merge-*.yml`, `on-pr-close-*.yml`, `release-*.yml`, `create-github-release-*.yml`, `prebuilds-*.yml`, `pr-test-*.yml`, `pr-validation-*.yml`, `pr-checks-*.yml`, `integration-*-*.yml`, `reusable-*.yml`, `trigger-reusable-*.yml`). New file with a divergent name → finding. Pre-existing files keep their name unless the PR renames them. | github-actions.mdc § File layout and naming | Low |
+| A7 | No `${{ secrets.X }}` interpolated directly inside a `run:` block. Pass via `env:` or action `with:` instead. | secrets-and-credentials.mdc § Access in workflows | High |
+| A8 | No `set -x` / `bash -x` in steps that touch secrets; no `printenv`, `env`, `cat`, or `echo` of a secret value, even for "debugging". | secrets-and-credentials.mdc § Access in workflows | High |
+| A9 | Concurrency block is declared. Release/state-mutating workflows have `cancel-in-progress: false`. | github-actions.mdc § Concurrency | Medium |
+| A10 | Every job has `timeout-minutes`. Default budget 30; >30 needs a justifying comment. | github-actions.mdc § Failure handling | Low |
+| A11 | `continue-on-error: true` is NOT set on Tier-1 checks (lint, format, type-check, security scans, tests). | github-actions.mdc § Failure handling | Medium |
+| A12 | Outputs use `$GITHUB_OUTPUT`, never the deprecated `::set-output::`. | github-actions.mdc § Outputs and step IDs | Low |
+| A13 | When `actions/cache` is used, cache writes are gated on non-fork triggers (`push` / `workflow_dispatch` / `merge_group`) — not blanket on `pull_request`. | github-actions.mdc § Caching | Medium |
+| A14 | Workflow filename matches the existing repo conventions (`on-pr-*.yml`, `on-merge-*.yml`, `on-pr-close-*.yml`, `release-*.yml`, `create-github-release-*.yml`, `prebuilds-*.yml`, `pr-test-*.yml`, `pr-validation-*.yml`, `pr-checks-*.yml`, `integration-*-*.yml`, `reusable-*.yml`, `trigger-reusable-*.yml`). New file with a divergent name → finding. Pre-existing files keep their name unless the PR renames them. | github-actions.mdc § File layout and naming | Low |
 
 For each finding, capture: file, line, the offending excerpt (3-8 lines), the tier, and a one-line "why" pulled from the rule. Write findings into the same chat overview structure that `/qv-pr-review` step 7a uses, under a new sub-heading `### GHA security audit`.
 
