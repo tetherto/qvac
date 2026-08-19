@@ -1,8 +1,8 @@
 {
   "name": "ggml-speech",
   "version-date": "2026-08-17",
-  "port-version": 1,
-  "description": "TEMP overlay: speech-stack ggml flavour pinned to tetherto/qvac-ext-ggml@bfb345c2 (PR #58 DIAG_MASK_INF_8 Adreno launch fix). Drop this overlay and consume the published registry pin once that commit is on speech.",
+  "port-version": 2,
+  "description": "TEMP overlay: speech-stack ggml flavour pinned to tetherto/qvac-ext-ggml@4bced9f3 (PR #58: DIAG_MASK_INF_8, Android logcat enqueue failures, Adreno launch validation). Drop this overlay once that work is on speech.",
   "homepage": "https://github.com/tetherto/qvac-ext-ggml/tree/speech",
   "license": "MIT",
   "dependencies": [

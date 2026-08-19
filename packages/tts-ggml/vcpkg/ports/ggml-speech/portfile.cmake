@@ -1,15 +1,15 @@
-# TEMP overlay: pin ggml-speech to qvac-ext-ggml#58
-# (fix/opencl-diag-mask-inf-8-adreno, REF bfb345c2) so Android Device Farm
-# can rebuild OpenCL against the DIAG_MASK_INF_8 work-group launch fix
-# before that commit is published on the registry speech pin.
+# TEMP overlay: pin ggml-speech to qvac-ext-ggml#58 tip 4bced9f3
+# (fix/opencl-diag-mask-inf-8-adreno: DIAG_MASK_INF_8 launch fix, Android
+# logcat on enqueue failure, GEMV workgroup clamp, Adreno launch validation)
+# so Android Device Farm can identify the remaining OpenCL abort.
 #
 # Registry port otherwise matches tetherto/qvac-registry-vcpkg ports/ggml-speech
 # at 2026-08-17 (PR #55).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF bfb345c275c93cee319ce0b5f8a4c420b5118128
-    SHA512 354c7bbad01a7bd4583cc347330d3e49c6096d6388b9fb787536a8759211556e5d19c59f861044e86afb43138c5fc0e58d99febf7ee2d43f165525b1b248f6db
+    REF 4bced9f374311c1799d3497f0668b07af729c9d8
+    SHA512 61e2158246529828ba2637472fe6ace085fa6343df8e33bb71aa8a2064e86e43c2ccfcd69ff1521bab07712bdea2190bbe7cdc159664c1dbfedb8385bc143776
     HEAD_REF speech
 )
 
