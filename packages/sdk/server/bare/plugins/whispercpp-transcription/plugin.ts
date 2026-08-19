@@ -1,7 +1,5 @@
-import whisperAddonLogging from '@qvac/transcription-whispercpp/addonLogging'
-import TranscriptionWhispercpp, {
-  type WhisperConfig as TranscriptionWhisperConfig
-} from '@qvac/transcription-whispercpp'
+import asrAddonLogging from '@qvac/asr-ggml/addonLogging'
+import ASRGgml from '@qvac/asr-ggml'
 import {
   definePlugin,
   defineHandler,
@@ -12,16 +10,17 @@ import {
   transcribeStreamResponseSchema,
   ModelType,
   whisperConfigSchema,
-  ADDON_WHISPER,
+  ADDON_ASR,
   type CreateModelParams,
   type PluginModelResult,
   type ResolveContext,
   type TranscribeSegment,
   type WhisperConfig
 } from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
 import { transcribe, transcribeStream } from '@/server/bare/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { buildWhisperEngineConfig } from '@/server/bare/plugins/asr-ggml/config'
+import { createAsrModelLogger } from '@/server/bare/plugins/asr-ggml/logging'
 
 function createWhisperModel(
   modelId: string,
@@ -29,29 +28,17 @@ function createWhisperModel(
   whisperConfig: WhisperConfig,
   vadModelPath?: string
 ) {
-  const logger = createStreamLogger(modelId, ModelType.whispercppTranscription)
-  registerAddonLogger(modelId, ModelType.whispercppTranscription, logger)
+  const logger = createAsrModelLogger(modelId, ModelType.whispercppTranscription)
 
-  const args = {
+  const model = new ASRGgml({
     files: {
       model: modelPath,
       ...(vadModelPath && { vadModel: vadModelPath })
     },
-    logger,
-    opts: {
-      stats: true
-    }
-  }
-
-  const { contextParams, miscConfig, ...whisperParams } = whisperConfig
-
-  const config = {
-    whisperConfig: whisperParams as TranscriptionWhisperConfig,
-    ...(contextParams && { contextParams }),
-    ...(miscConfig && { miscConfig })
-  }
-
-  const model = new TranscriptionWhispercpp(args, config)
+    config: buildWhisperEngineConfig(whisperConfig),
+    enableStats: true,
+    logger
+  })
 
   return { model }
 }
@@ -59,7 +46,7 @@ function createWhisperModel(
 export const whisperPlugin = definePlugin({
   modelType: ModelType.whispercppTranscription,
   displayName: 'Whisper (whisper.cpp)',
-  addonPackage: ADDON_WHISPER,
+  addonPackage: ADDON_ASR,
   loadConfigSchema: whisperConfigSchema,
 
   async resolveConfig(cfg: WhisperConfig, ctx: ResolveContext) {
@@ -191,60 +178,71 @@ export const whisperPlugin = definePlugin({
               request.requestId
             )
 
-        for await (const value of iterator) {
-          if (typeof value === 'object' && value !== null && 'type' in value) {
-            if (value.type === 'vad') {
-              yield {
-                type: 'transcribeStream' as const,
-                vad: {
-                  speaking: value.speaking,
-                  probability: value.probability
+        try {
+          let result = await iterator.next()
+          while (!result.done) {
+            const value = result.value
+            if (typeof value === 'object' && value !== null && 'type' in value) {
+              if (value.type === 'vad') {
+                yield {
+                  type: 'transcribeStream' as const,
+                  vad: {
+                    speaking: value.speaking,
+                    probability: value.probability
+                  }
                 }
-              }
-              continue
-            }
-            if (value.type === 'endOfTurn') {
-              // Whisper addon emits legacy `{ type, silenceDurationMs }` frames
-              // without `source`. Parakeet must never surface here.
-              if (value.source === 'parakeet') {
+                result = await iterator.next()
                 continue
               }
-              if (typeof value.silenceDurationMs !== 'number') {
+              if (value.type === 'endOfTurn') {
+                // The shared ASR op normalizes addon engine sources to the
+                // stable SDK-level Whisper/Parakeet variants.
+                if (value.source !== 'parakeet' && typeof value.silenceDurationMs === 'number') {
+                  yield {
+                    type: 'transcribeStream' as const,
+                    endOfTurn: {
+                      source: 'whisper' as const,
+                      silenceDurationMs: value.silenceDurationMs
+                    }
+                  }
+                }
+                result = await iterator.next()
                 continue
               }
-              yield {
-                type: 'transcribeStream' as const,
-                endOfTurn: {
-                  source: 'whisper' as const,
-                  silenceDurationMs: value.silenceDurationMs
-                }
-              }
+              result = await iterator.next()
               continue
             }
-            continue
+            yield metadata
+              ? {
+                  type: 'transcribeStream' as const,
+                  segment: value as TranscribeSegment
+                }
+              : {
+                  type: 'transcribeStream' as const,
+                  text: value as string
+                }
+            result = await iterator.next()
           }
-          yield metadata
-            ? {
-                type: 'transcribeStream' as const,
-                segment: value as TranscribeSegment
-              }
-            : {
-                type: 'transcribeStream' as const,
-                text: value as string
-              }
-        }
 
-        yield {
-          type: 'transcribeStream' as const,
-          text: '',
-          done: true
+          const { modelExecutionMs, stats } = result.value
+          yield attachModelExecutionMs(
+            {
+              type: 'transcribeStream' as const,
+              text: '',
+              done: true,
+              ...(stats && { stats })
+            },
+            modelExecutionMs
+          )
+        } finally {
+          await iterator.return?.(undefined as never)
         }
       }
     })
   },
 
   logging: {
-    module: whisperAddonLogging,
-    namespace: ModelType.whispercppTranscription
+    module: asrAddonLogging,
+    namespace: ADDON_ASR
   }
 })

@@ -8,11 +8,12 @@ import {
   AFRICAN_LANGUAGES_MAP
 } from '@/schemas'
 import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
-import type { GenerationParams, RunOptions } from '@qvac/llm-llamacpp'
+import type { GenerationParams } from '@qvac/llm-llamacpp'
 import { getLangName, detectOne } from '@qvac/langdetect-text'
 import { nowMs } from '@/profiling'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/server/bare/types/addon-responses'
+import { buildNmtTranslationStats } from '@/server/bare/ops/translate-stats'
 import {
   ModelIsDelegatedError,
   ModelNotFoundError,
@@ -194,14 +195,7 @@ export async function* translate(
     canonicalModelType === ModelType.llamacppCompletion &&
     !shouldSkipPerCallSampling(entry.local.name)
   ) {
-    // AnyModel.run is intentionally erased to a single-arg signature in the
-    // registry layer (Omit<BaseInference, "addon">). Re-narrow to the engine
-    // shape so we get the same typing as @qvac/llm-llamacpp.run().
-    const llmRun = model.run.bind(model) as (
-      prompt: typeof input,
-      opts: RunOptions
-    ) => ReturnType<typeof model.run>
-    response = await llmRun(input, {
+    response = await model.run(input, {
       generationParams: LLM_TRANSLATE_GENERATION_PARAMS
     })
   } else {
@@ -241,20 +235,7 @@ export async function* translate(
   }
   const modelExecutionMs = nowMs() - modelStart
 
-  const stats: TranslationStats = {
-    ...(nmtResponse.stats?.totalTime !== undefined && { totalTime: nmtResponse.stats.totalTime }),
-    ...(nmtResponse.stats?.totalTokens !== undefined && {
-      totalTokens: nmtResponse.stats.totalTokens
-    }),
-    ...(nmtResponse.stats?.decodeTime !== undefined && {
-      decodeTime: nmtResponse.stats.decodeTime
-    }),
-    ...(nmtResponse.stats?.encodeTime !== undefined && {
-      encodeTime: nmtResponse.stats.encodeTime
-    }),
-    ...(nmtResponse.stats?.TPS !== undefined && { tokensPerSecond: nmtResponse.stats.TPS }),
-    ...(nmtResponse.stats?.TTFT !== undefined && { timeToFirstToken: nmtResponse.stats.TTFT })
-  }
+  const stats = buildNmtTranslationStats(nmtResponse.stats)
 
   return buildStreamResult(modelExecutionMs, stats)
 }

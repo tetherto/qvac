@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <cinttypes>
 #include <cstddef>
 #include <filesystem>
@@ -12,7 +11,9 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <common/arg.h>
@@ -32,6 +33,7 @@
 #include "MtmdLlmContext.hpp"
 #include "TextLlmContext.hpp"
 #include "addon/LlmErrors.hpp"
+#include "handlers/LoadConfigHandlers.hpp"
 #include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -54,38 +56,6 @@ static void maybeSaveCacheToDisk(
   }
 }
 
-static std::vector<std::string> split(const std::string& str, char delimiter) {
-  auto trim = [](const std::string& str) -> std::string {
-    auto start =
-        std::find_if(str.begin(), str.end(), [](unsigned char character) {
-          return std::isspace(character) == 0;
-        });
-
-    if (start == str.end()) {
-      return "";
-    }
-
-    auto end =
-        std::find_if(str.rbegin(), str.rend(), [](unsigned char character) {
-          return std::isspace(character) == 0;
-        }).base();
-
-    return {start, end};
-  };
-
-  std::vector<std::string> tokens;
-  std::istringstream stream(str);
-  std::string token;
-
-  while (std::getline(stream, token, delimiter)) {
-    auto trimmed = trim(token);
-    if (!trimmed.empty()) {
-      tokens.push_back(std::move(trimmed));
-    }
-  }
-  return tokens;
-}
-
 void LlamaModel::resolveShardPaths(
     GGUFShards& shards, const std::string& modelPath) {
   if (shards.gguf_files.empty())
@@ -96,325 +66,6 @@ void LlamaModel::resolveShardPaths(
   for (auto& f : shards.gguf_files)
     f = (baseDir / f).string();
   shards.tensors_file = (baseDir / shards.tensors_file).string();
-}
-
-void LlamaModel::tuneConfigMap(
-    std::unordered_map<std::string, std::string>& configFilemap,
-    const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
-    const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
-    bool isMetal, bool isGpu) {
-
-  const bool isFinetuning = finetuneOverrides.active;
-
-  auto notUserSet = [&](const char* hyphenKey, const char* underscoreKey) {
-    return configFilemap.find(hyphenKey) == configFilemap.end() &&
-           configFilemap.find(underscoreKey) == configFilemap.end();
-  };
-
-  const bool isBitnet =
-      metadata.hasOneBitQuantization() &&
-      metadata.tryGetString("general.architecture") == "bitnet";
-
-  if (isFinetuning) {
-    configFilemap.erase("ctx_size");
-    configFilemap["ctx-size"] = std::to_string(finetuneOverrides.contextLength);
-    configFilemap.erase("batch_size");
-    configFilemap["batch-size"] = std::to_string(finetuneOverrides.batchSize);
-    configFilemap.erase("ubatch_size");
-    configFilemap["ubatch-size"] =
-        std::to_string(finetuneOverrides.microBatchSize);
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "[LlamaModel] Finetuning: ctx-size=%" PRId64 " batch-size=%" PRId64
-            " ubatch-size=%" PRId64 "\n",
-            finetuneOverrides.contextLength,
-            finetuneOverrides.batchSize,
-            finetuneOverrides.microBatchSize));
-  }
-
-  if (isFinetuning) {
-    configFilemap.erase("flash_attn");
-    configFilemap["flash-attn"] = finetuneOverrides.flashAttn ? "on" : "off";
-    QLOG_IF(
-        Priority::INFO,
-        (finetuneOverrides.flashAttn
-             ? "[LlamaModel] Finetuning: enabling flash attention\n"
-             : "[LlamaModel] Finetuning: disabling flash attention\n"));
-  } else if (isBitnet && notUserSet("flash-attn", "flash_attn")) {
-    configFilemap.erase("flash_attn");
-    configFilemap["flash-attn"] = "off";
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] BitNet model detected: disabling flash attention\n");
-  } else if (notUserSet("flash-attn", "flash_attn")) {
-    configFilemap.erase("flash_attn");
-    configFilemap["flash-attn"] = "on";
-    QLOG_IF(
-        Priority::INFO, "[LlamaModel] Enabling flash attention by default\n");
-  }
-
-  constexpr int kAdrenoUbatchThreshold = 800;
-  const bool needsUbatch = (isBitnet || isFinetuning) &&
-                           adrenoVersion.has_value() &&
-                           adrenoVersion.value() >= kAdrenoUbatchThreshold;
-  if (needsUbatch) {
-    constexpr int64_t kAdrenoUbatchCap = 128;
-    if (notUserSet("ubatch-size", "ubatch_size")) {
-      configFilemap["ubatch-size"] = std::to_string(kAdrenoUbatchCap);
-      QLOG_IF(
-          Priority::INFO,
-          "[LlamaModel] Adreno 800+ (Vulkan): defaulting ubatch-size=128\n");
-    } else {
-      const std::string& key =
-          configFilemap.count("ubatch-size") ? "ubatch-size" : "ubatch_size";
-      int64_t userVal;
-      try {
-        userVal = std::stoll(configFilemap[key]);
-      } catch (const std::exception& e) {
-        QLOG_IF(
-            Priority::ERROR,
-            string_format(
-                "[LlamaModel] Adreno 800+ (Vulkan): invalid ubatch-size "
-                "\"%s\" (%s), falling back to %" PRId64 "\n",
-                configFilemap[key].c_str(),
-                e.what(),
-                kAdrenoUbatchCap));
-        userVal = kAdrenoUbatchCap;
-      }
-      const int64_t clamped = std::min(userVal, kAdrenoUbatchCap);
-      if (clamped < userVal) {
-        QLOG_IF(
-            Priority::WARNING,
-            string_format(
-                "[LlamaModel] Adreno 800+ (Vulkan): ubatch-size=%" PRId64
-                " exceeds safe maximum %" PRId64 ", clamping to %" PRId64 "\n",
-                userVal,
-                kAdrenoUbatchCap,
-                clamped));
-      }
-      configFilemap.erase("ubatch_size");
-      configFilemap["ubatch-size"] = std::to_string(clamped);
-    }
-  }
-
-  if (isFinetuning && !finetuneOverrides.gpuSupportsF16OutProd) {
-    if (notUserSet("cache-type-k", "cache_type_k")) {
-      configFilemap["cache-type-k"] = "f32";
-      QLOG_IF(
-          Priority::INFO,
-          "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 K for KV "
-          "cache\n");
-    }
-    if (notUserSet("cache-type-v", "cache_type_v")) {
-      configFilemap["cache-type-v"] = "f32";
-      QLOG_IF(
-          Priority::INFO,
-          "[LlamaModel] Finetuning: GPU lacks F16 out_prod, using f32 V for KV "
-          "cache\n");
-    }
-  }
-
-  // QVAC-21318: KV-cache type policy. Blocks 1-3 run in a fixed order that MUST
-  // NOT be reordered; block 4 is an order-independent advisory:
-  //   1. auto-default q8_0 on GPU   — fills in the default when unset
-  //   2. Adreno 800+ Vulkan reject  — rejects quantized KV that would crash
-  //   3. OpenCL / Metal guard       — validates the (possibly defaulted) type
-  //   4. mixed K!=V warning         — advisory only, never throws
-  // The finetuning f32 KV override above runs first; the auto-default is gated
-  // by !isFinetuning so it never clobbers it.
-  //
-  // Shared inputs, computed once (flash-attn is already resolved above).
-  // flash-attn is read from BOTH the hyphen and underscore keys: a caller may
-  // pass flash_attn=on directly, and the underscore->hyphen normalization only
-  // happens later in the configVector loop — so check both here, otherwise the
-  // auto-default and the Adreno reject guard below would be silently skipped.
-  constexpr int kAdrenoKvQuantThreshold = 800;
-  auto valueIs =
-      [&](const char* hyphenKey, const char* underscoreKey, const char* want) {
-        auto it = configFilemap.find(hyphenKey);
-        if (it == configFilemap.end())
-          it = configFilemap.find(underscoreKey);
-        return it != configFilemap.end() && it->second == want;
-      };
-  const bool flashAttnOn = valueIs("flash-attn", "flash_attn", "on");
-  // Adreno 800+ on Vulkan: coopmat1 Flash Attention is unstable with quantized
-  // KV (no fabric scalar-FA fix on this branch). Adreno selects OpenCL by
-  // default, so this is normally unreachable; kept as a defensive guard against
-  // forced-Vulkan paths. Requires isGpu so a non-GPU call can't fire it.
-  const bool isAdrenoVulkan =
-      isGpu && adrenoVersion.has_value() &&
-      adrenoVersion.value() >= kAdrenoKvQuantThreshold && !isOpenCl && !isMetal;
-  auto isQuantizedKvType = [](const std::string& v) {
-    return v == "q4_0" || v == "q4_1" || v == "q5_0" || v == "q5_1" ||
-           v == "q8_0" || v == "iq4_nl" || v == "tbq3_0" || v == "tbq4_0" ||
-           v == "pq3_0" || v == "pq4_0";
-  };
-
-  // 1. Default the KV-cache to q8_0 on Metal/Vulkan GPU backends when the
-  // caller hasn't picked a cache type. q8_0 is quality-neutral vs f16 on GPU
-  // and cuts KV-cache memory ~47%. CPU keeps the f16 default — ARM q8_0 carries
-  // a measured quality and decode-throughput cost. OpenCL (Adreno) is also
-  // EXCLUDED: q8_0 attention works there, but quantized KV-cache *shifts*
-  // (sliding context / context management) abort natively in
-  // llama_kv_cache::update on Adreno, so f16 stays the safe default — and
-  // block 3 now *rejects* any explicit quantized KV on OpenCL (q8_0 and q4_0
-  // both crash on a shift). Also skipped for finetuning (manages its own KV
-  // types), when flash attention is off (V-cache quantization requires it), and
-  // on Adreno+Vulkan (see above).
-  if (!isFinetuning && isGpu && !isOpenCl && flashAttnOn && !isAdrenoVulkan &&
-      notUserSet("cache-type-k", "cache_type_k") &&
-      notUserSet("cache-type-v", "cache_type_v")) {
-    configFilemap["cache-type-k"] = "q8_0";
-    configFilemap["cache-type-v"] = "q8_0";
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] Defaulting KV-cache to q8_0 on GPU backend "
-        "(set cache-type-k/v to override)\n");
-  }
-
-  // 2. Adreno 800+ Vulkan: quantized KV-cache with Flash Attention crashes (the
-  // FA CM2 shader's dequant path hits an Adreno driver bug). Guard here so
-  // callers get a clean error instead of a native abort.
-  if (isAdrenoVulkan && flashAttnOn) {
-    auto checkAdrenoKv = [&](const char* hyphenKey,
-                             const char* underscoreKey,
-                             const char* side) {
-      auto it = configFilemap.find(hyphenKey);
-      if (it == configFilemap.end())
-        it = configFilemap.find(underscoreKey);
-      if (it == configFilemap.end())
-        return;
-      if (!isQuantizedKvType(it->second))
-        return;
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "[LlamaModel] cache-type-%s=%s: quantized KV-cache with "
-              "Flash Attention is not supported on Adreno 800+ (Vulkan). "
-              "Use flash-attn=off, set cache-type-%s to f16/f32/bf16, or "
-              "disable GPU acceleration.\n",
-              side,
-              it->second.c_str(),
-              side));
-    };
-    checkAdrenoKv("cache-type-k", "cache_type_k", "k");
-    checkAdrenoKv("cache-type-v", "cache_type_v", "v");
-  }
-
-  // 3. OpenCL (Adreno): reject ALL quantized KV-cache types. q4_0/q8_0
-  // attention works, but a quantized K cache needs a
-  // dequantize->RoPE->requantize copy on every KV-cache *shift* (sliding
-  // context / context management), and ggml-opencl has no F32->quantized copy
-  // kernel for that requantize step — so the shift aborts natively in
-  // llama_kv_cache::update on Adreno. Confirmed for BOTH q8_0 and q4_0 (CI run
-  // 28448086915: S25/S26 crash on a q4_0 sliding shift; Mali Vulkan passes).
-  // Only f32/f16/bf16 are safe on OpenCL. Metal: standard quant types are
-  // supported; only TurboQuant/PolarQuant is rejected.
-  if (isOpenCl || isMetal) {
-    auto isTurboQuantKvType = [](const std::string& v) {
-      return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
-    };
-    auto isOpenClSafeKvType = [](const std::string& v) {
-      return v == "f32" || v == "f16" || v == "bf16";
-    };
-    auto checkCacheType = [&](const char* hyphenKey,
-                              const char* underscoreKey,
-                              const char* side) {
-      auto it = configFilemap.find(hyphenKey);
-      if (it == configFilemap.end())
-        it = configFilemap.find(underscoreKey);
-      if (it == configFilemap.end())
-        return;
-      if (isOpenCl) {
-        if (isOpenClSafeKvType(it->second))
-          return;
-        // TurboQuant/PolarQuant: no OpenCL kernel at all. Keep the
-        // "TurboQuant/PolarQuant ... not supported" wording so callers can
-        // recognize it specifically.
-        if (isTurboQuantKvType(it->second)) {
-          throw qvac_errors::StatusError(
-              qvac_errors::general_error::InvalidArgument,
-              string_format(
-                  "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant "
-                  "KV-cache type and is not supported on the OpenCL (Adreno) "
-                  "backend. Use cache-type-%s f32/f16/bf16, or switch device "
-                  "to "
-                  "a Vulkan GPU or CPU.\n",
-                  side,
-                  it->second.c_str(),
-                  side));
-        }
-        // Any other quantized type on OpenCL: the requantize copy on a KV-cache
-        // shift has no ggml-opencl kernel and aborts in llama_kv_cache::update.
-        // The wording covers both sides — this check runs for K and V alike.
-        throw qvac_errors::StatusError(
-            qvac_errors::general_error::InvalidArgument,
-            string_format(
-                "[LlamaModel] cache-type-%s=%s: quantized KV-cache is not "
-                "supported on the OpenCL (Adreno) backend. A quantized K or V "
-                "cache aborts in llama_kv_cache::update on KV-cache shifts / "
-                "cache management (sliding context, state restore) — "
-                "ggml-opencl has no F32->quantized copy kernel for the "
-                "requantize step (true for q8_0 and q4_0 alike). Use "
-                "cache-type-%s f32/f16/bf16, or switch device to a Vulkan GPU "
-                "or CPU.\n",
-                side,
-                it->second.c_str(),
-                side));
-      }
-      // Metal: only TurboQuant/PolarQuant is unsupported.
-      if (!isTurboQuantKvType(it->second))
-        return;
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant "
-              "KV-cache type and is not supported on the Metal backend. Either "
-              "pick a different cache type "
-              "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or switch device "
-              "to a Vulkan GPU or CPU.\n",
-              side,
-              it->second.c_str()));
-    };
-    checkCacheType("cache-type-k", "cache_type_k", "k");
-    checkCacheType("cache-type-v", "cache_type_v", "v");
-  }
-
-  // 4. Mixed/asymmetric K!=V warning (advisory — never throws). When K and V
-  // use different cache types and at least one is quantized, the kernels fall
-  // off the fused Flash-Attention path (a large GPU decode penalty on
-  // Vulkan/Mali) for no quality benefit. Asymmetric non-quantized
-  // (f32/f16/bf16) carries no such penalty and is not warned. Finetuning
-  // manages its own KV types, so it is skipped. This is a warning, not a hard
-  // error — callers may still opt in — and can be removed once qvac-fabric
-  // handles asymmetric quantized K/V efficiently.
-  if (!isFinetuning) {
-    auto effectiveType = [&](const char* hyphenKey, const char* underscoreKey) {
-      auto it = configFilemap.find(hyphenKey);
-      if (it == configFilemap.end())
-        it = configFilemap.find(underscoreKey);
-      return it == configFilemap.end() ? std::string("f16") : it->second;
-    };
-    const std::string kType = effectiveType("cache-type-k", "cache_type_k");
-    const std::string vType = effectiveType("cache-type-v", "cache_type_v");
-    if (kType != vType &&
-        (isQuantizedKvType(kType) || isQuantizedKvType(vType))) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[LlamaModel] Mixed KV-cache types (cache-type-k=%s, "
-              "cache-type-v=%s): asymmetric quantized K/V falls off the fused "
-              "Flash-Attention path (notable GPU decode-throughput penalty on "
-              "Vulkan/Mali) with no quality benefit, and is unsupported on "
-              "Adreno OpenCL. Proceeding anyway; prefer a symmetric cache "
-              "type. "
-              "(This may be relaxed once qvac-fabric handles asymmetric "
-              "quantized K/V efficiently.)\n",
-              kType.c_str(),
-              vType.c_str()));
-    }
-  }
 }
 
 LlamaModel::LlamaModel(
@@ -448,7 +99,7 @@ void LlamaModel::reload(
 void LlamaModel::setInitLoader(
     std::optional<InitLoader::LOADER_TYPE> loaderType,
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
-  cancel();
+  cancelInference();
   std::unique_lock lock(stateMtx_);
   // Unconditionally stop the old contexts before destroying them, regardless
   // of job counters. cancel() above only routes to active engines (counters >
@@ -542,11 +193,17 @@ void LlamaModel::init(bool acquireLock) {
     snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
-  common_params params;
-  std::optional<int> adrenoVersion;
-  ResolvedToolsCompactConfig toolsCompactConfig;
-  commonParamsParse(
-      modelPath, configFilemap, params, adrenoVersion, toolsCompactConfig);
+  auto normalized = load_fit_normalization::normalizeLoadForFit(
+      modelPath,
+      std::move(configFilemap),
+      metadata_,
+      pendingFinetuneOverrides_,
+      load_fit_normalization::productionDependencies(
+          LlamaModel::llamaLogCallback));
+  snap->configuredNDiscarded_ = normalized.configuredNDiscarded;
+  snap->normalizedFitSnapshot_ = normalized.fitSnapshot;
+  runtimeBackendDevice_ = normalized.runtimeBackendDevice;
+  common_params params = std::move(normalized.params);
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -568,16 +225,11 @@ void LlamaModel::init(bool acquireLock) {
     return;
   }
 
-  // Create tools compact controller before context (contexts hold reference)
-  snap->toolsCompact_ =
-      std::make_unique<ToolsCompactController>(toolsCompactConfig.profile);
-
   snap->isTextLlm_ = constructionArgs_.projectionPath.empty();
   snap->llmContext_ = createContext(
       std::string(constructionArgs_.projectionPath),
       params,
-      std::move(llamaInit),
-      *snap->toolsCompact_);
+      std::move(llamaInit));
 
   if (snap->configuredNDiscarded_ > 0 && snap->llmContext_) {
     snap->llmContext_->setNDiscarded(snap->configuredNDiscarded_);
@@ -613,16 +265,15 @@ batching::DriverFactory
 buildDriverFactory(LlmModelContext shared, mtmd_context* sharedVision) {
   return [shared, sharedVision](
              const common_params& params,
-             ToolsCompactController& tools,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
     const auto sid = static_cast<llama_seq_id>(seqId);
     if (sharedVision != nullptr) {
       return std::make_unique<MtmdLlmContext>(
-          params, shared, tools, sharedVision, sid, perSeqCtxCeiling);
+          params, shared, sharedVision, sid, perSeqCtxCeiling);
     }
     return std::make_unique<TextLlmContext>(
-        params, shared, tools, sid, perSeqCtxCeiling);
+        params, shared, sid, perSeqCtxCeiling);
   };
 }
 
@@ -642,16 +293,31 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
       .lctx = ctx,
       .vocab = mdl != nullptr ? llama_model_get_vocab(mdl) : nullptr,
   };
-  return std::make_unique<batching::ContinuousBatchScheduler>(
-      shared,
-      maxChunkSize,
-      ctxTotalTokens,
-      batchSize,
-      batchCapacity,
-      cparams,
-      state.configuredNDiscarded_,
-      state.toolsCompact_ ? state.toolsCompact_->profile() : std::nullopt,
-      buildDriverFactory(shared, state.llmContext_->visionContext()));
+  // The scheduler validates its own geometry (ctxTotalTokens / batchSize, and
+  // batchCapacity >= batchSize) with std::invalid_argument, which would escape
+  // load unmapped. Both traps are really a `parallel` misconfiguration, so
+  // they are reported as InvalidArgument naming the knobs the caller sets.
+  try {
+    return std::make_unique<batching::ContinuousBatchScheduler>(
+        shared,
+        maxChunkSize,
+        ctxTotalTokens,
+        batchSize,
+        batchCapacity,
+        cparams,
+        state.configuredNDiscarded_,
+        buildDriverFactory(shared, state.llmContext_->visionContext()));
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "[LlamaModel] parallel=%zu is too large for this context "
+            "(ctx_size=%u, batch_size=%d): %s",
+            batchSize,
+            ctxTotalTokens,
+            batchCapacity,
+            e.what()));
+  }
 }
 
 void LlamaModel::setWeightsForFile(
@@ -664,14 +330,6 @@ void LlamaModel::setWeightsForFile(
 bool LlamaModel::isLoaded() {
   std::shared_lock lock(stateMtx_);
   return static_cast<bool>(state_->llmContext_);
-}
-
-llama_pos LlamaModel::getNPastBeforeTools() const {
-  std::shared_lock lock(stateMtx_);
-  if (state_->toolsCompact_) {
-    return state_->toolsCompact_->anchor();
-  }
-  return -1;
 }
 
 llama_context* LlamaModel::getContext() {
@@ -724,6 +382,10 @@ void LlamaModel::llamaLogCallback(
 }
 
 void LlamaModel::cancel() const {
+  const auto finetuneId = currentFinetuneJobId_.load();
+  if (finetuneId != qvac_lib_inference_addon_cpp::kNoJobId) {
+    requestFinetuneCancel(finetuneId);
+  }
   std::shared_lock lock(stateMtx_, std::try_to_lock);
   if (!lock.owns_lock()) {
     // If lock could not be acquired, it means reload
@@ -733,6 +395,13 @@ void LlamaModel::cancel() const {
     return;
   }
   cancelImpl();
+}
+
+void LlamaModel::cancelInference() const {
+  std::shared_lock lock(stateMtx_, std::try_to_lock);
+  if (lock.owns_lock()) {
+    cancelImpl();
+  }
 }
 
 void LlamaModel::cancelImpl() const {
@@ -750,6 +419,79 @@ void LlamaModel::cancelImpl() const {
   if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0) {
     state_->llmContext_->stop();
   }
+  // Park a cancel on every registered job. The engine stops above only reach
+  // work the run counters already see; a job the scheduler dequeued but that
+  // has not armed its cancel action yet (jobStarting ran, the engine slot has
+  // not) is invisible to them — it consumes the parked cancel when it arms
+  // and stops before its first decode. Park-only: running armed actions here
+  // could take engine locks, and this cancel may be issued from a streaming
+  // callback on the engine's own worker thread (see above).
+  liveJobs_.parkAll();
+}
+
+void LlamaModel::setFinetuneCancelSavesCheckpoint(
+    const bool save,
+    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  // Keyed by the snapshot itself, never by currentFinetuneJobId_: the
+  // canceller can arm while its snapshotted finetune still sits between the
+  // scheduler queue and beginFinetuneJob(), and the mode must still be
+  // waiting when that job's per-id cancel dispatches after bind. Scheduler
+  // ids are never reused, so an entry can only ever reach the job it names.
+  for (const auto id : cancelledJobs) {
+    finetuneCancelSaveModes_[id] = save;
+  }
+}
+
+void LlamaModel::discardFinetuneCancelSaveModes(
+    const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  for (const auto id : cancelledJobs) {
+    finetuneCancelSaveModes_.erase(id);
+  }
+}
+
+void LlamaModel::requestFinetuneCancel(
+    const qvac_lib_inference_addon_cpp::JobId id) const {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  if (currentFinetuneJobId_.load() != id) {
+    return;
+  }
+  // One-shot take of exactly this job's mode; absent means the canceller
+  // never chose one (whole-model teardown, internal paths) — no checkpoint.
+  bool save = false;
+  if (const auto found = finetuneCancelSaveModes_.find(id);
+      found != finetuneCancelSaveModes_.end()) {
+    save = found->second;
+    finetuneCancelSaveModes_.erase(found);
+  }
+  finetuneCancelRequests_.fetch_add(1);
+#ifndef STANDALONE_TEST_BUILD
+  finetuner_.requestPause(save);
+#else
+  static_cast<void>(save);
+#endif
+}
+
+void LlamaModel::beginFinetuneJob(
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  currentFinetuneJobId_.store(id);
+}
+
+void LlamaModel::closeFinetuneCancellationWindow() {
+  std::scoped_lock lock(finetuneCancelMtx_);
+  // Defensive teardown: the job is gone and its id is never reissued, so a
+  // mode its cancel never consumed is dead weight from here on.
+  finetuneCancelSaveModes_.erase(currentFinetuneJobId_.load());
+  currentFinetuneJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
+}
+
+void LlamaModel::jobStarting(const qvac_lib_inference_addon_cpp::JobId id) {
+  // Runs under the scheduler's admission lock (see IModelJobLifecycle), so
+  // it must stay quick and must not call back into the scheduler. Registering
+  // unarmed here makes every later cancel park instead of no-op.
+  liveJobs_.add(id);
 }
 
 std::any LlamaModel::process(const std::any& input) {
@@ -763,7 +505,7 @@ std::any LlamaModel::process(const std::any& input) {
   }
   if (input.type() == typeid(std::vector<Prompt>)) {
     const auto& prompts = std::any_cast<const std::vector<Prompt>&>(input);
-    return {processPromptBatchImpl(prompts)};
+    return {processPromptBatchImpl(prompts).outputs};
   }
   validateBitnetQuantization();
   const auto& prompt = std::any_cast<const Prompt&>(input);
@@ -771,8 +513,9 @@ std::any LlamaModel::process(const std::any& input) {
   if (prompt.finetuningParams.has_value()) {
     FinetuneTerminalResult::Stats stats{};
     // Release the shared lock before finetune() because reload() inside it
-    // acquires an exclusive lock on stateMtx_; safe since JobRunner serialises
-    // all jobs onto a single worker thread.
+    // acquires an exclusive lock on stateMtx_; safe because finetuning is
+    // admitted through MultiJobScheduler::runExclusiveJob, so no inference job
+    // holds stateMtx_ while this one runs.
     lock.unlock();
     std::string status = finetuner_.finetune(
         *prompt.finetuningParams, &stats, prompt.progressCallback);
@@ -791,6 +534,397 @@ std::any LlamaModel::process(const std::any& input) {
   }
 #endif
   return {processPromptImpl(prompt)};
+}
+
+bool LlamaModel::isConcurrentEligible(const Prompt& prompt) {
+  if (prompt.finetuningParams.has_value()) {
+    return false;
+  }
+  // A prefill earns a lane exactly when its product survives the slot
+  // teardown: the cache file persisted under its key. A live-only prefill's
+  // product is warm state in the shared single context, which a lane wipes.
+  return !prompt.prefill ||
+         (prompt.saveCacheToDisk && !prompt.cacheKey.empty());
+}
+
+std::any LlamaModel::process(
+    const std::any& input, qvac_lib_inference_addon_cpp::JobId id) {
+  const bool isSingle = input.type() == typeid(Prompt);
+  const bool isBatch = input.type() == typeid(std::vector<Prompt>);
+  // The scheduler registered this id at dequeue (jobStarting); make sure no
+  // path out of here — bad input type, finetune, batch, or an early throw —
+  // leaves that entry behind. Inner guards removing the same id first are
+  // fine: remove is idempotent, unknown ids (kNoJobId) are a no-op.
+  ScopeGuard lifecycleGuard([this, id] { liveJobs_.remove(id); });
+  if (id == qvac_lib_inference_addon_cpp::kNoJobId || (!isSingle && !isBatch)) {
+    return process(input);
+  }
+  // A tagged single-path prompt owns no scheduler slot: its cancel action
+  // stops the single-prompt context. The run-counter gate keeps a late
+  // cancel from leaving a stale stop flag on an idle engine, and the
+  // ownership check keeps a cancel that outlived its job — the registry
+  // entry is still live through the run's completion tail, and cancel()
+  // executes an action copy outside the registry lock — from stopping a
+  // successor; the action runs under the canceller's shared stateMtx_ (see
+  // cancelById), so state_ stays valid.
+  const auto processSinglePath = [this, &input, id] {
+    // An escaped cancel for a previous job may have set the context's stop
+    // flag after that run's last check. Cleared before the run counter is
+    // visible and before the parked-cancel re-issue below, so every stop
+    // aimed at THIS job — counter-gated or re-issued — lands after the
+    // clear.
+    {
+      std::shared_lock stateLock(stateMtx_);
+      if (state_ && state_->llmContext_) {
+        state_->llmContext_->resetStopFlag();
+      }
+    }
+    // Counted before arming: both the armed action and the whole-model
+    // cancelImpl gate their context stop on this counter, so a cancel landing
+    // any time from arming onwards can stop the eval loop; the loop consumes
+    // the flag at its first check, before any decode.
+    activeSingleJobs_.fetch_add(1);
+    currentSingleJobId_.store(id);
+    ScopeGuard countGuard([this] {
+      currentSingleJobId_.store(qvac_lib_inference_addon_cpp::kNoJobId);
+      activeSingleJobs_.fetch_sub(1);
+    });
+    const bool parkedCancel = liveJobs_.add(id, [this, id] {
+      if (state_ && state_->llmContext_ && activeSingleJobs_.load() > 0 &&
+          currentSingleJobId_.load() == id) {
+        state_->llmContext_->stop();
+      }
+    });
+    ScopeGuard registrationGuard([this, id] { liveJobs_.remove(id); });
+    if (parkedCancel) {
+      // A cancel landed while the job sat between the scheduler queue and
+      // this slot (jobStarting parked it). Re-issue it through the armed
+      // action: the counter above is already visible, so the context stop
+      // lands and the request cancels with the usual rollback.
+      cancelById(id);
+    }
+    return process(input);
+  };
+  if (isSingle) {
+    const auto& prompt = std::any_cast<const Prompt&>(input);
+    if (prompt.finetuningParams.has_value()) {
+      beginFinetuneJob(id);
+      ScopeGuard finetuneGuard([this] {
+        // Window first: once currentFinetuneJobId_ is cleared no cancel can
+        // latch a new pause (requestFinetuneCancel serializes on the same
+        // mutex), so the discard leaves nothing behind for the next finetune.
+        // Covers the exits finetune() never sees: the parked-cancel PAUSED
+        // return below and setup throws before the finetuner's own catch.
+        closeFinetuneCancellationWindow();
+        finetuner_.discardPendingPauseRequest();
+      });
+      // Arm the finetune cancel so cancelById(id) reaches the finetuner; a
+      // cancel parked before this point aborts the job before training starts.
+      if (liveJobs_.bind(id, [this, id] { requestFinetuneCancel(id); })) {
+        return std::any(FinetuneTerminalResult{"finetune", "PAUSED"});
+      }
+      return process(input);
+    }
+    if (!isConcurrentEligible(prompt)) {
+      // Live-only prefill: its warmed single-context state is unreachable by
+      // lane-based followups, and running it beside admitted peers would race
+      // on the shared context. Reject on a parallel model; without a
+      // scheduler the single path is the only worker and stays safe.
+      {
+        std::shared_lock rejectLock(stateMtx_);
+        if (state_ && state_->batchScheduler_) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              toString(qvac_errors::general_error::InvalidArgument),
+              "prefill without saveCacheToDisk and a cacheKey cannot run on "
+              "a parallel model: its warmed context is unreachable by "
+              "concurrent jobs; persist the cache or load with parallel=1");
+        }
+      }
+      return processSinglePath();
+    }
+  }
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    lock.unlock();
+    return isSingle ? processSinglePath() : process(input);
+  }
+  if (isBatch) {
+    return {processConcurrentBatch(
+        std::any_cast<const std::vector<Prompt>&>(input), id)};
+  }
+  return {processConcurrent(std::any_cast<const Prompt&>(input), id)};
+}
+
+std::vector<std::string> LlamaModel::processConcurrentBatch(
+    const std::vector<Prompt>& prompts,
+    const qvac_lib_inference_addon_cpp::JobId id) {
+  // Tag the scheduler group with the job id so a cancel can target it before
+  // any admission. Job ids are minted monotonically and never reused, so a tag
+  // cannot be confused with a later group's.
+  const auto groupTag = static_cast<uint64_t>(id);
+  // The group's live slots, shared with its cancel action: every admission's
+  // (seqId -> admissionId) ownership pair. A slot joins at admission and
+  // leaves the moment it ends — the scheduler may recycle the seqId to a
+  // peer job, so a late group cancel must never see it; and because a
+  // snapshot taken before that removal can still race the recycle, each
+  // cancel also carries the admissionId so the scheduler itself rejects a
+  // stale target. `cancelled` marks the whole group: requests admitted after
+  // the cancel are torn down at admission instead of outliving their group.
+  struct GroupSlots {
+    std::mutex mtx;
+    std::unordered_map<uint32_t, uint64_t> seqs;
+    bool cancelled = false;
+  };
+  auto slots = std::make_shared<GroupSlots>();
+
+  // The group's cancel action: tear down every slot it currently holds, and
+  // settle the group when some of its requests are still queued — those have
+  // no slot to tear down, and waiting for them to be admitted means waiting on
+  // whichever unrelated group currently holds the pool. Runs under the
+  // canceller's shared stateMtx_ (see cancelById), so state_ stays valid; it
+  // releases slots->mtx before touching the scheduler, so it never holds both
+  // locks at once.
+  const auto cancelGroup = [this, slots, groupTag] {
+    std::vector<std::pair<uint32_t, uint64_t>> seqs;
+    {
+      std::lock_guard<std::mutex> seqsLock(slots->mtx);
+      slots->cancelled = true;
+      seqs.assign(slots->seqs.begin(), slots->seqs.end());
+      slots->seqs.clear();
+    }
+    if (state_ && state_->batchScheduler_) {
+      for (const auto& [seqId, admissionId] : seqs) {
+        state_->batchScheduler_->cancel(seqId, admissionId);
+      }
+      // No-op once every request of the group holds a slot: the loop above
+      // already covers it, and the scheduler keeps the graceful in-slot cancel.
+      state_->batchScheduler_->cancelGroupQueued(groupTag);
+    }
+  };
+
+  // Armed BEFORE submission: a cancel that arrives while the group is still
+  // entirely queued must reach the drain above, not sit parked until the group
+  // is finally admitted. The arming registration also hands back a cancel
+  // parked between the scheduler dequeue and here (jobStarting -> parkAll),
+  // which is refused as Cancelled — the structured code consumers already
+  // match on for every other cancellation terminal, rather than a bare
+  // runtime_error whose message they would have to string-match.
+  if (liveJobs_.add(id, cancelGroup)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "LlamaModel: batch cancelled before it could run (cancelled between "
+        "the scheduler dequeue and admission)");
+  }
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
+
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id, slots, cancelGroup](
+          size_t, uint32_t seqId, uint64_t admissionId) {
+        {
+          std::lock_guard<std::mutex> seqsLock(slots->mtx);
+          if (slots->cancelled) {
+            return true;
+          }
+          slots->seqs[seqId] = admissionId;
+        }
+        // Re-arming per admission is idempotent — the action reads the live
+        // set. A true return means a cancel parked before the group had any
+        // slot: mark the group so later admissions die too, and let the
+        // scheduler kill this one before it decodes.
+        if (liveJobs_.bind(id, cancelGroup)) {
+          std::lock_guard<std::mutex> seqsLock(slots->mtx);
+          slots->cancelled = true;
+          slots->seqs.erase(seqId);
+          return true;
+        }
+        return false;
+      };
+  const SeqObserver onSeqDone = [slots](size_t, uint32_t seqId) {
+    std::lock_guard<std::mutex> seqsLock(slots->mtx);
+    slots->seqs.erase(seqId);
+  };
+
+  batching::BatchResult result =
+      processPromptBatchImpl(prompts, onSeqAssigned, onSeqDone, groupTag);
+  // Leave the group's complete terminal snapshot behind for the tagged
+  // jobEnded event: model-level figures from the run's own stats snapshot,
+  // TTFT/TPS averaged over the group's requests that produced them, token
+  // counts summed (see aggregateObservedStats).
+  if (!result.requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal = jobTerminalStats(
+        result.stats, batching::aggregateObservedStats(result.requestStats));
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    jobStats_[id] = std::move(terminal);
+  }
+  return std::move(result.outputs);
+}
+
+std::string LlamaModel::processConcurrent(
+    const Prompt& prompt, qvac_lib_inference_addon_cpp::JobId id) {
+  // Tagged like the batch path, so a cancel arriving while this request is
+  // still queued behind a wider group settles it now instead of waiting for
+  // that group to release a slot.
+  const auto groupTag = static_cast<uint64_t>(id);
+  // The job's slot identity, shared with its ONE cancel action — the same
+  // shape the batch path uses (GroupSlots), for the same reason: the action is
+  // installed once and re-reads live state, so ordering against admission
+  // cannot matter. Replacing the action at admission instead (the previous
+  // design) lost exactly that race: JobCancelRegistry::cancel copies the
+  // action out and runs it outside the registry lock, so a copy of the
+  // queued-only action could run after admission had already made
+  // cancelGroupQueued a no-op (admittedCount == totalCount) — the freshly
+  // bound slot action was never invoked, the cancel evaporated, and the
+  // caller's promise waited out the whole generation.
+  struct SlotIdentity {
+    std::mutex mtx;
+    std::optional<std::pair<uint32_t, uint64_t>> admission;
+    bool cancelled = false;
+  };
+  auto slot = std::make_shared<SlotIdentity>();
+
+  // The cancel action: tear down the slot when one is held (the scheduler
+  // validates the admission id, so a stale pair can never hit the seqId's
+  // next occupant), and settle the request through cancelGroupQueued while it
+  // is still queued (a no-op once admitted). Whichever side of admission the
+  // cancel lands on, exactly one mechanism acts. Runs under the canceller's
+  // shared stateMtx_ (see cancelById), so state_ stays valid; slot->mtx is
+  // released before touching the scheduler, so it never holds both locks.
+  const auto cancelSingle = [this, slot, groupTag] {
+    std::optional<std::pair<uint32_t, uint64_t>> admission;
+    {
+      std::lock_guard<std::mutex> slotLock(slot->mtx);
+      slot->cancelled = true;
+      admission = slot->admission;
+    }
+    if (state_ && state_->batchScheduler_) {
+      if (admission.has_value()) {
+        state_->batchScheduler_->cancel(admission->first, admission->second);
+      }
+      state_->batchScheduler_->cancelGroupQueued(groupTag);
+    }
+  };
+  // Armed BEFORE submission, for the same reason the batch path is: until
+  // admission there is no slot to cancel, and a parked cancel would otherwise
+  // only be consumed once a slot frees. Arming here also surfaces a cancel
+  // parked between the scheduler dequeue and this call (jobStarting ->
+  // parkAll), refused as Cancelled — the same structured terminal the batch
+  // path gives it, so consumers never string-match a message.
+  if (liveJobs_.add(id, cancelSingle)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_lib_inference_addon_llama::errors::toString(
+            qvac_lib_inference_addon_llama::errors::Cancelled),
+        "LlamaModel: request cancelled before it could run (cancelled between "
+        "the scheduler dequeue and admission)");
+  }
+  ScopeGuard mapGuard([this, id] { liveJobs_.remove(id); });
+
+  const SeqAssignedObserver onSeqAssigned =
+      [this, id, slot, cancelSingle](
+          size_t, uint32_t seqId, uint64_t admissionId) {
+        {
+          std::lock_guard<std::mutex> slotLock(slot->mtx);
+          if (slot->cancelled) {
+            return true;
+          }
+          slot->admission = {seqId, admissionId};
+        }
+        // Idempotent re-arm of the SAME action, exactly like the batch path:
+        // a true return means a whole-model cancel parked between add() and
+        // this admission — mark the job cancelled and let the scheduler kill
+        // the slot before it decodes.
+        if (liveJobs_.bind(id, cancelSingle)) {
+          std::lock_guard<std::mutex> slotLock(slot->mtx);
+          slot->cancelled = true;
+          slot->admission.reset();
+          return true;
+        }
+        return false;
+      };
+  // Drop the job the moment the slot ends. The scheduler frees the seqId
+  // here and may hand it to a peer job before this call returns and mapGuard
+  // runs; removing now stops the stale action from making cancelById target
+  // that peer's slot.
+  const SeqObserver onSeqDone = [this, id](size_t, uint32_t) {
+    liveJobs_.remove(id);
+  };
+
+  const std::vector<Prompt> singleBatch{prompt};
+  batching::BatchResult result =
+      processPromptBatchImpl(singleBatch, onSeqAssigned, onSeqDone, groupTag);
+  // Leave the job's complete terminal snapshot behind for the tagged
+  // jobEnded event (consumeJobStats), queued right after this returns. A
+  // throwing job never gets a jobEnded, so nothing is stored on that path.
+  if (!result.requestStats.empty()) {
+    qvac_lib_inference_addon_cpp::RuntimeStats terminal =
+        jobTerminalStats(result.stats, result.requestStats.front());
+    std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+    jobStats_[id] = std::move(terminal);
+  }
+  return result.outputs.empty() ? std::string{}
+                                : std::move(result.outputs.front());
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
+    const batching::RuntimeStatsSnapshot& stats,
+    const batching::ObservedRequestStats& observed) const {
+  // batchRuntimeStatsLocked's key set with the job's own observed figures in
+  // place of the aggregate values. Composed purely from the run's returned
+  // snapshot — no live scheduler read, no llama_perf_context_reset: a peer
+  // job may be mid-decode on the shared context, and the reset belongs only
+  // to the explicitly requested whole-model runtimeStats().
+  qvac_lib_inference_addon_cpp::RuntimeStats terminal = {
+      {"TTFT", observed.ttftMs},
+      {"TPS", observed.genTps},
+      {"ppTPS", stats.prefillTokensPerSecond()},
+      {"CacheTokens", stats.cacheTokens},
+      {"generatedTokens", observed.generatedTokens},
+      {"promptTokens", observed.promptTokens},
+      {"contextSlides", stats.contextSlides},
+      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      // visionEncodeMs/Tiles intentionally omitted, matching
+      // batchRuntimeStatsLocked: concurrent prompts share the one
+      // per-context accumulator, so a per-job value would be misattributed.
+      {"avgConcurrentSeq", stats.avgConcurrentSeq()},
+      {"backendDevice", runtimeBackendDevice_}};
+  // Unlike the vision counters, the stop reason IS per-sequence, so a job can
+  // report its own without misattribution — a single concurrent prompt would
+  // otherwise silently lose the stat the sequential path emits. Present only
+  // when it is honest: absent for a group whose requests disagree (see
+  // aggregateObservedStats), which addon.js tolerates by mapping only a
+  // numeric value.
+  if (observed.stopReason.has_value()) {
+    terminal.emplace_back(
+        "stopReason", static_cast<int64_t>(*observed.stopReason));
+  }
+  return terminal;
+}
+
+qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::consumeJobStats(
+    const qvac_lib_inference_addon_cpp::JobId id) const {
+  // Pure take of the snapshot built when the job finished (see
+  // jobTerminalStats): the jobEnded path must not touch live model state.
+  std::lock_guard<std::mutex> statsLock(jobStatsMtx_);
+  const auto found = jobStats_.find(id);
+  if (found == jobStats_.end()) {
+    return {};
+  }
+  qvac_lib_inference_addon_cpp::RuntimeStats stats = std::move(found->second);
+  jobStats_.erase(found);
+  return stats;
+}
+
+void LlamaModel::cancelById(qvac_lib_inference_addon_cpp::JobId id) const {
+  // The shared lock keeps state_ alive for whatever cancel action runs —
+  // each job registered the action that stops its own engine.
+  std::shared_lock lock(stateMtx_);
+  if (!state_) {
+    return;
+  }
+  liveJobs_.cancel(id);
 }
 
 LlamaModel::ResolvedPrompt
@@ -826,7 +960,6 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
-    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference =
         state_->cacheManager_->isCacheDisabled() ||
         !state_->cacheManager_->wasCacheUsedInLastPrompt();
@@ -835,7 +968,6 @@ LlamaModel::resolveChatAndTools(const Prompt& prompt) {
     loadPlannedMedia(parsedPrompt);
     resolved.chatMsgs = std::move(parsedPrompt.chatMsgs);
     resolved.tools = std::move(parsedPrompt.tools);
-    resolved.layout = std::move(parsedPrompt.layout);
     resolved.shouldResetAfterInference = true;
   }
   return resolved;
@@ -849,8 +981,9 @@ std::string LlamaModel::processPrompt(const Prompt& prompt) {
 std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   activeSingleJobs_.fetch_add(1);
   ScopeGuard jobGuard([this] { activeSingleJobs_.fetch_sub(1); });
-  state_->lastRun_ = {};
-  state_->lastRun_.wasPrefill = prompt.prefill;
+  state_->lastRun_.store(
+      ReloadableState::LastRunInfo{.wasPrefill = prompt.prefill},
+      std::memory_order_relaxed);
   if (state_->batchScheduler_) {
     state_->batchScheduler_->resetRuntimeStats();
   }
@@ -870,11 +1003,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
     resetState(true);
   }
 
-  bool hasKvCacheContext = resolved.isCacheLoaded;
-  if (state_->llmContext_->getNPast() > 0) {
-    hasKvCacheContext = true;
-  }
-
   auto resetAndInvalidateActiveCache = [this]() {
     resetState(false);
     if (state_->cacheManager_.has_value()) {
@@ -884,8 +1012,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   bool shouldSaveCache = false;
   bool shouldResetAfterInference = false;
-  state_->llmContext_->validatePromptPolicy(
-      resolved.chatMsgs, resolved.tools, resolved.layout, hasKvCacheContext);
 
   if (resolved.chatMsgs.empty() && resolved.tools.empty()) {
     QLOG_IF(Priority::INFO, "No messages to process - returning early\n");
@@ -990,7 +1116,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 std::vector<std::string>
 LlamaModel::processPromptBatch(const std::vector<Prompt>& prompts) {
   std::shared_lock lock(stateMtx_);
-  return processPromptBatchImpl(prompts);
+  return processPromptBatchImpl(prompts).outputs;
 }
 
 bool LlamaModel::supportsBatching() const {
@@ -998,24 +1124,35 @@ bool LlamaModel::supportsBatching() const {
   return state_ && isMultiBatchActivated(*state_);
 }
 
-std::vector<std::string>
-LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
-  // Serialize the entry section (prior-count check, cache invalidation, KV
-  // wipe) under batchEntryMutex_. Without it a second caller can see
-  // activeBatchJobs_ == 0 before the first caller increments it, skip the wipe,
-  // and reach scheduler.processBatch() while the first caller is still clearing
+unsigned LlamaModel::activeSlots() const {
+  std::shared_lock lock(stateMtx_);
+  if (!state_ || !state_->batchScheduler_) {
+    return 0;
+  }
+  return state_->batchScheduler_->occupancy();
+}
+
+batching::BatchResult LlamaModel::processPromptBatchImpl(
+    const std::vector<Prompt>& prompts,
+    const SeqAssignedObserver& onSeqAssigned, const SeqObserver& onSeqDone,
+    const uint64_t groupTag) {
+  // `onSeqAssigned` (optional) fires once per request when the scheduler
+  // assigns its seqId. Serialize the entry section (prior-count check, cache
+  // invalidation, KV wipe) under batchEntryMutex_: without it a second caller
+  // can see activeBatchJobs_ == 0 before the first increments it, skip the
+  // wipe, and reach scheduler.processBatch() while the first is still clearing
   // KV — wiping the second caller's sequences. The lock is released before
-  // scheduler.processBatch() so concurrent batch calls still overlap during
-  // generation; jobGuard outlives the lock so its decrement spans the whole
-  // job.
+  // processBatch() so concurrent batch calls still overlap; jobGuard outlives
+  // it so its decrement spans the whole job.
   std::optional<batching::BatchEntryGuard> jobGuard;
   {
     std::lock_guard<std::mutex> entryLock(state_->batchEntryMutex_);
     jobGuard.emplace(
         activeBatchJobs_, [this] { validateBitnetQuantization(); });
     const unsigned priorBatchJobs = jobGuard->prior();
-    state_->lastRun_ = {};
-    state_->lastRun_.wasBatch = true;
+    state_->lastRun_.store(
+        ReloadableState::LastRunInfo{.wasBatch = true},
+        std::memory_order_relaxed);
 
     // Invalidate single-prompt cache state and clear any stale KV left by
     // single-prompt runs so the batch scheduler starts on clean KV. Only the
@@ -1033,6 +1170,13 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
             llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
           }
         }
+        // Clear stale llama perf counters (single-prompt leftovers or a
+        // previous batch epoch) here, at the only point that is exclusive
+        // with respect to the scheduler: no batch job is in flight, so the
+        // worker is idle — the same reasoning that makes the KV wipe above
+        // safe. batchRuntimeStatsLocked() deliberately never resets them:
+        // it runs under a shared stateMtx_ while peers may be mid-decode.
+        llama_perf_context_reset(lctx);
       }
     }
   }
@@ -1052,17 +1196,34 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
 
   std::vector<batching::SubmitRequest> requests;
   requests.reserve(prompts.size());
+  // This call's cacheKey reservations, released when the run returns (any
+  // path). Reserving in the shared inflightSaveKeys_ set refuses both a
+  // duplicate inside this batch and a concurrent caller saving the same key —
+  // either would race two writers on one file.
   std::unordered_set<std::string> saveCacheKeys;
+  ScopeGuard keysGuard([this, &saveCacheKeys] {
+    if (saveCacheKeys.empty()) {
+      return;
+    }
+    std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
+    for (const auto& key : saveCacheKeys) {
+      inflightSaveKeys_.erase(key);
+    }
+  });
   for (size_t i = 0; i < prompts.size(); i++) {
     const Prompt& prompt = prompts[i];
-    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty() &&
-        !saveCacheKeys.insert(prompt.cacheKey).second) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(qvac_errors::general_error::InvalidArgument),
-          "processPromptBatch: duplicate cacheKey '" + prompt.cacheKey +
-              "' with saveCacheToDisk in the same batch would overwrite "
-              "itself; each saved cache must use a distinct key");
+    if (prompt.saveCacheToDisk && !prompt.cacheKey.empty()) {
+      std::lock_guard<std::mutex> keysLock(inflightSaveKeysMtx_);
+      if (!inflightSaveKeys_.insert(prompt.cacheKey).second) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(qvac_errors::general_error::InvalidArgument),
+            "processPromptBatch: cacheKey '" + prompt.cacheKey +
+                "' is already being saved by an in-flight request; "
+                "concurrent saves would overwrite each other — use a "
+                "distinct key per save");
+      }
+      saveCacheKeys.insert(prompt.cacheKey);
     }
     if (!prompt.media.empty() && state_->isTextLlm_) {
       throw qvac_errors::StatusError(
@@ -1075,6 +1236,18 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
           ADDON_ID,
           toString(qvac_errors::general_error::InvalidArgument),
           "processPromptBatch: finetuning is not a batch processing operation");
+    }
+    // Same live-only prefill policy as the single-prompt path: batch items
+    // always run in scheduler lanes, and a lane wipes its warmed KV at
+    // teardown, so a prefill without persistence produces nothing reachable.
+    if (!isConcurrentEligible(prompt)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(qvac_errors::general_error::InvalidArgument),
+          "processPromptBatch: prefill without saveCacheToDisk and a "
+          "cacheKey cannot run on a parallel model: its warmed context is "
+          "unreachable by concurrent jobs; persist the cache or load with "
+          "parallel=1");
     }
     ParsedPromptPayload parsed = formatPrompt(prompt.input);
     if (parsed.chatMsgs.empty()) {
@@ -1092,32 +1265,53 @@ LlamaModel::processPromptBatchImpl(const std::vector<Prompt>& prompts) {
     batching::SubmitRequest sr;
     sr.chatMsgs = std::move(parsed.chatMsgs);
     sr.tools = std::move(parsed.tools);
-    sr.layout = std::move(parsed.layout);
     sr.media = prompt.media;
     sr.mediaPlan = std::move(parsed.mediaPlan);
     sr.prefill = prompt.prefill;
     sr.cacheKey = prompt.cacheKey;
     sr.saveCacheToDisk = prompt.saveCacheToDisk;
     sr.overrides = prompt.generationParams;
-    sr.streams.onToken = [userCb = prompt.outputCallback](
-                             [[maybe_unused]] uint32_t seqId,
-                             const std::string& piece) {
+    // `seen` fires the seq observer exactly once per slot: at admission
+    // (onAdmitted), with onToken/onDone as a fallback latch. Only the
+    // admission carries the slot's real ownership token; the fallback
+    // latches pass the never-matching sentinel, so a cancel action armed
+    // through them could never target a slot — acceptable because the
+    // scheduler always fires onAdmitted first and the latches only close a
+    // theoretical gap.
+    auto seen = std::make_shared<std::atomic<bool>>(false);
+    auto notifySeq = [onSeqAssigned, seen, requestIndex = i](
+                         uint32_t seqId, uint64_t admissionId) {
+      if (onSeqAssigned && !seen->exchange(true)) {
+        return onSeqAssigned(requestIndex, seqId, admissionId);
+      }
+      return false;
+    };
+    sr.streams.onAdmitted = notifySeq;
+    sr.streams.onToken = [userCb = prompt.outputCallback,
+                          notifySeq](uint32_t seqId, const std::string& piece) {
+      notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
       if (userCb) {
         userCb(piece);
       }
     };
+    sr.streams.onDone =
+        [notifySeq, onSeqDone, requestIndex = i](uint32_t seqId) {
+          notifySeq(seqId, batching::K_UNKNOWN_ADMISSION_ID);
+          if (onSeqDone) {
+            onSeqDone(requestIndex, seqId);
+          }
+        };
 
     requests.push_back(std::move(sr));
   }
 
-  batching::BatchResult result = scheduler.processBatch(std::move(requests));
-
-  return result.outputs;
+  return scheduler.processBatch(std::move(requests), groupTag);
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::runtimeStats() const {
   std::shared_lock lock(stateMtx_);
-  if (state_->lastRun_.wasBatch && state_->batchScheduler_) {
+  const auto lastRun = state_->lastRun_.load(std::memory_order_relaxed);
+  if (lastRun.wasBatch && state_->batchScheduler_) {
     return batchRuntimeStatsLocked();
   }
   return singleRuntimeStatsLocked();
@@ -1135,9 +1329,13 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // TTFT comes from the scheduler's prefill-step timer rather than
   // `llama_perf_context().t_p_eval_ms`, which would include the
   // recurrent replay decode run by `compactThinkSpan` in
-  // `onGenerationFinished`. We still reset the live counters so they
-  // can't leak into the next single-prompt run.
-  llama_perf_context_reset(state_->llmContext_->getCtx());
+  // `onGenerationFinished`. No `llama_perf_context_reset` here: this
+  // runs under a shared stateMtx_ concurrently with in-flight batch
+  // jobs, and the scheduler releases its own mutex around llama_decode,
+  // so writing the context's non-atomic perf counters from this path
+  // races a mid-decode peer. The counters are cleared instead at the
+  // batch-entry epoch boundary (processPromptBatchImpl), which is
+  // exclusive with respect to the scheduler.
   return {
       {"TTFT", stats.prefillTimeMs()},
       {"TPS", stats.decodeTokensPerSecond()},
@@ -1167,7 +1365,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
   auto perfData =
       snapshot.value_or(llama_perf_context(state_->llmContext_->getCtx()));
   constexpr double kMillisInSecond = 1000.0;
-  const bool wasPrefill = state_->lastRun_.wasPrefill;
+  const bool wasPrefill =
+      state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
   const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
   const int64_t generatedTokens =
       static_cast<int64_t>(wasPrefill ? 0 : perfData.n_eval);
@@ -1217,612 +1416,6 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"backendDevice", runtimeBackendDevice_}};
 }
 
-qvac_lib_inference_addon_cpp::RuntimeStats
-LlamaModel::runtimeDebugStats() const {
-  std::shared_lock lock(stateMtx_);
-  const int64_t firstMsgTokens =
-      state_->llmContext_
-          ? static_cast<int64_t>(state_->llmContext_->getFirstMsgTokens())
-          : 0LL;
-  auto snapshot = state_->toolsCompact_
-                      ? state_->toolsCompact_->debugSnapshot()
-                      : ToolsCompactController::DebugSnapshot{};
-  return {
-      {"nPastBeforeTools", static_cast<int64_t>(snapshot.nPastBeforeTools)},
-      {"firstMsgTokens", firstMsgTokens},
-      {"toolsTrimmed", snapshot.lastToolsTrimmed ? 1LL : 0LL}};
-}
-
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-LlamaModel::ResolvedToolsCompactConfig
-LlamaModel::resolveToolsCompactConfig(bool toolsCompactRequested) const {
-  if (!toolsCompactRequested) {
-    return {};
-  }
-
-  auto arch = metadata_.tryGetString("general.architecture");
-  auto marker = qvac_lib_inference_addon_llama::utils::
-      selectToolsCompactMarkerForModelMetadata(arch);
-
-  if (!marker.has_value()) {
-    return {
-        .resolution = ToolsCompactResolution::RequestedUnsupported,
-        .profile = std::nullopt};
-  }
-
-  ToolsCompactProfile profile;
-  profile.toolCallStartMarker = marker.value();
-  return {
-      .resolution = ToolsCompactResolution::RequestedSupported,
-      .profile = std::move(profile)};
-}
-
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
-void LlamaModel::commonParamsParse(
-    const std::string& modelPath,
-    std::unordered_map<std::string, std::string>& configFilemap,
-    common_params& params, std::optional<int>& outAdrenoVersion,
-    ResolvedToolsCompactConfig& outToolsCompactConfig) {
-
-  std::vector<std::string> configVector;
-  outToolsCompactConfig = ResolvedToolsCompactConfig{};
-
-  // Check if tools are enabled and exclude it with jinja from the config file
-  if (auto iter = configFilemap.find("tools"); iter != configFilemap.end()) {
-    std::string toolsVal = iter->second;
-    std::ranges::transform(toolsVal, toolsVal.begin(), ::tolower);
-    if (toolsVal == "true") {
-      params.use_jinja = true;
-      // Remove "tools" from config, since using jinja
-      configFilemap.erase(iter);
-    } else {
-      configFilemap.erase(iter);
-    }
-  }
-  if (auto jit = configFilemap.find("jinja"); jit != configFilemap.end()) {
-    // Remove "jinja" from config
-    configFilemap.erase(jit);
-  }
-
-  // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
-  // fallback path used by llama.cpp does not execute the {%- set persona -%}
-  // block that injects the model's persona system prompt, so the model loses
-  // its identity when jinja is off. Auto-enable jinja whenever we detect the
-  // MedPsy basename so the embedded template is applied regardless of the
-  // tools setting.
-  if (!params.use_jinja &&
-      qvac_lib_inference_addon_llama::utils::isMedPsyBasename(
-          metadata_.tryGetString("general.basename").value_or(""))) {
-    params.use_jinja = true;
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] MedPsy basename detected; auto-enabling jinja so the "
-        "embedded chat template is applied\n");
-  }
-
-  // reasoning-budget controls the size of the model's <think> reasoning
-  // channel: -1 (default) leaves it unrestricted, 0 disables thinking
-  // entirely, any positive N caps the reasoning channel at N tokens (the
-  // budget sampler forces </think> once N reasoning tokens have been
-  // emitted).
-  auto parseReasoningBudget = [](const std::string& raw) {
-    int value = 0;
-    const char* begin = raw.data();
-    const char* end = begin + raw.size();
-    const auto [ptr, ec] = std::from_chars(begin, end, value);
-    if (ec != std::errc{} || ptr != end || value < -1) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          "reasoning-budget must be -1 (unrestricted), 0 (disabled), or a "
-          "positive integer (token cap)");
-    }
-    return value;
-  };
-  for (const std::string& key : {"reasoning-budget", "reasoning_budget"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      params.reasoning_budget = parseReasoningBudget(it->second);
-      configFilemap.erase(it);
-    }
-  }
-
-  // parse image-tile-mode (not in LLAMA_EXAMPLE_COMMON, must be handled
-  // manually before configVector is built)
-  for (const std::string& key : {"image-tile-mode", "image_tile_mode"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      std::string val = it->second;
-      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-      if (val == "0" || val == "batched") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_BATCHED;
-      } else if (val == "1" || val == "sequential") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_SEQUENTIAL;
-      } else if (val == "2" || val == "disabled") {
-        params.image_tile_mode = COMMON_IMAGE_TILE_MODE_DISABLED;
-      } else {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-tile-mode must be 0/batched, 1/sequential, or "
-                "2/disabled, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-    }
-  }
-
-  // parse image-max-tokens / image-min-tokens (override Qwen-VL default caps)
-  for (const std::string& key : {"image-max-tokens", "image_max_tokens"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        params.image_max_tokens = std::stoi(it->second);
-      } catch (...) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-max-tokens must be an integer, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-      break;
-    }
-  }
-  for (const std::string& key : {"image-min-tokens", "image_min_tokens"}) {
-    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
-      try {
-        params.image_min_tokens = std::stoi(it->second);
-      } catch (...) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "image-min-tokens must be an integer, got: %s",
-                it->second.c_str()));
-      }
-      configFilemap.erase(it);
-      break;
-    }
-  }
-
-  // parse custom nDiscarded from config (apply only if > 0)
-  if (auto iter = configFilemap.find("n_discarded");
-      iter != configFilemap.end()) {
-    try {
-      long long parsed = std::stoll(iter->second);
-      if (parsed > 0) {
-        state_->configuredNDiscarded_ = static_cast<llama_pos>(parsed);
-      }
-    } catch (...) {
-      std::string errorMsg = string_format(
-          "%s: invalid n_discarded value: %s\n",
-          __func__,
-          iter->second.c_str());
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          errorMsg);
-    }
-    configFilemap.erase(iter);
-  }
-
-  // parse tools_compact flag from config
-  bool toolsCompactRequested = false;
-  if (auto iter = configFilemap.find("tools_compact");
-      iter != configFilemap.end()) {
-    std::string val = iter->second;
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    toolsCompactRequested = (val == "true");
-    configFilemap.erase(iter);
-  }
-
-  outToolsCompactConfig = resolveToolsCompactConfig(toolsCompactRequested);
-  if (outToolsCompactConfig.resolution ==
-      ToolsCompactResolution::RequestedUnsupported) {
-    QLOG_IF(
-        Priority::WARNING,
-        "[LlamaModel] tools_compact is not supported for this model "
-        "architecture, ignoring\n");
-  }
-
-  llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
-  auto hIt = configFilemap.find("split-mode");
-  auto uIt = configFilemap.find("split_mode");
-  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        string_format(
-            "%s: both 'split-mode' and 'split_mode' are present; "
-            "use one or the other.\n",
-            __func__));
-  }
-  if (auto it = (hIt != configFilemap.end()) ? hIt : uIt;
-      it != configFilemap.end()) {
-    std::string val = it->second;
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    if (val == "layer") {
-      splitMode = LLAMA_SPLIT_MODE_LAYER;
-    } else if (val == "row") {
-      splitMode = LLAMA_SPLIT_MODE_ROW;
-    } else if (val != "none") {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: invalid split-mode '%s', must be 'none', 'layer', or "
-              "'row'.\n",
-              __func__,
-              it->second.c_str()));
-    }
-    configFilemap.erase(it);
-  }
-
-#if defined(__ANDROID__) ||                                                    \
-    (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
-  if (splitMode != LLAMA_SPLIT_MODE_NONE ||
-      configFilemap.count("main-gpu") > 0 ||
-      configFilemap.count("main_gpu") > 0 ||
-      configFilemap.count("tensor-split") > 0 ||
-      configFilemap.count("tensor_split") > 0) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "Multi-GPU parameters (split-mode, main-gpu, tensor-split) are not "
-        "supported on mobile (single-GPU device).");
-  }
-#endif
-
-  auto deviceIt = configFilemap.find("device");
-  if (deviceIt == configFilemap.end()) {
-    std::string errorMsg =
-        string_format("%s: must specify a device: 'gpu' or 'cpu'.\n", __func__);
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument, errorMsg);
-  }
-
-  bool isOpenCl = false;
-  bool isMetal = false;
-  bool isGpu = false;
-  {
-    using namespace backend_selection;
-    const BackendType preferredBackend =
-        preferredBackendTypeFromString(deviceIt->second);
-
-    const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
-
-    bool isMaliGpu = false;
-    const std::pair<BackendType, std::string> chosenBackend = chooseBackend(
-        preferredBackend,
-        LlamaModel::llamaLogCallback,
-        mainGpu,
-        &metadata_,
-        &outAdrenoVersion,
-        pendingFinetuneOverrides_.active,
-        &isMaliGpu);
-
-    // QVAC-21257: optional runtime override for the multimodal projector
-    // (mmproj / vision encoder) backend. The default is auto-selected per
-    // device class (QVAC-21867): desktop / iOS -> GPU; Android -> GPU except
-    // Mali, whose projector encode is slower on GPU than CPU -> CPU. The key
-    // lets callers force either backend without recompiling.
-    // Accepts true/on/1 and false/off/0 (case-insensitive). Erased from
-    // configFilemap so it is never forwarded to llama.cpp's argument parser
-    // by the passthrough loop.
-    std::optional<bool> mmprojUseGpuOverride;
-    {
-      auto hMmproj = configFilemap.find("mmproj-use-gpu");
-      auto uMmproj = configFilemap.find("mmproj_use_gpu");
-      if (hMmproj != configFilemap.end() && uMmproj != configFilemap.end()) {
-        throw qvac_errors::StatusError(
-            qvac_errors::general_error::InvalidArgument,
-            string_format(
-                "%s: both 'mmproj-use-gpu' and 'mmproj_use_gpu' are present; "
-                "use one or the other.\n",
-                __func__));
-      }
-      if (auto it = (hMmproj != configFilemap.end()) ? hMmproj : uMmproj;
-          it != configFilemap.end()) {
-        std::string val = it->second;
-        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-        if (val == "true" || val == "on" || val == "1") {
-          mmprojUseGpuOverride = true;
-        } else if (val == "false" || val == "off" || val == "0") {
-          mmprojUseGpuOverride = false;
-        } else {
-          throw qvac_errors::StatusError(
-              qvac_errors::general_error::InvalidArgument,
-              string_format(
-                  "%s: invalid mmproj-use-gpu '%s', must be 'true'/'on'/'1' or "
-                  "'false'/'off'/'0'.\n",
-                  __func__,
-                  it->second.c_str()));
-        }
-        configFilemap.erase(it);
-      }
-    }
-
-    if (chosenBackend.first == BackendType::GPU) {
-      params.mmproj_backend = chosenBackend.second;
-#ifdef __ANDROID__
-      // QVAC-21867: auto-default the projector backend by GPU class.
-      // Only Adreno 800+ is benchmarked (QVAC-21257) to encode the projector
-      // faster on the mobile GPU than on CPU, so it is the only Android class
-      // that defaults to GPU. Every other Android GPU class defaults to CPU
-      // (the LLM layers still run on the GPU):
-      //   - Mali: the projector encode is slower on the Mali GPU than on CPU
-      //     (QVAC-21257 benchmarks).
-      //   - Adreno < 800: materially weaker tiers the QVAC-21257
-      //     projector-on-GPU benchmarks did not cover (conservative).
-      //   - Any GPU whose Adreno tier can't be detected: conservative default.
-      // Relax per class once those tiers are benchmarked. The mmproj-use-gpu
-      // key overrides this either way.
-      constexpr int kAdrenoMmprojGpuThreshold = 800;
-      const bool isAdreno800Plus =
-          outAdrenoVersion.has_value() &&
-          outAdrenoVersion.value() >= kAdrenoMmprojGpuThreshold;
-      bool mmprojUseGpu = isAdreno800Plus;
-      const char* mmprojDefaultReason =
-          isAdreno800Plus
-              ? "auto-default, Adreno 800+"
-              : (isMaliGpu ? "auto-default, Mali GPU"
-                           : (outAdrenoVersion.has_value()
-                                  ? "auto-default, Adreno <800"
-                                  : "auto-default, non-Adreno-800+ GPU"));
-#else
-      bool mmprojUseGpu = true;
-      const char* mmprojDefaultReason = "auto-default";
-#endif
-      if (mmprojUseGpuOverride.has_value()) {
-        mmprojUseGpu = mmprojUseGpuOverride.value();
-      }
-      QLOG_IF(
-          Priority::INFO,
-          string_format(
-              "[LlamaModel] multimodal projector backend: %s (%s)\n",
-              mmprojUseGpu ? "GPU" : "CPU",
-              mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
-                                               : mmprojDefaultReason));
-      params.mmproj_use_gpu = mmprojUseGpu;
-      params.split_mode = splitMode;
-      runtimeBackendDevice_ = 1;
-
-      if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        if (std::holds_alternative<int>(mainGpu.value())) {
-          configFilemap["main-gpu"] =
-              std::to_string(std::get<int>(mainGpu.value()));
-        } else {
-          QLOG_IF(
-              Priority::WARNING,
-              "[LlamaModel] main-gpu 'dedicated'/'integrated' ignored in "
-              "multi-GPU split-mode; use an integer device index instead\n");
-        }
-      }
-    } else if (chosenBackend.first == BackendType::CPU) {
-      params.mmproj_use_gpu = false;
-      if (mmprojUseGpuOverride.value_or(false)) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
-            "running the multimodal projector on CPU\n");
-      }
-      runtimeBackendDevice_ = 0;
-      params.split_mode = LLAMA_SPLIT_MODE_NONE;
-      params.main_gpu = -1;
-      if (splitMode != LLAMA_SPLIT_MODE_NONE) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] split-mode, tensor-split and main-gpu ignored: "
-            "no GPU backend available, falling back to CPU\n");
-        splitMode = LLAMA_SPLIT_MODE_NONE;
-        configFilemap.erase("tensor-split");
-      }
-    } else {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InternalError,
-          "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
-          "'cpu'.\n");
-    }
-    // In multi-GPU split mode we intentionally omit --device so llama.cpp
-    // distributes layers/rows across all available GPUs rather than pinning
-    // to the single backend that chooseBackend selected.
-    if (splitMode == LLAMA_SPLIT_MODE_NONE) {
-      configVector.emplace_back("--device");
-      configVector.emplace_back(chosenBackend.second);
-    }
-    configFilemap.erase("device");
-
-    isGpu = chosenBackend.first == BackendType::GPU;
-    isOpenCl =
-        isGpu && chosenBackend.second.find("opencl") != std::string::npos;
-    isMetal =
-        isGpu && (chosenBackend.second.find("metal") != std::string::npos ||
-                  chosenBackend.second.rfind("mtl", 0) == 0);
-  }
-
-  tuneConfigMap(
-      configFilemap,
-      metadata_,
-      outAdrenoVersion,
-      pendingFinetuneOverrides_,
-      isOpenCl,
-      isMetal,
-      isGpu);
-
-  // Handle both reverse-prompt variants
-  for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {
-    if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
-      auto listString = iter->second;
-      std::vector<std::string> list = split(listString, ',');
-      for (const auto& item : list) {
-        params.antiprompt.push_back(item);
-      }
-      if (list.empty() && !listString.empty()) {
-        params.antiprompt.push_back(listString);
-      }
-      configFilemap.erase(iter);
-    }
-  }
-
-  // transform json config into the format required by llama.cpp
-  for (auto& keyValuePair : configFilemap) {
-    configVector.push_back(std::string("--") + keyValuePair.first);
-    if (!keyValuePair.second.empty()) {
-      configVector.push_back(keyValuePair.second);
-    }
-  }
-
-  auto ctxArg = common_params_parser_init(
-      params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
-
-  // disable warmup run
-  params.warmup = false;
-  params.training = pendingFinetuneOverrides_.active;
-  // add model path to  model parameters
-  params.model.path = modelPath;
-
-  int size = static_cast<int>(configVector.size());
-
-  std::unordered_map<std::string, common_arg*> argToOptions;
-  for (auto& opt : ctxArg.options) {
-    for (const auto& arg : opt.args) {
-      argToOptions[arg] = &opt;
-    }
-  }
-
-  // handle config arguments
-  auto checkArg = [&](int argIndex) {
-    if (argIndex >= size) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          "Expected value for argument");
-    }
-  };
-
-  for (int argIndex = 0; argIndex < size; argIndex++) {
-    const std::string argPrefix = "--";
-
-    std::string arg = configVector.at(argIndex);
-    if (arg.starts_with(argPrefix)) {
-      std::ranges::replace(arg, '_', '-');
-    }
-    if (argToOptions.find(arg) == argToOptions.end()) {
-      std::string errorMsg =
-          string_format("%s: invalid argument: %s\n", __func__, arg.c_str());
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          errorMsg);
-    }
-    auto opt = *argToOptions[arg];
-    if (opt.has_value_from_env()) {
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "%s: %s variable is set, but will be overwritten by argument "
-              "%s\n",
-              __func__,
-              opt.env,
-              arg.c_str()));
-    }
-    try {
-      if (opt.handler_void != nullptr) {
-        opt.handler_void(params);
-        continue;
-      }
-
-      // arg with single value
-      checkArg(argIndex);
-      const std::string& val = configVector[++argIndex];
-      if (opt.handler_int != nullptr) {
-        opt.handler_int(params, std::stoi(val));
-        continue;
-      }
-      if (opt.handler_string != nullptr) {
-        opt.handler_string(params, val);
-        continue;
-      }
-
-      // arg with 2 values
-      checkArg(argIndex);
-      const std::string& val2 = configVector[++argIndex];
-      if (opt.handler_str_str != nullptr) {
-        opt.handler_str_str(params, val, val2);
-        continue;
-      }
-    } catch (std::exception& e) {
-      std::string errorMsg = string_format(
-          "%s: error while handling argument \"%s\": %s\n\n",
-          __func__,
-          arg.c_str(),
-          e.what());
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InvalidArgument),
-          errorMsg);
-    }
-  }
-
-  postprocess_cpu_params(params.cpuparams, nullptr);
-  postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
-
-  if (!params.kv_overrides.empty()) {
-    params.kv_overrides.emplace_back();
-    params.kv_overrides.back().key[0] = 0;
-  }
-
-  if (!params.tensor_buft_overrides.empty()) {
-    params.tensor_buft_overrides.push_back({nullptr, nullptr});
-  }
-
-  if (!params.chat_template.empty() &&
-      !common_chat_verify_template(params.chat_template, params.use_jinja)) {
-    std::string errorMsg = string_format(
-        "%s: the supplied chat template is not supported: %s%s\n",
-        __func__,
-        params.chat_template.c_str(),
-        params.use_jinja ? ""
-                         : "\nnote: llama.cpp was started without --jinja, "
-                           "we only support commonly used templates");
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        qvac_errors::general_error::toString(
-            qvac_errors::general_error::InvalidArgument),
-        errorMsg);
-  }
-
-  constexpr int kMinNCtx = 8;
-  if (params.n_ctx != 0 && params.n_ctx < kMinNCtx) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "%s: warning: minimum context size is 8, using minimum size.\n",
-            __func__));
-    params.n_ctx = kMinNCtx;
-  }
-  if (params.rope_freq_base != 0.0) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "%s: changing RoPE frequency base to %g.\n",
-            __func__,
-            params.rope_freq_base));
-  }
-  if (params.rope_freq_scale != 0.0) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "%s: scaling RoPE frequency by %g.\n",
-            __func__,
-            params.rope_freq_scale));
-  }
-}
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static,readability-function-cognitive-complexity)
 ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (input.empty()) {
@@ -1840,10 +1433,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
   if (err.empty() && chatJson.is<picojson::array>()) {
     auto& obj = chatJson.get<picojson::array>();
 
-    // Build PromptLayout for tools_compact validation
-    PromptLayout layout;
-    layout.totalItems = obj.size();
-
     int addMediaPlaceholder = 0;
     bool isNextUser = false;
     for (size_t i = 0; i < obj.size(); ++i) {
@@ -1853,12 +1442,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
 
         if (jsonObj.find("type") != jsonObj.end() &&
             jsonObj["type"].get<std::string>() == "function") {
-          if (!layout.firstToolIdx.has_value()) {
-            layout.firstToolIdx = i;
-          }
-          layout.lastToolIdx = i;
-          layout.toolCount++;
-
           common_chat_tool tool;
           tool.name = jsonObj["name"].get<std::string>();
           if (jsonObj.find("description") != jsonObj.end()) {
@@ -1878,16 +1461,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
               ADDON_ID, toString(NoRoleProvided), errorMsg);
         }
         newMsg.role = jsonObj["role"].get<std::string>();
-
-        // Track last anchor (user/tool) message index for tools_compact
-        if (newMsg.role == "user" || newMsg.role == "tool") {
-          layout.lastAnchorIdx = i;
-        }
-
-        // Track if the very last array item is a user message
-        if (newMsg.role == "user" && i == obj.size() - 1) {
-          layout.lastItemIsUserMsg = true;
-        }
 
         if (jsonObj.find("content") == jsonObj.end()) {
           const char* errorMsg = "content is required in the input\n";
@@ -1935,8 +1508,6 @@ ParsedPromptPayload LlamaModel::formatPrompt(const std::string& input) {
       }
     }
 
-    parsed.layout = std::move(layout);
-
     if (addMediaPlaceholder > 0) {
       state_->llmContext_->resetMedia();
       std::string errorMsg =
@@ -1962,13 +1533,12 @@ void LlamaModel::resetState(bool resetStats) {
 
 std::unique_ptr<LlmContext> LlamaModel::createContext(
     std::string&& projectionPath, common_params& params,
-    common_init_result_ptr llamaInit, ToolsCompactController& tools) {
+    common_init_result_ptr llamaInit) {
   if (!projectionPath.empty()) {
     params.mmproj.path = std::move(projectionPath);
-    return std::make_unique<MtmdLlmContext>(
-        params, std::move(llamaInit), tools);
+    return std::make_unique<MtmdLlmContext>(params, std::move(llamaInit));
   }
-  return std::make_unique<TextLlmContext>(params, std::move(llamaInit), tools);
+  return std::make_unique<TextLlmContext>(params, std::move(llamaInit));
 }
 
 bool LlamaModel::loadMedia(const std::vector<uint8_t>& input) {

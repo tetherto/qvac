@@ -13,15 +13,15 @@
 
 - **Local-first:** load AI models and perform inference on your own machine. No third-party APIs, SaaS, or cloud involved.
 - **P2P:** build unstoppable internet systems — like BitTorrent, IPFS, and blockchain networks, but for AI.
-- **Cross-platform:** consistent developer experience across hardware, operating systems, and JS runtime environments — write code once, run it everywhere.
+- **Cross-platform:** consistent developer experience across Linux, macOS, Windows, Android, and iOS.
 - **OpenAI-compatible API:** integrate with the broader AI ecosystem.
 - **Open source:** 100% free to use and modify — build on top, contribute back, be part of our community.
 
 ## Usage
 
-QVAC is composed of JavaScript libraries and tools that converge in the JS SDK. _The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+QVAC ships client SDKs for building AI apps: **JavaScript/TypeScript** (`@qvac/sdk` on npm) and **Python** (`tetherto-qvac-sdk` on PyPI). _Both drive the same worker, so capabilities and behavior are identical across languages_. The JS/TS client runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev); the Python client is asyncio-native.
 
-Additionally, QVAC also provides an HTTP server, _allowing you to use it as a **local model provider** for your favorite AI tools_, such as OpenCode, OpenClaw, and any other application compatible with the [OpenAI API](https://platform.openai.com/docs/api-reference).
+Additionally, QVAC also provides an HTTP server, _allowing you to use it as a **local model provider** for your favorite AI tools_, such as OpenCode, OpenClaw, and any other harness compatible with the [OpenAI API](https://platform.openai.com/docs/api-reference).
 
 Whether you're building applications with the SDK or using QVAC as a local model provider, the principle is the same: load models and run inference locally, or delegate inference to peers using the built-in P2P capabilities.
 
@@ -36,8 +36,9 @@ Whether you're building applications with the SDK or using QVAC as a local model
 | **Multimodal** | LLM inference over text, images, and other media within a single conversation context. |
 | **Image generation** | Text-to-image and image-to-image generation via a customized Diffusion backend. |
 | **Video generation** | Text-to-video and image-to-video generation via a customized Diffusion backend. |
-| **Transcription** | Automatic speech recognition (ASR) via a customized Whisper backend or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3). |
-| **Text-to-Speech** | Speech synthesis (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml). |
+| **Music generation** | Generate music from text, lyrics, and musical controls with [`@qvac/audiogen-ggml`](packages/audiogen-ggml/README.md), backed by [ACE-Step](https://github.com/ace-step/ACE-Step-1.5). Published prebuilds cover Linux, macOS, Windows, Android arm64, and iOS arm64; the package includes a model downloader for application-owned model directories. |
+| **Transcription** | Automatic speech recognition (ASR) via [`@qvac/asr-ggml`](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml) (Whisper, [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), or Indic Conformer CTC), with duplex streaming and terminal performance statistics. See [Choosing a model](packages/asr-ggml/README.md#choosing-a-model). |
+| **Text-to-Speech** | Speech synthesis (TTS) via [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) — Chatterbox, Supertonic, Parler, and CosyVoice3 support opt-in GPU offload (Metal on Apple, Vulkan on desktop Linux/Windows for Chatterbox, Supertonic, and CosyVoice3, OpenCL/Adreno on Android), while Audio8 supports Metal on Apple, desktop Vulkan, and OpenCL/Adreno on Android. Voice cloning from a reference recording: Chatterbox, Audio8, and CosyVoice3 (zero-shot with the reference transcript, or cross-lingual timbre-only without it). Prebuilds cover Linux, macOS, Windows, Android arm64, and iOS; models can be downloaded from the QVAC registry where published or staged from local converted artifacts. See [Choosing a model](packages/tts-ggml/README.md#choosing-a-model). |
 | **Translation** | Text-to-text neural machine translation (NMT), via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a customized Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
@@ -73,7 +74,9 @@ keet://chat/nfo61f4e6zc5t1ifncyh9yp7s5eynbruz5bs95oc5ufn3e79entmhix74miigc8iz9ia
 
 ## Quickstart
 
-Want to get hands-on right away? Here's a simple example you can use to test QVAC.
+Want to get hands-on right away? Here's a simple example you can use to test QVAC, in either supported client.
+
+### JavaScript
 
 1. Create the examples workspace:
 
@@ -129,6 +132,77 @@ node quickstart.js
 ```
 
 You'll see the model download first. Then, QVAC will stream the response tokens and print them to the terminal.
+
+### Python
+
+<details>
+<summary>Show Python quickstart</summary>
+
+1. Create the examples workspace:
+
+```bash
+mkdir qvac-examples-py
+cd qvac-examples-py
+python -m venv .venv
+source .venv/bin/activate
+```
+
+2. Install the package:
+
+```bash
+pip install "tetherto-qvac-sdk"
+```
+
+3. Install the worker (requires Node.js and npm — `install-worker` shells out to `npm install`):
+
+```bash
+python -m tetherto.qvac_sdk install-worker
+```
+
+4. Create the quickstart script:
+
+```python
+import asyncio
+import sys
+
+from tetherto.qvac_sdk import Client, completion, load_model, unload_model
+from tetherto.qvac_sdk.models import LLAMA_3_2_1B_INST_Q4_0
+
+
+async def main():
+    async with Client() as client:
+        t = client.transport
+        # Load a model into memory
+        model_id = await load_model(
+            t,
+            model_src=LLAMA_3_2_1B_INST_Q4_0,
+            on_progress=lambda p: print(p),
+        )
+        # You can use the loaded model multiple times
+        history = [
+            {"role": "user", "content": "Explain quantum computing in one sentence"},
+        ]
+        run = completion(t, model_id=model_id, history=history)
+        async for event in run.events:
+            if event.type == "contentDelta":
+                sys.stdout.write(event.text)
+                sys.stdout.flush()
+        # Unload model to free up system resources
+        await unload_model(t, model_id)
+
+
+asyncio.run(main())
+```
+
+5. Run the quickstart script:
+
+```bash
+python quickstart.py
+```
+
+You'll see the model download first. Then, QVAC will stream the response tokens and print them to the terminal.
+
+</details>
 
 ## Contributing
 

@@ -1,10 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TranslationInterface = void 0;
+exports.errorMessage = errorMessage;
 const error_1 = require("./lib/error");
 const log_forward_1 = require("./lib/log-forward");
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved from package prebuilds.
-const binding = require("./binding");
+// Resolved lazily so importing the package (e.g. for types, error codes, or
+// the model fetchers) never dlopens the native prebuild; the binding loads on
+// first native use instead.
+let bindingCache = null;
+function getBinding() {
+    if (bindingCache === null) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved from package prebuilds.
+        bindingCache = require("./binding");
+    }
+    return bindingCache;
+}
 /** Extract a human-readable message from an unknown thrown value. */
 function errorMessage(err) {
     if (err instanceof Error)
@@ -28,11 +38,11 @@ class TranslationInterface {
      * @param transitionCb - to be called on addon state changes (LISTENING, IDLE, STOPPED, etc )
      */
     constructor(configurationParams, outputCb, transitionCb = null) {
-        this._handle = binding.createInstance(this, configurationParams, outputCb);
+        this._handle = getBinding().createInstance(this, configurationParams, outputCb);
         // Set up C++ → JS logger
         this._loggerInitialized = false;
         if (transitionCb && typeof transitionCb === "object") {
-            binding.setLogger((priority, message) => {
+            getBinding().setLogger((priority, message) => {
                 // Must invoke logger methods on the logger object — QvacLogger relies
                 // on `this` internally, so the call must not be detached.
                 (0, log_forward_1.forwardTransitionLog)(transitionCb, priority, message);
@@ -61,7 +71,7 @@ class TranslationInterface {
     // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve rejected-promise (not sync-throw) semantics for callers.
     async loadWeights(weightsData) {
         try {
-            binding.loadWeights(this._handle, weightsData);
+            getBinding().loadWeights(this._handle, weightsData);
         }
         catch (err) {
             throw new error_1.QvacErrorAddonMarian({
@@ -77,7 +87,7 @@ class TranslationInterface {
     // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve rejected-promise (not sync-throw) semantics for callers.
     async activate() {
         try {
-            binding.activate(this._handle);
+            getBinding().activate(this._handle);
         }
         catch (err) {
             throw new error_1.QvacErrorAddonMarian({
@@ -92,7 +102,7 @@ class TranslationInterface {
      */
     async cancel() {
         try {
-            await binding.cancel(this._handle);
+            await getBinding().cancel(this._handle);
         }
         catch (err) {
             throw new error_1.QvacErrorAddonMarian({
@@ -117,7 +127,7 @@ class TranslationInterface {
             return "Unloaded";
         }
         try {
-            return binding.getActiveBackendName(this._handle);
+            return getBinding().getActiveBackendName(this._handle);
         }
         catch (err) {
             throw new error_1.QvacErrorAddonMarian({
@@ -143,7 +153,7 @@ class TranslationInterface {
             return "";
         }
         try {
-            return binding.getActiveBackendDescription(this._handle);
+            return getBinding().getActiveBackendDescription(this._handle);
         }
         catch {
             return "";
@@ -159,7 +169,7 @@ class TranslationInterface {
     // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve rejected-promise (not sync-throw) semantics for callers.
     async runJob(data) {
         try {
-            return binding.runJob(this._handle, data);
+            return getBinding().runJob(this._handle, data);
         }
         catch (err) {
             throw new error_1.QvacErrorAddonMarian({
@@ -181,10 +191,10 @@ class TranslationInterface {
         try {
             // Clean up logger before destroying instance
             if (this._loggerInitialized) {
-                binding.releaseLogger();
+                getBinding().releaseLogger();
                 this._loggerInitialized = false;
             }
-            binding.destroyInstance(this._handle);
+            getBinding().destroyInstance(this._handle);
             this._handle = null;
         }
         catch (err) {

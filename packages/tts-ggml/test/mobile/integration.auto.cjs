@@ -10,6 +10,10 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runAudio8Test (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/audio8.test.js', options)
+}
+
 async function runChatterboxKvCacheGpuTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/chatterbox-kv-cache-gpu.test.js', options)
 }
@@ -20,6 +24,18 @@ async function runChatterboxMtlTest (options = {}) { // eslint-disable-line no-u
 
 async function runChatterboxSpeedTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/chatterbox-speed.test.js', options)
+}
+
+async function runCosyvoice3CloneTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/cosyvoice3-clone.test.js', options)
+}
+
+async function runCosyvoice3LavasrTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/cosyvoice3-lavasr.test.js', options)
+}
+
+async function runCosyvoice3Test (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/cosyvoice3.test.js', options)
 }
 
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -36,6 +52,10 @@ async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-un
 
 async function runOutputSampleRateTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/output-sample-rate.test.js', options)
+}
+
+async function runParlerWerTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/parler-wer.test.js', options)
 }
 
 async function runParlerTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -64,13 +84,18 @@ async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line n
 
 module.exports = {
   runAddonTest,
+  runAudio8Test,
   runChatterboxKvCacheGpuTest,
   runChatterboxMtlTest,
   runChatterboxSpeedTest,
+  runCosyvoice3CloneTest,
+  runCosyvoice3LavasrTest,
+  runCosyvoice3Test,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
+  runParlerWerTest,
   runParlerTest,
   runRtfBenchmarkTest,
   runStreamingBenchmarkTest,

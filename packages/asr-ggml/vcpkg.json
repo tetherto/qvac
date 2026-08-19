@@ -4,43 +4,45 @@
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.4"
+      "version>=": "1.3.3"
     },
     {
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["metal"],
+      "name": "speech-cpp",
+      "version>=": "2026-08-18",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "coreml",
+        "metal"
+      ],
       "platform": "osx | ios"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["opencl", "vulkan"],
+      "name": "speech-cpp",
+      "version>=": "2026-08-18",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "vulkan",
+        "opencl"
+      ],
       "platform": "android"
     },
     {
-      "name": "whisper-cpp",
-      "features": ["vulkan"],
-      "platform": "!(osx | ios | android)"
-    },
-    {
-      "name": "parakeet-cpp",
-      "version>=": "2026-07-29",
-      "features": ["metal"],
-      "platform": "osx | ios"
-    },
-    {
-      "name": "parakeet-cpp",
-      "version>=": "2026-07-29",
-      "features": ["vulkan", "opencl"],
-      "platform": "android"
-    },
-    {
-      "name": "parakeet-cpp",
-      "version>=": "2026-07-29",
-      "features": ["vulkan"],
+      "name": "speech-cpp",
+      "version>=": "2026-08-18",
+      "default-features": false,
+      "features": [
+        "whisper",
+        "parakeet",
+        "vulkan"
+      ],
       "platform": "!(osx | ios | android)"
     },
     {
@@ -55,14 +57,9 @@
   "features": {
     "tests": {
       "description": "Build C++ unit tests",
-      "dependencies": ["gtest"]
+      "dependencies": [
+        "gtest"
+      ]
     }
-  },
-  "overrides": [
-    {
-      "name": "whisper-cpp",
-      "version": "1.9.1",
-      "port-version": 5
-    }
-  ]
+  }
 }

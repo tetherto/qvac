@@ -13,11 +13,7 @@ npm install @qvac/logging
 ### Import
 
 ```js
-// ES Modules
-import QvacLogger from '@qvac/logging'
-
-// CommonJS
-const QvacLogger = require('@qvac/logging')
+import { QvacLogger } from '@qvac/logging'
 ```
 
 ### Create a Logger Wrapper
@@ -70,7 +66,7 @@ For example:
 
 ```js
 import * as logLevel from 'loglevel'
-import QvacLogger from '@qvac/logging'
+import { QvacLogger } from '@qvac/logging'
 
 logLevel.setLevel('warn')
 const log = new QvacLogger(logLevel)
@@ -89,7 +85,7 @@ log.debug('Debugging now!') // forwarded to logLevel.debug
 
 ```js
 import * as logLevel from 'loglevel'
-import QvacLogger from '@qvac/logging'
+import { QvacLogger } from '@qvac/logging'
 
 logLevel.setLevel('warn')
 const log = new QvacLogger(logLevel)
@@ -103,7 +99,7 @@ log.error('Critical!') // forwarded to logLevel.error
 
 ```js
 import Qvac from '@qvac/sdk'
-import QvacLogger from '@qvac/logging'
+import { QvacLogger } from '@qvac/logging'
 import * as logLevel from 'loglevel'
 
 logLevel.setLevel('debug')
@@ -113,10 +109,16 @@ const qvac = new Qvac({ logger: log })
 await qvac.start()
 ```
 
+## Development
+
+The package is written in TypeScript under `src/` and compiled to `dist/` with `tsc`.
+After cloning, run `npm install` (its `prepare` script builds `dist/`); run `npm run build`
+to recompile, `npm run typecheck` to type-check, and `npm run test:unit` for the tests.
+
 ## Testing
 
 Run unit tests with:
 
 ```bash
-npm test
+npm run test:unit
 ```

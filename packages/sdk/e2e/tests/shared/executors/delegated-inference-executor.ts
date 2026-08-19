@@ -7,7 +7,7 @@ import {
   cancel,
   LLAMA_3_2_1B_INST_Q4_0
 } from '@qvac/sdk'
-import { BaseExecutor, type TestResult } from '@tetherto/qvac-test-suite'
+import { BaseExecutor, type TestResult } from '@qvac/qvac-test-suite'
 import {
   delegatedProviderStart,
   delegatedProviderStop,

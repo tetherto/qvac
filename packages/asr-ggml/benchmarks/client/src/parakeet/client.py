@@ -57,13 +57,7 @@ class ParakeetClient:
             httpx.HTTPStatusError: for non-2xx responses
             httpx.RequestError: for network issues
         """
-        parakeet_config = {
-            "modelType": self.model_cfg.model_type.value,
-            "maxThreads": self.model_cfg.max_threads,
-            "useGPU": self.model_cfg.use_gpu,
-            "captionEnabled": self.model_cfg.caption_enabled,
-            "timestampsEnabled": self.model_cfg.timestamps_enabled,
-        }
+        parakeet_config = self.build_parakeet_config()
 
         parakeet_info = {"lib": self.lib}
         if self.version:
@@ -100,6 +94,18 @@ class ParakeetClient:
             load_time_ms=times.get("loadModelMs", 0.0),
             run_time_ms=times.get("runMs", 0.0),
         )
+
+    def build_parakeet_config(self) -> dict:
+        config = {
+            "modelType": self.model_cfg.model_type.value,
+            "maxThreads": self.model_cfg.max_threads,
+            "useGPU": self.model_cfg.use_gpu,
+            "captionEnabled": self.model_cfg.caption_enabled,
+            "timestampsEnabled": self.model_cfg.timestamps_enabled,
+        }
+        if self.model_cfg.language:
+            config["language"] = self.model_cfg.language
+        return config
 
     def transcribe(self, sources: List[str]) -> AddonResults:
         """

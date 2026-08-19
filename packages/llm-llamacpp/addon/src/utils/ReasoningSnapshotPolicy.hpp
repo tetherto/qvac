@@ -1,7 +1,17 @@
 #pragma once
 
+#include "model-interface/SequenceDriver.hpp"
+
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
+
+// Full-state snapshots are required by recurrent and hybrid models, and by
+// DeepSeek V4 whose compressed cache has the same checkpoint/replay
+// requirement despite not reporting either model predicate.
+[[nodiscard]] inline bool needsFullStateSnapshot(
+    bool isRecurrent, bool isHybrid, bool isDeepSeekV4) noexcept {
+  return isRecurrent || isHybrid || isDeepSeekV4;
+}
 
 // Recurrent / hybrid compaction restores an end-of-prefill snapshot and
 // replays the post-reasoning tail. `thinkingForcedOpen` is retained as an
@@ -66,6 +76,20 @@ recurrentReasoningBoundaryDecision(
              thinkingForcedOpen,
              closeMarkerSingleToken) ==
          RecurrentReasoningBoundaryDecision::Capture;
+}
+
+// Any terminal generation reason that interrupts an open reasoning span must
+// restore the pre-request checkpoint on the snapshot/replay path. Continuing
+// to compaction without a close marker would wipe the whole sequence instead
+// of preserving the preceding conversation.
+[[nodiscard]] inline bool shouldRollbackInterruptedReasoning(
+    GenerationStopReason terminalReason, bool needsRecurrentSnapshot,
+    bool removeThinkingFromContext, bool reasoningEnabled, bool insideReasoning,
+    bool hasOpenSpan, bool hasCapturedCloseSpan) noexcept {
+  return terminalReason != GenerationStopReason::None &&
+         needsRecurrentSnapshot && removeThinkingFromContext &&
+         reasoningEnabled && insideReasoning && hasOpenSpan &&
+         !hasCapturedCloseSpan;
 }
 
 } // namespace utils

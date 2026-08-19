@@ -1,0 +1,4 @@
+# Minimal deps for the qvac/qvac_bergamot lanes on self-hosted runners; the
+# opusmt/nllb/google/bergamot baselines in requirements.txt stay Linux-only.
+sacrebleu>=2.0.0
+click>=8.0.0

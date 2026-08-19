@@ -43,10 +43,9 @@ bool isFileInitialized(const std::filesystem::path& path) {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result_ptr llamaInit,
-    ToolsCompactController& tools)
-    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      compactor_(rollbackState_, tools_), shifter_(compactor_, rollbackState_) {
+    common_params& commonParams, common_init_result_ptr llamaInit)
+    : llamaInit_(std::move(llamaInit)), params_(commonParams),
+      compactor_(rollbackState_), shifter_(compactor_, rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
@@ -54,11 +53,10 @@ MtmdLlmContext::MtmdLlmContext(
 
 MtmdLlmContext::MtmdLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
-    ToolsCompactController& tools, mtmd_context* sharedVision,
-    llama_seq_id seqId, llama_pos perSeqCtxCeiling)
-    : tools_(tools), sharedVision_(sharedVision), modelCtx_(shared),
-      params_(commonParams), perSeqCtxCeiling_(perSeqCtxCeiling),
-      compactor_(rollbackState_, tools_), shifter_(compactor_, rollbackState_) {
+    mtmd_context* sharedVision, llama_seq_id seqId, llama_pos perSeqCtxCeiling)
+    : sharedVision_(sharedVision), modelCtx_(shared), params_(commonParams),
+      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_),
+      shifter_(compactor_, rollbackState_) {
   seqId_ = seqId;
   if (sharedVision_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -89,8 +87,7 @@ void MtmdLlmContext::initializeCommonState() {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
 
-  std::string chatTemplate =
-      getChatTemplate(modelCtx_.model, params_, tools_.enabled());
+  std::string chatTemplate = getChatTemplate(modelCtx_.model, params_);
   tmpls_ = common_chat_templates_init(modelCtx_.model, chatTemplate);
 
   smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
@@ -190,7 +187,12 @@ void MtmdLlmContext::initializeCommonState() {
         arch.has_value() &&
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(arch.value());
+    removeThinkingFromContext_ =
+        arch.has_value() &&
+        qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
+            arch.value());
   }
+  setRemoveThinkingFromContext(removeThinkingFromContext_);
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -202,6 +204,7 @@ void MtmdLlmContext::initVisionContext() {
   mparams.print_timings = true;
   mparams.n_threads = params_.cpuparams.n_threads;
   mparams.image_tile_mode = params_.image_tile_mode;
+  mparams.image_no_upscale = params_.image_no_upscale;
   // Forward the per-image token budget to the vision encoder. These were
   // previously dropped: the addon parsed image_min/max_tokens into
   // common_params but never copied them into mtmd_context_params, so a
@@ -331,7 +334,6 @@ void MtmdLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (current_.pos == 0 && !isCacheLoaded) {
-    tools_.reset();
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
@@ -394,6 +396,7 @@ void MtmdLlmContext::tokenizeChat(
 
   mtmd_input_text text;
   text.text = formattedChat.c_str();
+  text.text_len = formattedChat.size();
   text.add_special = addSpecial;
   text.parse_special = true;
 
@@ -409,37 +412,6 @@ void MtmdLlmContext::tokenizeChat(
     std::string errorMsg = string_format(
         "[MtmdLlm] %s: Unable to tokenize prompt, res = %d\n", __func__, res);
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
-  }
-
-  if (tools_.enabled() && !tools.empty()) {
-    inputs.tools = {};
-    inputs.add_generation_prompt = false;
-    inputs.use_jinja = params_.use_jinja;
-    inputs.enable_thinking = params_.reasoning_budget != 0;
-    auto promptNoTools = getPrompt(tmpls_.get(), inputs);
-
-    if (!promptNoTools.empty()) {
-      mtmd_input_text textNoTools;
-      textNoTools.text = promptNoTools.c_str();
-      textNoTools.add_special = addSpecial;
-      textNoTools.parse_special = true;
-
-      mtmd::input_chunks chunksNoTools(mtmd_input_chunks_init());
-      int32_t resNoTools = mtmd_tokenize(
-          visionContext(),
-          chunksNoTools.ptr.get(),
-          &textNoTools,
-          bitmapsCPtr.data(),
-          bitmapsCPtr.size());
-
-      if (resNoTools == 0) {
-        tools_.onTokenize(
-            mtmd_helper_get_n_tokens(chunks.ptr.get()),
-            mtmd_helper_get_n_tokens(chunksNoTools.ptr.get()));
-      }
-    }
-  } else {
-    tools_.onTokenize(mtmd_helper_get_n_tokens(chunks.ptr.get()), 0);
   }
 
   resetMedia();
@@ -505,7 +477,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         protectedPrefix_,
         ContextUsage{nPositions, nTokens},
         shifter_.discardBudget(),
-        tools_,
         defaultContextSliderOps());
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
@@ -704,7 +675,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       shifter_.setDiscardBudget(ctxSize - protectedPrefix_.pos - 1);
     }
   }
-  tools_.onEvalComplete(current_.pos, nPositions);
   return {};
 }
 
@@ -722,7 +692,7 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
 bool MtmdLlmContext::cancelGenerationCleanup(
     const std::function<void(const std::string&)>& outputCallback) {
   // Rollback = "request never happened": roll back to the pre-request
-  // cursor for both cancellation and n_predict truncation inside reasoning.
+  // cursor for cancellation or a known truncation inside reasoning.
   // `reasoningBoundary` is compaction-only and not used here — restoring
   // it would leak the cancelled prompt / generated-prefix state into
   // the cache.
@@ -771,7 +741,7 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   compactor_.clearSpan();
-  generationStopReason_ = GenerationStopReason::None;
+  generationStopReason_ = stopReasonAfterRequestRollback(generationStopReason_);
   // The sampled tokens were accepted before rollback; clear sampler history so
   // the next clean request cannot inherit a request that "never happened".
   common_sampler_reset(smpl_.get());
@@ -866,16 +836,12 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
           Priority::WARNING,
           string_format(
               "[MtmdLlm] generation overflow: context is full and nDiscarded "
-              "is "
-              "0 (nPast=%d, nCtx=%d, firstMsgTokens=%d, nPastBeforeTools=%d, "
-              "toolsCompact=%s)\n",
+              "is 0 (nPast=%d, nCtx=%d, firstMsgTokens=%d)\n",
               current_.pos,
               llama_n_ctx(modelCtx_.lctx),
-              protectedPrefix_.pos,
-              tools_.anchor(),
-              tools_.enabled() ? "true" : "false"));
+              protectedPrefix_.pos));
       generationStopReason_ = GenerationStopReason::ContextOverflow;
-      return {.ok = false};
+      break;
     }
     applyContextDiscard();
 
@@ -1094,8 +1060,7 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   const bool savedRemoveThinking = removeThinkingFromContext_;
   bool toggled = false;
   if (overrides.remove_thinking_from_context) {
-    removeThinkingFromContext_ = *overrides.remove_thinking_from_context;
-    compactor_.setRemoveThinkingFromContext(removeThinkingFromContext_);
+    setRemoveThinkingFromContext(*overrides.remove_thinking_from_context);
     toggled = true;
   }
 
@@ -1107,14 +1072,20 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
           restoreSampler = std::move(restoreSampler),
           savedRemoveThinking]() {
     restoreSampler();
-    removeThinkingFromContext_ = savedRemoveThinking;
-    compactor_.setRemoveThinkingFromContext(savedRemoveThinking);
+    setRemoveThinkingFromContext(savedRemoveThinking);
   };
 }
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 
+void MtmdLlmContext::resetStopFlag() { stopGeneration_.store(false); }
+
 llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }
+
+void MtmdLlmContext::setRemoveThinkingFromContext(bool value) {
+  removeThinkingFromContext_ = value;
+  compactor_.setRemoveThinkingFromContext(value);
+}
 
 llama_pos MtmdLlmContext::getNPast() const { return current_.pos; }
 
@@ -1471,7 +1442,6 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
 
 void MtmdLlmContext::resetState(bool resetStats) {
 
-  tools_.reset();
   current_ = {};
   protectedPrefix_ = {};
 
@@ -1743,8 +1713,6 @@ void MtmdLlmContext::onPrefillComplete(
     }
     pendingBatchFirstMsg_ = false;
   }
-  tools_.onEvalComplete(
-      current_.pos, static_cast<llama_pos>(prefillTokenCount));
 
   // Reset per-inference reasoning detection state shared by the single-prompt
   // and continuous-batching paths. Do not clear rollbackState_'s boundary
@@ -1927,7 +1895,7 @@ bool MtmdLlmContext::onGenerationFinished(
   }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
-  if (shouldRollbackKnownReasoningCutoff()) {
+  if (shouldRollbackInterruptedReasoning()) {
     return cancelGenerationCleanup(outputCallback);
   }
   compactThinkSpan();
@@ -1938,14 +1906,16 @@ bool MtmdLlmContext::onGenerationFinished(
   return true;
 }
 
-bool MtmdLlmContext::shouldRollbackKnownReasoningCutoff() const {
-  const bool knownTruncation =
-      generationStopReason_ == GenerationStopReason::PredictionLimit ||
-      generationStopReason_ == GenerationStopReason::SequenceLimit;
-  return knownTruncation && needsRecurrentSnapshot_ &&
-         removeThinkingFromContext_ && reasoningEnabled_ &&
-         reasoningState_.inside_reasoning && compactor_.hasOpenSpan() &&
-         !compactor_.hasCapturedCloseSpan();
+bool MtmdLlmContext::shouldRollbackInterruptedReasoning() const {
+  return qvac_lib_inference_addon_llama::utils::
+      shouldRollbackInterruptedReasoning(
+          generationStopReason_,
+          needsRecurrentSnapshot_,
+          removeThinkingFromContext_,
+          reasoningEnabled_,
+          reasoningState_.inside_reasoning,
+          compactor_.hasOpenSpan(),
+          compactor_.hasCapturedCloseSpan());
 }
 
 bool MtmdLlmContext::onCancel(
@@ -1955,13 +1925,6 @@ bool MtmdLlmContext::onCancel(
   // The single-prompt path invokes `cancelGenerationCleanup` directly
   // from its own generation loop.
   return cancelGenerationCleanup(outputCallback);
-}
-
-void MtmdLlmContext::validatePromptPolicy(
-    const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-    bool hasKvCacheContext) const {
-  tools_.validatePrompt(chatMsgs, tools, layout, hasKvCacheContext);
 }
 
 /// Prompt caching on the multimodal batch path round-trips the full four-field
@@ -2021,7 +1984,6 @@ bool MtmdLlmContext::loadCache(
     }
     current_ = {};
     protectedPrefix_ = {};
-    tools_.reset();
   });
 
   // Accepting a partial header would leave `cacheTokens`/`firstMsgCacheTokens`

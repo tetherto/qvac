@@ -87,8 +87,9 @@ async function main () {
       }
     })
 
-    const stats = await response.await()
-    if (stats) {
+    await response.await()
+    const stats = response.stats
+    if (stats && 'totalTime' in stats) {
       console.log('[quickstart] stats =', stats)
     }
   } finally {

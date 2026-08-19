@@ -174,7 +174,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
           workdir: ${{ github.workspace }}/packages/audiogen-ggml
 
@@ -338,40 +338,40 @@ jobs:
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      run_rtf_benchmarks: ${{ contains(github.event.pull_request.labels.*.name, 'run-benchmarks') }}
 
-  # Mobile integration lane: on-device (AWS Device Farm) load + generate smoke.
-  # Like the desktop lane it needs the mobile prebuild artifacts (android-arm64 /
-  # ios-arm64), so it is gated on run_mobile AND a successful prebuild (or reuse
-  # hit). The on-device test.cjs downloads the turbo-q4 GGUFs from the registry
-  # at runtime (no host-side prestage). See integration-mobile-test-audiogen-ggml.yml.
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
+  # MOBILE IS NOW ON-DEMAND ONLY. The PR mobile lane was removed to stop PRs from
+  # auto-launching (costly) AWS Device Farm runs. Run it by dispatching
+  # integration-mobile-test-audiogen-ggml.yml (Actions -> Run workflow), choosing
+  # the platform, device(s) and an optional test filter. The run-mobile-addon-tests
+  # label is kept for a future re-enable but no longer triggers anything here.
+
+  # The benchmark lanes only write artifacts; without this the table exists
+  # nowhere on a PR. Gated on the same label so an ordinary PR pays nothing.
+  # Secrets are deliberately not inherited: this job runs the aggregator from
+  # the PR's own checkout, and the reusable workflow falls back to github.token.
+  summarize-benchmarks:
     needs:
       - fork-approval
-      - context
-      - prebuild
-      - prebuild-artifact-reuse
-      - ci-router
       - authorize
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
-    secrets: inherit
+      - context
+      - run-integration-tests
+    if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true' && contains(github.event.pull_request.labels.*.name, 'run-benchmarks')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-summarize-audiogen-ggml-benchmarks.yml
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
   merge-guard:
-    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      # Desktop + mobile integration wired (full end-to-end generation), both
-      # non-blocking via continue-on-error (merge-guard treats success||skipped
-      # as pass), matching tts-ggml / parakeet's early-days posture.
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      # Desktop integration only. Mobile is now on-demand (workflow_dispatch) and
+      # deliberately dropped from the merge gate. Desktop stays non-blocking via
+      # continue-on-error (merge-guard treats success||skipped as pass).
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

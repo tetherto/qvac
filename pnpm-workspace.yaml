@@ -17,6 +17,10 @@ fetchRetryMaxtimeout: 120000
 # doesn't exist in this workspace; pin it to a real registry version instead.
 overrides:
   hyper-instrument>bare-v8: "^1.0.1"
+  # @electron/rebuild pins @electron/node-gyp to a git URL (exotic subdep);
+  # pin it to the electron fork's published registry build so blockExoticSubdeps
+  # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
+  "@electron/rebuild>@electron/node-gyp": "10.2.0-electron.2"
 
 blockExoticSubdeps: true
 

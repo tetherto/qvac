@@ -7,6 +7,114 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-08-19
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.5.0` -> `^0.6.0`, which carries `qvac-fabric`
+  `10069.1.0` -> `10069.1.1` (fixes MoE models emitting garbage on Adreno 830 OpenCL,
+  and re-enables the GPU MoE kernels that were falling back to CPU). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so the range
+  bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so
+  `^0.5.0` would not have resolved `0.6.0` on its own. No API change for this package.
+
+  This addon runs MobileNetV3-Small on CPU, so the Adreno fix does not change its own
+  inference path — the bump keeps it on the current shared runtime build rather than
+  leaving it on a superseded fabric.
+
+## [0.19.1] - 2026-08-18
+
+### Fixed
+
+- The addon now actually builds against the `qvac-lib-inference-addon-cpp` `1.3.3`
+  its manifest already asked for, rather than `1.2.4`. `vcpkg.json` carried both a
+  `"version>=": "1.3.3"` constraint and an `overrides` entry pinning the same port
+  to `1.2.4`, and a vcpkg override wins over a constraint — so this was the only one
+  of the shared runtime's twelve consumers not resolving 1.3.3, and 0.17.0's note
+  about aligning that floor did not describe what was built here. The pin was added
+  in 0.16.0 for a narrower reason: the registry-baseline bump that made
+  `abseil 20260526.0` available to the new fuzz feature would have carried the header
+  library from 1.2.4 to 1.3.2 as a side effect, and 1.3.2 was unvalidated for this
+  package at the time. That reason is spent — 1.3.3 is both what the constraint
+  requires and the registry baseline's default version for the port, so dropping the
+  override resolves exactly that version rather than leaving resolution to drift.
+
+  No public API change. `runJob()` keeps returning a Boolean admission result on the
+  untagged single-job path this addon uses, and `ClassificationModel` implements
+  plain `IModel`, so none of 1.3.0's job-scheduling interfaces apply to it. What the
+  addon does pick up is teardown and cancellation hardening in the shared runtime:
+  `AddonCpp` destroys its scheduler before stopping the output callback, so teardown
+  terminal events are still delivered; `destroyInstance` destroys the instance
+  outside the instance-registry mutex, so an output callback that re-enters a binding
+  during teardown cannot deadlock (both 1.3.0); `JsAsyncTask` defers environment
+  teardown until queued completions finish (1.3.2), releases its work captures on the
+  JavaScript loop before settling its promise, and no longer retains the model at all
+  for a `cancel()` with no live jobs (both 1.3.3) — the path `unload()` takes here.
+
+- Declared the runtime modules used by the published integration and mobile test files.
+
+## [0.19.0] - 2026-08-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.4.0` -> `^0.5.0`, which carries `qvac-fabric`
+  `10069.0.0` -> `10069.1.0` (VisionPsy Nano support and its Flash preprocessing rule).
+  This package consumes the shared runtime via npm rather than building the vcpkg port,
+  so the range bump is what picks up the new fabric. A caret on a `0.x` version locks
+  the minor, so `^0.4.0` would not have resolved `0.5.0` on its own. No API change for
+  this package.
+
+## [0.18.0] - 2026-08-10
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.3.1` -> `^0.4.0`, which carries `qvac-fabric`
+  `9840.1.1` -> `10069.0.0` (b10069 rebase). This package consumes the shared runtime
+  via npm rather than building the vcpkg port, so the range bump is what picks up the
+  new fabric. A caret on a `0.x` version locks the minor, so `^0.3.1` would not have
+  resolved `0.4.0` on its own. No API change for this package.
+
+## [0.17.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
+## [0.16.0] - 2026-08-05
+
+This release adds Google FuzzTest coverage for the image preprocessor and wires
+bounded fuzz runs into the Linux C++ CI workflow. No public addon API changes.
+
+## Features
+
+### FuzzTest coverage for `preprocessToTensor`
+
+The addon now ships Phase 0 fuzzing for `ImagePreprocessor::preprocessToTensor`,
+exercising both the encoded-image decode path (JPEG/PNG magic detection and
+`stb_image` decode) and the raw-RGB resize/normalize path. Fuzz targets compile
+the preprocessor sources directly without linking `@qvac/fabric`, so they run
+under full ASan + LeakSanitizer.
+
+New npm scripts support local fuzz workflows: `fuzz` (bounded run),
+`fuzz:continuous` (coverage-guided, time-boxed via `--fuzz_for`), and
+`test:cpp:fuzz` (combined unit-test + fuzz configure/build/run). Production
+builds pass `-D BUILD_FUZZING=OFF` explicitly so a prior fuzz configure cannot
+skip the shipped `.bare` module.
+
+Fuzz dependencies (Abseil, FuzzTest, RE2, ANTLR4, GoogleTest) resolve from
+vcpkg via a new manifest `fuzz` feature. Linux CI runs a bounded fuzz stage
+after C++ unit tests in `cpp-tests-classification.yml`.
+
+## Pull Requests
+
+- [#3527](https://github.com/tetherto/qvac/pull/3527) - QVAC-22734 infra: add FuzzTest fuzzing (Phase 0)
+
 ## [0.15.1] - 2026-07-30
 
 ### Changed

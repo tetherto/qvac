@@ -89,8 +89,7 @@ Gating (via `.github/actions/ci-router`):
   expensive on-device run is opt-in (new model / new GPU work) rather than
   automatic.
 
-Currently wired into the speech stack (`tts-ggml`, `transcription-parakeet`,
-`transcription-whispercpp`) -- the stack of the 0.2.1 bug. Rolling the same two
-`coload-smoke` / `coload-smoke-mobile` jobs into the remaining ggml addons'
-`on-pr-<addon>.yml` is a mechanical follow-up (mind that some addon pipelines
-lack a `context` job or a desktop leg).
+Currently wired into the speech stack (`tts-ggml`, `asr-ggml`) -- the stack of
+the 0.2.1 bug. Rolling the same two `coload-smoke` / `coload-smoke-mobile` jobs
+into the remaining ggml addons' `on-pr-<addon>.yml` is a mechanical follow-up
+(mind that some addon pipelines lack a `context` job or a desktop leg).

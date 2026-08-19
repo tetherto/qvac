@@ -16,7 +16,6 @@
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
-#include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// A multimodal session cache is only safe to restore when its header carries
@@ -43,19 +42,16 @@ public:
    * @param params - the parameters.
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
-   * @param tools - reference to the tools compact controller
    */
-  MtmdLlmContext(
-      common_params& commonParams, common_init_result_ptr llamaInit,
-      ToolsCompactController& tools);
+  MtmdLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must
   /// outlive this instance.
   MtmdLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
-      ToolsCompactController& tools, mtmd_context* sharedVision,
-      llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
+      mtmd_context* sharedVision, llama_seq_id seqId,
+      llama_pos perSeqCtxCeiling = -1);
 
   /**
    * The destructor.
@@ -109,6 +105,8 @@ public:
    * The stop method. It stops the model inference.
    */
   void stop() override;
+
+  void resetStopFlag() override;
 
   /**
    * The get context method. It returns the context.
@@ -185,6 +183,8 @@ public:
 
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
+
+  void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
@@ -268,11 +268,6 @@ public:
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const override;
-
   /// Disk prompt-cache for a multimodal batch slot, round-tripping the full
   /// four-field session metadata (see MtmdLlmContext.cpp). `loadCache` records
   /// the discard budget and returns false (cache miss) on an empty key, a
@@ -285,6 +280,8 @@ public:
   void snapshotPreRequestRollbackAnchor() override;
 
 private:
+  friend class MtmdLlmContextTestPeer;
+
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
@@ -330,7 +327,7 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
@@ -367,7 +364,6 @@ private:
   [[nodiscard]] bool cancelGenerationCleanup(
       const std::function<void(const std::string&)>& outputCallback);
 
-  ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   mtmd::context_ptr ctxVision_;
   /// Non-owning vision context for per-slot batch drivers; null in
@@ -441,14 +437,10 @@ private:
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
 
-  // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-on (opt-out via `generationParams` with
-  // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
-  bool removeThinkingFromContext_ = true;
+  // Per-request toggle for post-generation thinking-block KV compaction.
+  // Default-off, except Qwen3-family models opt in during initialization;
+  // `generationParams` can always override it.
+  bool removeThinkingFromContext_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the end-of-prefill

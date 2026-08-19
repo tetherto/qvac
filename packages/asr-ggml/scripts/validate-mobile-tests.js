@@ -13,10 +13,10 @@ const manifestGeneratorFile = path.join(repoRoot, 'scripts', 'generate-mobile-mo
 
 // Mirrors scripts/generate-mobile-integration-tests.js so both agree on the
 // runner name emitted for a given test/integration file.
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
@@ -28,7 +28,7 @@ function toFunctionName (fileName) {
 //     as the perf-only filter.
 // Keep it in exact sync with the mobile-perf runners: every mobile-perf test
 // file must be listed, and every listed name must exist.
-function validatePerfTests (integrationFiles) {
+function validatePerfTests(integrationFiles) {
   if (!fs.existsSync(perfTestsFile)) {
     console.error('❌ test/mobile/perf-tests.json is missing!')
     console.error('   The mobile benchmark lane resolves its Mocha grep from this file.')
@@ -43,15 +43,13 @@ function validatePerfTests (integrationFiles) {
     return false
   }
 
-  if (!Array.isArray(listed) || listed.some(entry => typeof entry !== 'string')) {
+  if (!Array.isArray(listed) || listed.some((entry) => typeof entry !== 'string')) {
     console.error('❌ test/mobile/perf-tests.json must be a flat array of runner names')
     return false
   }
 
   const perfRunners = new Set(
-    integrationFiles
-      .filter(file => file.includes('mobile-perf'))
-      .map(toFunctionName)
+    integrationFiles.filter((file) => file.includes('mobile-perf')).map(toFunctionName)
   )
   const listedSet = new Set(listed)
 
@@ -77,7 +75,7 @@ function validatePerfTests (integrationFiles) {
 // Mocha grep up in that manifest. A key that is not an exported runner stages
 // zero models for that shard, which shows up only as a slow on-device download
 // (or a timeout) on Device Farm — so validate the keys statically here.
-function validateManifestKeys (integrationFiles) {
+function validateManifestKeys(integrationFiles) {
   if (!fs.existsSync(manifestGeneratorFile)) {
     console.error(`❌ Missing ${path.relative(repoRoot, manifestGeneratorFile)}`)
     return false
@@ -90,7 +88,7 @@ function validateManifestKeys (integrationFiles) {
     return false
   }
 
-  const keys = [...block[1].matchAll(/^\s{2}(\w+):/gm)].map(match => match[1])
+  const keys = [...block[1].matchAll(/^\s{2}(\w+):/gm)].map((match) => match[1])
   if (keys.length === 0) {
     console.error('❌ TEST_MODELS in generate-mobile-model-manifest.js is empty')
     return false
@@ -109,18 +107,19 @@ function validateManifestKeys (integrationFiles) {
   return true
 }
 
-function getIntegrationTestFiles () {
+function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  return fs.readdirSync(integrationDir)
-    .filter(f => f.endsWith('.test.js'))
-    .filter(f => !DESKTOP_ONLY.has(f))
+  return fs
+    .readdirSync(integrationDir)
+    .filter((f) => f.endsWith('.test.js'))
+    .filter((f) => !DESKTOP_ONLY.has(f))
     .sort()
 }
 
-function getGeneratedIntegrationRefs (content) {
+function getGeneratedIntegrationRefs(content) {
   const references = new Set()
   const referencePattern = /runIntegrationModule\('\.\.\/integration\/([^']+)'(?:,\s*options)?\)/g
   let match = referencePattern.exec(content)
@@ -133,13 +132,13 @@ function getGeneratedIntegrationRefs (content) {
   return references
 }
 
-function setDiff (left, right) {
-  return [...left].filter(item => !right.has(item)).sort()
+function setDiff(left, right) {
+  return [...left].filter((item) => !right.has(item)).sort()
 }
 
-function printMismatchDetails (label, items) {
+function printMismatchDetails(label, items) {
   console.error(`   ${label}:`)
-  items.forEach(item => console.error(`     - ${item}`))
+  items.forEach((item) => console.error(`     - ${item}`))
 }
 
 try {

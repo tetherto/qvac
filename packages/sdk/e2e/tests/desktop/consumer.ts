@@ -1,7 +1,8 @@
-import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
+  LLAMA_3_2_1B_INST_Q4_0_SHARD,
   GTE_LARGE_FP16,
   GTE_LARGE_335M_FP16_SHARD,
   WHISPER_TINY,
@@ -20,17 +21,22 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
   TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  TTS_CODEC_DECODER_AUDIO8_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
   GROOT_Q5_VF16,
+  GROOT_MULTI_Q5_VF16,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
@@ -39,8 +45,13 @@ import {
   SD_V2_1_1B_Q8_0,
   REALESRGAN_X4PLUS_ANIME_6B,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
+  QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
-  BCI_WINDOWED
+  BCI_WINDOWED,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_VAE_BF16
 } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -77,6 +88,7 @@ import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-inference-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
+import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
@@ -110,6 +122,12 @@ resources.define('tools-batch', {
 
 resources.define('finetune-llm', {
   constant: QWEN3_1_7B_INST_Q4,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+})
+
+resources.define('finetune-llm-qwen35', {
+  constant: QWEN3_5_0_8B_MULTIMODAL_Q8_0,
   type: 'llamacpp-completion',
   config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
 })
@@ -148,12 +166,6 @@ resources.define('tools', {
   constant: QWEN3_1_7B_INST_Q4,
   type: 'llamacpp-completion',
   config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
 })
 
 resources.define('tools-qwen35', {
@@ -208,6 +220,15 @@ resources.define('vla-groot', {
   config: { backend: 'cpu' }
 })
 
+// Multi-embodiment GR00T (all 17 trained rows, default libero_sim), q5
+// profile. Desktop-only for the same reasons as vla-groot; drives the
+// selected-embodiment hparams and vlaSetEmbodiment switching tests.
+resources.define('vla-groot-multi', {
+  constant: GROOT_MULTI_Q5_VF16,
+  type: 'ggml-vla',
+  config: { backend: 'cpu' }
+})
+
 // Classification ships bundled weights inside @qvac/classification-ggml,
 // so no registry constant / pre-download is required.
 resources.define('classification', {
@@ -223,6 +244,13 @@ resources.define('echo', {
 resources.define('sharded-embeddings', {
   constant: GTE_LARGE_335M_FP16_SHARD,
   type: 'llamacpp-embedding',
+  skipPreDownload: true
+})
+
+resources.define('sharded-llm', {
+  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
+  type: 'llamacpp-completion',
+  config: { verbosity: 0, ctx_size: 2048, n_discarded: 256 },
   skipPreDownload: true
 })
 
@@ -323,6 +351,42 @@ resources.define('tts-parler-indic', {
   }
 })
 
+resources.define('tts-cosyvoice3', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42
+  }
+})
+
+// Same model with native chunk streaming engaged, so the streaming e2e can
+// exercise the native 24 kHz chunk path rather than generic SDK streaming.
+resources.define('tts-cosyvoice3-native-stream', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10
+  }
+})
+
+resources.define('tts-audio8', {
+  constant: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    greedy: true,
+    maxFrames: 130,
+    seed: 42
+  }
+})
+
 resources.define('tts-supertonic', {
   constant: TTS_EN_SUPERTONIC_Q8_0,
   type: 'tts-ggml',
@@ -387,6 +451,12 @@ resources.define('parakeet-ctc', {
   config: {}
 })
 
+resources.define('parakeet-indic-conformer', {
+  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  type: 'parakeet-transcription',
+  config: { language: 'hi' }
+})
+
 resources.define('parakeet-sortformer', {
   constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
@@ -439,6 +509,18 @@ resources.define('diffusion', {
     prediction: 'flux2_flow',
     llmModelSrc: QWEN3_4B_Q4_K_M,
     vaeModelSrc: FLUX_2_KLEIN_4B_VAE
+  }
+})
+
+resources.define('audiogen-turbo', {
+  type: 'audiogen-ggml',
+  config: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    useGPU: true,
+    inferenceSteps: 8
   }
 })
 
@@ -522,9 +604,16 @@ function ensureDesktopE2EConfig() {
     ...fixtureConfig,
     ...existingConfig
   }
+  const configuredPlugins = Array.isArray(mergedConfig['plugins'])
+    ? mergedConfig['plugins'].filter((plugin): plugin is string => typeof plugin === 'string')
+    : []
+  const desktopConfig = {
+    ...mergedConfig,
+    plugins: Array.from(new Set([...configuredPlugins, '@qvac/sdk/audiogen-ggml/plugin']))
+  }
   const generatedPath = path.resolve(process.cwd(), 'qvac.config.e2e.generated.json')
 
-  fs.writeFileSync(generatedPath, `${JSON.stringify(mergedConfig, null, 2)}\n`)
+  fs.writeFileSync(generatedPath, `${JSON.stringify(desktopConfig, null, 2)}\n`)
   process.env['QVAC_CONFIG_PATH'] = generatedPath
 
   if (existingPath) {
@@ -594,6 +683,9 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
+    new AudioGenExecutor(resources, {
+      resolveAudioAsset: (fileName) => path.resolve(process.cwd(), 'assets/audio', fileName)
+    }),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),

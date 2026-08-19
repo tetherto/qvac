@@ -38,16 +38,14 @@ test('FFmpegDecoder - lifecycle and decoding', async (t) => {
   } finally {
     await decoder.unload()
     // Give time for handles to close
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 })
 
 test('FFmpegDecoder - decodes multiple audio formats', async (t) => {
   // On mobile, test formats available in testAssets (ogg not supported by Expo's asset pipeline)
   // On desktop, test all formats including ogg
-  const formats = isMobile
-    ? ['mp3', 'wav', 'm4a']
-    : ['mp3', 'wav', 'ogg', 'm4a']
+  const formats = isMobile ? ['mp3', 'wav', 'm4a'] : ['mp3', 'wav', 'ogg', 'm4a']
 
   const decoder = await loadDecoder({
     audioFormat: 's16le',
@@ -80,7 +78,7 @@ test('FFmpegDecoder - decodes multiple audio formats', async (t) => {
     }
   } finally {
     await decoder.unload()
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 })
 
@@ -204,6 +202,6 @@ test('FFmpegDecoder - cancel rejects response and decoder is reusable', async (t
     t.ok(response2.stats.outputBytes > 0, 'second run produced output after a cancel')
   } finally {
     await decoder.unload()
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 })

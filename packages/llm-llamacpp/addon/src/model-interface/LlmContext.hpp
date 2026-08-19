@@ -15,7 +15,6 @@
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
-struct PromptLayout;
 struct mtmd_context;
 
 struct GenerationParams {
@@ -43,14 +42,13 @@ struct GenerationParams {
   // applied to `params_.reasoning_budget` for the duration of the request and
   // restored on completion.
   std::optional<int> reasoning_budget;
-  // Per-request override for the post-generation thinking-block KV
-  // cache compaction. Default-on at the context level; passing
-  // `false` here opts out for this request (keeps the reasoning block
-  // in the cache), `true` re-affirms the default. Supported on both
-  // pure-attention and recurrent / hybrid-SSM models — recurrent /
-  // hybrid takes the snapshot + restore + replay path documented on
-  // `TextLlmContext::needsRecurrentSnapshot_`; pure-attention takes
-  // the `seq_rm + seq_add` path. Restored at end-of-request.
+  // Per-request override for post-generation thinking-block KV cache
+  // compaction. Contexts default off except the Qwen3 family, which defaults
+  // on. `false` keeps the reasoning block in cache; `true` enables
+  // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
+  // models — recurrent / hybrid takes the snapshot + restore + replay path
+  // documented on `TextLlmContext::needsRecurrentSnapshot_`; pure-attention
+  // takes the `seq_rm + seq_add` path. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
@@ -243,11 +241,12 @@ public:
    * The generate response method. It generates the response token by token.
    *
    * @param outputCallback - the output callback.
-   * @return - ok=false for context overflow; cancelled=true when generation
-   * was stopped by user cancellation; rollbackOk=false when a cancellation
-   * or prediction-limit truncation inside reasoning could not restore the
-   * pre-request recurrent state and callers must skip cache persistence for
-   * this request.
+   * @return - cancelled=true when generation was stopped by user cancellation;
+   * rollbackOk=false when a cancellation or prediction-limit truncation inside
+   * reasoning could not restore the pre-request recurrent state and callers
+   * must skip cache persistence for this request. Generation-time context
+   * exhaustion is a successful terminal outcome exposed through runtime stats;
+   * prompt admission overflow still throws before this method runs.
    */
   virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;
@@ -256,6 +255,14 @@ public:
    * The stop method. It stops the model inference.
    */
   virtual void stop() = 0;
+
+  /**
+   * Clears a pending stop request no run consumed. stop() only sets a flag
+   * read at fixed points of the eval loop, so a cancel landing after a run's
+   * last check (its completion tail) survives it; the next run must start
+   * unpoisoned.
+   */
+  virtual void resetStopFlag() = 0;
 
   /**
    * The get context method. It returns the context.
@@ -464,21 +471,6 @@ public:
    *
    */
   virtual void resetMedia() {};
-
-  /// Validates an incoming prompt against any policy-level constraints
-  /// (size, layout, KV-cache state). Default is a no-op; concrete
-  /// contexts (`TextLlmContext`, `MtmdLlmContext`) override as needed.
-  /// Used by both the legacy single-prompt path and the per-slot
-  /// continuous-batching path before admission.
-  virtual void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const {
-    (void)chatMsgs;
-    (void)tools;
-    (void)layout;
-    (void)hasKvCacheContext;
-  }
 
   /// Loaded multimodal (mmproj) context this LLM context can hand to
   /// per-slot batch drivers, or null for text-only contexts. Used by the

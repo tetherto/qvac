@@ -23,6 +23,32 @@ export interface AudioGenConfigurationParams {
      */
     backendsDir?: string;
 }
+/** Stable string values serialized across the JS -> native addon boundary. */
+export declare enum AudioEditOperationType {
+    FlowEdit = "flow-edit",
+    Repaint = "repaint"
+}
+export declare enum RepaintMode {
+    Conservative = "conservative",
+    Balanced = "balanced",
+    Aggressive = "aggressive"
+}
+export interface AudioEditOperationJobData {
+    type: AudioEditOperationType;
+    sourceCaption?: string;
+    sourceLyrics?: string;
+    targetCaption?: string;
+    targetLyrics?: string;
+    caption?: string;
+    lyrics?: string;
+    nMin?: number;
+    nMax?: number;
+    nAvg?: number;
+    start?: number;
+    end?: number;
+    mode?: RepaintMode;
+    strength?: number;
+}
 /** One generation job handed to the native `runJob`. */
 export interface AudioGenJobData {
     type: string;
@@ -34,6 +60,21 @@ export interface AudioGenJobData {
     keyscale?: string;
     timesignature?: string;
     duration?: number;
+    lmTemperature?: number;
+    lmTopP?: number;
+    lmTopK?: number;
+    lmCfgScale?: number;
+    lmPhase1?: boolean;
+    dcwEnabled?: boolean;
+    dcwScaler?: number;
+    dcwHighScaler?: number;
+    audioCodes?: Int32Array;
+    referenceAudio?: Float32Array;
+    sourceAudio?: Float32Array;
+    taskType?: string;
+    audioCoverStrength?: number;
+    coverNoiseStrength?: number;
+    editOperations?: AudioEditOperationJobData[];
 }
 /** Native output event: (handle, event, data, error). */
 export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unknown, error: unknown) => void;
@@ -41,7 +82,7 @@ export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unk
 export interface AudioGenBinding {
     createInstance(owner: AudioGenInterface, configuration: AudioGenConfigurationParams, outputCallback: AudioGenOutputCallback | null): object;
     activate(handle: object | null): Promise<void>;
-    runJob(handle: object | null, data: AudioGenJobData): void | Promise<void>;
+    runJob(handle: object | null, data: AudioGenJobData): boolean | Promise<boolean>;
     cancel(handle: object | null): Promise<void>;
     destroyInstance(handle: object): Promise<void> | void;
 }
@@ -51,7 +92,7 @@ export declare class AudioGenInterface {
     private _handle;
     constructor(binding: AudioGenBinding, configuration?: AudioGenConfigurationParams, outputCallback?: AudioGenOutputCallback | null);
     activate(): Promise<void>;
-    runJob(data: AudioGenJobData): Promise<void>;
+    runJob(data: AudioGenJobData): Promise<boolean>;
     cancel(): Promise<void>;
     destroyInstance(): Promise<void>;
 }

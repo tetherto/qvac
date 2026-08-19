@@ -1,7 +1,7 @@
 import type { Node } from 'fumadocs-core/page-tree';
 import { resolveIcon } from '@/lib/resolveIcon';
 import React from 'react';
-import { SiExpo, SiElectron } from '@icons-pack/react-simple-icons';
+import { SiExpo, SiElectron, SiPython, SiTypescript } from '@icons-pack/react-simple-icons';
 
 /**
  * Only the API summary and release notes are versioned (one MDX per
@@ -28,22 +28,22 @@ export const customTree: Node[] = [
     icon: resolveIcon('DoorOpen'),
   },
   {
-    name: 'Quickstart',
-    url: '/quickstart',
-    type: 'page',
-    icon: resolveIcon('Rocket'),
-  },
-  {
     name: 'System requirements',
     url: '/system-requirements',
     type: 'page',
     icon: resolveIcon('Stethoscope'),
   },
   {
-    name: 'Installation',
-    url: '/installation',
+    name: 'JS/TS SDK',
+    url: '/js-ts-sdk',
     type: 'page',
-    icon: resolveIcon('Package'),
+    icon: React.createElement(SiTypescript, { className: 'h-4 w-4' }),
+  },
+  {
+    name: 'Python SDK',
+    url: '/python-sdk',
+    type: 'page',
+    icon: React.createElement(SiPython, { className: 'h-4 w-4' }),
   },
   {
     name: 'Configuration',
@@ -68,27 +68,25 @@ export const customTree: Node[] = [
   },
   {
     name: 'CLI',
-    type: 'folder',
+    url: '/cli',
+    type: 'page',
     icon: resolveIcon('Terminal'),
-    index: { type: 'page', name: 'CLI', url: '/cli' },
+  },
+  {
+    name: 'HTTP server',
+    type: 'folder',
+    index: { type: 'page', name: 'HTTP server', url: '/cli/http-server' },
+    icon: resolveIcon('Server'),
     children: [
       {
-        name: 'HTTP server',
-        type: 'folder',
-        index: { type: 'page', name: 'HTTP server', url: '/cli/http-server' },
-        icon: resolveIcon('Server'),
-        children: [
-          {
-            name: 'Connect tools',
-            url: '/cli/http-server/connection',
-            type: 'page',
-          },
-          {
-            name: 'Integration',
-            url: '/cli/http-server/integration',
-            type: 'page',
-          },
-        ],
+        name: 'Connect tools',
+        url: '/cli/http-server/connection',
+        type: 'page',
+      },
+      {
+        name: 'Integration',
+        url: '/cli/http-server/integration',
+        type: 'page',
       },
     ],
   },
@@ -159,6 +157,12 @@ export const customTree: Node[] = [
     url: '/ai-capabilities/video-generation',
     type: 'page',
     icon: resolveIcon('Video'),
+  },
+  {
+    name: 'Music generation',
+    url: '/ai-capabilities/music-generation',
+    type: 'page',
+    icon: resolveIcon('Music'),
   },
   {
     name: 'Transcription',
@@ -296,6 +300,7 @@ export const customTree: Node[] = [
       { name: 'transcription-whispercpp', url: '/addons/transcription-whispercpp', type: 'page' },
       { name: 'transcription-parakeet', url: '/addons/transcription-parakeet', type: 'page' },
       { name: 'tts-ggml', url: '/addons/tts-ggml', type: 'page' },
+      { name: 'audiogen-ggml', url: '/addons/audiogen-ggml', type: 'page' },
       { name: 'diffusion-cpp', url: '/addons/diffusion-cpp', type: 'page' },
     ],
   },

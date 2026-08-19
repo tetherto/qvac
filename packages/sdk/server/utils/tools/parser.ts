@@ -10,6 +10,7 @@ import { parsePythonicFormat } from '@/server/utils/tools/parsers/pythonic'
 import { parseHarmonyFormat } from '@/server/utils/tools/parsers/harmony'
 import { parseQwen35Format } from '@/server/utils/tools/parsers/qwen35'
 import { parseGemma4NativeFormat } from '@/server/utils/tools/parsers/gemma4native'
+import { parseDsmlFormat } from '@/server/utils/tools/parsers/dsml'
 
 function pickFormatParsers(
   dialect: ToolDialect | undefined
@@ -33,8 +34,14 @@ function pickFormatParsers(
       // No JSON fallback: Gemma4 emits only its native channel-thought dialect
       // and never falls back to JSON-envelope formats.
       return [parseGemma4NativeFormat]
+    case 'dsml':
+      // Hermes fallback: DeepSeek templates fall back to OpenAI-style JSON when
+      // the DSML block fails to materialise.
+      return [parseDsmlFormat, parseHermesFormat, parseLlamacppFormat]
     default:
-      // Gemma4 first: `<|tool_call>` is uniquely distinctive and can't
+      // DSML first: the `<｜DSML｜` token is unique to DeepSeek and can't
+      // false-match another dialect.
+      // Gemma4 next: `<|tool_call>` is uniquely distinctive and can't
       // false-match other dialects.
       // Harmony next: `to=functions.` is also uniquely Harmony.
       // Qwen35 before Hermes: defers to Hermes when JSON is inside <tool_call>,
@@ -42,6 +49,7 @@ function pickFormatParsers(
       // Pythonic last: its bare `[name(...)]` form can match payloads that
       // look like other dialects.
       return [
+        parseDsmlFormat,
         parseGemma4NativeFormat,
         parseHarmonyFormat,
         parseQwen35Format,

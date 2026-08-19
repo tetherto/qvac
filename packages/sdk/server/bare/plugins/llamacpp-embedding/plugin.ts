@@ -13,7 +13,7 @@ import {
   type EmbedConfig
 } from '@/schemas'
 import { createStreamLogger, registerAddonLogger, getServerLogger } from '@/logging'
-import { expandGGUFIntoShards } from '@/server/utils'
+import { getFirstShardPath } from '@/server/utils'
 import { embed } from '@/server/bare/ops/embed'
 import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
@@ -81,10 +81,8 @@ function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: 
     }
   }
 
-  const modelFiles = expandGGUFIntoShards(modelPath)
-
   const model = new EmbedLlamacpp({
-    files: { model: modelFiles },
+    files: { model: [getFirstShardPath(modelPath)] },
     config,
     logger,
     opts: { stats: true }

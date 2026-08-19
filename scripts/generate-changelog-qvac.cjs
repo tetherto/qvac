@@ -18,7 +18,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
-const { getPackageDir } = require("./sdk/package-paths.cjs");
+const { getPackageDir, getChangelogScanDirs } = require("./sdk/package-paths.cjs");
 
 /**
  * Execute git command
@@ -138,19 +138,50 @@ function resolveBaseRef(packageName, baseCommit, releaseType = "minor") {
 }
 
 /**
+ * Extract PR number from a commit subject.
+ * Prefer trailing `(#123)` / `Merge pull request #123`; last `#N` otherwise.
+ *
+ * @param {string} line
+ * @returns {number|null}
+ */
+function extractPRNumberFromSubject(line) {
+  const trailingSquash = line.match(/\(#(\d+)\)\s*$/);
+  if (trailingSquash) {
+    return parseInt(trailingSquash[1], 10);
+  }
+
+  const mergeRequest = line.match(/Merge pull request #(\d+)/i);
+  if (mergeRequest) {
+    return parseInt(mergeRequest[1], 10);
+  }
+
+  const matches = [...line.matchAll(/#(\d+)/g)];
+  if (matches.length === 0) {
+    return null;
+  }
+
+  // Last resort: last #N on the line (closer to GitHub's squash trailer).
+  return parseInt(matches[matches.length - 1][1], 10);
+}
+
+/**
  * Get PR numbers from path-scoped commits.
  * Searches all commits (not just merges) because squash-merged PRs
  * have only one parent but still contain "#123" in the commit message.
  * @param {string|null} baseRef - Tag, commit SHA, or null for all commits
- * @param {string} packagePath - e.g., "packages/sdk"
+ * @param {string|string[]} packagePaths - e.g., "packages/sdk" or
+ *   ["packages/sdk", "packages/inference"]
  * @returns {number[]}
  */
-function getPRNumbers(baseRef, packagePath) {
+function getPRNumbers(baseRef, packagePaths) {
   try {
     const range = baseRef ? `${baseRef}..HEAD` : "HEAD";
-    // Use :(top) pathspec to resolve from repo root regardless of CWD
+    const paths = Array.isArray(packagePaths) ? packagePaths : [packagePaths];
+    // Use :(top) pathspec to resolve from repo root regardless of CWD.
+    // Multiple pathspecs union: a commit touching any of them is included.
+    const pathspecs = paths.map((p) => `":(top)${p}"`).join(" ");
     const commits = git(
-      `log ${range} --oneline -- ":(top)${packagePath}"`,
+      `log ${range} --oneline -- ${pathspecs}`,
     );
 
     if (!commits) {
@@ -161,10 +192,9 @@ function getPRNumbers(baseRef, packagePath) {
     const lines = commits.split("\n");
 
     for (const line of lines) {
-      // Match "Merge pull request #123" or "(#123)" squash-merge patterns
-      const match = line.match(/#(\d+)/);
-      if (match) {
-        prNumbers.push(parseInt(match[1], 10));
+      const prNumber = extractPRNumberFromSubject(line);
+      if (prNumber !== null) {
+        prNumbers.push(prNumber);
       }
     }
 
@@ -301,6 +331,49 @@ function parseArgs(argv) {
  * @param {boolean} [options.dryRun] - If true, don't write files
  * @returns {Promise<{packageName: string, baseRef: string|null, baseVersion: string|null, version: string, prs: Array}>}
  */
+/**
+ * Fail-stop if the clone is shallow or baseRef is not an ancestor of HEAD.
+ *
+ * @param {string} baseRef
+ */
+function assertChangelogHistoryReady(baseRef) {
+  let isShallow;
+  try {
+    isShallow = git("rev-parse --is-shallow-repository");
+  } catch (error) {
+    throw new Error(
+      "Unable to determine whether the repository is shallow.",
+    );
+  }
+
+  if (isShallow === "true") {
+    throw new Error(
+      "Shallow clone: run `git fetch --unshallow` (or re-clone without " +
+        "--depth), then re-run.",
+    );
+  }
+
+  try {
+    git(`rev-parse --verify ${baseRef}^{commit}`);
+  } catch (error) {
+    throw new Error(
+      `Base reference '${baseRef}' does not resolve to a commit.`,
+    );
+  }
+
+  try {
+    execSync(`git merge-base --is-ancestor ${baseRef} HEAD`, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error(
+      `Base reference '${baseRef}' is not an ancestor of HEAD. ` +
+        "Check out the release tip (or package tag) before generating.",
+    );
+  }
+}
+
 async function generateChangelog(options) {
   const { packageName, baseCommit, baseVersion, dryRun } = options;
   const packagePath = getPackageDir(packageName);
@@ -344,6 +417,8 @@ async function generateChangelog(options) {
     );
   }
 
+  assertChangelogHistoryReady(baseRef);
+
   const resolvedBaseVersion =
     baseVersion || extractVersionFromTag(baseRef) || null;
 
@@ -353,9 +428,10 @@ async function generateChangelog(options) {
   }
   console.log("");
 
-  // Get PR numbers scoped to package path
+  // Get PR numbers scoped to the package's changelog scan dirs. For sdk this
+  // also covers packages/inference, whose engine ships out of the sdk package.
   console.log("🔍 Finding merged PRs...");
-  const prNumbers = getPRNumbers(baseRef, packagePath);
+  const prNumbers = getPRNumbers(baseRef, getChangelogScanDirs(packageName));
 
   if (prNumbers.length === 0) {
     console.log("No PRs found to generate changelog");
@@ -528,6 +604,8 @@ module.exports = {
   detectReleaseType,
   resolveBaseRef,
   getPRNumbers,
+  extractPRNumberFromSubject,
+  assertChangelogHistoryReady,
   fetchPRMetadata,
   getGitHubToken,
   getRepoRoot,

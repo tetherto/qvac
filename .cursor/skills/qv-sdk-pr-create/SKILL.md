@@ -28,16 +28,42 @@ Resolve remotes from `git remote -v`:
 
 In command examples below, `ORG_REMOTE` / `FORK_REMOTE` / `BRANCH` are placeholders — substitute the resolved remote and branch names. Do not run those tokens literally.
 
+## Release PR branch naming (org-branch path)
+
+`publish-sdk.yml` (and sibling publish workflows) run **Release Merge Guard** on
+`push` to any `release-*` ref. The guard validates `github.ref_name` — the branch
+that was **pushed** — not the PR base. It requires
+`release-<pkg>-x.y.z` (three-part semver).
+
+Consequences for release changelog / metadata PRs:
+
+1. **Base (target)** must be exactly `release-<pkg>-<x.y.z>` (e.g. `release-sdk-0.17.0`).
+   Short cuts like `release-sdk-0.17` fail the guard on merge/publish. If the cut
+   is short-named, STOP and ask a repo admin to rename it to the three-part form
+   before relying on publish (protected-branch rename needs admin).
+2. **Head (working branch)** must **not** start with `release-` when pushed to the
+   org remote. Prefer `chore/<pkg>-<x.y.z>-changelog`
+   (e.g. `chore/sdk-0.17.0-changelog`). Names like `release-sdk-0.17.0-changelog`
+   trip Release Merge Guard on the helper push and can leave a failing check on
+   that commit SHA.
+3. GitHub cannot retarget a PR's **head**. To rename a bad head: push the same
+   commits under the new name, open a new PR, close the old one, delete the old
+   remote head. If the new PR still shows a stale Release Merge Guard fail on the
+   same SHA, push an empty `[skiplog]` commit so checks reattach to a fresh SHA.
+
+`backmerge/release-<pkg>-<x.y.z>` heads are fine — they do not match the
+`release-*` push trigger.
+
 ## Workflow
 
-1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch
+1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch. For release PRs, apply **Release PR branch naming** above (base three-part; head not `release-*`)
 2. Resolve the head remote (prefer org remote; see above). Collect commits/diff from `<base>...<head-remote>/<branch>` (or local `HEAD` if not yet pushed)
 3. Infer ticket, prefix, and tags from changes (see Inference Strategy)
 4. Only ask user for input when inference confidence is low
 5. Generate title: `TICKET prefix[tags]: subject`
 6. Fill template sections based on changes
 7. Validate tag requirements ([bc]/[api]/[mod])
-8. **If diff touches `packages/sdk/package.json` version or dep blocks**, chain into the `qv-sdk-bare-sdk-sync` skill (see "SDK ↔ bare-SDK Sync Trigger" below)
+8. **If diff touches the `version` of `packages/inference` / `packages/sdk` / `packages/bare-sdk`, or sdk's dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
 9. Output complete PR description
 10. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
 
@@ -138,26 +164,26 @@ gh pr view --repo tetherto/qvac BRANCH --web
 6. If gh not available, output the copy-ready markdown format above
 7. As part of the output, provide a clickable hyperlink (not plain text) to the PR on GitHub.
 
-## SDK ↔ bare-SDK Sync Trigger
+## SDK Lockstep Client Sync Trigger
 
-**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) touches `packages/sdk/package.json` and modifies one of: `version`, `dependencies`, `optionalDependencies`, `peerDependencies`.
+**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) modifies the `version` of `packages/inference/package.json`, `packages/sdk/package.json`, or `packages/bare-sdk/package.json` (`@qvac/inference` is the anchor that drives the pod version), or sdk's `dependencies` / `optionalDependencies` / `peerDependencies`.
 
-When triggered, prompt the user to run `qv-sdk-bare-sdk-sync` so the same change is mirrored into `packages/bare-sdk/package.json` (with bare-sdk's NOTICE regenerated) in the same commit/PR. `@qvac/sdk` and `@qvac/bare-sdk` ship in lockstep — letting them drift in a PR creates work for the next release.
+When triggered, prompt the user to run `qv-sdk-lockstep-sync` so the pod stays aligned in the same commit/PR: `@qvac/sdk` + `@qvac/bare-sdk` (package.json + NOTICE) stamped to the inference anchor, and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`). Letting them drift creates work for the next `release-*` cut.
 
 ### Steps (after Step 7 of Workflow above)
 
 1. Detect the trigger condition by inspecting the diff:
-   - `git diff <base>...<head-remote>/<branch> -- packages/sdk/package.json` (or vs local `HEAD`) shows changes
-   - Changes touch the `version` line OR any `dependencies` / `optionalDependencies` / `peerDependencies` block
-2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-bare-sdk-sync` to mirror into bare-sdk?" [Yes / No (skip)]
-3. If yes, read `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` and follow it inline. The skill writes to `packages/bare-sdk/package.json` and regenerates `packages/bare-sdk/NOTICE`.
-4. Verify with `cd packages/bare-sdk && bun run check:deps-vs-sdk` — must pass.
-5. Stage and commit the bare-sdk changes onto the same branch BEFORE proceeding to Output step. The PR should ship the sdk and bare-sdk updates atomically.
-6. If `qv-notice-generate bare-sdk` fails (missing env tokens, etc.), STOP and surface the error. Do not output the PR description until bare-sdk is in sync.
+   - `git diff <base>...<head-remote>/<branch> -- packages/inference/package.json packages/sdk/package.json packages/bare-sdk/package.json` (or vs local `HEAD`) shows changes
+   - Changes touch a `version` line (inference / sdk / bare-sdk) OR sdk's `dependencies` / `optionalDependencies` / `peerDependencies` block
+2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-lockstep-sync` for bare-sdk + sdk-python?" [Yes / No (skip)]
+3. If yes, read `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` and follow it inline.
+4. Verify: `cd packages/bare-sdk && bun run check:deps-vs-sdk` and `packages/sdk-python` `generate.py --check` — both must pass.
+5. Stage and commit lockstep client changes onto the same branch BEFORE proceeding to Output step.
+6. If `qv-notice-generate bare-sdk` fails (missing env tokens, etc.), STOP and surface the error. Do not output the PR description until clients are in sync.
 
 ### Opt-out
 
-To skip the bare-sdk sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps changed but bare-sdk was not synced. Run `/qv-sdk-bare-sdk-sync` before merge or expect `check:deps-vs-sdk` to fail in CI."
+To skip lockstep sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps/version changed but lockstep clients were not synced. Run `/qv-sdk-lockstep-sync` before merge."
 
 ## Docs Artifacts (SDK Releases)
 
@@ -184,6 +210,11 @@ the release PR alongside the changelog.
 **Trigger:** the just-created PR's base is `release-<pkg>-<x.y.z>` for any SDK pod package.
 
 When triggered, automatically chain into the `sdk-backmerge` skill so a follow-up PR is also opened against `main` with the same version-bump + changelog metadata. This applies the gitflow.md "Keep main aligned" rule at PR-creation time so nobody has to remember a follow-up step after the release PR merges.
+
+**Preflight before opening the release PR:** confirm base matches
+`^release-<pkg>-\d+\.\d+\.\d+$` and the org head is **not** `release-*`
+(see **Release PR branch naming**). Do not open / chain the dual-PR flow against
+a short-named cut if publish is expected on merge.
 
 ### Steps (after Step 5 of gh CLI Integration above)
 
@@ -218,9 +249,10 @@ Before outputting the PR description, verify:
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
-- [ ] If diff touches `packages/sdk/package.json` deps/version, the sync skill ran (or `--no-sync` was set with a reminder emitted), and `check:deps-vs-sdk` passes
+- [ ] If diff touches the `version` of inference / sdk / bare-sdk (or sdk's deps), `qv-sdk-lockstep-sync` ran (or `--no-sync` was set with a reminder emitted), and bare-sdk + sdk-python checks pass
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
+- [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
 - [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
 - [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 
@@ -230,6 +262,6 @@ Before outputting the PR description, verify:
 - PR template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 - Format rules: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - Backmerge skill: `.cursor/skills/qv-sdk-backmerge/SKILL.md`
-- sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
+- sdk lockstep clients: `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md`
 - GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill until DevOps updates gitflow
 - Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)
