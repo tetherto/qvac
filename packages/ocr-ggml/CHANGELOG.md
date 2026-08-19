@@ -4,6 +4,12 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Declared the runtime modules used by the published integration and mobile test files.
+
 ## [0.17.0] - 2026-08-17
 
 ### Changed

@@ -303,6 +303,130 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "lmTemperature": {
+          "description": "LM sampling temperature (ACE-Step default: 0.85).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmTopP": {
+          "description": "LM nucleus-sampling probability (ACE-Step default: 0.9).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lmTopK": {
+          "description": "LM top-k cutoff; 0 disables top-k filtering.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lmCfgScale": {
+          "description": "Classifier-free guidance scale used by the LM.",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmPhase1": {
+          "description": "Allow the LM to infer missing metadata before semantic-code generation.",
+          "type": "boolean"
+        },
+        "dcwEnabled": {
+          "description": "Apply the official ACE-Step Haar DCW correction during DiT sampling (default: true).",
+          "type": "boolean"
+        },
+        "dcwScaler": {
+          "description": "DCW low-frequency correction strength (official default: 0.05).",
+          "type": "number",
+          "minimum": 0
+        },
+        "dcwHighScaler": {
+          "description": "DCW high-frequency correction strength (official default: 0.02).",
+          "type": "number",
+          "minimum": 0
+        },
+        "taskType": {
+          "description": "Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+          "type": "string",
+          "enum": ["text2music", "cover-nofsq"],
+          "title": "AudioGenStreamRequestTaskType"
+        },
+        "audioCoverStrength": {
+          "description": "Fraction of DiT steps that keep the source context (0..1, default 1). cover-nofsq currently requires 1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "coverNoiseStrength": {
+          "description": "Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "referenceAudio": {
+          "description": "Optional timbre reference audio; omit to keep the engine default.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestReferenceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestReferenceAudioFilePath"
+            }
+          ]
+        },
+        "sourceAudio": {
+          "description": "Source audio to re-render; required for cover tasks.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestSourceAudioFilePath"
+            }
+          ]
+        },
         "type": {
           "type": "string",
           "const": "audioGenStream"
@@ -2671,6 +2795,12 @@
       },
       "required": ["type", "events"],
       "additionalProperties": false
+    },
+    "constants.AudioGenTaskType": {
+      "title": "AudioGenTaskType",
+      "type": "string",
+      "enum": ["text2music", "cover-nofsq"],
+      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ"]
     },
     "constants.ModelType": {
       "title": "ModelType",
