@@ -8264,6 +8264,11 @@
                       "enum": ["disabled", "batched", "sequential"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
                     },
+                    "image_no_upscale": {
+                      "type": "string",
+                      "enum": ["on", "off"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"
+                    },
                     "mmproj-use-gpu": {
                       "type": "boolean"
                     }
