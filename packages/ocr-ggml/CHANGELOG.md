@@ -1,4 +1,5 @@
 # @qvac/ocr-ggml — Changelog
+<!-- ci: parity rerun 2 (all fixes incl on-merge perms) -->
 <!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
 All notable changes to this package will be documented here. The format

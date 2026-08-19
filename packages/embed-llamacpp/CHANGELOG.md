@@ -1,4 +1,5 @@
 # Changelog
+<!-- ci: parity rerun 2 (all fixes incl on-merge perms) -->
 <!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
 ## [0.30.1] - 2026-07-30
