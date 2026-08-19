@@ -1,13 +1,34 @@
 'use strict'
 
 const test = require('brittle')
+const os = require('bare-os')
 const {
   AudioGen,
   ENGINE_ACESTEP,
   ENGINE_MINIMAX,
+  ERR_CODES,
   MINIMAX_DEFAULT_MAX_FRAMES,
   detectEngineType
 } = require('../../index.js')
+
+function withPlatform(platform, action) {
+  const originalPlatform = os.platform
+  os.platform = () => platform
+  try {
+    return action()
+  } finally {
+    os.platform = originalPlatform
+  }
+}
+
+function captureError(action) {
+  try {
+    action()
+    return null
+  } catch (error) {
+    return error
+  }
+}
 
 function createHarness(options = {}) {
   let received
@@ -35,6 +56,44 @@ test('detectEngineType selects MiniMax from synth path', (t) => {
   )
   t.is(detectEngineType({ modelDir: '/models/acestep' }), ENGINE_ACESTEP)
   t.is(detectEngineType({}, ENGINE_MINIMAX), ENGINE_MINIMAX)
+})
+
+test('AudioGen rejects MiniMax on Android without affecting ACE-Step', (t) => {
+  const error = withPlatform('android', () =>
+    captureError(
+      () =>
+        new AudioGen({
+          engine: ENGINE_MINIMAX,
+          files: { modelDir: '/models/minimax' }
+        })
+    )
+  )
+  const acestep = withPlatform(
+    'android',
+    () => new AudioGen({ files: { modelDir: '/models/acestep' } })
+  )
+
+  t.is(error.code, ERR_CODES.INVALID_INPUT)
+  t.is(acestep._engineType, ENGINE_ACESTEP)
+})
+
+test('AudioGen rejects MiniMax on iOS without affecting ACE-Step', (t) => {
+  const error = withPlatform('ios', () =>
+    captureError(
+      () =>
+        new AudioGen({
+          engine: ENGINE_MINIMAX,
+          files: { modelDir: '/models/minimax' }
+        })
+    )
+  )
+  const acestep = withPlatform(
+    'ios',
+    () => new AudioGen({ files: { modelDir: '/models/acestep' } })
+  )
+
+  t.is(error.code, ERR_CODES.INVALID_INPUT)
+  t.is(acestep._engineType, ENGINE_ACESTEP)
 })
 
 test('AudioGen configures the MiniMax native engine', (t) => {

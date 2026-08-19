@@ -35,6 +35,8 @@ const REQUIRED_PATHS = [
   'package/audiogen.d.ts',
   'package/error.js',
   'package/error.d.ts',
+  'package/examples/generate-music-minimax.js',
+  'package/NOTICE',
   'package/scripts/download-audiogen-ggml-models.js',
   ...BENCHMARK_PATHS
 ]

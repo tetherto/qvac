@@ -14,6 +14,17 @@
 namespace qvac::audiogenggml::acestep {
 
 namespace {
+class CancellationReset {
+public:
+  explicit CancellationReset(std::atomic_bool& requested)
+      : requested_(requested) {}
+
+  ~CancellationReset() { requested_.store(false); }
+
+private:
+  std::atomic_bool& requested_;
+};
+
 int16_t f32ToI16(float x) {
   float v = x * 32767.0F;
   if (v > 32767.0F)
@@ -147,8 +158,10 @@ std::any AcestepModel::process(const std::any& input) {
 }
 
 AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
-  cancelRequested_.store(false);
-  jobInProgress_.store(true);
+  CancellationReset cancellationReset(cancelRequested_);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step generation cancelled");
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
   std::shared_ptr<tts_cpp::acestep::Engine> engine;
@@ -198,6 +211,9 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   };
 
   tts_cpp::acestep::GenerateResult result = engine->generate(params, progress);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step generation cancelled");
+  }
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
@@ -237,7 +253,6 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
 
-  jobInProgress_.store(false);
   return pcm;
 }
 

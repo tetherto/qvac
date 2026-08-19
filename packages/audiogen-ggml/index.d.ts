@@ -157,7 +157,7 @@ export interface AudiogenStats {
     /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
     backendId?: number;
 }
-export declare function detectEngineType(files?: AudioGenFiles, explicitEngine?: string): AudioGenEngine;
+export declare function detectEngineType(files?: AudioGenFiles, explicitEngine?: AudioGenEngine): AudioGenEngine;
 export declare class AudioGen {
     static readonly inferenceManagerConfig: {
         noAdditionalDownload: boolean;

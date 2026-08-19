@@ -64,6 +64,7 @@
     "test/utils/device-env.js",
     "test/utils/memory-usage.js",
     "benchmarks/RTF-BENCHMARKS.md",
+    "examples/generate-music-minimax.js",
     "scripts/download-audiogen-ggml-models.js",
     "README.md",
     "CHANGELOG.md",

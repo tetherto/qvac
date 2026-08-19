@@ -152,12 +152,15 @@ const ACESTEP_GENERATE_KEYS = [
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
 }
-function detectEngineType(files = {}, explicitEngine) {
-    if (explicitEngine !== undefined &&
-        explicitEngine !== exports.ENGINE_ACESTEP &&
-        explicitEngine !== exports.ENGINE_MINIMAX) {
+function validateEngineType(engine) {
+    if (engine !== undefined &&
+        engine !== exports.ENGINE_ACESTEP &&
+        engine !== exports.ENGINE_MINIMAX) {
         throw invalidInput(`engine must be '${exports.ENGINE_ACESTEP}' or '${exports.ENGINE_MINIMAX}'`);
     }
+}
+function detectEngineType(files = {}, explicitEngine) {
+    validateEngineType(explicitEngine);
     if (explicitEngine !== undefined)
         return explicitEngine;
     if (files.synthModel !== undefined)

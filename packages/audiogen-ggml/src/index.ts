@@ -366,17 +366,21 @@ function hasAnyFile (files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): bo
   return keys.some((key) => files[key] !== undefined)
 }
 
-export function detectEngineType (
-  files: AudioGenFiles = {},
-  explicitEngine?: string
-): AudioGenEngine {
+function validateEngineType (engine: string | undefined): void {
   if (
-    explicitEngine !== undefined &&
-    explicitEngine !== ENGINE_ACESTEP &&
-    explicitEngine !== ENGINE_MINIMAX
+    engine !== undefined &&
+    engine !== ENGINE_ACESTEP &&
+    engine !== ENGINE_MINIMAX
   ) {
     throw invalidInput(`engine must be '${ENGINE_ACESTEP}' or '${ENGINE_MINIMAX}'`)
   }
+}
+
+export function detectEngineType (
+  files: AudioGenFiles = {},
+  explicitEngine?: AudioGenEngine
+): AudioGenEngine {
+  validateEngineType(explicitEngine)
   if (explicitEngine !== undefined) return explicitEngine
   if (files.synthModel !== undefined) return ENGINE_MINIMAX
   return ENGINE_ACESTEP

@@ -106,7 +106,6 @@ private:
   std::shared_ptr<tts_cpp::acestep::Engine> engine_;
 
   mutable std::atomic_bool cancelRequested_{false};
-  std::atomic_bool jobInProgress_{false};
 
   std::function<void(const AudioGenProgress&)> progressSink_;
 
