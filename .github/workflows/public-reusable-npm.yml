@@ -47,7 +47,7 @@ jobs:
           echo "ref: $HEAD_SHA"
           echo "workdir: $WORKDIR"
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -112,7 +112,7 @@ jobs:
           exit 1
 
       - name: Call Publish NPM Action
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
         with:
           tag: "dev"
           workdir: ${{ inputs.workdir }}
@@ -128,13 +128,13 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
         with:
           workdir: ${{ inputs.workdir }}
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Publish to npm
         id: publish-npm
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
         with:
           workdir: ${{ inputs.workdir }}
           tag: ${{ steps.dist-tag.outputs.tag }}
