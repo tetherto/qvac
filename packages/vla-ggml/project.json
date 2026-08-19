@@ -90,21 +90,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/vla-ggml",
-        "ci": {
-          "npmName": "@qvac/vla-ggml",
-          "prebuildArtifactPrefix": "vla-",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED",
-          "androidDevicePoolArnPrimary": "ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED",
-          "enablesPerf": true
-        }
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

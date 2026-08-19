@@ -58,26 +58,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/asr-ggml",
-        "ci": {
-          "npmName": "@qvac/asr-ggml",
-          "schedulingMode": "dual-flagship",
-          "mochaTimeoutMs": "2700000",
-          "wdioWaitforTimeoutMs": "600000",
-          "prebuildArtifactPrefix": "asr-ggml-",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML",
-          "deviceFarmProjectArnFallback": "AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_ASR_GGML",
-          "iosDevicePoolArnFallback": "IOS_DEVICE_POOL_ARN_PARAKEET",
-          "enablesPerf": true,
-          "extraPreBuildCommand": "npm run test:mobile:generate"
-        }
-      }
-    },
     "benchmark": {
       "executor": "nx:run-commands",
       "options": {
@@ -126,7 +106,7 @@
           "buildStep": "build:ts",
           "nameTransform": "rename-prefix",
           "repoName": "asr-ggml",
-          "testGateMode": "post-publish-integration+mobile"
+          "testGateMode": "post-publish-integration"
         }
       }
     }

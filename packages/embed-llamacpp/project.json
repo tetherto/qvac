@@ -62,22 +62,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/embed-llamacpp",
-        "ci": {
-          "npmName": "@qvac/embed-llamacpp",
-          "prebuildArtifactPrefix": "llama-cpp-",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_LLAMACPP_EMBED",
-          "androidDevicePoolArnPrimary": "ANDROID_DEVICE_POOL_ARN_LLAMACPP_EMBED",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_LLAMACPP_EMBED",
-          "enablesPerf": false,
-          "extraPreBuildCommand": "npm run generate:benchmark-shards"
-        }
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

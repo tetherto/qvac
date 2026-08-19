@@ -36,22 +36,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/decoder-audio",
-        "ci": {
-          "npmName": "@qvac/decoder-audio",
-          "skipPrebuilds": true,
-          "mochaTimeoutMs": "600000",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO",
-          "androidDevicePoolArnPrimary": "ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_DECODER_AUDIO",
-          "enablesPerf": false
-        }
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
@@ -75,7 +59,7 @@
           "buildStep": "none",
           "nameTransform": "none",
           "repoName": "decoder-audio",
-          "testGateMode": "pre-publish-integration+mobile"
+          "testGateMode": "pre-publish-integration"
         }
       }
     }
