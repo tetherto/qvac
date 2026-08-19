@@ -111,8 +111,10 @@ Models are declared in `qvac.config.*` under the `serve.models` key. The server 
 
 - **`model`**: SDK model constant name (e.g., `QWEN3_600M_INST_Q4`). The server resolves it to a download source and addon type automatically.
 - **`default`**: when `true`, marks this model as the default for its endpoint category. This does not make the server auto-select the model for requests that omit `model`.
-- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded on first request (cold start). Defaults to `true` for constant model entries.
+- **`preload`**: when `true`, the model is loaded into memory on server startup. When `false`, it is loaded lazily on the first request that names it (cold start — that request blocks while the model loads; concurrent first requests share a single load). Defaults to `true` for constant model entries and `false` for explicit `{ src, type }` entries. Use `--model <alias>` to force a lazy model to warm at startup.
 - **`config`**: model config overrides passed to the underlying addon. Same options as [`modelConfig` in `loadModel()`](/reference/api#loadmodel).
+
+Lazy-load behavior (whether requests may load models on demand, load concurrency, per-load timeout, and cancel-on-disconnect) is tuned under [`serve.load`](/configuration#loadoptions-serveload), with matching `qvac serve openai` flags. Set `serve.load.lazy: false` (or `--no-lazy-load`) to require preloaded models and return `503 model_not_loaded` otherwise.
 
 <Callout type="info">
 The default LLM context window is 1,024 tokens and includes both the input and generated output. Set `config.ctx_size` explicitly for longer prompts. A request's `max_tokens` limits only generated tokens, so budget the prompt and requested output together within `ctx_size`.
@@ -219,11 +221,12 @@ All multipart endpoints (`/v1/audio/*`, `/v1/images/edits`, `/v1/files`) cap the
 
 ### Models
 
-Inspect and unload models registered in `serve.models`.
+Inspect and unload models registered in `serve.models`. Every configured model is
+usable: one that is not preloaded loads on the first request that names it.
 
 #### `GET /v1/models`
 
-List all loaded models.
+List all configured models (loaded or not — each loads on first request).
 
 ```bash
 curl http://localhost:11434/v1/models
@@ -242,7 +245,7 @@ Response:
 
 #### `GET /v1/models/:id`
 
-Get details of a specific loaded model.
+Get details of a configured model (whether or not it is currently loaded).
 
 ```bash
 curl http://localhost:11434/v1/models/my-llm
@@ -250,7 +253,9 @@ curl http://localhost:11434/v1/models/my-llm
 
 #### `DELETE /v1/models/:id`
 
-Unload a model, releasing its resources.
+Unload a model, releasing its resources. The alias stays configured and
+reloadable — the next request that names it loads it again. There is no separate
+load endpoint; send a normal request (or set `preload: true`) to load a model.
 
 ```bash
 curl -X DELETE http://localhost:11434/v1/models/my-llm

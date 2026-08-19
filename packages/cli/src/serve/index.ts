@@ -23,6 +23,7 @@ import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from './
 import { resolveServeApiKey } from './api-key.js'
 import { checkNetworkExposure, validateServeStartup } from './startup.js'
 import { createModelRegistry } from './core/model-registry.js'
+import { createLoadManager, defaultLoadFn } from './core/load-manager.js'
 import { preloadModels, shutdownSDK } from './core/lifecycle.js'
 import { createResponsesStore } from './adapters/openai/responses-store.js'
 import { createChunkAttributionStore } from './adapters/openai/chunk-attribution-store.js'
@@ -58,7 +59,12 @@ export interface StartServerOptions {
    * when other tooling consumes stdout. */
   quiet?: boolean | undefined
   docs?: boolean | undefined
+  lazyLoad?: boolean | undefined
+  loadConcurrency?: number | undefined
+  loadTimeoutMs?: number | null | undefined
+  cancelLoadOnDisconnect?: boolean | undefined
   transcribeOverride?: QvacContext['transcribeOverride']
+  loadModelOverride?: QvacContext['loadModelOverride']
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
@@ -100,9 +106,23 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     }
   })
 
+  // The load fn resolves the override lazily via this ref, so the manager can be
+  // built before the context (loadManager is a real required field, no placeholder)
+  // while tests can still swap the override post-build through the accessor below.
+  const overrideRef: { current: QvacContext['loadModelOverride'] } = {
+    current: options.loadModelOverride
+  }
+  const loadManager = createLoadManager(
+    registry,
+    logger,
+    { concurrency: serveConfig.load.concurrency, timeoutMs: serveConfig.load.timeoutMs },
+    () => overrideRef.current ?? defaultLoadFn
+  )
+
   const qvacContext: QvacContext = {
     registry,
     serveConfig,
+    loadManager,
     logger,
     vectorStores,
     ephemeralFiles,
@@ -112,7 +132,13 @@ export async function buildServer(options: StartServerOptions): Promise<FastifyI
     ffmpegAvailable,
     ...(options.transcribeOverride !== undefined
       ? { transcribeOverride: options.transcribeOverride }
-      : {})
+      : {}),
+    get loadModelOverride() {
+      return overrideRef.current
+    },
+    set loadModelOverride(fn) {
+      overrideRef.current = fn
+    }
   }
 
   const app = Fastify({
@@ -228,7 +254,12 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   // keeping the port closed until models are ready, matching the pre-Fastify
   // semantics that the e2e suite depends on.
   await app.ready()
-  await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
+  await preloadModels(
+    app.qvac.serveConfig,
+    app.qvac.registry,
+    app.qvac.logger,
+    app.qvac.loadManager
+  )
   app.qvac.logger.warn(app.qvac.responsesStore.bannerLine())
   app.qvac.logger.warn(app.qvac.videoJobsStore.bannerLine())
 

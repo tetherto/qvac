@@ -58,6 +58,15 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      repository:
+        description: >-
+          Repo to check out (owner/name) alongside test-version. Defaults to
+          this repo. Callers passing a fork's ref MUST set this too: a branch
+          name that only exists in the fork cannot be fetched from here, and one
+          that also exists here would silently build the wrong code.
+        required: false
+        type: string
+        default: ""
       plugins:
         description: >-
           Optional comma-separated SDK plugin specifiers (e.g.
@@ -157,8 +166,10 @@ jobs:
         working-directory: .
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           sparse-checkout: ${{ inputs.project-directory }}
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -465,7 +476,9 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
           sparse-checkout: ${{ inputs.working-directory }}/device-farm
 
       - name: Download APK artifact
@@ -679,8 +692,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           sparse-checkout: |
             ${{ inputs.project-directory }}
             .github/actions/sdk-e2e-fail-on-failures

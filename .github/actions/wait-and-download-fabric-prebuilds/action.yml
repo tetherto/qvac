@@ -78,15 +78,16 @@ runs:
         found=false
 
         while [ "$(date +%s)" -lt "$deadline" ]; do
-          # `in_progress` is a status value; conclusion stays null until the run
-          # completes, so it must not be matched against conclusion. Accepting a
-          # still-running producer is deliberate — it publishes the artifact long
-          # before the tests behind it conclude, and an unrelated failure there
-          # would otherwise strand the consumer until its own timeout.
+          # Status and conclusion are deliberately not filtered on. The producer
+          # only publishes fabric-prebuilds behind a successful prebuild, so the
+          # artifact's existence already proves the bundle is good — while the
+          # run's own conclusion also carries everything downstream of the
+          # publish (consumer smoke, lint). Rejecting a red run would strand
+          # this consumer for its full timeout over a failure that happened
+          # after the bundle it needs was uploaded. Provenance below, plus the
+          # artifact lookup, are the real gates.
           RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?head_sha=${HEAD_SHA}&per_page=20" \
-            --jq '.workflow_runs[]
-                  | select(.status=="in_progress" or (.status=="completed" and .conclusion=="success"))
-                  | .id' 2>/dev/null || true)
+            --jq '.workflow_runs[] | .id' 2>/dev/null || true)
           for rid in $RUNS; do
             [ "$rid" = "$RUN_ID" ] && continue
 
