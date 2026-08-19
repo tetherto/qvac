@@ -55,11 +55,15 @@ await loadModel({
 });
 
 await loadModel({
-  modelSrc: PARAKEET_INDIC_CONFORMER_CTC_Q8_0,  // Indic languages, desktop-only
+  modelSrc: PARAKEET_INDIC_CONFORMER_CTC_Q8_0,  // Indic languages
   modelType: "parakeet",
   modelConfig: { language: "hi" },              // required; e.g. "hi", "ta"
 });
 ```
+
+<Callout type="warn">
+**Indic Conformer is desktop-only.** Not supported on mobile (iOS, Android) or Electron.
+</Callout>
 
 For model artifacts available as constants, see [SDK — Models](/introduction#models).
 
