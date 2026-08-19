@@ -25,7 +25,6 @@ const runtimeProbes = [
   '@qvac/tts-ggml/text-chunker',
   '@qvac/tts-ggml/text-stream-accumulator',
   '@qvac/langdetect-text',
-  '@qvac/transcription-whispercpp',
   'bare-https',
   'bare-process',
   'bare-stream',
@@ -76,6 +75,14 @@ function externalSpecifiers(source) {
   return specifiers
 }
 
+function declaredPackagesFor(filePath) {
+  const runtime = declaredRuntimePackages()
+  if (filePath.startsWith('test/')) {
+    return new Set([...runtime, ...Object.keys(packageJson.devDependencies || {})])
+  }
+  return runtime
+}
+
 function undeclaredImports(filePath, declaredPackages) {
   if (!runtimeExtensions.has(path.extname(filePath))) return []
   const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
@@ -86,10 +93,9 @@ function undeclaredImports(filePath, declaredPackages) {
 }
 
 function undeclaredPublishedImports(files) {
-  const declaredPackages = declaredRuntimePackages()
   const undeclared = []
   for (const filePath of files) {
-    undeclared.push(...undeclaredImports(filePath, declaredPackages))
+    undeclared.push(...undeclaredImports(filePath, declaredPackagesFor(filePath)))
   }
   return [...new Set(undeclared)].sort()
 }
@@ -140,6 +146,16 @@ test('enhanced examples have package scripts', () => {
   )
 })
 
+test('WER helper uses asr-ggml as a development dependency', () => {
+  assert.equal(packageJson.dependencies['@qvac/transcription-whispercpp'], undefined)
+  assert.equal(packageJson.dependencies['@qvac/asr-ggml'], undefined)
+  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '^0.3.2')
+  const source = fs.readFileSync(path.join(packageRoot, 'test/utils/runWhisper.js'), 'utf8')
+  assert.match(source, /@qvac\/asr-ggml/)
+  assert.doesNotMatch(source, /transcription-whispercpp/)
+  assert.match(source, /function loadAsrGgml/)
+})
+
 test('published commands include their runtime files', () => {
   // ^0.6.1 keeps the transitive hyperdb on the v6 line shared by the rest of
   // the @qvac ecosystem; 0.4.x pinned hyperdb@4 and broke the SDK consumer
@@ -166,6 +182,11 @@ test('production tarball install includes promoted runtime modules', () => {
     writeConsumerPackage(consumerRoot)
     installTarball(consumerRoot, path.join(temporaryRoot, packed.filename))
     assertRuntimeProbesResolve(consumerRoot)
+    const asrProbe = spawnSync(process.execPath, ['-e', "require.resolve('@qvac/asr-ggml')"], {
+      cwd: consumerRoot,
+      encoding: 'utf8'
+    })
+    assert.notEqual(asrProbe.status, 0, 'production install must not include @qvac/asr-ggml')
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }

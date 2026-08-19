@@ -59,13 +59,63 @@ jobs:
             tag="${REPO_NAME}-v${PUBLISHED_VERSION}"
           fi
 
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
-            echo "Tag ${tag} already exists; nothing to do."
-            exit 0
+          # SHA the tag currently points at, or empty when the tag is absent.
+          tag_sha() {
+            gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" \
+              --jq '.object.sha' 2>/dev/null || true
+          }
+
+          # Already present? Succeed only if it points where we expect; a tag
+          # at a different SHA is a real problem worth failing on.
+          existing="$(tag_sha)"
+          if [ -n "${existing}" ]; then
+            if [ "${existing}" = "${TARGET_SHA}" ]; then
+              echo "Tag ${tag} already exists at ${TARGET_SHA}; nothing to do."
+              exit 0
+            fi
+            echo "::error::Tag ${tag} already exists at ${existing}, expected ${TARGET_SHA}"
+            exit 1
           fi
 
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-            -f ref="refs/tags/${tag}" \
-            -f sha="${TARGET_SHA}"
+          # Create the tag, tolerating GitHub's occasional transient failures on
+          # POST /git/refs (spurious 403 "Resource not accessible by integration"
+          # or 5xx). A 422 means the ref now exists -- a concurrent run or a
+          # retried attempt won the race -- which we treat as success once the
+          # SHA matches. This keeps a completed release (npm published) from
+          # being reported red by a flaky tag step.
+          attempt=0
+          max_attempts=5
+          while :; do
+            attempt=$((attempt + 1))
 
-          echo "Created tag ${tag} -> ${TARGET_SHA}"
+            if gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${tag}" \
+              -f sha="${TARGET_SHA}" 2>/tmp/create-ref.err; then
+              echo "Created tag ${tag} -> ${TARGET_SHA}"
+              exit 0
+            fi
+
+            # POST failed -- re-check whether the ref exists now (idempotent path
+            # for a 422 already-exists, or a create that landed despite an error).
+            existing="$(tag_sha)"
+            if [ -n "${existing}" ]; then
+              if [ "${existing}" = "${TARGET_SHA}" ]; then
+                echo "Tag ${tag} already exists at ${TARGET_SHA} (raced with another run); nothing to do."
+                exit 0
+              fi
+              echo "::error::Tag ${tag} exists at ${existing}, expected ${TARGET_SHA}"
+              cat /tmp/create-ref.err || true
+              exit 1
+            fi
+
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "::error::Failed to create tag ${tag} after ${attempt} attempts"
+              cat /tmp/create-ref.err || true
+              exit 1
+            fi
+
+            backoff=$((attempt * attempt * 2))
+            echo "Tag creation attempt ${attempt} failed (transient); retrying in ${backoff}s..."
+            cat /tmp/create-ref.err || true
+            sleep "${backoff}"
+          done

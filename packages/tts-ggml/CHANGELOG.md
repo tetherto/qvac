@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.4] - 2026-08-19
+
+### Changed
+
+- Keep `@qvac/asr-ggml` as a development dependency for desktop WER checks
+  instead of shipping `@qvac/transcription-whispercpp` at runtime. Consumer
+  installs no longer pull an unused ASR native addon.
+
+## [0.7.3] - 2026-08-18
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-18, which brings in ggml-speech
+  2026-08-18. The update prevents unsupported wide OpenCL GEMV workgroups on
+  Adreno devices and hardens padded DIAG_MASK_INF launches and diagnostics.
 
 ### Fixed
 
