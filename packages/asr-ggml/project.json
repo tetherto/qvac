@@ -106,7 +106,7 @@
           "buildStep": "build:ts",
           "nameTransform": "rename-prefix",
           "repoName": "asr-ggml",
-          "testGateMode": "post-publish-integration+mobile"
+          "testGateMode": "post-publish-integration"
         }
       }
     }

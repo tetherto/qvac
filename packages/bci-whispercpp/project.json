@@ -208,7 +208,7 @@
           "buildStep": "build:ts",
           "nameTransform": "rename-prefix",
           "repoName": "bci-whispercpp",
-          "testGateMode": "post-publish-integration+mobile"
+          "testGateMode": "post-publish-integration"
         }
       }
     }

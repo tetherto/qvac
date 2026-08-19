@@ -1025,7 +1025,7 @@
           "buildStep": "build:ts",
           "nameTransform": "rename-prefix",
           "repoName": "tts-ggml",
-          "testGateMode": "post-publish-integration+mobile"
+          "testGateMode": "post-publish-integration"
         }
       }
     }

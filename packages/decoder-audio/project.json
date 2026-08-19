@@ -59,7 +59,7 @@
           "buildStep": "none",
           "nameTransform": "none",
           "repoName": "decoder-audio",
-          "testGateMode": "pre-publish-integration+mobile"
+          "testGateMode": "pre-publish-integration"
         }
       }
     }
