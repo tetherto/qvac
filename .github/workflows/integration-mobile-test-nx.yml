@@ -67,6 +67,74 @@ jobs:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
 
+  # Carve-out: audiogen presigns from eu-central-1 with a secret bucket via a
+  # bespoke prestage-block script + a dit_variant matrix dimension (Android-only)
+  # — outside the generic seed/presign/prestage model. Routed to its own reusable.
+  run-mobile-audiogen:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'audiogen-ggml')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  # Carve-out: diffusion repoints the on-device model manifest to us-west-2
+  # presigned URLs (rewrite-manifest-urls.mjs) and pulls generated-image artifacts
+  # back (after-hook-pulls) — not expressible in the generic prestage step.
+  run-mobile-diffusion:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'diffusion-cpp')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  # Carve-out: vla uses two bespoke presign scripts + bundle-URL steps and an
+  # authorize/authorize-dispatch write-permission gate the generic leaf lacks.
+  run-mobile-vla:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'vla-ggml')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-vla.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
+  # Carve-out: inference-addon-cpp is a 6-job security-split pipeline (generated
+  # runner map, framework-revision pin, host-test gate, per-platform prebuild jobs,
+  # fork-code build isolated from the AWS device-farm job). Cannot fold into the
+  # generic single-matrix leaf.
+  run-mobile-inference-addon-cpp:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'inference-addon-cpp')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-inference-addon-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
+
   build-and-test:
     name: Build ${{ matrix.platform.platform }} and Run E2E Tests (${{ matrix.package.package }})
     needs: matrix
