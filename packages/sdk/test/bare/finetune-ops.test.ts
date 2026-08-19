@@ -17,7 +17,7 @@ import {
 } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
 import { getRequestRegistry } from '@/server/bare/runtime'
 import { ModelType } from '@/schemas'
-import { CompletionFailedError } from '@/utils/errors-server'
+import { CompletionFailedError, ModelNotFoundError } from '@/utils/errors-server'
 
 function createTempCheckpointDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'finetune-op-test-'))
@@ -515,7 +515,11 @@ test('pauseFinetune: a finetune queued behind an active reader is not global-pau
     // pause (which cancels the active reader), and the finetune must not start once
     // the reader releases.
     const pauseResult = await pauseFinetune(modelId)
-    t.is(pauseResult.status, 'PAUSED')
+    t.is(
+      pauseResult.status,
+      'CANCELLED',
+      'queued-only pause reports cancellation because no resumable checkpoint exists'
+    )
     t.is(
       pauseCalls,
       0,
@@ -620,36 +624,29 @@ test('pauseFinetune: an admitted finetune is paused through model.pause()', asyn
   }
 })
 
-test('pauseFinetune: pausing an admitted finetune cancels queued finetune peers', async (t) => {
+test('startFinetune: rejects a second finetune while one is already running', async (t) => {
   clearRegistry()
-  const modelId = 'finetune-pause-admitted-queued-model'
-  let pauseCalls = 0
+  const modelId = 'finetune-reject-second-model'
   let finetuneCalls = 0
-  let resolveAwait: ((value: { status: string; stats: object }) => void) | null = null
+  let resolveAwait: (value: { status: string; stats: object }) => void = () => {}
 
   registerModel(modelId, {
     model: {
       finetune: async function () {
         finetuneCalls++
-        const isA = finetuneCalls === 1
         return {
           on: () => {},
           removeListener: () => {},
           await: () =>
-            isA
-              ? new Promise((resolve) => {
-                  resolveAwait = resolve
-                })
-              : Promise.resolve({ status: 'COMPLETED', stats: {} })
+            new Promise<{ status: string; stats: object }>((resolve) => {
+              resolveAwait = resolve
+            })
         }
       },
-      pause: async function () {
-        pauseCalls++
-        resolveAwait?.({ status: 'PAUSED', stats: {} })
-      },
+      pause: async function () {},
       cancel: async function () {}
     } as unknown as AnyModel,
-    path: '/tmp/pause-admitted-queued-model.gguf',
+    path: '/tmp/reject-second-model.gguf',
     config: {},
     modelType: ModelType.llamacppCompletion
   })
@@ -661,30 +658,117 @@ test('pauseFinetune: pausing an admitted finetune cancels queued finetune peers'
   }
 
   try {
-    // A: admitted, holds the exclusive lane in handle.await().
-    const aPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
-    await new Promise((r) => setTimeout(r, 20))
-    // B: a second finetune, queues behind A.
-    const bPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    const activePromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
     await new Promise((r) => setTimeout(r, 20))
 
-    const pauseResult = await pauseFinetune(modelId)
-    t.is(pauseResult.status, 'PAUSED')
-    t.is(pauseCalls, 1, 'the admitted finetune is paused once')
-
-    const aResult = await aPromise
-    t.is(aResult.status, 'PAUSED', 'admitted finetune resolves PAUSED')
-    const bResult = await bPromise
-    t.is(bResult.status, 'CANCELLED', 'queued finetune peer is cancelled, not started')
-    t.is(
-      finetuneCalls,
-      1,
-      'only the admitted finetune ran model.finetune(); the queued peer did not'
+    let secondError: unknown
+    try {
+      await startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    } catch (error) {
+      secondError = error
+    }
+    t.ok(
+      secondError instanceof CompletionFailedError,
+      'a second finetune while one is active is rejected'
     )
+    t.is(finetuneCalls, 1, 'the second finetune never reached the addon')
+
+    // Let the first finish so the model frees.
+    resolveAwait({ status: 'COMPLETED', stats: {} })
+    t.is((await activePromise).status, 'COMPLETED')
   } finally {
     unregisterModel(modelId)
     clearRegistry()
   }
+})
+
+test('startFinetune: rejects a second finetune while the first is pausing', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-reject-during-pause-model'
+  let finetuneCalls = 0
+  let resolveActiveAwait: ((value: { status: string; stats: object }) => void) | null = null
+  let releaseNativePause = () => {}
+  let markPauseEntered = () => {}
+  const pauseEntered = new Promise<void>((resolve) => {
+    markPauseEntered = resolve
+  })
+
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        finetuneCalls++
+        return {
+          on: () => {},
+          removeListener: () => {},
+          await: () =>
+            new Promise((resolve) => {
+              resolveActiveAwait = resolve
+            })
+        }
+      },
+      pause: async function () {
+        // Native pause is in flight (not yet settled) while a second start is probed;
+        // the admitted finetune has not resolved, so it still occupies the model.
+        markPauseEntered()
+        await new Promise<void>((resolve) => {
+          releaseNativePause = resolve
+        })
+        resolveActiveAwait?.({ status: 'PAUSED', stats: {} })
+      },
+      cancel: async function () {}
+    } as unknown as AnyModel,
+    path: '/tmp/reject-during-pause-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const options = {
+    trainDatasetDir: '/tmp/train.jsonl',
+    validation: { type: 'none' as const },
+    outputParametersDir: '/tmp/out'
+  }
+
+  try {
+    const activePromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    const pausePromise = pauseFinetune(modelId)
+    await pauseEntered
+
+    // The admitted finetune still occupies the model while native pause is pending,
+    // so a second start is rejected rather than admitted.
+    let secondError: unknown
+    try {
+      await startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    } catch (error) {
+      secondError = error
+    }
+    t.ok(secondError instanceof CompletionFailedError, 'a second finetune during pause is rejected')
+    t.is(finetuneCalls, 1, 'the second finetune never reached the addon')
+
+    releaseNativePause()
+    t.is((await pausePromise).status, 'PAUSED')
+    t.is((await activePromise).status, 'PAUSED')
+  } finally {
+    releaseNativePause()
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('pauseFinetune: an unloaded model still raises ModelNotFoundError', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-pause-unloaded-model'
+  unregisterModel(modelId)
+
+  let caughtError: unknown
+  try {
+    await pauseFinetune(modelId)
+  } catch (error) {
+    caughtError = error
+  }
+
+  t.ok(caughtError instanceof ModelNotFoundError)
 })
 
 test('startFinetune: revalidates checkpoint state after the exclusive-lane wait', async (t) => {
@@ -697,30 +781,16 @@ test('startFinetune: revalidates checkpoint state after the exclusive-lane wait'
     outputParametersDir: '/tmp/out',
     checkpointSaveDir: checkpointDir
   }
-
   let finetuneCalls = 0
-  let resolveAEntered = () => {}
-  const aEntered = new Promise<void>((resolve) => (resolveAEntered = resolve))
-  let releaseA = () => {}
-  const gateA = new Promise<void>((resolve) => (releaseA = resolve))
 
   registerModel(modelId, {
     model: {
       finetune: async function () {
         finetuneCalls++
-        const isA = finetuneCalls === 1
         return {
           on: () => {},
           removeListener: () => {},
-          await: async () => {
-            // The first finetune (A) holds the exclusive lane until released, so
-            // the second (B) has to queue behind it.
-            if (isA) {
-              resolveAEntered()
-              await gateA
-            }
-            return { status: 'COMPLETED', stats: {} }
-          }
+          await: async () => ({ status: 'COMPLETED', stats: {} })
         }
       },
       pause: async () => {},
@@ -731,36 +801,37 @@ test('startFinetune: revalidates checkpoint state after the exclusive-lane wait'
     modelType: ModelType.llamacppCompletion
   })
 
-  try {
-    // A: a valid 'start' (checkpoint dir empty ⇒ IDLE). Admitted on the free
-    // exclusive lane, then parks in handle.await holding the lane.
-    const aPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
-    await aEntered
+  // A completion reader holds the shared lane; the exclusive finetune queues behind
+  // it (a valid 'start' at its pre-admission check — checkpoint dir empty ⇒ IDLE).
+  const reader = await getRequestRegistry().begin({
+    requestId: 'reader-1',
+    kind: 'completion',
+    modelId
+  })
 
-    // B: also a valid 'start' at its pre-admission check (still IDLE); queues
-    // behind A on the exclusive lane.
-    const bPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+  try {
+    const ftPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    // A peer pauses the model while B waits — the state B validated against is
-    // now stale: a paused checkpoint appears, so 'start' is no longer allowed.
+    // A peer pauses the model while the finetune waits — the state it validated
+    // against is now stale: a paused checkpoint appears, so 'start' is disallowed.
     createPauseCheckpointDir(checkpointDir, 5)
 
-    // Release A; B is admitted and must re-validate before model.finetune() runs.
-    releaseA()
+    // Release the reader; the finetune is admitted and must re-validate before
+    // model.finetune() runs.
+    await reader[Symbol.asyncDispose]()
 
-    await aPromise
-    let bError: unknown = null
+    let ftError: unknown = null
     try {
-      await bPromise
+      await ftPromise
     } catch (error) {
-      bError = error
+      ftError = error
     }
     t.ok(
-      bError instanceof CompletionFailedError,
-      'B rejects on re-validation because the checkpoint state changed while it queued'
+      ftError instanceof CompletionFailedError,
+      'finetune rejects on re-validation because the checkpoint state changed while it queued'
     )
-    t.is(finetuneCalls, 1, 'model.finetune ran only for A; B was rejected before any native work')
+    t.is(finetuneCalls, 0, 'model.finetune never ran; the finetune was rejected before native work')
   } finally {
     unregisterModel(modelId)
     clearRegistry()
