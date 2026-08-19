@@ -5,9 +5,8 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const INFERENCE_DEPENDENCY = "@qvac/inference";
-const GPR_PACKAGE = "@tetherto/inference-mono";
 const NPM_PACKAGE = "@qvac/inference";
-const SOURCES = new Set(["branch", "gpr", "npm", "manifest"]);
+const SOURCES = new Set(["branch", "npm", "manifest"]);
 
 function requireSource(source) {
   const normalized = String(source || "manifest")
@@ -15,7 +14,7 @@ function requireSource(source) {
     .toLowerCase();
   if (!SOURCES.has(normalized)) {
     throw new Error(
-      `Unsupported inference source "${source}". Expected branch, gpr, npm, or manifest.`,
+      `Unsupported inference source "${source}". Expected branch, npm, or manifest.`,
     );
   }
   return normalized;
@@ -64,7 +63,7 @@ export function resolvePublishedSource({
   resolvedVersion,
 }) {
   const normalized = requireSource(source);
-  if (normalized !== "gpr" && normalized !== "npm") {
+  if (normalized !== "npm") {
     throw new Error(`"${normalized}" is not a published inference source.`);
   }
   if (typeof resolvedVersion !== "string" || resolvedVersion.length === 0) {
@@ -73,14 +72,7 @@ export function resolvePublishedSource({
     );
   }
 
-  const request = requestedVersion || (normalized === "gpr" ? "dev" : "latest");
-  if (normalized === "gpr") {
-    return {
-      dependencySpec: `npm:${GPR_PACKAGE}@${resolvedVersion}`,
-      provenance: `gpr:${GPR_PACKAGE}@${resolvedVersion}`,
-      requestedVersion: request,
-    };
-  }
+  const request = requestedVersion || "latest";
   return {
     dependencySpec: resolvedVersion,
     provenance: `npm:${NPM_PACKAGE}@${resolvedVersion}`,
@@ -146,14 +138,9 @@ export function applyInferenceSource({
   return { dependencySpec: appliedSpec };
 }
 
-function resolveRegistryVersion(source, requestedVersion) {
-  const isGpr = source === "gpr";
-  const packageName = isGpr ? GPR_PACKAGE : NPM_PACKAGE;
-  const request = requestedVersion || (isGpr ? "dev" : "latest");
-  const args = ["view", `${packageName}@${request}`, "version", "--json"];
-  if (isGpr) {
-    args.push("--registry=https://npm.pkg.github.com/");
-  }
+function resolveRegistryVersion(requestedVersion) {
+  const request = requestedVersion || "latest";
+  const args = ["view", `${NPM_PACKAGE}@${request}`, "version", "--json"];
   const output = run("npm", args, { capture: true });
   return { request, version: exactVersion(output) };
 }
@@ -209,7 +196,6 @@ function resolveCommand() {
     };
   } else {
     const resolved = resolveRegistryVersion(
-      source,
       process.env.INFERENCE_VERSION || "",
     );
     result = resolvePublishedSource({

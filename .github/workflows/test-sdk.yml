@@ -57,16 +57,15 @@ on:
         description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
         type: string
       inference-source:
-        description: "Inference source (branch builds packages/inference; gpr/npm resolve a version; manifest keeps SDK package.json)"
+        description: "Inference source (branch builds packages/inference; npm resolves a version; manifest keeps SDK package.json)"
         type: choice
         options:
           - manifest
           - branch
-          - gpr
           - npm
         default: manifest
       inference-version:
-        description: "Inference version or dist-tag (gpr defaults to dev; npm defaults to latest)"
+        description: "npm inference version or dist-tag (blank defaults to latest)"
         type: string
       cache-models:
         description: "Reuse downloaded models for Desktop, Electron, and Snap"
@@ -151,11 +150,11 @@ on:
       test-version:
         type: string
       inference-source:
-        description: "Inference source: branch, gpr, npm, or manifest"
+        description: "Inference source: branch, npm, or manifest"
         type: string
         default: "manifest"
       inference-version:
-        description: "Inference version or dist-tag for gpr/npm"
+        description: "Inference version or dist-tag for npm"
         type: string
         default: ""
       cache-models:
