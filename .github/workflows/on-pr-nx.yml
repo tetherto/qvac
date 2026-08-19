@@ -158,7 +158,7 @@ jobs:
 
   run-integration-tests:
     needs: [authorize, ci-router, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && needs.prebuild.result != 'cancelled'
     permissions:
       contents: read
       packages: read
@@ -171,7 +171,7 @@ jobs:
 
   run-mobile-integration-tests:
     needs: [authorize, ci-router, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.prebuild.result != 'cancelled'
     permissions:
       contents: read
       packages: read
@@ -273,7 +273,7 @@ jobs:
   coload-smoke:
     name: coload-smoke (${{ matrix.package }})
     needs: [authorize, ci-router, matrix, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.prebuild.result != 'cancelled'
     permissions:
       contents: read
       packages: read
@@ -292,7 +292,7 @@ jobs:
   coload-smoke-mobile:
     name: coload-smoke-mobile (${{ matrix.package }})
     needs: [authorize, ci-router, matrix, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.ci-router.outputs.run_mobile == 'true' && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped')
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.ci-router.outputs.run_mobile == 'true' && needs.prebuild.result != 'cancelled'
     permissions:
       actions: read
       id-token: write
