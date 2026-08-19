@@ -169,6 +169,55 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   npm run example:cover
 ```
 
+### Ordered audio editing
+
+`edit()` starts a source-driven pipeline. `edit()`/`flowEdit()` and `repaint()`
+append independent operations and execute them in the exact order they are
+chained. Either operation can be used alone or repeated:
+
+```js
+const { AudioGen, RepaintMode } = require('@qvac/audiogen-ggml')
+
+const response = await gen
+  .edit({
+    pcm: sourcePcm,
+    sampleRate: 48000,
+    channels: 2
+  })
+  .edit({
+    from: {
+      caption: 'original pop song',
+      lyrics: originalLyrics
+    },
+    to: {
+      caption: 'guitar pop-rock',
+      lyrics: newLyrics
+    }
+  })
+  .repaint({
+    caption: 'analog synth solo',
+    lyrics: '[Instrumental]',
+    start: 10,
+    end: 20,
+    mode: RepaintMode.Balanced,
+    strength: 0.5
+  })
+  .edit({
+    from: { caption: 'guitar pop-rock' },
+    to: { caption: 'dark synthwave' }
+  })
+  .run({ seed: 22883 })
+```
+
+The source must be interleaved stereo PCM at 48 kHz. Both normalized
+`Float32Array` samples in `[-1, 1]` and addon-output `Int16Array` values are
+accepted. Out-of-range Float32 samples are rejected. Repaint preserves PCM
+outside its selected range; `start`/`end` must stay inside the source duration
+and span at least one latent frame (`1/25` s). Omitting `end` repaints through
+the end of the source. Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`) and
+changes musical/lyrical conditioning over its `nMin`/`nMax` diffusion window.
+Repainting an entire track is supported with `start: 0` and no `end`.
+
 ### Turning PCM into a file
 
 Convert each `Int16Array` view to bytes using its `byteOffset` and `byteLength`,

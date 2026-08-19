@@ -1,6 +1,6 @@
 import { type QvacResponse } from '@qvac/infer-base';
 import QvacLogger = require('@qvac/logging');
-import { AudioGenInterface } from './audiogen';
+import { AudioEditOperationType, AudioGenInterface, RepaintMode } from './audiogen';
 import { type DitVariant } from './models';
 import { type EncodeOptions, type EncodedAudio, type OutputFormat } from './lib/audio-format';
 export declare const ENGINE_ACESTEP = "acestep";
@@ -103,6 +103,72 @@ export interface GenerateOptions {
      */
     coverNoiseStrength?: number;
 }
+/** PCM accepted by the source-driven editing API. */
+export interface AudioEditSource {
+    /**
+     * Interleaved stereo PCM. Float32 samples must be finite and in `[-1, 1]`.
+     * Int16 output chunks can be reused directly.
+     */
+    pcm: Float32Array | Int16Array;
+    sampleRate: number;
+    channels: number;
+}
+export interface AudioEditPrompt {
+    caption: string;
+    lyrics?: string;
+}
+/** v1 Flow-Edit. Supported on turbo DiT only (`turbo-q4`, `turbo-q8`). */
+export interface FlowEditOptions {
+    /** Description of the unedited source audio. */
+    from: AudioEditPrompt;
+    /** Description of the desired audio. */
+    to: AudioEditPrompt;
+    /** Start of the flow-edit diffusion window, in [0, 1]. */
+    nMin?: number;
+    /** End of the flow-edit diffusion window, in [0, 1]. */
+    nMax?: number;
+    /** Number of forward-noise samples averaged per active step. */
+    nAvg?: number;
+}
+export interface RepaintOptions extends AudioEditPrompt {
+    /**
+     * Repaint region start in seconds. Must lie inside the source duration and
+     * leave at least one latent frame (`1/25` s) before `end`.
+     */
+    start: number;
+    /**
+     * Repaint region end in seconds. Omit to repaint through the source end.
+     * Must not exceed the source duration.
+     */
+    end?: number;
+    mode?: RepaintMode;
+    /** Balanced-mode preservation strength in [0, 1]. */
+    strength?: number;
+}
+export interface AudioEditRunOptions {
+    /** Seeds the first operation; each following operation uses seed + its index. */
+    seed?: number;
+}
+interface NativeFlowEditOperation {
+    type: AudioEditOperationType.FlowEdit;
+    sourceCaption: string;
+    sourceLyrics: string;
+    targetCaption: string;
+    targetLyrics: string;
+    nMin: number;
+    nMax: number;
+    nAvg: number;
+}
+interface NativeRepaintOperation {
+    type: AudioEditOperationType.Repaint;
+    caption: string;
+    lyrics: string;
+    start: number;
+    end: number;
+    mode: RepaintMode;
+    strength: number;
+}
+export type AudioEditOperationData = NativeFlowEditOperation | NativeRepaintOperation;
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
 export interface AudiogenProgress {
     stage: string;
@@ -141,6 +207,26 @@ export interface AudiogenStats {
     /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
     backendId?: number;
 }
+type EditRunner = (source: AudioEditSource, operations: readonly AudioEditOperationData[], options: AudioEditRunOptions) => Promise<QvacResponse<AudiogenOutputChunk>>;
+/**
+ * Fluent, ordered edit pipeline. Every call appends one operation; operations
+ * may be repeated in any order before the session is submitted with `run()`.
+ */
+export declare class AudioEditSession {
+    private readonly _source;
+    private readonly _runner;
+    private readonly _allowFlowEdit;
+    private readonly _operations;
+    private _started;
+    constructor(_source: AudioEditSource, _runner: EditRunner, _allowFlowEdit: boolean);
+    /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
+    flowEdit(options: FlowEditOptions): this;
+    /** Alias for `flowEdit()` so `.edit().repaint().edit()` reads naturally. */
+    edit(options: FlowEditOptions): this;
+    /** Append a timeline Repaint operation. */
+    repaint(options: RepaintOptions): this;
+    run(options?: AudioEditRunOptions): Promise<QvacResponse<AudiogenOutputChunk>>;
+}
 /**
  * GGML-backed music generation via the ACE-Step engine. Owns a persistent
  * native engine: the four model stages are loaded once by `load()` and reused
@@ -156,6 +242,7 @@ export declare class AudioGen {
     private readonly _runExclusive;
     private readonly _configuration;
     private readonly _logger;
+    private readonly _ditVariant;
     private _lifecycleRevision;
     private _destroyed;
     private _cancelPromise;
@@ -169,6 +256,13 @@ export declare class AudioGen {
      * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
      */
     run(caption: string, opts?: GenerateOptions): Promise<QvacResponse<AudiogenOutputChunk>>;
+    /**
+     * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
+     * be repeated and are executed in the exact order in which they are chained.
+     * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
+     */
+    edit(source: AudioEditSource): AudioEditSession;
+    private _runEdit;
     private _admitAndWait;
     private _createJobData;
     cancel(): Promise<void>;
@@ -195,4 +289,5 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format';
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format';
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error';
+export { AudioEditOperationType, RepaintMode } from './audiogen';
 export type { AudioGenConfigurationParams, AudioGenJobData, AudioGenBinding, AudioGenOutputCallback } from './audiogen';

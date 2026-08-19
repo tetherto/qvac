@@ -315,27 +315,12 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write # Allow commenting on PRs
-      id-token: write
-    needs:
-      - fork-approval
-      - authorize
-      - changes
-      - sanity-checks
-      - prebuild
-      - prebuild-artifact-reuse
-      - ci-router
-    if: |-
-      always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    uses: ./.github/workflows/integration-mobile-test-translation-nmtcpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+  # Mobile integration tests are no longer run on PRs. They run on demand via
+  # `integration-mobile-test-translation-nmtcpp.yml` (workflow_dispatch), where
+  # the dispatcher must pick a specific device. The `run-mobile-addon-tests`
+  # label / ci-router `run_mobile` output are kept for a possible future revival
+  # but no longer trigger anything here. (Benchmark / weekend / on-merge mobile
+  # runs are unaffected — they call the mobile workflow directly.)
 
   publish-prebuild-status:
     # Posts qvac/prebuild-translation-nmtcpp for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
@@ -373,7 +358,8 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, changes, ci-router, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
+    # run-mobile-integration-tests removed — mobile is on-demand only now.
+    needs: [authorize, changes, ci-router, verify-fabric-lockstep, sanity-checks, ts-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
     if: always() && !cancelled() && (needs.changes.outputs.pkg == 'true' || github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/public-pr.yml
     with:

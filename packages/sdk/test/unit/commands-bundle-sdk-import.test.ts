@@ -4,8 +4,55 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { bundleSdk } from '@/commands/bundle'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
-import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
+import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
+
+function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-project-'))
+  const sdkPath = path.join(projectRoot, 'external-sdk')
+  const sdkDistPath = path.join(sdkPath, 'dist')
+  const configPath = path.join(projectRoot, 'qvac.config.json')
+
+  t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+  fs.mkdirSync(sdkDistPath, { recursive: true })
+  fs.writeFileSync(
+    path.join(sdkPath, 'package.json'),
+    `${JSON.stringify({
+      name: '@qvac/sdk',
+      type: 'module',
+      exports: {
+        './worker-core': './dist/worker-core.js',
+        './plugins': './dist/plugins.js',
+        './logging': './dist/logging.js',
+        './llamacpp-completion/plugin': './dist/llm-plugin.js'
+      }
+    })}\n`
+  )
+  fs.writeFileSync(path.join(sdkPath, 'bare-imports.json'), '{}\n')
+  fs.writeFileSync(
+    path.join(sdkDistPath, 'worker-core.js'),
+    'export function initializeWorkerCore() { return { hasRPCConfig: false } }\n' +
+      'export function ensureRPCSetup() {}\n'
+  )
+  fs.writeFileSync(path.join(sdkDistPath, 'plugins.js'), 'export function registerPlugin() {}\n')
+  fs.writeFileSync(
+    path.join(sdkDistPath, 'logging.js'),
+    'export function getServerLogger() { return { info() {} } }\n'
+  )
+  fs.writeFileSync(path.join(sdkDistPath, 'llm-plugin.js'), 'export const llmPlugin = {}\n')
+  fs.writeFileSync(
+    configPath,
+    `${JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] })}\n`
+  )
+
+  return {
+    projectRoot,
+    sdkPath,
+    configPath,
+    outputDir: path.join(projectRoot, 'qvac')
+  }
+}
 
 describe('selectExportTarget', () => {
   it('returns a plain string target', () => {
@@ -107,5 +154,50 @@ describe('generateWorkerEntry', () => {
   it('defaults to an identity resolver (imports stay bare specifiers)', () => {
     const entry = generateWorkerEntry([], '@qvac/sdk')
     assert.match(entry, /from "@qvac\/sdk\/worker-core"/)
+  })
+
+  it('keeps the runtime entry relocatable while resolving the bundle entry', () => {
+    const { runtimeEntry, bundleEntry } = generateWorkerEntries([], '@qvac/sdk', tag)
+
+    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-core"/)
+    assert.doesNotMatch(runtimeEntry, /RESOLVED:/)
+    assert.match(bundleEntry, /from "RESOLVED:@qvac\/sdk\/worker-core"/)
+  })
+})
+
+describe('bundleSdk worker entries', () => {
+  it('uses resolved imports for bare-pack but writes a relocatable runtime entry', async (t) => {
+    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
+
+    await bundleSdk({
+      projectRoot,
+      sdkPath,
+      configPath,
+      hosts: [`${process.platform}-${process.arch}`],
+      quiet: true
+    })
+
+    const runtimeEntry = fs.readFileSync(path.join(outputDir, 'worker.entry.mjs'), 'utf8')
+    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-core"/)
+    assert.doesNotMatch(runtimeEntry, new RegExp(pathToFileURL(sdkPath).href))
+    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
+    assert.ok(!fs.existsSync(path.join(outputDir, 'worker.bundle.entry.mjs')))
+  })
+
+  it('removes the temporary bundle entry when bare-pack fails', async (t) => {
+    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
+    fs.writeFileSync(configPath, `${JSON.stringify({ plugins: ['missing-package/plugin'] })}\n`)
+
+    await assert.rejects(
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        hosts: [`${process.platform}-${process.arch}`],
+        quiet: true
+      })
+    )
+
+    assert.ok(!fs.existsSync(path.join(outputDir, 'worker.bundle.entry.mjs')))
   })
 })

@@ -113,18 +113,35 @@ function expandPrestageList(man, grep) {
   const urls = man.urls || {}
   const fallbacks = man.fallbacks || {}
   const byTest = man.tests || {}
-  const tests = grep
-    ? grep
-        .split('|')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : Object.keys(byTest)
-  const missing = tests.filter((t) => t.startsWith('runBenchmarkPerf') && !byTest[t])
-  if (missing.length)
-    throw new Error('[prestage] missing benchmark mapping(s): ' + missing.join(', '))
+  const names = Object.keys(byTest)
+  // grep is a mocha --grep REGEX over runner NAMES (same semantics as on-device
+  // mocha and as validate-devices), NOT a list of literal |-separated keys.
+  // Match it against the known runners so a partial pattern (e.g.
+  // "runBenchmarkPerf" or "Chat") stages every shard it selects instead of
+  // silently nothing. Empty grep => every shard. A NON-empty grep that fails to
+  // compile or matches no runner fails CLOSED (throws): the workflow_call lanes
+  // (weekend / on-merge / benchmarks) never run validate-devices, so a
+  // test-groups <-> model-map drift must surface here rather than silently ship
+  // an under-staged device. Manual dispatch filters are pre-validated by
+  // validate-devices, so this throw only fires on genuine drift.
+  let matched
+  if (grep) {
+    let re
+    try {
+      re = new RegExp(grep)
+    } catch (e) {
+      throw new Error('[prestage] invalid tests grep /' + grep + '/: ' + e.message)
+    }
+    matched = names.filter((n) => re.test(n))
+    if (matched.length === 0) {
+      throw new Error('[prestage] tests grep /' + grep + '/ matched no known runner')
+    }
+  } else {
+    matched = names
+  }
   const seen = new Set()
   const rows = []
-  for (const t of tests) {
+  for (const t of matched) {
     for (const name of byTest[t] || []) {
       if (!seen.has(name)) {
         seen.add(name)
@@ -144,7 +161,7 @@ function expandPrestageList(man, grep) {
 function commonPrelude(manifestB64) {
   const expand = expandPrestageList.toString()
   return `echo "${manifestB64}" | base64 -d > /tmp/model-manifest.json
-GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*'([^']*)'/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
+GREP=$(node -e "const fs=require('fs');try{const s=fs.readFileSync('tests/wdio.config.devicefarm.js','utf8');const m=s.match(/grep:\\s*[\\"']([^\\"']*)[\\"']/);process.stdout.write(m?m[1]:'')}catch(e){process.stdout.write('')}")
 export GREP
 echo "[prestage] shard grep: '$GREP'"
 node -e "const fs=require('fs');const expandPrestageList=${expand};const man=JSON.parse(fs.readFileSync('/tmp/model-manifest.json','utf8'));const rows=expandPrestageList(man,process.env.GREP||'');fs.writeFileSync('/tmp/prestage-list.tsv',rows.map(r=>r.name+'\\t'+r.url+(r.fallback?'\\t'+r.fallback:'')).join('\\n')+(rows.length?'\\n':''));console.error('[prestage] '+rows.length+' model(s)')"

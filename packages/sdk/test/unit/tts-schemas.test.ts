@@ -751,7 +751,7 @@ test('ttsConfigSchema: rejects sampling options on CosyVoice3', (t) => {
     ttsEngine: 'cosyvoice3',
     temperature: 0.7
   })
-  t.is(r.success, false, 'temperature is a sampling option, not a CosyVoice3 one')
+  t.is(r.success, false, 'temperature is a Parler/Audio8 option')
 })
 
 test('TTS_COSYVOICE3_EMOTIONS and TTS_PACES expose the canonical vocabularies', (t) => {
@@ -781,4 +781,116 @@ test('ttsRequestSchema: rejects free-form pace strings', (t) => {
     pace: 'fast'
   })
   t.is(ok.success, true)
+})
+
+// === Audio8 ===
+
+test('ttsConfigSchema: accepts the full Audio8 load surface', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/audio8-codec-decoder-q8_0.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/audio8-codec-encoder-q8_0.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: 'Exactly what the recording says.',
+    greedy: true,
+    temperature: 0.7,
+    topK: 50,
+    topP: 0.9,
+    maxFrames: 430,
+    useGPU: true,
+    outputSampleRate: 44100,
+    threads: 4,
+    nGpuLayers: 99,
+    seed: 42
+  })
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: requires the Audio8 codec decoder source', (t) => {
+  const r = ttsConfigSchema.safeParse({ ttsEngine: 'audio8' })
+  t.is(r.success, false, 'audio8CodecDecoderModelSrc is required')
+})
+
+test('ttsConfigSchema: rejects a whitespace-only Audio8 referenceText', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/encoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: '   '
+  })
+  t.is(r.success, false, 'a whitespace-only transcript must not reach the engine')
+})
+
+test('ttsConfigSchema: enforces the Audio8 voice-cloning pairing rules', (t) => {
+  const missingTranscript = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/encoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav'
+  })
+  t.is(missingTranscript.success, false)
+  if (!missingTranscript.success) {
+    t.is(missingTranscript.error.issues[0]?.path.join('.'), 'referenceText')
+  }
+
+  const missingRecording = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    referenceText: 'A transcript without a recording.'
+  })
+  t.is(missingRecording.success, false)
+  if (!missingRecording.success) {
+    t.is(missingRecording.error.issues[0]?.path.join('.'), 'referenceAudioSrc')
+  }
+
+  const missingEncoder = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: 'Exactly what the recording says.'
+  })
+  t.is(missingEncoder.success, false)
+  if (!missingEncoder.success) {
+    t.is(missingEncoder.error.issues[0]?.path.join('.'), 'audio8CodecEncoderModelSrc')
+  }
+})
+
+test('ttsConfigSchema: rejects conditioning and LavaSR options on Audio8', (t) => {
+  const emotion = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    emotion: 'happy'
+  })
+  t.is(emotion.success, false, 'Audio8 has no emotion vocabulary')
+
+  const lavasr = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    lavasrEnhancerModelSrc: 's3:///example/lavasr-enhancer.gguf'
+  })
+  t.is(lavasr.success, false, 'Audio8 emits native 44.1 kHz, LavaSR is rejected')
+
+  const streaming = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    streamChunkTokens: 25
+  })
+  t.is(streaming.success, false, 'Audio8 has no native chunk streaming')
+})
+
+test('ttsConfigSchema: validates Audio8 sampling ranges', (t) => {
+  const badTopP = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    topP: 1.5
+  })
+  t.is(badTopP.success, false)
+
+  const negativeTemperature = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    temperature: -1
+  })
+  t.is(negativeTemperature.success, false)
 })

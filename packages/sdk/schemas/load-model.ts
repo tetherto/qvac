@@ -13,6 +13,7 @@ import { delegateSchema } from './delegate'
 import { nmtConfigBaseSchema, nmtConfigSchema } from './translation-config'
 import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+  ttsAudio8LoadConfigSchema,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
   ttsCosyvoice3LoadConfigSchema,
@@ -95,6 +96,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
       ttsSupertonicLoadConfigSchema,
       ttsParlerLoadConfigSchema,
       ttsCosyvoice3LoadConfigSchema,
+      ttsAudio8LoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],

@@ -46,11 +46,11 @@ on:
         required: true
         type: string
       device-pools:
-        description: 'JSON array of device pools [{name, arn}]'
+        description: 'JSON array of device pools [{name, arn, p?, r?}]. Set p=true and r=false for private pools; r=false alone marks manual-only public pools.'
         required: true
         type: string
       device-pool-name:
-        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, a random AWS-available pool from device-pools is chosen."
+        description: "Explicit device pool name to run. When set, that pool is used as-is; when empty, an available private pool is preferred before the public fallback."
         required: false
         type: string
         default: ""
@@ -428,51 +428,15 @@ jobs:
           path: ${{ inputs.working-directory }}/build/consumers/android/consumer.apk
           retention-days: 7
 
-  select-pool:
-    name: "[android] select-pool"
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      id-token: write
-      contents: read
-    outputs:
-      pool: ${{ steps.select.outputs.pool }}
-      name: ${{ steps.select.outputs.name }}
-      availability: ${{ steps.select.outputs.availability }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          sparse-checkout: .github/actions/sdk-device-farm-select-pool
-          sparse-checkout-cone-mode: false
-
-      # Only random selection queries Device Farm (GetDevicePool + ListDevices);
-      # an explicit pool name needs no AWS access.
-      - name: Configure AWS credentials
-        if: ${{ inputs.device-pool-name == '' }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-
-      - name: Select device pool
-        id: select
-        uses: ./.github/actions/sdk-device-farm-select-pool
-        with:
-          # Normalise to strict JSON: the device-pools variable may use lenient
-          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
-          pools: ${{ toJSON(fromJSON(inputs.device-pools)) }}
-          pool-name: ${{ inputs.device-pool-name }}
-
   device-farm:
     name: "[android] device-farm"
-    needs: [build, select-pool]
+    needs: build
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        device: ${{ fromJson(needs.select-pool.outputs.pool) }}
+    outputs:
+      name: ${{ steps.select.outputs.name }}
+      availability: ${{ steps.select.outputs.availability }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -480,6 +444,16 @@ jobs:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           sparse-checkout: ${{ inputs.working-directory }}/device-farm
+
+      - name: Checkout trusted Device Farm selector
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout-cone-mode: false
+          path: .workflow
 
       - name: Download APK artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -496,11 +470,11 @@ jobs:
       - name: Upload APK to Device Farm
         id: upload-app
         run: |
-          echo "Uploading APK to Device Farm for ${{ matrix.device.name }}..."
+          echo "Uploading APK to Device Farm..."
 
           UPLOAD_RESPONSE=$(aws devicefarm create-upload \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --name "consumer-${{ needs.build.outputs.runId }}-${{ matrix.device.name }}.apk" \
+            --name "consumer-${{ needs.build.outputs.runId }}.apk" \
             --type "ANDROID_APP" \
             --output json)
 
@@ -602,16 +576,27 @@ jobs:
             sleep 5
           done
 
+      # Select after every upload is ready to reduce the private availability
+      # check-to-schedule window to only the following scheduling step.
+      - name: Select device pool
+        id: select
+        uses: ./.workflow/.github/actions/sdk-device-farm-select-pool
+        with:
+          # Normalise to strict JSON: the device-pools variable may use lenient
+          # (unquoted-key) JSON that GitHub's fromJSON tolerates but jq does not.
+          pools: ${{ toJSON(fromJSON(inputs.device-pools)) }}
+          pool-name: ${{ inputs.device-pool-name }}
+
       - name: Schedule Device Farm run
         id: schedule
         run: |
-          echo "Scheduling Device Farm run on ${{ matrix.device.name }}..."
+          echo "Scheduling Device Farm run on ${{ steps.select.outputs.name }}..."
 
-          RUN_NAME="mobile-${{ matrix.device.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
+          RUN_NAME="mobile-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
 
           RUN_ARN=$(aws devicefarm schedule-run \
             --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --device-pool-arn "${{ matrix.device.arn }}" \
+            --device-pool-arn "${{ steps.select.outputs.arn }}" \
             --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
             --name "$RUN_NAME" \
             --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
@@ -624,15 +609,15 @@ jobs:
           PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
           RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
           DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo "Device Farm Console (${{ matrix.device.name }}): $DF_URL"
+          echo "Device Farm Console (${{ steps.select.outputs.name }}): $DF_URL"
 
-          echo "### Device Farm: ${{ matrix.device.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Device Farm: ${{ steps.select.outputs.name }}" >> $GITHUB_STEP_SUMMARY
           echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
 
       - name: Save run ARN
         id: save-arn
         run: |
-          SAFE_NAME=$(echo "${{ matrix.device.name }}" | tr ' /\\:*?"<>|' '_')
+          SAFE_NAME=$(echo "${{ steps.select.outputs.name }}" | tr ' /\\:*?"<>|' '_')
           echo "${{ steps.schedule.outputs.run-arn }}" > "${SAFE_NAME}.txt"
           echo "safe-name=${SAFE_NAME}" >> $GITHUB_OUTPUT
 
@@ -1031,7 +1016,7 @@ jobs:
 
   report-finalize:
     name: "[android] report-finalize"
-    needs: [report-start, run-producer, select-pool]
+    needs: [report-start, run-producer, device-farm]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1052,12 +1037,12 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
-          device-pool-name: ${{ needs.select-pool.outputs.name }}
-          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
+          device-pool-name: ${{ needs.device-farm.outputs.name }}
+          device-pool-availability: ${{ needs.device-farm.outputs.availability }}
 
   report-artifacts-refresh:
     name: "[android] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm, select-pool]
+    needs: [report-start, run-producer, cleanup-device-farm, device-farm]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1078,6 +1063,6 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
-          device-pool-name: ${{ needs.select-pool.outputs.name }}
-          device-pool-availability: ${{ needs.select-pool.outputs.availability }}
+          device-pool-name: ${{ needs.device-farm.outputs.name }}
+          device-pool-availability: ${{ needs.device-farm.outputs.availability }}
           update-summary: "false"
