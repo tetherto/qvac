@@ -1,5 +1,5 @@
 {
-  "_comment": "Functional mobile shards for @qvac/tts-ggml. Each intended runner appears exactly once per platform. Performance runners remain in perf-tests.json, and runParlerWerTest remains excluded.",
+  "_comment": "Functional mobile shards for @qvac/tts-ggml. Each intended runner appears exactly once per platform. Performance runners remain in perf-tests.json, and runParlerWerTest and runCosyvoice3CloneTest remain excluded (the WER harness is desktop-tooling-bound; cloning is desktop-scoped for now - the s3tok/campplus add-on GGUFs are not in the mobile model manifest).",
   "ios": {
     "chatterbox": [
       "runAddonTest",

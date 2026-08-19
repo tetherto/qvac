@@ -30,7 +30,11 @@ SmolvlaModelAdapter::SmolvlaModelAdapter(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir)
     : model_(new SmolvlaModel()) {
   if (!smolvlaLoadModel(ggufPath.c_str(), *model_, forceCpu, backendsDir)) {
-    throw std::runtime_error("failed to load SmolVLA model from: " + ggufPath);
+    std::string message = "failed to load SmolVLA model from: " + ggufPath;
+    if (!model_->load_error.empty()) {
+      message += ": " + model_->load_error;
+    }
+    throw std::runtime_error(message);
   }
   hparamsGeneric_ = projectHparams(model_->hparams);
 }

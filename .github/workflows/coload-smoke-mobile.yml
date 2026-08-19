@@ -85,6 +85,7 @@ jobs:
       plugins: ${{ matrix.combo.plugins }}
       overlay-prebuild-addon: ${{ inputs.addon }}
       test-version: ${{ inputs.ref }}
+      repository: ${{ inputs.repository }}
       suite: smoke
       consumer-timeout: 1200
       device-farm-timeout: 90
@@ -95,7 +96,6 @@ jobs:
     # resolve it on their own. Omitting it here leaves `role-to-assume` empty
     # and every Device Farm job fails to authenticate.
     secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}

@@ -1,0 +1,135 @@
+name: Benchmark Performance (AudioGen GGML)
+
+# Manual entry point for the ACE-Step (audiogen-ggml) performance sweep.
+#
+# Fans out to the desktop integration workflow (RTF matrix across the three DiT
+# variants on CPU, plus the platform GPU backend on GPU runners) and the mobile
+# workflow (one Device Farm row per variant/provider), then folds every artifact
+# — including hand-authored drops for backends CI cannot reach — into one
+# findings table.
+#
+# Nothing here runs on a PR: an ACE-Step render is minutes long and a full sweep
+# downloads every DiT variant, so it stays opt-in.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "Repository to benchmark"
+        required: false
+        type: string
+      ref:
+        description: "Git ref (branch/tag/SHA) to benchmark"
+        required: false
+        type: string
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run (e.g. @qvac/audiogen-ggml@0.1.1). When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
+      run_desktop:
+        description: "Run desktop (CPU/GPU) RTF benchmarks"
+        required: false
+        type: boolean
+        default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
+      benchmark_matrix_json:
+        description: "Optional JSON array overriding the desktop benchmark matrix for all runners"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    outputs:
+      repository: ${{ steps.ctx.outputs.repository }}
+      ref: ${{ steps.ctx.outputs.ref }}
+      benchmark_matrix_json: ${{ steps.ctx.outputs.benchmark_matrix_json }}
+    steps:
+      - id: ctx
+        shell: bash
+        env:
+          INPUT_REPO: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          repo="${INPUT_REPO:-$REPO}"
+          ref="${INPUT_REF:-$REF_NAME}"
+          {
+            echo "repository=$repo"
+            echo "ref=$ref"
+            echo "benchmark_matrix_json=$INPUT_BENCHMARK_MATRIX_JSON"
+          } >> "$GITHUB_OUTPUT"
+
+  prebuild:
+    needs:
+      - context
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+    if: ${{ !inputs.prebuild_package }}
+
+  desktop-benchmarks:
+    needs:
+      - context
+      - prebuild
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/integration-test-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      run_integration_tests: false
+      run_rtf_benchmarks: true
+      benchmark_matrix_json: ${{ needs.context.outputs.benchmark_matrix_json }}
+    if: ${{ !cancelled() && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+
+  mobile-benchmarks:
+    needs:
+      - context
+      - prebuild
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      run_rtf_benchmarks: true
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+
+  summarize:
+    needs:
+      - context
+      - desktop-benchmarks
+      - mobile-benchmarks
+    if: (always())
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-summarize-audiogen-ggml-benchmarks.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}

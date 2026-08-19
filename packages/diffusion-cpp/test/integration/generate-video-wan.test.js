@@ -456,6 +456,18 @@ test(
     }
     const resolvedModelDir = path.dirname(resolvedFiles.model)
 
+    const i2vConfig = {
+      threads: 4,
+      device: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
+      diffusion_fa: true,
+      offload_to_cpu: true,
+      vae_tiling: true,
+      // Keep diffusion on GPU, but route only oversized VAE graphs to CPU.
+      vae_auto_cpu_fallback: true,
+      verbosity: 2
+    }
+    t.is(i2vConfig.vae_auto_cpu_fallback, true, 'Wan I2V enables automatic VAE CPU fallback')
+
     const model = new VideoStableDiffusion({
       files: {
         model: resolvedFiles.model,
@@ -463,14 +475,7 @@ test(
         t5Xxl: resolvedFiles.t5Xxl,
         clipVision: resolvedFiles.clipVision
       },
-      config: {
-        threads: 4,
-        device: (proc.env && proc.env.WAN_DEVICE) || 'gpu',
-        diffusion_fa: true,
-        offload_to_cpu: true,
-        vae_tiling: true,
-        verbosity: 2
-      },
+      config: i2vConfig,
       logger: console,
       opts: { stats: true }
     })

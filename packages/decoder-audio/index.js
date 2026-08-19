@@ -34,7 +34,7 @@ class FFmpegDecoder {
    * @param {number} [config.sampleRate] - Output sample rate (default: 16000)
    * @param {Object} [config.logger] - Logger instance
    */
-  constructor ({
+  constructor({
     config = {},
     logger = null,
     streamIndex = 0,
@@ -64,7 +64,7 @@ class FFmpegDecoder {
   /**
    * Resets the runtime stats
    */
-  _resetStats () {
+  _resetStats() {
     this._runtimeStats = {
       decodeTimeMs: 0,
       inputBytes: 0,
@@ -81,14 +81,14 @@ class FFmpegDecoder {
    * Get the current runtime stats
    * @returns {Object} Current runtime stats
    */
-  runtimeStats () {
+  runtimeStats() {
     return { ...this._runtimeStats }
   }
 
   /**
    * Load and initialize the decoder
    */
-  async load () {
+  async load() {
     if (this.isLoaded) {
       this.logger.info('FFmpegDecoder already loaded')
       return
@@ -116,7 +116,7 @@ class FFmpegDecoder {
   /**
    * Unload the decoder and clean up resources
    */
-  async unload () {
+  async unload() {
     if (!this.isLoaded) {
       return
     }
@@ -134,7 +134,7 @@ class FFmpegDecoder {
    * @param {Readable} audioStream - Input audio stream
    * @returns {QvacResponse} Response with decoded audio
    */
-  run (audioStream) {
+  run(audioStream) {
     if (!this.isLoaded) {
       throw new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED })
     }
@@ -148,7 +148,7 @@ class FFmpegDecoder {
       .then(() => {
         this._job.end(this.runtimeStats())
       })
-      .catch(err => {
+      .catch((err) => {
         this.logger.error('Error processing audio stream:', err)
         this._job.active?.updateStats(this.runtimeStats())
         this._job.fail(err)
@@ -157,20 +157,21 @@ class FFmpegDecoder {
     return response
   }
 
-  _cancelCurrent () {
+  _cancelCurrent() {
     this._cancelled = true
     this.logger.debug('Decoder cancel requested')
     return Promise.resolve()
   }
 
-  _getBufferSize (inputBitrate) {
+  _getBufferSize(inputBitrate) {
     const maxBufferSize = 1024 * 1024 // 1MB max
     return Math.min((inputBitrate / 8) * 4, maxBufferSize)
   }
 
-  _processFrame (decoder, raw, resampler) {
+  _processFrame(decoder, raw, resampler) {
     const OUTPUT_FORMAT = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].format
-    const OUTPUT_FORMAT_BYTE_LENGTH = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].byteLength
+    const OUTPUT_FORMAT_BYTE_LENGTH =
+      this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].byteLength
     const OUTPUT_SAMPLE_RATE = this.config.sampleRate
 
     while (decoder.receiveFrame(raw)) {
@@ -196,13 +197,15 @@ class FFmpegDecoder {
         if (samplesToSkip >= count) continue // Skip entire frame
 
         // Skip partial frame
-        const skipBytes = OUTPUT_FORMAT_BYTE_LENGTH * samplesToSkip * output.channelLayout.nbChannels
-        const length = OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels
+        const skipBytes =
+          OUTPUT_FORMAT_BYTE_LENGTH * samplesToSkip * output.channelLayout.nbChannels
+        const length =
+          OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels
         const chunk = Buffer.from(samples.data.subarray(skipBytes, skipBytes + length))
         this._job.output({ outputArray: chunk })
 
         // Track stats for partial frame
-        this._runtimeStats.samplesDecoded += (count - samplesToSkip)
+        this._runtimeStats.samplesDecoded += count - samplesToSkip
         this._runtimeStats.outputBytes += length
       } else {
         const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels
@@ -216,7 +219,7 @@ class FFmpegDecoder {
     }
   }
 
-  _processPacket (format, packet, raw, decoder, resampler) {
+  _processPacket(format, packet, raw, decoder, resampler) {
     while (format.readFrame(packet)) {
       if (this._cancelled) {
         packet.unref()
@@ -228,9 +231,10 @@ class FFmpegDecoder {
     }
   }
 
-  _processFFmpegStream (format, stream) {
+  _processFFmpegStream(format, stream) {
     const OUTPUT_FORMAT = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].format
-    const OUTPUT_FORMAT_BYTE_LENGTH = this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].byteLength
+    const OUTPUT_FORMAT_BYTE_LENGTH =
+      this.SUPPORTED_AUDIO_FORMATS[this.config.audioFormat].byteLength
     const OUTPUT_SAMPLE_RATE = this.config.sampleRate
 
     this.logger.debug('[FFmpegDecoder] Stream codec:', stream.codec, stream.codecParameters)
@@ -268,7 +272,9 @@ class FFmpegDecoder {
     this.totalSkipSamples = Math.floor((OUTPUT_SAMPLE_RATE * skipMs) / 1000)
 
     if (this.totalSkipSamples > 0) {
-      this.logger.info(`[FFmpegDecoder] Skipping ${skipMs}ms (${this.totalSkipSamples} samples) for ${codecName} to remove encoder artifacts`)
+      this.logger.info(
+        `[FFmpegDecoder] Skipping ${skipMs}ms (${this.totalSkipSamples} samples) for ${codecName} to remove encoder artifacts`
+      )
     }
 
     this._processPacket(format, packet, raw, decoder, resampler)
@@ -301,7 +307,7 @@ class FFmpegDecoder {
     decoder.destroy()
   }
 
-  async _collectStreamData (audioStream) {
+  async _collectStreamData(audioStream) {
     const chunks = []
     let totalBytes = 0
 
@@ -319,7 +325,7 @@ class FFmpegDecoder {
     return Buffer.concat(chunks)
   }
 
-  async _processStream (audioStream) {
+  async _processStream(audioStream) {
     // Reset and start tracking stats
     this._resetStats()
     const startTime = Date.now()
@@ -355,7 +361,9 @@ class FFmpegDecoder {
         audioBuffer.copy(buffer, 0, bufferOffset, bufferOffset + bytesToRead)
         bufferOffset += bytesToRead
 
-        this.logger.debug(`[FFmpegDecoder] Read ${bytesToRead} bytes from buffer, offset now: ${bufferOffset}`)
+        this.logger.debug(
+          `[FFmpegDecoder] Read ${bytesToRead} bytes from buffer, offset now: ${bufferOffset}`
+        )
         return bytesToRead
       },
       onseek: (offset, whence) => {

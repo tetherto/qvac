@@ -1,6 +1,151 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+### Pull Requests
+
+- [#3929](https://github.com/tetherto/qvac/pull/3929) - QVAC-23195 fix: bump
+  qvac-fabric to 10069.1.1 across consumers
+
+## [0.3.0] - 2026-08-18
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.1` -> `1.3.3`,
+  bringing this package onto the same shared-runtime floor every other addon
+  consumer already builds against. `model-fit` was the last one left behind.
+
+  No source change is needed here. The addon uses only the header-only JS
+  boundary (`inference-addon-cpp/Errors.hpp`, `JsInterface.hpp`, `JsUtils.hpp`)
+  and its binding is synchronous — it never constructs an `AddonCpp`, a
+  scheduler or an `OutputQueue` — so 1.3.0's two breaking changes (the
+  `JobRunner` -> `SingleJobScheduler` rename with the `JobRunner.hpp` forwarding
+  header removed, and `OutputQueue::clear()` returning job-tagged entries) reach
+  nothing this package compiles.
+
+  What the floor does pick up is the run of lifecycle fixes released between the
+  two versions: the `dlclose()` self-pin that makes `Worklet.terminate()` safe on
+  Android bionic (1.2.2), the `JsLogger` teardown and re-`setLogger` crash fixes
+  and their concurrent-env ownership hardening (1.2.3, 1.2.4), and the
+  `JsAsyncTask` teardown-thread and capture-release fixes (1.3.2, 1.3.3). The
+  first three matter to `model-fit` in particular: it is designed to run in a
+  short-lived isolated worklet, which is exactly the load/terminate cycle those
+  fixes cover.
+
+### Pull Requests
+
+- [#3926](https://github.com/tetherto/qvac/pull/3926) - chore[notask]: bump
+  model-fit to inference-addon-cpp 1.3.3
+
+## [0.2.1] - 2026-08-18
+
+Records a fix that was left out of `0.2.0`. It merged (#3890) before the
+`model-fit-v0.2.0` tag was cut, so the code already shipped in `0.2.0` — this
+release carries no source change of its own, only the entry that should have
+been in that one.
+
+### Fixed
+
+- Reject a successful fit whose context could not be resolved. `runFit` already
+  rewrote a fitted `nCtx` of 0 — llama's encoding for "use the trained context"
+  — to the model's declared context length, but when that GGUF metadata was
+  itself unavailable the zero survived and the caller was handed a `SUCCESS`
+  carrying `nCtx: 0`: a verdict with no load plan it could replay. Such a result
+  is now `ERROR` / `model-unreadable`, which is what the missing metadata
+  actually means. The resolution moved out of `runFit` into
+  `detail::finalizeFitContext` (`addon/src/fit/FitResultContext.cpp`) so it can
+  be tested without a model, covered by a new `ModelFitContextUnit` test built
+  under `BUILD_TESTING`.
+
+- Reject a malformed successful response in the process codec.
+  `parseFitProcessResponse` accepted a `completed` result with `status: 0` and a
+  non-positive `nCtx`, so a child that answered with an unresolved context put
+  it straight into a supervisor's hands. Defence in depth rather than a live
+  path: with the fix above the runner can no longer produce one.
+
+### Pull Requests
+
+- [#3890](https://github.com/tetherto/qvac/pull/3890) - QVAC-22630 fix: reject
+  unresolved successful fit contexts
+
+## [0.2.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.1.0] - 2026-08-12
+
+### Added
+
+- Initial release of `@qvac/model-fit`, a memory-fit **preflight** addon that
+  wraps llama.cpp's `llama_params_fit` C API to project — without loading any
+  weights — whether a GGUF model fits available device memory, and if so with
+  what offload plan (layers / context / tensor split). Intended to run in a
+  short-lived isolated worklet before handing a model to `@qvac/llm-llamacpp`.
+  (The wrapped entry point became `common_fit_params` before this first
+  publish — see *Changed* below.)
+- `reason` on the result — `fits`, `does-not-fit`, `model-unreadable` or
+  `no-backend-device`. `status` alone could not separate "this hardware cannot
+  run it" from "the model could not be read", which left the documented
+  proceed-on-unknown path impossible to diagnose.
+- `buftOverrides` on the result: the tensor placement the fitter selected. These
+  were previously discarded, so a `SUCCESS` could depend on placement the real
+  load would not reproduce.
+- `FitResult` is now a discriminated union on `status`, with the plan valid only
+  on `SUCCESS`, plus a consumer type test (`test/types/`) that checks branch
+  narrowing and exhaustiveness — the dts check previously only compiled the
+  declaration itself.
+- `NOTICE` and `LICENSE`, which `package.json` already listed in `files`.
+
+- Coverage for what the fitter does under memory pressure. `llama_params_fit`
+  assumes host memory is unlimited, so an unsatisfiable device margin is met by
+  moving every layer to the host rather than by reporting `FAILURE` — `fits`
+  stays true, and the plan rather than the flag is the admission signal. Driven
+  by the margin rather than by model size, which keeps it deterministic across
+  runners with different VRAM.
+- Coverage for the `FAILURE` verdict, which turns out to require a pinned
+  constraint. Unpinned, the fitter always has the host to fall back on, so it
+  answers even an unsatisfiable margin with `SUCCESS` and zero offload; pinning
+  `nGpuLayers` makes offload a hard requirement and produces a real "won't fit".
+  Documented, because it means `fits` alone is not an admission signal.
+- Documented two crash paths inside `llama_params_fit` that this addon cannot
+  contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
+  Windows divide-by-zero. Both terminate the process.
+- `nDevices` and `nGpuDevices` on the result — the device inventory the
+  projection was actually made against. Zero registered devices now returns
+  `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
+  be read as a detection result.
+- `@qvac/model-fit/process`, a boundary for running a projection in a child that
+  can be thrown away. The subpath exports a versioned NDJSON codec
+  (`encodeFitProcessRequest`, `parseFitProcessResponse`) and resolves a private
+  one-shot runner to spawn with a Bare executable. It exists because the crash
+  paths above terminate whoever calls the fitter, so the only way to survive
+  them is to ask the question from a process that is expendable. Spawning and
+  supervision are deliberately left to the caller.
+- The runner answers with one line on stdout, and that line rather than the exit
+  code is the result: `completed` for a projection, `invocation-error` for a
+  request that threw or never reached the fitter, and no line at all when native
+  code aborted. A missing or unparseable line is a failure whatever the status —
+  exit 0 does not prove delivery, and exit 2 arrives both with and without a
+  response. The outcome table in the README is the full contract.
+- The addon is loaded only once a request has parsed, so a malformed or oversized
+  request costs a spawn and never backend registration. The runner imposes no
+  timeout of its own; bounding and cancelling the child is the supervisor's job.
+- Two platform constraints a supervisor has to honour. On Windows the child's
+  stdio must be created as overlapped pipes (`stdio: ['overlapped', ...]`), or
+  the runner — itself a libuv program handed synchronous handles — never
+  observes the request and hangs with no output and no diagnostic; the flag is a
+  no-op elsewhere, so set it unconditionally. On darwin a cold child recompiles
+  the embedded Metal library during backend discovery, which costs roughly ten
+  seconds against a quarter of a second on linux and Windows, so a deadline must
+  be sized for discovery rather than for the projection.
 
 ### Changed
 
@@ -141,47 +286,3 @@
   place, win32 CI returns a real projection and the SEH filter never fires.
   Removing it also resolves the objection that resuming after a structured
   exception leaves llama's global logger pointing at a dead stack frame.
-
-### Added
-
-- `reason` on the result — `fits`, `does-not-fit`, `model-unreadable` or
-  `no-backend-device`. `status` alone could not separate "this hardware cannot
-  run it" from "the model could not be read", which left the documented
-  proceed-on-unknown path impossible to diagnose.
-- `buftOverrides` on the result: the tensor placement the fitter selected. These
-  were previously discarded, so a `SUCCESS` could depend on placement the real
-  load would not reproduce.
-- `FitResult` is now a discriminated union on `status`, with the plan valid only
-  on `SUCCESS`, plus a consumer type test (`test/types/`) that checks branch
-  narrowing and exhaustiveness — the dts check previously only compiled the
-  declaration itself.
-- `NOTICE` and `LICENSE`, which `package.json` already listed in `files`.
-
-- Coverage for what the fitter does under memory pressure. `llama_params_fit`
-  assumes host memory is unlimited, so an unsatisfiable device margin is met by
-  moving every layer to the host rather than by reporting `FAILURE` — `fits`
-  stays true, and the plan rather than the flag is the admission signal. Driven
-  by the margin rather than by model size, which keeps it deterministic across
-  runners with different VRAM.
-- Coverage for the `FAILURE` verdict, which turns out to require a pinned
-  constraint. Unpinned, the fitter always has the host to fall back on, so it
-  answers even an unsatisfiable margin with `SUCCESS` and zero offload; pinning
-  `nGpuLayers` makes offload a hard requirement and produces a real "won't fit".
-  Documented, because it means `fits` alone is not an admission signal.
-- Documented two crash paths inside `llama_params_fit` that this addon cannot
-  contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
-  Windows divide-by-zero. Both terminate the process.
-- `nDevices` and `nGpuDevices` on the result — the device inventory the
-  projection was actually made against. Zero registered devices now returns
-  `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
-  be read as a detection result.
-
-## [0.1.0] - 2026-07-27
-
-### Added
-
-- Initial release of `@qvac/model-fit`, a memory-fit **preflight** addon that
-  wraps llama.cpp's `llama_params_fit` C API to project — without loading any
-  weights — whether a GGUF model fits available device memory, and if so with
-  what offload plan (layers / context / tensor split). Intended to run in a
-  short-lived isolated worklet before handing a model to `@qvac/llm-llamacpp`.

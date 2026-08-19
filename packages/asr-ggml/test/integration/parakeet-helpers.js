@@ -949,6 +949,8 @@ const REGISTRY_PREFIX_Q8_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-11'
 const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
 const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
+const REGISTRY_PREFIX_INDIC = 'qvac_models_compiled/ggml/indic_conformer/2026-08-07'
+const REGISTRY_PREFIX_UNIFIED = 'qvac_models_compiled/ggml/parakeet/2026-08-13'
 
 function _registryQ8(file) {
   return `${REGISTRY_PREFIX_Q8_0}/${file}`
@@ -961,6 +963,12 @@ function _registry20260701(file) {
 }
 function _registryStreaming(file) {
   return `${REGISTRY_PREFIX_STREAMING}/${file}`
+}
+function _registryIndic(file) {
+  return `${REGISTRY_PREFIX_INDIC}/${file}`
+}
+function _registryUnified(file) {
+  return `${REGISTRY_PREFIX_UNIFIED}/${file}`
 }
 
 const MODEL_CONFIGS = {
@@ -981,6 +989,16 @@ const MODEL_CONFIGS = {
     registryPath: _registryQ8('parakeet-tdt-0.6b-v3.q8_0.gguf'),
     mobileRegistryPath: _registryQ4('parakeet-tdt-0.6b-v3.q4_0.gguf'),
     f16RegistryPath: _registry20260701('parakeet-tdt-0.6b-v3.f16.gguf'),
+    minSize: 50 * 1024 * 1024,
+    url: null
+  },
+  unified: {
+    file: 'parakeet-unified-en-0.6b.q8_0.gguf',
+    mobileFile: 'parakeet-unified-en-0.6b.q4_0.gguf',
+    f16File: 'parakeet-unified-en-0.6b.f16.gguf',
+    registryPath: _registryUnified('parakeet-unified-en-0.6b.q8_0.gguf'),
+    mobileRegistryPath: _registryUnified('parakeet-unified-en-0.6b.q4_0.gguf'),
+    f16RegistryPath: _registryUnified('parakeet-unified-en-0.6b.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
   },
@@ -1018,6 +1036,16 @@ const MODEL_CONFIGS = {
     f16RegistryPath: _registryStreaming('diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     minSize: 50 * 1024 * 1024,
     url: null
+  },
+  indicConformer: {
+    file: 'indic-conformer-ctc.q8_0.gguf',
+    mobileFile: 'indic-conformer-ctc.q4_0.gguf',
+    f16File: 'indic-conformer-ctc.f16.gguf',
+    registryPath: _registryIndic('indic-conformer-ctc.q8_0.gguf'),
+    mobileRegistryPath: _registryIndic('indic-conformer-ctc.q4_0.gguf'),
+    f16RegistryPath: _registryIndic('indic-conformer-ctc.f16.gguf'),
+    minSize: 50 * 1024 * 1024,
+    url: null
   }
 }
 
@@ -1027,7 +1055,11 @@ const MODEL_CONFIGS = {
 // reports and distinct from v1 `sortformer`) while the config key stays
 // `sortformerStreaming`.
 const MODEL_TYPE_ALIASES = {
-  'sortformer-streaming': 'sortformerStreaming'
+  'sortformer-streaming': 'sortformerStreaming',
+  'indic-conformer': 'indicConformer',
+  indic: 'indicConformer',
+  'parakeet-unified': 'unified',
+  rnnt: 'unified'
 }
 
 // Resolve a caller-facing model-type token (which may be a kebab alias) to the
@@ -1197,7 +1229,7 @@ function quantFromGgufName(ggufPathOrName) {
  *   8. QVAC model registry fetch into the test models dir, using the
  *      `mobileRegistryPath` on mobile and `registryPath` on desktop.
  *
- * @param {string} modelType - 'tdt', 'ctc', 'eou', or 'sortformer'
+ * @param {string} modelType - 'tdt', 'unified', 'ctc', 'eou', or 'sortformer'
  * @param {string} [override] - explicit GGUF path to use
  * @param {Object} [options] - resolution options
  * @param {string} [options.quant] - explicit quantisation to resolve
@@ -1385,7 +1417,7 @@ async function loadGgufOrSkip(t, modelType = 'tdt', options = {}) {
  * helper returns that shape so callers don't need to special-case
  * per model type.
  *
- * @param {string} _modelType - 'tdt', 'ctc', 'eou', or 'sortformer' (informational)
+ * @param {string} _modelType - 'tdt', 'unified', 'ctc', 'eou', or 'sortformer'
  * @param {string} ggufPath - absolute path to the .gguf file
  * @returns {Object} { modelPath } config to spread into ParakeetInterface config
  */

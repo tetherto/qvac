@@ -174,7 +174,6 @@ const config = {
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
-| tools_compact      | `"true"` or `"false"`                       | `"false"`                    | Compact tool tokens from KV cache between turns ([details](./docs/tools-compact.md)) |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context. In batch mode the sliding window is the per-sequence slot (`n_ctx / n_parallel`), so `n_discarded` is clamped to that per-slot window, not the full context; a value `>=` the slot cap is clamped and logs a warning |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
@@ -414,8 +413,6 @@ npm run quickstart
 -   [LoRA Inference](./examples/simple-lora-inference.js) – Inference with a finetuned LoRA adapter.
 -   [Smart Home Finetune Showcase](./examples/finetune/showcase/smart-home-finetune.js) – Train a smart home tool-calling specialist, then [evaluate](./examples/finetune/showcase/smart-home-finetuned-test.js) baseline vs finetuned.
 -   [Multi-GPU Benchmark](./examples/multiGpuBenchmark.js) – Compares single-GPU, layer-parallel, and tensor-parallel split modes.
--   [Bench Tools Placement](./examples/benchToolsPlacement.js) – Benchmarks standard vs `tools_compact` placement across multi-turn conversations.
--   [Test Tool Removal](./examples/testToolRemoval.js) – Demonstrates dynamic tool addition and removal between turns.
 
 ## OCR with Vision-Language Models
 

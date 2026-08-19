@@ -121,6 +121,39 @@ test('CosyVoice3: ttsParams shape forwards dir/language/streaming/cfm/promptText
   t.absent(params.supertonicModelPath, 'no supertonic fields leaked')
 })
 
+test('CosyVoice3: runCosyvoiceTTS helper forwards GPU options into TTSGgml options', (t) => {
+  const { buildCosyvoiceLoadOptions } = require('../utils/runCosyvoiceTTS')
+
+  const layers = buildCosyvoiceLoadOptions({ nGpuLayers: 99 })
+  t.is(layers.nGpuLayers, 99, 'helper forwards nGpuLayers as a top-level option')
+
+  const gpu = buildCosyvoiceLoadOptions({ useGPU: true })
+  t.is(gpu.config.useGPU, true, 'helper forwards useGPU into config (explicit wins over NO_GPU)')
+  t.absent(gpu.nGpuLayers, 'no nGpuLayers unless requested')
+
+  const none = buildCosyvoiceLoadOptions({})
+  t.absent(none.nGpuLayers, 'omitted nGpuLayers stays omitted')
+})
+
+test('CosyVoice3: GPU options forward to params (useGPU / nGpuLayers)', (t) => {
+  const gpu = createMockedCosyvoiceModel({ extra: { config: { language: 'en', useGPU: true } } })
+  t.is(gpu._buildTtsParams().useGPU, true, 'useGPU:true forwards to params')
+
+  const layers = createMockedCosyvoiceModel({
+    extra: { config: { language: 'en' }, nGpuLayers: 99 }
+  })
+  t.is(layers._buildTtsParams().nGpuLayers, 99, 'nGpuLayers forwards to params')
+
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        extra: { config: { language: 'en', useGPU: false }, nGpuLayers: 99 }
+      }),
+    /conflicts/,
+    'useGPU:false + nGpuLayers:99 conflict rejects'
+  )
+})
+
 test('CosyVoice3: per-component model paths forward to params', (t) => {
   const model = createMockedCosyvoiceModel({
     files: {
@@ -136,29 +169,82 @@ test('CosyVoice3: per-component model paths forward to params', (t) => {
   t.is(params.cosyvoiceHiftModelPath, './models/cv3/hift.gguf')
 })
 
-test('CosyVoice3: instruct renders structured control to the trained instruction', (t) => {
+// Guards the JS half of the openclCacheDir boundary: the native
+// buildCosyvoiceConfig reads the "openclCacheDir" key by name and forwards it to
+// EngineOptions::opencl_cache_dir (covered on the C++ side by
+// test_cosyvoice_config.cpp CosyvoiceEngineOptions.ForwardsOpenclCacheDir). The
+// original regression was the addon dropping this key, so pin that the JS layer
+// emits it under the exact name from both the top-level option and config.
+test('CosyVoice3: openclCacheDir forwards into the native configuration params', (t) => {
+  const fromOption = createMockedCosyvoiceModel({
+    extra: { openclCacheDir: '/var/cache/qvac/opencl' }
+  })
+  t.is(
+    fromOption._buildTtsParams().openclCacheDir,
+    '/var/cache/qvac/opencl',
+    'openclCacheDir option reaches the native configurationParams'
+  )
+
+  const fromConfig = new TTSGgml({
+    engine: TTSGgml.ENGINE_COSYVOICE3,
+    files: { cosyvoiceModelDir: './models/cosyvoice3' },
+    config: { language: 'en', useGPU: false, openclCacheDir: '/data/opencl' }
+  })
+  t.is(
+    fromConfig._buildTtsParams().openclCacheDir,
+    '/data/opencl',
+    'config.openclCacheDir reaches the native configurationParams'
+  )
+})
+
+test('CosyVoice3: instruct renders the controls with no canonical vocabulary', (t) => {
   const dialect = createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'cantonese' } } })
   t.is(dialect._buildTtsParams().instruct, '请用广东话表达。', 'dialect renders')
 
-  const emotion = createMockedCosyvoiceModel({ extra: { instruct: { emotion: 'happy' } } })
-  t.is(emotion._buildTtsParams().instruct, '请非常开心地说一句话。', 'emotion renders')
-
-  const speed = createMockedCosyvoiceModel({ extra: { instruct: { speed: 'slow' } } })
-  t.is(speed._buildTtsParams().instruct, '请用尽可能慢地语速说一句话。', 'speed renders')
+  const volume = createMockedCosyvoiceModel({ extra: { instruct: { volume: 'loud' } } })
+  t.ok(volume._buildTtsParams().instruct.includes('loudly'), 'volume renders')
 
   const raw = createMockedCosyvoiceModel({ extra: { instruct: '请用四川话表达。' } })
   t.is(raw._buildTtsParams().instruct, '请用四川话表达。', 'raw string passes through')
 
   const precedence = createMockedCosyvoiceModel({
-    extra: { instruct: { dialect: 'sichuan', emotion: 'sad' } }
+    extra: { instruct: { dialect: 'sichuan', volume: 'soft' } }
   })
-  t.is(precedence._buildTtsParams().instruct, '请用四川话表达。', 'dialect wins over emotion')
+  t.is(precedence._buildTtsParams().instruct, '请用四川话表达。', 'dialect wins over volume')
 
   const none = createMockedCosyvoiceModel({})
   t.absent(none._buildTtsParams().instruct, 'no instruct -> field absent')
 })
 
-test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
+test('CosyVoice3: emotion and pace are forwarded canonically, not pre-rendered', (t) => {
+  // The trained Chinese instructions live in tts-cpp now, so the addon must
+  // pass the canonical value through rather than render it here.
+  const happy = createMockedCosyvoiceModel({ extra: { emotion: 'happy' } })
+  t.is(happy._buildTtsParams().emotion, 'happy', 'emotion forwarded verbatim')
+  t.absent(happy._buildTtsParams().instruct, 'emotion does not populate instruct')
+
+  const slow = createMockedCosyvoiceModel({ extra: { pace: 'slow' } })
+  t.is(slow._buildTtsParams().pace, 'slow', 'pace forwarded verbatim')
+
+  const neutral = createMockedCosyvoiceModel({ extra: { emotion: 'neutral' } })
+  t.is(neutral._buildTtsParams().emotion, 'neutral', 'neutral is accepted')
+})
+
+// The determinism knobs the cosyvoice integration helper sets, pinned here
+// because the integration lane is the only other place that constructs with
+// them and it takes hours to tell you.
+test('CosyVoice3: seed is the determinism knob; greedy belongs to audio8', (t) => {
+  const seeded = createMockedCosyvoiceModel({ extra: { seed: 42 } })
+  t.is(seeded._buildTtsParams().seed, 42, 'seed reaches the native configurationParams')
+
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { greedy: true } }),
+    /audio8-only/,
+    'greedy is not a cosyvoice3 option'
+  )
+})
+
+test('CosyVoice3: unsupported emotions and instruct keys are rejected', (t) => {
   t.exception(
     () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: 'nope' } } }),
     /Valid dialects|Invalid CosyVoice instruct/,
@@ -169,6 +255,119 @@ test('CosyVoice3: invalid instruct value / unknown key rejected', (t) => {
     /Invalid CosyVoice instruct key/,
     'unknown structured key throws instead of silently zero-shot'
   )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { emotion: 'happy' } } }),
+    /Valid keys: dialect, volume, style/,
+    'emotion under instruct is rejected and points at the top-level option'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'angry' } }),
+    /invalid emotion/,
+    'the upstream spelling angry is not canonical'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'fear' } }),
+    /not supported by the cosyvoice3 engine/,
+    'an untrained emotion names the engine set'
+  )
+})
+
+test('CosyVoice3: one instruction per synthesis', (t) => {
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'happy', pace: 'fast' } }),
+    /one instruction per synthesis/,
+    'emotion + pace conflicts'
+  )
+  t.exception(
+    () =>
+      createMockedCosyvoiceModel({
+        extra: { emotion: 'happy', instruct: { dialect: 'cantonese' } }
+      }),
+    /one instruction per synthesis/,
+    'emotion + instruct conflicts'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'neutral', pace: 'fast' } }),
+    /one instruction per synthesis/,
+    'neutral carries its own instruction, so it conflicts with a pace step too'
+  )
+  t.execution(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'happy', pace: 'moderate' } }),
+    'moderate disengages its channel so it does not conflict'
+  )
+  t.execution(
+    () => createMockedCosyvoiceModel({ extra: { emotion: 'neutral', pace: 'moderate' } }),
+    'neutral plus the disengaged pace is still one instruction'
+  )
+})
+
+test('CosyVoice3: malformed instruct values rejected instead of silent zero-shot', (t) => {
+  // Presence, not truthiness: a set-but-empty or null control is malformed and
+  // must throw rather than degrade to zero-shot synthesis.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: '' } } }),
+    /Invalid CosyVoice instruct/,
+    'empty dialect string throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: { dialect: null } } }),
+    /Invalid CosyVoice instruct/,
+    'null dialect throws'
+  )
+  // Non-object structured values would slip past the presence checks.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: ['cantonese'] } }),
+    /control object/,
+    'array instruct throws'
+  )
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: 42 } }),
+    /control object/,
+    'numeric instruct throws'
+  )
+})
+
+test('CosyVoice3: explicit null instruct is rejected, not treated as omitted', (t) => {
+  // Only `undefined` means omitted (zero-shot); an explicit null is malformed.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: null } }),
+    /control object/,
+    'null instruct throws instead of silently selecting zero-shot'
+  )
+})
+
+test('CosyVoice3: non-plain instruct objects are rejected', (t) => {
+  // A Date is an object but not a control map; without a plain-object check it
+  // would carry no control fields and degrade to silent zero-shot.
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: new Date() } }),
+    /control object/,
+    'Date instruct throws'
+  )
+  // Controls inherited from a prototype must not be honored: only own
+  // properties of a plain object count.
+  const inherited = Object.create({ dialect: 'cantonese' })
+  t.exception(
+    () => createMockedCosyvoiceModel({ extra: { instruct: inherited } }),
+    /control object/,
+    'prototype-inherited control throws instead of being accepted'
+  )
+})
+
+test('CosyVoice3: undefined control fields are skipped, not malformed', (t) => {
+  // A field explicitly set to undefined means "not selected", so it is skipped
+  // and the next control by precedence takes effect (zero-shot when none do).
+  const skipped = createMockedCosyvoiceModel({
+    extra: { instruct: { dialect: undefined, volume: 'loud' } }
+  })
+  t.is(
+    skipped._buildTtsParams().instruct,
+    'Please say a sentence as loudly as possible.',
+    'undefined dialect falls through to volume'
+  )
+
+  const empty = createMockedCosyvoiceModel({ extra: { instruct: { dialect: undefined } } })
+  t.absent(empty._buildTtsParams().instruct, 'all-undefined instruct -> zero-shot, field absent')
 })
 
 test('CosyVoice3: LavaSR enhancer/denoiser accepted and forwarded to the addon', (t) => {
@@ -281,6 +480,62 @@ test('CosyVoice3: referenceAudio forwards for zero-shot cloning', (t) => {
   const params = model._buildTtsParams()
   t.is(params.referenceAudio, '/abs/ref.wav')
   t.is(params.promptText, 'hi there')
+})
+
+test('CosyVoice3: referenceAudio without cloning models or a model dir throws', (t) => {
+  // The clone consistency assert must fail closed at construction: with no
+  // model dir to discover the s3tok/campplus GGUFs under and no explicit
+  // paths, the native bake could never succeed.
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_COSYVOICE3,
+        referenceAudio: '/abs/ref.wav',
+        files: {
+          cosyvoiceLlmModel: './llm.gguf',
+          cosyvoiceFlowModel: './flow.gguf',
+          cosyvoiceHiftModel: './hift.gguf'
+        }
+      }),
+    /cosyvoiceS3tokModel/,
+    'clone request with unresolvable cloning models is rejected'
+  )
+})
+
+test('CosyVoice3: referenceAudio with explicit s3tok + campplus paths is accepted', (t) => {
+  // The other side of the clone assert: explicit cloning-model paths satisfy
+  // it without a model dir, and both forward to the addon.
+  let model
+  t.execution(() => {
+    model = new TTSGgml({
+      engine: TTSGgml.ENGINE_COSYVOICE3,
+      referenceAudio: '/abs/ref.wav',
+      files: {
+        cosyvoiceLlmModel: './llm.gguf',
+        cosyvoiceFlowModel: './flow.gguf',
+        cosyvoiceHiftModel: './hift.gguf',
+        cosyvoiceS3tokModel: './cosyvoice3-s3tok-q8_0.gguf',
+        cosyvoiceCampplusModel: './cosyvoice3-campplus-f32.gguf'
+      }
+    })
+  }, 'explicit cloning-model paths satisfy the clone assert')
+  const params = model._buildTtsParams()
+  t.is(params.cosyvoiceS3tokModelPath, './cosyvoice3-s3tok-q8_0.gguf')
+  t.is(params.cosyvoiceCampplusModelPath, './cosyvoice3-campplus-f32.gguf')
+})
+
+test('CosyVoice3: promptText alone (no referenceAudio) stays legal', (t) => {
+  // Without a reference it is the baked-voice transcript override, not a
+  // clone request, so the cloning models are not required.
+  t.execution(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_COSYVOICE3,
+        promptText: 'transcript override for the baked voice',
+        files: { cosyvoiceModelDir: './models/cv3' }
+      }),
+    'promptText without referenceAudio needs no cloning models'
+  )
 })
 
 test('CosyVoice3: synthesis returns audio output and stats (mocked)', async (t) => {

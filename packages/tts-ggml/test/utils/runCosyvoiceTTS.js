@@ -10,14 +10,15 @@ const { createWavBuffer } = require('./wav-helper')
 // CosyVoice3 is native 24 kHz (Qwen2 speech LM + DiT flow + CausalHiFT vocoder).
 const COSYVOICE_SAMPLE_RATE = 24000
 
-async function loadCosyvoiceTTS(params = {}) {
+// Exported separately so the option mapping (useGPU / NO_GPU / nGpuLayers /
+// per-call controls) is unit-testable without constructing the native engine.
+function buildCosyvoiceLoadOptions(params = {}) {
   const baseDir = getBaseDir()
   const defaultModelDir = path.resolve(path.join(baseDir, 'models', 'cosyvoice3'))
   const cosyvoiceModelDir = params.cosyvoiceModelDir || defaultModelDir
 
   // Backend selection mirrors runParlerTTS: explicit useGPU wins, else honor the
-  // NO_GPU env (on-device runner forces cpu). CosyVoice3 is CPU-only today, but
-  // keep the same config surface so the helper reads identically to its siblings.
+  // NO_GPU env (on-device runner forces cpu). nGpuLayers is a top-level knob.
   const config = { language: params.language || 'en' }
   if (params.useGPU !== undefined) {
     config.useGPU = params.useGPU
@@ -34,10 +35,30 @@ async function loadCosyvoiceTTS(params = {}) {
     config,
     opts: { stats: true }
   }
-  // instruct2 control (emotion / dialect / speed / volume / style / raw string)
-  // is a constructor-level option: the engine renders it once at construction.
+  if (params.nGpuLayers !== undefined) options.nGpuLayers = params.nGpuLayers
+  if (params.referenceAudio !== undefined) options.referenceAudio = params.referenceAudio
+  if (params.promptText !== undefined) options.promptText = params.promptText
+  if (params.cosyvoiceS3tokModel !== undefined) {
+    options.files.cosyvoiceS3tokModel = params.cosyvoiceS3tokModel
+  }
+  if (params.cosyvoiceCampplusModel !== undefined) {
+    options.files.cosyvoiceCampplusModel = params.cosyvoiceCampplusModel
+  }
+  // instruct2 control (dialect / volume / style / raw string) stays a
+  // constructor-level option; emotion and pace are the cross-engine options and
+  // also work on reload() and per call.
   if (params.instruct !== undefined) options.instruct = params.instruct
+  if (params.emotion !== undefined) options.emotion = params.emotion
+  if (params.pace !== undefined) options.pace = params.pace
+  // Pinning the seed is what makes two runs comparable: sampling is chaotic in
+  // the logits, so without it a before/after diff measures the sampler rather
+  // than the conditioning.
+  if (params.seed !== undefined) options.seed = params.seed
+  return options
+}
 
+async function loadCosyvoiceTTS(params = {}) {
+  const options = buildCosyvoiceLoadOptions(params)
   const model = new TTSGgml(options)
   await model.load()
   return model
@@ -57,7 +78,12 @@ async function runCosyvoiceTTS(model, params = {}, expectation = {}) {
   try {
     let outputArray = []
     let reportedSampleRate = null
-    const response = await model.run({ input: params.text, type: 'text' })
+    const response = await model.run({
+      input: params.text,
+      type: 'text',
+      ...(params.perCallEmotion !== undefined ? { emotion: params.perCallEmotion } : {}),
+      ...(params.perCallPace !== undefined ? { pace: params.perCallPace } : {})
+    })
 
     await response
       .onUpdate((data) => {
@@ -118,6 +144,7 @@ async function runCosyvoiceTTS(model, params = {}, expectation = {}) {
 }
 
 module.exports = {
+  buildCosyvoiceLoadOptions,
   loadCosyvoiceTTS,
   runCosyvoiceTTS,
   COSYVOICE_SAMPLE_RATE
