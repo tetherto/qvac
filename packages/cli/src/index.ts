@@ -266,6 +266,16 @@ function setupCli(): void {
       '--docs',
       'Expose Swagger UI at /docs and add same-port loopback CORS origins; requires a fixed --port (JSON spec is always at /openapi.json)'
     )
+    .option(
+      '--no-lazy-load',
+      'Disable lazy loading; a request for an unloaded model returns 503 model_not_loaded instead of loading it'
+    )
+    .option('--load-concurrency <n>', 'Max simultaneous model loads (default: 1)')
+    .option('--load-timeout <ms>', 'Per-load timeout in milliseconds (default: unbounded)')
+    .option(
+      '--no-cancel-load-on-disconnect',
+      'Keep loading a model even if the client that triggered the load disconnects'
+    )
     .option('-v, --verbose', 'Detailed output')
     .action(
       async (options: {
@@ -280,6 +290,10 @@ function setupCli(): void {
         corsOrigin: string[]
         publicBaseUrl?: string
         docs?: boolean
+        lazyLoad?: boolean
+        loadConcurrency?: string
+        loadTimeout?: string
+        cancelLoadOnDisconnect?: boolean
         verbose?: boolean
       }) => {
         try {
@@ -297,6 +311,15 @@ function setupCli(): void {
             corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
             publicBaseUrl: options.publicBaseUrl,
             docs: options.docs,
+            // Only forward when explicitly disabled so config can still opt out.
+            lazyLoad: options.lazyLoad === false ? false : undefined,
+            loadConcurrency:
+              options.loadConcurrency !== undefined
+                ? parseInt(options.loadConcurrency, 10)
+                : undefined,
+            loadTimeoutMs:
+              options.loadTimeout !== undefined ? parseInt(options.loadTimeout, 10) : undefined,
+            cancelLoadOnDisconnect: options.cancelLoadOnDisconnect === false ? false : undefined,
             verbose: options.verbose
           })
         } catch (error: unknown) {

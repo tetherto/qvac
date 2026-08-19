@@ -55,3 +55,14 @@ if (hasRPCConfig) {
 }
 `
 }
+
+export function generateWorkerEntries(
+  pluginSpecifiers: string[],
+  sdkName: string,
+  resolveBundleImport: (specifier: string) => string
+) {
+  return {
+    runtimeEntry: generateWorkerEntry(pluginSpecifiers, sdkName),
+    bundleEntry: generateWorkerEntry(pluginSpecifiers, sdkName, resolveBundleImport)
+  }
+}
