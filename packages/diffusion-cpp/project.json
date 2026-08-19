@@ -122,7 +122,7 @@
           "windowsVsGenerator": true,
           "needsSd2Model": true,
           "testEnvVars": [{ "name": "SD_TEST_MODEL_PATH", "path": "test/model/stable-diffusion-v2-1-Q8_0.gguf" }],
-          "vulkan": { "os": "windows-2025", "shell": "pwsh", "path": "C:\\VulkanSDK" },
+          "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
           "platforms": [
             { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
