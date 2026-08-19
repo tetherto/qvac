@@ -43,6 +43,8 @@
         "cwd": "packages/decoder-audio",
         "ci": {
           "npmName": "@qvac/decoder-audio",
+          "skipPrebuilds": true,
+          "mochaTimeoutMs": "600000",
           "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO",
           "androidDevicePoolArnPrimary": "ANDROID_DEVICE_POOL_ARN_DECODER_AUDIO",
           "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_DECODER_AUDIO",

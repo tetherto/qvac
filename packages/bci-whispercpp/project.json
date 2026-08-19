@@ -47,8 +47,12 @@
         "command": "pnpm run test:integration",
         "cwd": "packages/bci-whispercpp",
         "ci": {
+          "timeoutMinutes": 60,
           "envVarName": "GITHUB_TOKEN",
           "envSecretName": "PAT_TOKEN",
+          "windowsVulkan": { "setSdk": true, "addPath": true, "copyLoaderDll": true },
+          "modelDownloadScript": "download-models",
+          "modelDownloadContinueOnError": true,
           "runRtfBenchmarks": false,
           "rtfBenchmark": {
             "command": "node scripts/run-rtf-benchmark-matrix.js",
@@ -199,6 +203,7 @@
         "cwd": "packages/bci-whispercpp",
         "ci": {
           "mode": "coverage",
+          "continueOnError": true,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
           ],

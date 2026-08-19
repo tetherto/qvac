@@ -44,15 +44,28 @@
         "command": "pnpm run test:integration",
         "cwd": "packages/audiogen-ggml",
         "ci": {
+          "timeoutMinutes": 120,
           "envVarName": "GITHUB_TOKEN",
           "envSecretName": "PAT_TOKEN",
+          "linuxArmApt": ["libgomp1", "libomp5", "libblas3", "mesa-vulkan-drivers"],
+          "windowsVulkan": { "setSdk": true, "visibleDevices": true },
+          "modelCache": [
+            {
+              "paths": "packages/audiogen-ggml/models",
+              "hashFilesGlob": "packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js",
+              "warm": "false"
+            }
+          ],
+          "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "3600", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
+          "modelDownloadScript": "download-models:registry",
+          "modelDownloadSkipOnCacheHit": true,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
-            { "os": "ubuntu-26.04", "platform": "linux", "arch": "x64" },
-            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64" },
+            { "os": "ubuntu-26.04", "platform": "linux", "arch": "x64", "noGpu": true },
+            { "os": "ubuntu-24.04-arm", "platform": "linux", "arch": "arm64", "noGpu": true },
             { "os": "macos-26", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
-            { "os": "macos-15-large", "platform": "darwin", "arch": "x64" },
+            { "os": "macos-15-large", "platform": "darwin", "arch": "x64", "noGpu": true },
             { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64-gpu" }
           ]
         }

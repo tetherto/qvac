@@ -87,6 +87,9 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
+          # Coverage lanes (asr/tts/bci) carry LFS test fixtures; legacy set
+          # lfs:true on those checkouts.
+          lfs: ${{ matrix.mode == 'coverage' }}
 
       - name: Setup AWS + Windows CLI
         if: matrix.mode == 'standard'
@@ -161,9 +164,104 @@ jobs:
         if: matrix.mode == 'standard' && matrix.platform == 'darwin'
         uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
 
+      # Dual-registry auth (options.ci.dualRegistry) — vla pulls @tetherto GPR
+      # deps; needs .npmrc + git insteadOf before npm install.
+      - name: Configure dual registry (Unix)
+        if: matrix.dualRegistry && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${GPR_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Configure dual registry (Windows)
+        if: matrix.dualRegistry && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          @"
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
+          $pat = if ($env:GIT_PAT) { $env:GIT_PAT } else { $env:GPR_TOKEN }
+          git config --global url."https://${pat}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${pat}:@github.com/".insteadOf "git@github.com:"
+
       - name: Install npm dependencies
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.mode == 'standard' && 'npm install --ignore-scripts' || 'npm install' }}
+
+      # ROCm SDK (options.ci.installRocm) — vla HIP cross-compile on ubuntu-24.04.
+      - name: Setup ROCm SDK for HIP cross-compile
+        if: matrix.installRocm && matrix.os == 'ubuntu-24.04'
+        uses: ./.github/actions/setup-rocm
+
+      # Windows CMake generator (options.ci.windowsVsGenerator) — diffusion/embed/vla
+      # override the default generator on windows-2025.
+      - name: Configure CMake generator on Windows
+        if: matrix.windowsVsGenerator && matrix.os == 'windows-2025'
+        shell: powershell
+        run: |
+          "CMAKE_GENERATOR=Visual Studio 17 2022" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
+          "CMAKE_GENERATOR_PLATFORM=x64" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
+
+      # diffusion-cpp SD2 GGUF (options.ci.needsSd2Model). Test reads it via the
+      # SD_TEST_MODEL_PATH testEnvVar. Uses the package's own download script.
+      - name: Download SD2 model (Unix)
+        if: matrix.needsSd2Model && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/download-model-sd2.sh
+          MODEL_PATH=$(find . -name "stable-diffusion-v2-1-Q8_0.gguf" | head -n 1)
+          mkdir -p ./test/model
+          cp "$MODEL_PATH" ./test/model/stable-diffusion-v2-1-Q8_0.gguf
+
+      - name: Download SD2 model (Windows)
+        if: matrix.needsSd2Model && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          & .\scripts\download-model-sd2.ps1
+          $model = Get-ChildItem -Recurse -Filter stable-diffusion-v2-1-Q8_0.gguf | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path .\test\model | Out-Null
+          Copy-Item $model.FullName .\test\model\stable-diffusion-v2-1-Q8_0.gguf -Force
+
+      # embed-llamacpp unit-test GGUF (options.ci.needsEmbedModel). Found by path
+      # convention (models/unit-test/test-model.gguf), no env var.
+      - name: Download embed unit-test model
+        if: matrix.needsEmbedModel
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models/unit-test
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+            -o models/unit-test/test-model.gguf \
+            "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300M-Q8_0.gguf"
 
       # --- asr-ggml: HuggingFace whisper models (curl, no cache) ---
       - name: Download whisper test models
@@ -261,6 +359,9 @@ jobs:
 
       - name: Run C++ tests
         working-directory: ${{ matrix.workdir }}
+        # options.ci.continueOnError: coverage lanes (asr/bci) historically did
+        # not fail CI on a C++ test failure (surfaced via the results check only).
+        continue-on-error: ${{ matrix.continueOnError == true }}
         env:
           ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ matrix.workdir }}/.lsan-suppressions.txt
@@ -269,7 +370,10 @@ jobs:
           for row in $(echo '${{ toJSON(matrix.testEnvVars) }}' | jq -c '.[]?'); do
             name=$(echo "$row" | jq -r '.name')
             path=$(echo "$row" | jq -r '.path')
-            export "$name=${{ matrix.workdir }}/$path"
+            # Absolute path: the run step's cwd is matrix.workdir, so a
+            # workdir-relative value would double the prefix. Legacy used
+            # ${{ github.workspace }}/<workdir>/<path>.
+            export "$name=${{ github.workspace }}/${{ matrix.workdir }}/$path"
           done
           npm run test:cpp:run
 
