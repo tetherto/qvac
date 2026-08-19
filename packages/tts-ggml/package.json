@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
   "addon": true,
   "engines": {
