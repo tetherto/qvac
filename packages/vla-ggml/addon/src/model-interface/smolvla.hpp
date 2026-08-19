@@ -281,11 +281,10 @@ struct ggml_tensor* buildDenoiseStepGraph(
 void computeSinusoidalTimeEmbeddingCached(
     float timestep, const float* invPeriods, int dimension, float* out);
 
-// Resolve the device that owns `buft`, falling back to the CPU device: ggml
-// declares the CPU buffer type with a NULL device, so the plain lookup yields
-// nullptr on every CPU load and its capabilities cannot be read. Exposed so a
-// unit test can guard the mmap fast path against that regression.
-ggml_backend_dev_t smolvlaResolveDevice(ggml_backend_buffer_type_t buft);
+// Whether a weight load on `backend` can map the GGUF instead of allocating a
+// copy of it. This is the gate smolvlaLoadModel branches on; exposed so a unit
+// test asserts the decision itself rather than a helper beside it.
+bool smolvlaCanMmapWeights(ggml_backend_t backend);
 
 // Load model from GGUF file. `force_cpu`: skip GPU device selection.
 // `backendsDir`: absolute path to the prebuilds folder; BACKENDS_SUBDIR is

@@ -469,6 +469,10 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
     logger: { error: _collect, warn: _collect, info: _collect, debug: _collect },
     opts: { stats: true }
   })
+  // QVAC_LOG_LEVEL (and its EXPO_PUBLIC_ variant) outrank the logger passed
+  // above, so a harness exporting `warn` would drop the INFO lines the load
+  // assertion reads and fail it for the wrong reason. Pin the level instead.
+  model.logger.setLevel('debug')
 
   const tag = `${fixtureName}/${backend}`
 
