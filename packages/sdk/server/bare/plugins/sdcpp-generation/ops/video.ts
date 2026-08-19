@@ -13,6 +13,7 @@ import { formatZodError } from '@/utils/zod-error'
 import { ModelType } from '@/schemas'
 import {
   ltxVideoRequestSchema,
+  nonLtxVideoRequestSchema,
   singleExpertVideoRequestSchema,
   type VideoRequest,
   type VideoStreamResponse,
@@ -77,6 +78,7 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   const requestLogger = withRequestContext(getServerLogger(), ctx)
   const model = asVideoModel(getModel(request.modelId), request.modelId)
   if (ltxVideoModels.has(model)) parseVideoRequest(ltxVideoRequestSchema, request)
+  else parseVideoRequest(nonLtxVideoRequestSchema, request)
   if (!moeCapableVideoModels.has(model)) parseVideoRequest(singleExpertVideoRequestSchema, request)
 
   const onAbort = () => {
@@ -98,6 +100,12 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     ...(request.negative_prompt !== undefined && {
       negative_prompt: request.negative_prompt
     }),
+    ...(request.lora !== undefined && { lora: request.lora }),
+    ...(request.lora_strength !== undefined && {
+      lora_strength: request.lora_strength
+    }),
+    ...(request.stg_scale !== undefined && { stg_scale: request.stg_scale }),
+    ...(request.stg_block !== undefined && { stg_block: request.stg_block }),
     ...(request.width !== undefined && { width: request.width }),
     ...(request.height !== undefined && { height: request.height }),
     ...(request.video_frames !== undefined && {
@@ -141,6 +149,15 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     }),
     ...(request.control_frames !== undefined && {
       control_frames: request.control_frames.map((b64) => Buffer.from(b64, 'base64'))
+    }),
+    ...(request.reference_images !== undefined && {
+      reference_images: request.reference_images.map((b64) => Buffer.from(b64, 'base64'))
+    }),
+    ...(request.reference_attention_strength !== undefined && {
+      reference_attention_strength: request.reference_attention_strength
+    }),
+    ...(request.reference_downscale_factor !== undefined && {
+      reference_downscale_factor: request.reference_downscale_factor
     }),
     ...(request.vae_tiling !== undefined && { vae_tiling: request.vae_tiling }),
     ...(request.vae_tile_size !== undefined && {

@@ -97,6 +97,7 @@ import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-b
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { VideoIcLoraContractExecutor } from '../shared/executors/video-ic-lora-contract-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'desktop'
@@ -705,6 +706,7 @@ export const executor = createExecutor({
     new NoLingeringBareExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
+    new VideoIcLoraContractExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {
