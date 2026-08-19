@@ -665,14 +665,24 @@ export function createKvCacheSession(
 
       const renamed = await withCacheStateLock(async () => {
         markCachePathActive(result.targetCachePath)
-        await fsPromises.mkdir(path.dirname(result.targetCachePath), { recursive: true })
-        await markAutoCacheKey(targetCacheKey)
+        try {
+          await fsPromises.mkdir(path.dirname(result.targetCachePath), { recursive: true })
+          await markAutoCacheKey(targetCacheKey)
 
-        if (!(await renameCacheFile(sourceCachePath, result.targetCachePath))) {
+          if (!(await renameCacheFile(sourceCachePath, result.targetCachePath))) {
+            releaseCachePath(result.targetCachePath)
+            await pruneEmptyCacheDirectories(result.targetCachePath, snapshotActivePaths())
+            await removeAutoCacheMarkerIfMissing(targetCacheKey)
+            return false
+          }
+        } catch (setupError) {
+          // mkdir/markAutoCacheKey/rename threw after the target active-ref was
+          // taken: release it (first, so it can't leak) and prune any directory
+          // or marker created above, then propagate.
           releaseCachePath(result.targetCachePath)
           await pruneEmptyCacheDirectories(result.targetCachePath, snapshotActivePaths())
           await removeAutoCacheMarkerIfMissing(targetCacheKey)
-          return false
+          throw setupError
         }
 
         releaseCachePath(sourceCachePath)
@@ -973,6 +983,9 @@ export const __kvCacheSessionTestHooks = {
   },
   hasInitializedPath(cachePath: string): boolean {
     return initializedCaches.has(cachePath)
+  },
+  getActivePathCountForTest(cachePath: string): number {
+    return activeCachePaths.get(cachePath) ?? 0
   },
   getLastAutoCacheSweepMsForTest(): number {
     return lastAutoCacheSweepMs

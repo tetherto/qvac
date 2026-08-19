@@ -1402,3 +1402,66 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
     cleanup()
   }
 })
+
+test('kv-cache-session: auto-rename commit releases the target active-ref when setup fails', async (t) => {
+  const { mod, cleanup, writeFakeCache } = await loadSession()
+  const bareFs = await import('bare-fs')
+  const barePath = await import('bare-path')
+  const os = await import('bare-os')
+  const originalMkdir = bareFs.promises.mkdir
+  try {
+    const session = mod.createKvCacheSession('leak-model')
+    const configHash = mod.generateConfigHash('sys', [])
+
+    // Auto turn: primes and holds the source cache path.
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history: [{ role: 'user', content: 'hi' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+
+    // Fail the target directory's mkdir so the commit's target setup throws AFTER
+    // the target active-ref has been taken.
+    const targetCachePath = barePath.join(
+      os.tmpdir(),
+      'qvac-kvcache-leak-target',
+      'the-key',
+      'hash',
+      'session.bin'
+    )
+    bareFs.promises.mkdir = (async (p: string, opts?: unknown) => {
+      if (String(p).includes('qvac-kvcache-leak-target')) {
+        throw new Error('injected mkdir failure')
+      }
+      return originalMkdir(p, opts as never)
+    }) as typeof bareFs.promises.mkdir
+
+    let commitErr: unknown = null
+    try {
+      await session.commitTurn(turn, {
+        kind: 'autoRename',
+        targetCachePath,
+        messageCount: 2,
+        toolBlockCached: false
+      })
+    } catch (error) {
+      commitErr = error
+    }
+
+    t.ok(
+      commitErr instanceof Error && commitErr.message === 'injected mkdir failure',
+      'commit propagates the target-setup failure'
+    )
+    t.is(
+      mod.__kvCacheSessionTestHooks.getActivePathCountForTest(targetCachePath),
+      0,
+      'target active-ref released on setup failure (no leak)'
+    )
+  } finally {
+    bareFs.promises.mkdir = originalMkdir
+    cleanup()
+  }
+})
