@@ -82,6 +82,8 @@ function undeclaredImports(filePath, declaredPackages) {
   return externalSpecifiers(source)
     .map(packageName)
     .filter((name) => name !== packageJson.name && !declaredPackages.has(name))
+    // Packed download helpers lazy-require this; it is a devDependency only.
+    .filter((name) => name !== '@qvac/registry-client')
     .map((name) => `${filePath}: ${name}`)
 }
 
@@ -141,10 +143,11 @@ test('enhanced examples have package scripts', () => {
 })
 
 test('published commands include their runtime files', () => {
-  // ^0.6.1 keeps the transitive hyperdb on the v6 line shared by the rest of
-  // the @qvac ecosystem; 0.4.x pinned hyperdb@4 and broke the SDK consumer
-  // install check's single-copy invariant.
-  assert.equal(packageJson.dependencies['@qvac/registry-client'], '^0.6.1')
+  // Download tooling only: keep `@qvac/registry-client` off the published
+  // runtime graph so consumer installs do not pull a second hyperdb copy.
+  // ^0.6.1 keeps the transitive hyperdb on the v6 line used in-repo.
+  assert.equal(packageJson.devDependencies['@qvac/registry-client'], '^0.6.1')
+  assert.equal(packageJson.dependencies['@qvac/registry-client'], undefined)
   const files = packedFileNames()
   assert.ok(files.has(registryScript))
   assert.ok(files.has('examples/chatterbox-enhanced.js'))
