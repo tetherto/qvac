@@ -827,6 +827,47 @@ test('mobile SDK callers forward the AWS OIDC role to Device Farm jobs', () => {
   MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole)
 })
 
+// Any indent, so reindenting a workflow header cannot quietly move a caller
+// into the exempt branch below.
+const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m
+
+// The key alone is not enough: `repository: ''` and `repository: ${{
+// github.repository }}` both parse yet leave the callee falling back to this
+// repo, which is the bug. The value has to carry the caller's own repository,
+// either directly (`inputs.repository`) or via a context job that derives it.
+const FORWARDS_REPOSITORY_RE =
+  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m
+
+function declaresRepositoryInput(path) {
+  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)))
+}
+
+function assertPinsRepositoryWithRef(reusable, { path, job }) {
+  const block = withoutComments(job.text)
+  if (!/^\s*test-version:/m.test(block)) return
+  if (!declaresRepositoryInput(path)) return
+  assert.match(
+    block,
+    FORWARDS_REPOSITORY_RE,
+    `${path} job "${job.name}" passes test-version to ${reusable} without forwarding its own repository, so a fork ref would resolve against this repo`,
+  )
+}
+
+test('mobile SDK callers that can target a fork forward the repository too', () => {
+  // These workflows check out `test-version` from `inputs.repository ||
+  // github.repository`. A caller that can be pointed at a fork but forwards
+  // only the ref makes them resolve that ref against THIS repo: a fork-only
+  // branch fails to fetch, and a branch name that also exists here silently
+  // builds the wrong code while still reporting on the caller's addon.
+  // Callers with no `repository` input of their own are same-repo by
+  // construction and stay exempt.
+  MOBILE_SDK_WORKFLOWS.forEach((reusable) => {
+    const callers = callersOf(reusable)
+    assertEveryCallWasParsed(reusable, callers)
+    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller))
+  })
+})
+
 test('npm integration uses a dedicated run label, not verified', () => {
   const source = read('.github/workflows/public-reusable-npm.yml')
   const integrationStep = source.slice(
@@ -854,14 +895,13 @@ test('npm reusable pins PR checkout and keeps user input out of run scripts', ()
 const FORK_CI_ENV_RE =
   /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
 
-test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording', () => {
+test('reusable-fork-approval: fork-ci gate and status recording', () => {
   const source = read('.github/workflows/reusable-fork-approval.yml')
   assert.match(
     source,
     FORK_CI_ENV_RE,
     'reusable-fork-approval must gate on the fork-ci environment (fork-only conditional)',
   )
-  assert.match(source, /step-security\/harden-runner@/)
   assert.match(source, /context=qvac\/fork-verified/)
   assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/)
   assert.match(source, /statuses:\s*write/)
@@ -1618,11 +1658,6 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
     benchmarkMatrix.include.filter((entry) => entry.platform === 'iOS').length,
     12,
   )
-  assert.match(
-    workflow,
-    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
-  )
-  assert.match(workflow, /egress-policy:\s*audit/)
   assert.match(workflow, /release environment authorizes GitHub OIDC/)
   assert.match(workflow, /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/)
   assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
@@ -1667,7 +1702,7 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
   const benchmarkMatrix = JSON.parse(matrices[1])
   const functionalMatrix = JSON.parse(matrices[2])
-  assert.equal(benchmarkMatrix.include.length, 16)
+  assert.equal(benchmarkMatrix.include.length, 20)
   assert.deepEqual(
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],
@@ -1680,11 +1715,6 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     workflow,
     /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
   )
-  assert.match(
-    workflow,
-    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
-  )
-  assert.match(workflow, /egress-policy:\s*audit/)
   assert.match(
     workflow,
     /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,

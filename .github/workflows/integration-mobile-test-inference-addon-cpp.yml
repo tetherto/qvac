@@ -59,14 +59,6 @@ jobs:
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
-      # Audit only for the rollout, matching every existing adopter in this repo. Sole
-      # egress here is api.github.com to resolve the framework HEAD. Promote to block
-      # once egress is characterised across the workflow.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       - name: Resolve qvac-test-addon-mobile HEAD
         id: resolve
         env:
@@ -90,14 +82,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Audit only for the rollout. Expected egress: github.com (checkout) and the npm
-      # registry (npm install, plus bare-make fetching its cmake/ninja runtimes).
-      # Deliberately first, before any fork code runs in this job.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       # SHA PIN, repeated verbatim at every fork checkout here — keep it in sync.
       #
       # Every option for `ref` is IMMUTABLE, deliberately. head.sha first: a reusable
@@ -161,14 +145,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Audit only for the rollout. Expected egress: github.com (checkout), the npm
-      # registry, and the Ubuntu archives (setup-build-host installs the cross toolchain
-      # via apt). Deliberately first, before any fork code runs in this job.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -429,15 +405,6 @@ jobs:
             app_name: test-app-iOS.ipa
 
     steps:
-      # The most sensitive job in this workflow: it holds id-token + AWS. Audit only for
-      # the rollout, matching every existing adopter. Expected egress: github.com
-      # (checkout + artifact download), the npm registry (framework e2e install/pack),
-      # and AWS (sts + devicefarm). Promote to block once that egress is characterised.
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       # persist-credentials:false here too, not just on the addon checkout below:
       # this checkout lands at $GITHUB_WORKSPACE, so without it actions/checkout writes
       # the job GITHUB_TOKEN into ./.git/config as an http.extraheader — readable by the

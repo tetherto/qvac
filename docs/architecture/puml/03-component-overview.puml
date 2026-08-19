@@ -1,31 +1,44 @@
 @startuml
 !include <C4/C4_Component>
 
-title QVAC SDK – Internal Components
+title QVAC SDK Family - Internal Components
 
-Container_Boundary(client_side, "Client (@qvac/sdk)") {
-    Component(api, "Public API", "TypeScript", "loadModel, completion, transcribe, embed, translate, textToSpeech, ocr, rag*, invokePlugin, loggingStream, etc.")
-    Component(rpc_client, "RPC Client", "TypeScript", "IPC socket (desktop) or native bridge (mobile)")
-    Component(config, "Config Loader", "TypeScript", "Load qvac.config.{json,js,ts}, validate with Zod, send to worker")
+Container_Boundary(host_side, "Host Clients") {
+    Component(api, "@qvac/sdk Public API", "TypeScript", "loadModel, completion, transcribe, embed, translate, textToSpeech, ocr, rag*, diffusion, audioGen, vla, classify, invokePlugin")
+    Component(bare_api, "@qvac/bare-sdk Assembly API", "TypeScript on Bare", "plugins([...]) / registerPlugin(...), no default addon dependencies")
+    Component(inference_api, "@qvac/inference Engine API", "TypeScript on Bare", "plugins([...]) / registerPlugin(...), direct calls, no RPC layer")
+    Component(py_api, "Python Public API", "Python", "Generated methods, ergonomic wrappers, notebook facade")
+    Component(config, "Config Loader", "TypeScript/Python", "Load qvac.config or Client(config=...), validate with schemas, send to worker")
+    Component(rpc_client, "Host RPC Adapters", "bare-rpc", "Node socket, BareKit IPC, Python loopback TCP, or in-process direct adapter")
 }
 
-Container_Boundary(worker_side, "Worker (Bare Runtime)") {
-    Component(rpc_server, "RPC Server", "TypeScript", "Validate (Zod), route, stream responses, apply device defaults")
+Container_Boundary(contract_side, "Shared Contract") {
+    Component(contract, "Wire Contract", "JSON Schema + manifest + models", "Generated from Zod schemas, method registry, and model constants")
+}
+
+Container_Boundary(worker_side, "Bare Worker Core") {
+    Component(rpc_server, "RPC / Direct Dispatch", "TypeScript", "Validate requests, route handlers, stream responses, apply device defaults")
     Component(plugin_registry, "Plugin Registry", "TypeScript", "Register plugins by modelType, resolve handlers, validate schemas")
     Component(model_registry, "Model Registry", "TypeScript", "Track loaded models (local & delegated) with name/path matching")
     Component(config_registry, "Config Registry", "TypeScript", "Immutable runtime config store (getSDKConfig / setSDKConfig)")
+    Component(requests, "Request Lifecycle", "TypeScript", "RequestRegistry, RequestContext, DisposableScope, cancellation, concurrency policy")
     Component(download, "Download Manager", "TypeScript", "HTTP/Hyperdrive/Registry downloads with resume, progress, cancellation, checksum")
     Component(p2p, "P2P Layer", "TypeScript", "Hyperswarm discovery, Hyperdrive sync, delegated inference")
     Component(rag, "RAG", "TypeScript", "HyperDB vector storage with workspace isolation")
-    Component(plugins, "Built-in Plugins", "TypeScript/C++", "LLM, Embeddings, Whisper, NMT, TTS, OCR — each wrapping a native addon")
+    Component(plugins, "Built-in Plugins", "TypeScript/C++", "LLM, embeddings, ASR, BCI, NMT, TTS, OCR, diffusion, audio generation, VLA, classification")
     Component(logging, "Logging", "TypeScript", "Namespaced loggers (client/server/addon), configurable transports")
 }
 
 Rel_D(api, rpc_client, "Serializes calls")
-Rel_D(rpc_client, rpc_server, "JSON-RPC", "IPC / native bridge")
+Rel_D(bare_api, rpc_client, "Direct adapter")
+Rel_D(inference_api, rpc_server, "Direct engine calls")
+Rel_D(py_api, rpc_client, "Serializes calls")
+Rel_D(py_api, contract, "Generated from")
+Rel_D(rpc_client, rpc_server, "Shared RPC shape", "socket / native bridge / direct")
 Rel_D(rpc_server, plugin_registry, "Dispatches by modelType")
 Rel_D(plugin_registry, plugins, "Invokes handler")
 Rel_D(rpc_server, model_registry, "Registers/unregisters models")
+Rel_D(rpc_server, requests, "Tracks cancellable work")
 Rel_D(rpc_server, download, "Resolves and fetches models")
 Rel_D(rpc_server, p2p, "Peer discovery and sync")
 Rel_D(rpc_server, rag, "Vector search and persistence")
