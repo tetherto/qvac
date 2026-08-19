@@ -176,19 +176,10 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
-  run-mobile-integration-tests:
-    needs: [authorize, ci-router, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.prebuild.result != 'cancelled'
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-nx.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+  # Mobile integration tests are NOT run on PRs (matches main: QVAC-23665 moved
+  # them to on-demand workflow_dispatch via the per-package
+  # integration-mobile-test-<pkg>.yml files). The ci-router `run_mobile` output
+  # is retained for a possible future revival but triggers nothing here.
 
   # Flag-gated per-package jobs, driven by the on-pr fold map. sanity runs for
   # every affected package; the rest run over their pre-filtered sublist.
@@ -210,7 +201,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ matrix.workdir }}
 
@@ -296,34 +287,13 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
-  coload-smoke-mobile:
-    name: coload-smoke-mobile (${{ matrix.package }})
-    needs: [authorize, ci-router, matrix, prebuild]
-    if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.ci-router.outputs.run_mobile == 'true' && needs.prebuild.result != 'cancelled'
-    permissions:
-      actions: read
-      id-token: write
-      contents: read
-      pull-requests: write
-      packages: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.matrix.outputs.coload || '[]') }}
-    uses: ./.github/workflows/coload-smoke-mobile.yml
-    secrets: inherit
-    with:
-      addon: ${{ matrix.package }}
-      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
-
   # Perf reports (informational, not a merge gate). Composite variant
   # (ocr/diffusion) via the shared combine-perf-reports action; rtf variant
   # (asr) via its own aggregator. llm perf-report is pending (needs the
   # composite extra-args extension for --addon-type vision).
   perf-report:
     name: perf-report (${{ matrix.package }})
-    needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, matrix, run-integration-tests]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]'
     permissions:
       contents: read
@@ -356,7 +326,7 @@ jobs:
 
   perf-report-rtf:
     name: perf-report-rtf (${{ matrix.package }})
-    needs: [authorize, matrix, run-integration-tests, run-mobile-integration-tests]
+    needs: [authorize, matrix, run-integration-tests]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]'
     permissions:
       contents: read
@@ -370,20 +340,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download desktop RTF artifacts
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           pattern: ${{ matrix.perfReportDesktopPattern }}
           path: benchmark-artifacts/desktop
-          merge-multiple: false
-      - name: Download mobile performance artifacts
-        continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          pattern: ${{ matrix.perfReportMobilePattern }}
-          path: benchmark-artifacts/mobile
           merge-multiple: false
       - name: Generate unified performance report
         run: |
@@ -406,10 +369,10 @@ jobs:
           retention-days: 30
 
   merge-guard:
-    needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, run-mobile-integration-tests, coload-smoke, coload-smoke-mobile]
+    needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, coload-smoke]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

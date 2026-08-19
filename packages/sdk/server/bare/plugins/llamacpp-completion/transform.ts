@@ -1,4 +1,4 @@
-import { TOOLS_MODE, type LlmConfig } from '@/schemas'
+import { type LlmConfig } from '@/schemas'
 
 /**
  * Converts an LlmConfig into the flat string-keyed map the C++ addon expects.
@@ -33,13 +33,6 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
   if ('opencl_cache_dir' in transformed) {
     transformed['openclCacheDir'] = transformed['opencl_cache_dir']
     delete transformed['opencl_cache_dir']
-  }
-
-  if ('tools_mode' in transformed) {
-    if (transformed['tools_mode'] === TOOLS_MODE.dynamic) {
-      transformed['tools_compact'] = 'true'
-    }
-    delete transformed['tools_mode']
   }
 
   return transformed

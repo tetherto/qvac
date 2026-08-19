@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
-from tetherto.qvac_sdk.bare_rpc_transport import BARE_RPC_AVAILABLE, BareRpcTransport
+from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 from tetherto.qvac_sdk.methods import (
     bci_transcribe_stream,
     completion_stream,
@@ -47,17 +47,11 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     str(Path(__file__).resolve().parent.parent.parent / "sdk"),
 )
-WORKER_PATH = f"{SDK_DIR}/dist/server/worker.js"
 AUDIO_FIXTURE = f"{SDK_DIR}/e2e/assets/audio/transcription-short-wav.wav"
 NEURAL_FIXTURE = f"{SDK_DIR}/e2e/assets/neural/neural-not-too-controversial.bin"
 
 pytestmark = [
     pytest.mark.asyncio,
-    pytest.mark.skipif(
-        not BARE_RPC_AVAILABLE,
-        reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-        "(`pip install -e '.[bare-rpc]'`) to run these tests",
-    ),
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
         reason=f"no built SDK worker + Bare runtime found (worker={WORKER_PATH!r}, bare={BARE_BIN!r}) -- run scripts/build_worker.py, or set QVAC_POC_SDK_DIR",
@@ -180,8 +174,8 @@ def _wav_to_s16le_mono_16k(path: str) -> bytes:
 @pytest.mark.heavy
 async def test_transcribe_stream_duplex(transport) -> None:
     """Parakeet's streaming session only decodes when fed at roughly real-time
-    cadence (see transcription-parakeet's live-stream-simulation.test.js /
-    duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep`
+    cadence (see asr-ggml's parakeet-live-stream-simulation.test.js /
+    parakeet-duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep`
     between writes, matching the SDK e2e runner's `writeInChunks(delayMs)`."""
     load_request = LoadModelRequest.model_validate(
         {

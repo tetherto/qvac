@@ -15,6 +15,7 @@ import {
   ttsPlugin,
   ocrPlugin,
   diffusionPlugin,
+  audioGenPlugin,
   vlaPlugin,
   classificationPlugin
 } from '@/server/bare/plugins'
@@ -35,6 +36,7 @@ registerPlugins([
   ttsPlugin,
   ocrPlugin,
   diffusionPlugin,
+  audioGenPlugin,
   vlaPlugin,
   classificationPlugin
 ])

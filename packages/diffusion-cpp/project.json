@@ -94,21 +94,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/diffusion-cpp",
-        "ci": {
-          "npmName": "@qvac/diffusion-cpp",
-          "prebuildArtifactPrefix": "sd-cpp-",
-          "deviceFarmProjectArnPrimary": "LLM_AWS_DEVICE_FARM_PROJECT_ARN",
-          "androidDevicePoolArnPrimary": "LLM_ANDROID_DEVICE_POOL_ARN",
-          "iosDevicePoolArnPrimary": "LLM_IOS_DEVICE_POOL_ARN",
-          "enablesPerf": true
-        }
-      }
-    },
     "benchmark": {
       "executor": "nx:run-commands",
       "options": {
@@ -143,6 +128,19 @@
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
             { "os": "windows-2025", "platform": "windows", "arch": "x64", "runner": "qvac-win25-x64" }
           ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "buildStep": "build:ts",
+          "nameTransform": "scope-rewrite",
+          "repoName": "diffusion-cpp",
+          "testGateMode": "none"
         }
       }
     }

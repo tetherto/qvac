@@ -30,10 +30,28 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
+**Working branch (when cutting from a release line):** use
+`chore/<pkg>-<x.y.z>-changelog` (e.g. `chore/sdk-0.17.0-changelog`). Do **not**
+name the head `release-*` — org pushes to `release-*` run Release Merge Guard
+against the pushed ref (not the PR base). The release cut itself must be
+three-part `release-<pkg>-x.y.z`. Full rules live in
+`qv-sdk-pr-create` → "Release PR branch naming".
+
 ### Step 2: Fetch Tags and Resolve Base
 
 Tags live on the **upstream** remote (tetherto/qvac), not the contributor's fork.
 The script fetches from `upstream` first, falling back to `origin`.
+
+**Full-history requirement (fail-stop):** discovery is
+`git log <base>..HEAD -- <packagePath>`. Before generating:
+
+1. `git rev-parse --is-shallow-repository` must be `false` (else
+   `git fetch --unshallow` / re-clone without `--depth`, then stop).
+2. Base must be an ancestor of `HEAD`
+   (`git merge-base --is-ancestor <base> HEAD`); otherwise check out the
+   release tip / package tag first.
+
+The generator enforces both checks and exits non-zero on failure.
 
 Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing version tags.
 
@@ -189,40 +207,30 @@ before committing.
 
 See `.cursor/skills/qv-notice-generate/SKILL.md` for full details.
 
-### Step 7: Sync `@qvac/bare-sdk` (only when `--package=sdk`)
+### Step 7: Sync lockstep clients (only when `--package=sdk`)
 
-`@qvac/bare-sdk` releases in lockstep with `@qvac/sdk` from the same source
-tree, so every sdk release must also mirror version + shared dep ranges into
-bare-sdk and regenerate bare-sdk's NOTICE. Skip this step for any other
-`--package` value.
+`@qvac/sdk`, `@qvac/bare-sdk` and `tetherto-qvac-sdk` release in lockstep at the
+`@qvac/inference` version anchor. Every sdk release must stamp that anchor into
+sdk + bare-sdk, mirror bare-sdk metadata (+ NOTICE), and regenerate the Python
+client (`SDK_VERSION` and other `_generated/` outputs). Skip this step for any
+other `--package` value.
 
-Two distinct steps — run them in order:
+Read and follow `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` (Steps 1–3).
+Short form:
 
-1. **Mirror `package.json`** via the sync skill (writes only to
-   `packages/bare-sdk/package.json`):
+```bash
+node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs
+cd packages/bare-sdk && bun run check:deps-vs-sdk && cd -
+source .env
+node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk
 
-   ```bash
-   node .cursor/skills/qv-sdk-bare-sdk-sync/scripts/sync.mjs
-   cd packages/bare-sdk && bun run check:deps-vs-sdk && cd -
-   ```
+cd packages/sdk-python
+.venv/bin/python3 scripts/generate.py
+.venv/bin/python3 scripts/generate.py --check
+```
 
-2. **Regenerate `packages/bare-sdk/NOTICE`** against the post-sync dep tree
-   (separate from the sync script; uses the existing `qv-notice-generate`
-   skill which requires env tokens):
-
-   ```bash
-   source .env
-   node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk
-   ```
-
-After this, `git status` should additionally show modifications to
-`packages/bare-sdk/package.json` and `packages/bare-sdk/NOTICE`. Include both
-in the release commit. `bare-sdk` does not get its own changelog — its
-release history lives in `packages/sdk/CHANGELOG.md` (see
-`packages/bare-sdk/README.md` → "Release history").
-
-See `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md` for the full sync skill
-spec, including the exclusion lists and what is intentionally NOT mirrored.
+Include bare-sdk + sdk-python generated updates in the release commit. Neither
+client gets its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
 ### Step 8: Generate site docs (only when `--package=sdk`)
 
@@ -275,10 +283,11 @@ A clean build confirms nothing on the website broke. Treat a build failure as
 **Staging follows the same convention as the other steps.** Like every other
 step, this one only generates files — it never runs `git add` or `git commit`.
 The three surfaces above are part of the release commit (same as Step 7's
-bare-sdk files: "Include … in the release commit"), and every generation/build
-byproduct is gitignored — exactly like Step 5's `announcement-post.txt` — so a
-normal `git status` review shows only the committable files. Let the user review
-before committing. Generated + gitignored byproducts (do not `git add` them):
+lockstep-client files: "Include … in the release commit"), and every
+generation/build byproduct is gitignored — exactly like Step 5's
+`announcement-post.txt` — so a normal `git status` review shows only the
+committable files. Let the user review before committing. Generated + gitignored
+byproducts (do not `git add` them):
 
 - `docs/website/scripts/api-docs/api-data.json` (written by `release-version.ts`)
 - `docs/website/.next/`, `.source/`, `out/`, `dist/` (from `npm run build`)
@@ -338,14 +347,16 @@ Examples:
 Before completing:
 
 - [ ] Correct package identified
-- [ ] Base reference resolved (tag or `--base-commit`)
+- [ ] Working head (if branched for the release PR) is `chore/<pkg>-<x.y.z>-changelog`, not `release-*`
+- [ ] Clone is not shallow (`git rev-parse --is-shallow-repository` → `false`)
+- [ ] Base reference resolved (tag or `--base-commit`) and is an ancestor of `HEAD`
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md generated (mandatory) and follows format guide
 - [ ] Generated markdown is prettier-clean (`prettier --check` on the changelog output passes)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] NOTICE file updated for the target package
-- [ ] When `--package=sdk`: `qv-sdk-bare-sdk-sync` run, `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated
+- [ ] When `--package=sdk`: `qv-sdk-lockstep-sync` run (bare-sdk + sdk-python), `check:deps-vs-sdk` passing, bare-sdk NOTICE regenerated, python `generate.py --check` passing
 - [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
@@ -359,5 +370,6 @@ Before completing:
 - PR format: `.cursor/rules/sdk/commit-and-pr-format.mdc`
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.cursor/skills/qv-notice-generate/SKILL.md`
-- sdk ↔ bare-sdk sync: `.cursor/skills/qv-sdk-bare-sdk-sync/SKILL.md`
+- sdk lockstep clients: `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md`
 - Docs site pipeline (Step 8): `docs/website/docs-workflow.md`
+- Release PR branch naming (org `release-*` push / Merge Guard): `.cursor/skills/qv-sdk-pr-create/SKILL.md`

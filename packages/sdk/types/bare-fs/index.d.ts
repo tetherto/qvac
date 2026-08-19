@@ -58,6 +58,7 @@ declare module 'bare-fs' {
     encoding?: BufferEncoding
   ): void
   export function unlinkSync(path: string): void
+  export function truncateSync(path: string, len?: number): void
   export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): void
   export function rmdirSync(path: string): void
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void
@@ -91,5 +92,6 @@ declare module 'bare-fs' {
       options?: { encoding?: BufferEncoding; withFileTypes?: boolean }
     ): Promise<string[] | Buffer[]>
     rename(oldPath: string, newPath: string): Promise<void>
+    utimes(path: string, atime: number | Date, mtime: number | Date): Promise<void>
   }
 }

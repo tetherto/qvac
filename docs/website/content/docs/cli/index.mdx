@@ -95,10 +95,29 @@ Start an OpenAI-compatible REST API server.
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
 | `--model <alias>` | Model alias to preload (repeatable, must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
-| `--cors` | Enable CORS headers |
-| `--docs` | Mount the Swagger UI at `/docs` (auto-enables CORS so the UI's "Try it out" works across origins). Off by default. |
+| `--api-key-file <path>` | Read the Bearer token from a file instead of argv |
+| `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
+| `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
+| `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
+| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS, so it requires a fixed `--port`. |
 | `-v, --verbose` | Detailed output |
+
+A non-loopback `--host` requires `--api-key` or `--api-key-file`; the server refuses to start otherwise. Use `--allow-unauthenticated` to override that and start with a warning instead.
+
+`--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. Since those origins come from the configured port, `--docs --port 0` is rejected at startup instead of producing unusable `http://localhost:0` origins.
+
+Scripts that previously relied on wildcard CORS must name every trusted browser origin. They may keep `--cors` as a validation guard or drop it:
+
+```bash
+# Before: allowed every browser origin
+qvac serve openai --cors
+
+# After: optionally retain validation and repeat once per trusted origin
+qvac serve openai --cors \
+  --cors-origin https://app.example.com \
+  --cors-origin http://localhost:3000
+```
 
 ### `qvac openai spec`
 

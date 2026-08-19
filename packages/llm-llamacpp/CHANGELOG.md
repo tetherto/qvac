@@ -2,6 +2,220 @@
 <!-- ci: parity rerun 2 (all fixes incl on-merge perms) -->
 <!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
+## [0.45.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (fixes MoE models
+  emitting garbage on Adreno 830 OpenCL, and re-enables the GPU MoE kernels that
+  were falling back to CPU; no API change for this package).
+
+## [0.44.0] - 2026-08-17
+
+### Added
+
+- `image_no_upscale` in the addon load config — an idefics3-style preprocessing
+  override forwarded to the vision context, accepting `"on"` or `"off"`. Left
+  unset, the model's own GGUF value is used unchanged. This is what separates the
+  VisionPsy Flash checkpoint from the base one, whose mmprojs are otherwise
+  indistinguishable: a Flash checkpoint loaded without it silently runs base
+  preprocessing, which changes the image token count and so moves both accuracy
+  and encode time.
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule), which is what supplies
+  `image_no_upscale` on `common_params` and `mtmd_context_params`.
+
+## [0.43.0] - 2026-08-14
+
+This release removes the Qwen3-only dynamic tools feature behind
+`tools_compact`. Regular static tool calling remains supported and continues to
+use the fixed Qwen3 chat template.
+
+### Breaking Changes
+
+- The `tools_compact` load option is no longer supported. Configurations that
+  pass it now fail model loading as an unsupported option; remove the key and
+  keep tool definitions in the normal prompt flow.
+- Tool definitions are no longer added mid-conversation and trimmed from the KV
+  cache after a tool-call chain. This removes the Qwen3-specific cache behavior
+  that depended on context-sliding anchor bookkeeping.
+
+### Changed
+
+- Qwen3 tool calling now always uses the fixed chat template, so tool definitions
+  remain in the prompt throughout the conversation. General context sliding,
+  M-RoPE sliding, reasoning-block compaction, and static tool calling are
+  unchanged.
+
+### Removed
+
+- The `nPastBeforeTools` and `toolsTrimmed` runtime debug statistics, which only
+  reported dynamic tool compaction state, have been removed.
+
+### Pull Requests
+
+- [#3373](https://github.com/tetherto/qvac/pull/3373) - QVAC-22567 feat[bc]:
+  remove dynamic tools (tools_compact) from llm-llamacpp addon
+
+## [0.42.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`.
+
+- **`split-mode: 'row'` is no longer effective on any shipped backend.** Row
+  split needs a backend exposing `ggml_backend_split_buffer_type`, and at
+  qvac-fabric v10069 only SYCL still does — CUDA dropped it and moved tensor
+  parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR` this package does not
+  expose. Vulkan, Metal and OpenCL never provided it. qvac-fabric also stopped
+  treating `row` as `layer` on those backends and now **fails the model load**
+  with `device <name> does not support split buffers`, so the addon degrades
+  `row` -> `layer` itself before loading and logs a `WARNING`. Models keep
+  loading and `row` keeps behaving like `layer` as it did on Vulkan/Metal
+  before, but the fallback is now explicit rather than implicit in qvac-fabric.
+  Callers who set `split-mode: 'row'` for real tensor parallelism no longer get
+  it. See `docs/multi-gpu.md`.
+
+## [0.41.0] - 2026-08-07
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now
+  live under `src/` and the published root JavaScript entrypoints (`index.js`,
+  `addon.js`, `batchHandler.js`, `addonLogging.js`) and their `.d.ts`
+  declarations are generated from them and committed. Runtime behaviour and the
+  CommonJS export shape are unchanged.
+- The package is exported with `export =` rather than a default export, which
+  gives CommonJS consumers a real construct signature (`import LlmLlamacpp =
+  require('@qvac/llm-llamacpp')` previously failed with TS2351). A consequence
+  is that `import LlmLlamacpp from '@qvac/llm-llamacpp'` now requires
+  `esModuleInterop` or `allowSyntheticDefaultImports`; without either,
+  TypeScript reports TS1259.
+- `addon` is a public member of the published type instead of `protected`. An
+  interface cannot express `protected`, and the property was already public at
+  runtime, so this widens what the declarations support rather than changing
+  behaviour.
+- `BatchResponse.on` accepts the inherited `EventEmitter` event map in addition
+  to the `"output"` overload. Callback types for `"output"` are unchanged, but
+  an unrecognised event name no longer fails to compile.
+- `./addonLogging` additionally exports `setLogger` and `releaseLogger` as named
+  bindings, so ESM named imports resolve. The default export is unchanged.
+
+## [0.40.0] - 2026-08-06
+
+One model instance can now serve several requests at once. Every `run()` call is
+admitted as its own job by a native multi-job scheduler and decodes alongside
+whatever else is in flight, so concurrent callers share the batch engine instead
+of queueing behind each other. Terminal stats become per-job, cancellation
+becomes per-job, and a new admission policy lets a caller choose between failing
+fast and being queued.
+
+### Added
+
+- Concurrent top-level `run()` calls on one instance at `parallel >= 2`. Each
+  call streams to its own response, routed by the job id minted at admission; a
+  batch `run([...])` is admitted as one job whose prompts occupy up to N slots.
+- `rejectWhenBusy`, the admission policy, as `opts.rejectWhenBusy` per instance
+  and `runOptions.rejectWhenBusy` per call. A refusal throws an `Error` carrying
+  `code === 'RUN_BUSY'`, so callers branch on the code rather than matching the
+  message. The default follows `parallel`: `true` at `1`, preserving the
+  sequential fail-fast behaviour, `false` at `>= 2`. A batch derives ONE group
+  policy from its items — items that disagree are refused with a `TypeError`.
+- `activeSlots()` on the addon surface, reporting the requests occupying or
+  waiting for a continuous-batching slot. Slots, not jobs, are the currency
+  admission is measured in: one batch job of N prompts consumes up to N of them,
+  so a job count alone under-reports a full pool.
+- Per-job terminal stats. A job's `JobEnded` now overrides `TTFT`, `TPS`,
+  `generatedTokens` and `promptTokens` with that job's own observed figures,
+  while `ppTPS`, `CacheTokens`, `contextSlides`, `thinkingBlockDiscards`,
+  `avgConcurrentSeq` and `backendDevice` stay model-level.
+- `stopReason` for a single prompt that runs through the batch engine, which
+  previously omitted the key that the sequential path always reported.
+- Targeted cancellation: `response.cancel()` stops only that call's job or
+  group and leaves concurrent jobs decoding. A cancel that arrives while the
+  group's prompts are still queued settles it immediately instead of waiting for
+  an unrelated job to free a slot.
+
+### Changed
+
+- `parallel` now accepts `1..256` instead of `1..1024`. 256 is the engine's own
+  `LLAMA_MAX_SEQ`; a larger value used to spawn the whole eager thread pool and
+  only then fail the model load, where llama.cpp swallows the real reason into a
+  log line.
+- `parallel` also sizes the scheduler's worker pool one-to-one, and those OS
+  threads are created eagerly at load and held for the model's lifetime. A large
+  `parallel` is a standing resource commitment even while idle.
+- A `parallel` too large for `ctx_size` to leave room per slot — or a
+  `batch_size` smaller than `parallel` — is now refused as an `InvalidArgument`
+  naming the knobs involved, instead of escaping the load as an unmapped
+  `std::invalid_argument`.
+- A prefill-only request without `saveCacheToDisk` and a `cacheKey` is rejected
+  with `InvalidArgument` on a parallel model: its warmed state lives in a
+  context concurrent jobs cannot reach. Load with `parallel: 1` for live-only
+  cache warming.
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.4` -> `1.3.3` for
+  the multi-job scheduler.
+
+### Pull Requests
+
+- [#3445](https://github.com/tetherto/qvac/pull/3445) - Multi-job queue at
+  addon-cpp and LLM (Needed for LLM Continuous Batching Optimizations)
+
+## [0.39.4] - 2026-08-04
+
+Internal refactor of how JS configuration is parsed into C++. Generation,
+finetune, and load config now use a shared, declarative handler-registry pattern
+(the same approach diffusion-cpp uses). No change to accepted config keys,
+spellings, or defaults, apart from the edge cases below.
+
+### Changed
+
+- Sending both the hyphen and underscore spelling of `image-max-tokens` or
+  `image-min-tokens` in the same load config is now accepted (the underscore
+  spelling wins) instead of failing the load. Previously the second spelling was
+  forwarded to llama.cpp and rejected.
+- In rare multi-error cases, the specific `InvalidArgument` message that surfaces
+  first may differ from before: a generation request that sets conflicting
+  `grammar`/`json_schema` alongside another invalid field, or a finetune request
+  that omits a required field and also sends a malformed optional. Accept/reject
+  behavior is unchanged in these cases.
+
+### Pull Requests
+
+- [#3491](https://github.com/tetherto/qvac/pull/3491) - chore[api]: adopt
+  handler-registry pattern for config parsing
+
+## [0.39.3] - 2026-08-04
+
+This release makes DeepSeek V4 cache recovery safe when requests are cancelled
+or generation ends before a reasoning block closes. It also adds a supported
+string-based `no_mmap` configuration and makes thinking-block compaction
+default-on only for the Qwen3 reasoning family.
+
+### Fixed
+
+- DeepSeek V4 text inference now uses full-state checkpoints for request
+  cancellation, optional thinking-block compaction, and interrupted terminal
+  stops. When `remove_thinking_from_context` is enabled, it restores the
+  checkpoint instead of attempting unsafe compressed-cache edits.
+- Multimodal continuous-batch drivers now honor the per-request
+  `remove_thinking_from_context` override and keep their compactor state in
+  sync.
+- `no_mmap: 'true'` now disables memory-mapped model loading by setting the
+  native model parameter directly, rather than forwarding an unsupported
+  command-line argument.
+
+### Changed
+
+- Thinking-block compaction now defaults to `false` for non-Qwen models.
+  Qwen3, Qwen3.5, Qwen3.6, and their MoE variants retain the default-on
+  behavior; callers can override the setting for any model per request.
+
+### Pull Requests
+
+- [#3634](https://github.com/tetherto/qvac/pull/3634) - fix: recover DeepSeek
+  V4 checkpoints
+
 ## [0.39.2] - 2026-07-30
 
 ### Changed

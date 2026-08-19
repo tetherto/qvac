@@ -80,7 +80,7 @@ jobs:
           submodules: recursive
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
       - name: Setup AWS + Windows CLI

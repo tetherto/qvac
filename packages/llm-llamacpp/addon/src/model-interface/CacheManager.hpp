@@ -10,13 +10,11 @@
 
 #include "LlmContext.hpp"
 #include "MediaLoadOrder.hpp"
-#include "ToolsCompactController.hpp"
 #include "common/chat.h"
 
 struct ParsedPromptPayload {
   std::vector<common_chat_msg> chatMsgs;
   std::vector<common_chat_tool> tools;
-  PromptLayout layout;
   /// Absolute file paths of string-mode media messages, in prompt order. The
   /// single-prompt path collects them here; `formatPrompt` only collects them
   /// and never loads media itself. Both paths now load via `mediaPlan`.

@@ -36,7 +36,7 @@ function createLogger() {
   }
 }
 
-async function createInstance(modelName, dirPath, overrides = {}) {
+function createInstance(modelName, dirPath, overrides = {}) {
   const modelPath = path.join(dirPath, modelName)
   const config = {
     device: useCpu ? 'cpu' : 'gpu',

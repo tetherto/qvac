@@ -120,7 +120,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Node.js
         if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -171,7 +171,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Dual-registry auth (options.ci.dualRegistry) — packages with @tetherto
       # (GitHub Packages) deps need an .npmrc + git insteadOf before npm install.
@@ -181,9 +181,9 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         shell: bash
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
           cat > .npmrc <<NPMRC
@@ -204,9 +204,9 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         shell: powershell
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           @"
           registry=https://registry.npmjs.org/
@@ -226,7 +226,7 @@ jobs:
         if: matrix.windowsGitCreds && matrix.platform == 'win32'
         shell: powershell
         env:
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global core.longpaths true
           git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
@@ -410,7 +410,7 @@ jobs:
         continue-on-error: ${{ matrix.modelDownloadContinueOnError == true }}
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run ${{ matrix.modelDownloadScript }}
 
       # Export model-path + runtime env (options.ci.modelEnv, options.ci NO_GPU).
@@ -504,8 +504,16 @@ jobs:
       - name: Set RTF benchmark matrix env var
         if: always() && !cancelled() && matrix.runRtfBenchmarks
         shell: bash
+        env:
+          # options.ci.rtfBenchmark.env — optional literal {VAR: value} map of
+          # extra benchmark tuning vars a package's runner reads (e.g. audiogen's
+          # WARMUP_RUNS/RUNS/DURATION_S). Absent for packages that need none.
+          RTF_EXTRA_ENV: ${{ toJson(matrix.rtfBenchmark.env) }}
         run: |
           echo "${{ matrix.rtfBenchmark.matrixEnvVar }}=${{ toJson(matrix.benchmarkMatrixJson) }}" >> "$GITHUB_ENV"
+          if [ -n "${RTF_EXTRA_ENV:-}" ] && [ "$RTF_EXTRA_ENV" != "null" ]; then
+            node -e 'const e=JSON.parse(process.env.RTF_EXTRA_ENV||"{}");for(const[k,v]of Object.entries(e))require("fs").appendFileSync(process.env.GITHUB_ENV,`${k}=${v}\n`)'
+          fi
 
       - name: Run RTF benchmark
         if: always() && !cancelled() && matrix.runRtfBenchmarks
@@ -513,7 +521,23 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.rtfBenchmark.command }}
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Loud gate: the runner above is continue-on-error (partial-failure
+      # tolerant), so a run that produced ZERO artifacts would otherwise pass
+      # silently. Mirrors the legacy audiogen "Verify RTF benchmark output" step.
+      - name: Verify RTF benchmark output exists
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(benchmarks/results/rtf-benchmark-*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::no benchmarks/results/rtf-benchmark-*.json produced"
+            exit 1
+          fi
+          echo "RTF benchmark produced ${#files[@]} result file(s)"
 
       - name: Upload RTF benchmark results
         if: always() && !cancelled() && matrix.runRtfBenchmarks

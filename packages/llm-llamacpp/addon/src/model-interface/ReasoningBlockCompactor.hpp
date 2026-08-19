@@ -9,7 +9,6 @@
 
 #include "../utils/ReasoningRollbackState.hpp"
 #include "ContextSlider.hpp"
-#include "ToolsCompactController.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -50,12 +49,10 @@ namespace qvac_lib_inference_addon_llama {
 // Position-specific bookkeeping (`nPast_` for text vs `current_.pos /
 // .cacheTokens` and `protectedPrefix_` for multimodal) is applied by
 // the caller using the returned `Outcome`. The compactor handles only
-// the cache-side operations, logging, stats, and tools-compact slide
-// notification.
+// the cache-side operations, logging, and stats.
 class ReasoningBlockCompactor {
 public:
-  ReasoningBlockCompactor(
-      utils::ReasoningRollbackState& rollback, ToolsCompactController& tools);
+  explicit ReasoningBlockCompactor(utils::ReasoningRollbackState& rollback);
 
   // ---- Feature gates ----
   void setRemoveThinkingFromContext(bool v) noexcept {
@@ -232,11 +229,10 @@ public:
   // `qvac_errors::StatusError(FailedToDecode, outcome.failureMessage)`
   // (or an equivalent) once the local rollback above has run.
   //
-  // Under the default-on `remove_thinking_from_context` contract,
-  // there is no soft-failure return: any inability to remove the
-  // reasoning span from cache surfaces to the caller as one of the
-  // two `Failed*` outcomes above, and the caller is required to
-  // surface it as an exception.
+  // When `remove_thinking_from_context` is enabled, there is no soft-failure
+  // return: any inability to remove the reasoning span from cache surfaces to
+  // the caller as one of the two `Failed*` outcomes above, and the caller is
+  // required to surface it as an exception.
   struct Outcome {
     enum class Kind {
       // Feature off, no span captured, degenerate span, or the live cursor is
@@ -291,13 +287,6 @@ public:
     sliderOpsOverride_ = ops;
   }
 
-  // Access to the underlying tools-compact controller. Exposed so
-  // `ContextShifter` can route slide notifications to the same
-  // controller without holding an independent reference.
-  [[nodiscard]] ToolsCompactController& toolsController() noexcept {
-    return tools_;
-  }
-
   // ---- Stats ----
   [[nodiscard]] int32_t blockDiscards() const noexcept {
     return thinkingBlockDiscards_;
@@ -319,7 +308,6 @@ public:
 
 private:
   utils::ReasoningRollbackState& rollback_;
-  ToolsCompactController& tools_;
 
   std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
   bool pendingThinkCloseCapture_ = false;
@@ -328,11 +316,9 @@ private:
   llama_pos slideInvalidatedPos_ = 0;
   llama_pos slideInvalidatedDiscarded_ = 0;
 
-  // Default-on: mirrors the owning LlmContext's default. The owner
-  // syncs this via `setRemoveThinkingFromContext` whenever a request
-  // explicitly opts out (or opts back in), so the class-member value
-  // only matters at construction time before the first request.
-  bool removeThinkingFromContext_ = true;
+  // Default-off: mirrors the owning LlmContext's default. The owner syncs
+  // this during initialization and whenever a request overrides it.
+  bool removeThinkingFromContext_ = false;
   bool reasoningEnabled_ = false;
   bool needsRecurrentSnapshot_ = false;
 

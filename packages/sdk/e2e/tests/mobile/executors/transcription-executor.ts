@@ -1,12 +1,9 @@
 import { transcribe } from '@qvac/sdk'
-import {
-  ValidationHelpers,
-  type TestResult,
-  type Expectation
-} from '@tetherto/qvac-test-suite/mobile'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { transcriptionTests } from '../../transcription-tests.js'
+import { runF32leQueueRecovery } from '../../shared/transcription-f32le-queue-recovery.js'
 import {
   runMetadataStreamDuplex,
   validateSegments,
@@ -16,6 +13,7 @@ import {
 export class MobileTranscriptionExecutor extends ModelAssetExecutor<typeof transcriptionTests> {
   pattern = /^transcription-/
   protected handlers = {
+    'transcription-f32le-queue-recovery': this.f32leQueueRecovery.bind(this),
     'transcription-metadata-batch': this.metadataBatch.bind(this),
     'transcription-metadata-streaming': this.metadataStreaming.bind(this)
   }
@@ -51,6 +49,53 @@ export class MobileTranscriptionExecutor extends ModelAssetExecutor<typeof trans
     // @ts-ignore - expo-file-system is a peer dependency available in mobile context
     const { File } = await import('expo-file-system')
     return await new File(`file://${uriResult}`).bytes()
+  }
+
+  private async f32leQueueRecovery(params: unknown, expectation: unknown): Promise<TestResult> {
+    const p = params as { audioFileName: string }
+    const whisperModelId = await this.resources.ensureLoaded('whisper')
+    const audioBytesResult = await this.loadAudioBytes(p.audioFileName)
+    if (!(audioBytesResult instanceof Uint8Array)) return audioBytesResult
+
+    return runF32leQueueRecovery(
+      whisperModelId,
+      audioBytesResult,
+      expectation as Expectation,
+      async (validAudio, malformedAudio) => {
+        // @ts-ignore - expo-file-system is a peer dependency available in mobile context
+        const { File, Paths } = await import('expo-file-system')
+        const suffix = Date.now().toString()
+        const validFile = new File(Paths.cache, `qvac-f32le-valid-${suffix}.f32le`)
+        const malformedFile = new File(Paths.cache, `qvac-f32le-malformed-${suffix}.f32le`)
+        const cleanup = async () => {
+          const errors: Error[] = []
+          for (const file of [validFile, malformedFile]) {
+            try {
+              if (file.exists) file.delete()
+            } catch (error) {
+              errors.push(error instanceof Error ? error : new Error(String(error)))
+            }
+          }
+          if (errors[0]) throw errors[0]
+        }
+
+        try {
+          validFile.create()
+          malformedFile.create()
+          await validFile.write(validAudio)
+          await malformedFile.write(malformedAudio)
+
+          return {
+            validPath: decodeURIComponent(validFile.uri.replace(/^file:\/\//, '')),
+            malformedPath: decodeURIComponent(malformedFile.uri.replace(/^file:\/\//, '')),
+            cleanup
+          }
+        } catch (error) {
+          await cleanup()
+          throw error
+        }
+      }
+    )
   }
 
   private async transcribeAudio(

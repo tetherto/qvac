@@ -4,9 +4,15 @@ Self-contained, runnable ports of the TypeScript SDK examples
 (`packages/sdk/examples`). Each file is one `asyncio` script (`async def main()`
 + `asyncio.run`) that opens a `Client`, does one thing, and exits.
 
-Every example imports only from the flat public surface — `from tetherto.qvac_sdk import ...`
-— plus model constants from `tetherto.qvac_sdk.models`. Request models (e.g. `EmbedRequest`)
-are re-exported from `tetherto.qvac_sdk` too.
+No example imports another. Helpers like the `print_progress` download printer
+are repeated inline, exactly as the TypeScript examples repeat theirs, so a file
+copied out of this directory still runs. The docs embed these files verbatim,
+and `docs/website` tests that invariant.
+
+Examples use the flat public surface — `from tetherto.qvac_sdk import ...` — plus
+model constants from `tetherto.qvac_sdk.models`. Generated request models and raw
+method stubs may also be imported explicitly from `tetherto.qvac_sdk.schemas`
+and `tetherto.qvac_sdk.methods`.
 
 ## Running
 
@@ -25,6 +31,7 @@ Examples that read a local file take it as an argument:
 ```bash
 python examples/transcription.py path/to/audio-16khz.wav
 python examples/ocr.py path/to/image.png
+python examples/audiogen.py "lo-fi hip hop, mellow piano" audiogen-output.wav
 python examples/plugins.py <model-src>
 python examples/vla.py [path-to-smolvla.gguf]
 ```
@@ -44,6 +51,7 @@ Models download over P2P from the registry on first use and are cached locally.
 | `translation.py` | `translation/translation-llm.ts` | `translate` |
 | `transcription.py` | `transcription/whispercpp-filesystem.ts` | `transcribe` (`TranscribeRequest`) |
 | `text_to_speech.py` | `tts/supertonic.ts` | `text_to_speech` (`TextToSpeechRequest`) |
+| `audiogen.py` | `audiogen/generate-music.ts` | `audio_gen_stream` (`AudioGenStreamRequest`), multi-model AudioGen loading |
 | `ocr.py` | `ocr-fasttext.ts` | `ocr_stream` (`OcrStreamRequest`) |
 | `registry_query.py` | `registry-query.ts` | `model_registry_list` / `_search` / `_get_model` |
 | `model_info.py` | `cache-management.ts` | `get_model_info`, `download_asset_with_progress` |
@@ -51,4 +59,3 @@ Models download over P2P from the registry on first use and are cached locally.
 | `vla.py` | `vla-smolvla.ts` | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state` |
 | `plugins.py` | `plugins.ts` | `invoke_plugin`, `invoke_plugin_stream` |
 | `notebook.ipynb` / `notebook.py` | (Python-only) | `notebook.SyncClient` — synchronous, numpy/pandas, live streaming (Jupyter notebook + script) |
-| `_common.py` | (shared `onProgress` printer) | `print_progress` helper |

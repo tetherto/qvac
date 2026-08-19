@@ -1,5 +1,5 @@
-node_modules/
-.idea/
-
-test/unit/all.js
-package-lock.json
+node_modules
+dist
+test/dist
+bun.lock
+.npmrc

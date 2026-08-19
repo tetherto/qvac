@@ -48,7 +48,8 @@
         "ci": {
           "timeoutMinutes": 120,
           "envVarName": "GITHUB_TOKEN",
-          "envSecretName": "PAT_TOKEN",
+          "envSecretName": "GITHUB_TOKEN",
+          "runIntegrationTests": true,
           "linuxArmApt": ["libgomp1", "libomp5", "libblas3", "mesa-vulkan-drivers"],
           "windowsVulkan": { "setSdk": true, "visibleDevices": true },
           "modelCache": [
@@ -974,22 +975,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/tts-ggml",
-        "ci": {
-          "npmName": "@qvac/tts-ggml",
-          "prebuildArtifactPrefix": "tts-ggml-",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_TTS_GGML",
-          "deviceFarmProjectArnFallback": "AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_TTS_GGML",
-          "iosDevicePoolArnFallback": "IOS_DEVICE_POOL_ARN_ONNX_TTS",
-          "enablesPerf": false
-        }
-      }
-    },
     "benchmark": {
       "executor": "nx:run-commands",
       "options": {
@@ -1028,6 +1013,19 @@
             { "name": "QVAC_TEST_CHATTERBOX_S3GEN_GGUF", "path": "models/chatterbox-s3gen-mtl.gguf" },
             { "name": "QVAC_TEST_SUPERTONIC_GGUF", "path": "models/supertonic.gguf" }
           ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/tts-ggml",
+        "ci": {
+          "buildStep": "build:ts",
+          "nameTransform": "rename-prefix",
+          "repoName": "tts-ggml",
+          "testGateMode": "post-publish-integration"
         }
       }
     }

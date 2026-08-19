@@ -1,3 +1,6 @@
+import type ASRGgml from '@qvac/asr-ggml'
+import type TranslationNmtcpp from '@qvac/translation-nmtcpp'
+
 export interface LlmStats {
   TTFT?: number
   TPS?: number
@@ -6,6 +9,8 @@ export interface LlmStats {
   generatedTokens?: number
   avgConcurrentSeq?: number
   backendDevice?: 'cpu' | 'gpu'
+  stopReason?:
+    'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
 }
 
 export interface LlmResponse {
@@ -13,19 +18,8 @@ export interface LlmResponse {
   iterate(): AsyncIterable<string>
 }
 
-export interface NmtStats {
-  totalTime?: number
-  totalTokens?: number
-  decodeTime?: number
-  encodeTime?: number
-  TPS?: number
-  TTFT?: number
-}
-
-export interface NmtResponse {
-  stats?: NmtStats
-  iterate(): AsyncIterable<string>
-}
+export type NmtStats = TranslationNmtcpp.RuntimeStats
+export type NmtResponse = TranslationNmtcpp.TranslationResponse
 
 export interface TtsStats {
   audioDurationMs?: number
@@ -52,45 +46,12 @@ export interface EmbedResponse {
   await(): Promise<Float32Array[][]>
 }
 
-export interface TranscribeStats {
-  audioDurationMs?: number
-  realTimeFactor?: number
-  tokensPerSecond?: number
-  totalTokens?: number
-  totalSegments?: number
-  whisperEncodeMs?: number
-  whisperDecodeMs?: number
-  encoderMs?: number
-  decoderMs?: number
-  melSpecMs?: number
-  backendDevice?: number
-  backendId?: number
-  gpuUnsupported?: number
-  gpuMemTotalMb?: number
-  gpuMemFreeMb?: number
-}
+export type TranscribeStats = Partial<ASRGgml.WhisperRuntimeStats & ASRGgml.ParakeetRuntimeStats>
 
-export interface TranscribeAddonSegment {
-  text: string
-  start?: number
-  end?: number
-  toAppend?: boolean
-  id?: number
-}
-
-export interface TranscribeAddonVadEvent {
-  type: 'vad'
-  speaking: boolean
-  probability: number
-}
-
-export interface TranscribeAddonEndOfTurnEvent {
-  type: 'endOfTurn'
-  silenceDurationMs: number
-}
-
-export type TranscribeAddonOutput =
-  Array<TranscribeAddonSegment> | TranscribeAddonVadEvent | TranscribeAddonEndOfTurnEvent
+export type TranscribeAddonSegment = ASRGgml.TranscriptionSegment
+export type TranscribeAddonVadEvent = ASRGgml.VadEvent
+export type TranscribeAddonEndOfTurnEvent = ASRGgml.EndOfTurnEvent
+export type TranscribeAddonOutput = ASRGgml.ASRStreamOutput
 
 export interface TranscribeResponse {
   stats?: TranscribeStats

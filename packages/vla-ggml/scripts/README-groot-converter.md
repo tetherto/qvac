@@ -61,20 +61,23 @@ already tested there, so we write no new tensor map:
 - `groot-backbone-vision.gguf` — 316 tensors, mmproj (vision tower + `mm.*`).
 
 **Action head (2c)** is genuinely new work — `convert_groot_dit_to_gguf.py`
-converts `action_head.*` (VL fusion, DiT, timestep + embodiment MLPs). The
-`CategorySpecificLinear` embodiment weights are **sliced to one embodiment at
-conversion time** and stored dense, so the ggml loader needs no runtime
-embodiment-ID input.
+converts `action_head.*` (VL fusion, DiT, timestep + embodiment MLPs). By
+default it runs in **multi-embodiment** mode: the 7 `CategorySpecificLinear`
+weights are stored as rank-3 tensors (one `[out,in]` row per distinct trained
+`cat_id`) and the loader selects one row at load, switchable afterwards with
+`model.setEmbodiment(tag)` — one GGUF, one load, serves every embodiment it
+carries. See [Multi-embodiment](#multi-embodiment) below. The
+legacy single-embodiment mode (`--embodiment-tag`, slice one row into a 2D
+dense tensor at conversion time) is still available.
 
 ```
 python convert_groot_dit_to_gguf.py \
     --checkpoint      /path/to/checkpoints/GR00T-N1.7-3B \
-    --embodiment-tag  libero_sim \
     --out             /path/to/checkpoints/groot-action-head.gguf
 ```
 
 Output carries `general.architecture="groot"` + all `groot.*` metadata (hidden
-sizes, layer counts, `image_token_id`, `embodiment_cat_id`, …).
+sizes, layer counts, `image_token_id`, the `groot.embodiment.*` table, …).
 
 ### Stage 3 — merge + quantise
 
@@ -108,7 +111,7 @@ byte-copy) so profiles can be swept and gated against the M4.x parity tests.
 | Pattern | Kept | Reason |
 |---|---|---|
 | `v.patch_embd.*`, `v.position_emb*` | F16 | Read via **raw host memory** in `grootBuildPatchEmbedLinear` / `grootBuildVisionPosEmbed` (only understands F16/F32; a Q8_0 block read as F16 = garbage). |
-| `embodiment.*` | F16 | Consumed via `grootLinearXW` = `ggml_cont(ggml_transpose(W))`; ggml can't make a *transposed* quantised tensor contiguous (blocks span the reduction axis). Single-embodiment, tiny anyway. |
+| `embodiment.*` | F16 | Two reasons: consumed via `grootLinearXW` = `ggml_cont(ggml_transpose(W))` and ggml can't make a *transposed* quantised tensor contiguous (blocks span the reduction axis); and in multi-embodiment mode the loader byte-slices one `[out,in]` row out of the rank-3 tensor (`grootSliceEmbodiment`), which needs a uniform per-element size and block-aligned rows — F16 sidesteps the Q5_0/Q8_0 block-packing alignment entirely. ~300 MB for all 17 rows. |
 | any 1-D tensor (norms, biases) | as-is | Per-element math; negligible size; Q8_0 needs the blocked axis to be a multiple of 32. |
 
 Everything else flows through `grootLinear` = `ggml_mul_mat(W, x)`, which
@@ -132,6 +135,124 @@ either way (the DiT washes vision drift out), but the intermediate M4.5/M4.6 gat
 fail — so we keep vision at F16 (~+0.4 GB) and Q8_0 everything else. `q8_vf16`
 passes all 6 M4.x parity gates; final infer-parity **cos 0.999992 / rel 0.0059**.
 
+## Multi-embodiment
+
+GR00T's 7 `CategorySpecificLinear` layers (`state_encoder.layer1/2`,
+`action_encoder.w1/2/3`, `action_decoder.layer1/2`) are the **only**
+per-embodiment weights — each is a `[32, in, out]` bank indexed by `cat_id`.
+Everything else (vision, backbone, VL-fusion, the 32-layer DiT, timestep
+encoder) is shared, and `max_state_dim == max_action_dim == 132` is fixed for
+every embodiment. So a single GGUF can carry many embodiments by storing those
+7 tensors as **rank-3** (`[out, in, n_stored]`, one row per stored `cat_id`)
+and picking one row at load time. The hot path is unchanged: the selected row
+is sliced and pre-transposed once during load.
+
+### Converting
+
+Multi-embodiment is the **default** (omit `--embodiment-tag`):
+
+```
+# every distinct trained cat_id in the checkpoint's embodiment_id.json
+python convert_groot_dit_to_gguf.py \
+    --checkpoint /path/to/checkpoints/GR00T-N1.7-3B \
+    --out        /path/to/checkpoints/groot-action-head.gguf
+
+# narrow the ship set to specific tags (stored once per distinct cat_id)
+python convert_groot_dit_to_gguf.py \
+    --checkpoint         /path/to/checkpoints/GR00T-N1.7-3B \
+    --embodiments        libero_sim,oxe_droid_relative_eef_relative_joint \
+    --default-embodiment libero_sim \
+    --out                /path/to/checkpoints/groot-action-head.gguf
+```
+
+| Flag | Mode | Meaning |
+|---|---|---|
+| *(none)* | multi (default) | Store every distinct trained `cat_id` from `embodiment_id.json` (17 for the base checkpoint). |
+| `--embodiments a,24,…` | multi | Store only these rows, named by tag and/or numeric `cat_id`. Taken literally: it must include the default embodiment, rather than being silently widened to fit it. |
+| `--embodiments all` | multi | Store all 32 physical rows of the category bank, including untagged ones that `embodiment_id.json` does not name. |
+| `--default-embodiment tag` | multi | Embodiment used when the runtime asks for none (default `libero_sim`). Its `num_cameras` must be known, else conversion fails — see below. |
+| `--embodiment-cameras TAG=N` | multi | Stamp `num_cameras` for a row the checkpoint says nothing about, or pin one rig when tags sharing a `cat_id` disagree. Repeatable / comma-separated. Highest precedence. |
+| `--embodiment-tag tag` | v1 single | Slice this one row to a 2-D dense tensor at conversion. Mutually exclusive with `--embodiments`. |
+
+The base `GR00T-N1.7-3B` checkpoint has **17** distinct trained `cat_id`s; the
+LIBERO checkpoint only post-trained the `libero_sim` row (see
+[LIBERO checkpoint](#libero-checkpoint) — parity per embodiment needs a
+checkpoint that actually trained it). Cost is ~20 MB F16 per stored row
+(~300 MB for all 17).
+
+### Metadata written
+
+Multi mode emits a `groot.embodiment.*` table plus the v1 back-compat keys, so
+the metadata and the multi table agree on the default. Those keys do NOT make a
+multi GGUF loadable by a pre-multi loader: the `embodiment.*` tensors are rank-3,
+and a loader without slicing code loads the file and then aborts on `GGML_ASSERT`
+at the first `run()`. Multi files are a separate model family, not a drop-in
+replacement for a v1 GGUF.
+
+| Key | Meaning |
+|---|---|
+| `groot.embodiment.tags` | Full tag → `cat_id` map (all 52 tags), so the runtime can select by any tag string. |
+| `groot.embodiment.cat_ids` | The `cat_id` for each tag above (parallel array). |
+| `groot.embodiment.stored_cat_ids` | The `cat_id`s actually stored, in row order — row = index into this array. |
+| `groot.embodiment.stored_num_cameras` | `num_cameras` per stored row; `0` = unknown, see below. |
+| `groot.embodiment.count` | Number of stored rows. |
+| `groot.embodiment.default` | Default embodiment tag. |
+| `groot.embodiment_tag` / `groot.embodiment_cat_id` | v1 back-compat: the default entry. |
+| `groot.num_cameras` | Top-level; the default entry's camera count. Legacy/v1 key — a multi loader reads the per-row table instead, so conversion fails rather than emit a multi GGUF whose default row has no count. |
+
+### Where `num_cameras` comes from
+
+It means IMAGES PER INFER, cameras × video history, which is what the runtime
+consumes and `hparams.numCameras` reports. It is a property of the DATA CONFIG a
+row was trained or served with, not of the weight row, and the checkpoint states
+it per tag:
+
+```
+len(modality_configs[tag].video.modality_keys) × len(modality_configs[tag].video.delta_indices)
+```
+
+The converter derives counts from the checkpoint rather than a hardcoded list,
+consulting in precedence order: `--embodiment-cameras`, then
+`processor_config.json` (how the checkpoint is served now), then
+`experiment_cfg/final_processor_config.json` (training-time data configs), then a
+two-entry built-in fallback for checkpoints predating those keys. A lower source
+is consulted only for `cat_id`s the higher ones say nothing about, so a
+historical training mix cannot contradict the live config.
+
+Because one `cat_id` can be shared by several tags and rigs, disagreement inside
+the winning source stores `0` (unknown) rather than an arbitrary pick — e.g.
+`cat_id 26` is 3 cameras × 2 frames for `real_r1_pro_sharpa_relative_eef` and
+`_human`, but 1 × 2 for `_mecka` and `_maxinsights`. On the base checkpoint this
+yields 9 of 17 rows self-describing; on the LIBERO checkpoint, 4 of 17. The rest
+are runnable by stating the count at selection time.
+
+### Selecting at load time
+
+The addon open path takes an optional embodiment selector (`config.embodiment`
+in the `VlaModel` config; the SDK forwards it once its `@qvac/vla-ggml` range
+covers this version): a tag string, the numeric `cat_id`, or
+`{ tag | catId, numCameras }`. At load the loader resolves tag → `cat_id` (via
+`groot.embodiment.tags`) or takes the `cat_id` directly, maps it to a row (index
+in `stored_cat_ids`), slices that row, and drives `num_cameras` from the stored
+entry unless overridden (surfaced as `hparams.numCameras`, with
+`hparams.selectedEmbodimentTag` / `selectedEmbodimentCatId`). `setEmbodiment()`
+takes the same selector on a loaded model. Behaviour:
+
+- Omitted selects `groot.embodiment.default` — a no-op for single-embodiment or
+  non-GR00T GGUFs, so the field is always safe to pass.
+- An unknown tag or `cat_id`, or one that is mapped but not in the GGUF's ship
+  set, is rejected.
+- A tag and a `cat_id` in the same request is rejected: they are two spellings of
+  one selection, and a precedence rule would silently return the other one.
+- An embodiment whose stored `num_cameras` is `0` (unknown at conversion) needs an
+  explicit `numCameras` — with one it is fully runnable, without one it is
+  rejected. The runtime never substitutes another embodiment's count, which would
+  build the wrong image-token layout. An explicit count also overrides a stored
+  one (logged as a warning) for a rig whose view count differs, since counts are
+  stored per `cat_id` and aliased tags share them.
+- A single-embodiment (v1) GGUF rejects a non-default tag or `cat_id`, but still
+  accepts a `numCameras` override.
+
 ## LIBERO checkpoint
 
 The shipped model of record is the **LIBERO** post-trained checkpoint
@@ -140,9 +261,12 @@ LIBERO has a closed-loop simulator (for the demo), DROID doesn't. It's the
 **same architecture**, so the pipeline and graph are unchanged; only three
 things differ:
 
-- **Embodiment**: pass `--embodiment-tag libero_sim` to
-  `convert_groot_dit_to_gguf.py` (resolves to `cat_id 2`; base/DROID used
-  `oxe_droid_relative_eef_relative_joint` = 24).
+- **Embodiment**: `libero_sim` (`cat_id 2`; base/DROID used
+  `oxe_droid_relative_eef_relative_joint` = 24). Multi mode already defaults to
+  `libero_sim`, so no flag is needed; only the `libero_sim` row is post-trained
+  in this checkpoint (the other stored rows are base pretrain — see
+  [Multi-embodiment](#multi-embodiment)). Pass `--embodiment-tag libero_sim`
+  for a legacy single-embodiment GGUF.
 - **Vision convert must force F16**: run stage 2b as
   `convert_hf_to_gguf.py … --mmproj --outtype f16`. Without `--outtype f16` the
   vision weights stay **BF16** and `_merge_groot_gguf.py` aborts ("Only

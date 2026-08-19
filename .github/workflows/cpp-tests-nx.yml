@@ -58,6 +58,7 @@ jobs:
     environment: release
     permissions:
       contents: read
+      packages: read
       id-token: write
       checks: write
     strategy:
@@ -86,7 +87,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           # Coverage lanes (asr/tts/bci) carry LFS test fixtures; legacy set
           # lfs:true on those checkouts.
           lfs: ${{ matrix.mode == 'coverage' }}
@@ -171,9 +172,9 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         shell: bash
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
           cat > .npmrc <<NPMRC
@@ -194,9 +195,9 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         shell: powershell
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           @"
           registry=https://registry.npmjs.org/

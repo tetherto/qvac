@@ -2,6 +2,110 @@
 <!-- ci: parity rerun 2 (all fixes incl on-merge perms) -->
 <!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
+## [0.21.1] - 2026-08-19
+
+### Fixed
+
+- SmolVLA weight loads on a CPU backend now map the model file instead of
+  allocating a private copy of it. The check that decides between the two read
+  the device off the buffer type, and ggml declares the CPU buffer type with no
+  device attached, so every CPU load fell back to allocate-and-copy and charged
+  the whole model (~1.9 GB for the q8 LIBERO file) to the process. On iOS that
+  pushed the process against its memory limit and the load failed with a bare
+  `Failed to load SmolVLA model` — intermittently, and more often later in a
+  long run once other models had already been resident. The check now takes the
+  device from the backend being loaded onto, which is where the host-pointer
+  capability the mapped path needs is actually reported. GPU loads are
+  unaffected; they already resolved a device.
+- A failed SmolVLA load now reports why it failed. The error carried no reason,
+  so an exhausted allocation, an unreadable file and a malformed GGUF were
+  indistinguishable in application logs.
+- The mapped path now rejects a GGUF whose per-tensor offsets fall outside the
+  mapped region or ignore the file's own declared alignment, falling back to
+  allocate-and-copy rather than wiring tensors that would later be read out of
+  bounds. When it bails part-way it also releases the tensors it had already
+  wired before unmapping, so none is left pointing into an unmapped range.
+
+### Pull Requests
+
+- [#3905](https://github.com/tetherto/qvac/pull/3905) - QVAC-23327 fix: use the
+  mmap weights path for CPU SmolVLA loads
+
+## [0.21.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.20.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.19.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0` (b10069 rebase; no
+  API change for this package).
+
+### Pull Requests
+
+- [#3621](https://github.com/tetherto/qvac/pull/3621) - Sync all addons with
+  fabric v10069.0.0
+
+## [0.18.0] - 2026-08-06
+
+### Fixed
+
+- The native binding now treats the shared runtime's optional job id return from
+  `runJob()` as the acceptance signal, fixing the `qvac-lib-inference-addon-cpp`
+  1.3.3 build failure.
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
+## [0.17.0] - 2026-08-03
+
+### Added
+
+- GR00T multi-embodiment support: one GGUF can now carry many embodiments and select one at load time, instead of baking a single embodiment at conversion. The converter stores the 7 `CategorySpecificLinear` weights as rank-3 tensors (one row per distinct trained `cat_id`) with a `groot.embodiment.*` table; the loader resolves an embodiment tag → `cat_id` → row and slices it once at load, driving `numCameras` from the selected entry. New converter flags `--embodiments` (ship set) and `--default-embodiment`; multi-embodiment is the default, legacy single-embodiment `--embodiment-tag` still supported. The addon open path takes an optional `config.embodiment` (omit to select the GGUF default, a no-op for single-embodiment / non-GR00T GGUFs); SDK exposure of that field lands with the SDK's `@qvac/vla-ggml` range bump to this version. A multi-embodiment GGUF is NOT loadable by 0.16.1 or earlier: the back-compat `groot.embodiment_tag` / `groot.num_cameras` keys are still written, but the `embodiment.*` tensors are rank-3, and a loader with no slicing code loads the file cleanly and then aborts the process on `GGML_ASSERT` at the first `run()` (this release turns that into a catchable load error, see `grootCheckV1EmbodimentRank`). Multi files therefore ship under their own `groot-n1.7-3b-multi/` S3 family; the registry entries a released addon resolves keep pointing at the single-embodiment `groot-n1.7-3b-libero/` files, so a pinned older addon is never served one. See [`scripts/README-groot-converter.md`](./scripts/README-groot-converter.md#multi-embodiment).
+- `VlaModel.setEmbodiment(tag)` switches a loaded multi-embodiment GR00T model to another embodiment shipped in the same GGUF, so one load serves any of them. Only that embodiment's weight rows are re-read (~20 MB of the 4 GB q8 model); the vision tower, backbone, VL fusion and DiT are shared and untouched. Resolves to the refreshed hparams (`numCameras`, `selectedEmbodimentTag`), rejects an unknown/unshipped tag or an embodiment with no known camera count without disturbing the active one, and is serialized against in-flight inference.
+- An embodiment can be named by its numeric id as well as by tag, at load (`config.embodiment: 24`) and on a loaded model (`setEmbodiment(24)`) — the id is the checkpoint's `cat_id`, the same value `groot.embodiment.stored_cat_ids` records. `hparams.selectedEmbodimentCatId` reports the resolved id alongside `selectedEmbodimentTag`, so a selection can be round-tripped in either spelling. Naming both a tag and an id in one request is rejected rather than resolved by precedence.
+- `setEmbodiment` refuses to switch while an inference has been dispatched but not awaited. `run()` releases the exclusive queue once the job reaches the worker, so a switch in that window would have run inference on the new embodiment's weights against input validated against the old `numCameras` — the native mutex serializes the two but cannot restore the caller's intended order. Await the `run()` response first; the switch is accepted as soon as it settles. Enforced natively as well as in the JS wrapper, so it also holds for callers that reach the binding directly.
+- Conversion derives `num_cameras` from the checkpoint's own `processor_config.json` (cameras × video history per embodiment tag) instead of a hardcoded table, falling back to `experiment_cfg/final_processor_config.json` and then to a two-entry built-in list, with `--embodiment-cameras` overriding all of them. A lower source is only consulted for `cat_id`s the higher ones do not describe, so a historical training mix cannot contradict the live config; genuine disagreement within one source stores 0 rather than guessing. Self-describing rows go from 2 of 17 to 9 of 17 on the base checkpoint and 4 of 17 on the LIBERO one.
+- `--embodiments` accepts numeric `cat_id`s as well as tags, plus `all` for every physical row of the 32-entry category bank. An explicit subset is now taken literally instead of being silently widened to include the default embodiment, and conversion fails rather than emitting a multi GGUF whose default row has no camera count, since such a file cannot be loaded without an explicit selector.
+- Every stored embodiment row is now runnable. `num_cameras` is a property of the data config a row was trained or served with, not of the weight row, and one `cat_id` can be shared by rigs that disagree about it, so a ship set can carry rows whose view count is unknown or ambiguous at conversion time; selection takes an optional camera count (`config.embodiment: { catId, numCameras }`, `setEmbodiment({ tag, numCameras })`) that makes such a row selectable, and also covers a rig whose view count differs from the stored one (the override wins, with a warning). Without a stored count and without an override the selection is still rejected — the runtime never infers a view count, since the wrong one silently builds the wrong image-token layout. The converter's new `--embodiment-cameras TAG=N` stamps counts into the GGUF instead, and conversion now prints which stored rows ship without one.
+
+### Changed
+
+- Multi-embodiment GGUFs store the stacked `embodiment.*` weight rows as F16, where a single-embodiment (v1) GGUF stored the one baked row as F32. Biases stay F32. This halves the bank (~680 MB → ~340 MB for a 17-row ship set) and keeps the row slice a plain byte copy, since a uniform element size sidesteps quantized-block alignment; `quantize_groot_gguf.py` never touches `embodiment.*`, so F16 is what ships. Measured end-to-end against the PyTorch oracle for the same embodiment through both paths, the difference is at noise level (DROID `cat_id` 24: cos 0.999993 multi/F16 vs 0.999992 v1/F32).
+- `setEmbodiment` now rejects a single-embodiment GGUF unconditionally, including a request naming the very tag that GGUF bakes in. That case previously resolved as a silent no-op, and a `numCameras` override with it rewrote the reported camera count on a model that cannot honour it. Every documented contract already said such a model is rejected.
+- An unresolvable `config.embodiment` at load now surfaces as `INVALID_CONFIG` rather than `FAILED_TO_LOAD_WEIGHTS`. Embodiment resolution happens before any weight I/O, so the same root cause no longer reports two different error codes depending on whether it arrived via the constructor or `setEmbodiment()`.
+- A `config.embodiment` naming an embodiment on a SmolVLA or π₀.₅ GGUF is now rejected with `INVALID_CONFIG` instead of being dropped. Only GR00T has an embodiment concept, and a caller who names one has almost certainly pointed `files` at the wrong model file — the one case where the runtime used to fail open. Omitting the field is still a no-op on those architectures.
+- A `setEmbodiment()` that fails for a runtime reason rather than a bad request — the GGUF moved or was locked, a short read, a failed allocation — now reports `FAILED_TO_LOAD_WEIGHTS` instead of `INVALID_CONFIG`, matching what the load path already reports for the same failures. `INVALID_CONFIG` from a switch now means only that the request could not be resolved. The native message prefixes both paths classify on are pinned by a contract comment at each C++ throw site, so rewording one cannot silently change a public error code.
+
+### Fixed
+
+- GPU-backend loads no longer read the whole embodiment bank into host RAM to discard it unread. The rank-3 rows are held out of VRAM by giving them a non-null data pointer, which is all the ggml allocator inspects; the bytes were then streamed in anyway even though the selected row is read straight from the file. On a 17-row ship set that removed ~340 MB of disk read, ~340 MB of copying and a ~340 MB transient allocation from every GPU load (roughly double under `--embodiments all`), which matters most on the mobile RAM budgets the q5 build targets.
+- A GGUF carrying rank-3 embodiment weights but no readable `groot.embodiment.stored_cat_ids` table is now a load-time error instead of a clean load followed by a `GGML_ASSERT` process abort on the first `run()`. Relatedly, a `groot.embodiment.*` array that is present but not an int32 array is reported as corruption rather than silently treated as absent, and `groot.embodiment.count` is cross-checked against the table length instead of being written and never read.
+- The pre-transpose refill copied one matrix element per `std::memcpy` call with a runtime element size, which the compiler cannot fold into a move — about 5 million out-of-line calls per refill at `HIDDEN_SIZE` 1024. It is now a typed element copy. This ran at load before, and `setEmbodiment` puts it on a repeatable path.
+- The v1 converter path no longer stamps `num_cameras = 2` when the default embodiment's view count is unknown; it fails and names `--embodiment-cameras TAG=N`, matching what multi mode already did. A wrong count fails silently at inference, so guessing it at conversion time only moved the guess. A v1 GGUF bakes one tag, so when that tag's `cat_id` is shared by rigs that disagree, the tag's own count is used rather than the row's 0 — a `cat_id` with no single answer does not make the one tag being converted ambiguous. Multi mode is unchanged there, since its per-row count would still be 0 and rescuing only the top-level key would desync the two. `--embodiments all` also reports a checkpoint whose category bank is smaller than the expected 32 rows, instead of raising a bare `IndexError`.
+
+### Pull Requests
+
+- [#3427](https://github.com/tetherto/qvac/pull/3427) - QVAC-22492 feat[api]: GR00T multi-embodiment support in vla-ggml
+
 ## [0.16.2] - 2026-07-31
 
 This release fixes three regressions introduced by the 0.16.0 TypeScript migration. ESM named imports work again, a `null` config no longer breaks `load()`, and `run()` input validation is consistent for a missing `hparams`. There are no intentional API changes - the named-export surface matches 0.15.x again.
@@ -36,6 +140,7 @@ This release fixes three regressions introduced by the 0.16.0 TypeScript migrati
 ### Pull Requests
 
 - [#3519](https://github.com/tetherto/qvac/pull/3519) - QVAC-22177 fix: restore ESM named exports + config null-safety in vla wrapper
+
 
 ## [0.16.1] - 2026-07-30
 

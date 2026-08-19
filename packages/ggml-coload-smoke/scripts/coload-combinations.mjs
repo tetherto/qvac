@@ -29,7 +29,12 @@ import { appendFileSync, readFileSync } from 'node:fs'
 
 const require = createRequire(import.meta.url)
 const here = dirname(fileURLToPath(import.meta.url))
-const { ADDONS, allNames, stacks } = require(join(here, '..', 'addons.js'))
+const { ADDONS, allNames, pluginsOf, withPlugins, stacks } = require(join(here, '..', 'addons.js'))
+
+// Below this, a mobile combo bundles too few plugin-backed addons to co-load
+// anything on device. test/combinations.unit.test.js restates the value rather
+// than importing it, so both have to move together.
+const MIN_MOBILE_COLOAD_ADDONS = 2
 
 function parseArgs (argv) {
   const opts = {
@@ -67,13 +72,46 @@ function changedFromDiff (diffFile) {
   return [...changed]
 }
 
+function parseNames (csv) {
+  return csv
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+}
+
+function unknownNames (names) {
+  return names.filter(n => !ADDONS[n])
+}
+
+function fail (message) {
+  process.stderr.write(`coload-combinations: ${message}\n`)
+  process.exit(1)
+}
+
+// An addon absent from addons.js yields combos that never load it, so the
+// co-load gate would pass without exercising the caller's addon at all. A
+// green-but-vacuous gate is worse than no gate, so refuse to emit a matrix.
+function requireKnownAddons (names) {
+  const unknown = unknownNames(names)
+  if (unknown.length === 0) return
+  fail(
+    `unknown addon(s) ${unknown.join(', ')} -- not in addons.js. ` +
+    'Add an entry there before gating a PR on the co-load smoke. ' +
+    `Known addons: ${allNames().join(', ')}`
+  )
+}
+
+function requireMatchingCombos (matrix, only) {
+  if (matrix.length > 0) return
+  fail(`--only ${only} matched no combination; the co-load gate would skip silently`)
+}
+
 function combo (name, names) {
   // `plugins` is the SDK bundle specifier list for the subset of these addons
   // that expose a built-in SDK plugin -- used by the mobile (Device Farm)
   // co-load to bundle a consumer with only this subset.
   const plugins = names
-    .map(n => ADDONS[n].plugin)
-    .filter(Boolean)
+    .flatMap(pluginsOf)
     .map(suffix => `@qvac/sdk/${suffix}/plugin`)
   return { name, addons: names.join(','), plugins: plugins.join(',') }
 }
@@ -113,11 +151,7 @@ function fullMatrix () {
 
 function changedMatrix (changedCsv) {
   const byStack = stacks()
-  const changed = changedCsv
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-    .filter(n => ADDONS[n])
+  const changed = parseNames(changedCsv).filter(n => ADDONS[n])
 
   if (changed.length === 0) return fullMatrix()
 
@@ -143,21 +177,30 @@ function changedMatrix (changedCsv) {
 const opts = parseArgs(process.argv.slice(2))
 let matrix
 if (opts.mode === 'changed') {
-  const changedCsv = opts.changedFiles ? changedFromDiff(opts.changedFiles).join(',') : opts.changed
+  // Names derived from a diff are best-effort (a PR may touch no addon at all),
+  // but an explicitly requested addon must exist or the caller is being misled.
+  let changedCsv = opts.changed
+  if (opts.changedFiles) {
+    changedCsv = changedFromDiff(opts.changedFiles).join(',')
+  } else {
+    requireKnownAddons(parseNames(opts.changed))
+  }
   matrix = changedMatrix(changedCsv)
 } else {
   matrix = fullMatrix()
 }
 // Mobile co-load goes through the SDK bundle, which can only include addons
 // that expose a built-in SDK plugin. Drop combos that would bundle fewer than
-// two such addons (nothing to co-load on device).
+// two such addons (nothing to co-load on device). Count ADDONS, not plugin
+// specifiers: a single addon backing two plugins is still only one dlopen.
 if (opts.mobile) {
-  matrix = matrix.filter(c => c.plugins.split(',').filter(Boolean).length >= 2)
+  matrix = matrix.filter(c => withPlugins(parseNames(c.addons)).length >= MIN_MOBILE_COLOAD_ADDONS)
 }
 // Keep only named combos (e.g. --only all to run just the full bundle on PRs).
 if (opts.only) {
-  const keep = new Set(opts.only.split(',').map(s => s.trim()).filter(Boolean))
+  const keep = new Set(parseNames(opts.only))
   matrix = matrix.filter(c => keep.has(c.name))
+  requireMatchingCombos(matrix, opts.only)
 }
 const json = JSON.stringify(matrix)
 process.stdout.write(json + '\n')

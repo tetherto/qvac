@@ -43,6 +43,10 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 * **Logger API (`getLogger`)** — Create loggers for your application code with custom transports. Console output enabled by default; set `enableConsole: false` to use only custom transports.
 
+<Callout type="info">
+**Python:** `getLogger` is JS/TS-only and intentionally not ported — use the standard library [`logging`](https://docs.python.org/3/library/logging.html) module (a `logging.Handler` is the transport equivalent). The log-stream APIs `logging_stream` and `subscribe_server_logs` (plus `SDK_LOG_ID` / `SDK_ALL_LOG_ID`) **are** available in the Python SDK.
+</Callout>
+
 It works for all model types (LLM, Whisper, NMT, Embeddings) and provides valuable insight into model performance and behavior.
 
 ## Configuration
@@ -76,6 +80,14 @@ The following script shows an example of streaming logs from loaded models:
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/logging_streams.py title="logging_streams.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 To capture logs from every source (SDK server, all models, RAG) with a single subscription, use `subscribeServerLogs`:
@@ -99,6 +111,6 @@ To capture logs from every source (SDK server, all models, RAG) with a single su
 </Tabs>
 
 <Callout type="success">
-**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see [SDK quickstart](/quickstart).
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
 </Callout>
 

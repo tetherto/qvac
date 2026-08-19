@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-**Package:** `@qvac/llm-llamacpp` v0.19.2
+**Package:** `@qvac/llm-llamacpp` v0.39.3
 **Stack:** JavaScript, C++20, llama.cpp, Bare Runtime, CMake, vcpkg  
 **License:** Apache-2.0
 
@@ -68,9 +68,9 @@
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
 **Dependencies:**
-- inference-addon-cpp (≥1.1.5#1): C++ addon framework (single-job runner, runJob/activate/loadWeights/cancel/destroyInstance)
-- qvac-fabric-llm.cpp (≥7248.2.3): Inference engine
-- @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + single-job serialization)
+- inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
+- qvac-fabric-llm.cpp (≥9840.1.1): Inference engine
+- @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + serialized admission)
 - @qvac/logging: `QvacLogger` wrapper
 - bare-process: runtime/process integration used by the JS package surface
 - Bare Runtime (≥1.24.0): JavaScript runtime
@@ -130,7 +130,7 @@ graph TB
 |---------|------|---------|
 | @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
 | @qvac/logging | Framework | `QvacLogger` wrapper |
-| inference-addon-cpp | Native | C++ addon framework (single-job runner) |
+| inference-addon-cpp | Native | C++ addon framework (multi-job scheduler) |
 | qvac-fabric-llm.cpp | Native | Inference engine |
 | bare-process | Runtime | Process/runtime integration |
 | Bare Runtime | Runtime | JavaScript execution |
@@ -155,7 +155,7 @@ graph TB
 
 ### Main Class: LlmLlamacpp
 
-`LlmLlamacpp` is a standalone class (no inheritance). It composes a job handler (`createJobHandler`), a single-job run queue (`exclusiveRunQueue`), and a `LlamaInterface` native bridge.
+`LlmLlamacpp` is a standalone class (no inheritance). It composes a job handler (`createJobHandler`), an admission-serializing run queue (`exclusiveRunQueue` — jobs themselves run concurrently once admitted), and a `LlamaInterface` native bridge.
 
 ```mermaid
 classDiagram
@@ -173,9 +173,12 @@ classDiagram
     class LlamaInterface {
         +activate() Promise~void~
         +loadWeights(chunk) Promise~void~
-        +runJob(inputs) Promise~boolean~
-        +finetune(params) Promise~boolean~
+        +runJob(inputs) Promise~AdmissionResult~
+        +finetune(params) Promise~JobIdOrFalse~
         +cancel() Promise~void~
+        +cancelJob(id) Promise~void~
+        +activeJobs() number
+        +activeSlots() number
         +unload() Promise~void~
     }
 
@@ -207,6 +210,11 @@ classDiagram
     JobHandler ..> QvacResponse : creates
 ```
 
+`runJob()` resolves to `{ accepted, id, ids? }`: the scheduler-minted job id
+for a single run, or the group id plus per-item `ids` for a batch. `finetune()`
+resolves to that same kind of numeric id, or `false` when admission is
+rejected.
+
 <details>
 <summary>📊 LLM-Friendly: Class Responsibilities</summary>
 
@@ -214,10 +222,11 @@ classDiagram
 
 | Class | Responsibility | Lifecycle | Dependencies |
 |-------|----------------|-----------|--------------|
-| LlmLlamacpp | Orchestrate model lifecycle, stream weights, submit jobs, handle events | Created by user, persistent | LlamaInterface, createJobHandler, exclusiveRunQueue |
+| LlmLlamacpp | Orchestrate model lifecycle, stream weights, submit jobs, handle events | Created by user, persistent | LlamaInterface, createJobHandler, BatchHandler, exclusiveRunQueue |
 | LlamaInterface | JS wrapper around the native addon (handle, callbacks) | Created lazily in `_load()` | binding.js |
-| JobHandler (createJobHandler) | Track the current job, create `QvacResponse`, route `output`/`end`/`fail` | One per LlmLlamacpp instance | None |
-| exclusiveRunQueue | Serialize `run()` / `finetune()` / `unload()` into single-in-flight FIFO | One per LlmLlamacpp instance | None |
+| JobHandler (createJobHandler) | Finetune-only response holder; tagged finetune events reach it through a `_jobSinks` adapter registered under the finetune job's native id | One per LlmLlamacpp instance (finetune only) | None |
+| BatchHandler | Admits batch runs, owns `_groups` (native job id → batch group state) and `_chunkRoutes` (per-prompt id → native job id) so concurrent batch runs stay isolated | One per LlmLlamacpp instance | QvacResponse |
+| exclusiveRunQueue | Serialize `run()` / `finetune()` / `unload()` admission into single-in-flight FIFO; admitted jobs then run concurrently | One per LlmLlamacpp instance | None |
 | QvacResponse | Stream inference output, expose `await()`/`iterate()`/`onUpdate()` | Created per job, short-lived | None |
 
 **Key Relationships:**
@@ -225,8 +234,9 @@ classDiagram
 | From | To | Type | Purpose |
 |------|-----|------|---------|
 | LlmLlamacpp | LlamaInterface | Composition | Native addon bridge |
-| LlmLlamacpp | JobHandler | Composition | Per-job lifecycle + response |
-| LlmLlamacpp | exclusiveRunQueue | Composition | Serialize public API calls |
+| LlmLlamacpp | JobHandler | Composition | Finetune job lifecycle + response |
+| LlmLlamacpp | BatchHandler | Composition | Batch admission + group routing |
+| LlmLlamacpp | exclusiveRunQueue | Composition | Serialize public API admission |
 | LlmLlamacpp | bare-fs | Direct use | Stream shard files in `_streamShards()` |
 
 **Constructor signature (new):**
@@ -332,7 +342,7 @@ graph TB
 |-------|------------|----------------|----------|----------------|
 | 1. JavaScript API | LlmLlamacpp, createJobHandler, exclusiveRunQueue, bare-fs | High-level API, job/response lifecycle, shard streaming | JS | Ergonomic API for npm consumers |
 | 2. Bridge | LlamaInterface, binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
-| 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
+| 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Multi-job scheduler, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | LlamaModel, ModelMetadata, AsyncWeightsLoader, Contexts | Inference logic, metadata extraction, streaming weight coordination, chat formatting | C++ | Direct llama.cpp integration |
 | 5. Backend | llama.cpp, GGML | Tensor ops, GPU kernels | C++ | Optimized inference |
 
@@ -368,8 +378,10 @@ graph TB
 - Configuration parsing
 
 **Composition (no base class):**
-- `this._job = createJobHandler({ cancel: () => this.addon.cancel() })` — single active job + response
-- `this._run = exclusiveRunQueue()` — serialized `run()` / `finetune()` / `unload()`
+- `this._jobSinks = new Map()` — native job id → response, one entry per in-flight single run or finetune job
+- `this._finetuneJob = createJobHandler({ cancel: () => this.addon?.cancel() })` — the finetune-only response; tagged finetune events reach it through a sink adapter registered in `_jobSinks` under the finetune job's native id
+- `this._batchHandler = new BatchHandler({...})` — owns `_groups` (native job id → batch group state) and `_chunkRoutes` (per-prompt id → native job id) so concurrent batch runs stay isolated
+- `this._run = exclusiveRunQueue()` — serializes `run()` / `finetune()` / `unload()` admission only; once admitted, jobs run concurrently under `parallel >= 2`
 - `this.addon = new LlamaInterface(...)` — native bridge, created lazily in `_load()`
 - `normalizeGenerationParams()` validates/normalizes run-time overrides before the request crosses the JS/C++ boundary.
 
@@ -381,7 +393,7 @@ graph TB
 - Clean JavaScript API over raw C++ bindings
 - Native handle lifecycle management
 - Type conversion between JS and native
-- `mapAddonEvent()` routes `Output`, `JobEnded`, `RuntimeStats`, `FinetuneProgress`, and `LogMsg`; it also coalesces finetune terminal events with following runtime stats so responses do not finish twice.
+- `mapAddonEvent()` normalizes raw native events into `Output`, `JobEnded` (covers both a job's terminal stats snapshot and a finetune's terminal payload), `FinetuneProgress`, `BatchOutput`, `BatchResult`, `Error`, and `LogMsg`. It is a stateless, one-event-in-one-event-out mapping with no coalescing. What keeps a finetune job's terminal event and its trailing stats snapshot from settling the response twice lives in `index.js`'s `_handleAddonOutputEvent`/`_jobSinks`, not here: the finetune sink stays registered across the finetune terminal and is only deregistered when the trailing stats-shaped `JobEnded` lands.
 
 ### C++ Components
 
@@ -400,9 +412,9 @@ graph TB
 **Responsibility:** Addon-cpp framework integration; LLM addon provides createInstance and runJob over JsInterface
 
 **Why C++:**
-- Single-job runner (one job at a time, runJob returns boolean accepted)
-- Dedicated processing thread via addon-cpp JobRunner
-- Thread-safe job submission and cancellation (IModelCancel)
+- Multi-job scheduler (`parallel` worker lanes plus a waiting queue; runJob resolves an AdmissionResult carrying the scheduler-minted job id)
+- Dedicated worker threads via addon-cpp MultiJobScheduler
+- Thread-safe job submission and cancellation (whole-model IModelCancel plus per-job IModelCancelById)
 - Output dispatching via uv_async
 
 **LLM specialization:** createInstance builds LlamaModel with config; runJob parses inputs array (media + text) into LlamaModel::Prompt
@@ -447,7 +459,7 @@ graph TB
 
 #### **Notable C++ modules**
 
-The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ContextSlider`, `ToolsCompactController`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
+The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ContextSlider`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 
@@ -478,27 +490,32 @@ sequenceDiagram
     participant IF as LlamaInterface
     participant Bind as Native Binding
     participant Addon as AddonCpp/AddonJs
+    participant Sched as MultiJobScheduler
     participant Model as LlamaModel
     participant Llama as llama.cpp
     
-    JS->>IF: run(messages)
+    JS->>IF: run(messages) / run(batchItems)
     IF->>Bind: runJob(handle, inputsArray)
-    Bind->>Addon: runJob(inputs) [lock mutex]
-    Addon->>Addon: Set job input
-    Addon->>Addon: cv.notify_one()
-    Bind-->>IF: accepted (boolean)
-    IF-->>JS: QvacResponse
+    Bind->>Addon: runJob(inputs) [parse inputs, assign per-item ids]
+    Addon->>Sched: runJob(input) / runExclusiveJob(finetune)
+    Sched->>Sched: mint job id, queue for a free pool worker
+    Sched-->>Addon: admission { accepted, id, ids? }
+    Addon-->>Bind: { accepted, id, ids? }
+    Bind-->>IF: { accepted, id, ids? }
+    IF-->>JS: QvacResponse (routed by job id)
     
-    Note over Addon: Processing Thread
-    Addon->>Addon: Take job
-    Addon->>Addon: uv_async_send (JobStarted)
+    Note over Sched,Model: Later, on a scheduler pool worker
+    Sched->>Model: process(input, jobId)
+    Model->>Model: processConcurrent / processConcurrentBatch — arm cancel, push into pending_ [lock-free], wake batch worker
     
-    loop For each token
-        Addon->>Model: process(std::any)
-        Model->>Llama: llama_decode()
-        Llama-->>Model: tokens
-        Model->>Model: Sample token
-        Model->>Addon: outputCallback(token)
+    Note over Model: Batch worker thread (continuous batching)
+    Model->>Model: admit pending into free slots
+    
+    loop Per decode step, until every slot finishes
+        Model->>Llama: llama_decode() [one batch, all active slots]
+        Llama-->>Model: logits
+        Model->>Model: sample one token per slot
+        Model->>Addon: outputCallback(token) per slot
         Addon->>Addon: Queue output [lock]
         Addon->>Addon: uv_async_send()
     end
@@ -517,22 +534,25 @@ sequenceDiagram
 | Thread | Runs | Blocks On | Can Call |
 |--------|------|-----------|----------|
 | JavaScript | App code, callbacks | Nothing (event loop) | All JS, addon methods |
-| Processing | Inference | model.process() | model.*, uv_async_send() |
+| Scheduler pool worker (`parallel` of them, spawned at construction) | One admitted job each | `model.process(input, id)` | model.*, uv_async_send() |
+| Batch worker (one, only at `parallel >= 2`) | The shared decode loop over all active slots | `workCv_` when idle | model-internal state under the scheduler mutex |
 
 **Synchronization Primitives:**
 
 | Primitive | Purpose | Held Duration | Risk |
 |-----------|---------|---------------|------|
-| std::mutex | Protect single job state | <1ms | Low (brief) |
-| std::condition_variable | Wake processing thread | N/A | None |
+| std::mutex | Guard scheduler admission (job ids, queue) and the batch scheduler's slot state | <1ms | Low (brief) |
+| std::shared_mutex | `stateMtx_`: many jobs read model state concurrently, reload takes it exclusively | <1ms, reload longer | Low |
+| std::condition_variable | Wake a scheduler pool worker, or the batch worker on new/cancelled work | N/A | None |
 | uv_async_t | Wake JS thread | N/A | None |
 
 **Thread Safety Rules:**
 
 1. ✅ Call addon methods from any thread (runJob, cancel, activate, loadWeights, destroyInstance)
-2. ✅ Processing thread calls model methods
-3. ❌ Don't call JS functions from C++ thread (use uv_async_send)
-4. ❌ Don't call model methods from JS thread
+2. ✅ Scheduler pool workers call the model's inference entry points
+3. ✅ The JS thread may make the admission-time queries and cancels: `activeJobs()` reads the scheduler's admitted count under the scheduler's own mutex, while `activeSlots()`, `supportsBatching()` and `cancelById()` take the model's `stateMtx_` shared — all return promptly
+4. ❌ Don't call JS functions from C++ thread (use uv_async_send)
+5. ❌ Don't run inference from the JS thread — `process()` belongs to a scheduler worker
 
 </details>
 
@@ -799,8 +819,8 @@ Serialize chat messages array to JSON string before passing to C++, rather than 
 <summary>⚡ TL;DR</summary>
 
 **Chose:** Promise-based exclusive run queue stored as `this._run` from `exclusiveRunQueue()`
-**Why:** Ensure atomic multi-step operations (text + media + end-of-input) complete without interruption  
-**Cost:** One inference request at a time per model instance
+**Why:** Ensure atomic multi-step operations (admission, load/unload transitions) complete without interruption  
+**Cost:** One admission at a time per model instance; admitted jobs run concurrently when `parallel >= 2`
 
 </details>
 
@@ -810,21 +830,25 @@ A single inference request sends one `runJob(inputs)` call with an array of inpu
 1. Zero or more `{ type: 'media', content: Uint8Array }` - in-memory media bytes. The JS layer only forwards `Uint8Array` media payloads; path-string media is not currently passed through by `index.js`.
 2. One `{ type: 'text', input: JSON.stringify(messages) }` - Chat history
 
-Without coordination, concurrent requests could call `runJob()` while a job is already set or running; the addon returns `false` (not accepted) in that case.
+Without coordination, a `run()` could interleave with `load()`/`unload()` transitions, and concurrent admissions could race the capacity pre-check.
 
 ### Decision
 
-Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)` so only one native operation is in flight at a time. A second `run()` during an active job first waits a short window for the previous job to settle, then fails with a consistent busy error if the second run is not accepted:
-- `"Cannot set new job: a job is already set or being processed"`
+Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helper stored as `this._run`. `load()`, `run()`, `finetune()`, and `unload()` wrap their bodies with `this._run(() => ...)`. The queue serializes the *admission* section only: `run()`'s wrapped body resolves once the native scheduler has admitted the job and returned its id, so with `parallel >= 2` many admitted jobs generate concurrently while the next admission proceeds. When the effective `rejectWhenBusy` policy is `true` and the pool is full — always the case at `parallel: 1`, the backward-compatible default — the admission fails fast with the consistent busy error, an `Error` carrying `code === 'RUN_BUSY'`:
+- `"Cannot set new job: a job is already set or being processed"` (branch on the code; the message is prose and may change)
 
-**Note:** C++ level thread safety (single-job runner with mutex-protected job state, optional IModelCancel) is handled by the addon-cpp 1.1.x framework; see addon-cpp docs for architecture and decisions.
+"Full" is measured in scheduler slots (`activeSlots()`), not admitted jobs, because one batch job of N prompts occupies up to N slots; the job count is still used where slots are not the currency (`parallel: 1`, which has no scheduler, and exclusive finetune), so the check takes the max of the two.
+
+A `rejectWhenBusy: false` caller is queued by the native scheduler rather than refused — except against an exclusive finetune, which the scheduler refuses outright, so that call surfaces the same `RUN_BUSY` error instead of waiting for training to finish.
+
+**Note:** C++ level thread safety (multi-job scheduler with per-slot admission ids, whole-model IModelCancel plus per-job IModelCancelById) is handled by the addon-cpp 1.3.x framework; see addon-cpp docs for architecture and decisions.
 
 ### Rationale
 
 **Atomicity:**
 - Ensures multi-part messages (media + text + end-of-input) are sent as complete units
 - Prevents another request from inserting messages mid-stream
-- Each request gets exclusive run so only one runJob is in flight at a time
+- Each request gets an exclusive admission so only one runJob call is in flight at a time
 
 **Message Integrity:**
 - Model receives coherent message sequences
@@ -833,11 +857,11 @@ Implement a JavaScript-level promise queue using the `exclusiveRunQueue()` helpe
 
 ### Trade-offs
 - ✅ Simple promise-based queue (no complex locking)
-- ✅ Predictable sequential execution order
-- ❌ One request at a time per model instance
-- ❌ Head-of-line blocking (long request delays subsequent ones)
+- ✅ Predictable sequential admission order
+- ❌ One request at a time per model instance at `parallel: 1`
+- ❌ Head-of-line blocking on admission (a slow admission delays subsequent ones)
 
-**Mitigation:** Create multiple model instances for parallel requests
+**Mitigation:** Load with `parallel >= 2` for concurrent requests on one instance, or create multiple model instances
 
 ---
 
@@ -897,8 +921,7 @@ Provide hand-written TypeScript definitions in `index.d.ts` alongside JavaScript
 - [data-flows-detailed.md](data-flows-detailed.md) - Detailed data flow diagrams and sequences
 - [multi-gpu.md](multi-gpu.md) - `device` / `split-mode` / `tensor-split` / `main-gpu` semantics for multi-GPU inference and finetuning
 - [cache-api.md](cache-api.md) - KV cache persistence (`cacheKey`, `saveCacheToDisk`)
-- [tools-compact.md](tools-compact.md) - Tool-call compaction behavior
 - [finetuning.md](finetuning.md) - LoRA finetuning entrypoints and parameters
 - [continuous-batching.md](continuous-batching.md) - Continuous batching architecture (`parallel`, `ContinuousBatchScheduler`, slot lifecycle, cancellation)
 
-**Last Updated:** 2026-05-07
+**Last Updated:** 2026-07-23

@@ -2,6 +2,32 @@
 <!-- ci: parity rerun 2 (all fixes incl on-merge perms) -->
 <!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
+## [0.6.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.5.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.4.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0` (b10069 rebase; no
+  API change for this package).
+
+### Pull Requests
+
+- [#3621](https://github.com/tetherto/qvac/pull/3621) - Sync all addons with
+  fabric v10069.0.0
+
 ## [0.3.1] - 2026-07-30
 
 ### Changed

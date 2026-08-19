@@ -411,6 +411,11 @@ async function runFinetuningArchsTest (options = {}) { // eslint-disable-line no
   return runIntegrationModule('../integration/finetuning-archs.test.js', options)
 }
 
+async function runFinetuningCancelSlotReleaseTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningCancelSlotReleaseTest')) return __FILTERED
+  return runIntegrationModule('../integration/finetuning-cancel-slot-release.test.js', options)
+}
+
 async function runFinetuningMoeTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFinetuningMoeTest')) return __FILTERED
   return runIntegrationModule('../integration/finetuning-moe.test.js', options)
@@ -561,11 +566,6 @@ async function runToolCallingTest (options = {}) { // eslint-disable-line no-unu
   return runIntegrationModule('../integration/tool-calling.test.js', options)
 }
 
-async function runToolsCompactTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runToolsCompactTest')) return __FILTERED
-  return runIntegrationModule('../integration/tools-compact.test.js', options)
-}
-
 async function runTurboquantTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runTurboquantTest')) return __FILTERED
   return runIntegrationModule('../integration/turboquant.test.js', options)
@@ -576,7 +576,17 @@ async function runUnlimitedOcrPerfTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/unlimited-ocr-perf.test.js', options)
 }
 
+async function runUnloadThrowingListenerTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUnloadThrowingListenerTest')) return __FILTERED
+  return runIntegrationModule('../integration/unload-throwing-listener.test.js', options)
+}
+
 async function runUtf8OutputTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runUtf8OutputTest')) return __FILTERED
   return runIntegrationModule('../integration/utf8-output.test.js', options)
+}
+
+async function runVisionpsyImageNoUpscaleTokensTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runVisionpsyImageNoUpscaleTokensTest')) return __FILTERED
+  return runIntegrationModule('../integration/visionpsy-image-no-upscale-tokens.test.js', options)
 }

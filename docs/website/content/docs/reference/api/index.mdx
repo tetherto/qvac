@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.16.x (latest)
+title: API Summary — v0.17.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,11 +12,43 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 49 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 51 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
 ## Functions
+
+### `audioGen`
+
+Generates PCM audio using a loaded AudioGen model.
+
+**Signature**:
+
+```ts
+function audioGen(params: AudioGenClientParams): AudioGenResult;
+```
+
+**Example**:
+```ts
+const modelId = await loadModel({
+  modelType: "audiogen",
+  modelConfig: {
+    textEncModelSrc,
+    lmModelSrc,
+    ditModelSrc,
+    vaeModelSrc,
+  },
+});
+const run = audioGen({ modelId, caption: "ambient electronic music", duration: 10 });
+stopButton.onclick = () => cancel({ requestId: run.requestId });
+for await (const progress of run.progressStream) {
+  console.log(progress.stage, progress.step, progress.total);
+}
+const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
+const stats = await run.stats;
+```
+
+---
 
 ### `batchCompletion`
 
@@ -468,12 +500,24 @@ Returns status information for a catalog model, including cache state and loaded
 **Signature**:
 
 ```ts
-function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "bci" | "llm" | "whisper" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
+function getModelInfo(params: GetModelInfoParams): Promise<{ actualSize?: number; addon: "audiogen" | "llm" | "whisper" | "bci" | "embeddings" | "nmt" | "vad" | "tts" | "ocr" | "parakeet" | "diffusion" | "vla" | "classification" | "other"; blobBlockLength?: number; blobBlockOffset?: number; blobByteOffset?: number; blobCoreKey?: string; cachedAt?: Date; cacheFiles: { actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]; engine?: string; expectedSize: number; isCached: boolean; isLoaded: boolean; loadedInstances?: { config?: unknown; loadedAt: Date; registryId: string }[]; modelId: string; name: string; params?: string; quantization?: string; registryPath?: string; registrySource?: string; sha256Checksum: string }>;
 ```
 
 **Throws**:
 
 - `QvacErrorBase` — When the response type is invalid (`InvalidResponseError`) or the RPC layer fails.
+
+---
+
+### `getSystemResources`
+
+No description available
+
+**Signature**:
+
+```ts
+function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;
+```
 
 ---
 
@@ -1323,7 +1367,7 @@ function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextT
 ### `textToSpeechStream`
 
 Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
-Buffer should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+Uint8Array should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
 (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
 lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
 
@@ -1474,7 +1518,7 @@ const result = translate({
   modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es"
+  to: "es",
   modelType: "llm",
 });
 
@@ -1487,7 +1531,7 @@ const response = translate({
   modelId: "modelId",
   text: "Hello world",
   from: "en",
-  to: "es"
+  to: "es",
   modelType: "llm",
   stream: false,
 });

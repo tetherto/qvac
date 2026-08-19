@@ -1,17 +1,24 @@
-import { type WhisperConfig, type ModelTypeInput, normalizeModelType, ModelType } from '@/schemas'
+import {
+  type ParakeetConfig,
+  type WhisperConfig,
+  type ModelTypeInput,
+  normalizeModelType,
+  ModelType
+} from '@/schemas'
+import {
+  buildParakeetReloadConfig,
+  buildWhisperReloadConfig
+} from '@/server/bare/plugins/asr-ggml/config'
 
 export function transformConfigForReload(modelType: ModelTypeInput, config: unknown) {
   const canonicalType = normalizeModelType(modelType)
 
   switch (canonicalType) {
     case ModelType.whispercppTranscription: {
-      const whisperConfig = config as WhisperConfig
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { contextParams, miscConfig, ...whisperParams } = whisperConfig
-      return {
-        whisperConfig: whisperParams,
-        ...(miscConfig && { miscConfig })
-      }
+      return buildWhisperReloadConfig(config as WhisperConfig)
+    }
+    case ModelType.parakeetTranscription: {
+      return buildParakeetReloadConfig(config as ParakeetConfig)
     }
     case ModelType.llamacppCompletion:
     case ModelType.llamacppEmbedding:

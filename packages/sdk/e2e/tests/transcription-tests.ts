@@ -1,5 +1,5 @@
 // Transcription test definitions
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 const createTranscriptionTest = (
   testId: string,
@@ -35,6 +35,19 @@ export const transcriptionShortWav = createTranscriptionTest(
   30000,
   ['smoke']
 )
+
+export const transcriptionF32leQueueRecovery: TestDefinition = {
+  testId: 'transcription-f32le-queue-recovery',
+  params: {
+    audioFileName: 'transcription-short-wav.wav'
+  },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'transcription',
+    dependency: 'whisper',
+    estimatedDurationMs: 45000
+  }
+}
 
 export const transcriptionShortMp3 = createTranscriptionTest(
   'transcription-short-mp3',
@@ -189,6 +202,7 @@ export const transcriptionMetadataStreaming: TestDefinition = {
 
 export const transcriptionTests = [
   transcriptionShortWav,
+  transcriptionF32leQueueRecovery,
   transcriptionShortMp3,
   transcriptionShortAac,
   transcriptionShortOgg,

@@ -349,6 +349,13 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
     const int logitIdx = lastLogitIndices_[slot->seqId];
     slot->generatedTokens.push_back(samplerFn(slot->seqId, logitIdx));
     slot->hasUnfedSample = true;
+    // Stamp the observed token times: first sample fixes firstTokenAt (TTFT
+    // boundary), every sample advances lastTokenAt (observed-TPS window end).
+    const auto now = std::chrono::steady_clock::now();
+    if (!slot->firstTokenAt.has_value()) {
+      slot->firstTokenAt = now;
+    }
+    slot->lastTokenAt = now;
   }
 }
 

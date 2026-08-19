@@ -16,7 +16,6 @@
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
-#include "ToolsCompactController.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
 
@@ -24,7 +23,7 @@
 /// `LlmContext` API (driven by the single-prompt path in `LlamaModel`)
 /// and the per-sequence `SequenceDriver` API (driven by the
 /// `ContinuousBatchScheduler`). The overlapping state-query methods
-/// (`getNPast`, `getNSlides`, `validatePromptPolicy`) appear on both
+/// (`getNPast`, `getNSlides`) appear on both
 /// bases; a single override below satisfies both vtables.
 class TextLlmContext : public LlmContext, public SequenceDriver {
 public:
@@ -33,13 +32,10 @@ public:
   TextLlmContext(TextLlmContext&&) = delete;
   TextLlmContext& operator=(TextLlmContext&&) = delete;
   // Constructor
-  TextLlmContext(
-      common_params& commonParams, common_init_result_ptr llamaInit,
-      ToolsCompactController& tools);
+  TextLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
   TextLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
-      ToolsCompactController& tools, llama_seq_id seqId,
-      llama_pos perSeqCtxCeiling = -1);
+      llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
 
   // Destructor
   ~TextLlmContext() override = default;
@@ -87,6 +83,8 @@ public:
    * The stop method. It stops the model inference.
    */
   void stop() override;
+
+  void resetStopFlag() override;
 
   /**
    * The get context method. It returns the context.
@@ -209,11 +207,6 @@ public:
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const override;
-
   [[nodiscard]] bool loadCache(
       const std::string& cacheKey, llama_pos configuredNDiscarded) override;
   void saveCache(const std::string& cacheKey) const override;
@@ -240,11 +233,6 @@ public:
   }
 
 private:
-  /// Hook fired exactly once per slot, immediately before the policy
-  /// flushes its UTF-8 buffer at end-of-generation. Internal helper for
-  /// `onGenerationFinished`.
-  void onGenerationCompletePolicy(std::string_view assistantOutput);
-
   /**
    * The check antiprompt method. It checks the antiprompt.
    *
@@ -290,7 +278,7 @@ private:
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
   void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackKnownReasoningCutoff() const;
+  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
   void configureReasoningTags(
@@ -328,7 +316,6 @@ private:
   // whose header no longer matches live memory.
   void snapshotForRecurrentRollback();
 
-  ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
@@ -347,9 +334,7 @@ private:
   llama_pos preRequestNPast_ = 0;
   llama_pos preRequestFirstMsgTokens_ = 0;
   bool pendingBatchFirstMsg_ = false;
-  bool generationStarted_ = false;
   GenerationStopReason generationStopReason_ = GenerationStopReason::None;
-  std::string assistantOutput_;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
 
@@ -395,21 +380,19 @@ private:
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
 
-  // Per-request toggle for the post-generation thinking-block KV
-  // cache compaction. Default-on (opt-out via `generationParams` with
-  // `remove_thinking_from_context: false`); set by
-  // `applyGenerationParams`. Applies uniformly to pure-attention and
-  // recurrent / hybrid-SSM models — the model-type distinction is
-  // enforced downstream via `needsRecurrentSnapshot_`, not by varying
-  // this default per model.
-  bool removeThinkingFromContext_ = true;
+  // Per-request toggle for post-generation thinking-block KV compaction.
+  // Default-off, except Qwen3-family models opt in during initialization;
+  // `generationParams` can always override it.
+  bool removeThinkingFromContext_ = false;
 
-  // True when this context's model is recurrent or hybrid
+  // True when this context's model is recurrent, hybrid, or DeepSeek V4.
   // (`llama_model_is_recurrent || llama_model_is_hybrid`) — Mamba /
   // RWKV pure-recurrent and hybrid SSM + attention families (Qwen3.5,
   // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
   // For these we use the snapshot + replay path: snapshot the full
-  // sequence state at end-of-prefill, restore at end-of-generation,
+  // DeepSeek V4 has the same checkpoint requirement despite not reporting
+  // either predicate. We snapshot the full sequence state at end-of-prefill,
+  // restore at end-of-generation,
   // then batched-replay the captured post-reasoning tokens.
   // Pure-attention models keep the existing
   // `seq_rm + seq_add` path untouched.

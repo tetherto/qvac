@@ -57,22 +57,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/classification-ggml",
-        "ci": {
-          "npmName": "@qvac/classification-ggml",
-          "prebuildArtifactPrefix": "classification-ggml-",
-          "deviceFarmProjectArnPrimary": "LLM_AWS_DEVICE_FARM_PROJECT_ARN",
-          "androidDevicePoolArnPrimary": "LLM_ANDROID_DEVICE_POOL_ARN",
-          "iosDevicePoolArnPrimary": "LLM_IOS_DEVICE_POOL_ARN",
-          "enablesPerf": false,
-          "extraPreBuildCommand": "npm run mobile:copy-prebuilds"
-        }
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
@@ -93,6 +77,19 @@
             { "os": "macos-15", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
             { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
           ]
+        }
+      }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/classification-ggml",
+        "ci": {
+          "buildStep": "build:ts",
+          "nameTransform": "none",
+          "repoName": "classification-ggml",
+          "testGateMode": "none"
         }
       }
     }

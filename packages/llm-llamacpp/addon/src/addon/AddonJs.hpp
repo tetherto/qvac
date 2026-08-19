@@ -1,11 +1,11 @@
 #pragma once
+#include <algorithm>
 #include <any>
-#include <cmath>
 #include <functional>
-#include <limits>
+#include <future>
 #include <memory>
+#include <optional>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 #include <inference-addon-cpp/JsInterface.hpp>
@@ -14,12 +14,18 @@
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
+#include <inference-addon-cpp/queue/QueueCallbacks.hpp>
 
 #include "addon/JsBatchIds.hpp"
 #include "addon/PayloadHandler.hpp"
+#include "handlers/FinetuneParamHandlers.hpp"
+#include "handlers/GenerationParamHandlers.hpp"
 #include "model-interface/LlamaFinetuningParams.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "utils/ParallelLimits.hpp"
+#include "utils/ParseUnsigned.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -28,7 +34,7 @@ namespace js = qvac_lib_inference_addon_cpp::js;
 /// JS event-name baked into batch payloads; must match `addon.js`
 /// (`rawData.type === 'batch_output'`). Namespace-scope with linkage is
 /// required to use it as a `const char*` template arg in `PayloadHandler`.
-inline constexpr char kBatchOutputTypeName[] = "batch_output";
+inline constexpr char BATCH_OUTPUT_TYPE_NAME[] = "batch_output";
 
 inline LlamaModel*
 tryGetLlamaModel(qvac_lib_inference_addon_cpp::AddonCpp& addonCpp) {
@@ -44,20 +50,6 @@ getLlamaModel(qvac_lib_inference_addon_cpp::AddonJs& instance) {
         general_error::InternalError, "Model is not a LlamaModel");
   }
   return llamaModel;
-}
-
-inline std::function<void(const std::string&)>
-makeQueueOutputCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
-  return [&instance](const std::string& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s));
-  };
-}
-
-inline LlamaFinetuner::ProgressCallback
-makeQueueProgressCallback(qvac_lib_inference_addon_cpp::AddonJs& instance) {
-  return [&instance](const llama_finetuning_helpers::FinetuneProgressStats& s) {
-    instance.addonCpp->outputQueue->queueResult(std::any(s));
-  };
 }
 
 struct JsFinetuneProgressOutputHandler
@@ -238,161 +230,20 @@ parseLlamaFinetuningParams(js_env_t* env, js::Object& jsObj) {
   params.outputParametersDir =
       jsObj.getProperty<js::String>(env, "outputParametersDir")
           .as<std::string>(env);
-  params.numberOfEpochs = static_cast<int>(
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "numberOfEpochs")
-          .value_or(1));
-  params.learningRate =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "learningRate")
-          .value_or(1e-4);
   params.trainDatasetDir = jsObj.getProperty<js::String>(env, "trainDatasetDir")
                                .as<std::string>(env);
-  const std::string evalDatasetPath =
-      jsObj
-          .getOptionalPropertyAs<js::String, std::string>(
-              env, "evalDatasetPath")
-          .value_or("");
-  params.evalDatasetPath = evalDatasetPath;
-  params.contextLength =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "contextLength")
-          .value_or(128);
-  params.microBatchSize =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "microBatchSize")
-          .value_or(128);
-  params.assistantLossOnly =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "assistantLossOnly")
-          .value_or(false);
-  params.checkpointSaveDir =
-      jsObj
-          .getOptionalPropertyAs<js::String, std::string>(
-              env, "checkpointSaveDir")
-          .value_or("");
-  params.loraModules =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "loraModules")
-          .value_or("");
-  params.loraRank =
-      jsObj.getOptionalPropertyAs<js::Number, int32_t>(env, "loraRank")
-          .value_or(8);
-  params.loraAlpha =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraAlpha")
-          .value_or(16.0);
-  params.loraInitStd =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "loraInitStd")
-          .value_or(0.02);
-  params.loraSeed = static_cast<uint32_t>(
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "loraSeed")
-          .value_or(42));
-  params.chatTemplatePath = jsObj
-                                .getOptionalPropertyAs<js::String, std::string>(
-                                    env, "chatTemplatePath")
-                                .value_or("");
-  params.checkpointSaveSteps = jsObj
-                                   .getOptionalPropertyAs<js::Number, int64_t>(
-                                       env, "checkpointSaveSteps")
-                                   .value_or(0);
-  params.lrMin = jsObj.getOptionalPropertyAs<js::Number, double>(env, "lrMin")
-                     .value_or(0.0);
-  params.lrScheduler =
-      jsObj.getOptionalPropertyAs<js::String, std::string>(env, "lrScheduler")
-          .value_or("cosine");
-  params.warmupRatio =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "warmupRatio")
-          .value_or(0.1);
-  params.batchSize =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "batchSize")
-          .value_or(128);
-  params.weightDecay =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "weightDecay")
-          .value_or(0.01);
-  params.warmupStepsSet =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupStepsSet")
-          .value_or(false);
-  params.warmupSteps =
-      jsObj.getOptionalPropertyAs<js::Number, int64_t>(env, "warmupSteps")
-          .value_or(0);
-  params.warmupRatioSet =
-      jsObj.getOptionalPropertyAs<js::Boolean, bool>(env, "warmupRatioSet")
-          .value_or(false);
-  params.validationSplit =
-      jsObj.getOptionalPropertyAs<js::Number, double>(env, "validationSplit")
-          .value_or(0.05);
-  params.useEvalDatasetForValidation =
-      jsObj
-          .getOptionalPropertyAs<js::Boolean, bool>(
-              env, "useEvalDatasetForValidation")
-          .value_or(false);
+  applyFinetuneParamHandlers(env, jsObj, params);
   return params;
 }
 
 inline void parseGenerationParams(
     js_env_t* env, js::Object& inputObj, LlamaModel::Prompt& prompt) {
-  using namespace qvac_lib_inference_addon_cpp;
-
   auto configObj =
       inputObj.getOptionalProperty<js::Object>(env, "generationParams");
   if (!configObj.has_value()) {
     return;
   }
-
-  auto readNum = [&](const char* key, auto& out) {
-    auto value = configObj->getOptionalPropertyAs<js::Number, double>(env, key);
-    if (value.has_value()) {
-      out =
-          static_cast<typename std::decay_t<decltype(out)>::value_type>(*value);
-    }
-  };
-  GenerationParams& overrides = prompt.generationParams;
-  readNum("temp", overrides.temp);
-  readNum("top_p", overrides.top_p);
-  readNum("top_k", overrides.top_k);
-  readNum("predict", overrides.n_predict);
-  readNum("seed", overrides.seed);
-  readNum("frequency_penalty", overrides.frequency_penalty);
-  readNum("presence_penalty", overrides.presence_penalty);
-  readNum("repeat_penalty", overrides.repeat_penalty);
-
-  auto grammarStr =
-      configObj->getOptionalPropertyAs<js::String, std::string>(env, "grammar");
-  if (grammarStr.has_value() && !grammarStr->empty()) {
-    overrides.grammar = std::move(*grammarStr);
-  }
-
-  auto jsonSchemaStr =
-      configObj->getOptionalPropertyAs<js::String, std::string>(
-          env, "json_schema");
-  if (jsonSchemaStr.has_value() && !jsonSchemaStr->empty()) {
-    overrides.json_schema = std::move(*jsonSchemaStr);
-  }
-
-  if (overrides.grammar && overrides.json_schema) {
-    throw StatusError(
-        general_error::InvalidArgument,
-        "generationParams.grammar and generationParams.json_schema are "
-        "mutually exclusive");
-  }
-
-  auto reasoningBudget = configObj->getOptionalPropertyAs<js::Number, double>(
-      env, "reasoning_budget");
-  if (reasoningBudget.has_value()) {
-    // Reject fractional inputs (0.5, -1.1, 32.7) by requiring the value to
-    // round-trip through int. -1 = unrestricted, 0 = disabled, N>0 caps the
-    // reasoning channel at N tokens via the budget sampler.
-    const double value = *reasoningBudget;
-    if (value < -1 || value != std::floor(value) ||
-        value > static_cast<double>(std::numeric_limits<int>::max())) {
-      throw StatusError(
-          general_error::InvalidArgument,
-          "generationParams.reasoning_budget must be -1 (unrestricted), "
-          "0 (disabled), or a positive integer (token cap)");
-    }
-    overrides.reasoning_budget = static_cast<int>(value);
-  }
-
-  auto removeThinkingFromContext =
-      configObj->getOptionalPropertyAs<js::Boolean, bool>(
-          env, "remove_thinking_from_context");
-  if (removeThinkingFromContext.has_value()) {
-    overrides.remove_thinking_from_context = *removeThinkingFromContext;
-  }
+  applyGenerationParamHandlers(env, *configObj, prompt.generationParams);
 }
 
 inline std::vector<std::pair<std::string, js::Object>>
@@ -493,7 +344,7 @@ inline std::vector<LlamaModel::Prompt> parseBatchInputs(
     // fires and enqueues a `finished` event so the JS handler runs
     // `PayloadHandler::release` on the JS thread.
     shared_ptr<js_ref_t> handle(
-        PayloadHandler::allocate<kBatchOutputTypeName>(env, id),
+        PayloadHandler::allocate<BATCH_OUTPUT_TYPE_NAME>(env, id),
         [queue](js_ref_t* h) {
           BatchTokenOutput evt;
           evt.payloadHandle = h;
@@ -521,10 +372,44 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
 
   JsArgsParser args(env, info);
 
+  // Worker-pool size for multi-job admission == the model's concurrency
+  // (`parallel`/`n_seq_max`). Read straight from the config map before it is
+  // moved into the model; absent means single-slot (1), a malformed or
+  // out-of-range value throws before the model or scheduler is constructed.
+  auto config = args.getSubmap(1, "config");
+  // Bounded by K_MAX_PARALLEL_WORKERS (the engine's n_seq_max ceiling; see its
+  // definition above). The pool is thread-per-slot and eager: `parallel` OS
+  // threads are spawned at load and live for the model's lifetime, so a server
+  // pays the whole cost upfront and is ready to serve at full concurrency with
+  // no warm-up. The per-value cost below the ceiling is the user's documented
+  // choice (see `parallel` in index.d.ts and docs/continuous-batching.md).
+  unsigned maxConcurrency = 1;
+  if (auto it = config.find("parallel"); it != config.end()) {
+    try {
+      maxConcurrency = parseUnsignedInRange(
+          it->second, 1, K_MAX_PARALLEL_WORKERS, "parallel");
+    } catch (const std::invalid_argument& e) {
+      throw StatusError(general_error::InvalidArgument, e.what());
+    }
+  }
+
   unique_ptr<model::IModel> model = make_unique<LlamaModel>(
       args.getMapEntry(1, "path"),
       args.getMapEntry(1, "projectionPath"),
-      args.getSubmap(1, "config"));
+      std::move(config));
+
+  // Always drive the model through the multi-job scheduler. With a 1-slot pool
+  // it behaves like the single-job path (the model's process(input, id) falls
+  // back to the single-job route when no batch scheduler is active), while
+  // parallel >= 2 admits that many concurrent jobs. Raw model pointers stay
+  // valid: AddonCpp owns the model for the scheduler's whole lifetime.
+  // The default queueCapacity gives a nearly unbounded waiting room, so
+  // rejectWhenBusy:false callers are queued, not rejected.
+  auto scheduler = make_unique<MultiJobScheduler>(
+      dynamic_cast<model::IModelMultiprocessor*>(model.get()),
+      maxConcurrency,
+      dynamic_cast<model::IModelCancel*>(model.get()),
+      dynamic_cast<model::IModelCancelById*>(model.get()));
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<out_handl::JsStringOutputHandler>());
@@ -538,7 +423,8 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
 
-  auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  auto addon = make_unique<AddonJs>(
+      env, std::move(callback), std::move(model), std::move(scheduler));
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -550,38 +436,79 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JsArgsParser args(env, info);
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto inputsArray = js::Array{env, args.get(1, "inputsArray")};
+
+  // The scheduler mints the job id at admission and runJob returns it; the id
+  // is handed back in the result — for a batch too, so several batch groups
+  // can be in flight and each routes its terminal events (result, jobEnded
+  // stats) to its own response.
   const bool isBatch = inputsArray.size(env) > 0 &&
                        inputsArray.get<js::Object>(env, 0)
                            .getOptionalProperty<js::Array>(env, "messages")
                            .has_value();
   if (isBatch) {
-    // Reject before admission: otherwise processPromptBatch throws the same
-    // error on the worker thread, surfaced as an async rejection.
+    // Reject before admission: otherwise processPromptBatchImpl throws the
+    // same error on a scheduler worker, surfaced as an async rejection.
     if (!getLlamaModel(instance)->supportsBatching()) {
       throw StatusError(
           general_error::InvalidArgument,
           "Batch run() requires the model loaded with parallel >= 2 "
-          "(continuous batching, text-only model with n_seq_max > 1)");
+          "(continuous batching, n_seq_max > 1)");
     }
-    // Static to recycle vector capacity across calls; safe only while
-    // admissions stay serialized (one batch in flight). Demote to a local
-    // if that changes.
-    static JsBatchIds batchIds;
+    // Local: several batch admissions may now overlap, each with its own ids.
+    JsBatchIds batchIds;
     batchIds.reset(inputsArray.size(env));
     auto prompts = parseBatchInputs(env, instance, inputsArray, batchIds);
-    js_value_t* acceptedJs = instance.runJob(any(std::move(prompts)));
+    const optional<JobId> jobId =
+        instance.addonCpp->runJob(any(std::move(prompts)));
 
     js::Object result = js::Object::create(env);
-    result.setProperty(env, "accepted", acceptedJs);
+    result.setProperty(
+        env, "accepted", js::Boolean::create(env, jobId.has_value()));
     result.setProperty(env, "ids", batchIds.toJsArray(env));
+    if (jobId.has_value()) {
+      result.setProperty(
+          env, "id", js::Number::create(env, static_cast<double>(*jobId)));
+    }
     return result;
   }
 
+  // Streamed tokens are tagged with the admission-minted id via the deferred
+  // future: fulfilled right below, before any token can be produced.
+  auto idPromise = make_shared<promise<JobId>>();
   vector<pair<string, js::Object>> inputs = parseInputArray(env, inputsArray);
-  LlamaModel::Prompt prompt =
-      parsePromptInputs(env, inputs, makeQueueOutputCallback(instance));
+  LlamaModel::Prompt prompt = parsePromptInputs(
+      env,
+      inputs,
+      makeQueueCallback<string>(
+          instance.addonCpp->outputQueue, idPromise->get_future().share()));
 
-  return instance.runJob(any(std::move(prompt)));
+  const optional<JobId> jobId =
+      instance.addonCpp->runJob(any(std::move(prompt)));
+  idPromise->set_value(jobId.value_or(kNoJobId));
+
+  js::Object result = js::Object::create(env);
+  result.setProperty(
+      env, "accepted", js::Boolean::create(env, jobId.has_value()));
+  if (jobId.has_value()) {
+    result.setProperty(
+        env, "id", js::Number::create(env, static_cast<double>(*jobId)));
+  }
+  return result;
+}
+JSCATCH
+
+/// Requests occupying or waiting for a continuous-batching slot. Complements
+/// JsInterface::activeJobs (a job count): one batch job of N prompts consumes
+/// up to N slots, so only this number tracks the resource that runs out. 0
+/// when no batch scheduler is active (`parallel: 1`), hence the JS admission
+/// check takes the max of the two rather than replacing one with the other.
+inline js_value_t* activeSlots(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  return js::Number::create(
+      env, static_cast<double>(getLlamaModel(instance)->activeSlots()));
 }
 JSCATCH
 
@@ -598,17 +525,45 @@ inline js_value_t* cancel(js_env_t* env, js_callback_info_t* info) try {
   // stay alive until the async cancelJob() / pause-wait completes.
   // Previously we captured raw pointers (`auto* addonCpp = ... .get();`),
   // which let the test framework's teardown free the addon out from under
-  // an in-flight cancel and trip a destroyed-mutex UAF in JobRunner.
+  // an in-flight cancel and trip a destroyed-mutex UAF inside the job
+  // scheduler.
   auto addonCppRef = instance.addonCpp;
-  return js::JsAsyncTask::run(env, [addonCppRef, savePauseCheckpoint]() {
-    auto* llamaModel = tryGetLlamaModel(*addonCppRef);
-    if (llamaModel && llamaModel->finetuner().isFinetuneRunning() &&
-        llamaModel->finetuner().requestPause(savePauseCheckpoint)) {
-      llamaModel->finetuner().waitUntilFinetuningPauseComplete();
-    } else {
-      addonCppRef->cancelJob();
-    }
-  });
+  // Snapshot the live job ids here, on the JS thread — where admissions also
+  // run — so a job started after this call is never touched by the deferred
+  // cancellation below.
+  std::vector<qvac_lib_inference_addon_cpp::JobId> liveJobs =
+      addonCppRef->liveJobIds();
+  return js::JsAsyncTask::run(
+      env,
+      [addonCppRef, savePauseCheckpoint, liveJobs = std::move(liveJobs)]() {
+        // A snapshotted finetune is cancelled through the same per-id path as
+        // inference: cancelJobs -> cancelById lands on the job's bound
+        // finetune cancel action, which consumes the checkpoint mode armed
+        // here. Querying the finetuner directly ("whichever finetune is
+        // running now") would break the snapshot above — a finetune admitted
+        // after this cancel must never be paused by it.
+        auto* llamaModel = tryGetLlamaModel(*addonCppRef);
+        if (llamaModel != nullptr) {
+          llamaModel->setFinetuneCancelSavesCheckpoint(
+              savePauseCheckpoint, liveJobs);
+        }
+        // cancelJobs(snapshot), not cancelAllJobs(): the snapshot carries
+        // the real tagged ids under the multi-job scheduler (cancelById
+        // lands on each) and the untagged sentinel under the single-job
+        // one, so "cancel the in-flight work" holds for both — while a job
+        // admitted after the cancel request survives it. cancelJobs also
+        // returns only after every snapshotted id has left the scheduler
+        // (slot released — for a paused finetune that is after the
+        // post-pause model reload), so a resolved cancel promise means an
+        // immediate follow-up admission is not refused as busy.
+        addonCppRef->cancelJobs(liveJobs);
+        // The dispatch consumed the modes for whatever finetunes it reached;
+        // entries left behind (inference ids, jobs that finished first) must
+        // not outlive this cancel.
+        if (llamaModel != nullptr) {
+          llamaModel->discardFinetuneCancelSaveModes(liveJobs);
+        }
+      });
 }
 JSCATCH
 
@@ -628,12 +583,30 @@ inline js_value_t* finetune(js_env_t* env, js_callback_info_t* info) try {
         general_error::InvalidArgument, "Finetuning parameters not provided");
   }
 
+  // Tag finetune's streamed output and progress with the admission-minted id
+  // via the deferred future (the same hand-off runJob uses); JS registers its
+  // finetune sink under this id.
+  auto idPromise = make_shared<promise<JobId>>();
+  auto idFuture = idPromise->get_future().share();
+
   LlamaModel::Prompt prompt;
   prompt.finetuningParams = *paramsOpt;
-  prompt.outputCallback = makeQueueOutputCallback(instance);
-  prompt.progressCallback = makeQueueProgressCallback(instance);
+  prompt.outputCallback =
+      makeQueueCallback<string>(instance.addonCpp->outputQueue, idFuture);
+  prompt.progressCallback =
+      makeQueueCallback<llama_finetuning_helpers::FinetuneProgressStats>(
+          instance.addonCpp->outputQueue, std::move(idFuture));
 
-  return instance.runJob(any(std::move(prompt)));
+  // Finetune reloads weights, so it runs as an exclusive job — the scheduler
+  // enforces the finetune<->inference mutual exclusion (see runExclusiveJob).
+  const optional<JobId> jobId =
+      instance.addonCpp->runExclusiveJob(any(std::move(prompt)));
+  idPromise->set_value(jobId.value_or(kNoJobId));
+  if (!jobId.has_value()) {
+    // Refused (jobs queued or in flight): JS expects boolean false.
+    return js::Boolean::create(env, false);
+  }
+  return js::Number::create(env, static_cast<double>(*jobId));
 }
 JSCATCH
 

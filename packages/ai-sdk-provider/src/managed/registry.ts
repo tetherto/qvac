@@ -1,7 +1,9 @@
-import { mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmodSync, mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+
+import { DEFAULT_SERVE_START_TIMEOUT_MS } from '../defaults.js'
 
 // Shared, cross-process registry of managed serves. Each running serve is
 // described by one record keyed by its *fleet key* (model set + config + host),
@@ -20,6 +22,7 @@ export function managedServesDir(): string {
 
 export interface ServeRecord {
   readonly fleetKey: string
+  readonly apiKey: string
   // PID of the `qvac serve` process (what callers see as provider.pid).
   readonly servePid: number
   // PID of the detached runner that owns the serve and reaps it on idle.
@@ -32,6 +35,8 @@ export interface ServeRecord {
   readonly startedAt: string
   readonly idleTimeoutMs: number
 }
+
+type SweepServeRecord = Omit<ServeRecord, 'apiKey'> & { readonly apiKey?: string }
 
 function recordPath(fleetKey: string): string {
   return join(managedServesDir(), `${fleetKey}.json`)
@@ -60,24 +65,72 @@ export function isProcessAlive(pid: number): boolean {
 
 // ── Records ─────────────────────────────────────────────────────────────────
 
+export async function ensureManagedServesDir(): Promise<void> {
+  await mkdir(managedServesDir(), { recursive: true, mode: 0o700 })
+  await chmod(managedServesDir(), 0o700)
+}
+
 export async function writeRecord(record: ServeRecord): Promise<void> {
-  await mkdir(managedServesDir(), { recursive: true })
+  await ensureManagedServesDir()
   const final = recordPath(record.fleetKey)
   const tmp = `${final}.${process.pid}.${Date.now()}.tmp`
-  await writeFile(tmp, `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+  await writeFile(tmp, `${JSON.stringify(record, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
   // Rename is atomic on the same filesystem, so a reader never sees a partial
   // record.
   await rename(tmp, final)
 }
 
-function parseRecord(raw: string): ServeRecord | undefined {
+function parseRecordBase(raw: string): SweepServeRecord | undefined {
   try {
-    const r = JSON.parse(raw) as ServeRecord
-    if (typeof r.servePid === 'number' && typeof r.baseURL === 'string') return r
+    const r = JSON.parse(raw) as SweepServeRecord
+    if (
+      typeof r.fleetKey === 'string' &&
+      typeof r.servePid === 'number' &&
+      typeof r.runnerPid === 'number' &&
+      typeof r.port === 'number' &&
+      typeof r.host === 'string' &&
+      typeof r.baseURL === 'string' &&
+      typeof r.configPath === 'string' &&
+      typeof r.startedAt === 'string' &&
+      typeof r.idleTimeoutMs === 'number' &&
+      recordDestinationMatches(r)
+    ) {
+      return r
+    }
   } catch {
     // corrupt/partial record — treated as absent
   }
   return undefined
+}
+
+function parseRecord(raw: string): ServeRecord | undefined {
+  const record = parseRecordBase(raw)
+  if (record === undefined || typeof record.apiKey !== 'string' || record.apiKey.length === 0) {
+    return undefined
+  }
+  return record as ServeRecord
+}
+
+function recordDestinationMatches(record: Pick<ServeRecord, 'baseURL' | 'host' | 'port'>): boolean {
+  try {
+    const url = new URL(record.baseURL)
+    const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    const host = record.host.replace(/^\[|\]$/g, '').toLowerCase()
+    const port =
+      url.port.length > 0
+        ? Number(url.port)
+        : url.protocol === 'https:'
+          ? 443
+          : url.protocol === 'http:'
+            ? 80
+            : NaN
+    return hostname === host && port === record.port
+  } catch {
+    return false
+  }
 }
 
 export async function readRecord(fleetKey: string): Promise<ServeRecord | undefined> {
@@ -89,7 +142,15 @@ export async function readRecord(fleetKey: string): Promise<ServeRecord | undefi
   }
 }
 
-export async function readAllRecords(): Promise<ServeRecord[]> {
+export function readAllRecords(): Promise<ServeRecord[]> {
+  return readRecords(parseRecord)
+}
+
+function readSweepRecords(): Promise<SweepServeRecord[]> {
+  return readRecords(parseRecordBase)
+}
+
+async function readRecords<T>(parse: (raw: string) => T | undefined): Promise<T[]> {
   let files: string[]
   try {
     files = await readdir(managedServesDir())
@@ -97,11 +158,11 @@ export async function readAllRecords(): Promise<ServeRecord[]> {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw err
   }
-  const records: ServeRecord[] = []
+  const records: T[] = []
   for (const file of files) {
     if (!file.endsWith('.json')) continue
     try {
-      const rec = parseRecord(await readFile(join(managedServesDir(), file), 'utf8'))
+      const rec = parse(await readFile(join(managedServesDir(), file), 'utf8'))
       if (rec !== undefined) records.push(rec)
     } catch {
       // skip unreadable
@@ -139,9 +200,13 @@ export function removeRecord(fleetKey: string, opts?: { preserveConsumers?: bool
 // process sharing a fleet key don't collide on one marker (closing one would
 // otherwise deregister the whole process while the other is still live).
 export async function addConsumer(fleetKey: string, consumerId: string | number): Promise<void> {
+  await ensureManagedServesDir()
   const dir = consumersDir(fleetKey)
-  await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, String(consumerId)), '', 'utf8')
+  await mkdir(dir, { recursive: true, mode: 0o700 })
+  await chmod(dir, 0o700)
+  const marker = join(dir, String(consumerId))
+  await writeFile(marker, '', { encoding: 'utf8', mode: 0o600 })
+  await chmod(marker, 0o600)
 }
 
 // Sync (and best-effort) so it works in `process.on('exit')` handlers too, where
@@ -181,15 +246,22 @@ export async function liveConsumers(fleetKey: string): Promise<number[]> {
 
 // ── Health & discovery ────────────────────────────────────────────────────────
 
+// `apiKey === undefined` probes anonymously, for records written by a provider
+// that predates managed auth. Only ever used on a record whose baseURL has
+// already been checked against its own host/port.
 export async function healthCheck(
   baseURL: string,
+  apiKey: string | undefined,
   fetchImpl: typeof fetch,
   timeoutMs = 2_000
 ): Promise<boolean> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetchImpl(`${baseURL}/models`, { signal: controller.signal })
+    const res = await fetchImpl(`${baseURL}/models`, {
+      ...(apiKey === undefined ? {} : { headers: { authorization: `Bearer ${apiKey}` } }),
+      signal: controller.signal
+    })
     return res.ok
   } catch {
     return false
@@ -208,7 +280,7 @@ export async function findReusableServe(
   const rec = await readRecord(fleetKey)
   if (rec === undefined) return undefined
   if (!isProcessAlive(rec.servePid) || !isProcessAlive(rec.runnerPid)) return undefined
-  if (!(await healthCheck(rec.baseURL, fetchImpl))) return undefined
+  if (!(await healthCheck(rec.baseURL, rec.apiKey, fetchImpl))) return undefined
   return rec
 }
 
@@ -217,7 +289,7 @@ export async function findReusableServe(
 // Live serve with a dead runner → kill the orphan and drop the record. Returns
 // the fleet keys swept.
 export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<string[]> {
-  const records = await readAllRecords()
+  const records = await readSweepRecords()
   const swept: string[] = []
   for (const rec of records) {
     const serveAlive = isProcessAlive(rec.servePid)
@@ -233,7 +305,13 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
       // the OS recycled to a stranger also lands here; its stale record is
       // harmless — reuse health-checks and skips it, and the next spawn for the
       // key overwrites it.)
-      if (!(await healthCheck(rec.baseURL, fetchImpl))) continue
+      //
+      // A record with no `apiKey` was written by a provider that predates managed
+      // auth, so its serve is listening unauthenticated: probe it anonymously —
+      // never with another record's credential — and reap it on the same terms.
+      // `parseRecordBase` has already confirmed baseURL agrees with host/port, so
+      // the probe cannot be redirected by a tampered record.
+      if (!(await healthCheck(rec.baseURL, rec.apiKey, fetchImpl))) continue
       try {
         process.kill(rec.servePid, 'SIGTERM')
       } catch {
@@ -250,11 +328,40 @@ export async function sweepServes(fetchImpl: typeof fetch = fetch): Promise<stri
     }
     swept.push(rec.fleetKey)
   }
+  await sweepRunnerParams()
   return swept
 }
 
+// One-shot runner handoff files carry the serve key in plaintext (mode 0o600) and
+// are unlinked by the runner as it reads them. A client that dies in the window
+// between write and read leaves one behind with nothing to remove it, so they are
+// swept here once no runner could still be waiting to read one: the spawn budget
+// plus a wide margin for a machine that was busy or asleep mid-handoff.
+export const RUNNER_PARAMS_STALE_MS = DEFAULT_SERVE_START_TIMEOUT_MS * 2
+
+async function sweepRunnerParams(now = Date.now()): Promise<void> {
+  let files: string[]
+  try {
+    files = await readdir(managedServesDir())
+  } catch {
+    return
+  }
+  for (const file of files) {
+    if (!file.endsWith('.runner-params.json')) continue
+    const path = join(managedServesDir(), file)
+    try {
+      const { mtimeMs } = await stat(path)
+      if (now - mtimeMs < RUNNER_PARAMS_STALE_MS) continue
+      await rm(path, { force: true })
+    } catch {
+      // best-effort: a file the runner just consumed is already gone
+    }
+  }
+}
+
 export function ensureDirSync(): void {
-  mkdirSync(managedServesDir(), { recursive: true })
+  mkdirSync(managedServesDir(), { recursive: true, mode: 0o700 })
+  chmodSync(managedServesDir(), 0o700)
 }
 
 // Atomic-ish sync record write for the runner (avoids a partial record race on
@@ -263,6 +370,9 @@ export function writeRecordSync(record: ServeRecord): void {
   ensureDirSync()
   const final = recordPath(record.fleetKey)
   const tmp = `${final}.${process.pid}.${Date.now()}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+  writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600
+  })
   renameSync(tmp, final)
 }

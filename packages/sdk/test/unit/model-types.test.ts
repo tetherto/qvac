@@ -18,6 +18,7 @@ test('ModelType contains all canonical values', (t) => {
   t.is(ModelType.onnxTts, 'onnx-tts')
   t.is(ModelType.ttsGgml, 'tts-ggml')
   t.is(ModelType.ggmlOcr, 'ggml-ocr')
+  t.is(ModelType.audiogenGgml, 'audiogen-ggml')
 })
 
 test('ModelTypeAliases maps to correct canonical values', (t) => {
@@ -28,6 +29,7 @@ test('ModelTypeAliases maps to correct canonical values', (t) => {
   t.is(ModelTypeAliases.parakeet, ModelType.parakeetTranscription)
   t.is(ModelTypeAliases.tts, ModelType.ttsGgml)
   t.is(ModelTypeAliases.ocr, ModelType.ggmlOcr)
+  t.is(ModelTypeAliases.audiogen, ModelType.audiogenGgml)
 })
 
 test('PUBLIC_MODEL_TYPES contains both canonical and alias keys', (t) => {
@@ -40,6 +42,7 @@ test('PUBLIC_MODEL_TYPES contains both canonical and alias keys', (t) => {
   t.is(PUBLIC_MODEL_TYPES.onnxTts, 'onnx-tts')
   t.is(PUBLIC_MODEL_TYPES.ttsGgml, 'tts-ggml')
   t.is(PUBLIC_MODEL_TYPES.ggmlOcr, 'ggml-ocr')
+  t.is(PUBLIC_MODEL_TYPES.audiogenGgml, 'audiogen-ggml')
 
   // Alias keys
   t.is(PUBLIC_MODEL_TYPES.llm, 'llamacpp-completion')
@@ -49,6 +52,7 @@ test('PUBLIC_MODEL_TYPES contains both canonical and alias keys', (t) => {
   t.is(PUBLIC_MODEL_TYPES.parakeet, 'parakeet-transcription')
   t.is(PUBLIC_MODEL_TYPES.tts, 'tts-ggml')
   t.is(PUBLIC_MODEL_TYPES.ocr, 'ggml-ocr')
+  t.is(PUBLIC_MODEL_TYPES.audiogen, 'audiogen-ggml')
 })
 
 test('normalizeModelType converts aliases to canonical', (t) => {
@@ -60,6 +64,7 @@ test('normalizeModelType converts aliases to canonical', (t) => {
   t.is(normalizeModelType('parakeet'), 'parakeet-transcription')
   t.is(normalizeModelType('tts'), 'tts-ggml')
   t.is(normalizeModelType('ocr'), 'ggml-ocr')
+  t.is(normalizeModelType('audiogen'), 'audiogen-ggml')
 })
 
 test('normalizeModelType passes through canonical values unchanged', (t) => {
@@ -71,6 +76,7 @@ test('normalizeModelType passes through canonical values unchanged', (t) => {
   t.is(normalizeModelType('onnx-tts'), 'onnx-tts')
   t.is(normalizeModelType('tts-ggml'), 'tts-ggml')
   t.is(normalizeModelType('ggml-ocr'), 'ggml-ocr')
+  t.is(normalizeModelType('audiogen-ggml'), 'audiogen-ggml')
 })
 
 test('isModelTypeAlias correctly identifies aliases', (t) => {
@@ -82,6 +88,7 @@ test('isModelTypeAlias correctly identifies aliases', (t) => {
   t.is(isModelTypeAlias('parakeet'), true)
   t.is(isModelTypeAlias('tts'), true)
   t.is(isModelTypeAlias('ocr'), true)
+  t.is(isModelTypeAlias('audiogen'), true)
 
   // Canonical values are not aliases
   t.is(isModelTypeAlias('llamacpp-completion'), false)
@@ -92,6 +99,7 @@ test('isModelTypeAlias correctly identifies aliases', (t) => {
   t.is(isModelTypeAlias('onnx-tts'), false)
   t.is(isModelTypeAlias('tts-ggml'), false)
   t.is(isModelTypeAlias('ggml-ocr'), false)
+  t.is(isModelTypeAlias('audiogen-ggml'), false)
 })
 
 test('modelTypeInputSchema accepts aliases', (t) => {
@@ -102,6 +110,7 @@ test('modelTypeInputSchema accepts aliases', (t) => {
   t.is(modelTypeInputSchema.parse('parakeet'), 'parakeet')
   t.is(modelTypeInputSchema.parse('tts'), 'tts')
   t.is(modelTypeInputSchema.parse('ocr'), 'ocr')
+  t.is(modelTypeInputSchema.parse('audiogen'), 'audiogen')
 })
 
 test('modelTypeInputSchema accepts canonical values', (t) => {
@@ -113,6 +122,7 @@ test('modelTypeInputSchema accepts canonical values', (t) => {
   t.is(modelTypeInputSchema.parse('onnx-tts'), 'onnx-tts')
   t.is(modelTypeInputSchema.parse('tts-ggml'), 'tts-ggml')
   t.is(modelTypeInputSchema.parse('ggml-ocr'), 'ggml-ocr')
+  t.is(modelTypeInputSchema.parse('audiogen-ggml'), 'audiogen-ggml')
 })
 
 test('modelTypeInputSchema rejects invalid values', (t) => {
@@ -130,6 +140,7 @@ test('modelTypeSchema transforms aliases to canonical', (t) => {
   t.is(modelTypeSchema.parse('parakeet'), 'parakeet-transcription')
   t.is(modelTypeSchema.parse('tts'), 'tts-ggml')
   t.is(modelTypeSchema.parse('ocr'), 'ggml-ocr')
+  t.is(modelTypeSchema.parse('audiogen'), 'audiogen-ggml')
 })
 
 test('modelTypeSchema passes through canonical values', (t) => {
@@ -141,6 +152,7 @@ test('modelTypeSchema passes through canonical values', (t) => {
   t.is(modelTypeSchema.parse('onnx-tts'), 'onnx-tts')
   t.is(modelTypeSchema.parse('tts-ggml'), 'tts-ggml')
   t.is(modelTypeSchema.parse('ggml-ocr'), 'ggml-ocr')
+  t.is(modelTypeSchema.parse('audiogen-ggml'), 'audiogen-ggml')
 })
 
 test('modelTypeSchema rejects invalid values', (t) => {
