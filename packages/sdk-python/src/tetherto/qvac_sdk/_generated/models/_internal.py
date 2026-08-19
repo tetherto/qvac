@@ -6625,6 +6625,11 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode(Enum):
     sequential = "sequential"
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
+    on = "on"
+    off = "off"
+
+
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     ctx_size: float | None = None
     temp: Annotated[float | None, Field(ge=0.0, le=2.0)] = None
@@ -6671,6 +6676,10 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     image_tile_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode | None,
         Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"),
+    ] = None
+    image_no_upscale: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale | None,
+        Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"),
     ] = None
     mmproj_use_gpu: Annotated[bool | None, Field(alias="mmproj-use-gpu")] = None
 
