@@ -226,3 +226,30 @@ runs:
         fi
 
         echo "All requested $PLAT_UPPER device(s) exist on Device Farm."
+
+        # Overlap guard: the scheduler creates one run per selector with
+        # maxDevices:1, so two selectors that resolve to the SAME fleet model
+        # would schedule (and bill) that model twice. `unique` on the raw input
+        # strings can't catch this because two different CONTAINS selectors can
+        # share a match (e.g. "Google Pixel 9" and "Google Pixel 9 Pro" both
+        # match "Google Pixel 9 Pro"). Resolve every selector to the fleet
+        # model(s) it matches and reject any model claimed by more than one.
+        # EQUALS selectors are exact, so distinct EQUALS values never overlap —
+        # this only ever fires for ambiguous CONTAINS selections.
+        MATCHED_ALL='[]'
+        for MIDX in $(seq 0 $((MODEL_COUNT - 1))); do
+          MODEL=$(echo "$MODELS_JSON" | jq -r ".[$MIDX]")
+          if [ "$MODEL_OP" = "EQUALS" ]; then
+            SEL_MODELS=$(echo "$FLEET" | jq -c --arg m "$MODEL" '[.[] | select(.model == $m) | .model] | unique')
+          else
+            SEL_MODELS=$(echo "$FLEET" | jq -c --arg m "$MODEL" '[.[] | select(.model | contains($m)) | .model] | unique')
+          fi
+          MATCHED_ALL=$(jq -nc --argjson a "$MATCHED_ALL" --argjson b "$SEL_MODELS" '$a + $b')
+        done
+        DUPES=$(echo "$MATCHED_ALL" | jq -c 'group_by(.) | map(select(length > 1) | .[0]) | unique')
+        if [ "$(echo "$DUPES" | jq 'length')" -gt 0 ]; then
+          echo "::error::device selectors overlap on model(s) $(echo "$DUPES" | jq -r 'join(", ")') — Device Farm could schedule (and bill) the same model more than once. For a multi-device run, use -f device_model_operator=EQUALS with exact, distinct fleet names (see the device table in docs/ci/MOBILE-ON-DEMAND.md)."
+          exit 1
+        fi
+
+        echo "No overlapping $PLAT_UPPER device selectors — every requested run maps to a distinct model."

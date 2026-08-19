@@ -1588,6 +1588,11 @@ test('mobile validate-devices fails fast on an unknown tests filter and an overs
   // The device list is de-duplicated + capped, matching the scheduler.
   assert.match(action, /map\(select\(length > 0\)\) \| unique/)
   assert.match(action, /MAX_DEVICES=10/)
+  // gianni P2: overlapping CONTAINS selectors that resolve to the same fleet
+  // model are rejected before scheduling, so a model can't be billed twice.
+  assert.match(action, /select\(\.model \| contains\(\$m\)\)/)
+  assert.match(action, /group_by\(\.\) \| map\(select\(length > 1\)/)
+  assert.match(action, /selectors overlap on model/)
   // Gustavo: a `tests` filter that matches zero known runners is rejected here
   // (before any build) so a typo can't run zero tests and pass green. Multi-spec
   // addons source runner names + shard count from their test-groups.json...

@@ -64,6 +64,13 @@ match works depends on `device_model_operator`:
 - **`EQUALS`**: your value must be the **exact** fleet model — `Pixel 9` is
   rejected; you must pass `Google Pixel 9`.
 
+> **Use `EQUALS` for multi-device runs.** Because `CONTAINS` selectors can
+> overlap (`Google Pixel 9` and `Google Pixel 9 Pro` both match
+> `Google Pixel 9 Pro`), two selectors could land on the **same** physical model
+> and bill it twice. `validate-devices` now rejects overlapping selections up
+> front, so for any `devices_custom` list with more than one entry pass exact,
+> distinct fleet names with `-f device_model_operator=EQUALS`.
+
 The dropdown uses **exact** names so they work with either operator:
 
 | Platform | Exact `MODEL` values (dropdown) | Manufacturer |
