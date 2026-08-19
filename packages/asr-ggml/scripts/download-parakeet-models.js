@@ -10,12 +10,14 @@ const REGISTRY_DATE_Q4_0 = '2026-05-27'
 const REGISTRY_DATE_2026_07_01 = '2026-07-01'
 const REGISTRY_DATE_STREAMING = '2026-05-20'
 const REGISTRY_DATE_INDIC = '2026-08-07'
+const REGISTRY_DATE_UNIFIED = '2026-08-13'
 const REGISTRY_SOURCE = 's3'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
 const ALL_TYPES = [
   'ctc',
   'tdt',
+  'unified',
   'eou',
   'sortformer',
   'sortformer-streaming-v2.1',
@@ -33,6 +35,11 @@ const MODELS = {
     f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-tdt-0.6b-v3.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-tdt-0.6b-v3.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-tdt-0.6b-v3.q4_0.gguf')
+  },
+  unified: {
+    f16: filenameAt(REGISTRY_DATE_UNIFIED, 'parakeet-unified-en-0.6b.f16.gguf'),
+    q8_0: filenameAt(REGISTRY_DATE_UNIFIED, 'parakeet-unified-en-0.6b.q8_0.gguf'),
+    q4_0: filenameAt(REGISTRY_DATE_UNIFIED, 'parakeet-unified-en-0.6b.q4_0.gguf')
   },
   eou: {
     f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-eou-120m-v1.f16.gguf'),
@@ -185,7 +192,11 @@ async function main() {
   console.log('Done.')
 }
 
-main().catch((err) => {
-  console.error(err && err.message ? err.message : err)
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err && err.message ? err.message : err)
+    process.exit(1)
+  })
+}
+
+module.exports = { ALL_TYPES, ALL_QUANTS, MODELS, parseArgs, selectVariants }

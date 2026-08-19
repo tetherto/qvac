@@ -1,6 +1,6 @@
 'use strict'
 
-// GPU smoke tests across all 4 parakeet model types.
+// GPU smoke tests across all supported parakeet model types.
 //
 // Today every other integration test sets `useGPU: false`, so the
 // integration matrix only exercises the CPU fallback path on real
@@ -265,6 +265,30 @@ test(
         return
       }
       await runGpuModelTest(t, 'tdt', modelPath, audio, { minTextLength: 10 })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
+test(
+  'Unified GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'unified')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
     } finally {
       try {
         loggerBinding.releaseLogger()

@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
+  chain order and can be mixed or repeated. The source is interleaved stereo PCM
+  at 48 kHz (`Float32Array` samples in `[-1, 1]`, or addon-output `Int16Array`).
+- FlowEdit (`flowEdit()` / chained `.edit()`), turbo DiT only (`turbo-q4`,
+  `turbo-q8`; `sft` is rejected before native dispatch):
+  - `from` / `to`: current and target prompts (`caption`, optional `lyrics`;
+    lyrics default to `[Instrumental]`)
+  - `nMin` / `nMax`: active diffusion window in `[0, 1]` (defaults `0` / `1`)
+  - `nAvg`: forward-noise samples averaged per active step (default `1`,
+    minimum `1`)
+- Repaint (`repaint()`):
+  - `caption` / optional `lyrics` (lyrics default to `[Instrumental]`)
+  - `start`: region start in seconds (required, `>= 0`, inside the source)
+  - `end`: region end in seconds; omit to repaint through the source end
+  - the selected range must stay inside the source duration and span at least
+    one latent frame (`1/25` s)
+  - `mode`: `conservative` | `balanced` | `aggressive` (default `balanced`)
+  - `strength`: balanced-mode preservation in `[0, 1]` (default `0.5`)
+- `run({ seed })` on the edit session seeds the first operation; each later
+  operation uses `seed + index`.
+
+## [0.2.3] - 2026-08-18
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-18, which brings in ggml-speech
+  2026-08-18. The update prevents unsupported wide OpenCL GEMV workgroups on
+  Adreno devices and hardens padded DIAG_MASK_INF launches and diagnostics.
+
+### Fixed
+
+- Declare `bare-process` as a runtime dependency for the published benchmark
+  runner and its shipped utilities.
+
+## [0.2.2] - 2026-08-17
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-17, which brings in
+  ggml-speech 2026-08-17. The engine sources for this package are unchanged; the
+  ggml update fixes an uncatchable abort in the OpenCL elementwise ops on a
+  non-contiguous input and speeds up pad, small-M matmul and argmax dispatches
+  on Adreno.
+
+## [0.2.1] - 2026-08-14
+
 ### Breaking
 
 - Treat `destroy()` as terminal. Replace `await gen.destroy(); await gen.load()`
@@ -52,9 +100,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JavaScript API (`referenceAudio`, `sourceAudio`, `taskType`,
   `audioCoverStrength`, `coverNoiseStrength`) and forward them to audiogen-cpp.
 - Validate ACE-Step GPU generation on Android with a strict mobile smoke test:
-  `useGPU: true` must resolve to Vulkan (`backendDevice=1`, `backendId=3`) and
-  produce non-silent 48 kHz stereo audio. This covers ARM Mali devices such as
-  Pixel 9a instead of silently accepting a CPU fallback.
+  `useGPU: true` must resolve to Vulkan or OpenCL and produce non-silent 48 kHz
+  stereo audio. This covers Mali and Adreno devices without accepting a CPU
+  fallback.
 - Expose ACE-Step LM sampling controls, Haar DCW parameters, and optional frozen
   semantic codes through the JavaScript API for reproducible quality comparisons.
 - Export structured AudioGen errors with a CommonJS-compatible error runtime and

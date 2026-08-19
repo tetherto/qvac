@@ -18,11 +18,6 @@ jobs:
       statuses: write
     environment: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'fork-ci' || '' }}
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          egress-policy: audit
-
       - name: Record fork-ci approval on head SHA
         if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
         env:

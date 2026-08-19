@@ -1,9 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "094401e6562d0c38df07021d20d7a23e40227b3f",
-    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-23762/metadata-aware-caption-conditioning"
+    "baseline": "6abef47d396143286153203be55830d67bf7ed79",
+    "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
     {

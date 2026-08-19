@@ -46,6 +46,10 @@ function optionalFiniteNumber(value, name, integer = false) {
     return value === undefined ? undefined : requireFiniteNumber(value, name, integer);
 }
 const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq']);
+const AUDIO_LATENT_RATE = 25;
+const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE;
+const REPAINT_RANGE_EPSILON_SECONDS = 1e-5;
+const FLOW_EDIT_TURBO_VARIANTS = 'turbo-q4, turbo-q8';
 function optionalTaskType(value) {
     if (value === undefined)
         return undefined;
@@ -59,6 +63,45 @@ function requireFinitePcm(value, name) {
         if (!Number.isFinite(sample)) {
             throw invalidInput(`${name} must contain only finite samples`);
         }
+    }
+}
+function requireNormalizedPcm(value, name) {
+    for (const sample of value) {
+        if (!Number.isFinite(sample) || sample < -1 || sample > 1) {
+            throw invalidInput(`${name} must contain finite samples in [-1, 1]`);
+        }
+    }
+}
+function int16ToNormalizedFloat32(pcm) {
+    const converted = new Float32Array(pcm.length);
+    for (let i = 0; i < pcm.length; ++i) {
+        const sample = pcm[i];
+        converted[i] = sample < 0 ? sample / 32768 : sample / 32767;
+    }
+    return converted;
+}
+function isSftDit(ditVariant, ditModelPath) {
+    if (ditVariant === 'sft')
+        return true;
+    if (ditModelPath === undefined)
+        return false;
+    const file = ditModelPath.split(/[/\\]/).pop() ?? '';
+    return /(?:^|[^a-z])sft(?:[^a-z]|$)/i.test(file.replace(/\.gguf$/i, ''));
+}
+function sourceDurationSeconds(source) {
+    return source.pcm.length / source.channels / source.sampleRate;
+}
+function requireRepaintRange(source, start, end) {
+    const duration = sourceDurationSeconds(source);
+    const resolvedEnd = end === -1 ? duration : end;
+    if (start > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+        throw invalidInput('repaint.start must be within the source duration');
+    }
+    if (end !== -1 && end > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+        throw invalidInput('repaint.end must be within the source duration');
+    }
+    if (resolvedEnd - start < LATENT_FRAME_SECONDS - REPAINT_RANGE_EPSILON_SECONDS) {
+        throw invalidInput('repaint range must span at least one latent frame');
     }
 }
 function optionalStereoPcm(value, name) {
@@ -93,15 +136,10 @@ function requireEditSource(source) {
         throw invalidInput('edit source pcm must be interleaved stereo');
     }
     if (source.pcm instanceof Float32Array) {
-        requireFinitePcm(source.pcm, 'edit source pcm');
+        requireNormalizedPcm(source.pcm, 'edit source pcm');
         return source.pcm;
     }
-    const pcm = new Float32Array(source.pcm.length);
-    for (let i = 0; i < source.pcm.length; ++i) {
-        const sample = source.pcm[i];
-        pcm[i] = sample < 0 ? sample / 32768 : sample / 32767;
-    }
-    return pcm;
+    return int16ToNormalizedFloat32(source.pcm);
 }
 function requirePrompt(prompt, name) {
     if (typeof prompt !== 'object' || prompt === null) {
@@ -131,16 +169,21 @@ function errorMessage(error) {
 class AudioEditSession {
     _source;
     _runner;
+    _allowFlowEdit;
     _operations = [];
     _started = false;
-    constructor(_source, _runner) {
+    constructor(_source, _runner, _allowFlowEdit) {
         this._source = _source;
         this._runner = _runner;
+        this._allowFlowEdit = _allowFlowEdit;
     }
-    /** Append a Flow-Edit operation. */
+    /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
     flowEdit(options) {
         if (this._started)
             throw invalidInput('cannot modify an edit session after run()');
+        if (!this._allowFlowEdit) {
+            throw invalidInput(`flowEdit is supported on turbo DiT variants only (${FLOW_EDIT_TURBO_VARIANTS})`);
+        }
         if (typeof options !== 'object' || options === null) {
             throw invalidInput('flowEdit options must be an object');
         }
@@ -184,6 +227,7 @@ class AudioEditSession {
         if (end !== -1 && end <= start) {
             throw invalidInput('repaint.end must be greater than repaint.start');
         }
+        requireRepaintRange(this._source, start, end);
         if (!Object.values(audiogen_1.RepaintMode).includes(mode)) {
             throw invalidInput('repaint.mode must be conservative|balanced|aggressive');
         }
@@ -231,6 +275,7 @@ class AudioGen {
     _runExclusive;
     _configuration;
     _logger;
+    _ditVariant;
     _lifecycleRevision;
     _destroyed;
     _cancelPromise;
@@ -239,6 +284,7 @@ class AudioGen {
         this._logger = new QvacLogger(options.logger);
         const files = options.files ?? {};
         const config = options.config ?? {};
+        this._ditVariant = files.ditVariant;
         // DiT selection: an explicit `ditModel` path always wins; otherwise a
         // `ditVariant` enum picks which DiT GGUF to load from `modelDir` (the three
         // other stages are fixed, so the variant is the only real choice).
@@ -336,9 +382,10 @@ class AudioGen {
     /**
      * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
      * be repeated and are executed in the exact order in which they are chained.
+     * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
      */
     edit(source) {
-        return new AudioEditSession(source, async (audio, operations, options) => this._runEdit(audio, operations, options));
+        return new AudioEditSession(source, async (audio, operations, options) => this._runEdit(audio, operations, options), !isSftDit(this._ditVariant, this._configuration.ditModelPath));
     }
     async _runEdit(source, operations, options) {
         const sourceAudio = requireEditSource(source);

@@ -87,7 +87,7 @@ When a new cache key is used for the first time:
 
 - `cacheKey` — User-provided or auto-generated session identifier
 - `modelId` — Unique identifier for the loaded model instance
-- `configHash` — Hash of system prompt + tool names (ensures cache validity)
+- `configHash` — Hash of system prompt + complete canonical tool definitions (ensures cache validity)
 
 ### Auto-Cache Retention
 
@@ -177,7 +177,7 @@ Injecting the prime via closure keeps `kv-cache-session.ts` free of model-regist
 
 ### Config Hash Generation (generateConfigHash)
 
-Cache validity is tied to a SHA-256 hash of system prompt content + sorted tool names. Model config is NOT included (per addon team: doesn't affect cache validity). Changing tools mid-session creates a new cache with the new tools anchored. Dynamic-mode tools intentionally do NOT participate in the hash so the cache can survive per-turn tool sets.
+Cache validity is tied to a SHA-256 hash of the system prompt content + complete canonical tool definitions. Object keys are sorted recursively to avoid cache misses caused only by insertion order; tool-array order is preserved because it matches the prompt sent to the model. Model config is NOT included (per addon team: doesn't affect cache validity). Changing any prompt-affecting tool field mid-session creates a new cache with the new tools anchored.
 
 ### Auto-Cache Rename Flow
 
@@ -233,7 +233,7 @@ Enable with `loggerLevel: "debug"` in config. Logs from `cache-logger.ts` show:
 
 ## MCP Compatibility
 
-KV Cache works with MCP tools. Only tool names are hashed (sorted alphabetically) — tool order, descriptions, and parameter changes don't affect cache key. Adding/removing tools creates a new cache.
+KV Cache works with MCP tools. Complete canonical tool definitions are hashed: object-key insertion order does not affect the cache key, while tool-array order and changes to names, descriptions, or parameters create a new cache.
 
 ## Common Issues
 

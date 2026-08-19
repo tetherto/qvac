@@ -452,8 +452,14 @@ function generateDiffusionName({
   return nameParts.map(cleanPart).join('_')
 }
 
+function isIndicConformer(filename: string, lowerPath: string) {
+  const haystack = `${filename.toLowerCase()} ${lowerPath}`
+  return haystack.includes('indic-conformer') || haystack.includes('indic_conformer')
+}
+
 function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInput): string {
   const lower = filename.toLowerCase()
+  const family = isIndicConformer(filename, lowerPath) ? 'INDIC_CONFORMER' : ''
 
   let variant = ''
   if (lower.includes('sortformer') || lower.includes('diar_streaming')) {
@@ -474,7 +480,7 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     const versionHint = versionMatch ? `V${versionMatch[1]!}` : ''
     const speakerHint = speakerMatch ? speakerMatch[1]! : ''
 
-    const nameParts = [variant, paramsHint, speakerHint, versionHint, quantization].filter(
+    const nameParts = [family, variant, paramsHint, speakerHint, versionHint, quantization].filter(
       (p) => p && p !== ''
     )
     return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
@@ -505,6 +511,6 @@ function generateParakeetName({ filename, lowerPath, quantization }: BaseNameInp
     fileRole = cleanPart(filename.replace(/\.\w+$/, ''))
   }
 
-  const nameParts = [variant, fileRole, quantization].filter((p) => p && p !== '')
+  const nameParts = [family, variant, fileRole, quantization].filter((p) => p && p !== '')
   return `PARAKEET_${nameParts.map(cleanPart).join('_')}`
 }

@@ -13,8 +13,10 @@ import { delegateSchema } from './delegate'
 import { nmtConfigBaseSchema, nmtConfigSchema } from './translation-config'
 import {
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS,
+  ttsAudio8LoadConfigSchema,
   ttsChatterboxLoadConfigSchema,
   ttsConfigSchema,
+  ttsCosyvoice3LoadConfigSchema,
   ttsParlerLoadConfigSchema,
   ttsSupertonicLoadConfigSchema
 } from './text-to-speech'
@@ -60,7 +62,8 @@ import { reloadConfigRequestSchema } from './reload-config'
 const loadModelCommonFields = {
   modelSrc: modelSrcInputSchema,
   seed: z.boolean().optional(),
-  delegate: delegateSchema
+  delegate: delegateSchema,
+  fallbackSrc: z.string().optional()
 }
 
 const loadModelRequestCommonFields = {
@@ -92,6 +95,8 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
       ttsChatterboxLoadConfigSchema,
       ttsSupertonicLoadConfigSchema,
       ttsParlerLoadConfigSchema,
+      ttsCosyvoice3LoadConfigSchema,
+      ttsAudio8LoadConfigSchema,
       LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
     )
   ],
@@ -261,6 +266,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -279,6 +285,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -297,6 +304,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -315,6 +323,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -333,6 +342,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -360,6 +370,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -378,6 +389,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -396,6 +408,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -414,6 +427,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -433,6 +447,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -451,6 +466,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     })),
   z
@@ -470,6 +486,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
       seed: data.seed ?? false,
       withProgress: data.withProgress ?? !!data.onProgress,
       delegate: data.delegate,
+      ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
       ...(data.requestId !== undefined && { requestId: data.requestId })
     }))
 ])
@@ -491,6 +508,7 @@ export const loadCustomPluginToRequestSchema = z
     seed: data.seed ?? false,
     withProgress: data.withProgress ?? !!data.onProgress,
     delegate: data.delegate,
+    ...(data.fallbackSrc !== undefined && { fallbackSrc: data.fallbackSrc }),
     ...(data.requestId !== undefined && { requestId: data.requestId })
   }))
 
@@ -510,6 +528,12 @@ const commonModelConfigSchema = z.object({
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),
   delegate: delegateSchema,
+  fallbackSrc: z
+    .string()
+    .optional()
+    .describe(
+      'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
+    ),
   requestId: z
     .string()
     .min(1)
@@ -762,6 +786,7 @@ export type LoadModelDescriptorOnlyOptions = {
   modelConfig?: Record<string, unknown>
   seed?: boolean
   delegate?: z.input<typeof delegateSchema>
+  fallbackSrc?: string
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger
 }
@@ -807,6 +832,7 @@ export type LoadModelDescriptorInferredOptions<S extends ModelDescriptor> = {
   modelConfig?: InferredConfig<S>
   seed?: boolean
   delegate?: z.input<typeof delegateSchema>
+  fallbackSrc?: string
   onProgress?: (progress: ModelProgressUpdate) => void
   logger?: Logger
 }

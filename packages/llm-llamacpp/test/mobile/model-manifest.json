@@ -29,12 +29,12 @@
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
     },
     {
-      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "visionpsy-nano-460m-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
     },
     {
-      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "mmproj-visionpsy-nano-460m-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
     }
   ],
   "runFinetuningArchsTest": [
@@ -137,12 +137,12 @@
   ],
   "runImageElephantTest": [
     {
-      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "visionpsy-nano-460m-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
     },
     {
-      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "mmproj-visionpsy-nano-460m-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
     },
     {
       "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
@@ -155,12 +155,12 @@
   ],
   "runImageFruitPlateTest": [
     {
-      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "visionpsy-nano-460m-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
     },
     {
-      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "mmproj-visionpsy-nano-460m-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
     },
     {
       "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
@@ -173,12 +173,12 @@
   ],
   "runImageHighResAuroraTest": [
     {
-      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "visionpsy-nano-460m-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
     },
     {
-      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "mmproj-visionpsy-nano-460m-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
     },
     {
       "name": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
@@ -191,12 +191,12 @@
   ],
   "runImageMmprojGpuTest": [
     {
-      "name": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "visionpsy-nano-460m-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf"
     },
     {
-      "name": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
-      "url": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf"
+      "name": "mmproj-visionpsy-nano-460m-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf"
     }
   ],
   "runKvCacheTypeDefaultsTest": [
@@ -413,6 +413,16 @@
     {
       "name": "Llama-3.2-1B-Instruct-Q4_0.gguf",
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/067b946cf014b7c697f3654f621d577a3e3afd1c/Llama-3.2-1B-Instruct-Q4_0.gguf"
+    }
+  ],
+  "runVisionpsyImageNoUpscaleTokensTest": [
+    {
+      "name": "visionpsy-nano-460m-flash-q8_0.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf"
+    },
+    {
+      "name": "mmproj-visionpsy-nano-460m-flash-q8.gguf",
+      "url": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf"
     }
   ]
 }

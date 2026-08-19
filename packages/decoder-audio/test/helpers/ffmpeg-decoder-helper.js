@@ -4,7 +4,7 @@ const path = require('bare-path')
 const { FFmpegDecoder } = require('../..')
 const { runDecoder: runDecoderBase } = require('./decoder-helper')
 
-async function loadDecoder (params = {}) {
+async function loadDecoder(params = {}) {
   const config = {
     audioFormat: params.audioFormat || 's16le',
     sampleRate: params.sampleRate || 16000,
@@ -18,11 +18,17 @@ async function loadDecoder (params = {}) {
   return decoder
 }
 
-async function runDecoder (decoder, audioFilePath, expectation = {}, params = {}) {
+async function runDecoder(decoder, audioFilePath, expectation = {}, params = {}) {
   const defaultRawPath = path.join(__dirname, '../../../example/output_ffmpeg.raw')
   const defaultAudioFormat = params.audioFormat || decoder.config?.audioFormat || 's16le'
 
-  return runDecoderBase(decoder, audioFilePath, expectation, { ...params, audioFormat: defaultAudioFormat }, defaultRawPath)
+  return runDecoderBase(
+    decoder,
+    audioFilePath,
+    expectation,
+    { ...params, audioFormat: defaultAudioFormat },
+    defaultRawPath
+  )
 }
 
 module.exports = { loadDecoder, runDecoder }

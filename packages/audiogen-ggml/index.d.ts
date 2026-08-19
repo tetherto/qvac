@@ -107,7 +107,10 @@ export interface GenerateOptions {
 }
 /** PCM accepted by the source-driven editing API. */
 export interface AudioEditSource {
-    /** Interleaved stereo PCM. Int16 output chunks can be reused directly. */
+    /**
+     * Interleaved stereo PCM. Float32 samples must be finite and in `[-1, 1]`.
+     * Int16 output chunks can be reused directly.
+     */
     pcm: Float32Array | Int16Array;
     sampleRate: number;
     channels: number;
@@ -116,6 +119,7 @@ export interface AudioEditPrompt {
     caption: string;
     lyrics?: string;
 }
+/** v1 Flow-Edit. Supported on turbo DiT only (`turbo-q4`, `turbo-q8`). */
 export interface FlowEditOptions {
     /** Description of the unedited source audio. */
     from: AudioEditPrompt;
@@ -129,9 +133,15 @@ export interface FlowEditOptions {
     nAvg?: number;
 }
 export interface RepaintOptions extends AudioEditPrompt {
-    /** Repaint region start in seconds. */
+    /**
+     * Repaint region start in seconds. Must lie inside the source duration and
+     * leave at least one latent frame (`1/25` s) before `end`.
+     */
     start: number;
-    /** Repaint region end in seconds. Omit to repaint through the source end. */
+    /**
+     * Repaint region end in seconds. Omit to repaint through the source end.
+     * Must not exceed the source duration.
+     */
     end?: number;
     mode?: RepaintMode;
     /** Balanced-mode preservation strength in [0, 1]. */
@@ -207,10 +217,11 @@ type EditRunner = (source: AudioEditSource, operations: readonly AudioEditOperat
 export declare class AudioEditSession {
     private readonly _source;
     private readonly _runner;
+    private readonly _allowFlowEdit;
     private readonly _operations;
     private _started;
-    constructor(_source: AudioEditSource, _runner: EditRunner);
-    /** Append a Flow-Edit operation. */
+    constructor(_source: AudioEditSource, _runner: EditRunner, _allowFlowEdit: boolean);
+    /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
     flowEdit(options: FlowEditOptions): this;
     /** Alias for `flowEdit()` so `.edit().repaint().edit()` reads naturally. */
     edit(options: FlowEditOptions): this;
@@ -233,6 +244,7 @@ export declare class AudioGen {
     private readonly _runExclusive;
     private readonly _configuration;
     private readonly _logger;
+    private readonly _ditVariant;
     private _lifecycleRevision;
     private _destroyed;
     private _cancelPromise;
@@ -249,6 +261,7 @@ export declare class AudioGen {
     /**
      * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
      * be repeated and are executed in the exact order in which they are chained.
+     * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
      */
     edit(source: AudioEditSource): AudioEditSession;
     private _runEdit;

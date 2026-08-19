@@ -1,6 +1,6 @@
 # SDK Tests
 
-SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
+SDK dogfooding tests built on [`@qvac/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
 (packaged Electron main process), strict Snap, or mobile (Bare + React Native).
 
@@ -112,6 +112,11 @@ The first revision records its home/common paths and creates SDK registry Corest
 must have a different revision home while preserving and reopening those SDK-owned files from common storage.
 After that preflight, the normal MQTT consumer runs the Electron-supported SDK model and addon tests inside the
 installed Snap.
+
+GPU inference uses Canonical's `graphics-core22` content interface and wrapper, with `mesa-core22` as the default
+userspace driver provider. The refresh harness and CI explicitly connect this provider for locally built,
+unsigned Snaps before launching them; the `opengl` plug alone exposes device access but does not supply the
+matching Vulkan userspace drivers required by the native inference backends.
 
 Use `QVAC_TEST_SNAP_SUDO=0` when snap administration does not require `sudo`. Set
 `QVAC_TEST_SNAP_KEEP_INSTALLED=1` to preserve the package and common data after refresh diagnostics.

@@ -35,7 +35,7 @@ const WhisperInferenceArgsSchema = z.object({
 const ParakeetConfigSchema = z
   .object({
     modelType: z
-      .enum(['tdt', 'ctc', 'eou', 'sortformer', 'indic-conformer'])
+      .enum(['tdt', 'unified', 'ctc', 'eou', 'sortformer', 'indic-conformer'])
       .optional()
       .default('tdt'),
     language: z.string().min(1).optional(),

@@ -43,6 +43,10 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 
 * **Logger API (`getLogger`)** — Create loggers for your application code with custom transports. Console output enabled by default; set `enableConsole: false` to use only custom transports.
 
+<Callout type="info">
+**Python:** `getLogger` is JS/TS-only and intentionally not ported — use the standard library [`logging`](https://docs.python.org/3/library/logging.html) module (a `logging.Handler` is the transport equivalent). The log-stream APIs `logging_stream` and `subscribe_server_logs` (plus `SDK_LOG_ID` / `SDK_ALL_LOG_ID`) **are** available in the Python SDK.
+</Callout>
+
 It works for all model types (LLM, Whisper, NMT, Embeddings) and provides valuable insight into model performance and behavior.
 
 ## Configuration

@@ -1,5 +1,5 @@
 // RAG test definitions
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 const createRagTest = (
   testId: string,

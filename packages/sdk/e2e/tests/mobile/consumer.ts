@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@tetherto/qvac-test-suite/mobile'
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor } from '@qvac/qvac-test-suite/mobile'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -22,6 +22,9 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
   TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  TTS_CODEC_DECODER_AUDIO8_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
@@ -134,12 +137,6 @@ resources.define('tools', {
   constant: QWEN3_1_7B_INST_Q4,
   type: 'llamacpp-completion',
   config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
 })
 
 resources.define('ocr', {
@@ -302,6 +299,42 @@ resources.define('tts-parler-indic', {
     topK: 1,
     maxFrames: 430,
     normalizeNumbers: true
+  }
+})
+
+resources.define('tts-cosyvoice3', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42
+  }
+})
+
+// Same model with native chunk streaming engaged, so the streaming e2e can
+// exercise the native 24 kHz chunk path rather than generic SDK streaming.
+resources.define('tts-cosyvoice3-native-stream', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10
+  }
+})
+
+resources.define('tts-audio8', {
+  constant: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    greedy: true,
+    maxFrames: 130,
+    seed: 42
   }
 })
 
@@ -548,6 +581,10 @@ export const executor = createExecutor({
       'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
     ),
     new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
+    new SkipExecutor(
+      /^parakeet-indic-conformer-/,
+      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
+    ),
     new SkipExecutor(
       /^vla-groot-/,
       'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
