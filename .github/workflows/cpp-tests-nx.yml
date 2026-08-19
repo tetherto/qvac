@@ -357,10 +357,28 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.hardGateCommand }}
 
+      # Export testEnvVars (options.ci) as absolute paths. node (not jq) because
+      # self-hosted Windows git-bash has no jq. Values land in $GITHUB_ENV so the
+      # run step below inherits them. Absolute (github.workspace/<workdir>/<path>)
+      # because the run step's cwd is the workdir.
+      - name: Resolve C++ test env vars
+        if: matrix.testEnvVars
+        shell: bash
+        env:
+          TEST_ENV_VARS: ${{ toJSON(matrix.testEnvVars) }}
+          WS: ${{ github.workspace }}
+          WD: ${{ matrix.workdir }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${TEST_ENV_VARS:-[]}" | node -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const a=JSON.parse(s||"[]"); const fs=require("fs");
+              for(const r of a) fs.appendFileSync(process.env.GITHUB_ENV, r.name+"="+process.env.WS+"/"+process.env.WD+"/"+r.path+"\n");
+            })'
+
       - name: Run C++ tests
         working-directory: ${{ matrix.workdir }}
-        # bash required: the body uses set/jq/for; the Windows default shell is
-        # PowerShell, which parse-errors on it (broke every windows cpp leg).
+        # bash: consistent shell across linux/windows self-hosted (git-bash).
         shell: bash
         # options.ci.continueOnError: coverage lanes (asr/bci) historically did
         # not fail CI on a C++ test failure (surfaced via the results check only).
@@ -370,14 +388,6 @@ jobs:
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ matrix.workdir }}/.lsan-suppressions.txt
         run: |
           set -uo pipefail
-          for row in $(echo '${{ toJSON(matrix.testEnvVars) }}' | jq -c '.[]?'); do
-            name=$(echo "$row" | jq -r '.name')
-            path=$(echo "$row" | jq -r '.path')
-            # Absolute path: the run step's cwd is matrix.workdir, so a
-            # workdir-relative value would double the prefix. Legacy used
-            # ${{ github.workspace }}/<workdir>/<path>.
-            export "$name=${{ github.workspace }}/${{ matrix.workdir }}/$path"
-          done
           npm run test:cpp:run
 
       - name: Generate Coverage Report

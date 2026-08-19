@@ -129,11 +129,15 @@ jobs:
   prebuild:
     needs: [authorize, ci-router]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true'
+    # actions: read is required down the chain so the reuse action can list
+    # prior runs + download their artifacts (else the reusable job's request
+    # exceeds the caller grant -> startup_failure).
     permissions:
       contents: write
       packages: write
       pull-requests: write
       id-token: write
+      actions: read
     uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
     with:

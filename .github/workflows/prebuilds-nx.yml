@@ -66,6 +66,9 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+      # actions: read lets the reuse action (in reusable-prebuilds) list prior
+      # runs + download their prebuilds artifacts without exceeding the grant.
+      actions: read
     uses: ./.github/workflows/reusable-prebuilds.yml
     with:
       workdir: ${{ matrix.workdir }}

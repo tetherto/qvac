@@ -89,7 +89,7 @@ runs:
             for (const e of JSON.parse(s||"[]")) {
               process.stdout.write([e.dest, e.recursive ? "1" : "0", e.skipOnCacheHit ? "1" : "0", e.src].join("\t") + "\n");
             }
-          })' > /tmp/s3-manifest.tsv
+          })' > "${RUNNER_TEMP:-/tmp}/s3-manifest.tsv"
         cd "$GITHUB_WORKSPACE/$WORKDIR"
         while IFS=$'\t' read -r dest recursive skip src; do
           [ -z "$dest" ] && continue
@@ -109,4 +109,4 @@ runs:
             echo "aws s3 cp s3://$BUCKET/$src -> $dest"
             aws s3 cp "s3://$BUCKET/$src" "$dest"
           fi
-        done < /tmp/s3-manifest.tsv
+        done < "${RUNNER_TEMP:-/tmp}/s3-manifest.tsv"
