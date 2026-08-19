@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+### Pull Requests
+
+- [#3929](https://github.com/tetherto/qvac/pull/3929) - QVAC-23195 fix: bump
+  qvac-fabric to 10069.1.1 across consumers
+
 ## [0.3.0] - 2026-08-18
 
 ### Changed

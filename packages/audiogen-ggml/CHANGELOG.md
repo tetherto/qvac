@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
+  chain order and can be mixed or repeated. The source is interleaved stereo PCM
+  at 48 kHz (`Float32Array` samples in `[-1, 1]`, or addon-output `Int16Array`).
+- FlowEdit (`flowEdit()` / chained `.edit()`), turbo DiT only (`turbo-q4`,
+  `turbo-q8`; `sft` is rejected before native dispatch):
+  - `from` / `to`: current and target prompts (`caption`, optional `lyrics`;
+    lyrics default to `[Instrumental]`)
+  - `nMin` / `nMax`: active diffusion window in `[0, 1]` (defaults `0` / `1`)
+  - `nAvg`: forward-noise samples averaged per active step (default `1`,
+    minimum `1`)
+- Repaint (`repaint()`):
+  - `caption` / optional `lyrics` (lyrics default to `[Instrumental]`)
+  - `start`: region start in seconds (required, `>= 0`, inside the source)
+  - `end`: region end in seconds; omit to repaint through the source end
+  - the selected range must stay inside the source duration and span at least
+    one latent frame (`1/25` s)
+  - `mode`: `conservative` | `balanced` | `aggressive` (default `balanced`)
+  - `strength`: balanced-mode preservation in `[0, 1]` (default `0.5`)
+- `run({ seed })` on the edit session seeds the first operation; each later
+  operation uses `seed + index`.
+
 ## [0.2.3] - 2026-08-18
 
 ### Changed

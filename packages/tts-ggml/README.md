@@ -955,7 +955,8 @@ files are absent.  They cover, across the engines:
   warning),
 * multilingual Chatterbox sweep (es/fr/de/pt) via `chatterbox-mtl.test.js`,
 * on darwin the Chatterbox English batch path is additionally verified
-  for WER against the synthesized audio (whisper-small).
+  for WER against the synthesized audio (whisper-small via the
+  `@qvac/asr-ggml` development dependency).
 
 To stress-test long inputs, set `INPUT_SENTENCES=medium` (or `long`)
 and re-run the integration suite — `addon.test.js` reads the env var to

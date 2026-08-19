@@ -32,27 +32,126 @@ on:
         type: string
         required: false
         default: "packages/ocr-ggml"
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below — it never runs the full default pool. The
+  # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'. Valid names + how to find them: docs/ci/MOBILE-ON-DEMAND.md."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Google Pixel 9"
+          - "Google Pixel 8"
+          - "Samsung Galaxy S25 Ultra"
+          - "Apple iPhone 17"
+          - "Apple iPhone 16 Pro"
+          - "Apple iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
+        type: choice
+        required: false
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
+      tests:
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full sharded suite (many runs). Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
+        type: string
+        required: false
+        default: ""
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
         type: string
         required: false
-        default: main
+        default: ""
       package:
-        description: "Full NPM package spec to test"
+        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/ocr-ggml@<ver> (published) or @tetherto/ocr-ggml@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
-        default: "@qvac/ocr-ggml@latest"
+        default: ""
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
         default: "packages/ocr-ggml"
 
+concurrency:
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks a
+  # second Device Farm run. Different branches map to different groups, so the
+  # same addon can still be tested on 2-3 branches in parallel. workflow_call
+  # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
+  # inputs.platform is only ever set on a manual dispatch, and under workflow_call
+  # github.* resolves to the CALLER, so run_id keeps each call self-contained.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
+
 jobs:
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE any build or Device Farm run, so a typo
+  # or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      # Validate the tests filter + shard fan-out against test-groups.json from
+      # the SAME ref the build executes (inputs.ref || github.sha), not the
+      # workflow ref, so a branch that renames/adds runners or shards can't pass
+      # stale validation. Data only — nothing here is executed; the composite
+      # action stays on the trusted workflow ref checked out above.
+      - name: Checkout validation data (matches the built ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            packages/ocr-ggml/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: false
+          path: validation-data
+          persist-credentials: false
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: validation-data/packages/ocr-ggml/test/mobile/test-groups.json
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
+    # workflow_call: validate-devices is skipped; the `skipped` branch of the
+    # condition keeps this job running exactly as before.
+    # workflow_dispatch: a bad/empty device selection blocks this job.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
@@ -64,14 +163,9 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: Android
-            os: ubuntu-24.04
-            runner: qvac-ubuntu2404-x64
-          - platform: iOS
-            os: macos-14
-            runner: macos-14
+      # On workflow_dispatch, run only the chosen platform (devices come from
+      # the manual inputs). workflow_call runs both platforms as before.
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
       - name: Checkout composite action source
@@ -85,7 +179,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
@@ -137,8 +231,11 @@ jobs:
           addon-npm-name: '@qvac/ocr-ggml'
           prebuild-artifact-prefix: 'ggml-ocr-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          package-version: ${{ inputs.prebuild_package }}
-          force-npm-prebuild: ${{ inputs.prebuild_package != '' && 'true' || 'false' }}
+          # Manual dispatch (inputs.platform set): default (empty `package`) tests
+          # this branch's native prebuild; @qvac/ocr-ggml@<ver> = published, @tetherto/ocr-ggml@<dev>
+          # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
+          package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
+          force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}
 
       - name: Build mobile app
         id: build
@@ -183,6 +280,26 @@ jobs:
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # On a manual run with a test filter, override to a single grepped spec so
+      # only those tests run (and the sharded fan-out collapses to one spec).
+      # Empty filter / workflow_call keeps the auto-detected shard groups.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          # Reject anything but mocha-safe grep characters so a manual `tests`
+          # value cannot break out of the generated WDIO config on the Device
+          # Farm host (defense-in-depth; the sink is also JSON-encoded).
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       # Sharded mode is wired automatically: the composite reads test-groups.json
       # under <addon-workdir>/test/mobile/ and creates one test spec per group.
       - name: Upload to Device Farm
@@ -196,6 +313,7 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_OCR_FASTTEXT }}
+          test-groups: ${{ steps.manual_tests.outputs.groups }}
           enables-perf: 'true'
           mocha-timeout-ms: '1800000'
           # Host pre-stages the 4 GGUF OCR models before device tests.
@@ -212,6 +330,11 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # workflow_dispatch: fan the chosen shard(s) across the chosen device(s).
+          # workflow_call: default (dual-flagship input) keeps auto-sharded pool runs.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test runs
         id: monitor
