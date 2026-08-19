@@ -504,8 +504,16 @@ jobs:
       - name: Set RTF benchmark matrix env var
         if: always() && !cancelled() && matrix.runRtfBenchmarks
         shell: bash
+        env:
+          # options.ci.rtfBenchmark.env — optional literal {VAR: value} map of
+          # extra benchmark tuning vars a package's runner reads (e.g. audiogen's
+          # WARMUP_RUNS/RUNS/DURATION_S). Absent for packages that need none.
+          RTF_EXTRA_ENV: ${{ toJson(matrix.rtfBenchmark.env) }}
         run: |
           echo "${{ matrix.rtfBenchmark.matrixEnvVar }}=${{ toJson(matrix.benchmarkMatrixJson) }}" >> "$GITHUB_ENV"
+          if [ -n "${RTF_EXTRA_ENV:-}" ] && [ "$RTF_EXTRA_ENV" != "null" ]; then
+            node -e 'const e=JSON.parse(process.env.RTF_EXTRA_ENV||"{}");for(const[k,v]of Object.entries(e))require("fs").appendFileSync(process.env.GITHUB_ENV,`${k}=${v}\n`)'
+          fi
 
       - name: Run RTF benchmark
         if: always() && !cancelled() && matrix.runRtfBenchmarks
@@ -514,6 +522,22 @@ jobs:
         run: ${{ matrix.rtfBenchmark.command }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Loud gate: the runner above is continue-on-error (partial-failure
+      # tolerant), so a run that produced ZERO artifacts would otherwise pass
+      # silently. Mirrors the legacy audiogen "Verify RTF benchmark output" step.
+      - name: Verify RTF benchmark output exists
+        if: always() && !cancelled() && matrix.runRtfBenchmarks
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(benchmarks/results/rtf-benchmark-*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error title=No RTF benchmark output::no benchmarks/results/rtf-benchmark-*.json produced"
+            exit 1
+          fi
+          echo "RTF benchmark produced ${#files[@]} result file(s)"
 
       - name: Upload RTF benchmark results
         if: always() && !cancelled() && matrix.runRtfBenchmarks
