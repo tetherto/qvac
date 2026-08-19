@@ -38,9 +38,13 @@ Supported model families:
 
 - **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Expects **2 camera views** and a **continuous** robot state. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
 - **[π₀.₅ (pi05)](https://www.physicalintelligence.company/blog/pi05)**: single all-in-one `*.gguf` file. Expects **`vlaHparams().numCameras` camera views** (3 for `PI05_BASE_Q_AGGRESSIVE`) and a **discrete** robot state tokenized into the language prompt instead of a state buffer; the `noise` prior is required. Available constant: `PI05_BASE_Q_AGGRESSIVE`.
-- **[NVIDIA GR00T N1.7-3B (LIBERO)](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)**: single all-in-one `*.gguf` file. Reports `imageInputMode: "patches"` — each of its **2 camera views** is passed as a pre-patchified buffer of `vlaHparams().imagePatchElems` floats (not a `3·w·h` pixel plane), so `vlaPreprocessImage()` does not apply. Uses a **continuous** robot state (pad it with `vlaPadState()`), and the `noise` prior is required (flow-matching). Available constants: `GROOT_Q8_VF16` (desktop) and `GROOT_Q5_VF16` (mobile).
+- **[NVIDIA GR00T N1.7-3B](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)**: single all-in-one `*.gguf` file carrying **multiple embodiments** (see [GR00T embodiments](#gr00t-embodiments) below). Reports `imageInputMode: "patches"` — each camera view is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats, so `vlaPreprocessImage()` does not apply. Uses a **continuous** robot state (pad with `vlaPadState()`); the `noise` prior is required (flow-matching). Available constants: `GROOT_Q8_VF16` (desktop) and `GROOT_Q5_VF16` (mobile).
 
 For models available as constants, see [SDK — Models](/introduction#models).
+
+### GR00T embodiments
+
+Unlike SmolVLA and π₀.₅, a single GR00T GGUF carries up to 32 embodiments (the shipped `GROOT_Q8_VF16` / `GROOT_Q5_VF16` include 17). Pick one at load via `modelConfig.embodiment` — a tag string, a numeric `cat_id` in `0..31`, or an object carrying either plus an optional `numCameras` override for a rig whose view count differs from the stored one. Switch to another at runtime with `setEmbodiment()` (~20 MB read vs. reloading the ~4 GB GGUF). `vlaHparams()` reports the resolved embodiment as `selectedEmbodimentTag` / `selectedEmbodimentCatId`, along with its `numCameras`.
 
 ## Examples
 
