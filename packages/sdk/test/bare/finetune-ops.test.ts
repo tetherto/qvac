@@ -533,6 +533,160 @@ test('pauseFinetune: a finetune queued behind an active reader is not global-pau
   }
 })
 
+test('pauseFinetune: with no finetune running never invokes the addon-global pause', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-pause-none-model'
+  let pauseCalls = 0
+
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        throw new Error('finetune should not run')
+      },
+      pause: async function () {
+        pauseCalls++
+      },
+      cancel: async function () {}
+    } as unknown as AnyModel,
+    path: '/tmp/pause-none-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  try {
+    const result = await pauseFinetune(modelId)
+    t.is(result.status, 'PAUSED')
+    t.is(pauseCalls, 0, 'no addon-global pause when no finetune is running')
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('pauseFinetune: an admitted finetune is paused through model.pause()', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-pause-admitted-model'
+  let pauseCalls = 0
+  let finetuneCalls = 0
+  let resolveAwait: ((value: { status: string; stats: object }) => void) | null = null
+
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        finetuneCalls++
+        return {
+          on: () => {},
+          removeListener: () => {},
+          await: () =>
+            new Promise((resolve) => {
+              resolveAwait = resolve
+            })
+        }
+      },
+      pause: async function () {
+        pauseCalls++
+        resolveAwait?.({ status: 'PAUSED', stats: {} })
+      },
+      cancel: async function () {}
+    } as unknown as AnyModel,
+    path: '/tmp/pause-admitted-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  try {
+    const startPromise = startFinetune({
+      type: 'finetune',
+      modelId,
+      operation: 'start',
+      options: {
+        trainDatasetDir: '/tmp/train.jsonl',
+        validation: { type: 'none' },
+        outputParametersDir: '/tmp/out'
+      }
+    })
+    await new Promise((r) => setTimeout(r, 20))
+
+    const pauseResult = await pauseFinetune(modelId)
+    t.is(pauseResult.status, 'PAUSED')
+    t.is(pauseCalls, 1, 'admitted finetune is paused via model.pause()')
+
+    const startResult = await startPromise
+    t.is(startResult.status, 'PAUSED')
+    t.is(finetuneCalls, 1)
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('pauseFinetune: pausing an admitted finetune cancels queued finetune peers', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-pause-admitted-queued-model'
+  let pauseCalls = 0
+  let finetuneCalls = 0
+  let resolveAwait: ((value: { status: string; stats: object }) => void) | null = null
+
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        finetuneCalls++
+        const isA = finetuneCalls === 1
+        return {
+          on: () => {},
+          removeListener: () => {},
+          await: () =>
+            isA
+              ? new Promise((resolve) => {
+                  resolveAwait = resolve
+                })
+              : Promise.resolve({ status: 'COMPLETED', stats: {} })
+        }
+      },
+      pause: async function () {
+        pauseCalls++
+        resolveAwait?.({ status: 'PAUSED', stats: {} })
+      },
+      cancel: async function () {}
+    } as unknown as AnyModel,
+    path: '/tmp/pause-admitted-queued-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const options = {
+    trainDatasetDir: '/tmp/train.jsonl',
+    validation: { type: 'none' as const },
+    outputParametersDir: '/tmp/out'
+  }
+
+  try {
+    // A: admitted, holds the exclusive lane in handle.await().
+    const aPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    await new Promise((r) => setTimeout(r, 20))
+    // B: a second finetune, queues behind A.
+    const bPromise = startFinetune({ type: 'finetune', modelId, operation: 'start', options })
+    await new Promise((r) => setTimeout(r, 20))
+
+    const pauseResult = await pauseFinetune(modelId)
+    t.is(pauseResult.status, 'PAUSED')
+    t.is(pauseCalls, 1, 'the admitted finetune is paused once')
+
+    const aResult = await aPromise
+    t.is(aResult.status, 'PAUSED', 'admitted finetune resolves PAUSED')
+    const bResult = await bPromise
+    t.is(bResult.status, 'CANCELLED', 'queued finetune peer is cancelled, not started')
+    t.is(
+      finetuneCalls,
+      1,
+      'only the admitted finetune ran model.finetune(); the queued peer did not'
+    )
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
 test('startFinetune: revalidates checkpoint state after the exclusive-lane wait', async (t) => {
   clearRegistry()
   const checkpointDir = createTempCheckpointDir()

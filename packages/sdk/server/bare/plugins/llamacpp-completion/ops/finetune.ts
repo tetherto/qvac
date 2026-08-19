@@ -58,12 +58,37 @@ export function clearFinetuneRuntimeState(modelId: string) {
   else finetuneRuntimeState.set(modelId, count - 1)
 }
 
-// modelIds whose finetune currently HOLDS the exclusive lane (admitted, past the
-// queued-abort check) — distinct from the pre-admission running ref above. Only an
-// admitted finetune may be paused through the addon-global model.pause(); pausing
-// while merely queued would cancel an unrelated active reader (completion/translate)
-// and the finetune would still start once the reader released.
-const admittedFinetunes = new Set<string>()
+// Per-model finetune request tracking for pause targeting. `ids` holds every
+// in-flight finetune requestId for the model; `admitted` is the one that currently
+// HOLDS the exclusive lane (at most one, since finetune is exclusive) — the rest are
+// queued peers. Only the admitted finetune may be paused through the addon-global
+// model.pause(); queued finetunes (peers or ones waiting behind a reader) must be
+// cancelled by requestId instead, so pause never touches an unrelated reader and no
+// queued finetune slips into the lane the pause frees.
+interface FinetuneTracking {
+  ids: Set<string>
+  admitted: string | null
+}
+const finetuneTracking = new Map<string, FinetuneTracking>()
+
+function trackFinetune(modelId: string, requestId: string) {
+  const existing = finetuneTracking.get(modelId)
+  if (existing) existing.ids.add(requestId)
+  else finetuneTracking.set(modelId, { ids: new Set([requestId]), admitted: null })
+}
+
+function markFinetuneAdmitted(modelId: string, requestId: string) {
+  const tracking = finetuneTracking.get(modelId)
+  if (tracking) tracking.admitted = requestId
+}
+
+function untrackFinetune(modelId: string, requestId: string) {
+  const tracking = finetuneTracking.get(modelId)
+  if (!tracking) return
+  tracking.ids.delete(requestId)
+  if (tracking.admitted === requestId) tracking.admitted = null
+  if (tracking.ids.size === 0) finetuneTracking.delete(modelId)
+}
 
 export function getFinetuneStateFromCheckpoints(options: FinetuneOptions): FinetuneStatus {
   const checkpointDirectory = options.checkpointSaveDir ?? './checkpoints'
@@ -126,17 +151,22 @@ export async function startFinetune(
   // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
 
+  // Stable id, used for both registry scoping and pause targeting (below).
+  const requestId = request.requestId ?? generateServerRequestId()
+  trackFinetune(request.modelId, requestId)
+
   // Scope the run into the registry so cancel({ requestId }) and
   // cancel({ modelId, kind: "finetune" }) reach it; onAbort forwards to
   // model.cancel().
   await using ctx = await getRequestRegistry()
     .begin({
-      requestId: request.requestId ?? generateServerRequestId(),
+      requestId,
       kind: 'finetune',
       modelId: request.modelId
     })
     .catch((err: unknown) => {
       clearFinetuneRuntimeState(request.modelId)
+      untrackFinetune(request.modelId, requestId)
       throw err
     })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
@@ -144,6 +174,7 @@ export async function startFinetune(
   // removes the listener first.
   ctx.scope.defer(() => {
     clearFinetuneRuntimeState(request.modelId)
+    untrackFinetune(request.modelId, requestId)
   })
 
   // A finetune cancelled while queued resolves aborted without the exclusive
@@ -153,13 +184,10 @@ export async function startFinetune(
     return { type: 'finetune', status: 'CANCELLED' }
   }
 
-  // Past the queued-abort check: this finetune now holds the exclusive lane, so a
-  // global addon pause is safe (nothing else runs on the model). Mark it admitted
-  // for pauseFinetune and clear on scope unwind.
-  admittedFinetunes.add(request.modelId)
-  ctx.scope.defer(() => {
-    admittedFinetunes.delete(request.modelId)
-  })
+  // Past the queued-abort check: this finetune now holds the exclusive lane. Mark
+  // it admitted so pauseFinetune pauses THIS finetune (and cancels any queued
+  // peers) rather than global-pausing while it is merely queued.
+  markFinetuneAdmitted(request.modelId, requestId)
 
   // The pre-admission validation above ran before this request queued for the
   // exclusive lane, so a peer finetune could have changed the checkpoint state
@@ -201,18 +229,24 @@ export async function startFinetune(
 }
 
 export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
-  // Only an admitted finetune holds the model exclusively, so only then is the
-  // addon-global pause (which cancels whatever is running) safe. If a finetune is
-  // merely queued behind an active reader, a global pause would kill that reader
-  // AND the finetune would still start once the reader released — so cancel the
-  // queued finetune (nothing has trained yet) through the registry and never touch
-  // the addon globally.
-  if (admittedFinetunes.has(modelId)) {
+  const tracking = finetuneTracking.get(modelId)
+
+  if (tracking && tracking.admitted !== null) {
+    // An admitted finetune holds the model exclusively, so the addon-global pause is
+    // safe. Cancel every QUEUED finetune peer FIRST so none slips into the lane the
+    // pause is about to free, then pause the admitted one.
+    const admittedId = tracking.admitted
+    for (const id of tracking.ids) {
+      if (id !== admittedId) getRequestRegistry().cancel({ requestId: id })
+    }
     const model = getModel(modelId)
     await model.pause()
     return { type: 'finetune', status: 'PAUSED' }
   }
 
+  // No admitted finetune: a global pause would cancel an unrelated active reader
+  // (completion / LLM-translate). Cancel any queued finetune instead (nothing has
+  // trained yet) and never touch the addon globally.
   getRequestRegistry().cancel({ modelId, kind: 'finetune' })
   return { type: 'finetune', status: 'PAUSED' }
 }
