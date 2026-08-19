@@ -16114,7 +16114,7 @@ export const models = [
     params: ''
   },
   {
-    name: 'PARAKEET_CTC_F16',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_F16',
     registryPath:
       'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf',
     registrySource: 's3',
@@ -16131,7 +16131,7 @@ export const models = [
     params: '600M'
   },
   {
-    name: 'PARAKEET_CTC_Q4_0',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0',
     registryPath:
       'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf',
     registrySource: 's3',
@@ -16148,7 +16148,7 @@ export const models = [
     params: '600M'
   },
   {
-    name: 'PARAKEET_CTC_Q8_0',
+    name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0',
     registryPath:
       'qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf',
     registrySource: 's3',
@@ -23334,8 +23334,8 @@ export const OCR_LATIN = {
   params: models[589].params
 } as const
 
-export const PARAKEET_CTC_F16 = {
-  name: 'PARAKEET_CTC_F16',
+export const PARAKEET_INDIC_CONFORMER_CTC_F16 = {
+  name: 'PARAKEET_INDIC_CONFORMER_CTC_F16',
   src: `registry://${models[590].registrySource}/${models[590].registryPath}`,
   registryPath: models[590].registryPath,
   registrySource: models[590].registrySource,
@@ -23352,8 +23352,8 @@ export const PARAKEET_CTC_F16 = {
   params: models[590].params
 } as const
 
-export const PARAKEET_CTC_Q4_0 = {
-  name: 'PARAKEET_CTC_Q4_0',
+export const PARAKEET_INDIC_CONFORMER_CTC_Q4_0 = {
+  name: 'PARAKEET_INDIC_CONFORMER_CTC_Q4_0',
   src: `registry://${models[591].registrySource}/${models[591].registryPath}`,
   registryPath: models[591].registryPath,
   registrySource: models[591].registrySource,
@@ -23370,8 +23370,8 @@ export const PARAKEET_CTC_Q4_0 = {
   params: models[591].params
 } as const
 
-export const PARAKEET_CTC_Q8_0 = {
-  name: 'PARAKEET_CTC_Q8_0',
+export const PARAKEET_INDIC_CONFORMER_CTC_Q8_0 = {
+  name: 'PARAKEET_INDIC_CONFORMER_CTC_Q8_0',
   src: `registry://${models[592].registrySource}/${models[592].registryPath}`,
   registryPath: models[592].registryPath,
   registrySource: models[592].registrySource,

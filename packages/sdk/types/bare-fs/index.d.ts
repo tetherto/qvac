@@ -58,6 +58,7 @@ declare module 'bare-fs' {
     encoding?: BufferEncoding
   ): void
   export function unlinkSync(path: string): void
+  export function truncateSync(path: string, len?: number): void
   export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): void
   export function rmdirSync(path: string): void
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void

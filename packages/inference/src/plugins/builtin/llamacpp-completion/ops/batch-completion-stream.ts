@@ -5,7 +5,6 @@ import type {
   ResponseFormat,
   Tool
 } from '@/schemas/index'
-import { TOOLS_MODE } from '@/schemas/tools'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import type { Logger } from '@/logging/types'
@@ -19,7 +18,7 @@ import {
   type CompletionGenerationParams
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
-import { appendToolsToHistory, prependToolsToHistory } from '@/utils/tool-integration'
+import { prependToolsToHistory } from '@/utils/tool-integration'
 
 const logger = getEngineLogger()
 
@@ -69,7 +68,6 @@ type BatchModelStreamResult = {
 
 type BatchPromptRenderOptions = {
   toolsEnabled: boolean
-  toolsMode?: string | undefined
 }
 
 function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
@@ -104,10 +102,7 @@ function renderPromptHistory(
   let historyWithTools: Array<HistoryMessage | Tool> = prompt.history
 
   if (tools) {
-    historyWithTools =
-      options.toolsMode === TOOLS_MODE.dynamic
-        ? appendToolsToHistory(prompt.history, tools)
-        : prependToolsToHistory(prompt.history, tools)
+    historyWithTools = prependToolsToHistory(prompt.history, tools)
   }
 
   // Uses the same attachment expansion as single completion: each
@@ -160,8 +155,7 @@ export async function* batchCompletion(
   const model = getModel(modelId)
   const modelConfig = getModelConfig(modelId)
   const renderOptions: BatchPromptRenderOptions = {
-    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true,
-    toolsMode: (modelConfig as { toolsMode?: string }).toolsMode
+    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true
   }
 
   const onAbort = () => {

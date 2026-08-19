@@ -95,7 +95,7 @@ on:
       snap-platforms:
         description: "Advanced: Snap runners (JSON array)"
         type: string
-        default: '["ubuntu-22.04"]'
+        default: '["qvac-ubuntu2204-x64-gpu"]'
 
   workflow_call:
     inputs:
@@ -296,7 +296,7 @@ jobs:
       consumer: snap
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.snap-platforms || '["ubuntu-22.04"]' }}
+      platforms: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}

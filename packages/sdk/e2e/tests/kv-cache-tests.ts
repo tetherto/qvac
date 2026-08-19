@@ -252,46 +252,11 @@ export const kvCacheToolsSequentialSave: TestDefinition = {
       }
     ],
     messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
-    stream: true
+    stream: true,
+    generationParams: { temp: 0, top_k: 1, seed: 42 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 90000 }
-}
-
-// Dynamic tools mode + custom kvCache key across a multi-round tool chain,
-// with a model evict/reload in the middle. No other test covers this
-// intersection: `toolsMode: "dynamic"` exercises the per-turn fragment cache
-// path (trailing-tool / [assistant,user] slicing in `completion-stream.ts`),
-// and evict/reload simulates a model reload after priming (in-memory savedCount
-// and addon anchoring cleared, on-disk `.bin` retained). The executor asserts
-// that tool calls still parse on cached/reloaded rounds and that the on-disk
-// cache is reused (`cacheTokens > 0`).
-export const kvCacheToolsDynamicReuse: TestDefinition = {
-  testId: 'kv-cache-tools-dynamic-reuse',
-  params: {
-    cacheKey: 'tools-dynamic-reuse-session',
-    firstUserMessage: 'What is 10 + 20?',
-    secondUserMessage: 'Now what is 5 + 5?',
-    toolResult: '30',
-    tools: [
-      {
-        type: 'function',
-        name: 'calculator',
-        description: 'Performs basic math operations',
-        parameters: {
-          type: 'object',
-          properties: {
-            operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },
-            a: { type: 'number' },
-            b: { type: 'number' }
-          },
-          required: ['operation', 'a', 'b']
-        }
-      }
-    ]
-  },
-  expectation: { validation: 'type', expectedType: 'string' },
-  metadata: { category: 'kv-cache', dependency: 'tools-dynamic', estimatedDurationMs: 120000 }
 }
 
 export const kvCacheCancelThenNewPrompt: TestDefinition = {
@@ -330,6 +295,5 @@ export const kvCacheTests = [
   kvCacheRemoveThinkingCompaction,
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
-  kvCacheToolsDynamicReuse,
   kvCacheCancelThenNewPrompt
 ]
