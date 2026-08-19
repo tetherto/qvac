@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      reuse-workflow-file:
+        description: "Enables cross-run prebuild reuse (pass the calling on-pr workflow basename, e.g. on-pr-nx.yml). Empty = always build fresh."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -77,6 +82,7 @@ jobs:
       include-rocm: ${{ matrix.includeRocm == true }}
       extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
       platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
+      reuse-workflow-file: ${{ inputs.reuse-workflow-file }}
     secrets: inherit
 
   # No merge job here on purpose. The reusable merges each package's own legs
