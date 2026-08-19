@@ -139,6 +139,9 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+      # Enable cross-run prebuild reuse: a PR push that doesn't touch a
+      # package's native tree reuses that package's prior prebuilds-<pkg>.
+      reuse-workflow-file: on-pr-nx.yml
 
   cpp-tests:
     needs: [authorize, ci-router]

@@ -21,6 +21,10 @@ inputs:
   pr-number:
     description: 'github.event.pull_request.number'
     required: true
+  artifact-name:
+    description: 'Name of the prebuilds artifact to find/download/re-publish. Defaults to `prebuilds` (legacy per-package workflows); the nx path passes `prebuilds-<pkg>`.'
+    required: false
+    default: 'prebuilds'
 
 outputs:
   reuse_hit:
@@ -40,6 +44,7 @@ runs:
         NATIVE_HASH: ${{ inputs.native-hash }}
         PR_NUMBER: ${{ inputs.pr-number }}
         WORKFLOW_FILE: ${{ inputs.workflow-file }}
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
         RUN_ID: ${{ github.run_id }}
       run: |
         set -u
@@ -55,9 +60,9 @@ runs:
         for rid in $RUNS; do
           NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
                     --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
-          if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "prebuilds"; then
-            echo "Match in run $rid — downloading its prebuilds artifact"
-            if gh run download "$rid" --repo "$REPO" --name prebuilds --dir cached-prebuilds; then
+          if echo "$NAMES" | grep -qx "$WANT" && echo "$NAMES" | grep -qx "$ARTIFACT_NAME"; then
+            echo "Match in run $rid — downloading its '$ARTIFACT_NAME' artifact"
+            if gh run download "$rid" --repo "$REPO" --name "$ARTIFACT_NAME" --dir cached-prebuilds; then
               HIT=true
               echo "reused-run=$rid" >> "$GITHUB_OUTPUT"
               break
@@ -70,5 +75,5 @@ runs:
       if: steps.reuse.outputs.hit == 'true'
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
       with:
-        name: prebuilds
+        name: ${{ inputs.artifact-name }}
         path: cached-prebuilds

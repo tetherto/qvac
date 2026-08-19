@@ -94,12 +94,71 @@ on:
         type: boolean
         required: false
         default: false
+      reuse-workflow-file:
+        description: >-
+          When set (e.g. on-pr-nx.yml), enables cross-run prebuild reuse: on a
+          PR push that did NOT touch this package's native files, a prior run's
+          `prebuilds-<pkg>` artifact is downloaded and re-published instead of
+          rebuilding. Empty disables reuse (dispatch / benchmark / on-merge
+          always build fresh). Matches the legacy per-package on-pr behaviour.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
+  # Cross-run reuse gate (options: reuse-workflow-file). Per package: detect
+  # whether this PR push touched the package's native tree; if not, find and
+  # re-publish this PR's prior `prebuilds-<pkg>` artifact so the platform build
+  # matrix below can be skipped entirely. No-op (reuse_hit stays empty) for
+  # dispatch/push/benchmark/on-merge or when native files changed.
+  detect-reuse:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
+      native_hash: ${{ steps.detect.outputs.native_hash }}
+    steps:
+      - name: Resolve package name from workdir
+        id: pkg
+        shell: bash
+        env:
+          WORKDIR: ${{ inputs.workdir }}
+        run: |
+          set -euo pipefail
+          name="$(basename "$WORKDIR")"
+          if [ -z "$name" ] || [ "$name" = "." ] || [ "$name" = "/" ]; then
+            echo "::error::Cannot derive a package name from workdir '$WORKDIR'."
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - name: Checkout (base) for reuse actions
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Detect native changes
+        id: detect
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: ./.github/actions/detect-native-changes
+        with:
+          workdir: ${{ inputs.workdir }}
+      - name: Reuse prior prebuilds (no native change)
+        id: reuse
+        if: inputs.reuse-workflow-file != '' && steps.detect.outputs.native_changed == 'false'
+        uses: ./.github/actions/prebuild-artifact-reuse
+        with:
+          github-token: ${{ github.token }}
+          workflow-file: ${{ inputs.reuse-workflow-file }}
+          native-hash: ${{ steps.detect.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-${{ steps.pkg.outputs.name }}
+
   prebuild:
+    needs: detect-reuse
+    if: needs.detect-reuse.outputs.reuse_hit != 'true'
     permissions:
       contents: write
       pull-requests: write
@@ -508,10 +567,20 @@ jobs:
 
   merge:
     runs-on: ubuntu-latest
-    needs: prebuild
+    needs: [prebuild, detect-reuse]
+    # Skipped on a reuse hit (the reuse action already re-published
+    # prebuilds-<pkg>); otherwise runs once the platform builds succeed.
+    if: always() && needs.detect-reuse.outputs.reuse_hit != 'true' && needs.prebuild.result == 'success'
     permissions:
       contents: write
     steps:
+      - name: Checkout reuse action (for marker save)
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/actions/prebuild-artifact-save
+          sparse-checkout-cone-mode: false
+
       # Same derivation as the build job — the package is the single source of
       # truth for artifact identity on both sides.
       - name: Resolve package name from workdir
@@ -544,3 +613,13 @@ jobs:
         with:
           name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds
+
+      # Tag this run so a later no-native-change push of the same PR can reuse
+      # the prebuilds-<pkg> just uploaded. native_hash is per-package, so the
+      # marker name is unique per package within the run.
+      - name: Save prebuild reuse marker
+        if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.detect-reuse.outputs.native_hash != ''
+        uses: ./.github/actions/prebuild-artifact-save
+        with:
+          native-hash: ${{ needs.detect-reuse.outputs.native_hash }}
+          pr-number: ${{ github.event.pull_request.number }}
