@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Declare all runtime modules required by the published model fetchers, mobile
+  tests, and integration tests.
+- Declare lazy model downloader integrations as optional peers, report how to
+  install them when requested, and preserve nested missing-module errors.
+
+## [0.9.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
 ## [0.8.0] - 2026-08-13
 
 ### Changed
