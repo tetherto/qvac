@@ -114,7 +114,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
       - name: Detect fabric-stack PR
         id: detect
-        uses: tetherto/qvac/.github/actions/detect-fabric-stack@886582f4cb3ac15f8be9970abde70166d76f9ec7
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
       - name: Warn when a stack PR builds against released fabric
         if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
         shell: bash
@@ -134,7 +134,7 @@ jobs:
       actions: read
     steps:
       - name: Wait for fabric-prebuilds from on-pr-fabric
-        uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@886582f4cb3ac15f8be9970abde70166d76f9ec7
+        uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@6620d695d3a07cafe3931182e7844dde376a23f8
         with:
           github-token: ${{ github.token }}
           # needs_fabric_artifact pins this job to pull_request_target, where the
