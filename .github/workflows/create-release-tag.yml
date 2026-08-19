@@ -60,9 +60,17 @@ jobs:
           fi
 
           # SHA the tag currently points at, or empty when the tag is absent.
+          # gh writes the error body to stdout on a 404 and does not apply --jq
+          # to it, so a missing tag still produces output. Exit status is the
+          # only reliable signal here, and the hex guard keeps any response body
+          # from ever reaching the comparison below.
           tag_sha() {
-            gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" \
-              --jq '.object.sha' 2>/dev/null || true
+            local response sha
+            response="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" 2>/dev/null)" || return 0
+            sha="$(printf '%s' "${response}" | jq -r '.object.sha // empty')"
+            case "${sha}" in
+              [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) printf '%s' "${sha}" ;;
+            esac
           }
 
           # Already present? Succeed only if it points where we expect; a tag
