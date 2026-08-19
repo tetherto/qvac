@@ -45,8 +45,26 @@
         "command": "pnpm run test:integration",
         "cwd": "packages/translation-nmtcpp",
         "ci": {
+          "timeoutMinutes": 60,
           "testCommandSuffix": true,
           "useTeeLogging": true,
+          "envVarName": "QASE_API_TOKEN",
+          "envSecretName": "QASE_API_TOKEN",
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "modelCache": [
+            {
+              "paths": "packages/translation-nmtcpp/model",
+              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
+              "warm": "false"
+            }
+          ],
+          "modelS3": [
+            { "src": "qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/", "dest": "model/bergamot/enit", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/", "dest": "model/bergamot/esen", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/", "dest": "model/bergamot/fren", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/", "dest": "model/bergamot/enes", "recursive": true, "skipOnCacheHit": true },
+            { "src": "qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin", "dest": "model/indictrans/", "skipOnCacheHit": true }
+          ],
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
@@ -65,6 +83,7 @@
         "cwd": "packages/translation-nmtcpp",
         "ci": {
           "npmName": "@qvac/translation-nmtcpp",
+          "schedulingMode": "dual-flagship",
           "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP",
           "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_NMTCPP",
           "enablesPerf": true

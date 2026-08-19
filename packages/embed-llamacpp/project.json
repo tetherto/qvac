@@ -47,6 +47,9 @@
         "cwd": "packages/embed-llamacpp",
         "ci": {
           "testCommandSuffix": true,
+          "linuxArmApt": ["mesa-vulkan-drivers"],
+          "linuxArmGhCli": true,
+          "modelCache": [{ "warm": "true" }],
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
@@ -89,6 +92,8 @@
         "cwd": "packages/embed-llamacpp",
         "ci": {
           "mode": "standard",
+          "windowsVsGenerator": true,
+          "needsEmbedModel": true,
           "vulkan": { "os": "windows-2025", "shell": "pwsh", "path": "C:\\VulkanSDK" },
           "platforms": [
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },

@@ -45,6 +45,8 @@
         "command": "pnpm run test:integration",
         "cwd": "packages/classification-ggml",
         "ci": {
+          "timeoutMinutes": 30,
+          "modelEnv": { "QVAC_CLASSIFICATION_TRACE": "1" },
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },

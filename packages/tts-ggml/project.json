@@ -46,9 +46,22 @@
         "command": "pnpm run test:integration",
         "cwd": "packages/tts-ggml",
         "ci": {
+          "timeoutMinutes": 120,
           "envVarName": "GITHUB_TOKEN",
           "envSecretName": "GITHUB_TOKEN",
           "runIntegrationTests": true,
+          "linuxArmApt": ["libgomp1", "libomp5", "libblas3", "mesa-vulkan-drivers"],
+          "windowsVulkan": { "setSdk": true, "visibleDevices": true },
+          "modelCache": [
+            {
+              "paths": "packages/tts-ggml/models",
+              "hashFilesGlob": "packages/tts-ggml/scripts/download-tts-ggml-models.js",
+              "warm": "false"
+            }
+          ],
+          "modelEnv": { "INTEGRATION_TEST_TIMEOUT": "1800", "LD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}", "DYLD_LIBRARY_PATH": "{workspace}/{workdir}/prebuilds/{platform}-{arch}" },
+          "modelDownloadScript": "download-models:registry",
+          "modelDownloadSkipOnCacheHit": true,
           "runRtfBenchmarks": false,
           "rtfBenchmark": {
             "command": "node scripts/run-rtf-benchmark-matrix.js",
@@ -1003,6 +1016,7 @@
         "cwd": "packages/tts-ggml",
         "ci": {
           "mode": "coverage",
+          "continueOnError": true,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
           ],
