@@ -133,7 +133,7 @@ and `timestamps_enabled`. Indic Conformer also requires a two-letter
   `streaming_chunk_size`
 
 - **Model (parakeet)**: `path` (`.gguf` file), `sample_rate`, `audio_format`,
-  `model_type` (`tdt`/`ctc`/`eou`/`sortformer`/`indic-conformer`),
+  `model_type` (`tdt`/`unified`/`ctc`/`eou`/`sortformer`/`indic-conformer`),
   `language` (required by Indic Conformer), `max_threads`, `use_gpu`,
   `caption_enabled`, `timestamps_enabled`, `streaming`, `streaming_chunk_size`
 

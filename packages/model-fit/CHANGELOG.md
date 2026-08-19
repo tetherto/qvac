@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.0] - 2026-08-18
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.1` -> `1.3.3`,
+  bringing this package onto the same shared-runtime floor every other addon
+  consumer already builds against. `model-fit` was the last one left behind.
+
+  No source change is needed here. The addon uses only the header-only JS
+  boundary (`inference-addon-cpp/Errors.hpp`, `JsInterface.hpp`, `JsUtils.hpp`)
+  and its binding is synchronous — it never constructs an `AddonCpp`, a
+  scheduler or an `OutputQueue` — so 1.3.0's two breaking changes (the
+  `JobRunner` -> `SingleJobScheduler` rename with the `JobRunner.hpp` forwarding
+  header removed, and `OutputQueue::clear()` returning job-tagged entries) reach
+  nothing this package compiles.
+
+  What the floor does pick up is the run of lifecycle fixes released between the
+  two versions: the `dlclose()` self-pin that makes `Worklet.terminate()` safe on
+  Android bionic (1.2.2), the `JsLogger` teardown and re-`setLogger` crash fixes
+  and their concurrent-env ownership hardening (1.2.3, 1.2.4), and the
+  `JsAsyncTask` teardown-thread and capture-release fixes (1.3.2, 1.3.3). The
+  first three matter to `model-fit` in particular: it is designed to run in a
+  short-lived isolated worklet, which is exactly the load/terminate cycle those
+  fixes cover.
+
+### Pull Requests
+
+- [#3926](https://github.com/tetherto/qvac/pull/3926) - chore[notask]: bump
+  model-fit to inference-addon-cpp 1.3.3
+
 ## [0.2.1] - 2026-08-18
 
 Records a fix that was left out of `0.2.0`. It merged (#3890) before the

@@ -104,9 +104,9 @@ esac
 
 # Validate model type (parakeet-only input)
 case "$MODEL_TYPE" in
-    tdt|ctc|eou|sortformer|indic-conformer|all) ;;
+    tdt|unified|ctc|eou|sortformer|indic-conformer|all) ;;
     *)
-        echo -e "${RED}Error: Invalid model type '$MODEL_TYPE'. Must be one of: tdt, ctc, eou, sortformer, indic-conformer, all${NC}"
+        echo -e "${RED}Error: Invalid model type '$MODEL_TYPE'. Must be one of: tdt, unified, ctc, eou, sortformer, indic-conformer, all${NC}"
         exit 1
         ;;
 esac
