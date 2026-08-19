@@ -810,8 +810,13 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   g_progressCtx.expectedDenoiseSequences = gen.batchCount;
   const auto t0 = std::chrono::steady_clock::now();
 
-  SdImageBatch results(
-      generate_image(sdCtx_.get(), &genParams), gen.batchCount);
+  // The current stable-diffusion.cpp C API reports success and transfers the
+  // image batch through out-parameters. Initialize both so failure paths are
+  // safe even when the engine leaves them untouched.
+  int generatedImageCount = 0;
+  sd_image_t* rawImages = nullptr;
+  const bool generated = generate_image(
+      sdCtx_.get(), &genParams, &rawImages, &generatedImageCount);
 
   // VAE-decode boundary: captured before PNG encode / upscale / output so
   // vaeMs reflects only the in-library decode, not post-processing.
@@ -822,6 +827,38 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   }
   if (genParams.mask_image.data) {
     free(genParams.mask_image.data);
+  }
+
+  // Do not let a malformed out-count drive SdImageBatch's per-image cleanup.
+  // On this contract the output cardinality must be no greater than the
+  // requested batch size; only the outer allocation can be safely released
+  // when that contract is violated.
+  if (generatedImageCount < 0 || generatedImageCount > gen.batchCount) {
+    free(rawImages);
+    throw StatusError(
+        general_error::InternalError,
+        "generate_image() returned an invalid image count: " +
+            std::to_string(generatedImageCount));
+  }
+
+  SdImageBatch results(rawImages, generatedImageCount);
+
+  // Keep cancellation precedence aligned with the video path. The engine may
+  // return false after the abort callback stops sampling, but cancellation is
+  // a distinct, typed outcome for callers.
+  if (cancelRequested_.load()) {
+    throw sd_errors::makeCancelledError();
+  }
+
+  if (!generated) {
+    throw StatusError(
+        general_error::InternalError, "generate_image() failed");
+  }
+
+  if (rawImages == nullptr || generatedImageCount == 0) {
+    throw StatusError(
+        general_error::InternalError,
+        "generate_image() returned no images");
   }
 
   int outputCount = 0;
