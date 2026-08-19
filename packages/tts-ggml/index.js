@@ -1055,6 +1055,7 @@ class TTSGgml {
         // is reported ahead of the engine-agnostic streaming constraints.
         this._assertParlerOptionConsistency();
         this._assertCosyvoiceOptionConsistency();
+        this._assertCosyvoiceCloneConsistent();
         this._assertAudio8OptionConsistency();
         this._assertConditioningConsistency("constructor");
         if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
@@ -1163,6 +1164,25 @@ class TTSGgml {
         if (!this._audio8CodecEncoderPath) {
             throw new Error(`tts-ggml: ${where}: voice cloning needs the audio8 codec encoder ` +
                 "GGUF (files.audio8CodecEncoder)");
+        }
+    }
+    /**
+     * `promptText` is deliberately not required: its absence selects
+     * cross-lingual mode. With a model dir present but no cloning GGUFs in it,
+     * the native load fail-closes instead.
+     */
+    _assertCosyvoiceCloneConsistent() {
+        if (this._engineType !== ENGINE_COSYVOICE3)
+            return;
+        if (!this._referenceAudio)
+            return;
+        const haveExplicit = this._cosyvoiceS3tokModelPath && this._cosyvoiceCampplusModelPath;
+        if (!haveExplicit && !this._cosyvoiceModelDir) {
+            throw new Error("tts-ggml: referenceAudio (CosyVoice3 voice cloning) needs the " +
+                "speech-tokenizer and speaker-encoder GGUFs: set " +
+                "files.cosyvoiceS3tokModel + files.cosyvoiceCampplusModel, or a " +
+                "files.cosyvoiceModelDir containing cosyvoice3-s3tok*.gguf and " +
+                "cosyvoice3-campplus*.gguf");
         }
     }
     _assertCosyvoiceOptionConsistency() {

@@ -303,6 +303,130 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "lmTemperature": {
+          "description": "LM sampling temperature (ACE-Step default: 0.85).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmTopP": {
+          "description": "LM nucleus-sampling probability (ACE-Step default: 0.9).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lmTopK": {
+          "description": "LM top-k cutoff; 0 disables top-k filtering.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lmCfgScale": {
+          "description": "Classifier-free guidance scale used by the LM.",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmPhase1": {
+          "description": "Allow the LM to infer missing metadata before semantic-code generation.",
+          "type": "boolean"
+        },
+        "dcwEnabled": {
+          "description": "Apply the official ACE-Step Haar DCW correction during DiT sampling (default: true).",
+          "type": "boolean"
+        },
+        "dcwScaler": {
+          "description": "DCW low-frequency correction strength (official default: 0.05).",
+          "type": "number",
+          "minimum": 0
+        },
+        "dcwHighScaler": {
+          "description": "DCW high-frequency correction strength (official default: 0.02).",
+          "type": "number",
+          "minimum": 0
+        },
+        "taskType": {
+          "description": "Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+          "type": "string",
+          "enum": ["text2music", "cover-nofsq"],
+          "title": "AudioGenStreamRequestTaskType"
+        },
+        "audioCoverStrength": {
+          "description": "Fraction of DiT steps that keep the source context (0..1, default 1). cover-nofsq currently requires 1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "coverNoiseStrength": {
+          "description": "Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "referenceAudio": {
+          "description": "Optional timbre reference audio; omit to keep the engine default.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestReferenceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestReferenceAudioFilePath"
+            }
+          ]
+        },
+        "sourceAudio": {
+          "description": "Source audio to re-render; required for cover tasks.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestSourceAudioFilePath"
+            }
+          ]
+        },
         "type": {
           "type": "string",
           "const": "audioGenStream"
@@ -2672,6 +2796,12 @@
       "required": ["type", "events"],
       "additionalProperties": false
     },
+    "constants.AudioGenTaskType": {
+      "title": "AudioGenTaskType",
+      "type": "string",
+      "enum": ["text2music", "cover-nofsq"],
+      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ"]
+    },
     "constants.ModelType": {
       "title": "ModelType",
       "type": "string",
@@ -2742,11 +2872,71 @@
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
       "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
-    "constants.ToolsMode": {
-      "title": "ToolsMode",
+    "constants.TtsCosyvoice3Emotion": {
+      "title": "TtsCosyvoice3Emotion",
       "type": "string",
-      "enum": ["static", "dynamic"],
-      "x-enum-varnames": ["static", "dynamic"]
+      "enum": ["anger", "happy", "neutral", "sad"],
+      "x-enum-varnames": ["ANGER", "HAPPY", "NEUTRAL", "SAD"]
+    },
+    "constants.TtsCosyvoice3InstructDialect": {
+      "title": "TtsCosyvoice3InstructDialect",
+      "type": "string",
+      "enum": [
+        "cantonese",
+        "northeastern",
+        "gansu",
+        "guizhou",
+        "henan",
+        "hubei",
+        "hunan",
+        "jiangxi",
+        "minnan",
+        "ningxia",
+        "shanxi",
+        "shaanxi",
+        "shandong",
+        "shanghai",
+        "sichuan",
+        "tianjin",
+        "yunnan"
+      ],
+      "x-enum-varnames": [
+        "CANTONESE",
+        "NORTHEASTERN",
+        "GANSU",
+        "GUIZHOU",
+        "HENAN",
+        "HUBEI",
+        "HUNAN",
+        "JIANGXI",
+        "MINNAN",
+        "NINGXIA",
+        "SHANXI",
+        "SHAANXI",
+        "SHANDONG",
+        "SHANGHAI",
+        "SICHUAN",
+        "TIANJIN",
+        "YUNNAN"
+      ]
+    },
+    "constants.TtsCosyvoice3InstructStyle": {
+      "title": "TtsCosyvoice3InstructStyle",
+      "type": "string",
+      "enum": ["peppa", "robot"],
+      "x-enum-varnames": ["PEPPA", "ROBOT"]
+    },
+    "constants.TtsCosyvoice3InstructVolume": {
+      "title": "TtsCosyvoice3InstructVolume",
+      "type": "string",
+      "enum": ["loud", "soft"],
+      "x-enum-varnames": ["LOUD", "SOFT"]
+    },
+    "constants.TtsPace": {
+      "title": "TtsPace",
+      "type": "string",
+      "enum": ["slow", "moderate", "fast"],
+      "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
     },
     "constants.Verbosity": {
       "title": "Verbosity",
@@ -7850,6 +8040,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestLlamacppCompletionDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -7945,12 +8139,6 @@
                     },
                     "tools": {
                       "type": "boolean"
-                    },
-                    "toolsMode": {
-                      "type": "string",
-                      "enum": ["static", "dynamic"],
-                      "description": "Controls tool placement in the prompt. \"static\" (default) prepends the tool set once and reuses it across the session. \"dynamic\" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.",
-                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode"
                     },
                     "cache-type-k": {
                       "type": "string"
@@ -8137,6 +8325,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestWhispercppTranscriptionDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -8473,6 +8665,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestBciWhispercppTranscriptionDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8730,6 +8926,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestParakeetTranscriptionDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8906,6 +9106,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestLlamacppEmbeddingDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -9041,6 +9245,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestNmtcppTranslationDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -9831,6 +10039,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestTtsGgmlDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -10727,7 +10939,8 @@
                         },
                         "pace": {
                           "type": "string",
-                          "minLength": 1
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerPace"
                         },
                         "expressivity": {
                           "type": "string",
@@ -10817,6 +11030,275 @@
                       "required": ["ttsEngine"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigParler"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "cosyvoice3"
+                        },
+                        "emotion": {
+                          "type": "string",
+                          "enum": ["anger", "happy", "neutral", "sad"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"
+                        },
+                        "pace": {
+                          "type": "string",
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"
+                        },
+                        "instruct": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "dialect": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cantonese",
+                                    "northeastern",
+                                    "gansu",
+                                    "guizhou",
+                                    "henan",
+                                    "hubei",
+                                    "hunan",
+                                    "jiangxi",
+                                    "minnan",
+                                    "ningxia",
+                                    "shanxi",
+                                    "shaanxi",
+                                    "shandong",
+                                    "shanghai",
+                                    "sichuan",
+                                    "tianjin",
+                                    "yunnan"
+                                  ],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"
+                                },
+                                "volume": {
+                                  "type": "string",
+                                  "enum": ["loud", "soft"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"
+                                },
+                                "style": {
+                                  "type": "string",
+                                  "enum": ["peppa", "robot"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct"
+                            }
+                          ]
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "streamChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "streamFirstChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3"
                     }
                   ]
                 }
@@ -10875,6 +11357,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestGgmlOcrDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -11072,6 +11558,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestSdcppGenerationDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -12209,6 +12699,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestAudiogenGgmlDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12640,6 +13134,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestGgmlVlaDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12764,6 +13262,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestGgmlClassificationDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12845,6 +13347,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelCustomPluginRequestDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -14930,7 +15436,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechRequestPace"
         },
         "expressivity": {
           "type": "string",
@@ -15067,7 +15574,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechStreamRequestPace"
         },
         "expressivity": {
           "type": "string",

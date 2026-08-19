@@ -25,14 +25,14 @@ layout under `models/`:
 | Supertonic 2            | `supertonic2.gguf`                                    | Multilingual: `en`, `ko`, `es`, `pt`, `fr`                                  |
 | Supertonic 3            | `supertonic3.gguf`                                    | Multilingual: 31 languages plus the language-agnostic `na` code (see below) |
 | Parler-TTS Mini v1      | `parler-tts-mini-v1.gguf`                             | English; description-conditioned voices                                     |
-| CosyVoice3              | `cosyvoice3/` model directory                         | Instruct-conditioned Chinese dialect and multilingual synthesis             |
+| CosyVoice3              | `cosyvoice3/` dir (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + tokenizer files) | Instruct-conditioned; strong on Chinese + 17 dialects; native 24 kHz        |
 | Audio8                  | LM and codec decoder GGUFs; encoder optional           | 44.1 kHz synthesis and in-process voice cloning                              |
 
 **Chatterbox multilingual (23 languages):** Arabic (`ar`), Danish (`da`), German (`de`), Greek (`el`), English (`en`), Spanish (`es`), Finnish (`fi`), French (`fr`), Hebrew (`he`), Hindi (`hi`), Italian (`it`), Japanese (`ja`), Korean (`ko`), Malay (`ms`), Dutch (`nl`), Norwegian (`no`), Polish (`pl`), Portuguese (`pt`), Russian (`ru`), Swedish (`sv`), Swahili (`sw`), Turkish (`tr`), Chinese (`zh`).
 
 **Supertonic 3 (31 languages + `na`):** `ar`, `bg`, `hr`, `cs`, `da`, `nl`, `en`, `et`, `fi`, `fr`, `de`, `el`, `hi`, `hu`, `id`, `it`, `ja`, `ko`, `lv`, `lt`, `pl`, `pt`, `ro`, `ru`, `sk`, `sl`, `es`, `sv`, `tr`, `uk`, `vi`. Pass `language: 'na'` when the input language is unknown.
 
-Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit engine file options. Use `npm run download-models:registry` to acquire registry-published Chatterbox, Supertonic, and Parler models. CosyVoice3 and Audio8 must currently be staged from local converted artifacts.
+Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit `files.t3Model` + `files.s3genModel` (Chatterbox), `files.supertonicModel` (Supertonic), `files.parlerModel` (Parler-TTS), or `files.cosyvoiceModelDir` (CosyVoice3). Use `npm run download-models:registry` to acquire registry-published Chatterbox, Supertonic, and Parler models. CosyVoice3 and Audio8 must currently be staged from local converted artifacts.
 
 ## Requirement
 
@@ -186,8 +186,12 @@ The most common constructor options:
 | `files.modelDir`                     | string  | —       | Directory containing the two GGUFs (engine auto-detected)               |
 | `files.t3Model` / `files.s3genModel` | string  | —       | Override `modelDir` for the Chatterbox T3 / S3Gen GGUF                  |
 | `files.supertonicModel`              | string  | —       | Supertonic GGUF path                                                    |
+| `files.parlerModel`                  | string  | —       | Parler GGUF path (mini / large / indic variant)                         |
+| `files.cosyvoiceModelDir`            | string  | —       | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + tokenizer files) |
 | `referenceAudio`                     | string  | —       | Mono WAV ≥ 5 s for voice cloning                                        |
 | `voiceDir`                           | string  | —       | Pre-baked voice profile directory                                       |
+| `emotion` / `pace`                   | string  | —       | Cross-engine conditioning — Parler + CosyVoice3 emotions; Parler / CosyVoice3 / Supertonic pace |
+| `instruct`                           | object \| string | — | CosyVoice3-only: `dialect` / `volume` / `style` object (precedence in that order) or a raw instruction string |
 | `streamChunkTokens`                  | number  | 0       | `> 0` enables native chunk streaming (25 tokens ≈ 1 s of audio)         |
 | `cfmSteps`                           | number  | 2       | `1` halves CFM cost for faster synthesis                                |
 | `config.language`                    | string  | `'en'`  | Language code; multilingual models accept `es/fr/de/pt/it/zh/ja/ko/...` |
@@ -322,6 +326,9 @@ const model = new TTSGgml({
 
 Alternatively point at a pre-baked profile directory via `voiceDir`. When both are supplied, missing tensors in `voiceDir` are backfilled from `referenceAudio`.
 
+**CosyVoice3** does not take a reference — it always speaks with its baked
+default voice.
+
 ## Speech enhancement (LavaSR)
 
 Opt-in neural post-processing that bandwidth-extends the synthesized audio to **48 kHz** with a synthesised high band, using the LavaSR Vocos enhancer run on the CPU/GGML path. It is fully backward compatible — provide no enhancer GGUF and nothing changes. Enhancement is enabled simply by supplying the enhancer GGUF; there is no separate on/off flag.
@@ -342,8 +349,9 @@ const model = new TTSGgml({
 
 The GGUF path may instead be given as an `enhancer: { type: 'lavasr', enhancerPath }` block.
 
-- Works across all five engine families. Native chunk enhancement is available
-  where the selected engine supports native chunk streaming.
+- Works for Chatterbox, Supertonic, Parler, and CosyVoice3 (Audio8 is not
+  supported) — on the batch path, sentence-level streaming, and native chunk
+  streaming where the selected engine supports it.
 - For native chunk streaming the enhancer runs over a sliding window with look-ahead + crossfade, so each emitted chunk is bandwidth-extended seam-free; this adds ~0.34 s of look-ahead latency.
 - The enhancer always runs at 48 kHz internally. By default the emitted audio is 48 kHz; set `config.outputSampleRate` to resample the enhanced output (`sampleRate` reports the actual rate).
 
