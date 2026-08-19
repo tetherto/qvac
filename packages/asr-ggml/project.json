@@ -116,6 +116,19 @@
           ]
         }
       }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/asr-ggml",
+        "ci": {
+          "buildStep": "build:ts",
+          "nameTransform": "rename-prefix",
+          "repoName": "asr-ggml",
+          "testGateMode": "post-publish-integration+mobile"
+        }
+      }
     }
   },
   "implicitDependencies": [

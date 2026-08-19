@@ -145,6 +145,19 @@
           ]
         }
       }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/diffusion-cpp",
+        "ci": {
+          "buildStep": "build:ts",
+          "nameTransform": "scope-rewrite",
+          "repoName": "diffusion-cpp",
+          "testGateMode": "none"
+        }
+      }
     }
   },
   "implicitDependencies": [

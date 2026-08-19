@@ -106,6 +106,19 @@
           ]
         }
       }
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/llm-llamacpp",
+        "ci": {
+          "buildStep": "check:generated",
+          "nameTransform": "scope-rewrite",
+          "repoName": "llamacpp-llm",
+          "testGateMode": "none"
+        }
+      }
     }
   },
   "implicitDependencies": [
