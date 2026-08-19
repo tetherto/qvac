@@ -108,4 +108,3 @@ MiniMax-H3 $QUANT model set is ready in: $MODELS_DIR
 Use text-to-audio-video mode with all four paths, cfg_scale 1.0, guidance 7.0,
 and 24 FPS. MiniMax-H3 aligns frame counts to 17*k + 5.
 EOF
-
