@@ -347,6 +347,60 @@ export const ttsCosyvoice3InvalidEmotion: TestDefinition = {
   metadata: { category: 'tts', dependency: 'none', estimatedDurationMs: 1000 }
 }
 
+// Audio8 takes no per-request conditioning fields, so its coverage exercises
+// each operation shape with the load-time greedy/maxFrames/seed settings.
+export const ttsAudio8Default: TestDefinition = {
+  testId: 'tts-audio8-default',
+  params: {
+    text: 'Hello from Audio8.',
+    stream: false
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 60000 }
+}
+
+export const ttsAudio8Streaming: TestDefinition = {
+  testId: 'tts-audio8-streaming',
+  params: {
+    text: 'Audio8 can generate streaming speech.',
+    operation: 'stream'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'operation=stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 90000 }
+}
+
+export const ttsAudio8SentenceStreaming: TestDefinition = {
+  testId: 'tts-audio8-sentence-streaming',
+  params: {
+    text: 'This is the first sentence. This is the second sentence.',
+    operation: 'sentence-stream'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'operation=sentence-stream', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 120000 }
+}
+
+export const ttsAudio8DuplexStreaming: TestDefinition = {
+  testId: 'tts-audio8-duplex-streaming',
+  params: {
+    text: 'Audio8 also supports duplex text streaming.',
+    operation: 'duplex'
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['audio8-generated', 'operation=duplex', 'samples']
+  },
+  metadata: { category: 'tts', dependency: 'tts-audio8', estimatedDurationMs: 90000 }
+}
+
 export const ttsTests = [
   ttsChatterboxShortText,
   ttsChatterboxMediumText,
@@ -373,5 +427,9 @@ export const ttsTests = [
   ttsCosyvoice3NativeStreaming,
   ttsCosyvoice3SentenceStreaming,
   ttsCosyvoice3DuplexStreaming,
-  ttsCosyvoice3InvalidEmotion
+  ttsCosyvoice3InvalidEmotion,
+  ttsAudio8Default,
+  ttsAudio8Streaming,
+  ttsAudio8SentenceStreaming,
+  ttsAudio8DuplexStreaming
 ]

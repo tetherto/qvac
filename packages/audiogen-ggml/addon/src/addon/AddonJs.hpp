@@ -234,6 +234,110 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
   return modelInput;
 }
 
+inline std::string
+requiredEditString(js_env_t* env, js::Object& operation, const char* key) {
+  auto value =
+      operation.getOptionalPropertyAs<js::String, std::string>(env, key);
+  if (!value || value->empty()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Edit operation '") + key + "' must be a non-empty string");
+  }
+  return *value;
+}
+
+inline std::string optionalEditString(
+    js_env_t* env, js::Object& operation, const char* key,
+    const char* fallback) {
+  return operation.getOptionalPropertyAs<js::String, std::string>(env, key)
+      .value_or(fallback);
+}
+
+inline double optionalEditNumber(
+    js_env_t* env, js::Object& operation, const char* key, double fallback) {
+  js_value_t* raw = operation.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return fallback;
+  }
+  if (!js::is<js::Number>(env, raw)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Edit operation '") + key + "' must be a number");
+  }
+  const double value = js::Number::fromValue(raw).as<double>(env);
+  if (!std::isfinite(value)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Edit operation '") + key + "' must be finite");
+  }
+  return value;
+}
+
+inline AcestepModel::RepaintMode parseRepaintMode(const std::string& mode) {
+  if (mode == "conservative") {
+    return AcestepModel::RepaintMode::Conservative;
+  }
+  if (mode == "balanced") {
+    return AcestepModel::RepaintMode::Balanced;
+  }
+  if (mode == "aggressive") {
+    return AcestepModel::RepaintMode::Aggressive;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "Unknown repaint mode: " + mode);
+}
+
+inline AcestepModel::AudioEditOperationInput
+parseEditOperation(js_env_t* env, js::Object operation) {
+  const std::string operationType = requiredEditString(env, operation, "type");
+  if (operationType == "flow-edit") {
+    AcestepModel::FlowEditInput flow;
+    flow.sourceCaption = requiredEditString(env, operation, "sourceCaption");
+    flow.sourceLyrics =
+        optionalEditString(env, operation, "sourceLyrics", "[Instrumental]");
+    flow.targetCaption = requiredEditString(env, operation, "targetCaption");
+    flow.targetLyrics =
+        optionalEditString(env, operation, "targetLyrics", "[Instrumental]");
+    flow.nMin =
+        static_cast<float>(optionalEditNumber(env, operation, "nMin", 0.0));
+    flow.nMax =
+        static_cast<float>(optionalEditNumber(env, operation, "nMax", 1.0));
+    flow.nAvg =
+        static_cast<int>(optionalEditNumber(env, operation, "nAvg", 1.0));
+    return flow;
+  }
+  if (operationType == "repaint") {
+    AcestepModel::RepaintInput repaint;
+    repaint.caption = requiredEditString(env, operation, "caption");
+    repaint.lyrics =
+        optionalEditString(env, operation, "lyrics", "[Instrumental]");
+    repaint.start =
+        static_cast<float>(optionalEditNumber(env, operation, "start", 0.0));
+    repaint.end =
+        static_cast<float>(optionalEditNumber(env, operation, "end", -1.0));
+    repaint.strength =
+        static_cast<float>(optionalEditNumber(env, operation, "strength", 0.5));
+    repaint.mode = parseRepaintMode(
+        optionalEditString(env, operation, "mode", "balanced"));
+    return repaint;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "Unknown audio edit operation type: " + operationType);
+}
+
+inline std::vector<AcestepModel::AudioEditOperationInput>
+parseEditOperations(js_env_t* env, js::Array& operations) {
+  std::vector<AcestepModel::AudioEditOperationInput> result;
+  result.reserve(operations.size(env));
+  for (uint32_t i = 0; i < operations.size(env); ++i) {
+    result.push_back(
+        parseEditOperation(env, operations.get<js::Object>(env, i)));
+  }
+  return result;
+}
+
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
@@ -355,7 +459,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
 
-  if (type != "text") {
+  if (type != "text" && type != "edit") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Unknown input type: " + type);
@@ -365,12 +469,34 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 
 #ifdef AUDIOGEN_HAS_MINIMAX
   if (dynamic_cast<MinimaxModel*>(&instance.addonCpp->model.get())) {
+    if (type != "text") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "MiniMax-Music3 does not support audio editing");
+    }
     return instance.runJob(
         std::any(buildMinimaxInput(env, jobObject, jsInput)));
   }
 #endif
 
-  return instance.runJob(std::any(buildAcestepInput(env, jobObject, jsInput)));
+  AcestepModel::AnyInput modelInput =
+      buildAcestepInput(env, jobObject, jsInput);
+  if (type == "edit") {
+    if (modelInput.sourceAudio.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio edit requires non-empty sourceAudio");
+    }
+    auto operations =
+        jobObject.getOptionalProperty<js::Array>(env, "editOperations");
+    if (!operations || operations->size(env) == 0) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio edit requires at least one edit operation");
+    }
+    modelInput.editOperations = parseEditOperations(env, *operations);
+  }
+  return instance.runJob(std::any(std::move(modelInput)));
 }
 JSCATCH
 

@@ -324,20 +324,24 @@ Run an **OpenAI-compatible HTTP server** backed by locally configured QVAC model
 qvac serve openai [options]
 ```
 
-| Flag                      | Description                                                                                |
-| ------------------------- | ------------------------------------------------------------------------------------------ |
-| `-c, --config <path>`     | Config file path (default: auto-detect `qvac.config.*`).                                   |
-| `-p, --port <number>`     | Port to listen on (default: `11434`).                                                      |
-| `-H, --host <address>`    | Host to bind to (default: `127.0.0.1`).                                                    |
-| `--model <alias>`         | Model alias to preload (repeatable; must be in config).                                    |
-| `--api-key <key>`         | Require Bearer authentication. Recommended for every non-loopback bind.                    |
-| `--api-key-file <path>`   | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.    |
-| `--allow-unauthenticated` | Start a non-loopback bind without a key anyway. Warns instead of refusing.                 |
-| `--cors`                  | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin. |
-| `--cors-origin <origin>`  | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                  |
-| `--public-base-url <url>` | Externally reachable origin required for image `response_format=url`.                      |
-| `--docs`                  | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                       |
-| `-v, --verbose`           | Detailed output.                                                                           |
+| Flag                             | Description                                                                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <path>`            | Config file path (default: auto-detect `qvac.config.*`).                                                                            |
+| `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                               |
+| `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                             |
+| `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request. |
+| `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                             |
+| `--api-key-file <path>`          | Read the Bearer token from a file. Keeps it out of argv, which `/proc` exposes locally.                                             |
+| `--allow-unauthenticated`        | Start a non-loopback bind without a key anyway. Warns instead of refusing.                                                          |
+| `--cors`                         | Validate that `--cors-origin` or `serve.cors.origins` supplies an explicit trusted origin.                                          |
+| `--cors-origin <origin>`         | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed).                                                           |
+| `--public-base-url <url>`        | Externally reachable origin required for image `response_format=url`.                                                               |
+| `--docs`                         | Mount Swagger UI at `/docs` and add same-port loopback CORS origins.                                                                |
+| `--no-lazy-load`                 | Disable lazy loading; a request for an unloaded model returns `503 model_not_loaded`.                                               |
+| `--load-concurrency <n>`         | Max simultaneous model loads (default: `1`).                                                                                        |
+| `--load-timeout <ms>`            | Per-load timeout in milliseconds (default: unbounded).                                                                              |
+| `--no-cancel-load-on-disconnect` | Keep loading a model even if the client that triggered the load disconnects.                                                        |
+| `-v, --verbose`                  | Detailed output.                                                                                                                    |
 
 `serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. `--cors` is only a compatibility validation switch and does not enable CORS itself. It fails without an explicit CLI/config origin, including with `--docs`. Existing `--cors` scripts must add every trusted origin explicitly:
 

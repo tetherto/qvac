@@ -24,7 +24,9 @@ import path = require('bare-path')
 import os = require('bare-os')
 
 import {
+  AudioEditOperationType,
   AudioGenInterface,
+  RepaintMode,
   type AudioGenBinding,
   type AudioGenConfigurationParams,
   type AudioGenJobData,
@@ -163,6 +165,80 @@ export interface GenerateOptions {
   coverNoiseStrength?: number
 }
 
+/** PCM accepted by the source-driven editing API. */
+export interface AudioEditSource {
+  /**
+   * Interleaved stereo PCM. Float32 samples must be finite and in `[-1, 1]`.
+   * Int16 output chunks can be reused directly.
+   */
+  pcm: Float32Array | Int16Array
+  sampleRate: number
+  channels: number
+}
+
+export interface AudioEditPrompt {
+  caption: string
+  lyrics?: string
+}
+
+/** v1 Flow-Edit. Supported on turbo DiT only (`turbo-q4`, `turbo-q8`). */
+export interface FlowEditOptions {
+  /** Description of the unedited source audio. */
+  from: AudioEditPrompt
+  /** Description of the desired audio. */
+  to: AudioEditPrompt
+  /** Start of the flow-edit diffusion window, in [0, 1]. */
+  nMin?: number
+  /** End of the flow-edit diffusion window, in [0, 1]. */
+  nMax?: number
+  /** Number of forward-noise samples averaged per active step. */
+  nAvg?: number
+}
+
+export interface RepaintOptions extends AudioEditPrompt {
+  /**
+   * Repaint region start in seconds. Must lie inside the source duration and
+   * leave at least one latent frame (`1/25` s) before `end`.
+   */
+  start: number
+  /**
+   * Repaint region end in seconds. Omit to repaint through the source end.
+   * Must not exceed the source duration.
+   */
+  end?: number
+  mode?: RepaintMode
+  /** Balanced-mode preservation strength in [0, 1]. */
+  strength?: number
+}
+
+export interface AudioEditRunOptions {
+  /** Seeds the first operation; each following operation uses seed + its index. */
+  seed?: number
+}
+
+interface NativeFlowEditOperation {
+  type: AudioEditOperationType.FlowEdit
+  sourceCaption: string
+  sourceLyrics: string
+  targetCaption: string
+  targetLyrics: string
+  nMin: number
+  nMax: number
+  nAvg: number
+}
+
+interface NativeRepaintOperation {
+  type: AudioEditOperationType.Repaint
+  caption: string
+  lyrics: string
+  start: number
+  end: number
+  mode: RepaintMode
+  strength: number
+}
+
+export type AudioEditOperationData = NativeFlowEditOperation | NativeRepaintOperation
+
 /** A per-step progress tick from the selected engine. */
 export interface AudiogenProgress {
   stage: string
@@ -290,6 +366,10 @@ function requireMinimaxCfgScale (value: number): number {
 }
 
 const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq'])
+const AUDIO_LATENT_RATE = 25
+const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE
+const REPAINT_RANGE_EPSILON_SECONDS = 1e-5
+const FLOW_EDIT_TURBO_VARIANTS = 'turbo-q4, turbo-q8'
 
 function optionalTaskType (value: string | undefined): string | undefined {
   if (value === undefined) return undefined
@@ -307,6 +387,55 @@ function requireFinitePcm (value: Float32Array, name: string): void {
   }
 }
 
+function requireNormalizedPcm (value: Float32Array, name: string): void {
+  for (const sample of value) {
+    if (!Number.isFinite(sample) || sample < -1 || sample > 1) {
+      throw invalidInput(`${name} must contain finite samples in [-1, 1]`)
+    }
+  }
+}
+
+function int16ToNormalizedFloat32 (pcm: Int16Array): Float32Array {
+  const converted = new Float32Array(pcm.length)
+  for (let i = 0; i < pcm.length; ++i) {
+    const sample = pcm[i]
+    converted[i] = sample < 0 ? sample / 32768 : sample / 32767
+  }
+  return converted
+}
+
+function isSftDit (
+  ditVariant: DitVariant | undefined,
+  ditModelPath: string | undefined
+): boolean {
+  if (ditVariant === 'sft') return true
+  if (ditModelPath === undefined) return false
+  const file = ditModelPath.split(/[/\\]/).pop() ?? ''
+  return /(?:^|[^a-z])sft(?:[^a-z]|$)/i.test(file.replace(/\.gguf$/i, ''))
+}
+
+function sourceDurationSeconds (source: AudioEditSource): number {
+  return source.pcm.length / source.channels / source.sampleRate
+}
+
+function requireRepaintRange (
+  source: AudioEditSource,
+  start: number,
+  end: number
+): void {
+  const duration = sourceDurationSeconds(source)
+  const resolvedEnd = end === -1 ? duration : end
+  if (start > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint.start must be within the source duration')
+  }
+  if (end !== -1 && end > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint.end must be within the source duration')
+  }
+  if (resolvedEnd - start < LATENT_FRAME_SECONDS - REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint range must span at least one latent frame')
+  }
+}
+
 function optionalStereoPcm (
   value: Float32Array | undefined,
   name: string
@@ -320,6 +449,45 @@ function optionalStereoPcm (
   }
   requireFinitePcm(value, name)
   return value
+}
+
+function requireEditSource (source: AudioEditSource): Float32Array {
+  if (typeof source !== 'object' || source === null) {
+    throw invalidInput('edit source must be an audio source object')
+  }
+  if (source.sampleRate !== 48000) {
+    throw invalidInput(`edit source sampleRate must be 48000, got ${source.sampleRate}`)
+  }
+  if (source.channels !== 2) {
+    throw invalidInput(`edit source channels must be 2, got ${source.channels}`)
+  }
+  if (!(source.pcm instanceof Float32Array) && !(source.pcm instanceof Int16Array)) {
+    throw invalidInput('edit source pcm must be a Float32Array or Int16Array')
+  }
+  if (source.pcm.length === 0) {
+    throw invalidInput('edit source pcm must not be empty')
+  }
+  if ((source.pcm.length & 1) !== 0) {
+    throw invalidInput('edit source pcm must be interleaved stereo')
+  }
+  if (source.pcm instanceof Float32Array) {
+    requireNormalizedPcm(source.pcm, 'edit source pcm')
+    return source.pcm
+  }
+  return int16ToNormalizedFloat32(source.pcm)
+}
+
+function requirePrompt (prompt: AudioEditPrompt, name: string): AudioEditPrompt {
+  if (typeof prompt !== 'object' || prompt === null) {
+    throw invalidInput(`${name} must be an object`)
+  }
+  if (typeof prompt.caption !== 'string' || prompt.caption.trim().length === 0) {
+    throw invalidInput(`${name}.caption must be a non-empty string`)
+  }
+  if (prompt.lyrics !== undefined && typeof prompt.lyrics !== 'string') {
+    throw invalidInput(`${name}.lyrics must be a string`)
+  }
+  return prompt
 }
 
 function isCoverTask (taskType: string | undefined): boolean {
@@ -469,6 +637,116 @@ function isMobilePlatform (): boolean {
   return platform === 'android' || platform === 'ios'
 }
 
+type EditRunner = (
+  source: AudioEditSource,
+  operations: readonly AudioEditOperationData[],
+  options: AudioEditRunOptions
+) => Promise<QvacResponse<AudiogenOutputChunk>>
+
+/**
+ * Fluent, ordered edit pipeline. Every call appends one operation; operations
+ * may be repeated in any order before the session is submitted with `run()`.
+ */
+export class AudioEditSession {
+  private readonly _operations: AudioEditOperationData[] = []
+  private _started = false
+
+  constructor (
+    private readonly _source: AudioEditSource,
+    private readonly _runner: EditRunner,
+    private readonly _allowFlowEdit: boolean
+  ) {}
+
+  /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
+  flowEdit (options: FlowEditOptions): this {
+    if (this._started) throw invalidInput('cannot modify an edit session after run()')
+    if (!this._allowFlowEdit) {
+      throw invalidInput(
+        `flowEdit is supported on turbo DiT variants only (${FLOW_EDIT_TURBO_VARIANTS})`
+      )
+    }
+    if (typeof options !== 'object' || options === null) {
+      throw invalidInput('flowEdit options must be an object')
+    }
+    const from = requirePrompt(options.from, 'flowEdit.from')
+    const to = requirePrompt(options.to, 'flowEdit.to')
+    const nMin = requireFiniteNumber(options.nMin ?? 0, 'flowEdit.nMin')
+    const nMax = requireFiniteNumber(options.nMax ?? 1, 'flowEdit.nMax')
+    const nAvg = requireFiniteNumber(options.nAvg ?? 1, 'flowEdit.nAvg', true)
+    if (nMin < 0 || nMax > 1 || nMin > nMax) {
+      throw invalidInput('flowEdit requires 0 <= nMin <= nMax <= 1')
+    }
+    if (nAvg < 1) throw invalidInput('flowEdit.nAvg must be at least 1')
+    this._operations.push({
+      type: AudioEditOperationType.FlowEdit,
+      sourceCaption: from.caption,
+      sourceLyrics: from.lyrics ?? '[Instrumental]',
+      targetCaption: to.caption,
+      targetLyrics: to.lyrics ?? '[Instrumental]',
+      nMin,
+      nMax,
+      nAvg
+    })
+    return this
+  }
+
+  /** Alias for `flowEdit()` so `.edit().repaint().edit()` reads naturally. */
+  edit (options: FlowEditOptions): this {
+    return this.flowEdit(options)
+  }
+
+  /** Append a timeline Repaint operation. */
+  repaint (options: RepaintOptions): this {
+    if (this._started) throw invalidInput('cannot modify an edit session after run()')
+    const prompt = requirePrompt(options, 'repaint')
+    const start = requireFiniteNumber(options.start, 'repaint.start')
+    const end = optionalFiniteNumber(options.end, 'repaint.end') ?? -1
+    const mode = options.mode ?? RepaintMode.Balanced
+    const strength = requireFiniteNumber(options.strength ?? 0.5, 'repaint.strength')
+    if (start < 0) throw invalidInput('repaint.start must be non-negative')
+    if (end !== -1 && end <= start) {
+      throw invalidInput('repaint.end must be greater than repaint.start')
+    }
+    requireRepaintRange(this._source, start, end)
+    if (!Object.values(RepaintMode).includes(mode)) {
+      throw invalidInput('repaint.mode must be conservative|balanced|aggressive')
+    }
+    if (strength < 0 || strength > 1) {
+      throw invalidInput('repaint.strength must be between 0 and 1')
+    }
+    this._operations.push({
+      type: AudioEditOperationType.Repaint,
+      caption: prompt.caption,
+      lyrics: prompt.lyrics ?? '[Instrumental]',
+      start,
+      end,
+      mode,
+      strength
+    })
+    return this
+  }
+
+  async run (
+    options: AudioEditRunOptions = {}
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+    if (this._started) throw invalidInput('edit session run() may only be called once')
+    if (this._operations.length === 0) {
+      throw invalidInput('edit session requires at least one edit or repaint operation')
+    }
+    if (typeof options !== 'object' || options === null) {
+      throw invalidInput('edit session run options must be an object')
+    }
+    const seed = optionalFiniteNumber(options.seed, 'edit.seed', true)
+    this._started = true
+    return this._runner(this._source, this._operations, { seed })
+  }
+}
+
+/**
+ * GGML-backed music generation via the ACE-Step engine. Owns a persistent
+ * native engine: the four model stages are loaded once by `load()` and reused
+ * by every `run()`.
+ */
 export class AudioGen {
   static readonly inferenceManagerConfig = {
     noAdditionalDownload: true
@@ -485,6 +763,7 @@ export class AudioGen {
   private readonly _engineType: AudioGenEngine
   private readonly _defaultInferenceSteps: number
   private readonly _defaultCfgScale: number
+  private readonly _ditVariant: DitVariant | undefined
   private _lifecycleRevision: number
   private _destroyed: boolean
   private _cancelPromise: Promise<void> | null
@@ -498,6 +777,7 @@ export class AudioGen {
     this._engineType = detectEngineType(files, options.engine)
     const backendsDir = config.backendsDir ?? path.join(__dirname, 'prebuilds')
     const threads = requireNonNegativeInt32(config.threads ?? 0, 'threads')
+    this._ditVariant = files.ditVariant
 
     if (this._engineType === ENGINE_MINIMAX) {
       if (isMobilePlatform()) {
@@ -606,6 +886,44 @@ export class AudioGen {
    */
   async run (caption: string, opts: GenerateOptions = {}): Promise<QvacResponse<AudiogenOutputChunk>> {
     const jobData = this._createJobData(caption, opts)
+    const revision = this._lifecycleRevision
+    return new Promise((resolve, reject) => {
+      const queued = this._runExclusive(() =>
+        this._admitAndWait(jobData, revision, resolve, reject)
+      )
+      void queued.catch(reject)
+    })
+  }
+
+  /**
+   * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
+   * be repeated and are executed in the exact order in which they are chained.
+   * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
+   */
+  edit (source: AudioEditSource): AudioEditSession {
+    if (this._engineType === ENGINE_MINIMAX) {
+      throw invalidInput('MiniMax-Music3 does not support audio editing')
+    }
+    return new AudioEditSession(
+      source,
+      async (audio, operations, options) => this._runEdit(audio, operations, options),
+      !isSftDit(this._ditVariant, this._configuration.ditModelPath)
+    )
+  }
+
+  private async _runEdit (
+    source: AudioEditSource,
+    operations: readonly AudioEditOperationData[],
+    options: AudioEditRunOptions
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+    const sourceAudio = requireEditSource(source)
+    const jobData: AudioGenJobData = {
+      type: 'edit',
+      input: '',
+      sourceAudio,
+      editOperations: [...operations],
+      seed: options.seed
+    }
     const revision = this._lifecycleRevision
     return new Promise((resolve, reject) => {
       const queued = this._runExclusive(() =>
@@ -951,6 +1269,7 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'
+export { AudioEditOperationType, RepaintMode } from './audiogen'
 
 export type {
   AudioGenConfigurationParams,

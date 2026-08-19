@@ -19,6 +19,35 @@ export interface AudioGenConfigurationParams {
   backendsDir?: string
 }
 
+/** Stable string values serialized across the JS -> native addon boundary. */
+export enum AudioEditOperationType {
+  FlowEdit = 'flow-edit',
+  Repaint = 'repaint'
+}
+
+export enum RepaintMode {
+  Conservative = 'conservative',
+  Balanced = 'balanced',
+  Aggressive = 'aggressive'
+}
+
+export interface AudioEditOperationJobData {
+  type: AudioEditOperationType
+  sourceCaption?: string
+  sourceLyrics?: string
+  targetCaption?: string
+  targetLyrics?: string
+  caption?: string
+  lyrics?: string
+  nMin?: number
+  nMax?: number
+  nAvg?: number
+  start?: number
+  end?: number
+  mode?: RepaintMode
+  strength?: number
+}
+
 /** One generation job handed to the native `runJob`. */
 export interface AudioGenJobData {
   type: string
@@ -47,6 +76,7 @@ export interface AudioGenJobData {
   maxFrames?: number
   inferenceSteps?: number
   cfgScale?: number
+  editOperations?: AudioEditOperationJobData[]
 }
 
 /** Native output event: (handle, event, data, error). */

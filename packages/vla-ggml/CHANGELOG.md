@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
 ## [0.20.0] - 2026-08-17
 
 ### Changed

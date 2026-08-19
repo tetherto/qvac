@@ -1,8 +1,10 @@
 import {
+  AudioEditOperationType,
   AudioGen,
   ENGINE_MINIMAX,
   ERR_CODES,
   QvacErrorAudioGen,
+  RepaintMode,
   detectEngineType,
   type AudioGenEngine,
   type AudiogenOutputChunk
@@ -28,6 +30,25 @@ const output: AudiogenOutputChunk = {
   sampleRate: 48000,
   channels: 2
 }
+const editSession = audioGen
+  .edit({
+    pcm: new Int16Array([0, 0]),
+    sampleRate: 48000,
+    channels: 2
+  })
+  .edit({
+    from: { caption: 'original pop' },
+    to: { caption: 'guitar pop-rock' }
+  })
+  .repaint({
+    caption: 'analog synth solo',
+    start: 0,
+    end: 1,
+    mode: RepaintMode.Balanced
+  })
+const operationType: AudioEditOperationType =
+  AudioEditOperationType.FlowEdit
+const editResponse = editSession.run({ seed: 22883 })
 
 void audioGen
 void errorCode
@@ -35,3 +56,6 @@ void errorConstructor
 void minimax
 void output
 void invalidEngineIsAllowed
+void editSession
+void editResponse
+void operationType

@@ -218,6 +218,19 @@ test('AudioGen rejects unsupported MiniMax generation options', async (t) => {
   )
 })
 
+test('AudioGen rejects ACE-Step editing for MiniMax', (t) => {
+  const { gen } = createHarness()
+  t.exception(
+    () =>
+      gen.edit({
+        pcm: new Int16Array(2),
+        sampleRate: 44100,
+        channels: 2
+      }),
+    /MiniMax-Music3 does not support audio editing/
+  )
+})
+
 test('AudioGen rejects out-of-range MiniMax constructor controls', (t) => {
   t.exception(
     () =>
