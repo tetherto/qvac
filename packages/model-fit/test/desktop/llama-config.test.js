@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const fs = require('bare-fs')
 const process = require('bare-process')
 const path = require('bare-path')
 const { spawn } = require('bare-subprocess')
@@ -10,7 +11,12 @@ const {
   parseFitProcessResponse
 } = require('../../process')
 const { parseFitProcessRequest, runFitProcessLine } = require('../../process-internal')
-const { fitLlamaConfig } = require('../../index')
+
+const PREBUILDS_DIR = path.join(__dirname, '../../prebuilds')
+const HAS_NATIVE_PREBUILD =
+  fs.existsSync(path.join(PREBUILDS_DIR, `${process.platform}-${process.arch}`)) ||
+  (process.platform === 'darwin' && fs.existsSync(path.join(PREBUILDS_DIR, 'darwin-universal')))
+const fitLlamaConfig = HAS_NATIVE_PREBUILD ? require('../../index').fitLlamaConfig : undefined
 
 function runRunner(input) {
   return new Promise((resolve, reject) => {
@@ -176,10 +182,12 @@ test('v2 validates raw config shape before native allocation', async (t) => {
 test('all public v2 boundaries reject unknown top-level fields', async (t) => {
   for (const key of ['marginMib', 'fingerprint', 'fitContractVersion']) {
     const invalid = { ...config, [key]: key === 'marginMib' ? 512 : 'legacy' }
-    await t.exception.all(
-      () => fitLlamaConfig(invalid),
-      new RegExp(`unknown top-level field.*${key}`)
-    )
+    if (fitLlamaConfig !== undefined) {
+      await t.exception.all(
+        () => fitLlamaConfig(invalid),
+        new RegExp(`unknown top-level field.*${key}`)
+      )
+    }
     await t.exception.all(
       () => encodeFitLlamaProcessRequest(invalid),
       new RegExp(`unknown top-level field.*${key}`)
@@ -193,158 +201,184 @@ test('all public v2 boundaries reject unknown top-level fields', async (t) => {
       new RegExp(`unknown top-level field.*${key}`)
     )
 
-    const direct = await runDirectBinding(invalid)
-    t.is(direct.signal, null, `${key} must be rejected before backend initialization`)
-    t.is(direct.code, 0)
-    t.ok(JSON.parse(direct.stdout).message.includes(key))
-    t.is(direct.stderr, '')
+    if (HAS_NATIVE_PREBUILD) {
+      const direct = await runDirectBinding(invalid)
+      t.is(direct.signal, null, `${key} must be rejected before backend initialization`)
+      t.is(direct.code, 0)
+      t.ok(JSON.parse(direct.stdout).message.includes(key))
+      t.is(direct.stderr, '')
+    }
   }
 })
 
-test('direct binding rejects relationships before backend initialization', async (t) => {
-  for (const invalid of [
-    {
+test(
+  'direct binding rejects relationships before backend initialization',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    for (const invalid of [
+      {
+        modelPath: config.modelPath,
+        config: {
+          device: 'cpu',
+          'batch-size': '128',
+          'ubatch-size': '256'
+        }
+      },
+      {
+        modelPath: config.modelPath,
+        config: { device: 'cpu', 'ctx-size': '512' },
+        nCtxMin: 1024
+      }
+    ]) {
+      const direct = await runDirectBinding(invalid)
+      t.is(direct.signal, null, 'invalid relationship must not initialize a backend')
+      t.is(direct.code, 0)
+      t.is(JSON.parse(direct.stdout).ok, false)
+      t.is(direct.stderr, '')
+    }
+  }
+)
+
+test(
+  'direct binding narrows fit-critical integers before backend initialization',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    for (const [key, value] of [
+      ['ctx-size', '2147483648'],
+      ['ctx_size', '2147483648'],
+      ['ctx-size', '-2147483649'],
+      ['batch-size', '2147483648'],
+      ['batch_size', '2147483648'],
+      ['ubatch-size', '2147483648'],
+      ['ubatch_size', '2147483648'],
+      ['parallel', '2147483648'],
+      ['gpu-layers', '2147483648'],
+      ['gpu_layers', '2147483648'],
+      ['n-gpu-layers', '2147483648'],
+      ['n_gpu_layers', '2147483648'],
+      ['main-gpu', '2147483648'],
+      ['main_gpu', '2147483648'],
+      ['fit-ctx', '2147483648'],
+      ['fit_ctx', '2147483648'],
+      ['n-cpu-moe', '2147483648'],
+      ['n_cpu_moe', '2147483648'],
+      ['main-gpu', 'sideways'],
+      ['parallel', 'not-an-integer']
+    ]) {
+      const direct = await runDirectBinding({
+        modelPath: config.modelPath,
+        config: { device: 'cpu', [key]: value }
+      })
+      t.is(direct.signal, null, `${key}=${value} must not initialize a backend`)
+      t.is(direct.code, 0)
+      t.is(JSON.parse(direct.stdout).ok, false)
+      t.is(direct.stderr, '')
+    }
+  }
+)
+
+test(
+  'direct binding leaves numeric-looking string handlers untouched',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    const direct = await runDirectBinding({
       modelPath: config.modelPath,
       config: {
         device: 'cpu',
+        'tensor-split': '2147483648',
         'batch-size': '128',
         'ubatch-size': '256'
       }
-    },
-    {
-      modelPath: config.modelPath,
-      config: { device: 'cpu', 'ctx-size': '512' },
-      nCtxMin: 1024
-    }
-  ]) {
-    const direct = await runDirectBinding(invalid)
-    t.is(direct.signal, null, 'invalid relationship must not initialize a backend')
-    t.is(direct.code, 0)
-    t.is(JSON.parse(direct.stdout).ok, false)
-    t.is(direct.stderr, '')
-  }
-})
-
-test('direct binding narrows fit-critical integers before backend initialization', async (t) => {
-  for (const [key, value] of [
-    ['ctx-size', '2147483648'],
-    ['ctx_size', '2147483648'],
-    ['ctx-size', '-2147483649'],
-    ['batch-size', '2147483648'],
-    ['batch_size', '2147483648'],
-    ['ubatch-size', '2147483648'],
-    ['ubatch_size', '2147483648'],
-    ['parallel', '2147483648'],
-    ['gpu-layers', '2147483648'],
-    ['gpu_layers', '2147483648'],
-    ['n-gpu-layers', '2147483648'],
-    ['n_gpu_layers', '2147483648'],
-    ['main-gpu', '2147483648'],
-    ['main_gpu', '2147483648'],
-    ['fit-ctx', '2147483648'],
-    ['fit_ctx', '2147483648'],
-    ['n-cpu-moe', '2147483648'],
-    ['n_cpu_moe', '2147483648'],
-    ['main-gpu', 'sideways'],
-    ['parallel', 'not-an-integer']
-  ]) {
-    const direct = await runDirectBinding({
-      modelPath: config.modelPath,
-      config: { device: 'cpu', [key]: value }
     })
-    t.is(direct.signal, null, `${key}=${value} must not initialize a backend`)
-    t.is(direct.code, 0)
-    t.is(JSON.parse(direct.stdout).ok, false)
-    t.is(direct.stderr, '')
-  }
-})
-
-test('direct binding leaves numeric-looking string handlers untouched', async (t) => {
-  const direct = await runDirectBinding({
-    modelPath: config.modelPath,
-    config: {
-      device: 'cpu',
-      'tensor-split': '2147483648',
-      'batch-size': '128',
-      'ubatch-size': '256'
-    }
-  })
-  t.is(direct.signal, null)
-  t.is(direct.code, 0)
-  t.ok(JSON.parse(direct.stdout).message.includes('ubatch-size'))
-  t.is(direct.stderr, '')
-})
-
-test('symbolic main-gpu reaches unsupported config through direct and process paths', async (t) => {
-  for (const [key, value] of [
-    ['main-gpu', 'integrated'],
-    ['main_gpu', 'integrated'],
-    ['main-gpu', 'dedicated'],
-    ['main_gpu', 'dedicated']
-  ]) {
-    const symbolic = {
-      modelPath: path.join(__dirname, 'no-such-model.gguf'),
-      config: { device: 'gpu', [key]: value }
-    }
-    const direct = await runDirectBinding(symbolic)
     t.is(direct.signal, null)
     t.is(direct.code, 0)
-    t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
+    t.ok(JSON.parse(direct.stdout).message.includes('ubatch-size'))
     t.is(direct.stderr, '')
+  }
+)
 
-    const processOutcome = await runRunner(encodeFitLlamaProcessRequest(symbolic))
-    t.is(processOutcome.signal, null)
-    t.is(processOutcome.code, 0)
-    t.is(
-      parseFitProcessResponse(JSON.parse(processOutcome.stdout)).result.reason,
-      'unsupported-config'
+test(
+  'symbolic main-gpu reaches unsupported config through direct and process paths',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    for (const [key, value] of [
+      ['main-gpu', 'integrated'],
+      ['main_gpu', 'integrated'],
+      ['main-gpu', 'dedicated'],
+      ['main_gpu', 'dedicated']
+    ]) {
+      const symbolic = {
+        modelPath: path.join(__dirname, 'no-such-model.gguf'),
+        config: { device: 'gpu', [key]: value }
+      }
+      const direct = await runDirectBinding(symbolic)
+      t.is(direct.signal, null)
+      t.is(direct.code, 0)
+      t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
+      t.is(direct.stderr, '')
+
+      const processOutcome = await runRunner(encodeFitLlamaProcessRequest(symbolic))
+      t.is(processOutcome.signal, null)
+      t.is(processOutcome.code, 0)
+      t.is(
+        parseFitProcessResponse(JSON.parse(processOutcome.stdout)).result.reason,
+        'unsupported-config'
+      )
+      t.is(processOutcome.stderr, '')
+    }
+  }
+)
+
+test(
+  'known unsupported configs win before model and backend checks',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    for (const setting of [
+      { lora: '/adapter.gguf' },
+      { shards: '2' },
+      { stream: 'true' },
+      { mmproj: '/projector.gguf' },
+      { finetune: 'true' },
+      { 'rope-scale': '2' },
+      { yarn_orig_ctx: '4096' },
+      { 'unknown-setting': '1' }
+    ]) {
+      const direct = await runDirectBinding({
+        modelPath: path.join(__dirname, 'no-such-model.gguf'),
+        config: { device: 'cpu', ...setting }
+      })
+      t.is(direct.signal, null)
+      t.is(direct.code, 0)
+      t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
+      t.is(direct.stderr, '')
+    }
+  }
+)
+
+test(
+  'v2 round-trips through the disposable native runner',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    const outcome = await runRunner(
+      encodeFitLlamaProcessRequest({
+        modelPath: path.join(__dirname, 'no-such-model.gguf'),
+        config: { device: 'cpu' }
+      })
     )
-    t.is(processOutcome.stderr, '')
-  }
-})
+    if (
+      process.platform === 'darwin' &&
+      outcome.signal === 'SIGSEGV' &&
+      outcome.stderr.includes('ggml_metal_device_get: initialising device')
+    ) {
+      t.pass('known local Metal backend initialisation crash was isolated in the child')
+      return
+    }
 
-test('known unsupported configs win before model and backend checks', async (t) => {
-  for (const setting of [
-    { lora: '/adapter.gguf' },
-    { shards: '2' },
-    { stream: 'true' },
-    { mmproj: '/projector.gguf' },
-    { finetune: 'true' },
-    { 'rope-scale': '2' },
-    { yarn_orig_ctx: '4096' },
-    { 'unknown-setting': '1' }
-  ]) {
-    const direct = await runDirectBinding({
-      modelPath: path.join(__dirname, 'no-such-model.gguf'),
-      config: { device: 'cpu', ...setting }
-    })
-    t.is(direct.signal, null)
-    t.is(direct.code, 0)
-    t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
-    t.is(direct.stderr, '')
+    t.is(outcome.code, 0)
+    const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
+    t.is(response.version, FIT_PROCESS_PROTOCOL_VERSION_V2)
+    t.is(response.status, 'completed')
+    t.is(response.result.status, 2)
+    t.ok(['model-unreadable', 'no-backend-device'].includes(response.result.reason))
   }
-})
-
-test('v2 round-trips through the disposable native runner', async (t) => {
-  const outcome = await runRunner(
-    encodeFitLlamaProcessRequest({
-      modelPath: path.join(__dirname, 'no-such-model.gguf'),
-      config: { device: 'cpu' }
-    })
-  )
-  if (
-    process.platform === 'darwin' &&
-    outcome.signal === 'SIGSEGV' &&
-    outcome.stderr.includes('ggml_metal_device_get: initialising device')
-  ) {
-    t.pass('known local Metal backend initialisation crash was isolated in the child')
-    return
-  }
-
-  t.is(outcome.code, 0)
-  const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
-  t.is(response.version, FIT_PROCESS_PROTOCOL_VERSION_V2)
-  t.is(response.status, 'completed')
-  t.is(response.result.status, 2)
-  t.ok(['model-unreadable', 'no-backend-device'].includes(response.result.reason))
-})
+)
