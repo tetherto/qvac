@@ -21,10 +21,12 @@
  *     RuntimeStats (surfaced as JobEnded) so every drained Output event
  *     is delivered BEFORE the job is marked finished and the wrapper's
  *     response chain (`response.onUpdate(...).await()`) resolves — the
- *     tail-cut regression (QVAC-23758) was the JS wrapper clearing the
- *     active job before undelivered outputs arrived, dropping them; the
- *     synthetic JobEnded built from the teardown object survives only as
- *     a fallback when no native session existed (`cleaned: false`);
+ *     tail-cut regression was the JS wrapper clearing the active job
+ *     before undelivered outputs arrived, dropping them; the synthetic
+ *     JobEnded built from the teardown object survives only as a
+ *     fallback when no native session existed (`cleaned: false`), and
+ *     concurrent `endStreaming()` calls join the in-flight teardown
+ *     instead of taking that fallback;
  *   - a concurrent run()/runStreaming() during an open session rejects
  *     with the structured STREAMING_SESSION_ACTIVE error;
  *   - cancellation tears the session down via the existing
@@ -147,7 +149,7 @@ test('runStreaming surfaces one Output per pushed chunk and one JobEnded on clos
   await model.unload()
 })
 
-test('endStreaming delivers undelivered Output backlog before JobEnded (QVAC-23758 tail-cut)', async (t) => {
+test('endStreaming delivers undelivered Output backlog before JobEnded (tail-cut regression)', async (t) => {
   // Drive the wrapper directly: append several chunks and call
   // endStreaming() IMMEDIATELY, while the per-chunk Output events are
   // still queued for asynchronous delivery (process.nextTick in the
@@ -200,6 +202,53 @@ test('endStreaming delivers undelivered Output backlog before JobEnded (QVAC-237
     'listening',
     'Wrapper state machine returned to listening after the drain'
   )
+
+  await model.unload()
+})
+
+test('concurrent endStreaming calls join the in-flight teardown without dropping outputs', async (t) => {
+  // The first endStreaming removes the native session and waits for its
+  // queued terminal event. A second concurrent call used to see
+  // cleaned:false, clear the active job, and emit a synthetic JobEnded
+  // before the queued outputs arrived — discarding them. It must join
+  // the in-flight teardown instead.
+  const events = []
+  const model = createMockedModel({
+    onOutput: (addon, event, jobId, output, error) => {
+      events.push({ event, jobId, output, error })
+    }
+  })
+  await model.load()
+  const addon = getAddon(model)
+
+  await addon.startStreaming({ chunkMs: 2000 })
+  // Appends and BOTH endStreaming calls fire in one synchronous turn, so
+  // the duplicate end runs while the first one's backlog is still queued
+  // for delivery.
+  await Promise.all([
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.endStreaming(),
+    addon.endStreaming()
+  ])
+
+  const outputEvents = events.filter((e) => e.event === 'Output')
+  t.is(outputEvents.length, 3, 'All backlog Output events delivered despite the duplicate end')
+
+  const jobEndedEvents = events.filter((e) => e.event === 'JobEnded')
+  t.is(jobEndedEvents.length, 1, 'Exactly one terminal JobEnded (no synthetic duplicate)')
+  t.is(
+    events
+      .filter((e) => e.event === 'Output' || e.event === 'JobEnded')
+      .findIndex((e) => e.event === 'JobEnded'),
+    3,
+    'JobEnded still arrives after every drained Output event'
+  )
+  t.is(model._mockedBinding._streamingLog.ends, 1, 'Binding endStreaming invoked once')
+
+  const idempotent = await addon.endStreaming()
+  t.is(idempotent, undefined, 'endStreaming after teardown resolves as a no-op')
 
   await model.unload()
 })

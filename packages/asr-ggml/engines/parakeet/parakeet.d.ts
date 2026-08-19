@@ -98,6 +98,7 @@ export declare class ParakeetInterface {
     private _activeJobId;
     private _onCancelComplete;
     private _onStreamEndComplete;
+    private _endStreamingInFlight;
     private _bufferedAudio;
     private _bufferedBytes;
     private _config;

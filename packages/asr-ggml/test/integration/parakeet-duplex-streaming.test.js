@@ -19,7 +19,7 @@
  *     (surfaced as JobEnded) through the same FIFO output queue as
  *     the drained segments, so the wrapper response chain
  *     (`onUpdate(...).await()`) resolves only after every segment
- *     has been delivered (QVAC-23758).
+ *     has been delivered.
  *
  * Coverage:
  *

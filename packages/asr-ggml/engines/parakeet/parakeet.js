@@ -49,6 +49,7 @@ class ParakeetInterface {
     _activeJobId;
     _onCancelComplete;
     _onStreamEndComplete;
+    _endStreamingInFlight;
     _bufferedAudio;
     _bufferedBytes;
     _config;
@@ -62,6 +63,7 @@ class ParakeetInterface {
         this._activeJobId = null;
         this._onCancelComplete = null;
         this._onStreamEndComplete = null;
+        this._endStreamingInFlight = null;
         this._bufferedAudio = [];
         this._bufferedBytes = 0;
         this._config = this._applyDefaults(configurationParams);
@@ -133,6 +135,7 @@ class ParakeetInterface {
         return true;
     }
     _resolveStreamEndWaiter() {
+        this._endStreamingInFlight = null;
         if (!this._onStreamEndComplete)
             return;
         const resolve = this._onStreamEndComplete;
@@ -428,31 +431,27 @@ class ParakeetInterface {
     }
     endStreaming() {
         try {
+            // A second endStreaming() while the first is still waiting for the
+            // queued terminal event must join it, not fall through to the
+            // synthetic path — that would clear the job before the drained
+            // outputs are delivered and discard them.
+            if (this._endStreamingInFlight)
+                return this._endStreamingInFlight;
             if (this._activeJobId === null)
                 return Promise.resolve();
             const jobId = this._activeJobId;
-            // binding.endStreaming joins the native worker AFTER it has drained
-            // all buffered audio, so on return every remaining Output batch —
-            // plus the terminal RuntimeStats the ParakeetStreamingProcessor
-            // queues after finalize() — sits in the addon's output queue in
-            // FIFO order. Delivery to _addonOutputCallback is asynchronous
-            // (uv_async), so the active job MUST NOT be cleared here: doing so
-            // made _addonOutputCallback drop the entire drained backlog
-            // (jobId === null) and cut the tail off the transcript
-            // (QVAC-23758).
+            // The native endStreaming drains the backlog and queues a terminal
+            // RuntimeStats behind it; delivery is asynchronous, so the job must
+            // stay active until that terminal event arrives.
             const teardown = this._binding.endStreaming(this._handle) || {};
             if (teardown.cleaned) {
-                // Wait for the queued terminal event (JobEnded or Error) to flow
-                // through _addonOutputCallback, which clears the job, flips the
-                // state machine, and resolves the response with the processor's
-                // real stats.
-                return new Promise((resolve) => {
+                this._endStreamingInFlight = new Promise((resolve) => {
                     this._onStreamEndComplete = resolve;
                 });
+                return this._endStreamingInFlight;
             }
-            // No native session existed (already torn down elsewhere): the
-            // queue carries no terminal event, so synthesise the JobEnded here
-            // to keep the response chain resolving as before.
+            // No native session existed: the queue carries no terminal event,
+            // so synthesise the JobEnded to resolve the response chain.
             this._activeJobId = null;
             this._setState(state.LISTENING);
             this._outputCallback(this, "JobEnded", jobId, {
@@ -468,6 +467,7 @@ class ParakeetInterface {
         }
         catch (error) {
             this._onStreamEndComplete = null;
+            this._endStreamingInFlight = null;
             const normalized = normalizeError(error);
             return Promise.reject(createParakeetError(error_1.ERR_CODES_PARAKEET.FAILED_TO_RESET, normalized.message, error));
         }
