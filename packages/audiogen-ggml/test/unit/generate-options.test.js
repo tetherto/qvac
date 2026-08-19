@@ -38,7 +38,7 @@ test('AudioGen.run forwards sampler, caption, DCW and frozen-code controls', asy
     lmTopK: 0,
     lmCfgScale: 1.5,
     lmPhase1: false,
-    augmentCaptionWithMetadata: false,
+    augmentCaptionWithMetadata: true,
     dcwEnabled: false,
     dcwScaler: 0,
     dcwHighScaler: 0,
@@ -54,7 +54,7 @@ test('AudioGen.run forwards sampler, caption, DCW and frozen-code controls', asy
   t.is(job.lmTopK, 0, 'zero top-k is preserved')
   t.is(job.lmCfgScale, 1.5)
   t.is(job.lmPhase1, false, 'false Phase 1 flag is preserved')
-  t.is(job.augmentCaptionWithMetadata, false, 'false caption augmentation flag is preserved')
+  t.is(job.augmentCaptionWithMetadata, true, 'caption augmentation flag is forwarded')
   t.is(job.dcwEnabled, false, 'false DCW flag is preserved')
   t.is(job.dcwScaler, 0, 'zero low-frequency scaler is preserved')
   t.is(job.dcwHighScaler, 0, 'zero high-frequency scaler is preserved')
