@@ -47,7 +47,7 @@
         "cwd": "packages/tts-ggml",
         "ci": {
           "envVarName": "GITHUB_TOKEN",
-          "envSecretName": "PAT_TOKEN",
+          "envSecretName": "GITHUB_TOKEN",
           "runIntegrationTests": true,
           "runRtfBenchmarks": false,
           "rtfBenchmark": {

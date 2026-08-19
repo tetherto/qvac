@@ -45,7 +45,7 @@
         "cwd": "packages/audiogen-ggml",
         "ci": {
           "envVarName": "GITHUB_TOKEN",
-          "envSecretName": "PAT_TOKEN",
+          "envSecretName": "GITHUB_TOKEN",
           "runIntegrationTests": true,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
