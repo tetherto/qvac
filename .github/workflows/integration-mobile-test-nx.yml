@@ -102,7 +102,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -116,7 +116,7 @@ jobs:
           platform: ${{ matrix.platform.platform }}
           addon-workdir: ${{ matrix.package.workdir }}
           addon-npm-name: ${{ matrix.package.npmName }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           # options.ci.skipPrebuilds — decoder-audio's native code comes
           # transitively (bare-ffmpeg); it ships no prebuilds of its own, so
           # prebuild resolution must be skipped or setup hard-fails.

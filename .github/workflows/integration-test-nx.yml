@@ -120,7 +120,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Node.js
         if: matrix.hasPinModelManifest && matrix.os == 'ubuntu-22.04'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -171,7 +171,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Dual-registry auth (options.ci.dualRegistry) — packages with @tetherto
       # (GitHub Packages) deps need an .npmrc + git insteadOf before npm install.
@@ -181,9 +181,9 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         shell: bash
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
           cat > .npmrc <<NPMRC
@@ -204,9 +204,9 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         shell: powershell
         env:
-          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           @"
           registry=https://registry.npmjs.org/
@@ -226,7 +226,7 @@ jobs:
         if: matrix.windowsGitCreds && matrix.platform == 'win32'
         shell: powershell
         env:
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global core.longpaths true
           git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
@@ -410,7 +410,7 @@ jobs:
         continue-on-error: ${{ matrix.modelDownloadContinueOnError == true }}
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run ${{ matrix.modelDownloadScript }}
 
       # Export model-path + runtime env (options.ci.modelEnv, options.ci NO_GPU).
@@ -513,7 +513,7 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.rtfBenchmark.command }}
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload RTF benchmark results
         if: always() && !cancelled() && matrix.runRtfBenchmarks
