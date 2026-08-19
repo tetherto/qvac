@@ -386,6 +386,11 @@ jobs:
         env:
           ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ matrix.workdir }}/.lsan-suppressions.txt
+          # Package test:cpp:run scripts use POSIX syntax (cd ... && ./addon-test).
+          # npm's default script-shell on Windows is cmd, which chokes on `./`;
+          # force bash (git-bash resolves ./addon-test -> .exe) like the legacy
+          # per-package workflows, which ran the binary in a bash step directly.
+          npm_config_script_shell: bash
         run: |
           set -uo pipefail
           npm run test:cpp:run
