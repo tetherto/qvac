@@ -22,9 +22,23 @@ export interface ModelEntry {
   sdkModelId: string | null
 }
 
+export interface LoadConfig {
+  /** When false, requests never trigger a load; an unloaded model returns
+   * `503 model_not_loaded`. Only preloaded models serve. */
+  lazy: boolean
+  /** Max simultaneous lazy loads across distinct aliases (>= 1). */
+  concurrency: number
+  /** Per-load deadline in ms; `null` = unbounded. */
+  timeoutMs: number | null
+  /** When true, a client disconnect cancels the load it triggered (once no
+   * other client is still waiting on the same load). */
+  cancelOnDisconnect: boolean
+}
+
 export interface ServeConfig {
   models: Map<string, ResolvedModelEntry>
   defaults: Map<string, string>
+  load: LoadConfig
   /**
    * Externally reachable origin for this server (e.g. "https://api.example.com").
    * Required to mint absolute URLs in image-generation responses when
@@ -72,8 +86,6 @@ export interface ResolvedModelEntry {
 export interface ModelRegistry {
   STATES: typeof STATES
   getEntry: (modelId: string) => ModelEntry | null
-  getAll: () => ModelEntry[]
-  getReady: () => ModelEntry[]
   register: (
     alias: string,
     opts: {
@@ -86,8 +98,7 @@ export interface ModelRegistry {
   setLoading: (modelId: string) => void
   setReady: (modelId: string, sdkModelId?: string) => void
   setError: (modelId: string, error: unknown) => void
-  remove: (modelId: string) => boolean
-  isAllowed: (modelId: string, serveConfig: ServeConfig) => boolean
+  markUnloaded: (modelId: string) => void
 }
 
 export function createModelRegistry(): ModelRegistry {
@@ -95,14 +106,6 @@ export function createModelRegistry(): ModelRegistry {
 
   function getEntry(modelId: string): ModelEntry | null {
     return models.get(modelId) ?? null
-  }
-
-  function getAll(): ModelEntry[] {
-    return Array.from(models.values())
-  }
-
-  function getReady(): ModelEntry[] {
-    return getAll().filter((m) => m.state === STATES.READY)
   }
 
   function register(
@@ -157,25 +160,25 @@ export function createModelRegistry(): ModelRegistry {
     }
   }
 
-  function remove(modelId: string): boolean {
-    return models.delete(modelId)
-  }
-
-  function isAllowed(modelId: string, serveConfig: ServeConfig): boolean {
-    if (serveConfig.models.size === 0) return true
-    return serveConfig.models.has(modelId)
+  // Reverse of a load: keep the alias registered so it can lazy-reload, but drop
+  // the SDK handle and return it to IDLE. Used by unload so DELETE stays
+  // reversible (the entry must survive for the next request to reload it).
+  function markUnloaded(modelId: string): void {
+    const entry = models.get(modelId)
+    if (entry) {
+      entry.state = STATES.IDLE
+      entry.error = null
+      entry.sdkModelId = null
+    }
   }
 
   return {
     STATES,
     getEntry,
-    getAll,
-    getReady,
     register,
     setLoading,
     setReady,
     setError,
-    remove,
-    isAllowed
+    markUnloaded
   }
 }
