@@ -87,7 +87,6 @@
     "hyperschema": "^1.13.0",
     "llm-splitter": "^0.2.0",
     "ready-resource": "^1.1.2",
-    "zod": "^4.1.13",
-    "@qvac/logging": "^0.1.0"
+    "zod": "^4.1.13"
   }
 }
