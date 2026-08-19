@@ -40,7 +40,10 @@ async function main() {
       mode: 'txt2vid',
       prompt:
         process.env.PROMPT ||
-        'Realistic cinematic close-up of a person drinking coffee in warm morning light.',
+        'Premium cinematic coffee commercial. A confident adult sits at a small café table at sunrise, slowly lifts one matte black coffee cup, takes a relaxed sip, and smiles. Warm golden rim light, drifting steam, realistic skin, natural hands, shallow depth of field, subtle slow camera push-in, restrained natural motion, polished live-action advertising, no dialogue, no text overlay.',
+      negative_prompt:
+        process.env.NEG_PROMPT ||
+        'extra people, duplicate cup, malformed hands, cup fused to hand, text, subtitles, watermark, cartoon, CGI, blur, flicker, jitter, camera shake',
       width: Number(process.env.WIDTH || 960),
       height: Number(process.env.HEIGHT || 544),
       video_frames: Number(process.env.FRAMES || 124),
@@ -63,7 +66,7 @@ async function main() {
       .await()
 
     if (!avi) throw new Error('Generation finished without an AVI result')
-    const output = path.join(OUTPUT_DIR, process.env.OUTPUT || 'minimax-h3-coffee.avi')
+    const output = path.join(OUTPUT_DIR, process.env.OUTPUT || 'minimax-h3-coffee-commercial.avi')
     fs.writeFileSync(output, avi)
     console.log(`Saved ${output}`)
     if (stats) console.log(`Stats: ${stats.videoFrames} frames @ ${stats.fps} fps; audio=${stats.hasAudio}`)
