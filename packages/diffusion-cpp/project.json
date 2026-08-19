@@ -100,7 +100,12 @@
         "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
         "cwd": "packages/diffusion-cpp",
         "ci": {
-          "carveOut": true
+          "npmName": "@qvac/diffusion-cpp",
+          "prebuildArtifactPrefix": "sd-cpp-",
+          "deviceFarmProjectArnPrimary": "LLM_AWS_DEVICE_FARM_PROJECT_ARN",
+          "androidDevicePoolArnPrimary": "LLM_ANDROID_DEVICE_POOL_ARN",
+          "iosDevicePoolArnPrimary": "LLM_IOS_DEVICE_POOL_ARN",
+          "enablesPerf": true
         }
       }
     },
