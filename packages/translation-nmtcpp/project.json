@@ -76,20 +76,6 @@
         }
       }
     },
-    "test:integration-mobile": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
-        "cwd": "packages/translation-nmtcpp",
-        "ci": {
-          "npmName": "@qvac/translation-nmtcpp",
-          "schedulingMode": "dual-flagship",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_NMTCPP",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_NMTCPP",
-          "enablesPerf": true
-        }
-      }
-    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
