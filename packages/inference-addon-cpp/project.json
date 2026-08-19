@@ -1,7 +1,18 @@
 {
   "name": "inference-addon-cpp",
   "root": "packages/inference-addon-cpp",
-  "targets": {},
+  "targets": {
+    "test:integration-mobile": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'carve-out: routed to integration-mobile-test-inference-addon-cpp.yml'",
+        "cwd": "packages/inference-addon-cpp",
+        "ci": {
+          "carveOut": true
+        }
+      }
+    }
+  },
   "implicitDependencies": [
     "lint-cpp"
   ]
