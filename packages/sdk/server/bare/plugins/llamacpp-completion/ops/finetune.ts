@@ -66,6 +66,27 @@ export function clearFinetuneRuntimeState(modelId: string) {
 // unrelated reader.
 const admittedFinetunes = new Set<string>()
 
+// The single in-flight finetune's requestId per model. A QUEUED finetune is cancelled
+// by this id, not by a broad cancel({ modelId, kind }): the registry's grant→register
+// handoff leaves a brief window where the request is in neither the wait queue nor the
+// active set — a broad cancel misses it, but cancel({ requestId }) covers it via the
+// cancel-before-begin tripwire.
+const finetuneRequestIds = new Map<string, string>()
+
+// Models whose admitted finetune is mid-pause: model.pause() has been called but has
+// not settled. A new finetune is rejected during this window even if the runtime ref
+// has already cleared, because handle.await() can settle before model.pause() resolves.
+const pausingModels = new Set<string>()
+
+// Cancel the model's in-flight finetune by its tracked requestId (covers the
+// registry grant→register handoff window via the cancel-before-begin tripwire),
+// falling back to a broad cancel if the id is unknown.
+function cancelTrackedFinetune(modelId: string): void {
+  const requestId = finetuneRequestIds.get(modelId)
+  if (requestId !== undefined) getRequestRegistry().cancel({ requestId })
+  else getRequestRegistry().cancel({ modelId, kind: 'finetune' })
+}
+
 export function getFinetuneStateFromCheckpoints(options: FinetuneOptions): FinetuneStatus {
   const checkpointDirectory = options.checkpointSaveDir ?? './checkpoints'
 
@@ -126,28 +147,36 @@ export async function startFinetune(
   // running. With no queued finetune peers, pause/cancel never has to disambiguate
   // multiple finetunes, and a finetune that arrives mid-pause is simply rejected
   // because the pausing one still occupies the model until it unwinds.
-  if (getRunningFinetuneState(request.modelId)) {
+  if (getRunningFinetuneState(request.modelId) || pausingModels.has(request.modelId)) {
     throw new CompletionFailedError(
       `Model "${request.modelId}" already has an active finetune; pause or cancel it before starting another`
     )
   }
 
+  // Stable id, used for registry scoping and for targeted cancellation of this
+  // finetune while it is queued (see pauseFinetune / cancelFinetune).
+  const requestId = request.requestId ?? generateServerRequestId()
+
   // Take a ref before the async begin() so an immediate getFinetuneState() poll
   // observes RUNNING, not IDLE, and a concurrent start is rejected above. Released
   // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
+  finetuneRequestIds.set(request.modelId, requestId)
 
   // Scope the run into the registry so cancel({ requestId }) and
   // cancel({ modelId, kind: "finetune" }) reach it; onAbort forwards to
   // model.cancel().
   await using ctx = await getRequestRegistry()
     .begin({
-      requestId: request.requestId ?? generateServerRequestId(),
+      requestId,
       kind: 'finetune',
       modelId: request.modelId
     })
     .catch((err: unknown) => {
       clearFinetuneRuntimeState(request.modelId)
+      if (finetuneRequestIds.get(request.modelId) === requestId) {
+        finetuneRequestIds.delete(request.modelId)
+      }
       throw err
     })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
@@ -155,6 +184,9 @@ export async function startFinetune(
   // removes the listener first.
   ctx.scope.defer(() => {
     clearFinetuneRuntimeState(request.modelId)
+    if (finetuneRequestIds.get(request.modelId) === requestId) {
+      finetuneRequestIds.delete(request.modelId)
+    }
   })
 
   // A finetune cancelled while queued resolves aborted without the exclusive
@@ -218,16 +250,24 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
 
   if (admittedFinetunes.has(modelId)) {
     // The single finetune holds the model exclusively, so the addon-global pause is
-    // safe (nothing else runs on the model).
-    await model.pause()
+    // safe (nothing else runs on the model). Bar a new finetune until the native
+    // pause settles: the runtime ref can clear when handle.await() resolves, which
+    // may precede model.pause()'s resolution.
+    pausingModels.add(modelId)
+    try {
+      await model.pause()
+    } finally {
+      pausingModels.delete(modelId)
+    }
     return { type: 'finetune', status: 'PAUSED' }
   }
 
   if (getRunningFinetuneState(modelId)) {
     // A finetune is pending but not yet admitted (queued behind a reader). A global
-    // pause would cancel that unrelated reader, so cancel the queued finetune
-    // instead. Nothing has trained, so report CANCELLED rather than a false PAUSED.
-    getRequestRegistry().cancel({ modelId, kind: 'finetune' })
+    // pause would cancel that unrelated reader, so cancel the queued finetune by its
+    // own requestId. Nothing has trained, so report CANCELLED rather than a false
+    // PAUSED.
+    cancelTrackedFinetune(modelId)
     return { type: 'finetune', status: 'CANCELLED' }
   }
 
@@ -238,7 +278,7 @@ export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
 // Routes cancellation through the registry; the model.cancel() forward is
 // installed by startFinetune, so never call model.cancel() here.
 export function cancelFinetune(modelId: string): Promise<FinetuneResult> {
-  getRequestRegistry().cancel({ modelId, kind: 'finetune' })
+  cancelTrackedFinetune(modelId)
 
   return Promise.resolve({
     type: 'finetune',

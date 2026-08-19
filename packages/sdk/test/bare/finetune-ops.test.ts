@@ -707,13 +707,14 @@ test('startFinetune: rejects a second finetune while the first is pausing', asyn
         }
       },
       pause: async function () {
-        // Native pause is in flight (not yet settled) while a second start is probed;
-        // the admitted finetune has not resolved, so it still occupies the model.
+        // Adversarial ordering: the admitted finetune's handle settles BEFORE the
+        // native pause resolves. This clears the runtime ref while pause is still in
+        // flight, so the pausing barrier (not the ref) must reject a new finetune.
         markPauseEntered()
+        resolveActiveAwait?.({ status: 'PAUSED', stats: {} })
         await new Promise<void>((resolve) => {
           releaseNativePause = resolve
         })
-        resolveActiveAwait?.({ status: 'PAUSED', stats: {} })
       },
       cancel: async function () {}
     } as unknown as AnyModel,
@@ -734,21 +735,24 @@ test('startFinetune: rejects a second finetune while the first is pausing', asyn
 
     const pausePromise = pauseFinetune(modelId)
     await pauseEntered
+    // The admitted finetune has already unwound (its runtime ref is cleared), but the
+    // native pause has not settled — the barrier must still reject a new finetune.
+    t.is((await activePromise).status, 'PAUSED')
 
-    // The admitted finetune still occupies the model while native pause is pending,
-    // so a second start is rejected rather than admitted.
     let secondError: unknown
     try {
       await startFinetune({ type: 'finetune', modelId, operation: 'start', options })
     } catch (error) {
       secondError = error
     }
-    t.ok(secondError instanceof CompletionFailedError, 'a second finetune during pause is rejected')
+    t.ok(
+      secondError instanceof CompletionFailedError,
+      'a second finetune during pause is rejected by the barrier even after the handle settled'
+    )
     t.is(finetuneCalls, 1, 'the second finetune never reached the addon')
 
     releaseNativePause()
     t.is((await pausePromise).status, 'PAUSED')
-    t.is((await activePromise).status, 'PAUSED')
   } finally {
     releaseNativePause()
     unregisterModel(modelId)
