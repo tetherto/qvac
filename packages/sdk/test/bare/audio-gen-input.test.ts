@@ -239,7 +239,6 @@ test('audioGen plugin operation forwards 0.2.1 controls and decoded audio to the
     modelId,
     caption: 'orchestral arrangement with dramatic strings',
     lyrics: '[Instrumental]',
-    augmentCaptionWithMetadata: true,
     taskType: 'cover-nofsq',
     sourceAudio: { type: 'base64', value: sourceBytes.toString('base64') },
     referenceAudio: { type: 'base64', value: referenceBytes.toString('base64') },
@@ -259,7 +258,6 @@ test('audioGen plugin operation forwards 0.2.1 controls and decoded audio to the
 
   t.is(capturedCaption, 'orchestral arrangement with dramatic strings')
   t.is(capturedOptions?.lyrics, '[Instrumental]')
-  t.is(capturedOptions?.augmentCaptionWithMetadata, true)
   t.is(capturedOptions?.taskType, 'cover-nofsq')
   t.is(capturedOptions?.audioCoverStrength, 1)
   t.is(capturedOptions?.coverNoiseStrength, 0.75)

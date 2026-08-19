@@ -50,7 +50,6 @@ test('audioGen client params validate generation controls', (t) => {
       caption: 'ambient electronic music',
       seed: 42,
       bpm: 120,
-      augmentCaptionWithMetadata: true,
       duration: 10
     }).success
   )
@@ -59,14 +58,6 @@ test('audioGen client params validate generation controls', (t) => {
       modelId: 'model-1',
       caption: ' ',
       bpm: 0
-    }).success,
-    false
-  )
-  t.is(
-    audioGenClientParamsSchema.safeParse({
-      modelId: 'model-1',
-      caption: 'ambient electronic music',
-      augmentCaptionWithMetadata: 'yes'
     }).success,
     false
   )
