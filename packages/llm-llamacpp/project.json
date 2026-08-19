@@ -82,7 +82,7 @@
         "ci": {
           "carveOut": true,
           "mode": "llm",
-          "vulkan": { "os": "windows-2025", "shell": "pwsh", "path": "C:\\VulkanSDK" },
+          "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
           "vcpkgMode": "composite-local-cache",
           "hasWindowsCmakeGenerator": true,
           "hasAppleClangWorkaround": true,
