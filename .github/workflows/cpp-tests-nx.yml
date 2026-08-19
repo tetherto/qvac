@@ -359,6 +359,9 @@ jobs:
 
       - name: Run C++ tests
         working-directory: ${{ matrix.workdir }}
+        # bash required: the body uses set/jq/for; the Windows default shell is
+        # PowerShell, which parse-errors on it (broke every windows cpp leg).
+        shell: bash
         # options.ci.continueOnError: coverage lanes (asr/bci) historically did
         # not fail CI on a C++ test failure (surfaced via the results check only).
         continue-on-error: ${{ matrix.continueOnError == true }}
