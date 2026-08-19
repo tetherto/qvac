@@ -113,6 +113,11 @@ must have a different revision home while preserving and reopening those SDK-own
 After that preflight, the normal MQTT consumer runs the Electron-supported SDK model and addon tests inside the
 installed Snap.
 
+GPU inference uses Canonical's `graphics-core22` content interface and wrapper, with `mesa-core22` as the default
+userspace driver provider. The refresh harness and CI explicitly connect this provider for locally built,
+unsigned Snaps before launching them; the `opengl` plug alone exposes device access but does not supply the
+matching Vulkan userspace drivers required by the native inference backends.
+
 Use `QVAC_TEST_SNAP_SUDO=0` when snap administration does not require `sudo`. Set
 `QVAC_TEST_SNAP_KEEP_INSTALLED=1` to preserve the package and common data after refresh diagnostics.
 

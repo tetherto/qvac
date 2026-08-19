@@ -35,6 +35,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   non-contiguous input and speeds up pad, small-M matmul and argmax dispatches
   on Adreno.
 
+### Added
+
+- Add NVIDIA `parakeet-unified-en-0.6b` RNN-T support for CPU and GPU
+  transcription, model staging, conversion, examples, and performance coverage.
+
+### Changed
+
+- Recognize the native engine's new `parakeet.model.type = "rnnt"` metadata as
+  standard Parakeet ASR.
+- Require `speech-cpp` 2026-08-17 for native Unified RNN-T inference.
+
 ### Fixed
 
 - Publish a dependency-clean Whisper quickstart with positional audio, model,
