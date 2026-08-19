@@ -145,10 +145,10 @@ jobs:
     needs: matrix
     if: needs.matrix.outputs.any == 'true'
     # options.ci.timeoutMinutes — legacy per-package files ranged 30..360 (and
-    # diffusion overrode it per platform row). 360 is GitHub's own default and
-    # what the packages that declared nothing got; a flat 30 here would have
-    # hard-failed every model-heavy leg once staging was restored.
-    timeout-minutes: ${{ matrix.timeoutMinutes || 360 }}
+    # diffusion overrode it per platform row). Default is 540 (1.5x the prior
+    # 360 GitHub default) to give model-heavy legs headroom; packages can still
+    # override per row via options.ci.timeoutMinutes.
+    timeout-minutes: ${{ matrix.timeoutMinutes || 540 }}
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     permissions:
