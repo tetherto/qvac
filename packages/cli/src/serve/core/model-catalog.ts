@@ -78,6 +78,19 @@ export function buildCatalog(
     })
   }
 
+  entries.push(...buildBuiltinCatalog(constants))
+
+  // Configured first, then builtin; each group by id for a stable, paginable order.
+  entries.sort((a, b) =>
+    a.source === b.source ? a.id.localeCompare(b.id) : a.source === 'config' ? -1 : 1
+  )
+  return entries
+}
+
+// The catalog rows for every baked-in SDK constant, independent of any server
+// context — usable by CLI commands (e.g. `configure`) that have no ServeConfig.
+export function buildBuiltinCatalog(constants: Map<string, ModelConstant>): ModelCatalogEntry[] {
+  const entries: ModelCatalogEntry[] = []
   for (const [name, model] of constants) {
     entries.push({
       object: 'model_catalog_entry',
@@ -95,11 +108,6 @@ export function buildCatalog(
       hint: CATALOG_HINT
     })
   }
-
-  // Configured first, then builtin; each group by id for a stable, paginable order.
-  entries.sort((a, b) =>
-    a.source === b.source ? a.id.localeCompare(b.id) : a.source === 'config' ? -1 : 1
-  )
   return entries
 }
 

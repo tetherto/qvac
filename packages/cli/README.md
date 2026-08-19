@@ -9,6 +9,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 - [Installation](#installation)
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
+  - [`configure`](#configure)
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
   - [`verify bundle`](#verify-bundle)
@@ -107,6 +108,33 @@ qvac doctor --json
 # Fail-fast in a script (exit 1 on any required check)
 qvac doctor --quiet || exit 1
 ```
+
+### `configure`
+
+Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
+straight to `qvac serve openai`. It searches the models the SDK provides, lets you pick by
+capability, previews each entry with a link to the addon's docs, and (with `$EDITOR`) lets
+you tweak an entry before adding it. Existing entries are preserved; re-running is
+idempotent per model.
+
+```bash
+qvac configure                 # interactive
+qvac configure --yes           # non-interactive: write a chat + transcription starter
+qvac configure --modality chat --modality image
+```
+
+| Flag                  | Description                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
+| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
+| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
+| `--force`             | Re-add a model that is already configured.                                                                  |
+| `-q, --quiet`         | Suppress output.                                                                                            |
+
+Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.
+Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
+set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
+non-TTY use `--yes` / `--modality`.
 
 ### `bundle sdk`
 
