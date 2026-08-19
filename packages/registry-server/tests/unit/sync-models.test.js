@@ -3,10 +3,29 @@
 const test = require('brittle')
 const {
   ADD_MODEL_RPC_TIMEOUT_MS,
+  getChanges,
+  needsMetadataUpdate,
   recoverAfterAmbiguousAdd,
   isAmbiguousRpcError,
   waitForModelAfterAmbiguousAdd
 } = require('../../scripts/sync-models')
+
+const SETTLED = {
+  engine: '@qvac/llm-llamacpp',
+  licenseId: 'MIT',
+  description: '',
+  quantization: 'q4_k_m',
+  params: '1B',
+  notes: '',
+  tags: ['generation']
+}
+
+function pair(configOverrides = {}, existingOverrides = {}) {
+  return [
+    { ...SETTLED, ...configOverrides },
+    { ...SETTLED, ...existingOverrides }
+  ]
+}
 
 test('add-model RPC timeout is one hour', (t) => {
   t.is(ADD_MODEL_RPC_TIMEOUT_MS, 60 * 60 * 1000)
@@ -82,4 +101,44 @@ test('recoverAfterAmbiguousAdd reconnects even when polling times out', async (t
   t.is(result.connection, freshConnection)
   t.is(reconnects, 1)
   t.ok(staleConnection.cleaned)
+})
+
+test('needsMetadataUpdate - a settled model needs no update', (t) => {
+  const [config, existing] = pair()
+  t.absent(needsMetadataUpdate(config, existing))
+})
+
+test('needsMetadataUpdate - unlisting a listed model', (t) => {
+  const [config, existing] = pair({ unlisted: true }, { unlisted: false })
+  t.ok(needsMetadataUpdate(config, existing))
+  t.alike(getChanges(config, existing).unlisted, { from: false, to: true })
+})
+
+test('needsMetadataUpdate - re-listing via an explicit false', (t) => {
+  const [config, existing] = pair({ unlisted: false }, { unlisted: true })
+  t.ok(needsMetadataUpdate(config, existing))
+  t.alike(getChanges(config, existing).unlisted, { from: true, to: false })
+})
+
+test('needsMetadataUpdate - re-listing by removing the field', (t) => {
+  const [config, existing] = pair({}, { unlisted: true })
+  t.ok(needsMetadataUpdate(config, existing), 'an omitted flag re-lists an unlisted model')
+  t.alike(getChanges(config, existing).unlisted, { from: true, to: false })
+})
+
+test('needsMetadataUpdate - an unlisted model still unlisted needs no update', (t) => {
+  const [config, existing] = pair({ unlisted: true }, { unlisted: true })
+  t.absent(needsMetadataUpdate(config, existing))
+  t.absent(getChanges(config, existing).unlisted)
+})
+
+test('needsMetadataUpdate - a model that never carried the flag needs no update', (t) => {
+  const [config, existing] = pair()
+  t.absent(needsMetadataUpdate(config, existing), 'both sides omit the field')
+
+  const [explicitConfig, absentExisting] = pair({ unlisted: false }, {})
+  t.absent(
+    needsMetadataUpdate(explicitConfig, absentExisting),
+    'an explicit false against an absent stored field is not a change'
+  )
 })

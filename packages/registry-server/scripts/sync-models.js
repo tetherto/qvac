@@ -45,8 +45,8 @@ async function syncModels() {
 
     logger.info(`Loaded ${configModels.length} model(s) from ${filePath}`)
 
-    // Read all models from DB (including deprecated)
-    const dbModels = await client.findModels({}, { includeDeprecated: true })
+    // Read every model in the DB, including the ones hidden from discovery
+    const dbModels = await client.findModels({}, { includeDeprecated: true, includeUnlisted: true })
     const dbByKey = new Map()
     for (const model of dbModels) {
       const key = `${model.path}:${model.source}`
@@ -98,6 +98,9 @@ async function syncModels() {
             }
             if (entry.deprecationReason) {
               modelRequest.deprecationReason = entry.deprecationReason
+            }
+            if (entry.unlisted !== undefined) {
+              modelRequest.unlisted = entry.unlisted
             }
 
             try {
@@ -169,6 +172,11 @@ async function syncModels() {
             }
             if (entry.deprecationReason !== undefined) {
               updateRequest.deprecationReason = entry.deprecationReason || ''
+            }
+            if (entry.unlisted !== undefined) {
+              updateRequest.unlisted = entry.unlisted
+            } else if (existing.unlisted) {
+              updateRequest.unlisted = false
             }
 
             await connection.rpc.request('update-model-metadata', updateRequest)
@@ -317,7 +325,9 @@ function needsMetadataUpdate(config, existing, sourceInfo) {
     (config.deprecated !== undefined && config.deprecated !== existing.deprecated) ||
     (config.replacedBy !== undefined && config.replacedBy !== (existing.replacedBy || '')) ||
     (config.deprecationReason !== undefined &&
-      config.deprecationReason !== (existing.deprecationReason || ''))
+      config.deprecationReason !== (existing.deprecationReason || '')) ||
+    (existing.unlisted && config.unlisted === undefined) ||
+    (config.unlisted !== undefined && config.unlisted !== (existing.unlisted || false))
   )
 }
 
@@ -358,6 +368,11 @@ function getChanges(config, existing) {
       from: existing.deprecationReason || '',
       to: config.deprecationReason || ''
     }
+  }
+  if (config.unlisted !== undefined && config.unlisted !== (existing.unlisted || false)) {
+    changes.unlisted = { from: existing.unlisted || false, to: config.unlisted }
+  } else if (existing.unlisted && config.unlisted === undefined) {
+    changes.unlisted = { from: true, to: false }
   }
   return changes
 }
@@ -406,6 +421,8 @@ if (require.main === module) {
 
 module.exports = {
   ADD_MODEL_RPC_TIMEOUT_MS,
+  getChanges,
+  needsMetadataUpdate,
   recoverAfterAmbiguousAdd,
   isAmbiguousRpcError,
   syncModels,
