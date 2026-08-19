@@ -8,7 +8,7 @@
 // It fails loudly if:
 //   - documentation or other non-key metadata is added to the hashed manifest,
 //   - the manifest schema drifts (missing s3Path / malformed sha256 / bytes),
-//   - the staged set no longer matches the expected 13 desktop GGUFs, or
+//   - the staged set no longer matches the expected desktop GGUFs, or
 //   - a manifest filename or its S3 date prefix is not referenced by
 //     test/integration/parakeet-helpers.js (i.e. the manifest and the runtime
 //     model config have drifted apart).
@@ -21,10 +21,14 @@ const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'parakeet-models
 const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'parakeet-helpers.js')
 
 // The desktop quant sweep staged by integration-test-asr-ggml.yml
-// (f16 + q8_0 for all four model types, q4_0 for tdt/ctc/eou/sortformer), plus
+// (f16 + q8_0 + q4_0 for Unified and the existing core model types), plus
 // the Sortformer-Streaming v2.1 q8_0 GGUF that parakeet-sortformer-aosc-streaming.test.js
-// loads via MODEL_CONFIGS.sortformerStreaming.
+// loads via MODEL_CONFIGS.sortformerStreaming, plus Indic Conformer CTC q8_0
+// (desktop default; mobile uses q4_0 via the Device Farm manifest).
 const EXPECTED_FILES = [
+  'parakeet-unified-en-0.6b.f16.gguf',
+  'parakeet-unified-en-0.6b.q8_0.gguf',
+  'parakeet-unified-en-0.6b.q4_0.gguf',
   'parakeet-tdt-0.6b-v3.f16.gguf',
   'parakeet-ctc-0.6b.f16.gguf',
   'parakeet-eou-120m-v1.f16.gguf',
@@ -37,10 +41,19 @@ const EXPECTED_FILES = [
   'parakeet-tdt-0.6b-v3.q4_0.gguf',
   'parakeet-eou-120m-v1.q4_0.gguf',
   'sortformer-4spk-v1.q4_0.gguf',
-  'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'
+  'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
+  'indic-conformer-ctc.q8_0.gguf'
 ]
 
-const KNOWN_DATE_PREFIXES = ['2026-07-01', '2026-05-11', '2026-05-27', '2026-05-20']
+const KNOWN_DATE_PREFIXES = [
+  '2026-08-13',
+  '2026-07-01',
+  '2026-05-11',
+  '2026-05-27',
+  '2026-05-20',
+  '2026-08-07'
+]
+const KNOWN_MODEL_FAMILIES = ['parakeet', 'indic_conformer']
 
 function loadManifest() {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
@@ -68,7 +81,7 @@ test('manifest: contains only cache-key-bearing fields', (t) => {
   }
 })
 
-test('manifest: staged set matches the expected 13 desktop GGUFs', (t) => {
+test('manifest: staged set matches the expected desktop GGUFs', (t) => {
   const manifest = loadManifest()
   t.ok(manifest.models && typeof manifest.models === 'object', 'has models object')
   const names = Object.keys(manifest.models).sort()
@@ -80,12 +93,13 @@ test('manifest: every entry has a well-formed s3Path + pinned integrity', (t) =>
   for (const [name, entry] of Object.entries(manifest.models)) {
     t.is(typeof entry.s3Path, 'string', `${name}: s3Path is a string`)
     const m = entry.s3Path.match(
-      /^qvac_models_compiled\/ggml\/parakeet\/(\d{4}-\d{2}-\d{2})\/(.+)$/
+      /^qvac_models_compiled\/ggml\/(parakeet|indic_conformer)\/(\d{4}-\d{2}-\d{2})\/(.+)$/
     )
     t.ok(m, `${name}: s3Path matches registry layout`)
     if (m) {
-      t.ok(KNOWN_DATE_PREFIXES.includes(m[1]), `${name}: date prefix ${m[1]} is known`)
-      t.is(m[2], name, `${name}: s3Path basename matches the key`)
+      t.ok(KNOWN_MODEL_FAMILIES.includes(m[1]), `${name}: family ${m[1]} is known`)
+      t.ok(KNOWN_DATE_PREFIXES.includes(m[2]), `${name}: date prefix ${m[2]} is known`)
+      t.is(m[3], name, `${name}: s3Path basename matches the key`)
     }
 
     t.ok(/^[0-9a-f]{64}$/.test(entry.sha256), `${name}: sha256 is pinned as 64-hex`)

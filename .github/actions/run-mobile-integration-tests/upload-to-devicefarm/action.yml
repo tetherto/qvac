@@ -496,6 +496,9 @@ runs:
           echo "  grep: $GROUP_GREP"
 
           export GROUP_GREP_OUT="$GROUP_GREP"
+          # Pass the shard identity to Device Farm as data instead of making
+          # consumer pre_test hooks parse the generated WDIO JavaScript.
+          export GROUP_GREP_B64=$(printf '%s' "$GROUP_GREP" | base64 | tr -d '\n')
 
           # Per-shard perf gating: skip perf extraction on non-perf shards
           # to avoid the poll loop (~13 min on Android) running uselessly
@@ -524,6 +527,7 @@ runs:
           # are awkward to escape in sed substitution syntax (newlines, &, |, /).
           python3 - <<'PY' > "$WDIO_CONFIG_PATH"
         import os
+        import json
         with open(os.environ["TEMPLATE_PATH"]) as f:
             tpl = f.read()
         with open(os.environ["AFTER_SNIPPET_PATH"]) as f:
@@ -531,7 +535,11 @@ runs:
         repl = {
             "__PLATFORM_CAPABILITIES__": os.environ["PLATFORM_CAPS"],
             "__BUNDLE_ID__": os.environ["APP_BUNDLE_ID"],
-            "__MOCHA_GREP__": os.environ.get("GROUP_GREP_OUT", ""),
+            # JSON-encode so the grep becomes a quoted JS string literal in the
+            # generated WDIO config. This makes the substitution injection-safe
+            # for any grep source (manual dispatch `tests`, test-groups.json,
+            # perf-tests.json), not just simple identifiers.
+            "__MOCHA_GREP__": json.dumps(os.environ.get("GROUP_GREP_OUT", "")),
             "__MOCHA_TIMEOUT_MS__": os.environ["MOCHA_TIMEOUT_MS"],
             "__WDIO_WAITFOR_TIMEOUT_MS__": os.environ["WDIO_WAITFOR_TIMEOUT_MS"],
             "__INIT_PREDICATE__": os.environ["INIT_PREDICATE"],
@@ -565,8 +573,10 @@ runs:
           bash "$GENERATE_SCRIPT" "$SPEC_FILE"
 
           if [ "$IDX" = "0" ]; then
-            echo "Generated test spec preview ($SPEC_FILE):"
-            cat "$SPEC_FILE"
+            # Consumer hooks may contain presigned bearer URLs (including
+            # reversible encodings), so never print the generated spec.
+            echo "Generated test spec: $SPEC_FILE (contents omitted; hooks may contain credentials)"
+            wc -l "$SPEC_FILE"
           fi
 
           echo "Uploading $SPEC_FILE to Device Farm..."

@@ -10,8 +10,9 @@
 const fs = require('fs')
 const path = require('path')
 
-// BCI GPU backends: Vulkan (linux/win32/android), Metal (darwin/ios), OpenCL
-// (Adreno android). No CoreML/DirectML path. CUDA is disabled in the build.
+// BCI GPU backends: Vulkan (linux/win32/Mali android), Metal (darwin/ios),
+// OpenCL (Adreno android, e.g. Samsung Galaxy S25). No CoreML/DirectML path.
+// CUDA is disabled in the build.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 // ggml active-backend ids reported by the addon, mapped to the backend label.
@@ -105,11 +106,34 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-function normalizeBackend (platformName, useGPU, backendHint) {
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'mobile-accelerated', 'gpu'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
+  }
   if (hint) return hint
   if (!useGPU) return 'cpu'
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'darwin':
     case 'ios':
       return 'metal'
@@ -124,11 +148,11 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 
 // Prefer the observed ggml backend id (per-device ground truth) over the
 // platform-family guess. Falls back to normalizeBackend when no id was reported.
-function resolveMobileBackend (backendId, platformName, useGPU) {
+function resolveMobileBackend (backendId, platformName, useGPU, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
   }
-  return normalizeBackend(platformName, useGPU)
+  return normalizeBackend(platformName, useGPU, '', adreno)
 }
 
 function num (value) {
@@ -143,15 +167,20 @@ function normalizeReport (report, sourceFile, source) {
   const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
+  const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
+  const backendHint = (report.labels && report.labels.backend) ||
+    (report.requested && report.requested.backendHint)
+  const adreno = needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel)
 
   return {
     source,
-    device: (report.labels && (report.labels.device || report.labels.runner)) || report.platform || 'unknown',
+    device: deviceLabel || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
     model: report.model && report.model.name ? report.model.name.replace(/\.bin$/, '') : 'unknown',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || (report.requested && report.requested.backendHint)),
+    backend: normalizeBackend(platformName, useGPU, backendHint, adreno),
     meanTps: num(tps.mean),
     stddevTps: num(tps.stddev),
     p50Tps: num(tps.p50),
@@ -242,7 +271,8 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU,
+        isAdrenoDevice(device.gpu, device.name)),
       meanTps: mean(values.tps),
       stddevTps: stddev(values.tps),
       p50Tps: percentile(values.tps, 50),

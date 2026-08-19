@@ -1,7 +1,7 @@
 // Terminal lifecycle-hook routing for ContinuousBatchScheduler. Guards the
 // SequenceDriver contract that every error/cancel termination runs
-// onCancel/onGenerationFinished (and thus TextLlmContext::
-// onGenerationCompletePolicy, the tools_compact tool-region trim), not a bare
+// onCancel/onGenerationFinished (and thus TextLlmContext's post-generation
+// policy work, e.g. thinking-block compaction), not a bare
 // onSequenceEnd flush.
 #include <algorithm>
 #include <functional>
@@ -29,9 +29,6 @@ public:
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
   [[nodiscard]] int32_t getNSlides() const override { return 0; }
   [[nodiscard]] bool supportsSliding() const override { return true; }
-  void validatePromptPolicy(
-      const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
-      const PromptLayout&, bool) const override {}
   PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
       const std::vector<std::vector<uint8_t>>&,
@@ -77,10 +74,10 @@ const std::function<void(const std::string&)> kNoCallback;
 } // namespace
 
 /// Decode-error finalization must run the generation-complete hook
-/// (onCancel/onGenerationFinished), which is what triggers
-/// TextLlmContext::onGenerationCompletePolicy and the tools_compact tool-region
-/// trim. The pre-fix path called only onSequenceEnd, which flushes UTF-8 and
-/// skips the trim, leaving tool-compaction KV state inconsistent.
+/// (onCancel/onGenerationFinished), which is what triggers TextLlmContext's
+/// post-generation policy work (e.g. thinking-block compaction). The pre-fix
+/// path called only onSequenceEnd, which flushes UTF-8 and skips that policy
+/// work, leaving KV state inconsistent.
 TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
   RecordingDriver driver;
   (void)finalizeTerminalDriver(
@@ -88,8 +85,8 @@ TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
 
   EXPECT_TRUE(driver.fired("onCancel") || driver.fired("onGenerationFinished"))
       << "decode-error finalization must fire onCancel/onGenerationFinished so "
-         "onGenerationCompletePolicy runs; instead it fired only onSequenceEnd "
-         "(UTF-8 flush), skipping the tools_compact trim";
+         "the post-generation policy work runs; instead it fired only "
+         "onSequenceEnd (UTF-8 flush)";
 }
 
 /// Cancelled terminations route through onCancel (regression guard for the
@@ -123,6 +120,29 @@ TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
 
   EXPECT_TRUE(driver.fired("onGenerationFinished"));
   EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
+}
+
+TEST(GenerationStopReason, IdentifiesReasoningTruncations) {
+  EXPECT_TRUE(
+      isKnownReasoningTruncation(GenerationStopReason::PredictionLimit));
+  EXPECT_TRUE(isKnownReasoningTruncation(GenerationStopReason::SequenceLimit));
+  EXPECT_TRUE(
+      isKnownReasoningTruncation(GenerationStopReason::ContextOverflow));
+  EXPECT_FALSE(isKnownReasoningTruncation(GenerationStopReason::None));
+  EXPECT_FALSE(isKnownReasoningTruncation(GenerationStopReason::Eos));
+  EXPECT_FALSE(isKnownReasoningTruncation(GenerationStopReason::Antiprompt));
+}
+
+TEST(GenerationStopReason, RetainsReasoningTruncationAfterRollback) {
+  EXPECT_EQ(
+      stopReasonAfterRequestRollback(GenerationStopReason::ContextOverflow),
+      GenerationStopReason::ContextOverflow);
+  EXPECT_EQ(
+      stopReasonAfterRequestRollback(GenerationStopReason::PredictionLimit),
+      GenerationStopReason::PredictionLimit);
+  EXPECT_EQ(
+      stopReasonAfterRequestRollback(GenerationStopReason::None),
+      GenerationStopReason::None);
 }
 
 /// A prefill-only slot never generated, so it only flushes via onSequenceEnd

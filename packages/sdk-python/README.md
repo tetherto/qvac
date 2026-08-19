@@ -1,32 +1,47 @@
 # tetherto-qvac-sdk — Python SDK
 
 The Python client for QVAC: local-first, P2P AI inference (LLM completion,
-embeddings, transcription, TTS, OCR, translation, diffusion, VLA, …) through the
-same worker and the same contract as the TypeScript `@qvac/sdk`. Asyncio-native.
+embeddings, transcription, TTS, OCR, translation, diffusion, audio generation,
+VLA, …) through the same worker and the same contract as the TypeScript
+`@qvac/sdk`. Asyncio-native.
 
 The package version tracks the `@qvac/sdk` version it speaks (e.g. `0.15.0`), so
 a given python-sdk release makes clear exactly which SDK it targets.
 
 ## Install
 
-Getting started is two steps: install the Python package, then make the QVAC
-**worker** available. The package is a thin client — all inference runs in the
-worker (the QVAC runtime, `@qvac/sdk`), so **the worker must be installed for
-anything to run**.
-
-**1. Install the package**
+The fastest path is a **self-contained** install — one command, no separate
+worker, no Node.js. It pulls a per-platform wheel that bundles the QVAC worker
+(the `@qvac/sdk` runtime) and the Bare runtime, from the matching GitHub
+release (these wheels are far too large for PyPI, so they live as release
+assets):
 
 ```bash
-pip install "tetherto-qvac-sdk[bare-rpc]"
+# Replace <version> with the release you want, e.g. sdk-v0.17.0:
+pip install tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v<version>
 ```
 
-The `bare-rpc` extra is **required** — it's the wire transport (`bare-rpc-python`)
-the client speaks to the worker. It's an extra only because its dependencies are
-git-only for now; it folds into the base install once they're on PyPI. Genuinely
-optional extras: `vla` (numpy), `notebook` (numpy + pandas). (`langdetect` is no
-longer needed — source-language detection moved into the worker.)
+pip selects the bundled wheel for your platform and pulls the pure-Python deps
+(`pydantic`, `bare-rpc`, `compact-encoding`) from PyPI. Then
+`async with Client() as client: ...` just works — the bundled worker is found
+automatically, zero configuration. Optional extras: `vla` (numpy),
+`notebook` (numpy + pandas).
 
-**2. Install the worker** (one time) — either route works; both need Node.js:
+> Bundled wheels ship for **darwin-arm64, linux-x64, linux-arm64, win32-x64**.
+> On any other platform pip falls back to the thin wheel below.
+
+### Thin install (any platform)
+
+If there's no bundled wheel for your platform, or you'd rather run a shared
+system worker, install the thin client from PyPI and provide the worker
+separately:
+
+```bash
+pip install tetherto-qvac-sdk
+```
+
+Then install the worker once (either route needs Node.js):
 
 ```bash
 # via Python — fetches the exact worker version this package speaks and caches
@@ -34,16 +49,31 @@ longer needed — source-language detection moved into the worker.)
 python -m tetherto.qvac_sdk install-worker
 
 # or via npm — install the @qvac/sdk version that MATCHES this package (they
-# share a version, so use your installed tetherto-qvac-sdk version here;
-# Client() warns on a mismatch):
-npm install -g @qvac/sdk@0.15.0
+# share a version; Client() warns on a mismatch):
+npm install -g @qvac/sdk@<your tetherto-qvac-sdk version>
 ```
 
-That's it — `Client()` finds the worker automatically (see "Worker resolution"
-below for the full lookup order, including pointing `QVAC_SDK_DIR` at a
-locally-built `@qvac/sdk` for development). The Python route is the recommended
-first run: it pins the worker to the exact version this package was generated
-against, so you never have to track the version yourself.
+`Client()` then finds the worker automatically (see "Worker resolution" below
+for the full lookup order, including pointing `QVAC_SDK_DIR` at a locally-built
+`@qvac/sdk` for development). The Python route pins the worker to the exact
+version this package was generated against, so you never track it yourself.
+
+### Upgrading
+
+To upgrade **and keep the bundled worker**, re-run the install with `-f`
+pointing at the **new** release tag:
+
+```bash
+pip install -U tetherto-qvac-sdk \
+  -f https://github.com/tetherto/qvac/releases/expanded_assets/sdk-v<newversion>
+```
+
+A plain `pip install -U tetherto-qvac-sdk` (no `-f`, or a stale tag) upgrades to
+the **thin** PyPI wheel: pip applies no priority between locations and just
+takes the highest version it can see, which on PyPI is the `py3-none-any`
+wheel — you'd then need `install-worker`. To switch an already-installed thin
+build to the bundled wheel at the **same** version, add `--force-reinstall`
+(pip treats a version as satisfied regardless of which wheel is installed).
 
 ## Quickstart
 
@@ -74,8 +104,8 @@ asyncio.run(main())
 
 More in [`examples/`](./examples) — one runnable example per major capability
 (completion events / tools / worker-orchestrated tools, cancel, embeddings,
-translation, transcription, TTS, OCR, registry queries, model info, logging,
-VLA, plugins), mirroring `packages/sdk/examples`.
+translation, transcription, TTS, OCR, audio generation, registry queries, model
+info, logging, VLA, plugins), mirroring `packages/sdk/examples`.
 
 ## The public API (`tetherto.qvac_sdk`)
 
@@ -92,8 +122,9 @@ live in `tetherto.qvac_sdk.models`.
 - **Result types**: `CompletionRun` (`.events`, `.final`), `CompletionFinal`,
   `ToolCall`, `TranslateRun`.
 - **Generated method stubs** for every other contract method (`embed`,
-  `transcribe`, `text_to_speech`, `ocr_stream`, `diffusion_stream`, `classify`,
-  `get_model_info`, `download_asset`, …), each taking a typed request model.
+  `transcribe`, `text_to_speech`, `ocr_stream`, `audio_gen_stream`,
+  `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, …), each
+  taking a typed request model.
 - **Request/response models + enums** (`LoadModelRequest`, `ModelType`, …),
   also available in full from `tetherto.qvac_sdk.schemas`.
 - **Errors** (`QvacError`, `RPCError`, `InferenceCancelledError`,
@@ -107,12 +138,32 @@ live in `tetherto.qvac_sdk.models`.
 The raw generated method stubs are also in `tetherto.qvac_sdk.methods`, and the pydantic
 models in `tetherto.qvac_sdk.schemas`, if you prefer the explicit modules.
 
+Audio generation currently uses the raw `audio_gen_stream` stub rather than an
+ergonomic Python `audio_gen()` wrapper. Build an `AudioGenStreamRequest`, iterate
+the progress and base64 PCM frames, and assemble the output audio. See
+[`examples/audiogen.py`](./examples/audiogen.py).
+
+### Intentional divergences from `@qvac/sdk`
+
+Two top-level JS/TS facades are deliberately not ported; Python uses the ecosystem
+equivalent instead.
+
+- **`getLogger`** — use the standard library `logging` module. A `logging.Handler`
+  is the `LogTransport` equivalent, and the log-stream surface that has no stdlib
+  counterpart (`logging_stream`, `subscribe_server_logs`, `SDK_LOG_ID`,
+  `SDK_ALL_LOG_ID`) is already exported above.
+- **`profiler`** (process-wide aggregation + `exportTable`/`exportJSON`) — use the
+  per-call `profiled_call` and the `__profiling` envelope helpers in
+  `tetherto.qvac_sdk.profiling`, aggregating the returned `ProfilingReport`s
+  yourself. The global profiler is not a Client-API capability and would only
+  collect useful data after instrumenting the full streaming client.
+
 ## Notebook / data science
 
 For notebooks and REPLs, `tetherto.qvac_sdk.notebook.SyncClient` runs the async
 client on a background thread so every call is plain and blocking (no `await`),
 with numpy/pandas returns and live in-cell streaming. Needs the `notebook`
-extra (`pip install "tetherto-qvac-sdk[notebook,bare-rpc]"`):
+extra (`pip install "tetherto-qvac-sdk[notebook]"`):
 
 ```python
 from tetherto.qvac_sdk.notebook import SyncClient
@@ -186,7 +237,7 @@ than trusted to match.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[gen,dev,bare-rpc]"
+.venv/bin/pip install -e ".[gen,dev]"
 .venv/bin/python3 scripts/generate.py          # regenerate from ../sdk/contract
 .venv/bin/python3 -m pytest                     # unit + (with a built worker) real-model e2e
 ```

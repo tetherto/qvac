@@ -131,6 +131,42 @@ test('mobile peak is floored at the recorded post-load footprint', () => {
   assert.equal(row.peakRssMb, 400)
 })
 
+test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
+  const manual = {
+    platform: 'android-arm64',
+    platformName: 'android',
+    model: { name: 'ggml-bci-windowed.bin' },
+    requested: { useGPU: true },
+    labels: { device: 'Samsung Galaxy S25 Ultra', backend: 'vulkan' },
+    summary: { tokensPerSecond: { mean: 40 }, wallMs: { mean: 500 } }
+  }
+  assert.equal(normalizeReport(manual, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeReport(manual, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+
+  const unlabelled = { ...manual, labels: { device: 'Samsung Galaxy S25 Ultra' } }
+  assert.equal(normalizeReport(unlabelled, '/x/manual.json', 'manual').backend, 'opencl')
+})
+
+test('android GPU rows on Adreno devices resolve to opencl unless a backend id says otherwise', () => {
+  const gpuResult = (metrics) => ({
+    test: '[ggml-bci-windowed] [GPU] mobile-perf run 1',
+    execution_provider: 'gpu',
+    metrics
+  })
+
+  const adreno = mobileReport([gpuResult({ tps: 40, wall_time_ms: 900 })])
+  adreno.device = { name: 'Samsung Galaxy S25', platform: 'android', gpu: 'Adreno (TM) 830' }
+  assert.equal(normalizeMobileRecords(adreno, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'opencl')
+
+  const mali = mobileReport([gpuResult({ tps: 40, wall_time_ms: 900 })])
+  mali.device = { name: 'Pixel 9', platform: 'android', gpu: 'Mali-G715' }
+  assert.equal(normalizeMobileRecords(mali, '/x/Pixel_9/performance-report.json')[0].backend, 'vulkan')
+
+  const observed = mobileReport([gpuResult({ tps: 40, wall_time_ms: 900, backend_id: 3 })])
+  observed.device = { name: 'Samsung Galaxy S25', platform: 'android', gpu: 'Adreno (TM) 830' }
+  assert.equal(normalizeMobileRecords(observed, '/x/Samsung_Galaxy_S25/performance-report.json')[0].backend, 'vulkan')
+})
+
 test('markdown table includes the memory columns and rounded values', () => {
   const record = normalizeReport(desktopReport(true), 'rtf-benchmark-linux-x64-ggml-bci-windowed-gpu.json', 'desktop-ci')
   const markdown = renderMarkdown([record])

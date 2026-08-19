@@ -10,22 +10,33 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 
-import { createJobHandler, type JobHandler, type QvacResponse } from '@qvac/infer-base'
+import {
+  createJobHandler,
+  exclusiveRunQueue,
+  type JobHandler,
+  type QvacResponse
+} from '@qvac/infer-base'
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- @qvac/logging exposes a CommonJS export-assignment shape.
 import QvacLogger = require('@qvac/logging')
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path is a CommonJS module.
 import path = require('bare-path')
 
 import {
+  AudioEditOperationType,
   AudioGenInterface,
+  RepaintMode,
   type AudioGenBinding,
   type AudioGenConfigurationParams,
+  type AudioGenJobData,
   type AudioGenOutputCallback
 } from './audiogen'
 import { resolveDitModelPath, type DitVariant } from './models'
 import { encodePcm, type EncodeOptions, type EncodedAudio, type OutputFormat } from './lib/audio-format'
+import { ERR_CODES, QvacErrorAudioGen } from './error'
 
 export const ENGINE_ACESTEP = 'acestep'
+
+type RunExclusive = <T>(callback: () => Promise<T>) => Promise<T>
 
 /** Model file paths for the four ACE-Step stages. */
 export interface AudioGenFiles {
@@ -84,7 +95,125 @@ export interface GenerateOptions {
   timesignature?: string
   /** Target length in seconds; undefined lets the LM decide the full length. */
   duration?: number
+  /** LM sampling temperature (ACE-Step default: 0.85). */
+  lmTemperature?: number
+  /** LM nucleus-sampling probability (ACE-Step default: 0.9). */
+  lmTopP?: number
+  /** LM top-k cutoff; 0 disables top-k filtering. */
+  lmTopK?: number
+  /** Classifier-free guidance scale used by the LM. */
+  lmCfgScale?: number
+  /** Allow the LM to infer missing metadata before semantic-code generation. */
+  lmPhase1?: boolean
+  /** Apply official ACE-Step Haar DCW correction during DiT sampling (default: true). */
+  dcwEnabled?: boolean
+  /** DCW low-frequency correction strength (official default: 0.05). */
+  dcwScaler?: number
+  /** DCW high-frequency correction strength (official default: 0.02). */
+  dcwHighScaler?: number
+  /** Frozen ACE-Step semantic codes; when present, skips the LM stage. */
+  audioCodes?: Int32Array
+  /**
+   * Optional timbre reference: interleaved stereo float PCM at 48 kHz.
+   * Empty / omitted keeps the engine's canonical silence reference.
+   */
+  referenceAudio?: Float32Array
+  /**
+   * Source / cover audio (same layout as `referenceAudio`). Required when
+   * `taskType` is `"cover"` or `"cover-nofsq"`.
+   */
+  sourceAudio?: Float32Array
+  /**
+   * Task discriminator. Supported today: `"text2music"` (default) |
+   * `"cover-nofsq"`. `"cover"` (FSQ roundtrip) is accepted but not implemented
+   * in the engine yet.
+   */
+  taskType?: 'text2music' | 'cover' | 'cover-nofsq'
+  /**
+   * Fraction of DiT steps that keep the source context (0..1). Default 1.0.
+   * Values < 1 are rejected by the engine until context switching lands.
+   */
+  audioCoverStrength?: number
+  /**
+   * Blend initial DiT noise toward clean source latents (0..1). 0 = pure noise;
+   * 1 ≈ source latent. Default 0.
+   */
+  coverNoiseStrength?: number
 }
+
+/** PCM accepted by the source-driven editing API. */
+export interface AudioEditSource {
+  /**
+   * Interleaved stereo PCM. Float32 samples must be finite and in `[-1, 1]`.
+   * Int16 output chunks can be reused directly.
+   */
+  pcm: Float32Array | Int16Array
+  sampleRate: number
+  channels: number
+}
+
+export interface AudioEditPrompt {
+  caption: string
+  lyrics?: string
+}
+
+/** v1 Flow-Edit. Supported on turbo DiT only (`turbo-q4`, `turbo-q8`). */
+export interface FlowEditOptions {
+  /** Description of the unedited source audio. */
+  from: AudioEditPrompt
+  /** Description of the desired audio. */
+  to: AudioEditPrompt
+  /** Start of the flow-edit diffusion window, in [0, 1]. */
+  nMin?: number
+  /** End of the flow-edit diffusion window, in [0, 1]. */
+  nMax?: number
+  /** Number of forward-noise samples averaged per active step. */
+  nAvg?: number
+}
+
+export interface RepaintOptions extends AudioEditPrompt {
+  /**
+   * Repaint region start in seconds. Must lie inside the source duration and
+   * leave at least one latent frame (`1/25` s) before `end`.
+   */
+  start: number
+  /**
+   * Repaint region end in seconds. Omit to repaint through the source end.
+   * Must not exceed the source duration.
+   */
+  end?: number
+  mode?: RepaintMode
+  /** Balanced-mode preservation strength in [0, 1]. */
+  strength?: number
+}
+
+export interface AudioEditRunOptions {
+  /** Seeds the first operation; each following operation uses seed + its index. */
+  seed?: number
+}
+
+interface NativeFlowEditOperation {
+  type: AudioEditOperationType.FlowEdit
+  sourceCaption: string
+  sourceLyrics: string
+  targetCaption: string
+  targetLyrics: string
+  nMin: number
+  nMax: number
+  nAvg: number
+}
+
+interface NativeRepaintOperation {
+  type: AudioEditOperationType.Repaint
+  caption: string
+  lyrics: string
+  start: number
+  end: number
+  mode: RepaintMode
+  strength: number
+}
+
+export type AudioEditOperationData = NativeFlowEditOperation | NativeRepaintOperation
 
 /** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
 export interface AudiogenProgress {
@@ -158,10 +287,10 @@ function asNativeData (data: unknown): NativeAudiogenData | null {
 // they ever reach C++.
 function requireFiniteNumber (value: number, name: string, integer = false): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`audiogen-ggml: ${name} must be a finite number, got ${value}`)
+    throw invalidInput(`${name} must be a finite number, got ${value}`)
   }
   if (integer && !Number.isInteger(value)) {
-    throw new Error(`audiogen-ggml: ${name} must be an integer, got ${value}`)
+    throw invalidInput(`${name} must be an integer, got ${value}`)
   }
   return value
 }
@@ -172,6 +301,248 @@ function optionalFiniteNumber (
   integer = false
 ): number | undefined {
   return value === undefined ? undefined : requireFiniteNumber(value, name, integer)
+}
+
+const GENERATE_TASK_TYPES = new Set(['text2music', 'cover', 'cover-nofsq'])
+const AUDIO_LATENT_RATE = 25
+const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE
+const REPAINT_RANGE_EPSILON_SECONDS = 1e-5
+const FLOW_EDIT_TURBO_VARIANTS = 'turbo-q4, turbo-q8'
+
+function optionalTaskType (value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
+    throw invalidInput('taskType must be one of text2music|cover|cover-nofsq')
+  }
+  return value
+}
+
+function requireFinitePcm (value: Float32Array, name: string): void {
+  for (const sample of value) {
+    if (!Number.isFinite(sample)) {
+      throw invalidInput(`${name} must contain only finite samples`)
+    }
+  }
+}
+
+function requireNormalizedPcm (value: Float32Array, name: string): void {
+  for (const sample of value) {
+    if (!Number.isFinite(sample) || sample < -1 || sample > 1) {
+      throw invalidInput(`${name} must contain finite samples in [-1, 1]`)
+    }
+  }
+}
+
+function int16ToNormalizedFloat32 (pcm: Int16Array): Float32Array {
+  const converted = new Float32Array(pcm.length)
+  for (let i = 0; i < pcm.length; ++i) {
+    const sample = pcm[i]
+    converted[i] = sample < 0 ? sample / 32768 : sample / 32767
+  }
+  return converted
+}
+
+function isSftDit (
+  ditVariant: DitVariant | undefined,
+  ditModelPath: string | undefined
+): boolean {
+  if (ditVariant === 'sft') return true
+  if (ditModelPath === undefined) return false
+  const file = ditModelPath.split(/[/\\]/).pop() ?? ''
+  return /(?:^|[^a-z])sft(?:[^a-z]|$)/i.test(file.replace(/\.gguf$/i, ''))
+}
+
+function sourceDurationSeconds (source: AudioEditSource): number {
+  return source.pcm.length / source.channels / source.sampleRate
+}
+
+function requireRepaintRange (
+  source: AudioEditSource,
+  start: number,
+  end: number
+): void {
+  const duration = sourceDurationSeconds(source)
+  const resolvedEnd = end === -1 ? duration : end
+  if (start > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint.start must be within the source duration')
+  }
+  if (end !== -1 && end > duration + REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint.end must be within the source duration')
+  }
+  if (resolvedEnd - start < LATENT_FRAME_SECONDS - REPAINT_RANGE_EPSILON_SECONDS) {
+    throw invalidInput('repaint range must span at least one latent frame')
+  }
+}
+
+function optionalStereoPcm (
+  value: Float32Array | undefined,
+  name: string
+): Float32Array | undefined {
+  if (value === undefined) return undefined
+  if (!(value instanceof Float32Array)) {
+    throw invalidInput(`${name} must be a Float32Array`)
+  }
+  if ((value.length & 1) !== 0) {
+    throw invalidInput(`${name} must be interleaved stereo`)
+  }
+  requireFinitePcm(value, name)
+  return value
+}
+
+function requireEditSource (source: AudioEditSource): Float32Array {
+  if (typeof source !== 'object' || source === null) {
+    throw invalidInput('edit source must be an audio source object')
+  }
+  if (source.sampleRate !== 48000) {
+    throw invalidInput(`edit source sampleRate must be 48000, got ${source.sampleRate}`)
+  }
+  if (source.channels !== 2) {
+    throw invalidInput(`edit source channels must be 2, got ${source.channels}`)
+  }
+  if (!(source.pcm instanceof Float32Array) && !(source.pcm instanceof Int16Array)) {
+    throw invalidInput('edit source pcm must be a Float32Array or Int16Array')
+  }
+  if (source.pcm.length === 0) {
+    throw invalidInput('edit source pcm must not be empty')
+  }
+  if ((source.pcm.length & 1) !== 0) {
+    throw invalidInput('edit source pcm must be interleaved stereo')
+  }
+  if (source.pcm instanceof Float32Array) {
+    requireNormalizedPcm(source.pcm, 'edit source pcm')
+    return source.pcm
+  }
+  return int16ToNormalizedFloat32(source.pcm)
+}
+
+function requirePrompt (prompt: AudioEditPrompt, name: string): AudioEditPrompt {
+  if (typeof prompt !== 'object' || prompt === null) {
+    throw invalidInput(`${name} must be an object`)
+  }
+  if (typeof prompt.caption !== 'string' || prompt.caption.trim().length === 0) {
+    throw invalidInput(`${name}.caption must be a non-empty string`)
+  }
+  if (prompt.lyrics !== undefined && typeof prompt.lyrics !== 'string') {
+    throw invalidInput(`${name}.lyrics must be a string`)
+  }
+  return prompt
+}
+
+function isCoverTask (taskType: string | undefined): boolean {
+  return taskType === 'cover' || taskType === 'cover-nofsq'
+}
+
+function invalidInput (message: string): QvacErrorAudioGen {
+  return new QvacErrorAudioGen({ code: ERR_CODES.INVALID_INPUT, adds: message })
+}
+
+function errorMessage (error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+type EditRunner = (
+  source: AudioEditSource,
+  operations: readonly AudioEditOperationData[],
+  options: AudioEditRunOptions
+) => Promise<QvacResponse<AudiogenOutputChunk>>
+
+/**
+ * Fluent, ordered edit pipeline. Every call appends one operation; operations
+ * may be repeated in any order before the session is submitted with `run()`.
+ */
+export class AudioEditSession {
+  private readonly _operations: AudioEditOperationData[] = []
+  private _started = false
+
+  constructor (
+    private readonly _source: AudioEditSource,
+    private readonly _runner: EditRunner,
+    private readonly _allowFlowEdit: boolean
+  ) {}
+
+  /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
+  flowEdit (options: FlowEditOptions): this {
+    if (this._started) throw invalidInput('cannot modify an edit session after run()')
+    if (!this._allowFlowEdit) {
+      throw invalidInput(
+        `flowEdit is supported on turbo DiT variants only (${FLOW_EDIT_TURBO_VARIANTS})`
+      )
+    }
+    if (typeof options !== 'object' || options === null) {
+      throw invalidInput('flowEdit options must be an object')
+    }
+    const from = requirePrompt(options.from, 'flowEdit.from')
+    const to = requirePrompt(options.to, 'flowEdit.to')
+    const nMin = requireFiniteNumber(options.nMin ?? 0, 'flowEdit.nMin')
+    const nMax = requireFiniteNumber(options.nMax ?? 1, 'flowEdit.nMax')
+    const nAvg = requireFiniteNumber(options.nAvg ?? 1, 'flowEdit.nAvg', true)
+    if (nMin < 0 || nMax > 1 || nMin > nMax) {
+      throw invalidInput('flowEdit requires 0 <= nMin <= nMax <= 1')
+    }
+    if (nAvg < 1) throw invalidInput('flowEdit.nAvg must be at least 1')
+    this._operations.push({
+      type: AudioEditOperationType.FlowEdit,
+      sourceCaption: from.caption,
+      sourceLyrics: from.lyrics ?? '[Instrumental]',
+      targetCaption: to.caption,
+      targetLyrics: to.lyrics ?? '[Instrumental]',
+      nMin,
+      nMax,
+      nAvg
+    })
+    return this
+  }
+
+  /** Alias for `flowEdit()` so `.edit().repaint().edit()` reads naturally. */
+  edit (options: FlowEditOptions): this {
+    return this.flowEdit(options)
+  }
+
+  /** Append a timeline Repaint operation. */
+  repaint (options: RepaintOptions): this {
+    if (this._started) throw invalidInput('cannot modify an edit session after run()')
+    const prompt = requirePrompt(options, 'repaint')
+    const start = requireFiniteNumber(options.start, 'repaint.start')
+    const end = optionalFiniteNumber(options.end, 'repaint.end') ?? -1
+    const mode = options.mode ?? RepaintMode.Balanced
+    const strength = requireFiniteNumber(options.strength ?? 0.5, 'repaint.strength')
+    if (start < 0) throw invalidInput('repaint.start must be non-negative')
+    if (end !== -1 && end <= start) {
+      throw invalidInput('repaint.end must be greater than repaint.start')
+    }
+    requireRepaintRange(this._source, start, end)
+    if (!Object.values(RepaintMode).includes(mode)) {
+      throw invalidInput('repaint.mode must be conservative|balanced|aggressive')
+    }
+    if (strength < 0 || strength > 1) {
+      throw invalidInput('repaint.strength must be between 0 and 1')
+    }
+    this._operations.push({
+      type: AudioEditOperationType.Repaint,
+      caption: prompt.caption,
+      lyrics: prompt.lyrics ?? '[Instrumental]',
+      start,
+      end,
+      mode,
+      strength
+    })
+    return this
+  }
+
+  async run (
+    options: AudioEditRunOptions = {}
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+    if (this._started) throw invalidInput('edit session run() may only be called once')
+    if (this._operations.length === 0) {
+      throw invalidInput('edit session requires at least one edit or repaint operation')
+    }
+    if (typeof options !== 'object' || options === null) {
+      throw invalidInput('edit session run options must be an object')
+    }
+    const seed = optionalFiniteNumber(options.seed, 'edit.seed', true)
+    this._started = true
+    return this._runner(this._source, this._operations, { seed })
+  }
 }
 
 /**
@@ -188,13 +559,20 @@ export class AudioGen {
 
   addon: AudioGenInterface | null
   private readonly _job: JobHandler
+  private readonly _runExclusive: RunExclusive
   private readonly _configuration: AudioGenConfigurationParams
   private readonly _logger: QvacLogger
+  private readonly _ditVariant: DitVariant | undefined
+  private _lifecycleRevision: number
+  private _destroyed: boolean
+  private _cancelPromise: Promise<void> | null
+  private _cancellingResponse: QvacResponse<AudiogenOutputChunk> | null
 
   constructor (options: AudioGenOptions = {}) {
     this._logger = new QvacLogger(options.logger)
     const files = options.files ?? {}
     const config = options.config ?? {}
+    this._ditVariant = files.ditVariant
 
     // DiT selection: an explicit `ditModel` path always wins; otherwise a
     // `ditVariant` enum picks which DiT GGUF to load from `modelDir` (the three
@@ -233,10 +611,23 @@ export class AudioGen {
     this._job = createJobHandler({
       cancel: () => this.addon?.cancel() ?? Promise.resolve()
     })
+    this._runExclusive = exclusiveRunQueue() as RunExclusive
+    this._lifecycleRevision = 0
+    this._destroyed = false
+    this._cancelPromise = null
+    this._cancellingResponse = null
   }
 
   /** Create the native engine and load every stage GGUF. Idempotent. */
   async load (): Promise<void> {
+    const revision = this._lifecycleRevision
+    return this._runExclusive(() => this._load(revision))
+  }
+
+  private async _load (revision: number): Promise<void> {
+    if (revision !== this._lifecycleRevision || this._destroyed) {
+      throw this._lifecycleError()
+    }
     if (this.addon) return
     this._logger.info('audiogen-ggml: loading ACE-Step engine')
     const addon = this._createAddon(
@@ -249,14 +640,22 @@ export class AudioGen {
     // dead instance. Mirrors the cleanup pattern in tts-ggml._load().
     try {
       await addon.activate()
-    } catch (error) {
-      try {
-        await addon.destroyInstance()
-      } catch {
-        // best-effort teardown; surface the original activation error below.
+      if (revision !== this._lifecycleRevision || this._destroyed) {
+        throw this._lifecycleError()
       }
-      if (this.addon === addon) this.addon = null
-      throw error
+    } catch (error) {
+      if (this.addon === addon) {
+        this.addon = null
+        try {
+          await addon.destroyInstance()
+        } catch {}
+      }
+      if (error instanceof QvacErrorAudioGen) throw error
+      throw new QvacErrorAudioGen({
+        code: ERR_CODES.FAILED_TO_LOAD,
+        adds: errorMessage(error),
+        cause: error instanceof Error ? error : undefined
+      })
     }
     this._logger.info('audiogen-ggml: engine ready')
   }
@@ -266,49 +665,215 @@ export class AudioGen {
    * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
    */
   async run (caption: string, opts: GenerateOptions = {}): Promise<QvacResponse<AudiogenOutputChunk>> {
-    // start() is typed QvacResponse<any>; run()'s explicit return type narrows
-    // the public surface to QvacResponse<AudiogenOutputChunk>.
+    const jobData = this._createJobData(caption, opts)
+    const revision = this._lifecycleRevision
+    return new Promise((resolve, reject) => {
+      const queued = this._runExclusive(() =>
+        this._admitAndWait(jobData, revision, resolve, reject)
+      )
+      void queued.catch(reject)
+    })
+  }
+
+  /**
+   * Start a source-driven edit pipeline. Flow-Edit and Repaint operations may
+   * be repeated and are executed in the exact order in which they are chained.
+   * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
+   */
+  edit (source: AudioEditSource): AudioEditSession {
+    return new AudioEditSession(
+      source,
+      async (audio, operations, options) => this._runEdit(audio, operations, options),
+      !isSftDit(this._ditVariant, this._configuration.ditModelPath)
+    )
+  }
+
+  private async _runEdit (
+    source: AudioEditSource,
+    operations: readonly AudioEditOperationData[],
+    options: AudioEditRunOptions
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+    const sourceAudio = requireEditSource(source)
+    const jobData: AudioGenJobData = {
+      type: 'edit',
+      input: '',
+      sourceAudio,
+      editOperations: [...operations],
+      seed: options.seed
+    }
+    const revision = this._lifecycleRevision
+    return new Promise((resolve, reject) => {
+      const queued = this._runExclusive(() =>
+        this._admitAndWait(jobData, revision, resolve, reject)
+      )
+      void queued.catch(reject)
+    })
+  }
+
+  private async _admitAndWait (
+    jobData: AudioGenJobData,
+    revision: number,
+    resolve: (response: QvacResponse<AudiogenOutputChunk>) => void,
+    reject: (error: unknown) => void
+  ): Promise<void> {
+    if (revision !== this._lifecycleRevision) {
+      throw this._lifecycleError()
+    }
+    const addon = this._requireAddon()
+    const response = this._job.start() as QvacResponse<AudiogenOutputChunk>
+    let accepted: boolean
+    try {
+      accepted = await addon.runJob(jobData)
+    } catch (error) {
+      const runError = new QvacErrorAudioGen({
+        code: ERR_CODES.FAILED_TO_START_JOB,
+        adds: errorMessage(error),
+        cause: error instanceof Error ? error : undefined
+      })
+      response.failed(runError)
+      reject(runError)
+      return
+    }
+    if (accepted !== true) {
+      const admissionError = new QvacErrorAudioGen({ code: ERR_CODES.JOB_ALREADY_RUNNING })
+      response.failed(admissionError)
+      reject(admissionError)
+      return
+    }
+    resolve(response)
+    try {
+      await response.await()
+    } catch {}
+  }
+
+  private _createJobData (caption: string, opts: GenerateOptions): AudioGenJobData {
+    if (typeof caption !== 'string' || caption.trim().length === 0) {
+      throw invalidInput('caption must be a non-empty string')
+    }
     this._logger.debug(
       `audiogen-ggml: run (caption ${caption.length} chars, lyrics=${opts.lyrics ? 'yes' : 'no'})`
     )
-    const response = this._job.start()
-    try {
-      await this._requireAddon().runJob({
-        type: 'text',
-        input: caption,
-        lyrics: opts.lyrics ?? '[Instrumental]',
-        seed: optionalFiniteNumber(opts.seed, 'seed', true),
-        vocalLanguage: opts.vocalLanguage,
-        bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
-        keyscale: opts.keyscale,
-        timesignature: opts.timesignature,
-        duration: optionalFiniteNumber(opts.duration, 'duration')
-      })
-    } catch (error) {
-      this._logger.error(
-        `audiogen-ggml: run failed: ${error instanceof Error ? error.message : String(error)}`
-      )
-      this._job.fail(error instanceof Error ? error : new Error(String(error)))
-      throw error
+    if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
+      throw invalidInput('lmPhase1 must be a boolean')
     }
-    return response
+    if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
+      throw invalidInput('dcwEnabled must be a boolean')
+    }
+    if (opts.audioCodes !== undefined && !(opts.audioCodes instanceof Int32Array)) {
+      throw invalidInput('audioCodes must be an Int32Array')
+    }
+    const taskType = optionalTaskType(opts.taskType)
+    const referenceAudio = optionalStereoPcm(opts.referenceAudio, 'referenceAudio')
+    const sourceAudio = optionalStereoPcm(opts.sourceAudio, 'sourceAudio')
+    if (isCoverTask(taskType) && (sourceAudio === undefined || sourceAudio.length === 0)) {
+      throw invalidInput(`taskType '${taskType}' requires sourceAudio`)
+    }
+    return {
+      type: 'text',
+      input: caption,
+      lyrics: opts.lyrics ?? '[Instrumental]',
+      seed: optionalFiniteNumber(opts.seed, 'seed', true),
+      vocalLanguage: opts.vocalLanguage,
+      bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
+      keyscale: opts.keyscale,
+      timesignature: opts.timesignature,
+      duration: optionalFiniteNumber(opts.duration, 'duration'),
+      lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
+      lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),
+      lmTopK: optionalFiniteNumber(opts.lmTopK, 'lmTopK', true),
+      lmCfgScale: optionalFiniteNumber(opts.lmCfgScale, 'lmCfgScale'),
+      lmPhase1: opts.lmPhase1,
+      dcwEnabled: opts.dcwEnabled,
+      dcwScaler: optionalFiniteNumber(opts.dcwScaler, 'dcwScaler'),
+      dcwHighScaler: optionalFiniteNumber(opts.dcwHighScaler, 'dcwHighScaler'),
+      audioCodes: opts.audioCodes,
+      referenceAudio,
+      sourceAudio,
+      taskType,
+      audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
+      coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
+    }
   }
 
   async cancel (): Promise<void> {
-    await this.addon?.cancel()
-  }
-
-  async unload (): Promise<void> {
-    const addon = this.addon
-    this.addon = null
-    if (addon) {
-      await addon.destroyInstance()
-      this._logger.debug('audiogen-ggml: engine unloaded')
+    const response = this._job.active
+    if (!response) return
+    if (this._cancelPromise) return this._cancelPromise
+    const cancellation = this._cancelActiveResponse(
+      response as QvacResponse<AudiogenOutputChunk>
+    )
+    this._cancelPromise = cancellation
+    const cancellationError = new QvacErrorAudioGen({ code: ERR_CODES.CANCELLED })
+    try {
+      await cancellation
+      response.failed(cancellationError)
+    } finally {
+      if (this._cancelPromise === cancellation) this._cancelPromise = null
+      if (this._cancellingResponse === response) this._cancellingResponse = null
     }
   }
 
+  private async _cancelActiveResponse (
+    response: QvacResponse<AudiogenOutputChunk>
+  ): Promise<void> {
+    this._cancellingResponse = response
+    try {
+      await (this.addon?.cancel() ?? Promise.resolve())
+    } catch (error) {
+      const failedError = this._failedCancelError(error)
+      response.failed(failedError)
+      throw failedError
+    }
+  }
+
+  async unload (): Promise<void> {
+    await this._stop(new QvacErrorAudioGen({ code: ERR_CODES.MODEL_UNLOADED }))
+  }
+
   async destroy (): Promise<void> {
-    await this.unload()
+    if (this._destroyed) return
+    this._destroyed = true
+    await this._stop(new QvacErrorAudioGen({ code: ERR_CODES.INSTANCE_DESTROYED }))
+  }
+
+  private async _stop (settlementError: QvacErrorAudioGen): Promise<void> {
+    this._lifecycleRevision++
+    const addon = this.addon
+    this.addon = null
+    let cancellation = Promise.resolve()
+    let cancellationFailure: QvacErrorAudioGen | null = null
+    if (addon && this._job.active) {
+      try {
+        cancellation = addon.cancel()
+      } catch (error) {
+        cancellationFailure = this._failedCancelError(error)
+      }
+    }
+    this._job.active?.failed(settlementError)
+    await this._runExclusive(async () => {
+      try {
+        await cancellation
+      } catch (error) {
+        cancellationFailure = this._failedCancelError(error)
+      }
+      if (!addon) {
+        if (cancellationFailure) throw cancellationFailure
+        return
+      }
+      let destructionFailure: QvacErrorAudioGen | null = null
+      try {
+        await addon.destroyInstance()
+      } catch (error) {
+        destructionFailure = new QvacErrorAudioGen({
+          code: ERR_CODES.FAILED_TO_DESTROY,
+          adds: errorMessage(error),
+          cause: error instanceof Error ? error : undefined
+        })
+      }
+      if (cancellationFailure) throw cancellationFailure
+      if (destructionFailure) throw destructionFailure
+      this._logger.debug('audiogen-ggml: engine unloaded')
+    })
   }
 
   /**
@@ -346,9 +911,15 @@ export class AudioGen {
     data: unknown,
     error: unknown
   ): void {
+    if (this._cancellingResponse) return
     if (typeof error === 'string' && error.length > 0) {
       this._logger.error(`audiogen-ggml: engine error: ${error}`)
-      this._job.fail(new Error(error))
+      this._job.fail(
+        new QvacErrorAudioGen({
+          code: ERR_CODES.INFERENCE_FAILED,
+          adds: error
+        })
+      )
       return
     }
     const d = asNativeData(data)
@@ -387,8 +958,22 @@ export class AudioGen {
   }
 
   private _requireAddon (): AudioGenInterface {
-    if (!this.addon) throw new Error('AudioGen addon is not loaded (call load() first)')
+    if (!this.addon) throw this._lifecycleError()
     return this.addon
+  }
+
+  private _lifecycleError (): QvacErrorAudioGen {
+    return new QvacErrorAudioGen({
+      code: this._destroyed ? ERR_CODES.INSTANCE_DESTROYED : ERR_CODES.NOT_LOADED
+    })
+  }
+
+  private _failedCancelError (error: unknown): QvacErrorAudioGen {
+    return new QvacErrorAudioGen({
+      code: ERR_CODES.FAILED_TO_CANCEL,
+      adds: errorMessage(error),
+      cause: error instanceof Error ? error : undefined
+    })
   }
 }
 
@@ -411,6 +996,8 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
+export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'
+export { AudioEditOperationType, RepaintMode } from './audiogen'
 
 export type {
   AudioGenConfigurationParams,

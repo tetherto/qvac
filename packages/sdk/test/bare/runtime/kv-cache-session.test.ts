@@ -48,6 +48,12 @@ async function loadSession() {
   env['HOME'] = testHome
 
   const mod = await import('@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session')
+  const utils = await import('@/server/bare/ops/kv-cache-utils')
+  const retention = await import('@/server/bare/ops/kv-cache-retention')
+  const isolationPath = await utils.getCacheFilePath('_test', '_test', '_test')
+  const cacheRoot = path.dirname(path.dirname(path.dirname(isolationPath)))
+  fs.rmSync(cacheRoot, { recursive: true, force: true })
+  fs.mkdirSync(cacheRoot, { recursive: true })
 
   // Reset state between tests — module state is per-process, the
   // tests share it.
@@ -55,6 +61,7 @@ async function loadSession() {
 
   function cleanup() {
     try {
+      fs.rmSync(cacheRoot, { recursive: true, force: true })
       fs.rmSync(testHome, { recursive: true, force: true })
     } catch {
       /* best-effort */
@@ -67,8 +74,93 @@ async function loadSession() {
     fs.writeFileSync(cachePath, 'fake-kv-cache-bytes')
   }
 
-  return { fs, path, mod, cleanup, writeFakeCache }
+  return { fs, path, mod, utils, retention, cleanup, writeFakeCache }
 }
+
+test('generateConfigHash: includes complete canonical tool definitions', async (t) => {
+  const { mod, cleanup } = await loadSession()
+  try {
+    const calculator = {
+      type: 'function',
+      name: 'calculator',
+      description: 'Performs arithmetic',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation: { type: 'string', enum: ['add', 'subtract'] },
+          value: { type: 'number' }
+        },
+        required: ['operation', 'value']
+      }
+    }
+    const changedSchema = {
+      ...calculator,
+      parameters: {
+        ...calculator.parameters,
+        properties: {
+          ...calculator.parameters.properties,
+          operation: { type: 'string', enum: ['multiply', 'divide'] }
+        }
+      }
+    }
+    const reorderedKeys = {
+      parameters: {
+        required: ['operation', 'value'],
+        properties: {
+          value: { type: 'number' },
+          operation: { enum: ['add', 'subtract'], type: 'string' }
+        },
+        type: 'object'
+      },
+      description: 'Performs arithmetic',
+      name: 'calculator',
+      type: 'function'
+    }
+
+    const originalHash = mod.generateConfigHash('system prompt', [calculator])
+    const changedHash = mod.generateConfigHash('system prompt', [changedSchema])
+    const reorderedHash = mod.generateConfigHash('system prompt', [reorderedKeys])
+
+    t.not(originalHash, changedHash, 'same-named tools with different schemas use different caches')
+    t.is(originalHash, reorderedHash, 'object-key insertion order does not affect cache identity')
+
+    const other = { ...calculator, name: 'search' }
+    t.not(
+      mod.generateConfigHash('system prompt', [calculator, other]),
+      mod.generateConfigHash('system prompt', [other, calculator]),
+      'tool-array order participates in cache identity'
+    )
+  } finally {
+    cleanup()
+  }
+})
+
+// `configHash` is the on-disk `.bin` filename, so the digest of a tool-free
+// session is a compatibility surface: any change to the hash payload or its
+// serialization renames every plain-chat cache file and re-primes it cold.
+// Pinning the shipped digests keeps that a deliberate decision.
+test('generateConfigHash: no-tools digests stay pinned', async (t) => {
+  const { mod, cleanup } = await loadSession()
+  try {
+    t.is(
+      mod.generateConfigHash('you are a helpful assistant.', undefined),
+      '3f5906d163f40776',
+      'omitted tools keep the shipped digest'
+    )
+    t.is(
+      mod.generateConfigHash('you are a helpful assistant.', []),
+      '3f5906d163f40776',
+      'an empty tool array hashes like omitted tools'
+    )
+    t.is(
+      mod.generateConfigHash(null, undefined),
+      '99ba47708d700919',
+      'a missing system prompt keeps the shipped digest'
+    )
+  } finally {
+    cleanup()
+  }
+})
 
 test('kv-cache-session: beginTurn primes the cache on first use, reuses on second', async (t) => {
   const { mod, cleanup, writeFakeCache } = await loadSession()
@@ -96,7 +188,8 @@ test('kv-cache-session: beginTurn primes the cache on first use, reuses on secon
 
     await session.commitTurn(firstTurn, {
       kind: 'static',
-      messageCount: 3
+      messageCount: 3,
+      toolBlockCached: false
     })
 
     const secondTurn = await session.beginTurn({
@@ -137,7 +230,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
     // Simulate that the addon wrote the file.
     fs.writeFileSync(turn.cachePath, 'fake-cache-bytes')
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 7 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 7, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
@@ -164,7 +257,7 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
 })
 
 test('kv-cache-session: rollback wipes all three layers atomically', async (t) => {
-  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  const { fs, path, mod, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
@@ -185,6 +278,11 @@ test('kv-cache-session: rollback wipes all three layers atomically', async (t) =
 
     t.is(fs.existsSync(turn.cachePath), false, 'rollback unlinked the on-disk cache file')
     t.is(
+      fs.existsSync(path.dirname(path.dirname(turn.cachePath))),
+      false,
+      'rollback removed the empty cache-key directory'
+    )
+    t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
       undefined,
       'rollback forgot the cachedMessageCounts entry'
@@ -194,6 +292,225 @@ test('kv-cache-session: rollback wipes all three layers atomically', async (t) =
       false,
       'rollback cleared the initializedCaches entry'
     )
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: auto rename prunes the source cache-key directory', async (t) => {
+  const { fs, path, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const history = [
+      { role: 'system' as const, content: 'sys' },
+      { role: 'user' as const, content: 'hello' }
+    ]
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history,
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    const target = await utils.getCurrentCacheInfo('test-model', configHash, [
+      ...history,
+      { role: 'assistant', content: 'hi' }
+    ])
+    const sourceDirectory = path.dirname(path.dirname(turn.cachePath))
+
+    await session.commitTurn(turn, {
+      kind: 'autoRename',
+      targetCachePath: target.cachePath,
+      messageCount: 3,
+      toolBlockCached: false
+    })
+
+    t.is(fs.existsSync(turn.cachePath), false, 'source file moved')
+    t.is(fs.existsSync(sourceDirectory), false, 'empty source directory removed')
+    t.ok(fs.existsSync(target.cachePath), 'renamed cache remains at the target')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: marker write failure does not abort auto-cache path resolution', async (t) => {
+  const { fs, path, utils, cleanup } = await loadSession()
+  try {
+    const history = [{ role: 'user' as const, content: 'marker failure' }]
+    const cacheKey = utils.generateCacheKey(history)
+    const cachePath = await utils.getCacheFilePath('model', 'config', cacheKey)
+    const cacheRoot = path.dirname(path.dirname(path.dirname(cachePath)))
+    fs.mkdirSync(path.join(cacheRoot, `.auto-cache-${cacheKey}`))
+
+    const cacheInfo = await utils.getCurrentCacheInfo('model', 'config', history)
+
+    t.is(cacheInfo.cacheKey, cacheKey, 'auto-cache key still resolves')
+    t.is(cacheInfo.cachePath, cachePath, 'cache path remains usable without retention metadata')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: retention removes markers whose cache directory is missing', async (t) => {
+  const { fs, path, utils, retention, cleanup } = await loadSession()
+  try {
+    const cacheKey = '7777777777777777'
+    const cachePath = await utils.getCacheFilePath('model', 'config', cacheKey)
+    const cacheRoot = path.dirname(path.dirname(path.dirname(cachePath)))
+    const markerPath = path.join(cacheRoot, `.auto-cache-${cacheKey}`)
+    await retention.markAutoCacheKey(cacheKey)
+    fs.rmSync(path.dirname(path.dirname(cachePath)), { recursive: true, force: true })
+
+    await retention.planAutoCacheEvictions({
+      activeCachePaths: [],
+      maxBytes: 0,
+      maxIdleMs: 1,
+      nowMs: Date.now()
+    })
+
+    t.is(fs.existsSync(markerPath), false, 'orphaned auto-cache marker removed')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: beginTurn defers retention until turn cleanup', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const staleKey = '8888888888888888'
+    const stalePath = await utils.getCacheFilePath('stale-model', 'config', staleKey)
+    writeFakeCache(stalePath)
+    await retention.markAutoCacheKey(staleKey)
+    await fs.promises.utimes(stalePath, new Date(1000), new Date(1000))
+    mod.__kvCacheSessionTestHooks.setLastAutoCacheSweepMsForTest(0)
+
+    const session = mod.createKvCacheSession('test-model')
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash: mod.generateConfigHash('sys', []),
+      history: [{ role: 'user', content: 'active' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+
+    t.is(
+      mod.__kvCacheSessionTestHooks.getLastAutoCacheSweepMsForTest(),
+      0,
+      'beginTurn did not start a retention sweep'
+    )
+    t.ok(fs.existsSync(stalePath), 'stale cache remains available before inference starts')
+
+    await session.rollback(turn)
+    await mod.__kvCacheSessionTestHooks.waitForAutoCacheSweepForTest()
+
+    t.ok(
+      mod.__kvCacheSessionTestHooks.getLastAutoCacheSweepMsForTest() > 0,
+      'turn cleanup scheduled the first retention sweep'
+    )
+    t.is(fs.existsSync(stalePath), false, 'cleanup sweep removed the stale cache')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: retention evicts oldest auto caches and preserves named caches', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const oldKey = '1111111111111111'
+    const newKey = '2222222222222222'
+    const namedHexKey = '3333333333333333'
+    const oldPath = await utils.getCacheFilePath('model', 'config', oldKey)
+    const newPath = await utils.getCacheFilePath('model', 'config', newKey)
+    const namedHexPath = await utils.getCacheFilePath('model', 'config', namedHexKey)
+    const namedPrefixPath = await utils.getCacheFilePath('model', 'config', 'auto-session')
+
+    for (const cachePath of [oldPath, newPath, namedHexPath, namedPrefixPath]) {
+      writeFakeCache(cachePath)
+    }
+    await retention.markAutoCacheKey(oldKey)
+    await retention.markAutoCacheKey(newKey)
+    await fs.promises.utimes(oldPath, new Date(2000), new Date(2000))
+    await fs.promises.utimes(newPath, new Date(3000), new Date(3000))
+    await fs.promises.utimes(namedHexPath, new Date(1000), new Date(1000))
+    await fs.promises.utimes(namedPrefixPath, new Date(1000), new Date(1000))
+
+    const retentionOptions = {
+      activeCachePaths: [],
+      maxBytes: fs.statSync(newPath).size,
+      maxIdleMs: 0,
+      nowMs: 4000
+    }
+    const plannedEvictions = await retention.planAutoCacheEvictions(retentionOptions)
+    t.alike(plannedEvictions, [oldKey], 'planner selects the oldest marked auto cache')
+
+    await mod.__kvCacheSessionTestHooks.sweepAutoCachesForTest(retentionOptions)
+
+    t.is(fs.existsSync(oldPath), false, 'old auto cache evicted')
+    t.ok(fs.existsSync(newPath), 'newest auto cache retained under the quota')
+    t.ok(fs.existsSync(namedHexPath), 'hex-shaped named cache excluded from auto retention')
+    t.ok(fs.existsSync(namedPrefixPath), 'auto-prefixed named cache excluded from auto retention')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: retention never evicts an active auto cache', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash,
+      history: [{ role: 'user', content: 'active' }],
+      primeIfMissing: async (cachePath: string) => {
+        writeFakeCache(cachePath)
+      }
+    })
+    const inactiveKey = '4444444444444444'
+    const inactivePath = await utils.getCacheFilePath('other-model', 'config', inactiveKey)
+    writeFakeCache(inactivePath)
+    await retention.markAutoCacheKey(inactiveKey)
+
+    await mod.__kvCacheSessionTestHooks.sweepAutoCachesForTest({
+      maxBytes: 0,
+      maxIdleMs: 0,
+      nowMs: Date.now()
+    })
+
+    t.ok(fs.existsSync(turn.cachePath), 'active cache retained')
+    t.is(fs.existsSync(inactivePath), false, 'inactive cache evicted')
+    await session.rollback(turn)
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: retention expires idle auto caches', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const staleKey = '5555555555555555'
+    const freshKey = '6666666666666666'
+    const stalePath = await utils.getCacheFilePath('model', 'config', staleKey)
+    const freshPath = await utils.getCacheFilePath('model', 'config', freshKey)
+    writeFakeCache(stalePath)
+    writeFakeCache(freshPath)
+    await retention.markAutoCacheKey(staleKey)
+    await retention.markAutoCacheKey(freshKey)
+    await fs.promises.utimes(stalePath, new Date(1000), new Date(1000))
+    await fs.promises.utimes(freshPath, new Date(4500), new Date(4500))
+
+    await mod.__kvCacheSessionTestHooks.sweepAutoCachesForTest({
+      maxBytes: Number.MAX_SAFE_INTEGER,
+      maxIdleMs: 1000,
+      nowMs: 5000
+    })
+
+    t.is(fs.existsSync(stalePath), false, 'idle cache evicted after TTL')
+    t.ok(fs.existsSync(freshPath), 'recent cache retained')
   } finally {
     cleanup()
   }
@@ -402,7 +719,7 @@ test('kv-cache-session: beginTurn throws if prime closure resolves but no cache 
   // because the next existence probe would see no file and
   // re-prime, but the in-memory init flag would already say
   // "primed". `verifyPrimedFile` turns this into a propagated error.
-  const { mod, cleanup } = await loadSession()
+  const { fs, path, mod, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
@@ -436,6 +753,12 @@ test('kv-cache-session: beginTurn throws if prime closure resolves but no cache 
       mod.__kvCacheSessionTestHooks.hasInitializedKey('test-model', configHash, 'prime-no-file'),
       false,
       'init flag NOT set when verifyPrimedFile rejects'
+    )
+    t.ok(observedPath, 'observedPath must be set before directory check')
+    t.is(
+      fs.existsSync(path.dirname(path.dirname(observedPath!))),
+      false,
+      'failed prime leaves no empty cache-key directory'
     )
   } finally {
     cleanup()
@@ -521,7 +844,7 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
     // error where the file was removed externally.
     fs.unlinkSync(turn.cachePath)
 
-    await session.commitTurn(turn, { kind: 'static', messageCount: 5 })
+    await session.commitTurn(turn, { kind: 'static', messageCount: 5, toolBlockCached: false })
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),

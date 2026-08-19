@@ -21,5 +21,5 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   'Vector Stores':
     "**In-memory metadata; survives process lifetime only.** The underlying RAG workspace data persists via the SDK's RAG layer, but the OpenAI-shaped metadata (name, expires_after, etc.) is lost on restart.",
   Models:
-    'Lifecycle for models registered under `serve.models` in the config. DELETE unloads the model.'
+    'Lifecycle for models configured under `serve.models`. GET lists every configured model; each loads on first request unless `preload: true` warmed it at startup. DELETE unloads a model but keeps the alias reloadable — the next request loads it again.'
 }

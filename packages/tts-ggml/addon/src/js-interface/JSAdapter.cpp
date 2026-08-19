@@ -4,6 +4,7 @@
 #include <string>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
 
@@ -81,14 +82,29 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "engineType");
   if (explicitType == "chatterbox") return EngineType::Chatterbox;
   if (explicitType == "supertonic") return EngineType::Supertonic;
+  if (explicitType == "cosyvoice3")
+    return EngineType::Cosyvoice;
   if (explicitType == "parler")
     return EngineType::Parler;
+  if (explicitType == "audio8")
+    return EngineType::Audio8;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox', 'supertonic' or 'parler' (got '" +
+        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler' "
+        "or 'audio8' (got '" +
             explicitType + "')");
   }
+
+  const std::string cosyvoiceDir =
+      readOptionalString(configurationParams, env, "cosyvoiceModelDir");
+  if (!cosyvoiceDir.empty())
+    return EngineType::Cosyvoice;
+
+  const std::string cosyvoiceLlm =
+      readOptionalString(configurationParams, env, "cosyvoiceLlmModelPath");
+  if (!cosyvoiceLlm.empty())
+    return EngineType::Cosyvoice;
 
   const std::string supertonicPath =
       readOptionalString(configurationParams, env, "supertonicModelPath");
@@ -98,6 +114,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "parlerModelPath");
   if (!parlerPath.empty())
     return EngineType::Parler;
+
+  const std::string audio8Path =
+      readOptionalString(configurationParams, env, "audio8LmPath");
+  if (!audio8Path.empty())
+    return EngineType::Audio8;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -168,6 +189,22 @@ JSAdapter::readParlerDescriptionFields(js::Object obj, js_env_t* env) {
   return desc;
 }
 
+tts_cpp::cosyvoice::VoiceControls
+JSAdapter::readVoiceControls(js::Object obj, js_env_t* env) {
+  tts_cpp::cosyvoice::VoiceControls controls;
+  controls.emotion = readOptionalString(obj, env, "emotion");
+  controls.pace = readOptionalString(obj, env, "pace");
+  controls.instruct_text = readOptionalString(obj, env, "instruct");
+  return controls;
+}
+
+void JSAdapter::assertNoPerCallSupertonicControls(
+    js::Object obj, js_env_t* env) {
+  supertonic::detail::validateNoPerCallControls(
+      readOptionalString(obj, env, "emotion"),
+      readOptionalString(obj, env, "pace"));
+}
+
 parler::ParlerConfig
 JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   parler::ParlerConfig cfg;
@@ -192,6 +229,45 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  return cfg;
+}
+
+audio8::Audio8Model::VoiceOverride
+JSAdapter::readAudio8Voice(js::Object obj, js_env_t* env) {
+  audio8::Audio8Model::VoiceOverride voice;
+  voice.referenceAudio = readOptionalString(obj, env, "referenceAudio");
+  voice.referenceText = readOptionalString(obj, env, "referenceText");
+  return voice;
+}
+
+audio8::Audio8Config
+JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
+  audio8::Audio8Config cfg;
+  cfg.lmModelPath =
+      readOptionalString(configurationParams, env, "audio8LmPath");
+  cfg.codecDecoderPath =
+      readOptionalString(configurationParams, env, "audio8CodecDecoderPath");
+  cfg.codecEncoderPath =
+      readOptionalString(configurationParams, env, "audio8CodecEncoderPath");
+  const auto voice = readAudio8Voice(configurationParams, env);
+  cfg.referenceAudio = voice.referenceAudio;
+  cfg.referenceText = voice.referenceText;
+  cfg.greedy = readOptionalBool(configurationParams, env, "greedy");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.temperature = readOptionalFloat(configurationParams, env, "temperature");
+  cfg.topK = readOptionalInt(configurationParams, env, "topK");
+  cfg.topP = readOptionalFloat(configurationParams, env, "topP");
+  cfg.maxFrames = readOptionalInt(configurationParams, env, "maxFrames");
+  cfg.outputSampleRate =
+      readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
 
@@ -206,6 +282,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   }
   cfg.steps             = readOptionalInt(configurationParams, env, "steps");
   cfg.speed             = readOptionalFloat(configurationParams, env, "speed");
+  cfg.pace = readOptionalString(configurationParams, env, "pace");
   cfg.seed              = readOptionalInt(configurationParams, env, "seed");
   cfg.threads           = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers        = readOptionalInt(configurationParams, env, "nGpuLayers");
@@ -227,4 +304,53 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   return cfg;
 }
 
+cosyvoice::CosyvoiceConfig
+JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
+  cosyvoice::CosyvoiceConfig cfg;
+  cfg.modelDir =
+      readOptionalString(configurationParams, env, "cosyvoiceModelDir");
+  cfg.llmModelPath =
+      readOptionalString(configurationParams, env, "cosyvoiceLlmModelPath");
+  cfg.flowModelPath =
+      readOptionalString(configurationParams, env, "cosyvoiceFlowModelPath");
+  cfg.hiftModelPath =
+      readOptionalString(configurationParams, env, "cosyvoiceHiftModelPath");
+  cfg.s3tokModelPath =
+      readOptionalString(configurationParams, env, "cosyvoiceS3tokModelPath");
+  cfg.campplusModelPath = readOptionalString(
+      configurationParams, env, "cosyvoiceCampplusModelPath");
+  cfg.referenceAudio =
+      readOptionalString(configurationParams, env, "referenceAudio");
+  cfg.promptText = readOptionalString(configurationParams, env, "promptText");
+  cfg.voice = readOptionalString(configurationParams, env, "voice");
+  cfg.instruct = readOptionalString(configurationParams, env, "instruct");
+  cfg.emotion = readOptionalString(configurationParams, env, "emotion");
+  cfg.pace = readOptionalString(configurationParams, env, "pace");
+  {
+    auto lang = readOptionalString(configurationParams, env, "language");
+    if (!lang.empty())
+      cfg.language = std::move(lang);
+  }
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.outputSampleRate =
+      readOptionalInt(configurationParams, env, "outputSampleRate");
+  cfg.cfmSteps = readOptionalInt(configurationParams, env, "cfmSteps");
+  cfg.streamChunkTokens =
+      readOptionalInt(configurationParams, env, "streamChunkTokens");
+  cfg.streamFirstChunkTokens =
+      readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
+  cfg.streamLeftContextTokens =
+      readOptionalInt(configurationParams, env, "streamLeftContextTokens");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  cfg.openclCacheDir =
+      readOptionalString(configurationParams, env, "openclCacheDir");
+  cfg.enhancerGgufPath =
+      readOptionalString(configurationParams, env, "lavasrEnhancerPath");
+  cfg.denoiserGgufPath =
+      readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  return cfg;
+}
 }

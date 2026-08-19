@@ -1,9 +1,5 @@
-import parakeetAddonLogging from '@qvac/transcription-parakeet/addonLogging'
-import TranscriptionParakeet, {
-  type ParakeetConfig as AddonParakeetConfig,
-  type TranscriptionParakeetFiles,
-  type TranscriptionParakeetConfig
-} from '@qvac/transcription-parakeet'
+import asrAddonLogging from '@qvac/asr-ggml/addonLogging'
+import ASRGgml from '@qvac/asr-ggml'
 import {
   definePlugin,
   defineHandler,
@@ -15,13 +11,12 @@ import {
   ModelType,
   parakeetLoadConfigSchema,
   LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS,
-  ADDON_PARAKEET,
+  ADDON_ASR,
   type ParakeetConfig,
   type CreateModelParams,
   type PluginModelResult,
   type ResolveResult
 } from '@/schemas'
-import { createStreamLogger, registerAddonLogger } from '@/logging'
 import {
   ModelLoadFailedError,
   TranscriptionFailedError,
@@ -29,6 +24,8 @@ import {
 } from '@/utils/errors-server'
 import { transcribe, transcribeStream } from '@/server/bare/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { buildParakeetEngineConfig } from '@/server/bare/plugins/asr-ggml/config'
+import { createAsrModelLogger } from '@/server/bare/plugins/asr-ggml/logging'
 
 function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
   const cfgRecord = cfg as unknown as Record<string, unknown>
@@ -49,25 +46,12 @@ function createParakeetModel(params: CreateModelParams): PluginModelResult {
     throw new ModelLoadFailedError('Parakeet requires a GGUF model source')
   }
 
-  const logger = createStreamLogger(params.modelId, ModelType.parakeetTranscription)
-  registerAddonLogger(params.modelId, ModelType.parakeetTranscription, logger)
+  const logger = createAsrModelLogger(params.modelId, ModelType.parakeetTranscription)
 
-  const files: TranscriptionParakeetFiles = {
-    model: modelPath
-  }
-
-  const parakeetConfig = Object.fromEntries(
-    Object.entries(config).filter(([, value]) => value !== undefined)
-  ) as AddonParakeetConfig
-
-  const addonConfig: TranscriptionParakeetConfig = {
+  const model = new ASRGgml({
+    files: { model: modelPath },
+    config: buildParakeetEngineConfig(config),
     enableStats: true,
-    parakeetConfig
-  }
-
-  const model = new TranscriptionParakeet({
-    files,
-    config: addonConfig,
     logger
   })
 
@@ -77,7 +61,7 @@ function createParakeetModel(params: CreateModelParams): PluginModelResult {
 export const parakeetPlugin = definePlugin({
   modelType: ModelType.parakeetTranscription,
   displayName: 'Parakeet (NVIDIA NeMo GGML)',
-  addonPackage: ADDON_PARAKEET,
+  addonPackage: ADDON_ASR,
   loadConfigSchema: parakeetLoadConfigSchema,
 
   resolveConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
@@ -173,34 +157,47 @@ export const parakeetPlugin = definePlugin({
           request.requestId
         )
 
-        for await (const value of iterator) {
-          if (typeof value === 'object' && value !== null && 'type' in value) {
-            if (value.type === 'endOfTurn') {
-              yield {
-                type: 'transcribeStream' as const,
-                endOfTurn: { source: 'parakeet' as const }
+        try {
+          let result = await iterator.next()
+          while (!result.done) {
+            const value = result.value
+            if (typeof value === 'object' && value !== null && 'type' in value) {
+              if (value.type === 'endOfTurn') {
+                yield {
+                  type: 'transcribeStream' as const,
+                  endOfTurn: { source: 'parakeet' as const }
+                }
               }
+              result = await iterator.next()
+              continue
             }
-            continue
+
+            yield {
+              type: 'transcribeStream' as const,
+              text: value
+            }
+            result = await iterator.next()
           }
 
-          yield {
-            type: 'transcribeStream' as const,
-            text: value
-          }
-        }
-
-        yield {
-          type: 'transcribeStream' as const,
-          text: '',
-          done: true
+          const { modelExecutionMs, stats } = result.value
+          yield attachModelExecutionMs(
+            {
+              type: 'transcribeStream' as const,
+              text: '',
+              done: true,
+              ...(stats && { stats })
+            },
+            modelExecutionMs
+          )
+        } finally {
+          await iterator.return?.(undefined as never)
         }
       }
     })
   },
 
   logging: {
-    module: parakeetAddonLogging,
-    namespace: ModelType.parakeetTranscription
+    module: asrAddonLogging,
+    namespace: ADDON_ASR
   }
 })

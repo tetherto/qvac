@@ -14,9 +14,9 @@ name: Workflow security
 #      Deterministic, offline, secret-free, and therefore fork-safe. Catches the
 #      machine-modellable high-risk patterns; the reproducible backbone of the gate.
 #   2. job `workflow-security-agent` — a Claude Code agent
-#      (anthropics/claude-code-action) that runs the repo-specific A1–A15 checklist
+#      (anthropics/claude-code-action) that runs the repo-specific A1–A14 checklist
 #      from .cursor/skills/qv-devops-pr-review that zizmor CANNOT model: the
-#      mandatory `# v<ver>` pin comment, harden-runner presence, per-job
+#      mandatory `# v<ver>` pin comment, per-job
 #      timeout-minutes, filename conventions, state-mutating concurrency, etc. This
 #      automates what was previously the human `qv-devops-pr-review` fallback.
 #      ⚠ SHIPS DISABLED: Claude Code is not in CI yet, so this pass is gated behind
@@ -126,14 +126,6 @@ jobs:
       # failures; every other trigger runs warn-only (shadow mode).
       ENFORCE: ${{ github.event.inputs.enforce || 'false' }}
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          # Audit only: this gate holds no secrets and runs zizmor offline; the
-          # sole egress is pip reaching PyPI to install the pinned zizmor. Promote
-          # to block once that egress is characterized from the audit logs.
-          egress-policy: audit
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -382,13 +374,6 @@ jobs:
       # Upsert a single agent-findings comment on same-repo PRs.
       pull-requests: write
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          # Audit only: egress is the agent toolchain (npm/bun) plus inference to
-          # api.anthropic.com. Promote to block once that egress is characterized.
-          egress-policy: audit
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -463,25 +448,24 @@ jobs:
             Read these first — they are the source of truth:
             - .cursor/rules/devops/github-actions.mdc
             - .cursor/rules/devops/secrets-and-credentials.mdc
-            - .cursor/skills/qv-devops-pr-review/SKILL.md   (the A1-A15 checklist)
+            - .cursor/skills/qv-devops-pr-review/SKILL.md   (the A1-A14 checklist)
 
             Audit ONLY the files whose paths are listed in `changed_files.txt` in the
             repo root (one path per line). If that file is empty, report no findings.
 
-            Apply the A1-A15 checklist to each file, prioritising the checks zizmor
+            Apply the A1-A14 checklist to each file, prioritising the checks zizmor
             does NOT model: A1 (third-party `uses:` pinned to a 40-char SHA WITH a
-            trailing `# v<ver>` comment), A7 (mandatory `step-security/harden-runner`
-            as the first step of sensitive jobs), A10 (state-mutating workflows set
-            `cancel-in-progress: false`, or document a deliberate deviation), A11
-            (every job declares `timeout-minutes`), and A15 (filename matches the
-            repo's documented naming families). Also flag any A2-A6, A8, A9, A12-A14
+            trailing `# v<ver>` comment), A9 (state-mutating workflows set
+            `cancel-in-progress: false`, or document a deliberate deviation), A10
+            (every job declares `timeout-minutes`), and A14 (filename matches the
+            repo's documented naming families). Also flag any A2-A8, A11-A13
             issue you find.
 
             Output: write ONE GitHub-flavoured Markdown report to the file
             `workflow-security-agent-report.md` in the repo root, structured as:
             - a one-line summary (total findings + highest tier High/Medium/Low);
             - a table with columns: File | Line | Check (e.g. A7) | Tier | Why;
-            - each row cites the rule (e.g. "github-actions.mdc § Hardened runners").
+            - each row cites the rule (e.g. "github-actions.mdc § Permissions").
             Keep it concise. Write NOTHING to disk except that one report file, and do
             not run shell commands. If there are no findings, still write the report
             stating that explicitly.
@@ -511,7 +495,7 @@ jobs:
                 ? report
                 : `:warning: The workflow-security agent did not produce a report this run — see the [run logs](${runUrl}).`,
               '',
-              '_Agentic audit of the repo-specific GHA conventions (A1-A15 from `qv-devops-pr-review`) that the deterministic zizmor pass cannot model. **Warn-only** — advisory and non-deterministic; it does not block the merge._',
+              '_Agentic audit of the repo-specific GHA conventions (A1-A14 from `qv-devops-pr-review`) that the deterministic zizmor pass cannot model. **Warn-only** — advisory and non-deterministic; it does not block the merge._',
             ].join('\n');
             await core.summary.addRaw(body).write();
             if (context.eventName !== 'pull_request') {

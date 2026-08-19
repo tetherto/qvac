@@ -1,3 +1,4 @@
+#include <chrono>
 #include <map>
 #include <set>
 
@@ -1180,4 +1181,59 @@ TEST(MediaBarrierFlowTest, ConsecutiveBarriersServicedInOrder) {
   const Request* req = batcher.requestAt(0);
   ASSERT_NE(req, nullptr);
   EXPECT_EQ(req->remainingToFeed(), 1u);
+}
+
+/// Sampling stamps the request's observed token times: the first sampled
+/// token fixes firstTokenAt once, every sampled token advances lastTokenAt.
+/// These stamps feed the per-request observed stats (TTFT / observed TPS).
+TEST_F(MultiRequestBatcherTest, SamplingStampsObservedTokenTimes) {
+  const unsigned kMaxChunkSize = 8;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId0 = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20, 30}, seqId0),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 3);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  const Request* req = batcher.requestAt(seqId0);
+  ASSERT_NE(req, nullptr);
+  EXPECT_FALSE(req->firstTokenAt.has_value())
+      << "no token sampled yet: no stamp";
+  EXPECT_FALSE(req->lastTokenAt.has_value());
+
+  const auto beforeFirst = std::chrono::steady_clock::now();
+  batcher.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
+    return mocked_llama_sampler_sample(seqId, logitIdx);
+  });
+
+  req = batcher.requestAt(seqId0);
+  ASSERT_TRUE(req->firstTokenAt.has_value());
+  ASSERT_TRUE(req->lastTokenAt.has_value());
+  EXPECT_GE(*req->firstTokenAt, beforeFirst);
+  const auto firstStamp = *req->firstTokenAt;
+
+  // Second generation step: feed the sample, decode, sample again.
+  result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 1);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+  batcher.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
+    return mocked_llama_sampler_sample(seqId, logitIdx);
+  });
+
+  req = batcher.requestAt(seqId0);
+  EXPECT_EQ(*req->firstTokenAt, firstStamp)
+      << "firstTokenAt must be fixed by the first sample only";
+  EXPECT_GE(*req->lastTokenAt, firstStamp)
+      << "lastTokenAt must advance with every sample";
+  EXPECT_EQ(req->generatedTokens.size(), 2u);
 }

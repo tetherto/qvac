@@ -210,6 +210,7 @@ function buildCanonicalReport(settings, summary, backend) {
           avg_rss_mb: typeof memory.avgRssMb === 'number' ? memory.avgRssMb : null,
           peak_rss_mb: typeof memory.peakRssMb === 'number' ? memory.peakRssMb : null,
           reclaimed_mb: typeof memory.reclaimedMb === 'number' ? memory.reclaimedMb : null,
+          backend_id: typeof summary.backendId === 'number' ? summary.backendId : null,
           word_error_rate:
             quality.wer && typeof quality.wer.mean === 'number' ? quality.wer.mean : null,
           character_error_rate:

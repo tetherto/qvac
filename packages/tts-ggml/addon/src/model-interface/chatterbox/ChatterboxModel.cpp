@@ -19,6 +19,7 @@
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/DenoiserLoader.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
@@ -188,7 +189,8 @@ std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
         }
         return enhanced;
       },
-      kChatterboxNativeSampleRate, finalRate);
+      kChatterboxNativeSampleRate,
+      finalRate);
 }
 
 // Per-chunk post-processing for the native streaming path: an optional
@@ -496,8 +498,8 @@ void ChatterboxModel::loadLocked() {
   // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
   // Pass the engine's *resolved* device, not the requested switch: if the
   // engine fell back to CPU (gpu_unsupported / off-allowlist), keep the
-  // enhancer on CPU too instead of forcing it onto the GPU. Shared with
-  // Supertonic via loadEnhancer so the two loaders can't drift.
+  // enhancer on CPU too instead of forcing it onto the GPU. Shared with the
+  // other engines via loadEnhancer so the loaders can't drift.
   LoadedEnhancer loaded = loadEnhancer(
       cfg_.enhancerGgufPath,
       backendDevice_ == kBackendDeviceGpu,
@@ -506,22 +508,8 @@ void ChatterboxModel::loadLocked() {
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
 
-  // LavaSR denoiser: load when a GGUF path is set (runs before the enhancer).
-  // The UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR #78; an
-  // older tts-cpp pin (pre-#78) makes Denoiser::load throw, surfacing here as a
-  // clean InitializationFailed error.
-  if (!cfg_.denoiserGgufPath.empty()) {
-    try {
-      denoiser_ = tts_cpp::lavasr::Denoiser::load(cfg_.denoiserGgufPath);
-    } catch (const std::exception& e) {
-      denoiser_.reset();
-      throw createTTSError(
-          TTSErrorCode::InitializationFailed,
-          std::string("ChatterboxModel::load: lavasr denoiser: ") + e.what());
-    }
-  } else {
-    denoiser_.reset();
-  }
+  denoiser_ = loadDenoiser(
+      cfg_.denoiserGgufPath, "ChatterboxModel::load: lavasr denoiser: ");
 }
 
 void ChatterboxModel::unloadLocked() {

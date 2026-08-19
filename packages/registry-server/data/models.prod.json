@@ -152,7 +152,7 @@
   {
     "source": "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v5.1.2.bin",
     "engine": "@qvac/transcription-whispercpp",
-    "description": "VAD model for Whisper",
+    "description": "Voice activity detection model for Whisper",
     "quantization": "",
     "params": "",
     "licenseId": "MIT",
@@ -193,7 +193,7 @@
   {
     "source": "https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/blob/b69aef112e9f895e6f98d7ae0949f72ff09aa401/Llama-3.2-1B-Instruct-Q4_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Llama 3.2 1B instruct model",
     "quantization": "q4_0",
     "params": "1B",
     "licenseId": "llama3.2",
@@ -203,7 +203,7 @@
   {
     "source": "https://huggingface.co/ChristianAzinn/gte-large-gguf/blob/f9fa5479908e72c2a8b9d6ba112911cd1e51be53/gte-large_fp16.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "description": "GTE-large embedding model",
     "quantization": "fp16",
     "params": "",
     "licenseId": "MIT",
@@ -223,7 +223,7 @@
   {
     "source": "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/ccd7aae53bcb1997355c2f094959e72b3642ce17/SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "Vision-language model for video understanding",
+    "description": "Vision-language model used for video understanding",
     "quantization": "q8_0",
     "params": "500M",
     "licenseId": "Apache-2.0",
@@ -3301,6 +3301,47 @@
     "description": "Wan 2.2 Variational Autoencoder",
     "licenseId": "Apache-2.0",
     "tags": ["vae", "wan"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/abot-world-0-5b-lf-dit-q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/acvlab/ABot-World-0-5B-LF",
+    "description": "ABot-World interactive world model (keyboard-driven causal walk), Wan2.2-TI2V-5B derivative",
+    "notes": "Driven via the diffusion-cpp world session API; not a batch text/image-to-video model.",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "params": "5B",
+    "tags": ["generation", "diffusion", "video", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/taew2_2_f16.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://github.com/madebyollin/taehv",
+    "description": "taehv (taew2.2) tiny streaming video decoder for the Wan 2.2 TI2V latent space",
+    "notes": "Real-time pixel decoder for ABot-World walk sessions.",
+    "licenseId": "MIT",
+    "quantization": "F16",
+    "tags": ["vae", "taehv", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/umt5-xxl-enc-q8_0.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+    "description": "UMT5-XXL text encoder (encoder-only GGUF) for ABot-World native scene creation",
+    "notes": "GGUF conversion of the Comfy-Org umt5_xxl_fp16 repackage; walk-level validated quantization (F16 parity work uses the registry's umt5_xxl_fp16.safetensors entry).",
+    "licenseId": "Apache-2.0",
+    "quantization": "Q8_0",
+    "tags": ["text-encoder", "wan", "abot-world"]
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ABot-World-0-5B-LF/2026-07-17/wan2.2_vae_f16.gguf",
+    "engine": "@qvac/diffusion-cpp",
+    "link": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    "description": "Wan 2.2 VAE (48-channel, GGUF) - ABot-World first-frame encoder",
+    "notes": "GGUF conversion of the Comfy-Org wan2.2_vae repackage.",
+    "licenseId": "Apache-2.0",
+    "quantization": "F16",
+    "tags": ["vae", "wan", "abot-world"]
   },
   {
     "source": "https://huggingface.co/QuantStack/LTX-2.3-GGUF/resolve/4b420da2a92451eaeec5cd44e769007198acff88/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q2_K.gguf",
@@ -7734,6 +7775,28 @@
     "link": "https://huggingface.co/nvidia/GR00T-N1.7-LIBERO"
   },
   {
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "NVIDIA GR00T N1.7-3B vision-language-action model, multi-embodiment. Single GGUF carrying every trained embodiment head of the base checkpoint (17 stored rows, default libero_sim); select at load or switch at runtime by tag or cat_id, no reload. Same architecture as the LIBERO model: Qwen3-VL backbone, VL fusion, 32-layer AlternateVLDiT action head, 4-step Euler flow-matching. Camera count and action dims follow the selected embodiment. Desktop multi-embodiment model of record.",
+    "quantization": "q8_vf16",
+    "params": "groot-n1.7-3b-multi",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["vla", "groot", "multi-embodiment", "robotics"],
+    "notes": "q8_vf16 profile: Q8_0 non-vision linears, F16 vision tower + embodiment bank, F32 norms. Requires @qvac/vla-ggml >= 0.17.0. Base-checkpoint conversion (nvidia/GR00T-N1.7-3B, 2026-08-04) — replaces the withdrawn 2026-07-23 LIBERO-post-trained build, whose finetuned trunk skewed every non-libero row (DROID cos 0.881 vs 0.999993 base-derived). Parity vs the base oracle: libero_sim cos 0.999995, oxe_droid 0.999993, real_r1_pro 0.999941 (PR #3427). For LIBERO-only use, prefer groot-n1.7-3b-libero.",
+    "link": "https://huggingface.co/nvidia/GR00T-N1.7-3B"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q5_vf16.gguf",
+    "engine": "@qvac/vla-ggml",
+    "description": "NVIDIA GR00T N1.7-3B vision-language-action model, multi-embodiment. Mobile profile of the desktop multi-embodiment groot-q8_vf16 model: same architecture and embodiment bank (17 stored rows, default libero_sim), smaller action-head quant so the model file fits the on-device memory budget. Active embodiment selected at load or switched at runtime by tag or cat_id.",
+    "quantization": "q5_vf16",
+    "params": "groot-n1.7-3b-multi",
+    "licenseId": "nvidia-open-model-license",
+    "tags": ["vla", "groot", "multi-embodiment", "robotics", "mobile"],
+    "notes": "q5_vf16 profile: Q5_0 non-vision linears, F16 vision tower + embodiment bank, F32 norms. Q5_0 is required — legacy Q4_0 is too coarse for the DiT action head, and K-quants are not supported by the qvac-fabric gguf packer. Requires @qvac/vla-ggml >= 0.17.0. Base-checkpoint conversion (nvidia/GR00T-N1.7-3B, 2026-08-04) — replaces the withdrawn 2026-07-23 LIBERO-post-trained build, whose finetuned trunk skewed every non-libero row. For LIBERO-only use, prefer the groot-n1.7-3b-libero entries.",
+    "link": "https://huggingface.co/nvidia/GR00T-N1.7-3B"
+  },
+  {
     "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/593b5a2e04c8f3e4ee880263f93e0bd2901ad47f/smollm2-360m-instruct-q8_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "SmolLM2 360M instruction-tuned GGUF model from Hugging Face, useful as a small text-generation canary.",
@@ -8196,6 +8259,116 @@
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 CAM++ speaker embedding model (GGUF)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "campplus", "speaker-embedding", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 S3 speech tokenizer (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-f32.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 S3 speech tokenizer (GGUF)",
+    "quantization": "fp32",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-s3tok-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 S3 speech tokenizer (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder / synthesis half (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder / synthesis half (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "encoder", "multilingual", "gguf"],
+    "notes": "Only needed for voice cloning; text-only synthesis can omit this GGUF.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec encoder / analysis half for voice cloning (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "encoder", "multilingual", "gguf"],
+    "notes": "Only needed for voice cloning; text-only synthesis can omit this GGUF.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
     "source": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "KAT-Coder V2.5 Dev 35B-A3B MoE coding model (bartowski GGUF)",
@@ -8205,5 +8378,192 @@
     "tags": ["generation", "instruct", "moe", "kat-coder"],
     "notes": "",
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4 Flash 0731 UD-IQ2_M model",
+    "quantization": "UD-IQ2_M",
+    "params": "304B",
+    "licenseId": "MIT",
+    "tags": ["generation", "instruct", "deepseek-v4", "shard"],
+    "notes": "shard 1/3",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00002-of-00003.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4 Flash 0731 UD-IQ2_M model",
+    "quantization": "UD-IQ2_M",
+    "params": "304B",
+    "licenseId": "MIT",
+    "tags": ["generation", "instruct", "deepseek-v4", "shard"],
+    "notes": "shard 2/3",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF/resolve/109848da2469efe1f1aab9e11acea08a065ccd4f/UD-IQ2_M/DeepSeek-V4-Flash-0731-UD-IQ2_M-00003-of-00003.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DeepSeek V4 Flash 0731 UD-IQ2_M model",
+    "quantization": "UD-IQ2_M",
+    "params": "304B",
+    "licenseId": "MIT",
+    "tags": ["generation", "instruct", "deepseek-v4", "shard"],
+    "notes": "shard 3/3",
+    "link": "https://huggingface.co/unsloth/DeepSeek-V4-Flash-0731-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "KAT-Coder V2.5 Dev 35B-A3B MoE coding model (bartowski GGUF)",
+    "quantization": "q4_k_m",
+    "params": "35B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "instruct", "moe", "kat-coder"],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "KAT-Coder V2.5 Dev 35B-A3B MoE coding model (bartowski GGUF)",
+    "quantization": "q8_0",
+    "params": "35B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "instruct", "moe", "kat-coder"],
+    "notes": "",
+    "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "description": "Indic Conformer CTC 600M multilingual GGUF",
+    "quantization": "f16",
+    "params": "600M",
+    "licenseId": "MIT",
+    "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
+    "notes": "F16 GGUF conversion of ai4bharat/indic-conformer"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "description": "Indic Conformer CTC 600M multilingual GGUF",
+    "quantization": "q4_0",
+    "params": "600M",
+    "licenseId": "MIT",
+    "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
+    "notes": "Q4_0 GGUF conversion of ai4bharat/indic-conformer"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "description": "Indic Conformer CTC 600M multilingual GGUF",
+    "quantization": "q8_0",
+    "params": "600M",
+    "licenseId": "MIT",
+    "tags": ["transcription", "indic-conformer", "ctc", "ggml", "indic", "multilingual"],
+    "notes": "Q8_0 GGUF conversion of ai4bharat/indic-conformer"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M on-device vision-language model from QVAC.",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy"],
+    "notes": "Lossless against the FP32 reference. Pair with the mmproj-visionpsy-nano-460m-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/visionpsy-nano-460m-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M on-device vision-language model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy"],
+    "notes": "Imatrix-calibrated build, recommended size/quality trade-off for mobile. Pair with the mmproj-visionpsy-nano-460m-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs/resolve/4138c5bd6e026d67cebf2dbd2d81c6229c14cdc1/mmproj-visionpsy-nano-460m-q8.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for VisionPsy Nano 460M",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy"],
+    "notes": "Required by every VisionPsy Nano 460M variant.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M Flash low-latency vision-language model from QVAC.",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy", "flash"],
+    "notes": "Flash processes far fewer visual tokens than the base model for much faster time-to-first-token. Pair with the mmproj-visionpsy-nano-460m-flash-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/visionpsy-nano-460m-flash-q4_k_m-imat.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "VisionPsy Nano 460M Flash low-latency vision-language model from QVAC.",
+    "quantization": "q4_k_m",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy", "flash"],
+    "notes": "Imatrix-calibrated build, recommended size/quality trade-off for mobile. Pair with the mmproj-visionpsy-nano-460m-flash-q8 entry for image input.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs/resolve/a24fb9cdd1119406b15ff60b06a51f8438a931c1/mmproj-visionpsy-nano-460m-flash-q8.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for VisionPsy Nano 460M Flash",
+    "quantization": "q8_0",
+    "params": "460M",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "visionpsy", "flash"],
+    "notes": "Required by every VisionPsy Nano 460M Flash variant. Not interchangeable with the non-Flash projector.",
+    "link": "https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen3.8 27B UD-Q4_K_XL model",
+    "quantization": "UD-Q4_K_XL",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "qwen3.8", "instruct", "video-instruct"],
+    "notes": "Pair with the F16 mmproj entry for image and video input.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q8_K_XL.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen3.8 27B UD-Q8_K_XL model",
+    "quantization": "UD-Q8_K_XL",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "qwen3.8", "instruct", "video-instruct"],
+    "notes": "Pair with the F16 mmproj entry for image and video input.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/mmproj-F16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Qwen 3.8 27B",
+    "quantization": "f16",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "qwen3.8", "instruct", "video-instruct"],
+    "notes": "Required for image and video input.",
+    "link": "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF"
   }
 ]

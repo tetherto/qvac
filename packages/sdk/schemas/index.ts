@@ -8,12 +8,10 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
-  TOOLS_MODE,
   type Tool,
   type ToolCall,
   type ToolCallError,
-  type ToolCallWithCall,
-  type ToolsMode
+  type ToolCallWithCall
 } from './tools'
 export * from './delegate'
 export * from './delete-cache'
@@ -42,6 +40,7 @@ export * from './ocr'
 export * from './sdcpp-config'
 export * from './vla'
 export * from './classification'
+export * from './audio-gen'
 export * from './shard'
 export * from './suspend'
 export * from './resume'
@@ -67,7 +66,10 @@ export {
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
   MODEL_EXECUTION_KEY,
+  BACKEND_DIAGNOSTICS_KEY,
   profilerModeSchema,
+  profilerGPUResourceGaugeSchema,
+  profilerResourceGaugeSchema,
   serverBreakdownSchema,
   delegationBreakdownSchema,
   operationEventSchema,
@@ -80,7 +82,9 @@ export {
   type OperationEvent,
   type ProfilingRequestMeta,
   type ProfilingResponseMeta,
-  type PerCallProfiling
+  type PerCallProfiling,
+  type ProfilerGPUResourceGauge,
+  type ProfilerResourceGauge
 } from './profiling'
 export { runtimeContextSchema, type RuntimeContext } from './runtime-context'
 export * from './get-model-info'

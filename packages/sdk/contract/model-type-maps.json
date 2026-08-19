@@ -1,5 +1,6 @@
 {
   "aliasToCanonical": {
+    "audiogen": "audiogen-ggml",
     "bci": "bci-whispercpp-transcription",
     "classification": "ggml-classification",
     "diffusion": "sdcpp-generation",
@@ -13,6 +14,7 @@
     "whisper": "whispercpp-transcription"
   },
   "engineToAddon": {
+    "audiogen-ggml": "audiogen",
     "bci-whispercpp-transcription": "bci",
     "ggml-classification": "classification",
     "ggml-ocr": "ocr",
@@ -28,6 +30,8 @@
     "whispercpp-transcription": "whisper"
   },
   "legacyEngineToCanonical": {
+    "@qvac/audiogen": "audiogen-ggml",
+    "@qvac/audiogen-ggml": "audiogen-ggml",
     "@qvac/bci-whispercpp": "bci-whispercpp-transcription",
     "@qvac/classification-ggml": "ggml-classification",
     "@qvac/diffusion-cpp": "sdcpp-generation",
@@ -44,6 +48,7 @@
     "@qvac/tts-onnx": "tts-ggml",
     "@qvac/vad-silero": "onnx-vad",
     "@qvac/vla-ggml": "ggml-vla",
+    "audiogen": "audiogen-ggml",
     "bci": "bci-whispercpp-transcription",
     "classification": "ggml-classification",
     "diffusion": "sdcpp-generation",

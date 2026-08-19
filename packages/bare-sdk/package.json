@@ -1,6 +1,6 @@
 {
   "name": "@qvac/bare-sdk",
-  "version": "0.16.0",
+  "version": "0.17.1",
   "license": "Apache-2.0",
   "description": "Bare-targeted slim assembly of the QVAC SDK. Consumers install only the addon packages they need and register plugins explicitly. No addon dependencies pulled in by default.",
   "repository": {
@@ -97,6 +97,10 @@
     "./sdcpp-generation/plugin": {
       "types": "./dist/_sdk/server/bare/plugins/sdcpp-generation/plugin.d.ts",
       "import": "./dist/_sdk/server/bare/plugins/sdcpp-generation/plugin.js"
+    },
+    "./audiogen-ggml/plugin": {
+      "types": "./dist/_sdk/server/bare/plugins/audiogen-ggml/plugin.d.ts",
+      "import": "./dist/_sdk/server/bare/plugins/audiogen-ggml/plugin.js"
     },
     "./ggml-vla/plugin": {
       "types": "./dist/_sdk/server/bare/plugins/ggml-vla/plugin.d.ts",

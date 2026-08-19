@@ -9,10 +9,20 @@ const REGISTRY_DATE_Q8_0 = '2026-05-11'
 const REGISTRY_DATE_Q4_0 = '2026-05-27'
 const REGISTRY_DATE_2026_07_01 = '2026-07-01'
 const REGISTRY_DATE_STREAMING = '2026-05-20'
+const REGISTRY_DATE_INDIC = '2026-08-07'
+const REGISTRY_DATE_UNIFIED = '2026-08-13'
 const REGISTRY_SOURCE = 's3'
 const OUT_DIR = path.resolve(__dirname, '..', 'models')
 
-const ALL_TYPES = ['ctc', 'tdt', 'eou', 'sortformer', 'sortformer-streaming-v2.1']
+const ALL_TYPES = [
+  'ctc',
+  'tdt',
+  'unified',
+  'eou',
+  'sortformer',
+  'sortformer-streaming-v2.1',
+  'indic-conformer'
+]
 const ALL_QUANTS = ['f16', 'q8_0', 'q4_0']
 
 const MODELS = {
@@ -25,6 +35,11 @@ const MODELS = {
     f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-tdt-0.6b-v3.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_Q8_0, 'parakeet-tdt-0.6b-v3.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_Q4_0, 'parakeet-tdt-0.6b-v3.q4_0.gguf')
+  },
+  unified: {
+    f16: filenameAt(REGISTRY_DATE_UNIFIED, 'parakeet-unified-en-0.6b.f16.gguf'),
+    q8_0: filenameAt(REGISTRY_DATE_UNIFIED, 'parakeet-unified-en-0.6b.q8_0.gguf'),
+    q4_0: filenameAt(REGISTRY_DATE_UNIFIED, 'parakeet-unified-en-0.6b.q4_0.gguf')
   },
   eou: {
     f16: filenameAt(REGISTRY_DATE_2026_07_01, 'parakeet-eou-120m-v1.f16.gguf'),
@@ -40,10 +55,15 @@ const MODELS = {
     f16: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.f16.gguf'),
     q8_0: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf'),
     q4_0: filenameAt(REGISTRY_DATE_STREAMING, 'diar_streaming_sortformer_4spk-v2.1.q4_0.gguf')
+  },
+  'indic-conformer': {
+    f16: filenameAtIndic(REGISTRY_DATE_INDIC, 'indic-conformer-ctc.f16.gguf'),
+    q8_0: filenameAtIndic(REGISTRY_DATE_INDIC, 'indic-conformer-ctc.q8_0.gguf'),
+    q4_0: filenameAtIndic(REGISTRY_DATE_INDIC, 'indic-conformer-ctc.q4_0.gguf')
   }
 }
 
-function filenameAt (date, filename) {
+function filenameAt(date, filename) {
   return {
     filename,
     registryPath: `qvac_models_compiled/ggml/parakeet/${date}/${filename}`,
@@ -51,7 +71,15 @@ function filenameAt (date, filename) {
   }
 }
 
-function parseArgs (argv) {
+function filenameAtIndic(date, filename) {
+  return {
+    filename,
+    registryPath: `qvac_models_compiled/ggml/indic_conformer/${date}/${filename}`,
+    registrySource: REGISTRY_SOURCE
+  }
+}
+
+function parseArgs(argv) {
   const args = { type: 'all', quant: 'q8_0', output: OUT_DIR }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
@@ -74,7 +102,7 @@ function parseArgs (argv) {
   return args
 }
 
-function printUsage () {
+function printUsage() {
   console.log(`Usage: node scripts/download-parakeet-models.js [--type <T>] [--quant <Q>] [--output <DIR>]
 
 Download Parakeet GGUFs from the QVAC model registry into ./models/.
@@ -89,7 +117,7 @@ Flags:
 `)
 }
 
-function selectVariants (type, quant) {
+function selectVariants(type, quant) {
   const types = type === 'all' ? ALL_TYPES : [type]
   const selected = []
   for (const t of types) {
@@ -105,7 +133,7 @@ function selectVariants (type, quant) {
   return selected
 }
 
-async function downloadOne (client, variant, outputDir) {
+async function downloadOne(client, variant, outputDir) {
   const dest = path.join(outputDir, variant.filename)
   if (fs.existsSync(dest)) {
     console.log(`  ✓ ${variant.filename} (already present)`)
@@ -120,7 +148,7 @@ async function downloadOne (client, variant, outputDir) {
   return { ok: true, path: dest, cached: false }
 }
 
-async function downloadAll (variants, outputDir) {
+async function downloadAll(variants, outputDir) {
   fs.mkdirSync(outputDir, { recursive: true })
   const client = new QVACRegistryClient()
   let failures = 0
@@ -135,14 +163,19 @@ async function downloadAll (variants, outputDir) {
       }
     }
   } finally {
-    try { await client.close() } catch (_) {}
+    try {
+      await client.close()
+    } catch (_) {}
   }
   return failures
 }
 
-async function main () {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
-  if (args.help) { printUsage(); return }
+  if (args.help) {
+    printUsage()
+    return
+  }
 
   const variants = selectVariants(args.type, args.quant)
   if (variants.length === 0) {
@@ -159,7 +192,11 @@ async function main () {
   console.log('Done.')
 }
 
-main().catch(err => {
-  console.error(err && err.message ? err.message : err)
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err && err.message ? err.message : err)
+    process.exit(1)
+  })
+}
+
+module.exports = { ALL_TYPES, ALL_QUANTS, MODELS, parseArgs, selectVariants }

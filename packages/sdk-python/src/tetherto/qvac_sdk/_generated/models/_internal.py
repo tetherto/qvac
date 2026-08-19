@@ -21,6 +21,216 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
+class AudioGenStreamRequestTaskType(Enum):
+    text2music = "text2music"
+    cover_nofsq = "cover-nofsq"
+
+
+class AudioGenStreamRequestReferenceAudioBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: str
+
+
+class AudioGenStreamRequestReferenceAudioFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: str
+
+
+class AudioGenStreamRequestSourceAudioBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: str
+
+
+class AudioGenStreamRequestSourceAudioFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: str
+
+
+class AudioGenStreamRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    caption: Annotated[str, Field(min_length=1)]
+    lyrics: str | None = None
+    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
+    vocal_language: Annotated[
+        str | None, Field(alias="vocalLanguage", min_length=1)
+    ] = None
+    bpm: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    keyscale: Annotated[str | None, Field(min_length=1)] = None
+    timesignature: Annotated[str | None, Field(min_length=1)] = None
+    duration: Annotated[
+        float | None,
+        Field(
+            description="Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+            gt=0.0,
+        ),
+    ] = None
+    lm_temperature: Annotated[
+        float | None,
+        Field(
+            alias="lmTemperature",
+            description="LM sampling temperature (ACE-Step default: 0.85).",
+            ge=0.0,
+        ),
+    ] = None
+    lm_top_p: Annotated[
+        float | None,
+        Field(
+            alias="lmTopP",
+            description="LM nucleus-sampling probability (ACE-Step default: 0.9).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    lm_top_k: Annotated[
+        int | None,
+        Field(
+            alias="lmTopK",
+            description="LM top-k cutoff; 0 disables top-k filtering.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    lm_cfg_scale: Annotated[
+        float | None,
+        Field(
+            alias="lmCfgScale",
+            description="Classifier-free guidance scale used by the LM.",
+            ge=0.0,
+        ),
+    ] = None
+    lm_phase1: Annotated[
+        bool | None,
+        Field(
+            alias="lmPhase1",
+            description="Allow the LM to infer missing metadata before semantic-code generation.",
+        ),
+    ] = None
+    dcw_enabled: Annotated[
+        bool | None,
+        Field(
+            alias="dcwEnabled",
+            description="Apply the official ACE-Step Haar DCW correction during DiT sampling (default: true).",
+        ),
+    ] = None
+    dcw_scaler: Annotated[
+        float | None,
+        Field(
+            alias="dcwScaler",
+            description="DCW low-frequency correction strength (official default: 0.05).",
+            ge=0.0,
+        ),
+    ] = None
+    dcw_high_scaler: Annotated[
+        float | None,
+        Field(
+            alias="dcwHighScaler",
+            description="DCW high-frequency correction strength (official default: 0.02).",
+            ge=0.0,
+        ),
+    ] = None
+    task_type: Annotated[
+        AudioGenStreamRequestTaskType | None,
+        Field(
+            alias="taskType",
+            description="Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+            title="AudioGenStreamRequestTaskType",
+        ),
+    ] = None
+    audio_cover_strength: Annotated[
+        float | None,
+        Field(
+            alias="audioCoverStrength",
+            description="Fraction of DiT steps that keep the source context (0..1, default 1). cover-nofsq currently requires 1.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    cover_noise_strength: Annotated[
+        float | None,
+        Field(
+            alias="coverNoiseStrength",
+            description="Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    reference_audio: Annotated[
+        AudioGenStreamRequestReferenceAudioBase64
+        | AudioGenStreamRequestReferenceAudioFilePath
+        | None,
+        Field(
+            alias="referenceAudio",
+            description="Optional timbre reference audio; omit to keep the engine default.",
+        ),
+    ] = None
+    source_audio: Annotated[
+        AudioGenStreamRequestSourceAudioBase64
+        | AudioGenStreamRequestSourceAudioFilePath
+        | None,
+        Field(
+            alias="sourceAudio",
+            description="Source audio to re-render; required for cover tasks.",
+        ),
+    ] = None
+    type: Literal["audioGenStream"] = "audioGenStream"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class AudioGenStreamResponseProgress(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    stage: str
+    step: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class AudioGenStreamResponseStopReason(Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class AudioGenStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
+    total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+
+
+class AudioGenStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["audioGenStream"] = "audioGenStream"
+    progress: Annotated[
+        AudioGenStreamResponseProgress | None,
+        Field(title="AudioGenStreamResponseProgress"),
+    ] = None
+    data: Annotated[str | None, Field(min_length=1)] = None
+    sample_rate: Annotated[
+        int | None, Field(alias="sampleRate", gt=0, le=9007199254740991)
+    ] = None
+    channels: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    bits_per_sample: Annotated[
+        int | None, Field(alias="bitsPerSample", gt=0, le=9007199254740991)
+    ] = None
+    done: bool
+    stop_reason: Annotated[
+        AudioGenStreamResponseStopReason | None,
+        Field(alias="stopReason", title="AudioGenStreamResponseStopReason"),
+    ] = None
+    stats: Annotated[
+        AudioGenStreamResponseStats | None, Field(title="AudioGenStreamResponseStats")
+    ] = None
+
+
 class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     GeneratedBaseModel
 ):
@@ -88,7 +298,7 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
     remove_thinking_from_context: Annotated[
         bool | None,
         Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
 
@@ -281,6 +491,7 @@ class BatchCompletionStreamRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class BatchCompletionStreamRequest(GeneratedBaseModel):
@@ -854,6 +1065,7 @@ class CancelRequestBroadKind(Enum):
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     tts = "tts"
     ocr = "ocr"
     vla = "vla"
@@ -1045,7 +1257,7 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     remove_thinking_from_context: Annotated[
         bool | None,
         Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
 
@@ -1057,6 +1269,7 @@ class CompletionOrchestrateRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class CompletionOrchestrateRequestResponseFormatText(GeneratedBaseModel):
@@ -1579,7 +1792,7 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     remove_thinking_from_context: Annotated[
         bool | None,
         Field(
-            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`. No-op for models without a recognised reasoning channel. Throws on models with recurrent memory (SSM / hybrid SSM such as Qwen3.5), where the cache edit is unsupported."
+            description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
 
@@ -1591,6 +1804,7 @@ class CompletionStreamRequestToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class CompletionStreamRequestResponseFormatText(GeneratedBaseModel):
@@ -1949,6 +2163,11 @@ class CompletionStreamResponse(GeneratedBaseModel):
     ]
 
 
+class AudioGenTaskType(Enum):
+    text2_music = "text2music"
+    cover_nofsq = "cover-nofsq"
+
+
 class ModelType(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -1960,6 +2179,7 @@ class ModelType(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
 
@@ -1973,6 +2193,7 @@ class PluginId(Enum):
     tts = "@qvac/sdk/tts-ggml/plugin"
     ocr = "@qvac/sdk/ggml-ocr/plugin"
     diffusion = "@qvac/sdk/sdcpp-generation/plugin"
+    audiogen = "@qvac/sdk/audiogen-ggml/plugin"
     vla = "@qvac/sdk/ggml-vla/plugin"
     classification = "@qvac/sdk/ggml-classification/plugin"
 
@@ -1987,9 +2208,47 @@ class SupportedAudioFormat(Enum):
     raw = ".raw"
 
 
-class ToolsMode(Enum):
-    static = "static"
-    dynamic = "dynamic"
+class TtsCosyvoice3Emotion(Enum):
+    anger = "anger"
+    happy = "happy"
+    neutral = "neutral"
+    sad = "sad"
+
+
+class TtsCosyvoice3InstructDialect(Enum):
+    cantonese = "cantonese"
+    northeastern = "northeastern"
+    gansu = "gansu"
+    guizhou = "guizhou"
+    henan = "henan"
+    hubei = "hubei"
+    hunan = "hunan"
+    jiangxi = "jiangxi"
+    minnan = "minnan"
+    ningxia = "ningxia"
+    shanxi = "shanxi"
+    shaanxi = "shaanxi"
+    shandong = "shandong"
+    shanghai = "shanghai"
+    sichuan = "sichuan"
+    tianjin = "tianjin"
+    yunnan = "yunnan"
+
+
+class TtsCosyvoice3InstructStyle(Enum):
+    peppa = "peppa"
+    robot = "robot"
+
+
+class TtsCosyvoice3InstructVolume(Enum):
+    loud = "loud"
+    soft = "soft"
+
+
+class TtsPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
 
 
 class Verbosity(Enum):
@@ -2787,6 +3046,7 @@ class LocalLoadedModelInfoToolDialect(Enum):
     harmony = "harmony"
     qwen35 = "qwen35"
     gemma4 = "gemma4"
+    dsml = "dsml"
 
 
 class LocalLoadedModelInfo(GeneratedBaseModel):
@@ -2857,6 +3117,7 @@ class GetModelInfoResponseModelInfoAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -6295,11 +6556,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
     number_3 = 3
 
 
-class LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode(Enum):
-    static = "static"
-    dynamic = "dynamic"
-
-
 class MainGpu(RootModel[int]):
     root: Annotated[int, Field(ge=0, le=9007199254740991)]
 
@@ -6326,6 +6582,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -6337,6 +6594,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6390,14 +6648,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     n_discarded: float | None = None
     parallel: Annotated[int | None, Field(ge=1, le=9007199254740991)] = None
     tools: bool | None = None
-    tools_mode: Annotated[
-        LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode | None,
-        Field(
-            alias="toolsMode",
-            description='Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.',
-            title="LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode",
-        ),
-    ] = None
     cache_type_k: Annotated[str | None, Field(alias="cache-type-k")] = None
     cache_type_v: Annotated[str | None, Field(alias="cache-type-v")] = None
     main_gpu: Annotated[
@@ -6437,6 +6687,13 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestLlamacppCompletionDelegate | None,
         Field(title="LoadModelSrcRequestLlamacppCompletionDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -6545,6 +6802,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -6556,6 +6814,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6677,6 +6936,13 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionDelegate | None,
         Field(title="LoadModelSrcRequestWhispercppTranscriptionDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -6803,6 +7069,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -6814,6 +7081,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -6888,6 +7156,13 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestBciWhispercppTranscriptionDelegate | None,
         Field(title="LoadModelSrcRequestBciWhispercppTranscriptionDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -6985,6 +7260,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
     streaming_right_lookahead_ms: Annotated[
         int | None, Field(alias="streamingRightLookaheadMs", ge=0, le=9007199254740991)
     ] = None
+    language: str | None = None
     streaming_spk_cache_enable: Annotated[
         bool | None, Field(alias="streamingSpkCacheEnable")
     ] = None
@@ -7043,6 +7319,13 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestParakeetTranscriptionDelegate | None,
         Field(title="LoadModelSrcRequestParakeetTranscriptionDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -7207,6 +7490,13 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingDelegate | None,
         Field(title="LoadModelSrcRequestLlamacppEmbeddingDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -7396,6 +7686,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7407,6 +7698,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7442,6 +7734,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7453,6 +7746,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7494,6 +7788,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7505,6 +7800,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7542,6 +7838,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7553,6 +7850,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7590,6 +7888,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7601,6 +7900,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7806,6 +8106,13 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
         LoadModelSrcRequestNmtcppTranslationDelegate | None,
         Field(title="LoadModelSrcRequestNmtcppTranslationDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -7901,6 +8208,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7912,6 +8220,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7945,6 +8254,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -7956,6 +8266,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -7991,6 +8302,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8002,6 +8314,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8035,6 +8348,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8046,6 +8360,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8079,6 +8394,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8090,6 +8406,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8125,6 +8442,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8136,6 +8454,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8290,6 +8609,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8301,6 +8621,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8336,6 +8657,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8347,6 +8669,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8450,6 +8773,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion(Enum):
     surprise = "surprise"
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigParlerPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class MaxFrames(RootModel[int]):
     root: Annotated[int, Field(ge=10, le=2147483647)]
 
@@ -8469,7 +8798,10 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"),
     ] = None
     pitch: Annotated[str | None, Field(min_length=1)] = None
-    pace: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerPace | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerPace"),
+    ] = None
     expressivity: Annotated[str | None, Field(min_length=1)] = None
     noise: Annotated[str | None, Field(min_length=1)] = None
     reverb: Annotated[str | None, Field(min_length=1)] = None
@@ -8501,6 +8833,396 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     normalize_numbers: Annotated[bool | None, Field(alias="normalizeNumbers")] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion(Enum):
+    anger = "anger"
+    happy = "happy"
+    neutral = "neutral"
+    sad = "sad"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
+class Instruct(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect(Enum):
+    cantonese = "cantonese"
+    northeastern = "northeastern"
+    gansu = "gansu"
+    guizhou = "guizhou"
+    henan = "henan"
+    hubei = "hubei"
+    hunan = "hunan"
+    jiangxi = "jiangxi"
+    minnan = "minnan"
+    ningxia = "ningxia"
+    shanxi = "shanxi"
+    shaanxi = "shaanxi"
+    shandong = "shandong"
+    shanghai = "shanghai"
+    sichuan = "sichuan"
+    tianjin = "tianjin"
+    yunnan = "yunnan"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume(Enum):
+    loud = "loud"
+    soft = "soft"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle(Enum):
+    peppa = "peppa"
+    robot = "robot"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    dialect: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"),
+    ] = None
+    volume: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"),
+    ] = None
+    style: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"),
+    ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[Literal["cosyvoice3"], Field(alias="ttsEngine")] = (
+        "cosyvoice3"
+    )
+    emotion: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"),
+    ] = None
+    pace: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace | None,
+        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"),
+    ] = None
+    instruct: (
+        Instruct | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct | None
+    ) = None
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    stream_chunk_tokens: Annotated[
+        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
+    ] = None
+    stream_first_chunk_tokens: Annotated[
+        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    lavasr_enhancer_model_src: Annotated[
+        str
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
+        | None,
+        Field(alias="lavasrEnhancerModelSrc"),
+    ] = None
+    lavasr_denoiser_model_src: Annotated[
+        str
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
+        | None,
+        Field(alias="lavasrDenoiserModelSrc"),
+    ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[Literal["audio8"], Field(alias="ttsEngine")] = "audio8"
+    reference_text: Annotated[
+        str | None, Field(alias="referenceText", min_length=1)
+    ] = None
+    greedy: bool | None = None
+    temperature: Annotated[float | None, Field(ge=0.0)] = None
+    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
+    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
+    max_frames: Annotated[int | None, Field(alias="maxFrames", ge=0, le=2147483647)] = (
+        None
+    )
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    audio8_codec_decoder_model_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc,
+        Field(alias="audio8CodecDecoderModelSrc"),
+    ]
+    audio8_codec_encoder_model_src: Annotated[
+        str
+        | LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
+        | None,
+        Field(alias="audio8CodecEncoderModelSrc"),
+    ] = None
+    reference_audio_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc | None,
+        Field(alias="referenceAudioSrc"),
+    ] = None
+
+
 class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -8514,6 +9236,13 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         LoadModelSrcRequestTtsGgmlDelegate | None,
         Field(title="LoadModelSrcRequestTtsGgmlDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -8526,7 +9255,9 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config_: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
-        | LoadModelSrcRequestTtsGgmlModelConfigParler,
+        | LoadModelSrcRequestTtsGgmlModelConfigParler
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3
+        | LoadModelSrcRequestTtsGgmlModelConfigAudio8,
         Field(alias="modelConfig"),
     ]
 
@@ -8594,6 +9325,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8605,6 +9337,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8675,6 +9408,13 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestGgmlOcrDelegate | None,
         Field(title="LoadModelSrcRequestGgmlOcrDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -8813,6 +9553,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8824,6 +9565,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8857,6 +9599,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8868,6 +9611,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8901,6 +9645,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8912,6 +9657,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8945,6 +9691,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -8956,6 +9703,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -8989,6 +9737,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9000,6 +9749,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9035,6 +9785,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9046,6 +9797,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9081,6 +9833,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9092,6 +9845,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9125,6 +9879,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9136,6 +9891,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9171,6 +9927,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9182,6 +9939,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9217,6 +9975,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9228,6 +9987,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9263,6 +10023,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9274,6 +10035,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -9520,6 +10282,13 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
         LoadModelSrcRequestSdcppGenerationDelegate | None,
         Field(title="LoadModelSrcRequestSdcppGenerationDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -9537,6 +10306,299 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
             alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
         ),
     ] = None
+
+
+class LoadModelSrcRequestAudiogenGgmlDelegate(GeneratedBaseModel):
+    provider_public_key: Annotated[
+        str,
+        Field(
+            alias="providerPublicKey",
+            description="Hex-encoded public key of the remote provider to delegate to.",
+            pattern="^[0-9a-fA-F]{64}$",
+        ),
+    ]
+    timeout: Annotated[
+        float | None,
+        Field(
+            description="Per-call timeout in milliseconds for the delegated request.",
+            ge=100.0,
+        ),
+    ] = None
+    health_check_timeout: Annotated[
+        float | None,
+        Field(
+            alias="healthCheckTimeout",
+            description="Timeout in milliseconds for the health-check probe before delegating.",
+            ge=100.0,
+        ),
+    ] = None
+    fallback_to_local: Annotated[
+        bool | None,
+        Field(
+            alias="fallbackToLocal",
+            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
+        ),
+    ] = False
+    force_new_connection: Annotated[
+        bool | None,
+        Field(
+            alias="forceNewConnection",
+            description="When `true`, skip any cached delegation connection and open a fresh one.",
+        ),
+    ] = False
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestAudiogenGgmlModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    inference_steps: Annotated[
+        int | None, Field(alias="inferenceSteps", ge=0, le=9007199254740991)
+    ] = None
+    shift: Annotated[float | None, Field(ge=0.0)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=0, le=9007199254740991)
+    ] = None
+    threads: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
+    backends_dir: Annotated[str | None, Field(alias="backendsDir", min_length=1)] = None
+    text_enc_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc,
+        Field(alias="textEncModelSrc"),
+    ]
+    lm_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc,
+        Field(alias="lmModelSrc"),
+    ]
+    dit_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc,
+        Field(alias="ditModelSrc"),
+    ]
+    vae_model_src: Annotated[
+        str | LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc,
+        Field(alias="vaeModelSrc"),
+    ]
+
+
+class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[str, Field(alias="modelSrc")]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    delegate: Annotated[
+        LoadModelSrcRequestAudiogenGgmlDelegate | None,
+        Field(title="LoadModelSrcRequestAudiogenGgmlDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["audiogen-ggml"], Field(alias="modelType")] = (
+        "audiogen-ggml"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestAudiogenGgmlModelConfig,
+        Field(alias="modelConfig", title="LoadModelSrcRequestAudiogenGgmlModelConfig"),
+    ]
 
 
 class LoadModelSrcRequestGgmlVlaDelegate(GeneratedBaseModel):
@@ -9584,6 +10646,53 @@ class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
     cpu = "cpu"
 
 
+class Embodiment(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').",
+            max_length=256,
+            min_length=1,
+        ),
+    ]
+
+
+class Embodiment1(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(description="The embodiment's numeric `cat_id` (0..31).", ge=0, le=31),
+    ]
+
+
+class LoadModelSrcRequestGgmlVlaModelConfigEmbodiment(GeneratedBaseModel):
+    tag: Annotated[
+        str | None,
+        Field(
+            description="Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').",
+            max_length=256,
+            min_length=1,
+        ),
+    ] = None
+    cat_id: Annotated[
+        int | None,
+        Field(
+            alias="catId",
+            description="The embodiment's numeric `cat_id` (0..31).",
+            ge=0,
+            le=31,
+        ),
+    ] = None
+    num_cameras: Annotated[
+        int | None,
+        Field(
+            alias="numCameras",
+            description="Overrides the camera count stored in the GGUF for the selected embodiment. Required to select an embodiment whose count was unknown at conversion time.",
+            ge=1,
+            le=64,
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
     backend: Annotated[
         LoadModelSrcRequestGgmlVlaModelConfigBackend | None,
@@ -9600,6 +10709,15 @@ class LoadModelSrcRequestGgmlVlaModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
+    embodiment: Annotated[
+        Embodiment
+        | Embodiment1
+        | LoadModelSrcRequestGgmlVlaModelConfigEmbodiment
+        | None,
+        Field(
+            description="GR00T only: which embodiment of a multi-embodiment GGUF to activate at load — a tag string, a numeric `cat_id` (0..31), or `{ tag | catId, numCameras }`. Omitted = the GGUF's default embodiment. Rejected by the addon for non-GR00T models."
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
@@ -9614,6 +10732,13 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
     delegate: Annotated[
         LoadModelSrcRequestGgmlVlaDelegate | None,
         Field(title="LoadModelSrcRequestGgmlVlaDelegate"),
+    ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
     ] = None
     request_id: Annotated[
         str | None,
@@ -9691,6 +10816,13 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
         LoadModelSrcRequestGgmlClassificationDelegate | None,
         Field(title="LoadModelSrcRequestGgmlClassificationDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -9767,6 +10899,13 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
         LoadModelCustomPluginRequestDelegate | None,
         Field(title="LoadModelCustomPluginRequestDelegate"),
     ] = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
     request_id: Annotated[
         str | None,
         Field(
@@ -9793,6 +10932,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
         | LoadModelSrcRequestSdcppGeneration
+        | LoadModelSrcRequestAudiogenGgml
         | LoadModelSrcRequestGgmlVla
         | LoadModelSrcRequestGgmlClassification
         | LoadModelCustomPluginRequest
@@ -9808,6 +10948,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
         | LoadModelSrcRequestSdcppGeneration
+        | LoadModelSrcRequestAudiogenGgml
         | LoadModelSrcRequestGgmlVla
         | LoadModelSrcRequestGgmlClassification
         | LoadModelCustomPluginRequest,
@@ -9861,6 +11002,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     parakeet_transcription = "parakeet-transcription"
     ggml_ocr = "ggml-ocr"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     llm = "llm"
@@ -9872,6 +11014,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     tts = "tts"
     ocr = "ocr"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
 
@@ -10090,6 +11233,7 @@ class ModelRegistryGetModelResponseModelAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -10106,6 +11250,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     onnx_vad = "onnx-vad"
@@ -10226,6 +11371,7 @@ class ModelRegistryListResponseModelsItemAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -10242,6 +11388,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     onnx_vad = "onnx-vad"
@@ -10355,6 +11502,7 @@ class ModelRegistrySearchRequestAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -10382,6 +11530,7 @@ class ModelRegistrySearchResponseModelsItemAddon(Enum):
     ocr = "ocr"
     parakeet = "parakeet"
     diffusion = "diffusion"
+    audiogen = "audiogen"
     vla = "vla"
     classification = "classification"
     other = "other"
@@ -10398,6 +11547,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     ggml_ocr = "ggml-ocr"
     parakeet_transcription = "parakeet-transcription"
     sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
     onnx_vad = "onnx-vad"
@@ -11045,6 +12195,12 @@ class TextToSpeechRequestEmotion(Enum):
     surprise = "surprise"
 
 
+class TextToSpeechRequestPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class TextToSpeechRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -11066,7 +12222,9 @@ class TextToSpeechRequest(GeneratedBaseModel):
         TextToSpeechRequestEmotion | None, Field(title="TextToSpeechRequestEmotion")
     ] = None
     pitch: Annotated[str | None, Field(min_length=1)] = None
-    pace: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[
+        TextToSpeechRequestPace | None, Field(title="TextToSpeechRequestPace")
+    ] = None
     expressivity: Annotated[str | None, Field(min_length=1)] = None
     noise: Annotated[str | None, Field(min_length=1)] = None
     reverb: Annotated[str | None, Field(min_length=1)] = None
@@ -11125,6 +12283,12 @@ class TextToSpeechStreamRequestEmotion(Enum):
     surprise = "surprise"
 
 
+class TextToSpeechStreamRequestPace(Enum):
+    slow = "slow"
+    moderate = "moderate"
+    fast = "fast"
+
+
 class TextToSpeechStreamRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId")]
     input_type: Annotated[str | None, Field(alias="inputType")] = "text"
@@ -11152,7 +12316,10 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         Field(title="TextToSpeechStreamRequestEmotion"),
     ] = None
     pitch: Annotated[str | None, Field(min_length=1)] = None
-    pace: Annotated[str | None, Field(min_length=1)] = None
+    pace: Annotated[
+        TextToSpeechStreamRequestPace | None,
+        Field(title="TextToSpeechStreamRequestPace"),
+    ] = None
     expressivity: Annotated[str | None, Field(min_length=1)] = None
     noise: Annotated[str | None, Field(min_length=1)] = None
     reverb: Annotated[str | None, Field(min_length=1)] = None
@@ -12313,7 +13480,8 @@ class Response_1(
 
 class Response(
     RootModel[
-        BatchCompletionStreamResponse
+        AudioGenStreamResponse
+        | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
         | CancelResponse
@@ -12358,7 +13526,8 @@ class Response(
     ]
 ):
     root: Annotated[
-        BatchCompletionStreamResponse
+        AudioGenStreamResponse
+        | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
         | CancelResponse
@@ -12415,7 +13584,8 @@ class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
 
 class Request(
     RootModel[
-        BatchCompletionStreamRequest
+        AudioGenStreamRequest
+        | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
         | Request_1
@@ -12456,7 +13626,8 @@ class Request(
     ]
 ):
     root: Annotated[
-        BatchCompletionStreamRequest
+        AudioGenStreamRequest
+        | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
         | Request_1

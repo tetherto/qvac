@@ -133,7 +133,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/ocr-ggml
 
@@ -290,23 +290,17 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, fork-approval]
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+  # Mobile integration tests are no longer run on PRs. They run on demand via
+  # `integration-mobile-test-ocr-ggml.yml` (workflow_dispatch), where the
+  # dispatcher must pick a specific device. The `run-mobile-addon-tests` label /
+  # ci-router `run_mobile` output are kept for a possible future revival but no
+  # longer trigger anything here. (Benchmark / weekend / on-merge mobile runs
+  # are unaffected — they call the mobile workflow directly.)
 
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
+    # run-mobile-integration-tests removed — only desktop perf is combined on PRs now.
+    needs: [fork-approval, authorize, run-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -337,8 +331,44 @@ jobs:
           # still run on desktop and remain in the per-device desktop reports.
           exclude: 'full-suite|canvasSize lab_results'
 
+  publish-prebuild-status:
+    # Posts qvac/prebuild-ocr-ggml for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
+    needs: [prebuild, prebuild-artifact-reuse, ci-router]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so publish logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREBUILD_RESULT: ${{ needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # A skipped prebuild is only a pass when ci-router succeeded and chose
+          # not to build (no label); a skip from an upstream failure fails closed.
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
+          # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
+          # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/prebuild-ocr-ggml
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
-    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests]
+    # run-mobile-integration-tests removed — mobile is on-demand only now.
+    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests]
     # Always run so the PR still gets a status check even if fork-approval is
     # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
     # ensures this doesn't hold the concurrency group open after a
@@ -348,4 +378,5 @@ jobs:
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      # run-mobile-integration-tests removed — mobile is on-demand only now.
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

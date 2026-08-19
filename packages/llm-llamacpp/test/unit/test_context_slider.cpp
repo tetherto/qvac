@@ -1,6 +1,4 @@
 // Owns ContextSlider orchestration via trySlidePrefill/trySlideGeneration.
-// Controller primitive behavior is intentionally covered in
-// test_tools_compact_controller.cpp.
 
 #include <cstdint>
 #include <optional>
@@ -11,7 +9,6 @@
 #include "model-interface/ContextShifter.hpp"
 #include "model-interface/ContextSlider.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
-#include "model-interface/ToolsCompactController.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 
 using qvac_lib_inference_addon_llama::ContextShifter;
@@ -96,7 +93,6 @@ private:
 class ContextSliderTest : public ::testing::Test {};
 
 TEST_F(ContextSliderTest, PrefillSlideScenario_EnoughRoom) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
 
   ContextSlideOutcome outcome = trySlidePrefill(
@@ -106,7 +102,6 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_EnoughRoom) {
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/50,
       /*nDiscarded=*/100,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::NotNeeded);
@@ -118,7 +113,6 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_EnoughRoom) {
 }
 
 TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
   ContextSlideOutcome outcome = trySlidePrefill(
@@ -128,7 +122,6 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/180,
       /*nDiscarded=*/100,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
@@ -149,7 +142,6 @@ TEST_F(ContextSliderTest, PrefillSlidInvokesLlamaOpsWithExpectedRanges) {
 }
 
 TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
   ContextSlideOutcome outcome = trySlidePrefill(
@@ -159,7 +151,6 @@ TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
       ContextUsage{/*pos=*/20, /*cacheTokens=*/80},
       ContextUsage{/*pos=*/10, /*cacheTokens=*/80},
       /*nDiscarded=*/40,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
@@ -175,7 +166,6 @@ TEST_F(ContextSliderTest, PrefillSlidesWhenCacheTokensOverflowButPositionsFit) {
 }
 
 TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
   ops.failSeqRmFor({kSeqId, 50, 150});
 
@@ -186,7 +176,6 @@ TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/180,
       /*nDiscarded=*/100,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::MemoryOperationFailed);
@@ -205,7 +194,6 @@ TEST_F(ContextSliderTest, PrefillSlideReturnsMemoryFailureWhenSeqRmFails) {
 // per-sequence cap so n_discarded can free room before the scheduler rejects
 // the prompt. Regression for PR #2327 review r3344885390.
 TEST_F(ContextSliderTest, PrefillSlidesAgainstPerSeqCapBelowFullCtx) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/8192);
 
   // nPast + append = 2100: over the per-seq cap (2048) but well under the
@@ -217,7 +205,6 @@ TEST_F(ContextSliderTest, PrefillSlidesAgainstPerSeqCapBelowFullCtx) {
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/200,
       /*nDiscarded=*/512,
-      controller,
       ops,
       /*effectiveCtx=*/2048);
 
@@ -239,12 +226,12 @@ TEST_F(ContextSliderTest, PrefillSlidesAgainstPerSeqCapBelowFullCtx) {
 }
 
 TEST_F(ContextSliderTest, PrefillOverflowWhenPartialSlideCannotFit) {
-  ToolsCompactController controller(ToolsCompactProfile{});
   FakeLlamaContextOps ops(/*ctxSize=*/512);
 
-  controller.onTokenize(474, 25);
-  controller.onEvalComplete(474, 474);
-
+  // The discardable region is large enough (474 - 25 >= 256), but even after
+  // discarding the allowed 256 tokens the append cannot fit:
+  // 474 + 308 - 256 = 526 >= 512. The slide must refuse and report Overflow
+  // without touching the KV cache.
   ContextSlideOutcome outcome = trySlidePrefill(
       /*lctx=*/nullptr,
       kSeqId,
@@ -252,20 +239,17 @@ TEST_F(ContextSliderTest, PrefillOverflowWhenPartialSlideCannotFit) {
       /*firstMsgTokens=*/25,
       /*nTokensToAppend=*/308,
       /*nDiscarded=*/256,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Overflow);
   EXPECT_EQ(outcome.newNPast, 474);
   EXPECT_EQ(outcome.discarded, 0);
-  EXPECT_EQ(controller.anchor(), 25);
   EXPECT_EQ(ops.memoryCalls(), 0);
   EXPECT_TRUE(ops.seqRmCalls().empty());
   EXPECT_TRUE(ops.seqAddCalls().empty());
 }
 
 TEST_F(ContextSliderTest, PrefillSlideScenario_Overflow) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/100);
 
   ContextSlideOutcome outcome = trySlidePrefill(
@@ -275,7 +259,6 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_Overflow) {
       /*firstMsgTokens=*/50,
       /*nTokensToAppend=*/200,
       /*nDiscarded=*/100,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Overflow);
@@ -287,7 +270,6 @@ TEST_F(ContextSliderTest, PrefillSlideScenario_Overflow) {
 }
 
 TEST_F(ContextSliderTest, GenerationSlideScenario_EnoughRoom) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
 
   ContextSlideOutcome outcome = trySlideGeneration(
@@ -296,7 +278,6 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_EnoughRoom) {
       /*nPast=*/499,
       /*firstMsgTokens=*/50,
       /*nDiscarded=*/120,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::NotNeeded);
@@ -308,7 +289,6 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_EnoughRoom) {
 }
 
 TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/400);
 
   ContextSlideOutcome outcome = trySlideGeneration(
@@ -317,7 +297,6 @@ TEST_F(ContextSliderTest, GenerationSlidInvokesLlamaOpsWithExpectedRanges) {
       /*nPast=*/400,
       /*firstMsgTokens=*/50,
       /*nDiscarded=*/120,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
@@ -341,8 +320,7 @@ TEST_F(
     ContextSliderTest,
     GenerationSlideWithTrackedReasoningSpanInvalidatesFinalCompaction) {
   ReasoningRollbackState rollback;
-  ToolsCompactController tools(std::nullopt);
-  ReasoningBlockCompactor compactor(rollback, tools);
+  ReasoningBlockCompactor compactor(rollback);
   ContextShifter shifter(compactor, rollback);
   FakeLlamaContextOps ops(/*ctxSize=*/100);
 
@@ -387,8 +365,7 @@ TEST_F(
     ContextSliderTest,
     GenerationSlideBeforeGeneratedOpenerDefersFailureUntilOpenerAppears) {
   ReasoningRollbackState rollback;
-  ToolsCompactController tools(std::nullopt);
-  ReasoningBlockCompactor compactor(rollback, tools);
+  ReasoningBlockCompactor compactor(rollback);
   ContextShifter shifter(compactor, rollback);
   FakeLlamaContextOps ops(/*ctxSize=*/100);
 
@@ -432,8 +409,7 @@ TEST_F(
     ContextSliderTest,
     GenerationSlideBeforeGeneratedOpenerNoOpsWhenNoOpenerAppears) {
   ReasoningRollbackState rollback;
-  ToolsCompactController tools(std::nullopt);
-  ReasoningBlockCompactor compactor(rollback, tools);
+  ReasoningBlockCompactor compactor(rollback);
   ContextShifter shifter(compactor, rollback);
   FakeLlamaContextOps ops(/*ctxSize=*/100);
 
@@ -464,7 +440,6 @@ TEST_F(
 }
 
 TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
-  ToolsCompactController controller(std::nullopt);
   FakeLlamaContextOps ops(/*ctxSize=*/500);
 
   ContextSlideOutcome outcome = trySlideGeneration(
@@ -473,7 +448,6 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
       /*nPast=*/500,
       /*firstMsgTokens=*/50,
       /*nDiscarded=*/0,
-      controller,
       ops);
 
   EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::NotNeeded);
@@ -482,79 +456,6 @@ TEST_F(ContextSliderTest, GenerationSlideScenario_NoDiscardAllowed) {
   EXPECT_EQ(ops.memoryCalls(), 0);
   EXPECT_TRUE(ops.seqRmCalls().empty());
   EXPECT_TRUE(ops.seqAddCalls().empty());
-}
-
-TEST_F(ContextSliderTest, GenerationToolsCompactClampsDiscardToAnchorWindow) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  FakeLlamaContextOps ops(/*ctxSize=*/140);
-  constexpr llama_pos firstMsgTokens = 50;
-
-  controller.onTokenize(/*tokensWithTools=*/140, /*tokensWithoutTools=*/80);
-  controller.onEvalComplete(/*nPast=*/140, /*totalTokensEvaled=*/140);
-  ASSERT_EQ(controller.anchor(), 80);
-
-  ContextSlideOutcome outcome = trySlideGeneration(
-      /*lctx=*/nullptr,
-      kSeqId,
-      /*nPast=*/140,
-      firstMsgTokens,
-      /*nDiscarded=*/120,
-      controller,
-      ops);
-
-  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
-  EXPECT_EQ(outcome.newNPast, 110);
-  EXPECT_EQ(outcome.discarded, 30);
-  EXPECT_EQ(controller.anchor(), firstMsgTokens);
-
-  ASSERT_EQ(ops.memoryCalls(), 1);
-  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
-  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 80);
-  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
-  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 80);
-  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 140);
-  EXPECT_EQ(ops.seqAddCalls()[0].delta, -30);
-}
-
-TEST_F(
-    ContextSliderTest,
-    GenerationDegenerateBoundaryResetsThenSlidesFromFirstMessage) {
-  ToolsCompactController controller(ToolsCompactProfile{});
-  FakeLlamaContextOps ops(/*ctxSize=*/120);
-  constexpr llama_pos firstMsgTokens = 50;
-
-  controller.onTokenize(/*tokensWithTools=*/120, /*tokensWithoutTools=*/50);
-  controller.onEvalComplete(/*nPast=*/120, /*totalTokensEvaled=*/120);
-  ASSERT_EQ(controller.anchor(), firstMsgTokens);
-  ASSERT_TRUE(controller.degenerateBoundary(firstMsgTokens));
-
-  ContextSlideOutcome outcome = trySlideGeneration(
-      /*lctx=*/nullptr,
-      kSeqId,
-      /*nPast=*/120,
-      firstMsgTokens,
-      /*nDiscarded=*/40,
-      controller,
-      ops);
-
-  EXPECT_EQ(outcome.kind, ContextSlideOutcome::Kind::Slid);
-  EXPECT_EQ(outcome.newNPast, 80);
-  EXPECT_EQ(outcome.discarded, 40);
-  EXPECT_EQ(controller.anchor(), firstMsgTokens);
-
-  ASSERT_EQ(ops.memoryCalls(), 1);
-  ASSERT_EQ(ops.seqRmCalls().size(), 1u);
-  EXPECT_EQ(ops.seqRmCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqRmCalls()[0].startPos, 50);
-  EXPECT_EQ(ops.seqRmCalls()[0].endPos, 90);
-  ASSERT_EQ(ops.seqAddCalls().size(), 1u);
-  EXPECT_EQ(ops.seqAddCalls()[0].seqId, kSeqId);
-  EXPECT_EQ(ops.seqAddCalls()[0].startPos, 90);
-  EXPECT_EQ(ops.seqAddCalls()[0].endPos, 120);
-  EXPECT_EQ(ops.seqAddCalls()[0].delta, -40);
 }
 
 // ---------------------------------------------------------------------------

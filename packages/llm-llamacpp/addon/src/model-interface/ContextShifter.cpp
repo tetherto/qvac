@@ -9,7 +9,6 @@
 #include "../utils/ReasoningRollbackState.hpp"
 #include "ContextSlider.hpp"
 #include "ReasoningBlockCompactor.hpp"
-#include "ToolsCompactController.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -27,15 +26,12 @@ ContextShifter::Outcome ContextShifter::applyGenerationDiscard(
     ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
     llama_pos protectedPrefixPos, llama_pos effectiveCtx, llama_pos cacheTokens,
     const char* labelTag, const IContextSliderOps& ops) {
-  // Slide notification is routed through the compactor's tools
-  // controller so we keep a single tools reference per inference.
   auto outcome = trySlideGeneration(
       ctx,
       seqId,
       pos,
       protectedPrefixPos,
       nDiscarded_,
-      compactor_.toolsController(),
       ops,
       effectiveCtx,
       cacheTokens);
