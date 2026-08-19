@@ -141,7 +141,8 @@ protected:
     cfg.diffusionModelPath = diffModel;
     cfg.llmPath = llmModel;
     cfg.vaePath = vaeModel;
-    cfg.prediction = FLUX2_FLOW_PRED;
+    cfg.prediction = FLUX_FLOW_PRED;
+    cfg.usesFlux2Flow = true;
     cfg.nThreads = sd_test_helpers::getTestThreads();
     cfg.device = sd_test_helpers::getTestDevice();
 

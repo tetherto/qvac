@@ -117,8 +117,11 @@ struct SdCtxConfig {
   //   EPS_PRED        -> SD1.x
   //   V_PRED          -> SD2.x
   //   FLOW_PRED       -> SD3 (flow matching)
-  //   FLUX2_FLOW_PRED -> FLUX.2 [klein]
+  //   FLUX_FLOW_PRED  -> FLUX / FLUX.2 [klein]
   prediction_t prediction = PREDICTION_COUNT; // auto
+  // August unifies FLUX and FLUX.2 under FLUX_FLOW_PRED. Retain this input
+  // distinction for QVAC's multi-reference request validation.
+  bool usesFlux2Flow = false;
 
   // -- LoRA (Low-Rank Adaptation) apply mode ---------------------------------
   lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;

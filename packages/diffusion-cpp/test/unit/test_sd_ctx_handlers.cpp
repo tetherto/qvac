@@ -27,7 +27,9 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "v").prediction, V_PRED);
   EXPECT_EQ(applyOne("prediction", "edm_v").prediction, EDM_V_PRED);
   EXPECT_EQ(applyOne("prediction", "flow").prediction, FLOW_PRED);
-  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, FLUX2_FLOW_PRED);
+  const auto flux2 = applyOne("prediction", "flux2_flow");
+  EXPECT_EQ(flux2.prediction, FLUX_FLOW_PRED);
+  EXPECT_TRUE(flux2.usesFlux2Flow);
 
   SdCtxConfig cfg;
   EXPECT_THROW(

@@ -319,22 +319,37 @@ void SdModel::load() {
 
   // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
-  params.vae_decode_only = config_.vaeDecodeOnly;
-
-  // Keep reusable ctx semantics explicit. sd.cpp defaults may free parameter
-  // buffers after a generation, but this addon runs many jobs through one
-  // sd_ctx_t.
-  params.free_params_immediately = config_.freeParamsImmediately;
-  params.offload_params_to_cpu = config_.offloadToCpu;
-  params.keep_clip_on_cpu = config_.keepClipOnCpu;
-  params.keep_vae_on_cpu = config_.keepVaeOnCpu;
   params.vae_auto_cpu_fallback = config_.vaeAutoCpuFallback;
   params.vae_auto_cpu_fallback_memory_ratio =
       config_.vaeAutoCpuFallbackMemoryRatio;
 
-  // Also set the newer backend spec so offload intent survives sd.cpp builds
-  // that route parameter placement through params_backend.
-  params.params_backend = config_.offloadToCpu ? "cpu" : nullptr;
+  // August routes parameter residency through module assignments instead of
+  // per-context CPU/offload booleans. Keep the compatibility config surface,
+  // but translate it to the current `params_backend` grammar.
+  std::string paramsBackend;
+  auto appendParamsAssignment = [&](const char* assignment) {
+    if (!paramsBackend.empty())
+      paramsBackend += ",";
+    paramsBackend += assignment;
+  };
+  if (config_.offloadToCpu)
+    appendParamsAssignment("*=cpu");
+  if (config_.keepClipOnCpu)
+    appendParamsAssignment("te=cpu");
+  if (config_.keepVaeOnCpu)
+    appendParamsAssignment("vae=cpu");
+  params.params_backend =
+      paramsBackend.empty() ? nullptr : paramsBackend.c_str();
+
+  // August always loads the VAE capabilities needed by the selected model and
+  // keeps model-manager residency across jobs. These legacy controls therefore
+  // have no direct C API equivalent.
+  if (config_.vaeDecodeOnly)
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "vae_decode_only is ignored by the 2026-08-11 engine");
+  if (config_.freeParamsImmediately)
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "free_params_immediately is ignored by the 2026-08-11 engine");
 
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
@@ -569,7 +584,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //
   // Three code paths depending on model architecture and input shape:
   //
-  //   FLUX2 (FLUX2_FLOW_PRED) with N reference images (N>=1):
+  //   FLUX.2 (August FLUX_FLOW_PRED) with N reference images (N>=1):
   //     Uses ref_images -- in-context conditioning. Each reference image is
   //     VAE-encoded into separate latent tokens that the FLUX transformer
   //     attends to via joint attention with distinct RoPE positions. The
@@ -609,9 +624,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
-                              config_.prediction == FLUX_FLOW_PRED;
-    const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
+    const bool isFluxFamily = config_.prediction == FLUX_FLOW_PRED;
+    const bool isFlux2 = config_.usesFlux2Flow;
     const size_t nMulti = job.initImagesBytes.size();
 
     // -- Input validation: mutual exclusion + FLUX-only for multi -----------
@@ -680,12 +694,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
       genParams.ref_images = refImgs->data();
       genParams.ref_images_count = static_cast<int>(nMulti);
-      genParams.auto_resize_ref_image = gen.autoResizeRefImage;
-      // See SdGenConfig::increaseRefIndex for semantics. For FLUX2-klein the
-      // CLI default (false) is what produces visible fusion: both refs share
-      // a RoPE slot and their features blend in attention. Setting true
-      // tends to make one ref dominate.
-      genParams.increase_ref_index = gen.increaseRefIndex;
+      // The August C API owns reference image normalization and RoPE placement;
+      // its legacy auto-resize and reference-index flags are intentionally not
+      // part of the request structure.
       // Fall through to the generate_image() call below.
     } else {
       // -- Single-image path (existing behaviour) --------------------------
@@ -735,7 +746,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
-        genParams.auto_resize_ref_image = gen.autoResizeRefImage;
       } else {
         // SDEdit path -- the vcpkg version of generate_image() rounds
         // width/height UP to a spatial multiple (typically 8) before

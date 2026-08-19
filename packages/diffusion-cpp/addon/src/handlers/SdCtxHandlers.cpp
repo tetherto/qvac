@@ -239,10 +239,15 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
          c.prediction = EDM_V_PRED;
        else if (v == "flow")
          c.prediction = FLOW_PRED;
-       else if (v == "flux_flow")
+       else if (v == "flux_flow") {
          c.prediction = FLUX_FLOW_PRED;
-       else if (v == "flux2_flow")
-         c.prediction = FLUX2_FLOW_PRED;
+         c.usesFlux2Flow = false;
+       } else if (v == "flux2_flow") {
+         // August uses FLUX_FLOW_PRED for both FLUX and FLUX.2. Preserve the
+         // user-level distinction for multi-reference validation only.
+         c.prediction = FLUX_FLOW_PRED;
+         c.usesFlux2Flow = true;
+       }
        else
          throw StatusError(
              general_error::InvalidArgument,
