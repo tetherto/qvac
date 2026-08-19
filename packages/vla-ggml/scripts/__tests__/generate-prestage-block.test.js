@@ -49,7 +49,7 @@ function runWithStubs(
     path.join(testsDir, 'wdio.config.devicefarm.js'),
     // Double quotes: upload-to-devicefarm JSON-encodes the grep into the wdio
     // config, so the prestage extractor must read a double-quoted value (a
-    // single-quote-only regex silently stages the whole manifest — QVAC-23665).
+    // single-quote-only regex would silently stage the whole manifest).
     `exports.config = { mochaOpts: { grep: ${JSON.stringify(grep)} } }\n`
   )
   try {
@@ -140,7 +140,7 @@ test('shard grep is a regex: partial matches stage, an unbaked-but-known shard f
   const out = (r) => `${r.stdout}${r.stderr}`
 
   // Partial regex "runGroot" used to find no exact key and stage nothing; it
-  // must now match runGrootTest and stage its model (QVAC-23665 P2c).
+  // must now match runGrootTest and stage its model.
   const partial = runWithStubs(script, { grep: 'runGroot' })
   assert.equal(partial.status, 0, partial.stderr)
   assert.match(out(partial), /1 model\(s\) for 1 test\(s\)/)

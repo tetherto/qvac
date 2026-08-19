@@ -1628,28 +1628,28 @@ test('mobile validate-devices fails fast on an unknown tests filter and an overs
   // The device list is de-duplicated + capped, matching the scheduler.
   assert.match(action, /map\(select\(length > 0\)\) \| unique/)
   assert.match(action, /MAX_DEVICES=10/)
-  // gianni P2: overlapping CONTAINS selectors that resolve to the same fleet
-  // model are rejected before scheduling, so a model can't be billed twice.
+  // Overlapping CONTAINS selectors that resolve to the same fleet model are
+  // rejected before scheduling, so a model can't be billed twice.
   assert.match(action, /select\(\.model \| contains\(\$m\)\)/)
   assert.match(action, /group_by\(\.\) \| map\(select\(length > 1\)/)
   assert.match(action, /selectors overlap on model/)
-  // Gustavo: a `tests` filter that matches zero known runners is rejected here
-  // (before any build) so a typo can't run zero tests and pass green. Multi-spec
-  // addons source runner names + shard count from their test-groups.json...
+  // A `tests` filter that matches zero known runners is rejected here (before
+  // any build) so a typo can't run zero tests and pass green. Multi-spec addons
+  // source runner names + shard count from their test-groups.json.
   assert.match(action, /RUNNERS_JSON=\$\(jq -c/)
   assert.match(action, /grep -Ec -- "\$TESTS"/)
   assert.match(action, /matches none of the/)
-  // Re-review P2: the mocha-safe charset allowlist the workflows enforce at the
-  // sink is ALSO enforced here (before the build) so an anchored/invalid pattern
-  // fails fast instead of wasting build minutes only to be rejected afterwards.
+  // The mocha-safe charset allowlist the workflows enforce at the sink is ALSO
+  // enforced here (before the build) so an anchored/invalid pattern fails fast
+  // instead of wasting build minutes only to be rejected afterwards.
   assert.match(action, /grep -Eq '\^\[A-Za-z0-9_ \|\(\)\.\*\+-\]\+\$'/)
-  // ...and single-spec addons (Bugbot P1: previously skipped) validate the SAME
-  // filter against their committed integration.auto.cjs runner declarations.
+  // Single-spec addons validate the SAME filter against their committed
+  // integration.auto.cjs runner declarations.
   assert.match(action, /runner-source-path/)
   assert.match(action, /RUNNER_SOURCE_PATH/)
   assert.match(action, /async function run\[A-Za-z0-9_\]\+/)
-  // iancris: spec-count-aware run-count cap, enforced before build/upload spend
-  // (specs = 1 when a tests filter is given, else the platform's group count).
+  // Spec-count-aware run-count cap, enforced before build/upload spend (specs =
+  // 1 when a tests filter is given, else the platform's group count).
   assert.match(action, /SPEC_COUNT=\$GROUP_COUNT/)
   assert.match(action, /MAX_RUNS=40/)
   assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
@@ -1660,12 +1660,11 @@ const MOBILE_TEST_WORKFLOWS = workflowPaths().filter((path) =>
 )
 
 test('mobile validate-devices reads its filter/shard data from the tested ref, not the workflow ref', () => {
-  // Re-review P1/P2: the build checks out addon code from `inputs.ref ||
-  // github.ref`, so the validator must read test-groups.json /
-  // integration.auto.cjs from the SAME ref — otherwise a branch that
-  // renames/adds runners passes stale validation and can run zero tests.
-  // The executable composite action stays on the trusted workflow ref, so the
-  // data file must NEVER be sparse-checked-out alongside it.
+  // The build checks out addon code from the tested ref, so the validator must
+  // read test-groups.json / integration.auto.cjs from the SAME ref — otherwise
+  // a branch that renames/adds runners passes stale validation and can run zero
+  // tests. The executable composite action stays on the trusted workflow ref,
+  // so the data file must NEVER be sparse-checked-out alongside it.
   assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
   for (const path of MOBILE_TEST_WORKFLOWS) {
     const src = read(path)
@@ -1710,14 +1709,14 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
 })
 
 test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
-  // Olu (Proletter) review: (1) `${{ github.event.inputs.package }}` must never
-  // be interpolated into a run: script — it goes through an `env:` block per
-  // github-actions.mdc, else a crafted spec (`"; curl … | bash; echo "`) breaks
-  // out of the scope check that renders after the quotes break; (2) the
-  // model-match operator defaults to EQUALS so a maxDevices:1 dispatch bills the
-  // exact fleet model, not a CONTAINS near-match (e.g. Pixel 9 -> Pixel 9 Pro);
-  // (3) the dispatch package spec defaults to EMPTY so a `--ref <branch>` run
-  // tests the branch's native prebuild artifact, not the published @latest.
+  // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
+  // run: script — it goes through an `env:` block per github-actions.mdc, else a
+  // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
+  // renders after the quotes break; (2) the model-match operator defaults to
+  // EQUALS so a maxDevices:1 dispatch bills the exact fleet model, not a CONTAINS
+  // near-match (e.g. Pixel 9 -> Pixel 9 Pro); (3) the dispatch package spec
+  // defaults to EMPTY so a `--ref <branch>` run tests the branch's native
+  // prebuild artifact, not the published @latest.
   assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
   for (const path of MOBILE_TEST_WORKFLOWS) {
     const src = read(path)
@@ -1750,9 +1749,9 @@ test('audiogen keeps the composite action on the default branch but reads data f
 })
 
 test('translation validation data and build check out the SAME repository', () => {
-  // Final-review P2: translation's build hardcodes the tetherto/qvac fallback,
-  // so its validation-data checkout must use the identical fallback — otherwise
-  // a blank-`repository` fork dispatch validates the fork but builds tetherto.
+  // Translation's build hardcodes the tetherto/qvac fallback, so its
+  // validation-data checkout must use the identical fallback — otherwise a
+  // blank-`repository` fork dispatch validates the fork but builds tetherto.
   const src = read('.github/workflows/integration-mobile-test-translation-nmtcpp.yml')
   const repoLines = src.match(/repository: \$\{\{ inputs\.repository \|\| [^\n]+/g) || []
   assert.ok(repoLines.length >= 2, 'expected both data + build repository lines')
@@ -1803,9 +1802,9 @@ test('mobile monitor maps each run back to its spec for any per-spec fan-out', (
   )
   assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
   assert.match(action, /spec_index_for_run\(\)/)
-  // Bugbot P3: the legend generalises runs_per_spec = RUN_COUNT / SPEC_COUNT so
-  // it labels dual-flagship (2), single-pool (1) AND manual fan-outs with >2
-  // devices correctly, instead of only special-casing the *2 shape.
+  // The legend generalises runs_per_spec = RUN_COUNT / SPEC_COUNT so it labels
+  // dual-flagship (2), single-pool (1) AND manual fan-outs with >2 devices
+  // correctly, instead of only special-casing the *2 shape.
   assert.match(action, /RUN_COUNT % SPEC_COUNT/)
   assert.match(action, /per_spec=\$\(\(RUN_COUNT \/ SPEC_COUNT\)\)/)
   assert.match(action, /echo \$\(\(run_index \/ per_spec\)\)/)
