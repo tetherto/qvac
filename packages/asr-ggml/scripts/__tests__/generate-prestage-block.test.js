@@ -312,20 +312,20 @@ test('complete prestage script accepts an explicitly model-free runner', () => {
   assert.match(result.stderr, /0 parakeet \+ 0 whisper model\(s\) for grep/)
 })
 
-test('complete prestage script rejects a missing grep but tolerates an unknown mapping', () => {
+test('complete prestage script rejects a missing grep and an unknown mapping', () => {
   const missingGrep = runCompleteScript()
   assert.notEqual(missingGrep.status, 0)
   assert.match(missingGrep.stdout, /FATAL: shard grep is required/)
 
-  // A grep that matches no known runner (a typo, or a renamed/removed test) is
-  // NOT fatal on device: warn and stage nothing so the run still executes and
-  // the device downloads what it needs. validate-devices rejects such a filter
-  // earlier for manual dispatches, so a false-green can't slip through there.
+  // A grep that matches no known runner (a typo, or a test-groups <-> model-map
+  // drift) fails CLOSED on device: the workflow_call lanes (weekend / on-merge /
+  // benchmarks) never run validate-devices, so an under-staged run must surface
+  // here rather than silently ship. A model-free-but-known runner still matches
+  // its manifest key (see the model-free test above) so it is unaffected.
   const unknownMapping = runCompleteScript({ grep: 'runRenamedParakeetTest' })
-  assert.equal(unknownMapping.status, 0, unknownMapping.stderr)
+  assert.notEqual(unknownMapping.status, 0)
   assert.equal(unknownMapping.curlLog, '')
   assert.match(unknownMapping.stderr, /matched no known runner/)
-  assert.match(unknownMapping.stderr, /0 parakeet \+ 0 whisper model\(s\) for grep/)
 })
 
 test('complete prestage script rejects malformed manifest entries', () => {

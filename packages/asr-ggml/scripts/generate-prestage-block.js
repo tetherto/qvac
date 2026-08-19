@@ -179,10 +179,13 @@ function selectPrestageModels() {
   // The tests filter is a mocha --grep regex over runner NAMES. Match it against
   // each manifest's runner keys (mirrors on-device mocha grep) and stage the
   // union — so a partial pattern like `runMobilePerf` stages every runner it
-  // will run, not just an exact key. An empty / invalid grep, or one that
-  // matches nothing, is NOT fatal: warn and stage nothing so the device
-  // downloads what it needs. validate-devices already rejects a manual filter
-  // that matches zero runners, so this stays a safety net.
+  // will run, not just an exact key. An empty grep is benign (no shard resolved
+  // -> stage nothing, device downloads its own models). A NON-empty grep that
+  // fails to compile or matches zero runners is FATAL: the workflow_call lanes
+  // (weekend / on-merge / benchmarks) never run validate-devices, so a
+  // test-groups <-> model-map drift must fail closed here rather than silently
+  // ship an under-staged device. A manual dispatch filter is already validated
+  // by validate-devices, so this throw only fires on genuine drift.
   let re = null
   if (!grep) {
     console.error(
@@ -192,9 +195,7 @@ function selectPrestageModels() {
     try {
       re = new RegExp(grep)
     } catch (err) {
-      console.error(
-        `[prestage] WARN: invalid tests grep /${grep}/ (${err.message}); staging nothing`
-      )
+      throw new Error(`[prestage] invalid tests grep /${grep}/: ${err.message}`)
     }
   }
 
@@ -235,9 +236,7 @@ function selectPrestageModels() {
       }
     }
     if (matchedRunners === 0) {
-      console.error(
-        `[prestage] WARN: tests grep /${grep}/ matched no known runner; staging nothing`
-      )
+      throw new Error(`[prestage] tests grep /${grep}/ matched no known runner`)
     }
   }
 

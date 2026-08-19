@@ -386,13 +386,18 @@ test('selectFunctionalEntries regex-matches runner names and deduplicates shared
     ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf']
   )
 
-  // Graceful, non-throwing: an empty grep, a zero-match typo, an invalid regex,
-  // and a runner mapped to no models all stage nothing so the device just
-  // downloads whatever it needs and the run still executes.
+  // An empty grep is benign (no shard resolved -> stage nothing). A model-free
+  // but KNOWN runner (runParlerTest -> []) still matches its manifest key, so it
+  // stages nothing without erroring. A zero-match typo or an invalid regex is a
+  // test-groups <-> model-map drift and fails CLOSED: the workflow_call lanes
+  // never run validate-devices, so an under-staged run must surface here.
   assert.deepEqual(selectFunctionalEntries(mappings, ''), [])
-  assert.deepEqual(selectFunctionalEntries(mappings, 'runMissingTest'), [])
-  assert.deepEqual(selectFunctionalEntries(mappings, '('), [])
   assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
+  assert.throws(
+    () => selectFunctionalEntries(mappings, 'runMissingTest'),
+    /matched no known runner/
+  )
+  assert.throws(() => selectFunctionalEntries(mappings, '('), /invalid tests grep/)
 })
 
 test('functional mapping fails when any required manifest target is absent', () => {
@@ -465,11 +470,15 @@ test('functional selector executes deduplication and accepts a zero-model Parler
     ].join('\n')
   )
 
-  // A typo (or a runner with no models) is not fatal: exit 0, stage nothing.
+  // A typo that matches no known runner is drift and fails CLOSED on device
+  // (non-zero exit) so a validate-devices-less workflow_call run cannot silently
+  // ship under-staged.
   const typo = run('runNopeTest')
-  assert.equal(typo.status, 0, typo.stderr)
-  assert.equal(readFileSync(listPath, 'utf8'), '')
+  assert.notEqual(typo.status, 0)
+  assert.match(typo.stderr, /matched no known runner/)
 
+  // A model-free but KNOWN runner (runParlerTest -> []) matches its manifest key,
+  // so it stages nothing without erroring.
   const parler = run('runParlerTest')
   assert.equal(parler.status, 0, parler.stderr)
   assert.equal(readFileSync(listPath, 'utf8'), '')

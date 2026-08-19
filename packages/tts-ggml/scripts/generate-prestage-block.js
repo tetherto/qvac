@@ -204,10 +204,15 @@ function functionalModelsByTest(manifest) {
 // values, or the manual `tests` dispatch input). Match it against the known
 // runner keys and stage the union of their models — so a partial pattern like
 // `runChatterbox` correctly stages every runner it will run on device, not just
-// an exact key. A grep that matches nothing (a typo, or a runner mapped to no
-// models such as runParlerTest) is NOT fatal: warn and stage nothing so the
-// device downloads what it needs and the run still executes. validate-devices
-// already rejects a manual filter that matches zero runners, so this is a net.
+// an exact key. `modelsByTest` enumerates EVERY functional runner as a key
+// (including no-model ones such as runParlerTest -> []), so a runner that needs
+// no models still matches and stages nothing without erroring. An empty grep is
+// benign (no shard resolved). A NON-empty grep that fails to compile or matches
+// zero runner keys is FATAL: the workflow_call lanes (weekend / on-merge /
+// benchmarks) never run validate-devices, so a test-groups <-> model-map drift
+// must fail closed here rather than silently ship an under-staged device. A
+// manual dispatch filter is already validated by validate-devices, so this
+// throw only fires on genuine drift.
 function selectFunctionalEntries(modelsByTest, grep) {
   const pattern = (grep || '').trim()
   if (!pattern) {
@@ -218,17 +223,11 @@ function selectFunctionalEntries(modelsByTest, grep) {
   try {
     re = new RegExp(pattern)
   } catch (err) {
-    console.error(
-      `[prestage] WARN: invalid tests grep /${pattern}/ (${err.message}); staging nothing`
-    )
-    return []
+    throw new Error(`[prestage] invalid tests grep /${pattern}/: ${err.message}`)
   }
   const runners = Object.keys(modelsByTest).filter((testName) => re.test(testName))
   if (runners.length === 0) {
-    console.error(
-      `[prestage] WARN: tests grep /${pattern}/ matched no known runner; staging nothing`
-    )
-    return []
+    throw new Error(`[prestage] tests grep /${pattern}/ matched no known runner`)
   }
   const seen = new Set()
   return runners
@@ -339,11 +338,13 @@ echo "[prestage] done"`
 }
 
 // Device-side mirror of selectFunctionalEntries (serialized into the pre_test
-// host block): regex-match the grep against runner NAMES, stage the union of
-// their models, and degrade gracefully (warn + stage nothing) on an empty /
-// invalid grep or a zero-match pattern instead of failing the run.
+// host block): regex-match the grep against runner NAMES and stage the union of
+// their models. An empty grep is benign (no shard resolved). A non-empty grep
+// that fails to compile or matches zero runner keys fails closed (throws) so a
+// test-groups <-> model-map drift on the validate-devices-less workflow_call
+// lanes cannot silently ship an under-staged device.
 function buildFunctionalSelectionCode() {
-  return "const fs=require('fs');const input=process.env.FUNCTIONAL_MANIFEST_PATH||'/tmp/model-manifest.json';const output=process.env.FUNCTIONAL_LIST_PATH||'/tmp/prestage-list.tsv';const man=JSON.parse(fs.readFileSync(input,'utf8'));const g=(process.env.GREP||'').trim();let re=null;if(!g){console.error('[prestage] WARN: no functional shard grep — staging nothing')}else{try{re=new RegExp(g)}catch(e){console.error('[prestage] WARN: invalid tests grep /'+g+'/ ('+e.message+'); staging nothing')}}const runners=re?Object.keys(man).filter(k=>re.test(k)):[];if(re&&runners.length===0)console.error('[prestage] WARN: tests grep /'+g+'/ matched no known runner; staging nothing');const seen=new Set();const out=[];for(const t of runners){for(const m of man[t]){if(!seen.has(m.targetName)){seen.add(m.targetName);out.push(m.targetName+'\\t'+m.url)}}}fs.writeFileSync(output,out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+runners.length+' test(s)')"
+  return "const fs=require('fs');const input=process.env.FUNCTIONAL_MANIFEST_PATH||'/tmp/model-manifest.json';const output=process.env.FUNCTIONAL_LIST_PATH||'/tmp/prestage-list.tsv';const man=JSON.parse(fs.readFileSync(input,'utf8'));const g=(process.env.GREP||'').trim();let re=null;if(!g){console.error('[prestage] WARN: no functional shard grep — staging nothing')}else{try{re=new RegExp(g)}catch(e){throw new Error('[prestage] invalid tests grep /'+g+'/: '+e.message)}}const runners=re?Object.keys(man).filter(k=>re.test(k)):[];if(re&&runners.length===0)throw new Error('[prestage] tests grep /'+g+'/ matched no known runner');const seen=new Set();const out=[];for(const t of runners){for(const m of man[t]){if(!seen.has(m.targetName)){seen.add(m.targetName);out.push(m.targetName+'\\t'+m.url)}}}fs.writeFileSync(output,out.join('\\n')+(out.length?'\\n':''));console.error('[prestage] '+out.length+' model(s) for '+runners.length+' test(s)')"
 }
 
 function buildFunctionalPrestageScript(manifestB64) {

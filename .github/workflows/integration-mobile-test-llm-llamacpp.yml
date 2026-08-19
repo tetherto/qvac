@@ -151,11 +151,11 @@ on:
         required: false
         default: ""
       device_model_operator:
-        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
         type: choice
         required: false
-        options: [CONTAINS, EQUALS]
-        default: CONTAINS
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
       tests:
         description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runLlmSpeedTest'; combine several with '|'). Empty = full sharded suite (many runs). Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
@@ -167,10 +167,10 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test"
+        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/llm-llamacpp@<ver> (published) or @tetherto/llm-llamacpp@<dev> (GPR) to force-install a specific build."
         type: string
-        required: true
-        default: "@qvac/llm-llamacpp@latest"
+        required: false
+        default: ""
       qvac_perf_runs:
         description: "Override QVAC_PERF_RUNS pushed to the device"
         type: string
@@ -338,8 +338,10 @@ jobs:
     steps:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        env:
+          PKG: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+          if [[ ! "$PKG" =~ ^@qvac/|^@tetherto/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
@@ -393,8 +395,8 @@ jobs:
           # the candidate in this same run) is pulled in when the per-matrix
           # artifact is absent, so the baseline session would silently run the
           # candidate binary. See run-mobile-integration-tests/setup.
-          # Manual dispatch (inputs.platform set): pin the build named in `package`
-          # (default @qvac/llm-llamacpp@latest = published; @tetherto/llm-llamacpp@<dev>
+          # Manual dispatch (inputs.platform set): default (empty `package`) tests
+          # this branch's native prebuild; @qvac/llm-llamacpp@<ver> = published, @tetherto/llm-llamacpp@<dev>
           # = this branch's GPR build). workflow_call keeps addon_npm_version/artifact-first.
           force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.addon_npm_version != '') && 'true' || 'false' }}
           package-version: ${{ inputs.platform != '' && inputs.package || inputs.addon_npm_version }}

@@ -268,15 +268,20 @@ test('expandPrestageList treats grep as a regex, so a partial pattern selects ev
   ])
 })
 
-test('expandPrestageList stages nothing (no throw) for a zero-match or invalid grep', () => {
+test('expandPrestageList fails closed for a zero-match or invalid grep', () => {
   const normalized = normalizeManifest({ runOther: [{ name: 'm.gguf', url: 'u://m' }] })
 
-  // A grep that matches no known runner: device falls back to its own download.
-  // validate-devices already rejects this before device-farm spend; here we
-  // just prove prestage stays graceful instead of throwing on a billed device.
-  assert.deepEqual(expandPrestageList(normalized, 'runBenchmarkPerf_1b_q4'), [])
-  // An invalid regex must not crash the pre_test phase either.
-  assert.deepEqual(expandPrestageList(normalized, '('), [])
+  // The LLM mobile manifest is committed and validated complete (every mobile
+  // runner has a pinned URL), so a grep that matches no runner is a test-groups
+  // <-> model-map drift, not a legit no-model runner. The workflow_call lanes
+  // (weekend / on-merge / benchmarks) never run validate-devices, so this must
+  // fail closed rather than silently ship an under-staged device.
+  assert.throws(
+    () => expandPrestageList(normalized, 'runBenchmarkPerf_1b_q4'),
+    /matched no known runner/
+  )
+  // An invalid regex is likewise a hard error, not a silent stage-nothing.
+  assert.throws(() => expandPrestageList(normalized, '('), /invalid tests grep/)
 })
 
 test('commonPrelude embeds expandPrestageList verbatim (no host/CI drift)', () => {

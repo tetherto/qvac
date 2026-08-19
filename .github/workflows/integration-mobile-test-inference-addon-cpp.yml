@@ -54,11 +54,11 @@ on:
         required: false
         default: ""
       device_model_operator:
-        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
         type: choice
         required: false
-        options: [CONTAINS, EQUALS]
-        default: CONTAINS
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
       tests:
         description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string

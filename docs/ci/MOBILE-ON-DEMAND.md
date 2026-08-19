@@ -23,9 +23,9 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 | **platform** | The one platform this run targets — `Android` or `iOS`. A manual run is always a single platform. |
 | **device** | A searchable dropdown of common pool devices (e.g. `Pixel 9`, `iPhone 17`). Pick `(custom)` if you want to type your own in `devices_custom`. |
 | **devices_custom** | A free-text field for one **or more** device models, comma-separated (e.g. `Pixel 9, Pixel 8`). When set, it **overrides** the dropdown. Use it for new/uncommon devices or to run several at once. |
-| **device_model_operator** | How the model name is matched: `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`) or `EQUALS` (that exact model only). |
+| **device_model_operator** | How the model name is matched: `EQUALS` (**default** — that exact fleet model only; dropdown values are exact fleet names) or `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`). Default is `EQUALS` so a single-device run bills exactly the model you picked. |
 | **tests** | Optional test filter — see [below](#the-tests-filter). Empty = the full mobile suite. |
-| **package** (or **package_spec**) | Which build to actually put on the phone — see [below](#which-build-gets-tested). Default `@qvac/<addon>@latest` = the published release. |
+| **package** (or **package_spec**) | Which build to actually put on the phone — see [below](#which-build-gets-tested). Default **empty** = this branch's native prebuild artifact. |
 | **ref** | Git ref to check out for the **test harness / app** (not the native binary — see below). |
 
 ### Device selection: dropdown + free-text
@@ -59,12 +59,16 @@ A device name is matched as a **`MODEL`** value on Device Farm. **The fleet uses
 full manufacturer-prefixed names** (e.g. `Google Pixel 9`, not `Pixel 9`). How the
 match works depends on `device_model_operator`:
 
-- **`CONTAINS`** (default): your value need only be a substring — `Pixel 9` matches
-  `Google Pixel 9` (and `Google Pixel 9 Pro`, `Google Pixel 9a`, …).
-- **`EQUALS`**: your value must be the **exact** fleet model — `Pixel 9` is
-  rejected; you must pass `Google Pixel 9`.
+- **`EQUALS`** (default): your value must be the **exact** fleet model — `Pixel 9`
+  is rejected; you must pass `Google Pixel 9`. The dropdown values are already
+  exact fleet names, so the default just works and bills exactly the model you
+  picked.
+- **`CONTAINS`**: your value need only be a substring — `Pixel 9` matches
+  `Google Pixel 9` (and `Google Pixel 9 Pro`, `Google Pixel 9a`, …). Use it only
+  for a deliberate shorthand match; on a single-device run it can pick a
+  different (and slower) variant than you intended.
 
-> **Use `EQUALS` for multi-device runs.** Because `CONTAINS` selectors can
+> **Keep `EQUALS` (the default) for multi-device runs.** Because `CONTAINS` selectors can
 > overlap (`Google Pixel 9` and `Google Pixel 9 Pro` both match
 > `Google Pixel 9 Pro`), two selectors could land on the **same** physical model
 > and bill it twice. `validate-devices` now rejects overlapping selections up
@@ -125,7 +129,14 @@ mistyped filter can't reach the device, select zero tests, and report a false
 pass. Model pre-staging follows the same regex: only the models the matched
 runners need are staged; anything unmatched is simply fetched on-device (a
 partial pattern like `runBenchmarkPerf` stages every shard it selects, not
-nothing).
+nothing). On the automated `workflow_call` lanes (weekend / on-merge /
+benchmarks) — which never run `validate-devices` — pre-staging **fails closed**
+if the shard grep matches no known runner, so a `test-groups` ↔ model-map drift
+surfaces instead of silently shipping an under-staged run. (`vla-ggml` is the one
+exception: its manifest is built from presigned URLs that may legitimately be
+absent, so it fails closed only when the grep matches no known runner *name*,
+and still falls back to on-device download when a known runner's URL isn't baked
+yet.)
 
 #### Where to find the test names (per addon)
 
@@ -149,20 +160,21 @@ the `run*` names that executed, which you can then narrow with `tests`.
 A manual run does **not** compile the native addon — it installs a **prebuilt**
 one. Which prebuild depends on the `package` / `package_spec` input:
 
-- **Empty / default (`@qvac/<addon>@latest`)** → the **latest published** release
-  from npm. This is what you get if you just click Run.
-- **`@qvac/<addon>@1.2.3`** → that exact published npm version.
-- **`@tetherto/<addon>@<dev-version>`** → the **branch build** published to GitHub
-  Packages (GPR). This is how you test **your own branch's native code before it
-  is released**: push your branch (its prebuild/publish workflow puts a dev build
-  on GPR), then dispatch with `package: @tetherto/<addon>@<that dev version>`.
+- **Empty (default)** → the **same artifact-first resolution `workflow_call` uses**:
+  the branch's native prebuild artifact. Just clicking Run / `--ref <branch>`
+  tests **your branch's** native code, not a published release.
+- **`@qvac/<addon>@1.2.3`** → force-install that exact **published npm** version.
+- **`@tetherto/<addon>@<dev-version>`** → force-install a specific **branch build**
+  published to GitHub Packages (GPR) — e.g. to test a build published from another
+  branch. Setting any non-empty spec flips `force-npm-prebuild` on.
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
-> `-f ref=<tag/sha>` only to override it. `ref` changes the JS test harness + app
-> that gets built; it does **not** rebuild the native binary. To test unpublished
-> native changes, pin the GPR dev build via `package` as above — otherwise the run
-> silently tests the published `@latest`, not your branch.
+> `-f ref=<tag/sha>` only to override it. With the empty-package default, `ref`
+> drives **both** the JS test harness + app **and** the native prebuild artifact,
+> so a plain `--ref <branch>` dispatch tests that branch end-to-end. Set
+> `package` / `package_spec` only when you deliberately want a *published* build
+> instead of the branch artifact.
 >
 > The `tests`-filter / shard-count validation reads the runner list from the
 > **same commit** the build executes, so if your branch renames or adds runners

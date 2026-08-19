@@ -58,11 +58,11 @@ on:
         required: false
         default: ""
       device_model_operator:
-        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
         type: choice
         required: false
-        options: [CONTAINS, EQUALS]
-        default: CONTAINS
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
       tests:
         description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
@@ -74,10 +74,10 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test"
+        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/translation-nmtcpp@<ver> (published) or @tetherto/translation-nmtcpp@<dev> (GPR) to force-install a specific build."
         type: string
-        required: true
-        default: "@qvac/translation-nmtcpp@latest"
+        required: false
+        default: ""
       bergamot_language_pair:
         description: "Bergamot language pair, e.g. 'enit'"
         type: string
@@ -216,8 +216,8 @@ jobs:
           addon-workdir: ${{ inputs.workdir || 'packages/translation-nmtcpp' }}
           addon-npm-name: '@qvac/translation-nmtcpp'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          # Manual dispatch (inputs.platform set): pin the build named in `package`
-          # (default @qvac/translation-nmtcpp@latest = published; @tetherto/translation-nmtcpp@<dev>
+          # Manual dispatch (inputs.platform set): default (empty `package`) tests
+          # this branch's native prebuild; @qvac/translation-nmtcpp@<ver> = published, @tetherto/translation-nmtcpp@<dev>
           # = this branch's GPR build). workflow_call is untouched (artifact-first).
           package-version: ${{ inputs.platform != '' && inputs.package || '' }}
           force-npm-prebuild: ${{ (inputs.platform != '' && inputs.package != '') && 'true' || 'false' }}

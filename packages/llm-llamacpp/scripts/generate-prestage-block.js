@@ -118,19 +118,24 @@ function expandPrestageList(man, grep) {
   // mocha and as validate-devices), NOT a list of literal |-separated keys.
   // Match it against the known runners so a partial pattern (e.g.
   // "runBenchmarkPerf" or "Chat") stages every shard it selects instead of
-  // silently nothing. Empty grep => every shard. An invalid regex or a pattern
-  // that matches no runner stages nothing (device downloads its own models);
-  // validate-devices already rejects a zero-match filter before we get here, so
-  // this only stays defensive.
+  // silently nothing. Empty grep => every shard. A NON-empty grep that fails to
+  // compile or matches no runner fails CLOSED (throws): the workflow_call lanes
+  // (weekend / on-merge / benchmarks) never run validate-devices, so a
+  // test-groups <-> model-map drift must surface here rather than silently ship
+  // an under-staged device. Manual dispatch filters are pre-validated by
+  // validate-devices, so this throw only fires on genuine drift.
   let matched
   if (grep) {
-    let re = null
+    let re
     try {
       re = new RegExp(grep)
     } catch (e) {
-      re = null
+      throw new Error('[prestage] invalid tests grep /' + grep + '/: ' + e.message)
     }
-    matched = re ? names.filter((n) => re.test(n)) : []
+    matched = names.filter((n) => re.test(n))
+    if (matched.length === 0) {
+      throw new Error('[prestage] tests grep /' + grep + '/ matched no known runner')
+    }
   } else {
     matched = names
   }

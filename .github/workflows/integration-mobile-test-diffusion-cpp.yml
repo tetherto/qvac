@@ -61,11 +61,11 @@ on:
         required: false
         default: ""
       device_model_operator:
-        description: "Model match: CONTAINS (any model containing the value) or EQUALS (exact model only)."
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
         type: choice
         required: false
-        options: [CONTAINS, EQUALS]
-        default: CONTAINS
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
       tests:
         description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAddonTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
@@ -77,10 +77,10 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test"
+        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/diffusion-cpp@<ver> (published) or @tetherto/diffusion-cpp@<dev> (GPR) to force-install a specific build."
         type: string
-        required: true
-        default: '@qvac/diffusion-cpp@latest'
+        required: false
+        default: ""
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
@@ -224,8 +224,10 @@ jobs:
     steps:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        env:
+          PKG: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/|^@tetherto/ ]]; then
+          if [[ ! "$PKG" =~ ^@qvac/|^@tetherto/ ]]; then
             echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
@@ -258,8 +260,8 @@ jobs:
           addon-npm-name: '@qvac/diffusion-cpp'
           prebuild-artifact-prefix: 'sd-cpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          # Manual dispatch (inputs.platform set): pin the build named in `package`
-          # (default @qvac/diffusion-cpp@latest = published; @tetherto/diffusion-cpp@<dev>
+          # Manual dispatch (inputs.platform set): default (empty `package`) tests
+          # this branch's native prebuild; @qvac/diffusion-cpp@<ver> = published, @tetherto/diffusion-cpp@<dev>
           # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
           package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
           force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}

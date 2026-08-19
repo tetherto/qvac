@@ -1707,6 +1707,36 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
   }
 })
 
+test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
+  // Olu (Proletter) review: (1) `${{ github.event.inputs.package }}` must never
+  // be interpolated into a run: script — it goes through an `env:` block per
+  // github-actions.mdc, else a crafted spec (`"; curl … | bash; echo "`) breaks
+  // out of the scope check that renders after the quotes break; (2) the
+  // model-match operator defaults to EQUALS so a maxDevices:1 dispatch bills the
+  // exact fleet model, not a CONTAINS near-match (e.g. Pixel 9 -> Pixel 9 Pro);
+  // (3) the dispatch package spec defaults to EMPTY so a `--ref <branch>` run
+  // tests the branch's native prebuild artifact, not the published @latest.
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
+  for (const path of MOBILE_TEST_WORKFLOWS) {
+    const src = read(path)
+    assert.doesNotMatch(
+      src,
+      /"\$\{\{ github\.event\.inputs\.package \}\}" =~/,
+      `${path} must validate the package spec via an env: block, not an inline run: template`,
+    )
+    assert.doesNotMatch(
+      src,
+      /default: CONTAINS/,
+      `${path} must default device_model_operator to EQUALS`,
+    )
+    assert.doesNotMatch(
+      src,
+      /default:\s*['"]@[a-z]+\/[^'"]*@latest['"]/,
+      `${path} must default the dispatch package spec to empty (artifact-first), not @latest`,
+    )
+  }
+})
+
 test('audiogen keeps the composite action on the default branch but reads data from the tested ref', () => {
   // audiogen runs validate-devices in the `release` environment, so the
   // executable action stays pinned to the default branch (supply-chain guard);
