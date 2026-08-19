@@ -2,7 +2,7 @@
 #
 # Builds the QVAC-compatible 2026-08-11 engine revision against the separate
 # system ggml overlay. The immutable revision retains MiniMax-H3 support and
-# forward-ports ABot-World sessions without reverting August's public APIs.
+# completes ABot-World cached sessions without reverting August's public APIs.
 #
 # Vulkan validation: static library, CLI, server, seven native tests, and
 # ggml f31dab0f all built successfully on NV5090.
@@ -10,8 +10,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 651de1a3841a951d698eb28232a867d712b0e575
-    SHA512 ae863fa5555df46783159315751167dd8dde74a81852140de319579df69948e357af4c7d28b012a379d525a71158ddd1bf1f7181a97f6f5917ae847a4724efa7
+    REF df32704e0e3b4f889c9dda8749b2a37bdc1113a7
+    SHA512 3f3ac9465e6adc850a5292c9362fadf4d2785f0eb711b19851ddbdbeba7c258a017a02dcfb58bd17a7e0f5cc23a1e9c1e1fb2552736006d6e987186d2756542c
 )
 
 set(SD_FLASH_ATTN OFF)
