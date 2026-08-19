@@ -1322,9 +1322,8 @@ static bool tryLoadWeightsMmap(
           std::string("smolvla_load_model: tensor '") + name +
               "' is unusable in the mapped region (off=" + std::to_string(off) +
               " nbytes=" + std::to_string(nbytes) +
-              " region=" + std::to_string(tensorDataSize) +
-              " alignment=" + std::to_string(alignment) +
-              ") — falling back to alloc+copy");
+              " region=" + std::to_string(tensorDataSize) + " alignment=" +
+              std::to_string(alignment) + ") — falling back to alloc+copy");
       munmap(addr, fileSize);
       return false;
     }
