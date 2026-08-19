@@ -150,13 +150,7 @@
         "command": "echo 'orchestrated by integration-mobile-test-nx.yml'",
         "cwd": "packages/audiogen-ggml",
         "ci": {
-          "npmName": "@qvac/audiogen-ggml",
-          "prebuildArtifactPrefix": "audiogen-ggml-",
-          "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML",
-          "deviceFarmProjectArnFallback": "AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS",
-          "iosDevicePoolArnPrimary": "IOS_DEVICE_POOL_ARN_AUDIOGEN_GGML",
-          "iosDevicePoolArnFallback": "IOS_DEVICE_POOL_ARN_ONNX_TTS",
-          "enablesPerf": false
+          "carveOut": true
         }
       }
     },
