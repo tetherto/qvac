@@ -110,6 +110,7 @@ type NativeOutputCallback = (
 ) => void;
 
 interface StreamingTeardown {
+  cleaned?: unknown;
   audioDurationMs?: unknown;
   totalSamples?: unknown;
 }
@@ -181,6 +182,7 @@ export class ParakeetInterface {
   private _nextJobId: number;
   private _activeJobId: number | null;
   private _onCancelComplete: (() => void) | null;
+  private _onStreamEndComplete: (() => void) | null;
   private _bufferedAudio: Float32Array[];
   private _bufferedBytes: number;
   private _config: ParakeetConfigurationParams;
@@ -199,6 +201,7 @@ export class ParakeetInterface {
     this._nextJobId = 1;
     this._activeJobId = null;
     this._onCancelComplete = null;
+    this._onStreamEndComplete = null;
     this._bufferedAudio = [];
     this._bufferedBytes = 0;
 
@@ -231,6 +234,7 @@ export class ParakeetInterface {
     this._config = configurationParams;
     this._activeJobId = null;
     this._onCancelComplete = null;
+    this._resolveStreamEndWaiter();
     this._bufferedAudio = [];
     this._bufferedBytes = 0;
     this._handle = this._binding.createInstance(
@@ -290,6 +294,13 @@ export class ParakeetInterface {
     return true;
   }
 
+  private _resolveStreamEndWaiter(): void {
+    if (!this._onStreamEndComplete) return;
+    const resolve = this._onStreamEndComplete;
+    this._onStreamEndComplete = null;
+    resolve();
+  }
+
   private _addonOutputCallback(
     addon: unknown,
     event: unknown,
@@ -303,10 +314,16 @@ export class ParakeetInterface {
     const jobId = this._activeJobId;
 
     if (jobId === null) {
-      if (isTerminal) this._resolvePendingCancel();
+      if (isTerminal) {
+        this._resolvePendingCancel();
+        this._resolveStreamEndWaiter();
+      }
       return;
     }
-    if (isTerminal && this._resolvePendingCancel()) return;
+    if (isTerminal && this._resolvePendingCancel()) {
+      this._resolveStreamEndWaiter();
+      return;
+    }
     if (mappedEvent === "Output") this._setState(state.PROCESSING);
 
     this._outputCallback(
@@ -320,6 +337,7 @@ export class ParakeetInterface {
     if (isTerminal) {
       this._activeJobId = null;
       this._setState(state.LISTENING);
+      this._resolveStreamEndWaiter();
     }
   }
 
@@ -576,6 +594,7 @@ export class ParakeetInterface {
       this._binding.destroyInstance(this._handle);
       this._handle = null;
       this._activeJobId = null;
+      this._resolveStreamEndWaiter();
       this._bufferedAudio = [];
       this._bufferedBytes = 0;
       this._setState(state.IDLE);
@@ -678,7 +697,28 @@ export class ParakeetInterface {
     try {
       if (this._activeJobId === null) return Promise.resolve();
       const jobId = this._activeJobId;
+      // binding.endStreaming joins the native worker AFTER it has drained
+      // all buffered audio, so on return every remaining Output batch —
+      // plus the terminal RuntimeStats the ParakeetStreamingProcessor
+      // queues after finalize() — sits in the addon's output queue in
+      // FIFO order. Delivery to _addonOutputCallback is asynchronous
+      // (uv_async), so the active job MUST NOT be cleared here: doing so
+      // made _addonOutputCallback drop the entire drained backlog
+      // (jobId === null) and cut the tail off the transcript
+      // (QVAC-23758).
       const teardown = this._binding.endStreaming(this._handle) || {};
+      if (teardown.cleaned) {
+        // Wait for the queued terminal event (JobEnded or Error) to flow
+        // through _addonOutputCallback, which clears the job, flips the
+        // state machine, and resolves the response with the processor's
+        // real stats.
+        return new Promise((resolve) => {
+          this._onStreamEndComplete = resolve;
+        });
+      }
+      // No native session existed (already torn down elsewhere): the
+      // queue carries no terminal event, so synthesise the JobEnded here
+      // to keep the response chain resolving as before.
       this._activeJobId = null;
       this._setState(state.LISTENING);
       this._outputCallback(
@@ -700,6 +740,7 @@ export class ParakeetInterface {
       );
       return Promise.resolve();
     } catch (error) {
+      this._onStreamEndComplete = null;
       const normalized = normalizeError(error);
       return Promise.reject(
         createParakeetError(

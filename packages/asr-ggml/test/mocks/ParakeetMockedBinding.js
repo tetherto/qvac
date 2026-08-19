@@ -31,6 +31,8 @@ class MockedBinding {
     this._streamingActive = false
     this._streamingChunkIndex = 0
     this._streamingConfig = null
+    this._streamingSamplesFed = 0
+    this._streamingDropOutputs = false
     // History of streaming actions for tests to assert against
     // (counts of starts / appends / ends / cancels, plus the
     // last streamingConfig that was passed). Reset implicitly via
@@ -116,6 +118,8 @@ class MockedBinding {
     if (this._streamingActive) {
       this._streamingActive = false
       this._streamingChunkIndex = 0
+      this._streamingSamplesFed = 0
+      this._streamingDropOutputs = true
       this._streamingLog.cancels++
     }
     if (this.transitionCb) {
@@ -128,8 +132,11 @@ class MockedBinding {
   // `appendStreamingAudio`, `endStreaming`) plus the cancel-with-
   // streaming hook. Each appended chunk synthesises one Output event
   // so the wrapper's `onUpdate(...)` fires at the same cadence the
-  // real binding would; endStreaming returns the teardown object the
-  // JS wrapper turns into a synthetic JobEnded (see parakeet.ts).
+  // real binding would. Like the real binding, a graceful endStreaming
+  // queues a terminal RuntimeStats event BEHIND any still-undelivered
+  // Output events (FIFO via process.nextTick), and the JS wrapper waits
+  // for it before marking the job finished (see parakeet.ts ->
+  // endStreaming). Only cancel drops undelivered outputs.
   startStreaming(handle, config = {}) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (this._streamingActive) {
@@ -138,6 +145,8 @@ class MockedBinding {
     this._streamingActive = true
     this._streamingChunkIndex = 0
     this._streamingConfig = config
+    this._streamingSamplesFed = 0
+    this._streamingDropOutputs = false
     this._streamingLog.starts++
     this._streamingLog.lastConfig = config
     return true
@@ -158,8 +167,12 @@ class MockedBinding {
     const sampleRate = 16000
     const startS = (chunkIndex * audioLength) / sampleRate
     const endS = ((chunkIndex + 1) * audioLength) / sampleRate
+    this._streamingSamplesFed = (this._streamingSamplesFed || 0) + audioLength
     process.nextTick(() => {
-      if (!this._streamingActive) return
+      // Graceful endStreaming must NOT drop outputs queued before it —
+      // that's the real binding's FIFO drain contract. Only a cancel
+      // (forceful teardown) discards undelivered outputs.
+      if (this._streamingDropOutputs) return
       this._callCallbacks(
         'Output',
         [
@@ -183,18 +196,32 @@ class MockedBinding {
     if (!this._streamingActive) {
       return { cleaned: false, audioDurationMs: 0, totalSamples: 0 }
     }
-    const samplesFed =
-      (this._streamingLog.appends *
-        (this._streamingConfig?.sampleRate || 16000) *
-        (this._streamingConfig?.chunkMs || 1000)) /
-      1000
+    const samplesFed = this._streamingSamplesFed || 0
+    const audioDurationMs = samplesFed / 16
     this._streamingActive = false
     this._streamingChunkIndex = 0
     this._streamingConfig = null
+    this._streamingSamplesFed = 0
     this._streamingLog.ends++
+    // Mirror the real binding: ParakeetStreamingProcessor queues the
+    // terminal RuntimeStats through the same FIFO channel as the Output
+    // events, so it lands AFTER every output scheduled before this call.
+    // The JS wrapper's endStreaming awaits its arrival instead of
+    // synthesising a JobEnded of its own.
+    process.nextTick(() => {
+      this._callCallbacks(
+        'RuntimeStats',
+        {
+          totalTime: 0,
+          audioDurationMs,
+          totalSamples: Math.round(samplesFed)
+        },
+        null
+      )
+    })
     return {
       cleaned: true,
-      audioDurationMs: samplesFed > 0 ? samplesFed / 16 : 0,
+      audioDurationMs,
       totalSamples: Math.round(samplesFed)
     }
   }
@@ -297,6 +324,8 @@ class MockedBinding {
     this._streamingActive = false
     this._streamingChunkIndex = 0
     this._streamingConfig = null
+    this._streamingSamplesFed = 0
+    this._streamingDropOutputs = true
     console.log('Destroyed the addon')
     this._state = state.IDLE
     if (this.transitionCb) {

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <exception>
 #include <iomanip>
 #include <sstream>
@@ -252,6 +253,33 @@ void ParakeetStreamingProcessor::processLoop() {
                 e.what());
       }
       emitPending();
+      // Queue the terminal stats through the SAME FIFO output queue as
+      // the segments (mirroring whisper's StreamingProcessor, which calls
+      // queueJobEnded() here). Delivery to the JS output callback is
+      // asynchronous (uv_async), so this is the only ordering-safe way to
+      // signal job completion: the JS driver waits for this event instead
+      // of synthesising a JobEnded of its own, which raced ahead of the
+      // drained backlog and cut the tail off the transcript (QVAC-23758).
+      // ParakeetModel::runtimeStats() is bypassed by the duplex path, so
+      // the stats are built from this processor's own counters.
+      {
+        qvac_lib_inference_addon_cpp::RuntimeStats terminal;
+        terminal.emplace_back("totalTime", static_cast<int64_t>(0));
+        terminal.emplace_back("audioDurationMs", audio_seconds_ * 1000.0);
+        terminal.emplace_back(
+            "totalSamples",
+            static_cast<int64_t>(std::llround(
+                audio_seconds_ * static_cast<double>(config_.sampleRate))));
+        try {
+          output_queue_->queueResult(std::any(std::move(terminal)));
+        } catch (const std::exception& e) {
+          QLOG(
+              logger::Priority::WARNING,
+              std::string(
+                  "ParakeetStreamingProcessor: terminal queueResult failed: ") +
+                  e.what());
+        }
+      }
       break;
     }
   }

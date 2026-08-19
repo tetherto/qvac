@@ -1,6 +1,6 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
   "addon": true,
   "engines": {

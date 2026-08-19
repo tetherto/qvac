@@ -62,6 +62,7 @@ export type ParakeetOutputCallback = (addon: unknown, event: unknown, jobId: num
 export type ParakeetStateCallback = (addon: ParakeetInterface, newState: string) => void;
 type NativeOutputCallback = (addon: unknown, event: unknown, data: unknown, error: unknown) => void;
 interface StreamingTeardown {
+    cleaned?: unknown;
     audioDurationMs?: unknown;
     totalSamples?: unknown;
 }
@@ -96,6 +97,7 @@ export declare class ParakeetInterface {
     private _nextJobId;
     private _activeJobId;
     private _onCancelComplete;
+    private _onStreamEndComplete;
     private _bufferedAudio;
     private _bufferedBytes;
     private _config;
@@ -107,6 +109,7 @@ export declare class ParakeetInterface {
     private _looksLikeTranscript;
     private _mapAddonEvent;
     private _resolvePendingCancel;
+    private _resolveStreamEndWaiter;
     private _addonOutputCallback;
     private _emitSyntheticError;
     loadWeights(weightsData: WeightData): Promise<boolean>;
