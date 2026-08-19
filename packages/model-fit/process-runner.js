@@ -30,8 +30,12 @@ function fit(config) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
     return require('./index').fitParams(config);
 }
+function fitLlama(config) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
+    return require('./index').fitLlamaConfig(config);
+}
 function finish(line) {
-    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit));
+    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit, fitLlama));
 }
 let input = '';
 let finished = false;

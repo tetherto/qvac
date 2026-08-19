@@ -4,7 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const { fitParams, FIT_STATUS } = require('../../index.js')
+const { fitLlamaConfig, fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
 
 // Deliberately never created. Argument validation must reject configs using it
@@ -34,6 +34,71 @@ test('fitParams rejects invalid config', async function (t) {
     () => fitParams({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }),
     /nCtx must be a safe integer/
   )
+})
+
+test('fitLlamaConfig validates the raw map at both public boundaries', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+  const binding = require('../../binding.js')
+
+  await t.exception.all(
+    () => fitLlamaConfig({ ...base, config: { device: 1 } }),
+    /config\.device must be a string/
+  )
+  await t.exception.all(
+    () => binding.llamaConfigFit({ ...base, config: { device: 1 } }),
+    /values must be strings/
+  )
+  await t.exception.all(
+    () =>
+      fitLlamaConfig({
+        ...base,
+        config: { device: 'cpu', 'batch-size': '128', 'ubatch-size': '256' }
+      }),
+    /ubatch-size must not exceed batch-size/
+  )
+  await t.exception.all(
+    () =>
+      fitLlamaConfig({
+        ...base,
+        config: { device: 'cpu', 'ctx-size': '512' },
+        nCtxMin: 1024
+      }),
+    /nCtxMin must not exceed/
+  )
+})
+
+test('fitLlamaConfig fits completion and embedding load maps', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const completion = fitLlamaConfig({
+    modelPath,
+    config: {
+      device: 'cpu',
+      'ctx-size': '512',
+      'batch-size': '128',
+      'ubatch-size': '64',
+      parallel: '1',
+      'gpu-layers': '0',
+      'no-mmap': 'true',
+      'swa-full': ''
+    },
+    nCtxMin: 512
+  })
+  const embedding = fitLlamaConfig({
+    modelPath,
+    config: {
+      device: 'cpu',
+      embedding: '',
+      'ctx-size': '512',
+      'batch-size': '128',
+      'ubatch-size': '64'
+    },
+    nCtxMin: 512
+  })
+
+  t.not(completion.reason, 'unsupported-config', 'completion config reaches common_fit_params')
+  t.not(embedding.reason, 'unsupported-config', 'embedding config reaches common_fit_params')
+  t.is(completion.nGpuLayers, 0, 'completion config preserves CPU placement')
+  t.is(embedding.nGpuLayers, 0, 'embedding config preserves CPU placement')
 })
 
 test('fitParams rejects values that would truncate or wrap in the binding', async function (t) {
@@ -86,7 +151,20 @@ test('intended-load fields are bounded to their enum domains', async function (t
     () => fitParams({ ...base, flashAttnType: -2 }),
     /flashAttnType must be between/
   )
-  await t.exception.all(() => fitParams({ ...base, mainGpu: -1 }), /mainGpu must be between/)
+  t.is(
+    fitParams({ ...base, nGpuLayers: 0, splitMode: 0, mainGpu: -1 }).status,
+    FIT_STATUS.ERROR,
+    'the CPU sentinel passes wrapper validation'
+  )
+  await t.exception.all(() => fitParams({ ...base, mainGpu: -2 }), /mainGpu must be between/)
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 1, splitMode: 0, mainGpu: -1 }),
+    /mainGpu -1 requires/
+  )
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 0, splitMode: 1, mainGpu: -1 }),
+    /mainGpu -1 requires/
+  )
   await t.exception.all(() => fitParams({ ...base, typeK: -1 }), /typeK must be between/)
   await t.exception.all(() => fitParams({ ...base, typeV: 1.5 }), /typeV must be a safe integer/)
 
@@ -100,6 +178,47 @@ test('intended-load fields are bounded to their enum domains', async function (t
   await t.exception.all(
     () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 4 }),
     /out of range/
+  )
+  t.is(
+    binding.paramsFit({
+      modelPath: UNREACHABLE_MODEL,
+      nGpuLayers: 0,
+      splitMode: 0,
+      mainGpu: -1
+    }).status,
+    FIT_STATUS.ERROR,
+    'the CPU sentinel passes native validation'
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, mainGpu: -2 }),
+    /out of range/
+  )
+  await t.exception.all(
+    () =>
+      binding.paramsFit({
+        modelPath: UNREACHABLE_MODEL,
+        nGpuLayers: 1,
+        splitMode: 0,
+        mainGpu: -1
+      }),
+    /mainGpu.*-1.*requires/
+  )
+})
+
+test('swaFull rejects non-boolean values at both public boundaries', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+  const binding = require('../../binding.js')
+
+  await t.exception.all(() => fitParams({ ...base, swaFull: 1 }), /swaFull must be a boolean/)
+  for (const swaFull of [null, 1, 'true', {}]) {
+    await t.exception.all(() => binding.paramsFit({ ...base, swaFull }), /swaFull.*boolean/)
+  }
+
+  t.is(binding.paramsFit(base).status, FIT_STATUS.ERROR, 'absent remains omitted')
+  t.is(
+    binding.paramsFit({ ...base, swaFull: undefined }).status,
+    FIT_STATUS.ERROR,
+    'undefined remains omitted'
   )
 })
 
@@ -131,6 +250,22 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   t.not(res.status, FIT_STATUS.ERROR, 'a pinned placement is accepted, not rejected')
   t.is(res.splitMode, 0, 'the pinned split mode survives the fit')
   t.is(res.mainGpu, 0, 'the pinned main GPU survives the fit')
+})
+
+test('an explicit CPU placement reaches the fitter and preserves its sentinel', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const res = fitParams({
+    modelPath,
+    nCtx: 512,
+    nGpuLayers: 0,
+    splitMode: 0,
+    mainGpu: -1
+  })
+
+  t.is(res.status, FIT_STATUS.SUCCESS, 'the CPU placement reaches common_fit_params')
+  t.is(res.nGpuLayers, 0, 'the CPU layer count survives the fit')
+  t.is(res.splitMode, 0, 'the CPU split mode survives the fit')
+  t.is(res.mainGpu, -1, 'the CPU sentinel survives the fit')
 })
 
 test('binding.paramsFit enforces the same constraints as the wrapper', async function (t) {

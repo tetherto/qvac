@@ -51,6 +51,47 @@ const plan = fitParams({
 // }
 ```
 
+### Experimental llama.cpp load-config API
+
+`fitLlamaConfig()` accepts the same flat string map used for ordinary
+completion and embedding loads, then normalizes its memory-relevant settings
+inside `@qvac/model-fit` before calling `common_fit_params`:
+
+```js
+const { fitLlamaConfig } = require('@qvac/model-fit')
+
+const result = fitLlamaConfig({
+  modelPath: '/abs/path/model.gguf',
+  config: {
+    device: 'gpu',
+    'ctx-size': '4096',
+    'batch-size': '512',
+    'ubatch-size': '128',
+    parallel: '1',
+    'gpu-layers': '-1',
+    embedding: ''
+  },
+  marginMiB: 1024,
+  nCtxMin: 4096
+})
+```
+
+This path is experimental and intentionally owned by this package. It uses
+qvac-fabric's common argument parser and model/context conversions for generic
+llama.cpp semantics, while temporarily duplicating QVAC's ordinary-inference
+backend, flash-attention, KV-cache and BitNet defaults. It does not import or
+invoke `@qvac/llm-llamacpp`.
+
+The supported scope is desktop, local, single-file GGUF, ordinary completion or
+embedding inference. Symbolic GPU layouts, mobile process admission, shards,
+multimodal projectors, LoRA, finetuning and caller-driven RoPE/YaRN extension
+return `ERROR` with `reason: 'unsupported-config'`. That outcome is unknown,
+not evidence that the model is too large.
+
+Results are advisory projections. A `SUCCESS` is conditional on reproducing
+the returned placement and is not a guaranteed allocation; no outcome from
+this experimental API should be used as a denial-grade admission decision.
+
 ### Backend registration
 
 `common_fit_params` does not load backends — it reads ggml's global device
@@ -220,6 +261,19 @@ includes compiling the embedded Metal library, which is slow enough on a cold
 runner to dwarf the fit itself. Size the deadline for that, not for the
 projection.
 
+Protocol v1 remains the low-level `{ version: 1, config: FitConfig }` envelope.
+Protocol v2 carries the experimental raw load shape:
+
+```js
+const { encodeFitLlamaProcessRequest } = require('@qvac/model-fit/process')
+
+const line = encodeFitLlamaProcessRequest({
+  modelPath: '/abs/path/model.gguf',
+  config: { device: 'cpu', 'ctx-size': '4096' }
+})
+// {"version":2,"config":{...}}\n
+```
+
 ### Spawning on Windows
 
 The child's stdio must be created as **overlapped** pipes:
@@ -236,16 +290,11 @@ thread and never observes the request: the child hangs with no output and no
 diagnostic until the supervisor's deadline fires. The flag is a no-op on other
 platforms, so it can be set unconditionally.
 
-## SDK usage (intended)
+## SDK integration
 
-The SDK runs this preflight before handing a model to `@qvac/llm-llamacpp`:
-
-1. sample device resources,
-2. run `fitParams(...)` in a disposable Bare subprocess → load plan + fit
-   projection,
-3. **admit/deny** — only deny when it can *prove* the model won't fit; on
-   `ERROR`/unknown, proceed as today (advisory-only until the projection and
-   device identity are proven reliable).
+SDK wiring is outside this package change. A later SDK change may invoke the
+v2 process request as an advisory signal; this package does not make admission
+decisions.
 
 ## Build
 

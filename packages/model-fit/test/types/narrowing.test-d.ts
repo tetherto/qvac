@@ -3,9 +3,18 @@
 // way an SDK would rely on. Type-checked by `npm run test:dts`, never executed.
 
 import { fitParams, FIT_STATUS } from '../../index'
-import type { FitResult, FitReason, FitPlan } from '../../index'
+import type { FitConfig, FitResult, FitReason, FitPlan } from '../../index'
 
 declare function assertNever (value: never): never
+
+const swaFullEnabled: FitConfig = { modelPath: '/model.gguf', swaFull: true }
+const swaFullDisabled: FitConfig = { modelPath: '/model.gguf', swaFull: false }
+void swaFullEnabled
+void swaFullDisabled
+
+// @ts-expect-error swaFull only accepts booleans
+const invalidSwaFull: FitConfig = { modelPath: '/model.gguf', swaFull: 1 }
+void invalidSwaFull
 
 const result: FitResult = fitParams({ modelPath: '/model.gguf' })
 
@@ -55,7 +64,7 @@ if (result.status === FIT_STATUS.SUCCESS) {
   void ctx
 } else {
   // Every remaining branch is an ERROR, with a cause the SDK can act on.
-  const reason: 'model-unreadable' | 'no-backend-device' = result.reason
+  const reason: 'model-unreadable' | 'no-backend-device' | 'unsupported-config' = result.reason
   void reason
 }
 

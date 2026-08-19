@@ -1,34 +1,45 @@
-import type { FitConfig, FitResult } from './index';
+import type { FitConfig, FitResult, LlamaLoadFitConfig } from './index';
 export declare const FIT_PROCESS_PROTOCOL_VERSION: 1;
+export declare const FIT_PROCESS_PROTOCOL_VERSION_V2: 2;
 export declare const FIT_PROCESS_MAX_REQUEST_BYTES: number;
 export declare const FIT_PROCESS_MAX_RESPONSE_BYTES: number;
-export interface FitProcessRequest {
+export interface FitProcessRequestV1 {
     version: typeof FIT_PROCESS_PROTOCOL_VERSION;
     config: FitConfig;
 }
-export type FitProcessResponse = {
+export interface FitProcessRequestV2 {
+    version: typeof FIT_PROCESS_PROTOCOL_VERSION_V2;
+    config: LlamaLoadFitConfig;
+}
+export type FitProcessRequest = FitProcessRequestV1 | FitProcessRequestV2;
+export interface FitProcessCompletedResponseV1 {
     version: typeof FIT_PROCESS_PROTOCOL_VERSION;
     status: 'completed';
     result: FitResult;
-} | {
+}
+export interface FitProcessCompletedResponseV2 {
+    version: typeof FIT_PROCESS_PROTOCOL_VERSION_V2;
+    status: 'completed';
+    result: FitResult;
+}
+export interface FitProcessInvocationErrorResponseV1 {
     version: typeof FIT_PROCESS_PROTOCOL_VERSION;
     status: 'invocation-error';
     error: {
         name: string;
         message: string;
     };
-};
+}
+export interface FitProcessInvocationErrorResponseV2 {
+    version: typeof FIT_PROCESS_PROTOCOL_VERSION_V2;
+    status: 'invocation-error';
+    error: {
+        name: string;
+        message: string;
+    };
+}
+export type FitProcessResponse = FitProcessCompletedResponseV1 | FitProcessCompletedResponseV2 | FitProcessInvocationErrorResponseV1 | FitProcessInvocationErrorResponseV2;
 export declare function encodeFitProcessRequest(config: FitConfig): string;
+export declare function encodeFitLlamaProcessRequest(config: LlamaLoadFitConfig): string;
 export declare function parseFitProcessResponse(value: unknown): FitProcessResponse;
-/**
- * Absolute path to the one-shot runner, to be spawned with a Bare executable.
- *
- * The child reads one request line on stdin and writes one response line on
- * stdout. Supervisors must key off that line rather than the exit code, and are
- * responsible for the deadline the runner does not impose: see "What the parent
- * observes" in the package README for the full set of outcomes.
- *
- * Resolved on demand so hosts without subprocess support can import the
- * protocol and refuse the feature before the runner entrypoint is looked up.
- */
 export declare function resolveFitProcessRunnerPath(): string;

@@ -5,6 +5,7 @@ import processModule = require('bare-process')
 import {
   runFitProcessLine,
   type FitProcessFit,
+  type FitProcessLlamaFit,
   type FitProcessOutcome
 } from './process-internal'
 import { FIT_PROCESS_MAX_REQUEST_BYTES } from './process'
@@ -58,8 +59,15 @@ function fit (config: Parameters<FitProcessFit>[0]): ReturnType<FitProcessFit> {
   return (require('./index') as { fitParams: FitProcessFit }).fitParams(config)
 }
 
+function fitLlama (
+  config: Parameters<FitProcessLlamaFit>[0]
+): ReturnType<FitProcessLlamaFit> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
+  return (require('./index') as { fitLlamaConfig: FitProcessLlamaFit }).fitLlamaConfig(config)
+}
+
 function finish (line: string): void {
-  writeOutcome(runFitProcessLine(line, fit))
+  writeOutcome(runFitProcessLine(line, fit, fitLlama))
 }
 
 let input = ''

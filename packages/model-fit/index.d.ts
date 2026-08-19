@@ -67,7 +67,7 @@ export interface FitConfig {
      * `enum llama_split_mode`: how the model splits across multiple GPUs.
      */
     splitMode?: number;
-    /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
     mainGpu?: number;
     /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
     typeK?: number;
@@ -75,6 +75,15 @@ export interface FitConfig {
     typeV?: number;
     /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
     flashAttnType?: number;
+    /** Whether the intended load uses the full-size SWA cache. */
+    swaFull?: boolean;
+}
+export interface LlamaLoadFitConfig {
+    modelPath: string;
+    config: Record<string, string>;
+    backendsDir?: string;
+    marginMiB?: number;
+    nCtxMin?: number;
 }
 /** A tensor buffer-type override the fitter selected. */
 export interface FitBuftOverride {
@@ -128,7 +137,7 @@ export interface FitPlan {
      * projected to fit.
      */
     splitMode: number;
-    /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
     mainGpu: number;
     /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
     typeK: number;
@@ -156,7 +165,7 @@ export type FitResult = ({
 } & Partial<FitPlan> & FitDeviceInventory) | ({
     status: 2;
     fits: false;
-    reason: 'model-unreadable' | 'no-backend-device';
+    reason: 'model-unreadable' | 'no-backend-device' | 'unsupported-config';
 } & Partial<FitPlan> & FitDeviceInventory);
 /** Stable, machine-readable explanation of a fit outcome. */
 export type FitReason = FitResult['reason'];
@@ -186,3 +195,4 @@ export declare const FIT_STATUS: Readonly<{
  * it must be an application-controlled location — never remote or user input.
  */
 export declare function fitParams(config: FitConfig): FitResult;
+export declare function fitLlamaConfig(config: LlamaLoadFitConfig): FitResult;

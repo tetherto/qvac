@@ -6,6 +6,7 @@ import path = require('bare-path')
 /** Shape of the native addon this module wraps. */
 interface FitBinding {
   paramsFit(config: FitConfig): FitResult
+  llamaConfigFit(config: LlamaLoadFitConfig): FitResult
 }
 
 export interface FitConfig {
@@ -77,7 +78,7 @@ export interface FitConfig {
    * `enum llama_split_mode`: how the model splits across multiple GPUs.
    */
   splitMode?: number
-  /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
   mainGpu?: number
   /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
   typeK?: number
@@ -85,7 +86,25 @@ export interface FitConfig {
   typeV?: number
   /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
   flashAttnType?: number
+  /** Whether the intended load uses the full-size SWA cache. */
+  swaFull?: boolean
 }
+
+export interface LlamaLoadFitConfig {
+  modelPath: string
+  config: Record<string, string>
+  backendsDir?: string
+  marginMiB?: number
+  nCtxMin?: number
+}
+
+const LLAMA_LOAD_FIT_FIELDS = new Set([
+  'modelPath',
+  'config',
+  'backendsDir',
+  'marginMiB',
+  'nCtxMin'
+])
 
 /** A tensor buffer-type override the fitter selected. */
 export interface FitBuftOverride {
@@ -141,7 +160,7 @@ export interface FitPlan {
    * projected to fit.
    */
   splitMode: number
-  /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
   mainGpu: number
   /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
   typeK: number
@@ -162,7 +181,7 @@ export interface FitPlan {
 export type FitResult =
   | ({ status: 0, fits: true, reason: 'fits' } & FitPlan & FitDeviceInventory)
   | ({ status: 1, fits: false, reason: 'does-not-fit' } & Partial<FitPlan> & FitDeviceInventory)
-  | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' } & Partial<FitPlan> & FitDeviceInventory)
+  | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' | 'unsupported-config' } & Partial<FitPlan> & FitDeviceInventory)
 
 /** Stable, machine-readable explanation of a fit outcome. */
 export type FitReason = FitResult['reason']
@@ -200,6 +219,10 @@ export const FIT_STATUS = Object.freeze({
 const UINT32_MAX = 4294967295
 const INT32_MAX = 2147483647
 const INT32_MIN = -2147483648
+const MAX_PATH_BYTES = 4096
+const MAX_LLAMA_CONFIG_ENTRIES = 256
+const MAX_LLAMA_CONFIG_KEY_BYTES = 128
+const MAX_LLAMA_CONFIG_VALUE_BYTES = 4096
 
 // Every numeric field crosses into C++ as a uint32_t or int32_t. Fractions
 // truncate there and out-of-range values wrap, so `marginMiB: -1` would silently
@@ -221,7 +244,7 @@ const NUMERIC_FIELDS = Object.freeze({
   // so the shape check lives here and the exact bound stays in the binding,
   // which is compiled against the same ggml.h.
   splitMode: { min: 0, max: 3 },
-  mainGpu: { min: 0, max: INT32_MAX },
+  mainGpu: { min: -1, max: INT32_MAX },
   typeK: { min: 0, max: INT32_MAX },
   typeV: { min: 0, max: INT32_MAX },
   flashAttnType: { min: -1, max: 1 }
@@ -256,6 +279,14 @@ function validateRelationships (config: FitConfig): void {
   }
   if (nCtx > 0 && nCtxMin > 0 && nCtxMin > nCtx) {
     throw new RangeError('model-fit: config.nCtxMin must not exceed config.nCtx')
+  }
+  if (
+    config.mainGpu === -1 &&
+    (config.nGpuLayers !== 0 || config.splitMode !== 0)
+  ) {
+    throw new RangeError(
+      'model-fit: config.mainGpu -1 requires config.nGpuLayers 0 and config.splitMode NONE'
+    )
   }
 }
 
@@ -297,6 +328,9 @@ export function fitParams (config: FitConfig): FitResult {
     const { min, max } = NUMERIC_FIELDS[key]
     validateNumber(config, key, min, max)
   }
+  if (config.swaFull !== undefined && typeof config.swaFull !== 'boolean') {
+    throw new TypeError('model-fit: config.swaFull must be a boolean when provided')
+  }
   validateRelationships(config)
 
   // An explicit backendsDir always wins, including a bad one — it is the
@@ -311,4 +345,106 @@ export function fitParams (config: FitConfig): FitResult {
   }
 
   return binding.paramsFit(resolved)
+}
+
+function validateLlamaLoadFitConfig (config: LlamaLoadFitConfig): void {
+  if (config === null || config === undefined || typeof config !== 'object' || Array.isArray(config)) {
+    throw new TypeError('model-fit: config object is required')
+  }
+  for (const key of Object.keys(config)) {
+    if (!LLAMA_LOAD_FIT_FIELDS.has(key)) {
+      throw new TypeError(`model-fit: unknown top-level field '${key}'`)
+    }
+  }
+  if (typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
+    throw new TypeError('model-fit: config.modelPath must be a non-empty string')
+  }
+  if (Buffer.byteLength(config.modelPath, 'utf8') > MAX_PATH_BYTES) {
+    throw new RangeError(`model-fit: config.modelPath must not exceed ${MAX_PATH_BYTES} bytes`)
+  }
+  if (!path.isAbsolute(config.modelPath)) {
+    throw new TypeError(`model-fit: config.modelPath must be an absolute path, got '${config.modelPath}'`)
+  }
+  if (config.backendsDir !== undefined) {
+    if (typeof config.backendsDir !== 'string' || config.backendsDir.length === 0) {
+      throw new TypeError('model-fit: config.backendsDir must be a non-empty string when provided')
+    }
+    if (Buffer.byteLength(config.backendsDir, 'utf8') > MAX_PATH_BYTES) {
+      throw new RangeError(`model-fit: config.backendsDir must not exceed ${MAX_PATH_BYTES} bytes`)
+    }
+  }
+  if (
+    config.config === null ||
+    config.config === undefined ||
+    typeof config.config !== 'object' ||
+    Array.isArray(config.config)
+  ) {
+    throw new TypeError('model-fit: config.config must be an object')
+  }
+
+  const entries = Object.entries(config.config)
+  if (entries.length > MAX_LLAMA_CONFIG_ENTRIES) {
+    throw new RangeError(
+      `model-fit: config.config must not contain more than ${MAX_LLAMA_CONFIG_ENTRIES} entries`
+    )
+  }
+  for (const [key, value] of entries) {
+    if (Buffer.byteLength(key, 'utf8') === 0 || Buffer.byteLength(key, 'utf8') > MAX_LLAMA_CONFIG_KEY_BYTES) {
+      throw new RangeError(
+        `model-fit: llama config keys must be 1 to ${MAX_LLAMA_CONFIG_KEY_BYTES} bytes`
+      )
+    }
+    if (typeof value !== 'string') {
+      throw new TypeError(`model-fit: config.config.${key} must be a string`)
+    }
+    if (Buffer.byteLength(value, 'utf8') > MAX_LLAMA_CONFIG_VALUE_BYTES) {
+      throw new RangeError(
+        `model-fit: config.config.${key} must not exceed ${MAX_LLAMA_CONFIG_VALUE_BYTES} bytes`
+      )
+    }
+  }
+
+  validateNumber(config, 'marginMiB', 0, UINT32_MAX)
+  validateNumber(config, 'nCtxMin', 0, UINT32_MAX)
+
+  function integerSetting (hyphenKey: string, underscoreKey: string): number | undefined {
+    const hyphenValue = config.config[hyphenKey]
+    const underscoreValue = config.config[underscoreKey]
+    if (hyphenValue !== undefined && underscoreValue !== undefined) {
+      throw new TypeError(`model-fit: use only one of ${hyphenKey} and ${underscoreKey}`)
+    }
+    const value = hyphenValue ?? underscoreValue
+    if (value === undefined) return undefined
+    if (!/^-?\d+$/.test(value)) {
+      throw new TypeError(`model-fit: config.config.${hyphenKey} must be an integer string`)
+    }
+    const parsed = Number(value)
+    if (!Number.isSafeInteger(parsed)) {
+      throw new RangeError(`model-fit: config.config.${hyphenKey} must be a safe integer string`)
+    }
+    return parsed
+  }
+
+  const nCtx = integerSetting('ctx-size', 'ctx_size')
+  const nBatch = integerSetting('batch-size', 'batch_size')
+  const nUbatch = integerSetting('ubatch-size', 'ubatch_size')
+  if (nBatch !== undefined && nUbatch !== undefined && nUbatch > nBatch) {
+    throw new RangeError('model-fit: config.config.ubatch-size must not exceed batch-size')
+  }
+  if (nCtx !== undefined && nCtx > 0 && config.nCtxMin !== undefined && config.nCtxMin > nCtx) {
+    throw new RangeError('model-fit: config.nCtxMin must not exceed config.config.ctx-size')
+  }
+}
+
+export function fitLlamaConfig (config: LlamaLoadFitConfig): FitResult {
+  validateLlamaLoadFitConfig(config)
+
+  let resolved = config
+  if (config.backendsDir === undefined) {
+    const packaged = defaultBackendsDir()
+    if (packaged !== undefined) {
+      resolved = { ...config, backendsDir: packaged }
+    }
+  }
+  return binding.llamaConfigFit(resolved)
 }
