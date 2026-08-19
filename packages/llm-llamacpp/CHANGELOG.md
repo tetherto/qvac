@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.45.0] - 2026-08-19
+
+This release removes sliding-context support. The addon no longer evicts tokens
+from the middle of the KV cache when the context fills, so a full context is
+reported to the caller instead of being made room for.
+
+### Breaking Changes
+
+- The `n_discarded` load option is no longer supported. Configurations that pass
+  it now fail model loading as an unsupported option; remove the key.
+- The `contextSlides` runtime stat is gone from `runtimeStats()` and from the
+  `RuntimeStats` type in `index.d.ts`.
+- A conversation that outgrows the context no longer keeps going by dropping
+  old tokens. Behaviour is now what `n_discarded=0` already did, which was the
+  default:
+  - a prefill that does not fit throws `ContextOverflow`, carrying the cached
+    token count, the prompt token count and the context size;
+  - a generation that fills the window stops with
+    `stopReason: "contextOverflow"` and still returns the tokens it produced.
+- `ContextSlideFailed` is retired as an error code. Its numeric value stays
+  reserved so the codes after it do not shift; the one remaining internal
+  failure it covered now reports `FailedToDecode`.
+
+### Changed
+
+- Per-session cache metadata keeps its four-field width, so cache files written
+  by this version still load on older builds and vice versa. The two
+  first-message fields are retired and written as `0`.
+
 ## [0.44.0] - 2026-08-17
 
 ### Added
