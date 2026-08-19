@@ -14,22 +14,15 @@ name: On PR Trigger (inference-addon-cpp)
 # to the exact commit, a stale approval can't authorise a new one — which is why
 # `reopened` and `ready_for_review` are safe to keep. Enforced by ci-trust-policy.test.mjs.
 
+# MOBILE IS NOW ON-DEMAND ONLY. The automatic pull_request_target trigger has
+# been intentionally disabled to stop PRs from auto-launching (costly) AWS Device
+# Farm runs. Run mobile tests by dispatching
+# `integration-mobile-test-inference-addon-cpp.yml` (Actions → Run workflow),
+# where you pick the platform, device(s) and an optional test filter.
+# The `run-mobile-addon-tests` label + full gating machinery below are kept
+# deliberately, so this PR path can be re-enabled later by restoring the
+# `pull_request_target` trigger — do not rely on the label in the meantime.
 on:
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
-      - ready_for_review
-    branches:
-      - main
-      - release-*
-      - feature-*
-      - tmp-*
-    paths:
-      - "packages/inference-addon-cpp/**"
-      - ".github/workflows/*inference-addon-cpp*.yml"
   workflow_dispatch:
   workflow_call:
 

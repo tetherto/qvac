@@ -46,8 +46,8 @@ import {
   PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
-  SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   QWEN3_5_0_8B_MULTIMODAL_Q4_K_M,
   GEMMA4_2B_MULTIMODAL_Q4_K_M,
   BCI_WINDOWED
@@ -434,21 +434,33 @@ resources.define('bci', {
 })
 
 resources.define('vision', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
-    ctx_size: 1024,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    ctx_size: 4096,
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
 resources.define('vision-batch', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 2048,
     parallel: 2,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-upscale', {
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 4096,
+    image_no_upscale: 'off',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
