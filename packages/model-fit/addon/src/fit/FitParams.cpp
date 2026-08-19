@@ -444,7 +444,7 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   }
 
   FitResult out;
-  if (preBackendUnsupportedLlamaLoad(req.config).has_value()) {
+  if (preBackendUnsupportedLlamaLoad(req.params).has_value()) {
     out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
     out.reason = FitReason::UnsupportedConfig;
     return out;
@@ -472,8 +472,9 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
 
   const uint32_t trainedCtx = readTrainedContext(req.modelPath);
   NormalizedLlamaLoad normalized = normalizeLlamaLoadConfig(
+      req.loadKind,
       req.modelPath,
-      req.config,
+      req.params,
       readModelTraits(req.modelPath),
       discoverBackendDevices());
   LlamaFitExecution execution;

@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+import fs = require('bare-fs')
+import path = require('bare-path')
 import processModule = require('bare-process')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -9,6 +11,7 @@ import {
   type FitProcessOutcome
 } from './process-internal'
 import { FIT_PROCESS_MAX_REQUEST_BYTES } from './process'
+import type { FitResult } from './index'
 
 interface RunnerInput {
   setEncoding(encoding: 'utf8'): void
@@ -31,6 +34,7 @@ interface RunnerProcess {
 }
 
 const process = processModule as unknown as RunnerProcess
+const PACKAGED_BACKENDS_DIR = path.join(__dirname, 'prebuilds')
 
 function exitAfterWriteError (error: Error): void {
   process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
@@ -59,11 +63,30 @@ function fit (config: Parameters<FitProcessFit>[0]): ReturnType<FitProcessFit> {
   return (require('./index') as { fitParams: FitProcessFit }).fitParams(config)
 }
 
-function fitLlama (
-  config: Parameters<FitProcessLlamaFit>[0]
-): ReturnType<FitProcessLlamaFit> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
-  return (require('./index') as { fitLlamaConfig: FitProcessLlamaFit }).fitLlamaConfig(config)
+function fitLlama (...args: Parameters<FitProcessLlamaFit>): ReturnType<FitProcessLlamaFit> {
+  const [loadKind, config] = args
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
+  const binding = require('./binding') as {
+    llamaConfigFit(request: {
+      loadKind: Parameters<FitProcessLlamaFit>[0]
+      modelPath: string
+      params: Record<string, string>
+      backendsDir?: string
+      marginMiB?: number
+      nCtxMin?: number
+    }): FitResult
+  }
+  let resolved = config
+  if (config.backendsDir === undefined) {
+    try {
+      if (fs.statSync(PACKAGED_BACKENDS_DIR).isDirectory()) {
+        resolved = { ...config, backendsDir: PACKAGED_BACKENDS_DIR }
+      }
+    } catch {
+      // Statically linked builds do not need a packaged backends directory.
+    }
+  }
+  return binding.llamaConfigFit({ loadKind, ...resolved })
 }
 
 function finish (line: string): void {

@@ -16,7 +16,7 @@ const PREBUILDS_DIR = path.join(__dirname, '../../prebuilds')
 const HAS_NATIVE_PREBUILD =
   fs.existsSync(path.join(PREBUILDS_DIR, `${process.platform}-${process.arch}`)) ||
   (process.platform === 'darwin' && fs.existsSync(path.join(PREBUILDS_DIR, 'darwin-universal')))
-const fitLlamaConfig = HAS_NATIVE_PREBUILD ? require('../../index').fitLlamaConfig : undefined
+const publicIndex = HAS_NATIVE_PREBUILD ? require('../../index') : undefined
 
 function runRunner(input) {
   return new Promise((resolve, reject) => {
@@ -39,11 +39,11 @@ function runRunner(input) {
   })
 }
 
-function runDirectBinding(config) {
+function runDirectBinding(config, loadKind = 'completion') {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [path.join(__dirname, 'direct-binding-runner.js'), JSON.stringify(config)],
+      [path.join(__dirname, 'direct-binding-runner.js'), JSON.stringify({ loadKind, ...config })],
       { stdio: ['ignore', 'overlapped', 'overlapped'] }
     )
     let stdout = ''
@@ -63,32 +63,60 @@ function runDirectBinding(config) {
 
 const config = {
   modelPath: path.resolve('/tmp/model.gguf'),
-  config: {
+  params: {
     device: 'cpu',
-    'ctx-size': '2048',
-    embedding: ''
+    'ctx-size': '2048'
   },
   marginMiB: 512,
   nCtxMin: 1024
 }
 
-test('v2 encodes a raw llama load config without correlation fields', (t) => {
-  const line = encodeFitLlamaProcessRequest(config)
+test('v2 encodes an explicit neutral load kind without correlation fields', (t) => {
+  const line = encodeFitLlamaProcessRequest('embedding', config)
   t.alike(JSON.parse(line), {
     version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+    loadKind: 'embedding',
     config
   })
 })
 
-test('v2 parses a raw llama load config', (t) => {
+test('v2 parses an explicit neutral load kind', (t) => {
   const request = parseFitProcessRequest({
     version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+    loadKind: 'completion',
     config
   })
   t.alike(request, {
     version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+    loadKind: 'completion',
     config
   })
+})
+
+test('v2 rejects missing and unknown load kinds', async (t) => {
+  await t.exception.all(
+    () => encodeFitLlamaProcessRequest('llm', config),
+    /loadKind must be 'completion' or 'embedding'/
+  )
+  for (const loadKind of [undefined, 'llm']) {
+    await t.exception.all(
+      () =>
+        parseFitProcessRequest({
+          version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+          loadKind,
+          config
+        }),
+      /loadKind must be 'completion' or 'embedding'/
+    )
+  }
+})
+
+test('top-level API does not export raw llama fitting', (t) => {
+  if (publicIndex === undefined) {
+    t.pass('native-only export check skipped before prebuild availability')
+    return
+  }
+  t.alike(Object.keys(publicIndex).sort(), ['FIT_STATUS', 'fitParams'])
 })
 
 test('v2 rejects legacy envelope fields while v1 remains permissive', async (t) => {
@@ -97,6 +125,7 @@ test('v2 rejects legacy envelope fields while v1 remains permissive', async (t) 
       () =>
         parseFitProcessRequest({
           version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+          loadKind: 'completion',
           config,
           [key]: 'legacy'
         }),
@@ -117,7 +146,7 @@ test('v2 rejects legacy envelope fields while v1 remains permissive', async (t) 
   }
 })
 
-test('v2 dispatches to the llama fit function', (t) => {
+test('v2 dispatches load kind and params to the llama fit function', (t) => {
   let received
   const result = {
     status: 2,
@@ -130,18 +159,19 @@ test('v2 dispatches to the llama fit function', (t) => {
   const outcome = runFitProcessLine(
     JSON.stringify({
       version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+      loadKind: 'embedding',
       config
     }),
     () => {
       throw new Error('v1 fit must not run')
     },
-    (value) => {
-      received = value
+    (loadKind, value) => {
+      received = { loadKind, config: value }
       return result
     }
   )
 
-  t.alike(received, config)
+  t.alike(received, { loadKind: 'embedding', config })
   t.alike(outcome.response, {
     version: FIT_PROCESS_PROTOCOL_VERSION_V2,
     status: 'completed',
@@ -152,18 +182,18 @@ test('v2 dispatches to the llama fit function', (t) => {
 test('v2 validates raw config shape before native allocation', async (t) => {
   await t.exception.all(
     () =>
-      encodeFitLlamaProcessRequest({
+      encodeFitLlamaProcessRequest('completion', {
         modelPath: config.modelPath,
-        config: { device: 1 }
+        params: { device: 1 }
       }),
-    /config\.device must be a string/
+    /params\.device must be a string/
   )
 
   await t.exception.all(
     () =>
-      encodeFitLlamaProcessRequest({
+      encodeFitLlamaProcessRequest('completion', {
         modelPath: config.modelPath,
-        config: Object.fromEntries(
+        params: Object.fromEntries(
           Array.from({ length: 257 }, (_, index) => [`key-${index}`, 'value'])
         )
       }),
@@ -171,31 +201,26 @@ test('v2 validates raw config shape before native allocation', async (t) => {
   )
   await t.exception.all(
     () =>
-      encodeFitLlamaProcessRequest({
+      encodeFitLlamaProcessRequest('completion', {
         modelPath: '',
-        config: { device: 'cpu' }
+        params: { device: 'cpu' }
       }),
     /modelPath must be a non-empty string/
   )
 })
 
-test('all public v2 boundaries reject unknown top-level fields', async (t) => {
+test('all v2 boundaries reject unknown config fields', async (t) => {
   for (const key of ['marginMib', 'fingerprint', 'fitContractVersion']) {
     const invalid = { ...config, [key]: key === 'marginMib' ? 512 : 'legacy' }
-    if (fitLlamaConfig !== undefined) {
-      await t.exception.all(
-        () => fitLlamaConfig(invalid),
-        new RegExp(`unknown top-level field.*${key}`)
-      )
-    }
     await t.exception.all(
-      () => encodeFitLlamaProcessRequest(invalid),
+      () => encodeFitLlamaProcessRequest('completion', invalid),
       new RegExp(`unknown top-level field.*${key}`)
     )
     await t.exception.all(
       () =>
         parseFitProcessRequest({
           version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+          loadKind: 'completion',
           config: invalid
         }),
       new RegExp(`unknown top-level field.*${key}`)
@@ -218,7 +243,7 @@ test(
     for (const invalid of [
       {
         modelPath: config.modelPath,
-        config: {
+        params: {
           device: 'cpu',
           'batch-size': '128',
           'ubatch-size': '256'
@@ -226,7 +251,7 @@ test(
       },
       {
         modelPath: config.modelPath,
-        config: { device: 'cpu', 'ctx-size': '512' },
+        params: { device: 'cpu', 'ctx-size': '512' },
         nCtxMin: 1024
       }
     ]) {
@@ -267,7 +292,7 @@ test(
     ]) {
       const direct = await runDirectBinding({
         modelPath: config.modelPath,
-        config: { device: 'cpu', [key]: value }
+        params: { device: 'cpu', [key]: value }
       })
       t.is(direct.signal, null, `${key}=${value} must not initialize a backend`)
       t.is(direct.code, 0)
@@ -283,7 +308,7 @@ test(
   async (t) => {
     const direct = await runDirectBinding({
       modelPath: config.modelPath,
-      config: {
+      params: {
         device: 'cpu',
         'tensor-split': '2147483648',
         'batch-size': '128',
@@ -309,7 +334,7 @@ test(
     ]) {
       const symbolic = {
         modelPath: path.join(__dirname, 'no-such-model.gguf'),
-        config: { device: 'gpu', [key]: value }
+        params: { device: 'gpu', [key]: value }
       }
       const direct = await runDirectBinding(symbolic)
       t.is(direct.signal, null)
@@ -317,7 +342,7 @@ test(
       t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
       t.is(direct.stderr, '')
 
-      const processOutcome = await runRunner(encodeFitLlamaProcessRequest(symbolic))
+      const processOutcome = await runRunner(encodeFitLlamaProcessRequest('completion', symbolic))
       t.is(processOutcome.signal, null)
       t.is(processOutcome.code, 0)
       t.is(
@@ -345,7 +370,7 @@ test(
     ]) {
       const direct = await runDirectBinding({
         modelPath: path.join(__dirname, 'no-such-model.gguf'),
-        config: { device: 'cpu', ...setting }
+        params: { device: 'cpu', ...setting }
       })
       t.is(direct.signal, null)
       t.is(direct.code, 0)
@@ -360,9 +385,9 @@ test(
   { skip: !HAS_NATIVE_PREBUILD },
   async (t) => {
     const outcome = await runRunner(
-      encodeFitLlamaProcessRequest({
+      encodeFitLlamaProcessRequest('completion', {
         modelPath: path.join(__dirname, 'no-such-model.gguf'),
-        config: { device: 'cpu' }
+        params: { device: 'cpu' }
       })
     )
     if (

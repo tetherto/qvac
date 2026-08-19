@@ -209,16 +209,26 @@ test('process core handles malformed JSON without invoking fit', (t) => {
 
 test('process core preserves recognizable malformed request versions', (t) => {
   for (const malformed of [
-    { version: 2, config: { modelPath: '/model.gguf', config: { device: 'cpu' } }, legacy: true },
     {
       version: 2,
+      loadKind: 'completion',
+      config: { modelPath: '/model.gguf', params: { device: 'cpu' } },
+      legacy: true
+    },
+    {
+      version: 2,
+      loadKind: 'completion',
       config: {
         modelPath: '/model.gguf',
-        config: { device: 'cpu' },
+        params: { device: 'cpu' },
         unknownField: true
       }
     },
-    { version: 2, config: { modelPath: '/model.gguf', config: { device: 1 } } }
+    {
+      version: 2,
+      loadKind: 'completion',
+      config: { modelPath: '/model.gguf', params: { device: 1 } }
+    }
   ]) {
     const outcome = runFitProcessLine(JSON.stringify(malformed), () => completedFitResult())
     t.is(outcome.response.version, FIT_PROCESS_PROTOCOL_VERSION_V2)

@@ -1,4 +1,4 @@
-import type { FitConfig, FitResult, LlamaLoadFitConfig } from './index'
+import type { FitConfig, FitResult } from './index'
 
 export const FIT_PROCESS_PROTOCOL_VERSION = 1 as const
 export const FIT_PROCESS_PROTOCOL_VERSION_V2 = 2 as const
@@ -10,9 +10,20 @@ export interface FitProcessRequestV1 {
   config: FitConfig
 }
 
+export type LlamaLoadKind = 'completion' | 'embedding'
+
+export interface FitLlamaProcessConfig {
+  modelPath: string
+  params: Record<string, string>
+  backendsDir?: string
+  marginMiB?: number
+  nCtxMin?: number
+}
+
 export interface FitProcessRequestV2 {
   version: typeof FIT_PROCESS_PROTOCOL_VERSION_V2
-  config: LlamaLoadFitConfig
+  loadKind: LlamaLoadKind
+  config: FitLlamaProcessConfig
 }
 
 export type FitProcessRequest = FitProcessRequestV1 | FitProcessRequestV2
@@ -153,11 +164,17 @@ function encodeFitProcessRequestEnvelope (request: FitProcessRequest): string {
   return encoded
 }
 
-function assertLlamaLoadFitConfig (config: LlamaLoadFitConfig): void {
+function assertLlamaLoadKind (loadKind: LlamaLoadKind): void {
+  if (loadKind !== 'completion' && loadKind !== 'embedding') {
+    throw new TypeError("Fit process loadKind must be 'completion' or 'embedding'")
+  }
+}
+
+function assertFitLlamaProcessConfig (config: FitLlamaProcessConfig): void {
   if (!isRecord(config) || typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
     throw new TypeError('Fit process llama config modelPath must be a non-empty string')
   }
-  const allowedFields = new Set(['modelPath', 'config', 'backendsDir', 'marginMiB', 'nCtxMin'])
+  const allowedFields = new Set(['modelPath', 'params', 'backendsDir', 'marginMiB', 'nCtxMin'])
   for (const key of Object.keys(config)) {
     if (!allowedFields.has(key)) {
       throw new TypeError(`Fit process llama config unknown top-level field '${key}'`)
@@ -176,16 +193,16 @@ function assertLlamaLoadFitConfig (config: LlamaLoadFitConfig): void {
       'Fit process llama config backendsDir must be a non-empty string no longer than 4096 bytes'
     )
   }
-  if (!isRecord(config.config)) {
-    throw new TypeError('Fit process llama config config must be an object')
+  if (!isRecord(config.params)) {
+    throw new TypeError('Fit process llama config params must be an object')
   }
-  const entries = Object.entries(config.config)
+  const entries = Object.entries(config.params)
   if (entries.length > 256) {
     throw new RangeError('Fit process llama config must not contain more than 256 entries')
   }
   for (const [key, value] of entries) {
     if (typeof value !== 'string') {
-      throw new TypeError(`Fit process llama config config.${key} must be a string`)
+      throw new TypeError(`Fit process llama config params.${key} must be a string`)
     }
     if (Buffer.byteLength(key, 'utf8') === 0 || Buffer.byteLength(key, 'utf8') > 128) {
       throw new RangeError('Fit process llama config keys must be 1 to 128 bytes')
@@ -212,10 +229,15 @@ export function encodeFitProcessRequest (config: FitConfig): string {
   })
 }
 
-export function encodeFitLlamaProcessRequest (config: LlamaLoadFitConfig): string {
-  assertLlamaLoadFitConfig(config)
+export function encodeFitLlamaProcessRequest (
+  loadKind: LlamaLoadKind,
+  config: FitLlamaProcessConfig
+): string {
+  assertLlamaLoadKind(loadKind)
+  assertFitLlamaProcessConfig(config)
   return encodeFitProcessRequestEnvelope({
     version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+    loadKind,
     config
   })
 }

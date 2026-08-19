@@ -78,13 +78,6 @@ export interface FitConfig {
     /** Whether the intended load uses the full-size SWA cache. */
     swaFull?: boolean;
 }
-export interface LlamaLoadFitConfig {
-    modelPath: string;
-    config: Record<string, string>;
-    backendsDir?: string;
-    marginMiB?: number;
-    nCtxMin?: number;
-}
 /** A tensor buffer-type override the fitter selected. */
 export interface FitBuftOverride {
     /** Tensor-name pattern the override applies to. */
@@ -195,4 +188,3 @@ export declare const FIT_STATUS: Readonly<{
  * it must be an application-controlled location — never remote or user input.
  */
 export declare function fitParams(config: FitConfig): FitResult;
-export declare function fitLlamaConfig(config: LlamaLoadFitConfig): FitResult;

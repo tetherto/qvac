@@ -15,6 +15,11 @@ namespace model_fit {
 
 using LlamaConfigMap = std::unordered_map<std::string, std::string>;
 
+enum class LlamaLoadKind : uint8_t {
+  Completion,
+  Embedding,
+};
+
 enum class BackendDeviceType : uint8_t {
   Cpu,
   Gpu,
@@ -48,8 +53,9 @@ struct NormalizedLlamaLoad {
 };
 
 struct LlamaLoadFitRequest {
+  LlamaLoadKind loadKind = LlamaLoadKind::Completion;
   std::string modelPath;
-  LlamaConfigMap config;
+  LlamaConfigMap params;
   std::string backendsDir;
   uint32_t marginMiB = 1024;
   uint32_t nCtxMin = 0;
@@ -77,8 +83,15 @@ std::optional<std::string> preBackendUnsupportedLlamaLoad(
     const LlamaConfigMap& config, LlamaFitPlatform platform);
 
 NormalizedLlamaLoad normalizeLlamaLoadConfig(
+    LlamaLoadKind loadKind, const std::string& modelPath, LlamaConfigMap config,
+    const ModelTraits& traits, const std::vector<BackendDevice>& devices);
+NormalizedLlamaLoad normalizeLlamaLoadConfig(
     const std::string& modelPath, LlamaConfigMap config,
     const ModelTraits& traits, const std::vector<BackendDevice>& devices);
+NormalizedLlamaLoad normalizeLlamaLoadConfig(
+    LlamaLoadKind loadKind, const std::string& modelPath, LlamaConfigMap config,
+    const ModelTraits& traits, const std::vector<BackendDevice>& devices,
+    LlamaFitPlatform platform);
 NormalizedLlamaLoad normalizeLlamaLoadConfig(
     const std::string& modelPath, LlamaConfigMap config,
     const ModelTraits& traits, const std::vector<BackendDevice>& devices,

@@ -4,7 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const { fitLlamaConfig, fitParams, FIT_STATUS } = require('../../index.js')
+const { fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
 
 // Deliberately never created. Argument validation must reject configs using it
@@ -36,42 +36,51 @@ test('fitParams rejects invalid config', async function (t) {
   )
 })
 
-test('fitLlamaConfig validates the raw map at both public boundaries', async function (t) {
+test('native raw fitting validates load kind, params, and relationships', async function (t) {
   const base = { modelPath: UNREACHABLE_MODEL }
   const binding = require('../../binding.js')
 
   await t.exception.all(
-    () => fitLlamaConfig({ ...base, config: { device: 1 } }),
-    /config\.device must be a string/
+    () => binding.llamaConfigFit({ ...base, params: { device: 'cpu' } }),
+    /loadKind/
   )
   await t.exception.all(
-    () => binding.llamaConfigFit({ ...base, config: { device: 1 } }),
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 1 }
+      }),
     /values must be strings/
   )
   await t.exception.all(
     () =>
-      fitLlamaConfig({
+      binding.llamaConfigFit({
+        loadKind: 'completion',
         ...base,
-        config: { device: 'cpu', 'batch-size': '128', 'ubatch-size': '256' }
+        params: { device: 'cpu', 'batch-size': '128', 'ubatch-size': '256' }
       }),
     /ubatch-size must not exceed batch-size/
   )
   await t.exception.all(
     () =>
-      fitLlamaConfig({
+      binding.llamaConfigFit({
+        loadKind: 'completion',
         ...base,
-        config: { device: 'cpu', 'ctx-size': '512' },
+        params: { device: 'cpu', 'ctx-size': '512' },
         nCtxMin: 1024
       }),
     /nCtxMin must not exceed/
   )
 })
 
-test('fitLlamaConfig fits completion and embedding load maps', async function (t) {
+test('native raw fitting uses explicit completion and embedding load kinds', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
-  const completion = fitLlamaConfig({
+  const binding = require('../../binding.js')
+  const completion = binding.llamaConfigFit({
+    loadKind: 'completion',
     modelPath,
-    config: {
+    params: {
       device: 'cpu',
       'ctx-size': '512',
       'batch-size': '128',
@@ -83,11 +92,11 @@ test('fitLlamaConfig fits completion and embedding load maps', async function (t
     },
     nCtxMin: 512
   })
-  const embedding = fitLlamaConfig({
+  const embedding = binding.llamaConfigFit({
+    loadKind: 'embedding',
     modelPath,
-    config: {
+    params: {
       device: 'cpu',
-      embedding: '',
       'ctx-size': '512',
       'batch-size': '128',
       'ubatch-size': '64'

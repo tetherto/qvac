@@ -11,6 +11,7 @@ namespace {
 using model_fit::BackendDevice;
 using model_fit::BackendDeviceType;
 using model_fit::LlamaConfigMap;
+using model_fit::LlamaLoadKind;
 using model_fit::ModelTraits;
 
 int failures = 0;
@@ -61,6 +62,26 @@ BackendDevice device(
 } // namespace
 
 int main() {
+  {
+    const auto embedding = model_fit::normalizeLlamaLoadConfig(
+        LlamaLoadKind::Embedding,
+        "/embedding.gguf",
+        LlamaConfigMap{{"device", "cpu"}},
+        ModelTraits{},
+        {cpu()});
+    const auto completionWithLegacyEmbedding =
+        model_fit::normalizeLlamaLoadConfig(
+            LlamaLoadKind::Completion,
+            "/completion.gguf",
+            LlamaConfigMap{{"device", "cpu"}, {"embedding", ""}},
+            ModelTraits{},
+            {cpu()});
+    expect(embedding.params.embedding, "load kind must select embedding normalization");
+    expect(
+        !completionWithLegacyEmbedding.supported,
+        "embedding params key must not select embedding normalization");
+  }
+
   {
     const auto normalized = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -118,10 +139,10 @@ int main() {
 
   {
     const auto metalEmbedding = model_fit::normalizeLlamaLoadConfig(
+        LlamaLoadKind::Embedding,
         "/embedding.gguf",
         LlamaConfigMap{
             {"device", "gpu"},
-            {"embedding", ""},
             {"batch-size", "256"},
             {"ubatch-size", "64"},
             {"parallel", "1"}},
@@ -145,8 +166,9 @@ int main() {
         "embedding ubatch must equal batch");
 
     const auto openClEmbedding = model_fit::normalizeLlamaLoadConfig(
+        LlamaLoadKind::Embedding,
         "/embedding.gguf",
-        LlamaConfigMap{{"device", "gpu"}, {"embedding", ""}},
+        LlamaConfigMap{{"device", "gpu"}},
         ModelTraits{},
         {device("OpenCL0", "Adreno 830", BackendDeviceType::Gpu, 1, "OpenCL"),
          cpu()});
@@ -160,10 +182,10 @@ int main() {
         "OpenCL embedding must retain unquantized KV defaults");
 
     const auto parallelEmbedding = model_fit::normalizeLlamaLoadConfig(
+        LlamaLoadKind::Embedding,
         "/embedding.gguf",
         LlamaConfigMap{
             {"device", "cpu"},
-            {"embedding", ""},
             {"batch-size", "128"},
             {"ubatch-size", "32"},
             {"parallel", "2"}},
@@ -181,8 +203,9 @@ int main() {
       const BackendDevice openCl =
           device("OpenCL0", description, BackendDeviceType::Gpu, 7, "OpenCL");
       const auto bitnetEmbedding = model_fit::normalizeLlamaLoadConfig(
+          LlamaLoadKind::Embedding,
           "/embedding-bitnet.gguf",
-          LlamaConfigMap{{"device", "gpu"}, {"embedding", ""}},
+          LlamaConfigMap{{"device", "gpu"}},
           ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
           {openCl, cpu()});
       expect(
@@ -619,10 +642,10 @@ int main() {
 
     int embeddingFitCalls = 0;
     auto embedding = model_fit::normalizeLlamaLoadConfig(
+        LlamaLoadKind::Embedding,
         "/embedding.gguf",
         LlamaConfigMap{
             {"device", "cpu"},
-            {"embedding", ""},
             {"ctx-size", "512"},
             {"batch-size", "128"},
             {"ubatch-size", "64"}},

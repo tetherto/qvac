@@ -62,7 +62,7 @@ const std::unordered_set<std::string> SUPPORTED_LOAD_KEYS = {
     "ctx-size",       "batch-size",   "ubatch-size",   "parallel",
     "gpu-layers",     "n-gpu-layers", "flash-attn",    "cache-type-k",
     "cache-type-v",   "no-mmap",      "swa-full",      "fit-ctx",
-    "n-cpu-moe",      "embedding",    "no-kv-offload", "kv-offload",
+    "n-cpu-moe",      "no-kv-offload", "kv-offload",
     "no-op-offload",  "op-offload",   "no-host",       "host",
     "no-extra-bufts", "extra-bufts",
 };
@@ -305,10 +305,12 @@ preBackendUnsupportedDetail(const LlamaConfigMap& config) {
   return std::nullopt;
 }
 
-NormalizedLlamaLoad
-parseGenericConfig(const std::string& modelPath, const LlamaConfigMap& config) {
+NormalizedLlamaLoad parseGenericConfig(
+    LlamaLoadKind loadKind, const std::string& modelPath,
+    const LlamaConfigMap& config) {
   NormalizedLlamaLoad out;
   common_params& params = out.params;
+  params.embedding = loadKind == LlamaLoadKind::Embedding;
   auto parser = common_params_parser_init(
       params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
 
@@ -327,10 +329,6 @@ parseGenericConfig(const std::string& modelPath, const LlamaConfigMap& config) {
 
   for (const auto& [key, value] : config) {
     if (IGNORED_NON_MEMORY_KEYS.contains(key)) {
-      continue;
-    }
-    if (key == "embedding") {
-      params.embedding = parseBoolean(value, key);
       continue;
     }
     if (key == "no-host") {
@@ -490,14 +488,30 @@ std::optional<std::string> preBackendUnsupportedLlamaLoad(
 }
 
 NormalizedLlamaLoad normalizeLlamaLoadConfig(
-    const std::string& modelPath, LlamaConfigMap config,
+    LlamaLoadKind loadKind, const std::string& modelPath, LlamaConfigMap config,
     const ModelTraits& traits, const std::vector<BackendDevice>& devices) {
   return normalizeLlamaLoadConfig(
-      modelPath, std::move(config), traits, devices, currentPlatform());
+      loadKind,
+      modelPath,
+      std::move(config),
+      traits,
+      devices,
+      currentPlatform());
 }
 
 NormalizedLlamaLoad normalizeLlamaLoadConfig(
     const std::string& modelPath, LlamaConfigMap config,
+    const ModelTraits& traits, const std::vector<BackendDevice>& devices) {
+  return normalizeLlamaLoadConfig(
+      LlamaLoadKind::Completion,
+      modelPath,
+      std::move(config),
+      traits,
+      devices);
+}
+
+NormalizedLlamaLoad normalizeLlamaLoadConfig(
+    LlamaLoadKind loadKind, const std::string& modelPath, LlamaConfigMap config,
     const ModelTraits& traits, const std::vector<BackendDevice>& devices,
     LlamaFitPlatform platform) {
   if (platform == LlamaFitPlatform::Mobile) {
@@ -544,8 +558,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     config.erase(mmapIt);
   }
 
-  const bool isEmbedding = config.contains("embedding") &&
-                           parseBoolean(config.at("embedding"), "embedding");
+  const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
   BackendSelection selection;
   if (requestedDevice == "gpu") {
     selection = selectGpu(devices, traits, mainGpu, isEmbedding);
@@ -643,7 +656,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     config["ubatch-size"] = std::to_string(ubatch);
   }
 
-  NormalizedLlamaLoad out = parseGenericConfig(modelPath, config);
+  NormalizedLlamaLoad out = parseGenericConfig(loadKind, modelPath, config);
   if (!out.supported) {
     return out;
   }
@@ -669,6 +682,19 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     }
   }
   return out;
+}
+
+NormalizedLlamaLoad normalizeLlamaLoadConfig(
+    const std::string& modelPath, LlamaConfigMap config,
+    const ModelTraits& traits, const std::vector<BackendDevice>& devices,
+    LlamaFitPlatform platform) {
+  return normalizeLlamaLoadConfig(
+      LlamaLoadKind::Completion,
+      modelPath,
+      std::move(config),
+      traits,
+      devices,
+      platform);
 }
 
 LlamaFitExecution invokeLlamaFit(

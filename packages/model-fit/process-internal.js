@@ -7,8 +7,8 @@ const process_1 = require("./process");
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-function parseLlamaLoadFitConfig(value) {
-    const allowedFields = new Set(['modelPath', 'config', 'backendsDir', 'marginMiB', 'nCtxMin']);
+function parseFitLlamaProcessConfig(value) {
+    const allowedFields = new Set(['modelPath', 'params', 'backendsDir', 'marginMiB', 'nCtxMin']);
     for (const key of Object.keys(value)) {
         if (!allowedFields.has(key)) {
             throw new TypeError(`Fit process request config unknown top-level field '${key}'`);
@@ -20,16 +20,16 @@ function parseLlamaLoadFitConfig(value) {
     if (Buffer.byteLength(value['modelPath'], 'utf8') > 4096) {
         throw new RangeError('Fit process request config modelPath must not exceed 4096 bytes');
     }
-    if (!isRecord(value['config'])) {
-        throw new TypeError('Fit process request llama config must be an object');
+    if (!isRecord(value['params'])) {
+        throw new TypeError('Fit process request llama params must be an object');
     }
-    const entries = Object.entries(value['config']);
+    const entries = Object.entries(value['params']);
     if (entries.length > 256) {
         throw new RangeError('Fit process request llama config must not contain more than 256 entries');
     }
     for (const [key, entry] of entries) {
         if (typeof entry !== 'string') {
-            throw new TypeError(`Fit process request llama config.${key} must be a string`);
+            throw new TypeError(`Fit process request llama params.${key} must be a string`);
         }
         if (Buffer.byteLength(key, 'utf8') === 0 || Buffer.byteLength(key, 'utf8') > 128) {
             throw new RangeError('Fit process request llama config keys must be 1 to 128 bytes');
@@ -66,18 +66,26 @@ function parseFitProcessRequest(value) {
     }
     if (value['version'] === process_1.FIT_PROCESS_PROTOCOL_VERSION_V2) {
         for (const key of Object.keys(value)) {
-            if (key !== 'version' && key !== 'config') {
+            if (key !== 'version' && key !== 'loadKind' && key !== 'config') {
                 throw new TypeError(`Fit process request unknown v2 envelope field '${key}'`);
             }
+        }
+        if (value['loadKind'] !== 'completion' && value['loadKind'] !== 'embedding') {
+            throw new TypeError("Fit process request loadKind must be 'completion' or 'embedding'");
         }
     }
     if (!isRecord(value['config'])) {
         throw new TypeError('Fit process request config must be an object');
     }
     if (value['version'] === process_1.FIT_PROCESS_PROTOCOL_VERSION_V2) {
+        const loadKind = value['loadKind'];
+        if (loadKind !== 'completion' && loadKind !== 'embedding') {
+            throw new TypeError("Fit process request loadKind must be 'completion' or 'embedding'");
+        }
         return {
             version: process_1.FIT_PROCESS_PROTOCOL_VERSION_V2,
-            config: parseLlamaLoadFitConfig(value['config'])
+            loadKind,
+            config: parseFitLlamaProcessConfig(value['config'])
         };
     }
     if (typeof value['config']['modelPath'] !== 'string') {
@@ -143,7 +151,7 @@ function runFitProcessLine(line, fit, fitLlama = () => {
     try {
         const result = request.version === process_1.FIT_PROCESS_PROTOCOL_VERSION
             ? fit(request.config)
-            : fitLlama(request.config);
+            : fitLlama(request.loadKind, request.config);
         const response = {
             version: request.version,
             status: 'completed',

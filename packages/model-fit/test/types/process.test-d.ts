@@ -8,18 +8,22 @@ import {
   FIT_PROCESS_MAX_REQUEST_BYTES,
   FIT_PROCESS_MAX_RESPONSE_BYTES
 } from '../../process'
-import type { FitProcessRequest, FitProcessResponse } from '../../process'
-import type { FitConfig, FitResult, LlamaLoadFitConfig } from '../../index'
+import type {
+  FitLlamaProcessConfig,
+  FitProcessRequest,
+  FitProcessResponse
+} from '../../process'
+import type { FitConfig, FitResult } from '../../index'
 
 declare function assertNever (value: never): never
 
 const v1Config: FitConfig = { modelPath: '/model.gguf', nCtx: 4096, swaFull: true }
-const v2Config: LlamaLoadFitConfig = {
+const v2Config: FitLlamaProcessConfig = {
   modelPath: '/model.gguf',
-  config: { device: 'gpu', 'ctx-size': '4096' }
+  params: { device: 'gpu', 'ctx-size': '4096' }
 }
 const v1Line: string = encodeFitProcessRequest(v1Config)
-const v2Line: string = encodeFitLlamaProcessRequest(v2Config)
+const v2Line: string = encodeFitLlamaProcessRequest('completion', v2Config)
 const runnerPath: string = resolveFitProcessRunnerPath()
 void v1Line
 void v2Line
@@ -31,6 +35,7 @@ const v1Request: FitProcessRequest = {
 }
 const v2Request: FitProcessRequest = {
   version: FIT_PROCESS_PROTOCOL_VERSION_V2,
+  loadKind: 'completion',
   config: v2Config
 }
 void v1Request

@@ -303,10 +303,21 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
   auto config = args.getJsObject(0, "config");
   static const std::unordered_set<std::string_view> allowedFields = {
-      "modelPath", "config", "backendsDir", "marginMiB", "nCtxMin"};
+      "loadKind", "modelPath", "params", "backendsDir", "marginMiB", "nCtxMin"};
   requireAllowedProperties(env, config, allowedFields);
 
   LlamaLoadFitRequest request;
+  const std::string loadKind =
+      config.getProperty<jsu::String>(env, "loadKind").as<std::string>(env);
+  if (loadKind == "completion") {
+    request.loadKind = LlamaLoadKind::Completion;
+  } else if (loadKind == "embedding") {
+    request.loadKind = LlamaLoadKind::Embedding;
+  } else {
+    throw StatusError(
+        InvalidArgument,
+        "model-fit: 'loadKind' must be 'completion' or 'embedding'");
+  }
   request.modelPath =
       config.getProperty<jsu::String>(env, "modelPath").as<std::string>(env);
   if (request.modelPath.empty() || request.modelPath.size() > 4096) {
@@ -316,17 +327,17 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
         "bytes");
   }
   try {
-    request.config = args.getSubmap(0, "config");
+    request.params = args.getSubmap(0, "params");
   } catch (const std::exception&) {
     throw StatusError(
-        InvalidArgument, "model-fit: llama config values must be strings");
+        InvalidArgument, "model-fit: llama params values must be strings");
   }
-  if (request.config.size() > 256) {
+  if (request.params.size() > 256) {
     throw StatusError(
         InvalidArgument,
-        "model-fit: 'config' must not contain more than 256 entries");
+        "model-fit: 'params' must not contain more than 256 entries");
   }
-  for (const auto& [key, value] : request.config) {
+  for (const auto& [key, value] : request.params) {
     if (key.empty() || key.size() > 128) {
       throw StatusError(
           InvalidArgument,
@@ -339,7 +350,7 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
     }
   }
   try {
-    validateLlamaLoadFitCriticalIntegers(request.config);
+    validateLlamaLoadFitCriticalIntegers(request.params);
   } catch (const std::invalid_argument& error) {
     throw StatusError(InvalidArgument, error.what());
   }
@@ -364,9 +375,9 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
   }
 
   const std::optional<int64_t> batch =
-      aliasedInteger(request.config, "batch-size", "batch_size");
+      aliasedInteger(request.params, "batch-size", "batch_size");
   const std::optional<int64_t> ubatch =
-      aliasedInteger(request.config, "ubatch-size", "ubatch_size");
+      aliasedInteger(request.params, "ubatch-size", "ubatch_size");
   if (batch.has_value() && ubatch.has_value() &&
       ubatch.value() > batch.value()) {
     throw StatusError(
@@ -374,7 +385,7 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
         "model-fit: config.ubatch-size must not exceed batch-size");
   }
   const std::optional<int64_t> context =
-      aliasedInteger(request.config, "ctx-size", "ctx_size");
+      aliasedInteger(request.params, "ctx-size", "ctx_size");
   if (context.has_value() && context.value() > 0 && request.nCtxMin > 0 &&
       request.nCtxMin > static_cast<uint64_t>(context.value())) {
     throw StatusError(

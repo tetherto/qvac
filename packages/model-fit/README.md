@@ -35,7 +35,8 @@ const plan = fitParams({
 // plan = {
 //   status,       // 0 SUCCESS | 1 FAILURE (won't fit) | 2 ERROR (unknown)
 //   fits,         // status === SUCCESS
-//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' | 'no-backend-device'
+//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' |
+//                 // 'no-backend-device' | 'unsupported-config'
 //   buftOverrides,// placement the projection depended on, [] when none
 //   nGpuLayers,   // fitted offload layer count
 //   nCtx,         // fitted context size
@@ -50,47 +51,6 @@ const plan = fitParams({
 //   tensorSplit   // number[] offload proportion per device
 // }
 ```
-
-### Experimental llama.cpp load-config API
-
-`fitLlamaConfig()` accepts the same flat string map used for ordinary
-completion and embedding loads, then normalizes its memory-relevant settings
-inside `@qvac/model-fit` before calling `common_fit_params`:
-
-```js
-const { fitLlamaConfig } = require('@qvac/model-fit')
-
-const result = fitLlamaConfig({
-  modelPath: '/abs/path/model.gguf',
-  config: {
-    device: 'gpu',
-    'ctx-size': '4096',
-    'batch-size': '512',
-    'ubatch-size': '128',
-    parallel: '1',
-    'gpu-layers': '-1',
-    embedding: ''
-  },
-  marginMiB: 1024,
-  nCtxMin: 4096
-})
-```
-
-This path is experimental and intentionally owned by this package. It uses
-qvac-fabric's common argument parser and model/context conversions for generic
-llama.cpp semantics, while temporarily duplicating QVAC's ordinary-inference
-backend, flash-attention, KV-cache and BitNet defaults. It does not import or
-invoke `@qvac/llm-llamacpp`.
-
-The supported scope is desktop, local, single-file GGUF, ordinary completion or
-embedding inference. Symbolic GPU layouts, mobile process admission, shards,
-multimodal projectors, LoRA, finetuning and caller-driven RoPE/YaRN extension
-return `ERROR` with `reason: 'unsupported-config'`. That outcome is unknown,
-not evidence that the model is too large.
-
-Results are advisory projections. A `SUCCESS` is conditional on reproducing
-the returned placement and is not a guaranteed allocation; no outcome from
-this experimental API should be used as a denial-grade admission decision.
 
 ### Backend registration
 
@@ -262,17 +222,24 @@ runner to dwarf the fit itself. Size the deadline for that, not for the
 projection.
 
 Protocol v1 remains the low-level `{ version: 1, config: FitConfig }` envelope.
-Protocol v2 carries the experimental raw load shape:
+Protocol v2 carries the process-only raw load shape. The explicit load kind
+selects completion or embedding normalization; it is never inferred from a
+parameter key:
 
 ```js
 const { encodeFitLlamaProcessRequest } = require('@qvac/model-fit/process')
 
-const line = encodeFitLlamaProcessRequest({
+const line = encodeFitLlamaProcessRequest('embedding', {
   modelPath: '/abs/path/model.gguf',
-  config: { device: 'cpu', 'ctx-size': '4096' }
+  params: { device: 'cpu', 'ctx-size': '4096' }
 })
-// {"version":2,"config":{...}}\n
+// {"version":2,"loadKind":"embedding","config":{...}}\n
 ```
+
+Raw-load normalization remains private to the disposable runner and native
+addon. The supported scope is desktop, local, single-file GGUF completion or
+embedding inference. Unsupported layouts and features return `ERROR` with
+`reason: 'unsupported-config'`.
 
 ### Spawning on Windows
 
