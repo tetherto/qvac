@@ -1,4 +1,5 @@
 # Changelog
+<!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
 ## [0.16.2] - 2026-07-31
 
