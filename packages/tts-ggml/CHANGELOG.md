@@ -1,5 +1,4 @@
 # Changelog
-<!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
 All notable changes to this project will be documented in this file.
 
