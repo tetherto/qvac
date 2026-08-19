@@ -116,9 +116,11 @@ jobs:
   # dispatch/push/benchmark/on-merge or when native files changed.
   detect-reuse:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
+    # No explicit permissions block: this reusable is called by ~17 workflows,
+    # and a reusable job can't request a scope its caller lacks (that is a
+    # startup_failure, not a runtime error). Inherit instead — the reuse step
+    # (the only thing needing actions: read) runs only when reuse-workflow-file
+    # is set, and that caller (on-pr-nx) grants actions: read down the chain.
     outputs:
       reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
       native_hash: ${{ steps.detect.outputs.native_hash }}
