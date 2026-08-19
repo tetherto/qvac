@@ -12,8 +12,10 @@ import {
   finetune as finetuneOp,
   getFinetuneState,
   getFinetuneStateFromCheckpoints,
+  pauseFinetune,
   startFinetune
 } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
+import { getRequestRegistry } from '@/server/bare/runtime'
 import { ModelType } from '@/schemas'
 import { CompletionFailedError } from '@/utils/errors-server'
 
@@ -455,6 +457,76 @@ test('startFinetune: detaches progress listeners after completion', async (t) =>
     t.alike(seenSteps, [2])
     t.is(result.status, 'COMPLETED')
     t.is(removeListenerCalls, 1)
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('pauseFinetune: a finetune queued behind an active reader is not global-paused and does not later start', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-pause-queued-model'
+  let pauseCalls = 0
+  let finetuneCalls = 0
+
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        finetuneCalls++
+        return {
+          on: () => {},
+          removeListener: () => {},
+          await: async () => ({ status: 'COMPLETED', stats: {} })
+        }
+      },
+      pause: async function () {
+        pauseCalls++
+      },
+      cancel: async function () {}
+    } as unknown as AnyModel,
+    path: '/tmp/pause-queued-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+
+  // A completion "reader" holds the shared per-model lane; the exclusive finetune
+  // must queue behind it (never admitted).
+  const reader = await getRequestRegistry().begin({
+    requestId: 'reader-1',
+    kind: 'completion',
+    modelId
+  })
+
+  try {
+    const ftPromise = startFinetune({
+      type: 'finetune',
+      modelId,
+      operation: 'start',
+      options: {
+        trainDatasetDir: '/tmp/train.jsonl',
+        validation: { type: 'none' },
+        outputParametersDir: '/tmp/out'
+      }
+    })
+    // Let the finetune reach the exclusive-lane wait behind the reader.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    // Pause while the finetune is only queued: it must NOT invoke the addon-global
+    // pause (which cancels the active reader), and the finetune must not start once
+    // the reader releases.
+    const pauseResult = await pauseFinetune(modelId)
+    t.is(pauseResult.status, 'PAUSED')
+    t.is(
+      pauseCalls,
+      0,
+      'no addon-global pause while the finetune is only queued (would kill the reader)'
+    )
+
+    // Release the reader; the queued-then-paused finetune must not start.
+    await reader[Symbol.asyncDispose]()
+    const ftResult = await ftPromise
+    t.is(ftResult.status, 'CANCELLED', 'queued finetune does not start after a pause')
+    t.is(finetuneCalls, 0, 'model.finetune() never ran for the queued-then-paused finetune')
   } finally {
     unregisterModel(modelId)
     clearRegistry()

@@ -58,6 +58,13 @@ export function clearFinetuneRuntimeState(modelId: string) {
   else finetuneRuntimeState.set(modelId, count - 1)
 }
 
+// modelIds whose finetune currently HOLDS the exclusive lane (admitted, past the
+// queued-abort check) — distinct from the pre-admission running ref above. Only an
+// admitted finetune may be paused through the addon-global model.pause(); pausing
+// while merely queued would cancel an unrelated active reader (completion/translate)
+// and the finetune would still start once the reader released.
+const admittedFinetunes = new Set<string>()
+
 export function getFinetuneStateFromCheckpoints(options: FinetuneOptions): FinetuneStatus {
   const checkpointDirectory = options.checkpointSaveDir ?? './checkpoints'
 
@@ -146,6 +153,14 @@ export async function startFinetune(
     return { type: 'finetune', status: 'CANCELLED' }
   }
 
+  // Past the queued-abort check: this finetune now holds the exclusive lane, so a
+  // global addon pause is safe (nothing else runs on the model). Mark it admitted
+  // for pauseFinetune and clear on scope unwind.
+  admittedFinetunes.add(request.modelId)
+  ctx.scope.defer(() => {
+    admittedFinetunes.delete(request.modelId)
+  })
+
   // The pre-admission validation above ran before this request queued for the
   // exclusive lane, so a peer finetune could have changed the checkpoint state
   // while we waited. Re-validate now that we hold the lane exclusively and the
@@ -186,13 +201,20 @@ export async function startFinetune(
 }
 
 export async function pauseFinetune(modelId: string): Promise<FinetuneResult> {
-  const model = getModel(modelId)
-  await model.pause()
-
-  return {
-    type: 'finetune',
-    status: 'PAUSED'
+  // Only an admitted finetune holds the model exclusively, so only then is the
+  // addon-global pause (which cancels whatever is running) safe. If a finetune is
+  // merely queued behind an active reader, a global pause would kill that reader
+  // AND the finetune would still start once the reader released — so cancel the
+  // queued finetune (nothing has trained yet) through the registry and never touch
+  // the addon globally.
+  if (admittedFinetunes.has(modelId)) {
+    const model = getModel(modelId)
+    await model.pause()
+    return { type: 'finetune', status: 'PAUSED' }
   }
+
+  getRequestRegistry().cancel({ modelId, kind: 'finetune' })
+  return { type: 'finetune', status: 'PAUSED' }
 }
 
 // Routes cancellation through the registry; the model.cancel() forward is
