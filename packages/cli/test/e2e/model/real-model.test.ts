@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test'
+import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -37,7 +37,7 @@ function timedWavField() {
 }
 
 describe('models', () => {
-  it('GET /v1/models lists all 4 loaded models', async () => {
+  it('GET /v1/models lists every configured model (loaded and lazy)', async () => {
     const res = await get('/v1/models')
     assert.equal(res.statusCode, 200)
     const body = res.json() as {
@@ -45,14 +45,29 @@ describe('models', () => {
       data: Array<{ id: string; object: string; owned_by: string }>
     }
     assert.equal(body.object, 'list')
-    assert.equal(body.data.length, 4)
+    // All configured aliases appear, including the preload:false ones
+    // (test-embed-lazy, test-video) that are not loaded yet.
     assert.deepEqual([...body.data.map((m) => m.id)].sort(), [
       'test-embed',
+      'test-embed-lazy',
       'test-llm',
+      'test-video',
       'test-whisper',
       'test-whisper-translate'
     ])
     assert.ok(body.data.every((m) => m.object === 'model' && m.owned_by === 'qvac'))
+  })
+
+  it('lazy-loads a preload:false model on first request', async () => {
+    const registry = server().qvac.registry
+    assert.equal(registry.getEntry(E2E.embedLazy)?.state, registry.STATES.IDLE)
+
+    const res = await post('/v1/embeddings', { model: E2E.embedLazy, input: 'lazy load me' })
+    assert.equal(res.statusCode, 200)
+    const body = res.json() as { data: Array<{ embedding: number[] }> }
+    assert.ok(body.data[0]?.embedding.length > 0)
+
+    assert.equal(registry.getEntry(E2E.embedLazy)?.state, registry.STATES.READY)
   })
 
   it('GET /v1/models/:id returns model details', async () => {
@@ -976,31 +991,43 @@ describe('cross-type model rejection', () => {
 
 const TINY_PNG_DATA_URI = `data:image/png;base64,${tinyPng().toString('base64')}`
 
-describe('videos (HTTP layer only; test-video preload:false)', () => {
-  it('JSON txt2vid reaches model check (503 model_not_ready)', async () => {
+// A real sdcpp-video load is far too heavy for an HTTP-layer test, so the
+// lazy-load is stubbed to fail. These assert that a valid request passes
+// validation and reaches the (now lazy) model gate — which surfaces the load
+// failure as `model_load_failed` rather than the old permanent `model_not_ready`.
+describe('videos (HTTP layer only; lazy-load stubbed to fail)', () => {
+  before(() => {
+    server().qvac.loadModelOverride = () =>
+      Promise.reject(new Error('stub: no real video load in HTTP-layer test'))
+  })
+  after(() => {
+    delete server().qvac.loadModelOverride
+  })
+
+  it('JSON txt2vid reaches the model gate (503 model_load_failed)', async () => {
     assertError(
       await post('/v1/videos', { model: E2E.video, prompt: 'a bird flies' }),
-      'model_not_ready'
+      'model_load_failed'
     )
   })
-  it('JSON img2vid with data URI reaches model check (503 model_not_ready)', async () => {
+  it('JSON img2vid with data URI reaches the model gate (503 model_load_failed)', async () => {
     assertError(
       await post('/v1/videos', {
         model: E2E.video,
         prompt: 'subject turns',
         input_reference: { image_url: TINY_PNG_DATA_URI }
       }),
-      'model_not_ready'
+      'model_load_failed'
     )
   })
-  it('JSON img2vid with HTTP URL reaches model check (503 model_not_ready)', async () => {
+  it('JSON img2vid with HTTP URL reaches the model gate (503 model_load_failed)', async () => {
     assertError(
       await post('/v1/videos', {
         model: E2E.video,
         prompt: 'subject turns',
         input_reference: { image_url: 'http://127.0.0.1:1/v1/models' }
       }),
-      'model_not_ready'
+      'model_load_failed'
     )
   })
   it('input_reference with wrong shape returns 400 invalid_request', async () => {
@@ -1013,7 +1040,7 @@ describe('videos (HTTP layer only; test-video preload:false)', () => {
       'invalid_request'
     )
   })
-  it('multipart POST with input_reference file reaches model check (503 model_not_ready)', async () => {
+  it('multipart POST with input_reference file reaches the model gate (503 model_load_failed)', async () => {
     const res = await server().inject({
       method: 'POST',
       url: '/v1/videos',
@@ -1023,6 +1050,6 @@ describe('videos (HTTP layer only; test-video preload:false)', () => {
         { name: 'input_reference', filename: 'ref.png', contentType: 'image/png', data: tinyPng() }
       ])
     })
-    assertError(res, 'model_not_ready')
+    assertError(res, 'model_load_failed')
   })
 })

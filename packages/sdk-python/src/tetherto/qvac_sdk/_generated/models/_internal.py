@@ -9041,6 +9041,188 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
     ] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc(
+    GeneratedBaseModel
+):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    tts_engine: Annotated[Literal["audio8"], Field(alias="ttsEngine")] = "audio8"
+    reference_text: Annotated[
+        str | None, Field(alias="referenceText", min_length=1)
+    ] = None
+    greedy: bool | None = None
+    temperature: Annotated[float | None, Field(ge=0.0)] = None
+    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
+    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
+    max_frames: Annotated[int | None, Field(alias="maxFrames", ge=0, le=2147483647)] = (
+        None
+    )
+    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    output_sample_rate: Annotated[
+        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+    ] = None
+    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    n_gpu_layers: Annotated[
+        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+    ] = None
+    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    audio8_codec_decoder_model_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc,
+        Field(alias="audio8CodecDecoderModelSrc"),
+    ]
+    audio8_codec_encoder_model_src: Annotated[
+        str
+        | LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
+        | None,
+        Field(alias="audio8CodecEncoderModelSrc"),
+    ] = None
+    reference_audio_src: Annotated[
+        str | LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc | None,
+        Field(alias="referenceAudioSrc"),
+    ] = None
+
+
 class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -9074,7 +9256,8 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         LoadModelSrcRequestTtsGgmlModelConfigChatterbox
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonic
         | LoadModelSrcRequestTtsGgmlModelConfigParler
-        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3,
+        | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3
+        | LoadModelSrcRequestTtsGgmlModelConfigAudio8,
         Field(alias="modelConfig"),
     ]
 

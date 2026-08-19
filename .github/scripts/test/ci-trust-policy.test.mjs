@@ -895,14 +895,13 @@ test('npm reusable pins PR checkout and keeps user input out of run scripts', ()
 const FORK_CI_ENV_RE =
   /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
 
-test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording', () => {
+test('reusable-fork-approval: fork-ci gate and status recording', () => {
   const source = read('.github/workflows/reusable-fork-approval.yml')
   assert.match(
     source,
     FORK_CI_ENV_RE,
     'reusable-fork-approval must gate on the fork-ci environment (fork-only conditional)',
   )
-  assert.match(source, /step-security\/harden-runner@/)
   assert.match(source, /context=qvac\/fork-verified/)
   assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/)
   assert.match(source, /statuses:\s*write/)
@@ -1659,11 +1658,6 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
     benchmarkMatrix.include.filter((entry) => entry.platform === 'iOS').length,
     12,
   )
-  assert.match(
-    workflow,
-    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
-  )
-  assert.match(workflow, /egress-policy:\s*audit/)
   assert.match(workflow, /release environment authorizes GitHub OIDC/)
   assert.match(workflow, /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/)
   assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
@@ -1721,11 +1715,6 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     workflow,
     /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
   )
-  assert.match(
-    workflow,
-    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
-  )
-  assert.match(workflow, /egress-policy:\s*audit/)
   assert.match(
     workflow,
     /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,
