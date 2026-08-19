@@ -58,13 +58,13 @@ const std::unordered_set<std::string> FIT_CRITICAL_INTEGER_KEYS = {
 
 // This exact experimental subset must be classified before backend discovery.
 const std::unordered_set<std::string> SUPPORTED_LOAD_KEYS = {
-    "device",         "main-gpu",     "split-mode",    "tensor-split",
-    "ctx-size",       "batch-size",   "ubatch-size",   "parallel",
-    "gpu-layers",     "n-gpu-layers", "flash-attn",    "cache-type-k",
-    "cache-type-v",   "no-mmap",      "swa-full",      "fit-ctx",
-    "n-cpu-moe",      "no-kv-offload", "kv-offload",
-    "no-op-offload",  "op-offload",   "no-host",       "host",
-    "no-extra-bufts", "extra-bufts",
+    "device",       "main-gpu",      "split-mode",  "tensor-split",
+    "ctx-size",     "batch-size",    "ubatch-size", "parallel",
+    "gpu-layers",   "n-gpu-layers",  "flash-attn",  "cache-type-k",
+    "cache-type-v", "no-mmap",       "swa-full",    "fit-ctx",
+    "n-cpu-moe",    "no-kv-offload", "kv-offload",  "no-op-offload",
+    "op-offload",   "no-host",       "host",        "no-extra-bufts",
+    "extra-bufts",
 };
 
 const std::array<std::string_view, 18> UNSUPPORTED_KEY_PARTS = {
@@ -503,11 +503,7 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     const std::string& modelPath, LlamaConfigMap config,
     const ModelTraits& traits, const std::vector<BackendDevice>& devices) {
   return normalizeLlamaLoadConfig(
-      LlamaLoadKind::Completion,
-      modelPath,
-      std::move(config),
-      traits,
-      devices);
+      LlamaLoadKind::Completion, modelPath, std::move(config), traits, devices);
 }
 
 NormalizedLlamaLoad normalizeLlamaLoadConfig(

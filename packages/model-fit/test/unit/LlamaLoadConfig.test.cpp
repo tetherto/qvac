@@ -76,7 +76,9 @@ int main() {
             LlamaConfigMap{{"device", "cpu"}, {"embedding", ""}},
             ModelTraits{},
             {cpu()});
-    expect(embedding.params.embedding, "load kind must select embedding normalization");
+    expect(
+        embedding.params.embedding,
+        "load kind must select embedding normalization");
     expect(
         !completionWithLegacyEmbedding.supported,
         "embedding params key must not select embedding normalization");
