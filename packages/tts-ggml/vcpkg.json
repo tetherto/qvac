@@ -10,7 +10,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-17",
+      "version>=": "2026-08-18",
       "default-features": false,
       "features": [
         "tts",
@@ -20,7 +20,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-17",
+      "version>=": "2026-08-18",
       "default-features": false,
       "features": [
         "tts",
@@ -31,7 +31,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-17",
+      "version>=": "2026-08-18",
       "default-features": false,
       "features": [
         "tts",
@@ -52,7 +52,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-08-17",
+          "version>=": "2026-08-18",
           "default-features": false,
           "features": [
             "vulkan"

@@ -10,7 +10,7 @@ import { getClientLogger } from '@/logging'
 import type { Logger } from '@/logging/types'
 import { BareImportsMapNotFoundError } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
-import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
+import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
 import { generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
@@ -94,6 +94,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   const projectRoot = options.projectRoot ?? process.cwd()
   const outputDir = path.join(projectRoot, 'qvac')
   const entryPath = path.join(outputDir, 'worker.entry.mjs')
+  const bundleEntryPath = path.join(outputDir, 'worker.bundle.entry.mjs')
   const bundlePath = path.join(outputDir, 'worker.bundle.js')
 
   const logger = createCommandLogger(options)
@@ -136,8 +137,12 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   logger.info('\n📝 Generating worker entry...')
   const resolveSdkImport = createSdkImportResolver(sdkPath, sdkName)
-  const workerEntry = generateWorkerEntry(pluginSpecifiers, sdkName, resolveSdkImport)
-  await fsp.writeFile(entryPath, workerEntry, 'utf8')
+  const { runtimeEntry, bundleEntry } = generateWorkerEntries(
+    pluginSpecifiers,
+    sdkName,
+    resolveSdkImport
+  )
+  await fsp.writeFile(entryPath, runtimeEntry, 'utf8')
   logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
   logger.info(`   Using: ${path.relative(projectRoot, importsMapPath)}`)
 
@@ -147,15 +152,20 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     logger.debug(`   Deferred: ${deferModules.join(', ')}`)
   }
 
-  await runBarePack({
-    entryPath,
-    outputPath: bundlePath,
-    hosts,
-    importsMapPath,
-    deferModules,
-    quiet: options.quiet === true,
-    logger
-  })
+  try {
+    await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
+    await runBarePack({
+      entryPath: bundleEntryPath,
+      outputPath: bundlePath,
+      hosts,
+      importsMapPath,
+      deferModules,
+      quiet: options.quiet === true,
+      logger
+    })
+  } finally {
+    await fsp.rm(bundleEntryPath, { force: true })
+  }
 
   const stats = await fsp.stat(bundlePath)
   const sizeKB = (stats.size / 1024).toFixed(1)
