@@ -234,6 +234,108 @@ test('world scene op: the model slot is held until uninterruptible work settles'
 // RNG/history cannot be resumed either way. So a cancelled step must also drop
 // the session, and the NEXT step must rebuild it with no explicit reload from
 // the caller.
+// Maxim's finding: an abort can land while `ensureActivated()` is still running.
+// `onAbort` fires, but the native cancel flag it sets is cleared when the next
+// block begins — so dispatching anyway would run a whole block, advance the
+// session history, and deliver none of it. The caller sees a rejection while the
+// world has silently moved on.
+test('world step op: a request aborted before dispatch never starts a native block', async function (t) {
+  const [{ worldStep }, { getRequestRegistry }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime')
+  ])
+  const driver = makeResponse([new Uint8Array([1])])
+
+  let steps = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => {
+      steps++
+      return driver.response
+    },
+    createScene: async () => driver.response,
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId }) => {
+    const requestId = makeId('req')
+    const stream = worldStep({ modelId, requestId, keys: ['W'] })
+
+    // Cancel before the generator body has run at all, so the abort is already
+    // set by the time activation completes.
+    getRequestRegistry().cancel({ requestId })
+
+    await t.exception(stream.next(), /cancelled/i, 'the step rejects as a cancellation')
+    t.is(steps, 0, 'no native block was dispatched, so the world did not move')
+  })
+})
+
+// Maxim's second finding: the addon raises its own `Diffusion/Cancelled` out of
+// iterate(), which left through the catch and never reached the typed
+// conversion — so the client saw a generic RPC error for what this API promises
+// as a typed cancellation.
+test('world step op: a native cancellation surfaces as InferenceCancelledError', async function (t) {
+  const [{ worldStep }, { getRequestRegistry }, { InferenceCancelledError }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime'),
+    import('@/utils/errors-server')
+  ])
+
+  let settle = () => {}
+  const finished = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  let raise = () => {}
+  const gate = new Promise<void>((resolve) => {
+    raise = resolve
+  })
+  const nativeCancelling = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => ({
+      async *iterate() {
+        yield new Uint8Array([1])
+        await gate
+        // What the addon actually throws once its cancel lands.
+        throw new Error('Diffusion/Cancelled')
+      },
+      await: () => finished
+    }),
+    createScene: async () => ({
+      async *iterate() {},
+      await: () => finished
+    }),
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(nativeCancelling, async ({ modelId }) => {
+    const requestId = makeId('req')
+    const stream = worldStep({ modelId, requestId, keys: ['W'] })
+    await stream.next()
+
+    getRequestRegistry().cancel({ requestId })
+    raise()
+    settle()
+
+    let thrown: unknown
+    try {
+      await stream.next()
+    } catch (error) {
+      thrown = error
+    }
+    t.ok(
+      thrown instanceof InferenceCancelledError,
+      'the native cancellation is relabelled as the typed error the API promises'
+    )
+    t.is(
+      (thrown as InstanceType<typeof InferenceCancelledError>).requestId,
+      requestId,
+      'and carries the requestId the caller cancelled with'
+    )
+  })
+})
+
 test('world step op: a cancelled step rebuilds the session without an explicit reload', async function (t) {
   const [{ worldStep }, { getRequestRegistry }] = await Promise.all([
     import('@/server/bare/plugins/sdcpp-generation/ops/world'),

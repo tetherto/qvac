@@ -449,6 +449,16 @@ export async function* worldStep(
     ctx.signal.removeEventListener('abort', onAbort)
   })
 
+  // An abort can land while `ensureActivated()` is still running. `onAbort` has
+  // then already fired, but the native cancel flag it sets is CLEARED by
+  // `processWalkStep()` when the next block begins — so dispatching now would
+  // run a full block, advance the session history, and deliver none of it. The
+  // caller would see a rejection while the world silently moved on. Refuse
+  // before dispatch instead.
+  if (ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId)
+  }
+
   const response = await session.run(() => session.step(request.keys ?? []))
 
   let frameIndex = 0
@@ -469,6 +479,16 @@ export async function* worldStep(
     }
   } catch (error) {
     stepFailed = true
+    // Native cancellation surfaces as the addon's own `Diffusion/Cancelled`
+    // error out of `iterate()`. Rethrowing it raw hands the client a generic RPC
+    // error for what this API promises as a typed cancellation — and the
+    // conversion below the try is unreachable once we throw from here. Only an
+    // aborted request is relabelled; every other failure keeps its own error.
+    // `finally` still runs before this propagates, so the settle and teardown
+    // happen first either way.
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(ctx.requestId, {}, error)
+    }
     throw error
   } finally {
     // Cancel is block-granular, so the DiT keeps going after we stop reading.
