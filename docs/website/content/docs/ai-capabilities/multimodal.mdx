@@ -29,10 +29,17 @@ You should load two models:
 - a matching projection model (`mmproj-*.gguf`). Model file format: `*.gguf`.
 
 Recommended pairs:
-- SmolVLM2 + mmproj-*
+- VisionPsy Nano (base or Flash) + mmproj-*
 - Qwen2.5-Omni + mmproj-* (or Qwen3-VL + mmproj-*)
+- SmolVLM2 + mmproj-*
 
 For models available as constants, see [SDK — Models](/introduction#models).
+
+### VisionPsy Nano: base vs. Flash
+
+VisionPsy Nano ships in two variants — base and Flash — that share the same projection model (`mmproj-*.gguf`). To pick between them at [`loadModel()`](/reference/api#loadmodel) time, set `modelConfig.image_no_upscale`:
+- `'off'` (default): base variant.
+- `'on'`: Flash variant.
 
 ## Example
 
