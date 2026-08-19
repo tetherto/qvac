@@ -150,5 +150,9 @@ describe('model-catalog', () => {
     const last = paginate(cat, 2, 4)
     assert.equal(last.data.length, 1)
     assert.equal(last.hasMore, false)
+    // Omitted limit → everything, no more pages.
+    const all = paginate(cat)
+    assert.equal(all.data.length, 5)
+    assert.equal(all.hasMore, false)
   })
 })

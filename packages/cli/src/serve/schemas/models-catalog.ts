@@ -20,9 +20,8 @@ export const modelCatalogQuery = z.object({
     .number()
     .int()
     .positive()
-    .max(1000)
     .optional()
-    .describe('Page size (default 100).'),
+    .describe('Page size. Omit for no limit (returns all matching entries).'),
   offset: z.coerce.number().int().min(0).optional().describe('Rows to skip (default 0).')
 })
 

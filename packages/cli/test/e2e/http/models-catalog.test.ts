@@ -27,11 +27,12 @@ describe('serve: model catalog', () => {
   const get = (url: string) => (server() as FastifyInstance).inject({ method: 'GET', url })
 
   it('lists catalog entries as model_catalog_entry objects', async () => {
-    const res = await get('/v1/models/catalog?limit=1000')
+    const res = await get('/v1/models/catalog')
     assert.equal(res.statusCode, 200)
     const body = res.json() as CatalogList
     assert.equal(body.object, 'list')
     assert.ok(body.data.length > 1, 'built-in constants should populate the catalog')
+    assert.equal(body.has_more, false, 'no default limit — the full catalog is returned')
     assert.ok(body.data.every((e) => e.object === 'model_catalog_entry'))
   })
 
@@ -57,15 +58,15 @@ describe('serve: model catalog', () => {
   })
 
   it('filters by role and addon', async () => {
-    const chat = (await get('/v1/models/catalog?role=chat&limit=1000')).json() as CatalogList
+    const chat = (await get('/v1/models/catalog?role=chat')).json() as CatalogList
     assert.ok(chat.data.length > 0)
     assert.ok(chat.data.every((e) => e.role === 'chat'))
-    const llm = (await get('/v1/models/catalog?addon=llm&limit=1000')).json() as CatalogList
+    const llm = (await get('/v1/models/catalog?addon=llm')).json() as CatalogList
     assert.ok(llm.data.every((e) => e.addon === 'llm'))
   })
 
   it('searches by id substring', async () => {
-    const body = (await get('/v1/models/catalog?search=QWEN&limit=1000')).json() as CatalogList
+    const body = (await get('/v1/models/catalog?search=QWEN')).json() as CatalogList
     assert.ok(body.data.length > 0)
     assert.ok(body.data.every((e) => e.id.toLowerCase().includes('qwen')))
   })

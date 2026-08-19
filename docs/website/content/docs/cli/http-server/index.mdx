@@ -281,7 +281,7 @@ models.)
 
 Filter with query params (combined with AND): `search` (id substring), `role`
 (chat/embedding/transcription/speech/image/…), `addon`/`type` (llm/tts/whisper/diffusion/…),
-`quantization`, `engine`, `configured`, `limit` (default 100), `offset`.
+`quantization`, `engine`, `configured`, `limit` (omit for no limit), `offset`.
 
 ```bash
 curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'

@@ -160,7 +160,7 @@ Filter with query params (all optional, combined with AND):
 | `quantization` | e.g. `q4`, `q8_0` (case-insensitive)                                          |
 | `engine`       | e.g. `llamacpp-completion`                                                    |
 | `configured`   | `true` / `false`                                                              |
-| `limit`        | Page size (default 100)                                                       |
+| `limit`        | Page size; omit for no limit (returns all matching entries)                   |
 | `offset`       | Rows to skip (default 0)                                                      |
 
 Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`.
