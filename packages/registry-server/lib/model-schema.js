@@ -14,7 +14,8 @@ const baseModelFields = {
   deprecated: z.boolean().optional(),
   deprecatedAt: z.string().optional(),
   replacedBy: z.string().optional(),
-  deprecationReason: z.string().max(512).optional()
+  deprecationReason: z.string().max(512).optional(),
+  unlisted: z.boolean().optional()
 }
 
 const addModelRequestSchema = z

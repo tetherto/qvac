@@ -28,6 +28,7 @@ test('addModelRequestSchema accepts full valid payload', async (t) => {
     deprecatedAt: '',
     replacedBy: '',
     deprecationReason: '',
+    unlisted: true,
     skipExisting: true
   })
   t.ok(result.success)
@@ -121,6 +122,19 @@ test('addModelRequestSchema rejects non-boolean skipExisting', async (t) => {
   t.ok(
     result.error.issues.some((i) => i.path.includes('skipExisting')),
     'error references skipExisting field'
+  )
+})
+
+// lunte-disable-next-line require-await
+test('addModelRequestSchema rejects non-boolean unlisted', async (t) => {
+  const result = addModelRequestSchema.safeParse({
+    ...VALID_PAYLOAD,
+    unlisted: 'yes'
+  })
+  t.absent(result.success)
+  t.ok(
+    result.error.issues.some((i) => i.path.includes('unlisted')),
+    'error references unlisted field'
   )
 })
 

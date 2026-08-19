@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "schema": [
     {
       "name": "model-blob-binding",
@@ -173,6 +173,12 @@
           "required": false,
           "type": "string",
           "version": 2
+        },
+        {
+          "name": "unlisted",
+          "required": false,
+          "type": "bool",
+          "version": 3
         }
       ]
     },

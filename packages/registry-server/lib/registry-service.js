@@ -704,7 +704,8 @@ class RegistryService extends ReadyResource {
           replacedBy: isUndeprecating ? '' : (data.replacedBy ?? existing.replacedBy),
           deprecationReason: isUndeprecating
             ? ''
-            : (data.deprecationReason ?? existing.deprecationReason)
+            : (data.deprecationReason ?? existing.deprecationReason),
+          unlisted: data.unlisted !== undefined ? data.unlisted : existing.unlisted
         }
 
         await this._appendOperation(DISPATCH_PUT_MODEL, updated)
@@ -1299,6 +1300,9 @@ class RegistryService extends ReadyResource {
     }
     if (request.deprecationReason) {
       entry.deprecationReason = request.deprecationReason
+    }
+    if (request.unlisted !== undefined) {
+      entry.unlisted = request.unlisted
     }
 
     return entry
