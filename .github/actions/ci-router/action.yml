@@ -19,8 +19,15 @@ outputs:
   run_desktop:
     description: 'Run desktop integration tests (run-desktop-addon-tests label)'
     value: ${{ steps.route.outputs.run_desktop }}
+  # ANNOUNCEMENT: standalone per-addon mobile suites are now ON-DEMAND ONLY —
+  # run them by dispatching integration-mobile-test-<addon>.yml (pick platform,
+  # device(s), optional test filter). The on-pr callers' standalone mobile lanes
+  # no longer auto-run on PRs, so the `run-mobile-addon-tests` label no longer
+  # launches those Device Farm runs (the label + flag are kept for a future
+  # re-enable; do not rely on the label). This flag is STILL used to gate the
+  # on-device (Device Farm) co-load smoke, so it is intentionally left wired.
   run_mobile:
-    description: 'Run mobile integration tests (run-mobile-addon-tests label)'
+    description: 'Gates the on-device co-load smoke (run-mobile-addon-tests label). Standalone per-addon mobile suites are dispatch-only and no longer auto-run on PRs.'
     value: ${{ steps.route.outputs.run_mobile }}
   run_coload:
     description: 'Run the multi-addon co-load smoke (run-coload-tests label). Desktop co-load runs on this flag alone; the on-device (Device Farm) co-load additionally requires run_mobile.'
