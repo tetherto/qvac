@@ -641,8 +641,8 @@ importers:
         specifier: ^4.2.2
         version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-subprocess:
-        specifier: ^5.2.1
-        version: 5.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^6.1.0
+        version: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6
@@ -1432,7 +1432,7 @@ importers:
         specifier: ^0.1.1
         version: link:../error
       '@qvac/logging':
-        specifier: ^0.1.0
+        specifier: ^0.1.1
         version: link:../logging
       '@qvac/response':
         specifier: ^0.1.2

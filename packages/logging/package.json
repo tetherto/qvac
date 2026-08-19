@@ -56,26 +56,6 @@
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.3"
   },
-  "imports": {
-    "./env": {
-      "bare": "bare-env",
-      "default": "./env.js"
-    }
-  },
-  "exports": {
-    ".": {
-      "types": "./index.d.ts",
-      "default": "./index.js"
-    },
-    "./constants": {
-      "types": "./constants.d.ts",
-      "default": "./constants.js"
-    },
-    "./constants.js": {
-      "types": "./constants.d.ts",
-      "default": "./constants.js"
-    }
-  },
   "dependencies": {
     "bare-env": "^3.0.0"
   }

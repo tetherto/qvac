@@ -110,7 +110,6 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.64.0",
     "cmake-npm": "^1.1.0",
-    "bare-subprocess": "^5.2.1",
     "b4a": "^1.6.7",
     "bare-https": "^3.0.0"
   },
