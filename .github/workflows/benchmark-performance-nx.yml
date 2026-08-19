@@ -25,11 +25,6 @@ on:
         required: false
         type: boolean
         default: true
-      run_mobile:
-        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -103,28 +98,15 @@ jobs:
       base-ref: ${{ inputs.base-ref }}
       head-ref: ${{ inputs.head-ref }}
 
-  mobile-benchmarks:
-    needs: [matrix, context, prebuild]
-    if: needs.matrix.outputs.any == 'true' && !cancelled() && inputs.run_mobile && needs.prebuild.result == 'success'
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/integration-mobile-test-nx.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      base-ref: ${{ inputs.base-ref }}
-      head-ref: ${{ inputs.head-ref }}
+  # Mobile RTF benchmarks are NOT consolidated: they remain on the per-package
+  # legacy benchmark-performance-<pkg>.yml (Device Farm), unchanged from main.
+  # This leaf covers the desktop RTF matrix only.
 
   summarize:
     needs:
       - matrix
       - context
       - desktop-benchmarks
-      - mobile-benchmarks
     if: always() && needs.matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
     permissions:
