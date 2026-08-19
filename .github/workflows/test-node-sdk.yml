@@ -341,6 +341,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: first
+          TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
 
       - name: Preserve first Snap revision
@@ -356,6 +357,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: second
+          TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
 
       - name: Verify Snap refresh persistence
@@ -378,6 +380,15 @@ jobs:
         if: inputs.consumer == 'snap'
         working-directory: ${{ inputs.working-directory }}
         run: sudo snap install --dangerous snap/dist/qvac-sdk-e2e.snap
+
+      - name: Connect Snap GPU interfaces
+        if: inputs.consumer == 'snap'
+        run: |
+          sudo snap connect qvac-sdk-e2e:opengl
+          sudo snap connect qvac-sdk-e2e:hardware-observe
+          sudo snap connect qvac-sdk-e2e:graphics-core22 mesa-core22:graphics-core22
+          snap list mesa-core22
+          snap connections qvac-sdk-e2e
 
       - name: Determine Snap model requirements
         id: snap-model-requirements
