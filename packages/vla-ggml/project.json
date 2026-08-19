@@ -112,7 +112,7 @@
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
             { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
             { "os": "macos-15-intel", "platform": "darwin", "arch": "x64" },
-            { "os": "windows-2025", "platform": "windows", "arch": "x64", "runner": "qvac-win25-x64" }
+            { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }
           ]
         }
       }
