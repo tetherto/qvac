@@ -114,7 +114,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             packages/inference-addon-cpp/mobile/scripts/lib/desktop-suites.js
@@ -232,7 +232,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
       # `package-manager-cache: false` on every setup-node here — do not drop it. The
       # input defaults to TRUE and auto-enables once any package.json declares
@@ -289,7 +289,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
 
       # Selects the NDK, exports ANDROID_TOOLCHAIN_ROOT + API level, installs the cross
@@ -349,7 +349,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -452,7 +452,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
+          ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           persist-credentials: false
           path: addon
           fetch-depth: 0

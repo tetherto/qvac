@@ -1673,11 +1673,13 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
     // into a dedicated dir. Most addons pin to `inputs.ref || github.sha`
     // (github.sha is the constant triggering commit, so a mid-run push can't
     // make validation and build diverge); inference uses the equivalent
-    // `pull_request.head.sha || inputs.ref`. github.ref (mutable) is never used
-    // for a checkout ref — only as a concurrency-group key.
+    // `pull_request.head.sha || inputs.ref || github.sha` (the trailing
+    // github.sha pins a blank workflow_dispatch to the triggering commit too).
+    // github.ref (mutable) is never used for a checkout ref — only as a
+    // concurrency-group key.
     assert.match(
       src,
-      /ref: \$\{\{ (inputs\.ref \|\| github\.sha|github\.event\.pull_request\.head\.sha \|\| inputs\.ref) \}\}/,
+      /ref: \$\{\{ (inputs\.ref \|\| github\.sha|github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha) \}\}/,
       `${path} must check out validation data from the same immutable ref the build uses`,
     )
     assert.doesNotMatch(
@@ -1776,10 +1778,15 @@ test('inference generates its runner map in an unprivileged job and fails closed
   assert.match(mapJob, /permissions:\n\s+contents: read/)
   assert.doesNotMatch(mapJob, /id-token: write/)
   assert.doesNotMatch(mapJob, /environment:/)
-  // It regenerates from the SAME immutable commit the build compiles
-  // (github.ref is deliberately NOT a fallback, so a mid-run push can't make
-  // validation inspect different code than the build), and fails closed.
-  assert.match(mapJob, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.ref \}\}/)
+  // It regenerates from the SAME immutable commit the build compiles: the
+  // build jobs share this exact expression, and the trailing github.sha pins a
+  // blank workflow_dispatch to the triggering commit (github.ref is deliberately
+  // NOT a fallback, so a mid-run push can't make validation inspect different
+  // code than the build), and fails closed.
+  assert.match(
+    mapJob,
+    /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha \}\}/,
+  )
   assert.doesNotMatch(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
   assert.match(mapJob, /set -euo pipefail/)
   assert.doesNotMatch(src, /falling back to device-only/)
