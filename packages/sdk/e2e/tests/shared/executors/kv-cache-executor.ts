@@ -224,11 +224,18 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
       return (async () => {
         let text = ''
         let firstTokenAt = 0
+        // Record lastTokenAt per token (the last DECODED token), not after the
+        // stream closes: a cached stream closes only after its post-decode KV
+        // commit/rename, so a stream-close timestamp would stretch the decode
+        // window across the commit and falsely count commit-phase overlap as
+        // decode overlap.
+        let lastTokenAt = 0
         for await (const t of run.tokenStream) {
-          if (firstTokenAt === 0) firstTokenAt = Date.now()
+          const now = Date.now()
+          if (firstTokenAt === 0) firstTokenAt = now
+          lastTokenAt = now
           text += t
         }
-        const lastTokenAt = Date.now()
         const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
         return {
           text,
