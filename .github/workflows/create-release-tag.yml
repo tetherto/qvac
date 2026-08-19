@@ -60,9 +60,15 @@ jobs:
           fi
 
           # SHA the tag currently points at, or empty when the tag is absent.
+          # `gh api` writes the error body to STDOUT on a 404, so only the exit
+          # status distinguishes absent from present -- capturing the output
+          # alone yields the {"message":"Not Found",...} JSON and reads as a SHA.
           tag_sha() {
-            gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" \
-              --jq '.object.sha' 2>/dev/null || true
+            local out
+            if out="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" \
+              --jq '.object.sha' 2>/dev/null)"; then
+              printf '%s\n' "${out}"
+            fi
           }
 
           # Already present? Succeed only if it points where we expect; a tag
