@@ -578,6 +578,7 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
     })
 
     let received = 0
+    let receivedAfterCancelAck = 0
     let cancelInvoked = false
     const cancelSlot = errorSlot()
 
@@ -586,10 +587,13 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
         received++
         if (!cancelInvoked) {
           cancelInvoked = true
-          // First token proves the addon is decoding — cancel then.
-          void cancel({ modelId, kind: 'translate' }).catch((err: unknown) => {
+          // First token proves the addon is decoding. Await the cancel
+          // acknowledgement so only later tokens count as post-cancel output.
+          await cancel({ modelId, kind: 'translate' }).catch((err: unknown) => {
             cancelSlot.error = toError(err)
           })
+        } else {
+          receivedAfterCancelAck++
         }
       }
     } catch (err) {
@@ -611,15 +615,17 @@ export class CancellationExecutor extends AbstractModelExecutor<typeof sharedTes
         output: 'translate(llm) stream ended before any token — cancel never fired'
       }
     }
-    if (received > params.maxTokensAfterCancel) {
+    if (receivedAfterCancelAck > params.maxTokensAfterCancel) {
       return {
         passed: false,
-        output: `translate(llm) yielded ${received} tokens after cancel (allowed ≤ ${params.maxTokensAfterCancel})`
+        output: `translate(llm) yielded ${receivedAfterCancelAck} tokens after cancel acknowledgement (allowed ≤ ${params.maxTokensAfterCancel})`
       }
     }
     return {
       passed: true,
-      output: `translate(llm) broad cancel OK: ${received} tokens before stream end (≤ ${params.maxTokensAfterCancel})`
+      output:
+        `translate(llm) broad cancel OK: ${receivedAfterCancelAck} post-ack tokens ` +
+        `(${received} total, allowed post-ack ≤ ${params.maxTokensAfterCancel})`
     }
   }
 

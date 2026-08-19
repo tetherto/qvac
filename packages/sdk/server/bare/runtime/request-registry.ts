@@ -30,9 +30,10 @@ export interface BeginOpts {
   parentSignal?: AbortSignal
   /**
    * Per-request override of the kind policy's `maxConcurrentPerModel`. The
-   * policy value is one number for every model of a kind, but a loaded
-   * model's real concurrency is its own `parallel` (continuous-batching
-   * slot count), which varies per model — so the handler passes it here.
+   * policy value is one number for every model of a kind, but handlers may
+   * use a loaded model's `parallel` as its top-level request-permit cap.
+   * This counts requests, not native sequences: a multi-prompt batch still
+   * consumes one permit and the addon schedules its sequences internally.
    * Must be uniform across all requests routed to the same `(lane, modelId)`
    * (a given model always yields the same `parallel`): the FIFO slot
    * hand-off assumes one cap per lane and does not re-check it. A finite

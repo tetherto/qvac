@@ -138,11 +138,12 @@ try {
 
   await unloadModel({ modelId, clearStorage: false })
 
-  // A zero exit must prove BOTH typed cancellation and survivor isolation: the
-  // doomed run cancelled, and the peer produced tokens AFTER the cancel landed.
-  if (!doomedCancelled || tokensAfterCancel === 0) {
+  // A zero exit must prove concurrent scheduling, typed cancellation, and survivor
+  // isolation: the first burst reported multiple resident sequences, the doomed
+  // run cancelled, and its peer produced tokens AFTER the cancel landed.
+  if (peakConcurrent <= 1 || !doomedCancelled || tokensAfterCancel === 0) {
     console.error(
-      `✖ cancel isolation not demonstrated (doomedCancelled=${doomedCancelled}, tokensAfterCancel=${tokensAfterCancel}, survivorText="${survivorText}")`
+      `✖ multi-job behavior not demonstrated (peakConcurrent=${peakConcurrent.toFixed(2)}, doomedCancelled=${doomedCancelled}, tokensAfterCancel=${tokensAfterCancel}, survivorText="${survivorText}")`
     )
     process.exit(1)
   }

@@ -154,9 +154,10 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     }
   }
 
-  // Proves real simultaneous decoding on a parallel>1 model. Gates on engine
-  // avgConcurrentSeq > 1 — client interval overlap alone can't prove it, since
-  // transport buffering can make a serialized server's frames overlap client-side.
+  // Proves concurrent scheduling on a parallel>1 model with two independent
+  // signals: engine sequence co-residency and overlapping content-token windows.
+  // Either signal alone can mislead (prefill contributes to avgConcurrentSeq;
+  // transport buffering can overlap client windows), so require both.
   async concurrentOverlap(
     params: CompletionTestParams,
     expectation: Expectation
@@ -172,13 +173,16 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
           stream: true
         } as CompletionFnParams)
         let start = 0
+        let end = 0
         let text = ''
         for await (const token of run.tokenStream) {
-          if (start === 0) start = Date.now()
+          const now = Date.now()
+          if (start === 0) start = now
+          end = now
           text += token
         }
         const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
-        return { start, end: Date.now(), text, avgConcurrentSeq: stats?.avgConcurrentSeq }
+        return { start, end, text, avgConcurrentSeq: stats?.avgConcurrentSeq }
       })
     )
 
@@ -216,8 +220,16 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       return {
         passed: false,
         output:
-          `Engine avgConcurrentSeq peaked at ${maxSeq} (<= 1): the backend decoded ` +
-          `serially, not concurrently. Client interval peak was ${peakOverlap}/${CONCURRENCY}.`
+          `Engine avgConcurrentSeq peaked at ${maxSeq} (<= 1): no multi-sequence ` +
+          `co-residency was observed. Content-token interval peak was ${peakOverlap}/${CONCURRENCY}.`
+      }
+    }
+    if (peakOverlap <= 1) {
+      return {
+        passed: false,
+        output:
+          `Content-token windows did not overlap (peak ${peakOverlap}/${CONCURRENCY}); ` +
+          `avgConcurrentSeq=${maxSeq.toFixed(2)} may reflect prefill co-residency only`
       }
     }
     const failed = intervals
