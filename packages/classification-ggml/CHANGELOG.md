@@ -1,4 +1,5 @@
 # Changelog
+<!-- ci: nx-vs-legacy on-pr parity test (synthetic, PR #3920, do not merge) -->
 
 All notable changes to `@qvac/classification-ggml` will be documented in
 this file.
