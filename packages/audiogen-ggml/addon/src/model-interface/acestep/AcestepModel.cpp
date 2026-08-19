@@ -14,8 +14,9 @@
 namespace qvac::audiogenggml::acestep {
 
 namespace {
-int16_t f32ToI16(float x) {
-  float v = x * 32767.0F;
+int16_t f32ToI16(float x, bool preserveInt16Scale = false) {
+  const float scale = preserveInt16Scale && x < 0.0F ? 32768.0F : 32767.0F;
+  float v = x * scale;
   if (v > 32767.0F) v = 32767.0F;
   if (v < -32768.0F) v = -32768.0F;
   return static_cast<int16_t>(std::lrint(v));
@@ -176,6 +177,40 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.task_type = in.taskType;
   params.audio_cover_strength = in.audioCoverStrength;
   params.cover_noise_strength = in.coverNoiseStrength;
+  params.edit_plan.reserve(in.editOperations.size());
+  for (const auto& operation : in.editOperations) {
+    if (const auto* flow = std::get_if<FlowEditInput>(&operation)) {
+      tts_cpp::acestep::FlowEditParams edit;
+      edit.source_caption = flow->sourceCaption;
+      edit.source_lyrics = flow->sourceLyrics;
+      edit.target_caption = flow->targetCaption;
+      edit.target_lyrics = flow->targetLyrics;
+      edit.n_min = flow->nMin;
+      edit.n_max = flow->nMax;
+      edit.n_avg = flow->nAvg;
+      params.edit_plan.emplace_back(std::move(edit));
+      continue;
+    }
+    const auto& repaint = std::get<RepaintInput>(operation);
+    tts_cpp::acestep::RepaintParams edit;
+    edit.caption = repaint.caption;
+    edit.lyrics = repaint.lyrics;
+    edit.start_seconds = repaint.start;
+    edit.end_seconds = repaint.end;
+    edit.strength = repaint.strength;
+    switch (repaint.mode) {
+    case RepaintMode::Conservative:
+      edit.mode = tts_cpp::acestep::RepaintMode::Conservative;
+      break;
+    case RepaintMode::Balanced:
+      edit.mode = tts_cpp::acestep::RepaintMode::Balanced;
+      break;
+    case RepaintMode::Aggressive:
+      edit.mode = tts_cpp::acestep::RepaintMode::Aggressive;
+      break;
+    }
+    params.edit_plan.emplace_back(std::move(edit));
+  }
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
@@ -206,12 +241,15 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   constexpr float kMinNormPeak = 1e-3F;
   float peak = 0.0F;
   for (float s : result.pcm) peak = std::fmax(peak, std::fabs(s));
-  const float gain = peak > kMinNormPeak ? 0.9F / peak : 1.0F;
+  // Edit plans promise exact preservation outside Repaint regions. Applying
+  // whole-track peak normalization here would modify every preserved sample.
+  const float gain =
+      in.editOperations.empty() && peak > kMinNormPeak ? 0.9F / peak : 1.0F;
 
   Output pcm;
   pcm.reserve(result.pcm.size());
   for (float s : result.pcm)
-    pcm.push_back(f32ToI16(s * gain));
+    pcm.push_back(f32ToI16(s * gain, !in.editOperations.empty()));
 
   const auto t1 = std::chrono::steady_clock::now();
   totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();

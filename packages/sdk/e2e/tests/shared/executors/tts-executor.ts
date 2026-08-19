@@ -13,6 +13,7 @@ import {
   makeCosyvoice3EmotionComparisonHandler,
   makeCosyvoice3TtsHandler
 } from '../utils/tts-cosyvoice3-helpers.js'
+import { makeAudio8TtsHandler } from '../utils/tts-audio8-helpers.js'
 import { ttsTests } from '../../tts-tests.js'
 
 type TtsParams = { text: string; stream?: boolean; sentenceStream?: boolean }
@@ -42,6 +43,9 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
       }
       if (test.testId.startsWith('tts-cosyvoice3-')) {
         return [test.testId, this.makeCosyvoice3(dep)]
+      }
+      if (test.testId.startsWith('tts-audio8-')) {
+        return [test.testId, this.makeAudio8(dep)]
       }
       if (params.stream && params.sentenceStream) {
         return [test.testId, this.makeSentenceStream(dep)]
@@ -95,6 +99,14 @@ export class TtsExecutor extends AbstractModelExecutor<typeof ttsTests> {
 
   private makeCosyvoice3EmotionComparison(dep: string) {
     return makeCosyvoice3EmotionComparisonHandler<Expectation, TestResult>({
+      dependency: dep,
+      ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
+      validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
+    })
+  }
+
+  private makeAudio8(dep: string) {
+    return makeAudio8TtsHandler<Expectation, TestResult>({
       dependency: dep,
       ensureLoaded: (dependency) => this.resources.ensureLoaded(dependency),
       validate: (output, expectation) => ValidationHelpers.validate(output, expectation)
