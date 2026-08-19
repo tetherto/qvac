@@ -113,14 +113,6 @@ jobs:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       ENFORCE: ${{ github.event.inputs.enforce || 'false' }}
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
-        with:
-          # Audit only for the first rollout; the scans reach npm, GitHub API,
-          # PyPI, and (indirectly) HuggingFace. Promote to block once egress is
-          # characterized from audit logs.
-          egress-policy: audit
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 

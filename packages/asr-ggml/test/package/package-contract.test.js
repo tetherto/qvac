@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
+const { builtinModules } = require('node:module')
 const os = require('node:os')
 const path = require('node:path')
 const process = require('node:process')
@@ -11,10 +12,15 @@ const { pathToFileURL } = require('node:url')
 
 const packageRoot = path.resolve(__dirname, '..', '..')
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const expectedVersion = JSON.parse(
+const sourcePackageJson = JSON.parse(
   fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')
-).version
+)
+const expectedVersion = sourcePackageJson.version
 const publishedExampleScripts = ['example:whisper']
+const runtimeExtensions = new Set(['.cjs', '.js', '.mjs'])
+const externalSpecifierPattern =
+  /(?:require\s*\(\s*|import\s*\(\s*|(?:import|export)\s+(?:[^'"]*?\s+from\s+)?)(['"])([^'"]+)\1/g
+const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)])
 const requiredFiles = [
   'package.json',
   'index.js',
@@ -33,6 +39,49 @@ const requiredFiles = [
   'examples/quickstart.js',
   'examples/quickstart-arguments.js'
 ]
+
+function packageName(specifier) {
+  return specifier.startsWith('@')
+    ? specifier.split('/').slice(0, 2).join('/')
+    : specifier.split('/')[0]
+}
+
+function declaredRuntimePackages() {
+  return new Set([
+    ...Object.keys(sourcePackageJson.dependencies || {}),
+    ...Object.keys(sourcePackageJson.optionalDependencies || {}),
+    ...Object.keys(sourcePackageJson.peerDependencies || {})
+  ])
+}
+
+function externalSpecifiers(source) {
+  const specifiers = []
+  for (const match of source.matchAll(externalSpecifierPattern)) {
+    const specifier = match[2]
+    if (!specifier.startsWith('.') && !specifier.startsWith('/') && !nodeBuiltins.has(specifier)) {
+      specifiers.push(specifier)
+    }
+  }
+  return specifiers
+}
+
+function undeclaredImports(filePath, declaredPackages) {
+  if (!runtimeExtensions.has(path.extname(filePath))) return []
+  const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
+  return externalSpecifiers(source)
+    .map(packageName)
+    .filter((name) => name !== sourcePackageJson.name && !declaredPackages.has(name))
+    .map((name) => `${filePath}: ${name}`)
+}
+
+function undeclaredPublishedImports(files) {
+  const declaredPackages = declaredRuntimePackages()
+  const undeclared = []
+  for (const filePath of files) {
+    undeclared.push(...undeclaredImports(filePath, declaredPackages))
+  }
+  return [...new Set(undeclared)].sort()
+}
 
 function assertExportTargetsExist(packageJson, packedFiles) {
   const targets = Object.values(packageJson.exports).flatMap((entry) =>
@@ -133,6 +182,7 @@ test('packed tarball preserves the public package contract', () => {
       [...packedFiles].some((filePath) => filePath.startsWith('test/unit/')),
       false
     )
+    assert.deepEqual(undeclaredPublishedImports(packedFiles), [])
 
     const consumerRoot = path.join(temporaryRoot, 'consumer')
     fs.mkdirSync(consumerRoot)

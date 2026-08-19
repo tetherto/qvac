@@ -480,6 +480,7 @@ jobs:
           QVAC_ASR_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
           QVAC_ASR_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
           QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+          QVAC_PARAKEET_ADD_UNIFIED_COVERAGE: 'true'
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
           GITHUB_SHA: ${{ github.sha }}
@@ -498,6 +499,7 @@ jobs:
           QVAC_ASR_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
           QVAC_ASR_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}
           QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON: ${{ inputs.benchmark_matrix_json || matrix.benchmark_matrix_json }}
+          QVAC_PARAKEET_ADD_UNIFIED_COVERAGE: 'true'
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
           GITHUB_SHA: ${{ github.sha }}
