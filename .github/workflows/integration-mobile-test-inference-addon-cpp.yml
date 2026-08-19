@@ -63,7 +63,7 @@ jobs:
       # egress here is api.github.com to resolve the framework HEAD. Promote to block
       # once egress is characterised across the workflow.
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
 
@@ -94,7 +94,7 @@ jobs:
       # registry (npm install, plus bare-make fetching its cmake/ninja runtimes).
       # Deliberately first, before any fork code runs in this job.
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
 
@@ -109,7 +109,7 @@ jobs:
       # defaults to the event's SHA, which is immutable and is the same commit.
       # Flagged by CodeQL actions/untrusted-checkout-toctou.
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
@@ -119,7 +119,7 @@ jobs:
       # `packageManager`, so without it an unrelated manifest edit would start writing
       # the default-branch cache scope from a job that runs fork code.
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 22
           package-manager-cache: false
@@ -165,12 +165,12 @@ jobs:
       # registry, and the Ubuntu archives (setup-build-host installs the cross toolchain
       # via apt). Deliberately first, before any fork code runs in this job.
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
@@ -181,13 +181,13 @@ jobs:
       # rather than `./.github/actions/...` because this job checks out untrusted PR code
       # at $GITHUB_WORKSPACE, where a relative path would run the fork's copy.
       - name: Setup build host (Android NDK + toolchain env)
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
         with:
           platform: android
           arch: arm64
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 22
           package-manager-cache: false
@@ -210,7 +210,7 @@ jobs:
           test -f prebuilds/android-arm64/inference-addon-cpp-mobile-tests.bare
 
       - name: Upload Android prebuild artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ env.PREBUILD_PREFIX }}android-arm64
           path: ${{ env.ADDON_WORKDIR }}/prebuilds
@@ -226,14 +226,14 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 22
           package-manager-cache: false
@@ -259,7 +259,7 @@ jobs:
           test -f prebuilds/ios-arm64/inference-addon-cpp-mobile-tests.bare
 
       - name: Upload iOS prebuild artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ env.PREBUILD_PREFIX }}ios-arm64
           path: ${{ env.ADDON_WORKDIR }}/prebuilds
@@ -313,7 +313,7 @@ jobs:
       # Nothing later needs it: this is a sparse fetch of .github/actions only, and the
       # addon and framework checkouts each carry their own credentials.
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
@@ -324,7 +324,7 @@ jobs:
       # addon/.git/config, which the fork-controlled steps below could read. If a private
       # fork ever 404s here, re-add token to ALL checkouts, keeping that flag.
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || inputs.ref }}
@@ -389,7 +389,7 @@ jobs:
           ls -R df-handoff
 
       - name: Upload Device Farm handoff data
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: mobile-bundle-${{ matrix.platform }}
           path: df-handoff
@@ -434,7 +434,7 @@ jobs:
       # (checkout + artifact download), the npm registry (framework e2e install/pack),
       # and AWS (sts + devicefarm). Promote to block once that egress is characterised.
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
 
@@ -446,7 +446,7 @@ jobs:
       # Nothing later needs it: this is a sparse fetch of .github/actions only, and the
       # addon and framework checkouts each carry their own credentials.
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
@@ -475,7 +475,7 @@ jobs:
       # Pinned to resolve-framework's revision (the same one setup used in build) so a
       # mid-run framework advance can't overlay app.test.js onto a different runtime.
       - name: Checkout trusted mobile test framework
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: tetherto/qvac-test-addon-mobile
           ref: ${{ needs.resolve-framework.outputs.sha }}
@@ -486,7 +486,7 @@ jobs:
           path: test-framework
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 22
           package-manager-cache: false
