@@ -157,6 +157,7 @@ const models = await client.findBy({
   engine: "whispercpp",      // exact match
   quantization: "q8",        // partial match, case-insensitive
   includeDeprecated: false,  // default: false
+  includeUnlisted: false,    // default: false
 });
 
 // findModels — range queries (advanced)

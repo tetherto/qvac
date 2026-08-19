@@ -99,6 +99,37 @@ To reverse a deprecation (e.g., deprecated by mistake), set `deprecated: false`:
 
 The sync script will clear all deprecation fields (`deprecatedAt`, `replacedBy`, `deprecationReason`) automatically.
 
+## Unlisting a Model
+
+A model that is seeded but not yet ready to be announced can be hidden from discovery with `unlisted`:
+
+```json
+{
+  "source": "...",
+  "unlisted": true
+}
+```
+
+An unlisted model is omitted from the generated SDK model constants and from the SDK's
+`modelRegistryList` and `modelRegistrySearch` results. It remains retrievable by its exact
+registry path, so `getModel` and `downloadModel` continue to work. The flag controls visibility
+only; it grants no access control.
+
+Use `unlisted` for a model that is not ready for consumers. Use `deprecated` for a model that is
+on its way out and superseded by another entry.
+
+To announce the model, set `unlisted: false` or remove the field:
+
+```json
+{
+  "source": "...",
+  "unlisted": false
+}
+```
+
+The next sync run re-lists it, and the following `update-models` run picks it up into the model
+constants.
+
 ## Removing a Model
 
 **Default**: Deprecate the model (see above) rather than removing it from the JSON file.
@@ -123,6 +154,7 @@ If you remove an entry from `models.prod.json`, the sync script will auto-deprec
 | `deprecated`        | No       | Boolean flag for deprecation                                                                                                       |
 | `replacedBy`        | No       | Source URL of replacement model                                                                                                    |
 | `deprecationReason` | No       | Reason for deprecation                                                                                                             |
+| `unlisted`          | No       | Boolean flag hiding the model from discovery; omitting it means listed                                                             |
 
 Note: `deprecatedAt` timestamp is auto-generated when syncing to the database.
 

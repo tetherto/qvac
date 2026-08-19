@@ -54,10 +54,16 @@ main().catch(console.error)
 #### Metadata Queries
 
 - `getModel(path, source)`: Retrieves a specific model's metadata by path and source.
-- `findModels(query)`: General search with filters. Supports path prefix queries for finding model shards.
+- `findModels(query, opts)`: General search with filters. Supports path prefix queries for finding model shards.
+- `findBy(params)`: Search by `name`, `engine`, or `quantization` using the matching index.
 - `findModelsByEngine(query)`: Searches models by engine (indexed).
 - `findModelsByName(query)`: Searches models by name (indexed).
 - `findModelsByQuantization(query)`: Searches models by quantization (indexed).
+
+`findModels` and `findBy` omit deprecated and unlisted models by default. Pass
+`includeDeprecated: true` or `includeUnlisted: true` to include them — in `opts` for `findModels`,
+in `params` for `findBy`. `getModel` and `downloadModel` are unaffected and always resolve a model
+by its exact path and source.
 
 Query format for range queries:
 
