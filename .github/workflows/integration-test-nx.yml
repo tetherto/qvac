@@ -144,7 +144,11 @@ jobs:
     name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests-${{ matrix.package }}
     needs: matrix
     if: needs.matrix.outputs.any == 'true'
-    timeout-minutes: 30
+    # options.ci.timeoutMinutes — legacy per-package files ranged 30..360 (and
+    # diffusion overrode it per platform row). 360 is GitHub's own default and
+    # what the packages that declared nothing got; a flat 30 here would have
+    # hard-failed every model-heavy leg once staging was restored.
+    timeout-minutes: ${{ matrix.timeoutMinutes || 360 }}
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     permissions:
@@ -169,10 +173,82 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.PAT_TOKEN }}
 
+      # Dual-registry auth (options.ci.dualRegistry) — packages with @tetherto
+      # (GitHub Packages) deps need an .npmrc + git insteadOf before npm install.
+      # Reproduces the inline blocks from the legacy vla/diffusion files.
+      - name: Configure dual registry (Unix)
+        if: matrix.dualRegistry && matrix.platform != 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: bash
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          //npm.pkg.github.com/:_authToken=${GPR_TOKEN}
+          NPMRC
+          if [ -n "${GIT_PAT:-}" ]; then
+            git config --global url."https://${GIT_PAT}:@github.com/".insteadOf "https://github.com/"
+          else
+            git config --global url."https://${GPR_TOKEN}:@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Configure dual registry (Windows)
+        if: matrix.dualRegistry && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        env:
+          GPR_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          @"
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //registry.npmjs.org/:_authToken=$env:NPM_TOKEN
+          //npm.pkg.github.com/:_authToken=$env:GPR_TOKEN
+          "@ | Out-File -FilePath .npmrc -Encoding utf8
+          $pat = if ($env:GIT_PAT) { $env:GIT_PAT } else { $env:GPR_TOKEN }
+          git config --global url."https://${pat}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${pat}:@github.com/".insteadOf "git@github.com:"
+
+      # Windows-only git creds (options.ci.windowsGitCreds) — lighter than
+      # dualRegistry: longpaths + insteadOf so private deps resolve on win32.
+      # Reproduces the legacy ocr-ggml windows git-config step.
+      - name: Configure Windows git credentials
+        if: matrix.windowsGitCreds && matrix.platform == 'win32'
+        shell: powershell
+        env:
+          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config --global core.longpaths true
+          git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "git@github.com:"
+
       - name: Setup Bare runtime
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+
+      # Linux arm64 runtime libs (options.ci.linuxArmApt) — Vulkan ICD / OpenMP /
+      # BLAS the self-hosted arm images lack. Reproduces the legacy per-package
+      # apt-get steps (mesa-vulkan-drivers, libgomp1/libomp5/libblas3, g++-13).
+      - name: Install Linux arm64 runtime packages
+        if: matrix.linuxArmApt && matrix.arch == 'arm64' && (matrix.platform == 'linux' || matrix.platform == 'android')
+        shell: bash
+        env:
+          APT_PKGS: ${{ join(matrix.linuxArmApt, ' ') }}
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086 # deliberate word-splitting: APT_PKGS is a package list
+          sudo apt-get install -y $APT_PKGS
 
       - name: Install npm dependencies
         working-directory: ${{ matrix.workdir }}
@@ -219,6 +295,152 @@ jobs:
           Remove-Item -Recurse -Force package
           Remove-Item $TARBALL
 
+      # Windows Vulkan loader (options.ci.windowsVulkan) — set SDK env, optionally
+      # add Bin to PATH and copy vulkan-1.dll next to the .bare addon so the
+      # statically-linked loader resolves. Reproduces the legacy tts/audiogen
+      # (setSdk+visibleDevices), vla (setSdk+addPath) and bci (+copyLoaderDll) steps.
+      - name: Stage Windows Vulkan loader
+        if: matrix.windowsVulkan && matrix.platform == 'win32'
+        working-directory: ${{ matrix.workdir }}
+        shell: powershell
+        run: |
+          $cfg = '${{ toJson(matrix.windowsVulkan) }}' | ConvertFrom-Json
+          if ($cfg.setSdk) { "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8 }
+          if ($cfg.addPath) { "C:\VulkanSDK\Bin" | Out-File -FilePath $Env:GITHUB_PATH -Append -Encoding utf8 }
+          if ($cfg.visibleDevices) { "GGML_VK_VISIBLE_DEVICES=1" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8 }
+          if ($cfg.copyLoaderDll) {
+            $vk = "$Env:WINDIR\System32\vulkan-1.dll"
+            if (!(Test-Path $vk)) { $vk = "$Env:VULKAN_SDK\Bin\vulkan-1.dll" }
+            if (!(Test-Path $vk)) { $vk = (Get-ChildItem -Path 'C:\VulkanSDK' -Recurse -Filter vulkan-1.dll -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+            $dir = (Get-ChildItem -Path 'prebuilds\win32-x64' -Recurse -Filter '*.bare' -ErrorAction SilentlyContinue | Select-Object -First 1).Directory.FullName
+            if ($vk -and $dir) { Copy-Item -Path $vk -Destination $dir -Force; Write-Host "copied $vk -> $dir" }
+            else { Write-Host "vulkan-1.dll or addon dir not found; skipping copy" }
+          }
+
+      # gh CLI on GitHub-hosted arm64 ubuntu images (options.ci.linuxArmGhCli) —
+      # those images ship without it and the manifest warm-download uses it for
+      # GitHub Release assets. Best-effort, exactly like the legacy embed step.
+      - name: Install gh CLI (linux arm64)
+        if: matrix.linuxArmGhCli && matrix.arch == 'arm64' && matrix.platform == 'linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          type -p wget >/dev/null || { sudo apt-get update && sudo apt-get install -y wget; }
+          sudo mkdir -p -m 755 /etc/apt/keyrings
+          out=$(mktemp)
+          wget -nv -O "$out" https://cli.github.com/packages/githubcli-archive-keyring.gpg
+          sudo install -m 0644 "$out" /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y gh
+          gh --version
+
+      # Model cache + manifest warm-download (options.ci.modelCache) — an ORDERED
+      # ARRAY of cache-models invocations. `uses:` cannot be templated into a
+      # loop, so the array is consumed by index; three slots cover every package
+      # today (diffusion-cpp is the only multi-slot one: base/ideogram/ltx). Add a
+      # fourth block verbatim if a package ever needs it. Slot 0's cache-hit gates
+      # the S3 / npm download steps below (see `skipOnCacheHit`).
+      #
+      # Gated `runner.environment != 'github-hosted'` per the action's own docs:
+      # self-hosted runners front a transparent local cache server, so the
+      # actions/cache round-trip is pure overhead there.
+      - name: Cache + warm models (slot 0)
+        id: model-cache-0
+        if: matrix.modelCache[0] && runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: ${{ matrix.package }}
+          group: ${{ matrix.modelCache[0].group || '' }}
+          cache-key-suffix: ${{ matrix.modelCache[0].cacheKeySuffix || '' }}
+          cache-version: ${{ matrix.modelCache[0].cacheVersion || 'v1' }}
+          paths: ${{ matrix.modelCache[0].paths || '' }}
+          hash-files-glob: ${{ matrix.modelCache[0].hashFilesGlob || '' }}
+          enable-cross-os: ${{ matrix.modelCache[0].enableCrossOs || 'true' }}
+          warm: ${{ matrix.modelCache[0].warm || 'true' }}
+
+      - name: Cache + warm models (slot 1)
+        id: model-cache-1
+        if: matrix.modelCache[1] && runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: ${{ matrix.package }}
+          group: ${{ matrix.modelCache[1].group || '' }}
+          cache-key-suffix: ${{ matrix.modelCache[1].cacheKeySuffix || '' }}
+          cache-version: ${{ matrix.modelCache[1].cacheVersion || 'v1' }}
+          paths: ${{ matrix.modelCache[1].paths || '' }}
+          hash-files-glob: ${{ matrix.modelCache[1].hashFilesGlob || '' }}
+          enable-cross-os: ${{ matrix.modelCache[1].enableCrossOs || 'true' }}
+          warm: ${{ matrix.modelCache[1].warm || 'true' }}
+
+      - name: Cache + warm models (slot 2)
+        id: model-cache-2
+        if: matrix.modelCache[2] && runner.environment != 'github-hosted'
+        uses: ./.github/actions/cache-models
+        with:
+          package: ${{ matrix.package }}
+          group: ${{ matrix.modelCache[2].group || '' }}
+          cache-key-suffix: ${{ matrix.modelCache[2].cacheKeySuffix || '' }}
+          cache-version: ${{ matrix.modelCache[2].cacheVersion || 'v1' }}
+          paths: ${{ matrix.modelCache[2].paths || '' }}
+          hash-files-glob: ${{ matrix.modelCache[2].hashFilesGlob || '' }}
+          enable-cross-os: ${{ matrix.modelCache[2].enableCrossOs || 'true' }}
+          warm: ${{ matrix.modelCache[2].warm || 'true' }}
+
+      # Model staging via S3 (options.ci.modelS3) — OIDC + aws s3 cp loop.
+      - name: Stage integration models (S3)
+        if: matrix.modelS3
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: ${{ matrix.workdir }}
+          s3-manifest: ${{ toJson(matrix.modelS3) }}
+          cache-hit: ${{ steps.model-cache-0.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
+
+      # Model staging via npm script (options.ci.modelDownloadScript) — registry
+      # download. continueOnError mirrors bci's best-effort legacy step;
+      # skipOnCacheHit mirrors tts/audiogen's `cache-hit != 'true'` gate.
+      - name: Download models (npm)
+        if: >-
+          matrix.modelDownloadScript &&
+          !(matrix.modelDownloadSkipOnCacheHit && steps.model-cache-0.outputs.cache-hit == 'true')
+        working-directory: ${{ matrix.workdir }}
+        continue-on-error: ${{ matrix.modelDownloadContinueOnError == true }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: npm run ${{ matrix.modelDownloadScript }}
+
+      # Export model-path + runtime env (options.ci.modelEnv, options.ci NO_GPU).
+      # Tokens {workspace}/{workdir}/{platform}/{arch} are substituted. Values
+      # land in $GITHUB_ENV so every run-step below inherits them.
+      - name: Export model and runtime env
+        if: matrix.modelEnv || matrix.noGpu
+        shell: bash
+        env:
+          MODEL_ENV: ${{ toJson(matrix.modelEnv) }}
+          NO_GPU_VAL: ${{ matrix.noGpu }}
+          WS: ${{ github.workspace }}
+          WD: ${{ matrix.workdir }}
+          PLAT: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NO_GPU_VAL:-}" ]; then echo "NO_GPU=${NO_GPU_VAL}" >> "$GITHUB_ENV"; fi
+          printf '%s' "${MODEL_ENV:-null}" | node -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              const o=JSON.parse(s||"null"); if(!o) process.exit(0);
+              const sub=v=>String(v)
+                .split("{workspace}").join(process.env.WS)
+                .split("{workdir}").join(process.env.WD)
+                .split("{platform}").join(process.env.PLAT)
+                .split("{arch}").join(process.env.ARCH);
+              const fs=require("fs");
+              for(const [k,v] of Object.entries(o)) fs.appendFileSync(process.env.GITHUB_ENV, k+"="+sub(v)+"\n");
+            })'
+
       - name: Run integration tests (Unix, tee'd)
         if: matrix.useTeeLogging && matrix.platform != 'win32'
         working-directory: ${{ matrix.workdir }}
@@ -233,8 +455,17 @@ jobs:
           if [ "${{ matrix.hasGenerateStep }}" = "true" ]; then
             npm run test:integration:generate
           fi
+          set +e
           npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | tee test-output.log
-          exit "${PIPESTATUS[0]}"
+          EXIT=${PIPESTATUS[0]}
+          if [ "$EXIT" -eq 0 ]; then exit 0; fi
+          # options.ci.tolerateSigsegv: known ggml/Vulkan static-destructor crash
+          # at teardown (exit 139) after a full pass is treated as success (vla).
+          if [ "${{ matrix.tolerateSigsegv }}" = "true" ] && [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' test-output.log && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' test-output.log; then
+            echo "::warning::Tests passed but process crashed at teardown with SIGSEGV (exit 139). Known ggml/Vulkan static-destructor issue; treating as pass."
+            exit 0
+          fi
+          exit "$EXIT"
 
       - name: Run integration tests (Windows, tee'd)
         if: matrix.useTeeLogging && matrix.platform == 'win32'

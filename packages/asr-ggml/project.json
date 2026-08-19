@@ -65,6 +65,9 @@
         "cwd": "packages/asr-ggml",
         "ci": {
           "npmName": "@qvac/asr-ggml",
+          "schedulingMode": "dual-flagship",
+          "mochaTimeoutMs": "2700000",
+          "wdioWaitforTimeoutMs": "600000",
           "prebuildArtifactPrefix": "asr-ggml-",
           "deviceFarmProjectArnPrimary": "AWS_DEVICE_FARM_PROJECT_ARN_ASR_GGML",
           "deviceFarmProjectArnFallback": "AWS_DEVICE_FARM_PROJECT_ARN_PARAKEET",
@@ -100,6 +103,7 @@
         "cwd": "packages/asr-ggml",
         "ci": {
           "mode": "coverage",
+          "continueOnError": true,
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" }
           ],

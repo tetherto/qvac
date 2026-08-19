@@ -117,6 +117,10 @@ jobs:
           addon-workdir: ${{ matrix.package.workdir }}
           addon-npm-name: ${{ matrix.package.npmName }}
           pat-token: ${{ secrets.PAT_TOKEN }}
+          # options.ci.skipPrebuilds — decoder-audio's native code comes
+          # transitively (bare-ffmpeg); it ships no prebuilds of its own, so
+          # prebuild resolution must be skipped or setup hard-fails.
+          skip-prebuilds: ${{ matrix.package.skipPrebuilds && 'true' || 'false' }}
 
       - name: Extra pre-build step
         if: matrix.package.extraPreBuildCommand
@@ -148,6 +152,10 @@ jobs:
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets[matrix.package.deviceFarmProjectArnPrimary] || secrets[matrix.package.deviceFarmProjectArnFallback] }}
           enables-perf: ${{ matrix.package.enablesPerf && 'true' || 'false' }}
+          # Per-package timeout tuning (options.ci) — empty falls back to the
+          # action's own defaults (mocha 1800000 / wdio 120000).
+          mocha-timeout-ms: ${{ matrix.package.mochaTimeoutMs || '' }}
+          wdio-waitfor-timeout-ms: ${{ matrix.package.wdioWaitforTimeoutMs || '' }}
 
       - name: Schedule Device Farm test run
         id: schedule
@@ -160,7 +168,10 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
-          scheduling-mode: 'single-pool'
+          # options.ci.schedulingMode — default single-pool preserves the prior
+          # leaf behavior; asr/translation override to dual-flagship (their legacy
+          # default). ocr is multi-spec so scheduling-mode is ignored regardless.
+          scheduling-mode: ${{ matrix.package.schedulingMode || 'single-pool' }}
 
       - name: Monitor Device Farm test run
         id: monitor
