@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Optional `augmentCaptionWithMetadata` generation control. When enabled,
+  ACE-Step enriches its internal conditioning caption with BPM/tempo guidance,
+  time signature, and key while preserving the original user caption in result
+  metadata. The option defaults to `false`.
 - Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
   chain order and can be mixed or repeated. The source is interleaved stereo PCM
   at 48 kHz (`Float32Array` samples in `[-1, 1]`, or addon-output `Int16Array`).
