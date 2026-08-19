@@ -40,8 +40,13 @@ runs:
       with:
         node-version: lts/*
     - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+    # --ignore-scripts: computing the nx affected graph only needs the nx CLI +
+    # each project's project.json (read from source), NOT built/linked workspace
+    # packages. Skipping lifecycle scripts avoids running every package's prepare
+    # (e.g. rag's `bare copy-hyperspec`, native addon builds) — wasteful here and
+    # a source of unrelated failures in a job that just derives the matrix.
     - shell: bash
-      run: pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile --ignore-scripts
     - if: github.event_name == 'pull_request'
       uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
     - id: compute
