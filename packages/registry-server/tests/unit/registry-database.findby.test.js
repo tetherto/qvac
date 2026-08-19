@@ -83,6 +83,22 @@ const TEST_MODELS = [
       byteLength: 50,
       sha256: 'eee'
     }
+  },
+  {
+    path: 'models/seeded-not-announced.gguf',
+    source: 'https://huggingface.co/example/seeded',
+    engine: '@qvac/embed-llamacpp',
+    licenseId: 'MIT',
+    quantization: 'q6_k',
+    unlisted: true,
+    blobBinding: {
+      coreKey: Buffer.alloc(32),
+      blockOffset: 0,
+      blockLength: 1,
+      byteOffset: 0,
+      byteLength: 60,
+      sha256: 'fff'
+    }
   }
 ]
 
@@ -129,11 +145,111 @@ test('findBy() - includeDeprecated returns all models', async (t) => {
 
   try {
     const models = await ctx.db.findBy({ includeDeprecated: true })
-    t.is(models.length, 5, 'returns all 5 models including deprecated')
+    t.is(models.length, 5, 'returns all 5 listed models including deprecated')
     t.ok(
       models.find((m) => m.deprecated),
       'includes deprecated model'
     )
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('findBy() - no filters omits unlisted models', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const models = await ctx.db.findBy()
+    t.absent(
+      models.find((m) => m.unlisted),
+      'no unlisted models'
+    )
+    t.absent(
+      models.find((m) => m.path === 'models/seeded-not-announced.gguf'),
+      'the unlisted model is not discoverable by default'
+    )
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('findBy() - includeUnlisted returns unlisted models', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const models = await ctx.db.findBy({ includeUnlisted: true })
+    t.is(models.length, 5, 'returns 5 non-deprecated models including unlisted')
+    t.ok(
+      models.find((m) => m.path === 'models/seeded-not-announced.gguf'),
+      'includes unlisted model'
+    )
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('findBy() - a model without the unlisted field is listed', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const models = await ctx.db.findBy()
+    t.is(models.length, 4, 'the four models that omit the field are all returned')
+    t.absent(
+      models.find((m) => m.unlisted),
+      'an absent unlisted field reads as false'
+    )
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('findBy() - includeDeprecated and includeUnlisted are independent', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const deprecatedOnly = await ctx.db.findBy({ includeDeprecated: true })
+    t.absent(
+      deprecatedOnly.find((m) => m.unlisted),
+      'includeDeprecated does not surface unlisted models'
+    )
+
+    const unlistedOnly = await ctx.db.findBy({ includeUnlisted: true })
+    t.absent(
+      unlistedOnly.find((m) => m.deprecated),
+      'includeUnlisted does not surface deprecated models'
+    )
+
+    const both = await ctx.db.findBy({ includeDeprecated: true, includeUnlisted: true })
+    t.is(both.length, 6, 'both flags return every model')
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('findBy({ engine }) - with includeUnlisted', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const listed = await ctx.db.findBy({ engine: '@qvac/embed-llamacpp' })
+    t.is(listed.length, 0, 'the unlisted model is hidden from an engine query')
+
+    const all = await ctx.db.findBy({ engine: '@qvac/embed-llamacpp', includeUnlisted: true })
+    t.is(all.length, 1, 'includeUnlisted surfaces it through the engine index')
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('getModel() - an unlisted model is still retrievable by exact key', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const model = await ctx.db.getModel(
+      'models/seeded-not-announced.gguf',
+      'https://huggingface.co/example/seeded'
+    )
+    t.ok(model, 'exact-key lookup ignores the unlisted filter')
+    t.is(model.unlisted, true, 'the flag round-trips through the wire format')
   } finally {
     await cleanup(ctx)
   }

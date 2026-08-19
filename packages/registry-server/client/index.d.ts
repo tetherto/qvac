@@ -25,6 +25,8 @@ export interface QVACModelEntry {
   description?: string
   notes?: string
   tags?: string[]
+  deprecated?: boolean
+  unlisted?: boolean
   blobBinding: QVACBlobBinding
 }
 
@@ -97,6 +99,15 @@ export interface FindByParams {
   quantization?: string
   /** Include deprecated models (default: false) */
   includeDeprecated?: boolean
+  /** Include unlisted models (default: false) */
+  includeUnlisted?: boolean
+}
+
+export interface FindModelsOptions {
+  /** Include deprecated models (default: false) */
+  includeDeprecated?: boolean
+  /** Include unlisted models (default: false) */
+  includeUnlisted?: boolean
 }
 
 export interface LifecycleSwarmHandle {
@@ -135,7 +146,7 @@ export class QVACRegistryClient extends ReadyResource {
   ): Promise<QVACBlobDownloadResult>
 
   findBy(params?: FindByParams): Promise<QVACModelEntry[]>
-  findModels(query?: QVACModelQuery): Promise<QVACModelEntry[]>
+  findModels(query?: QVACModelQuery, opts?: FindModelsOptions): Promise<QVACModelEntry[]>
   findModelsByEngine(query?: QVACModelQuery): Promise<QVACModelEntry[]>
   findModelsByName(query?: QVACModelQuery): Promise<QVACModelEntry[]>
   findModelsByQuantization(query?: QVACModelQuery): Promise<QVACModelEntry[]>

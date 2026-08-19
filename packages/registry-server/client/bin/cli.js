@@ -62,6 +62,7 @@ function printModelFull(model, opts = {}) {
   if (opts.verbose && model.description) console.log(`    description:  ${model.description}`)
   if (opts.verbose) console.log(`    blob core:    ${coreKey}`)
   if (model.deprecated) console.log('    deprecated:   true')
+  if (model.unlisted) console.log('    unlisted:     true')
   console.log()
 }
 
@@ -86,6 +87,7 @@ const listCmd = command(
   flag('--quantization|-q [quantization]', 'Filter by quantization (partial match)'),
   flag('--full', 'Show full model details'),
   flag('--include-deprecated', 'Include deprecated models'),
+  flag('--include-unlisted', 'Include unlisted models'),
   flag('--json', 'Output as JSON'),
   async function (cmd) {
     await withClient(cmd, async (client, rootFlags) => {
@@ -95,6 +97,7 @@ const listCmd = command(
       if (flags.engine) params.engine = flags.engine
       if (flags.quantization) params.quantization = flags.quantization
       if (flags.includeDeprecated) params.includeDeprecated = true
+      if (flags.includeUnlisted) params.includeUnlisted = true
 
       const hasFilters = flags.name || flags.engine || flags.quantization
       let models
@@ -102,7 +105,13 @@ const listCmd = command(
       if (hasFilters) {
         models = await client.findBy(params)
       } else {
-        models = await client.findModels({}, { includeDeprecated: !!flags.includeDeprecated })
+        models = await client.findModels(
+          {},
+          {
+            includeDeprecated: !!flags.includeDeprecated,
+            includeUnlisted: !!flags.includeUnlisted
+          }
+        )
       }
 
       if (flags.json) {

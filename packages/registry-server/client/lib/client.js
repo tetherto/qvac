@@ -131,13 +131,17 @@ class QVACRegistryClient extends ReadyResource {
 
   async findModels(query = {}, opts = {}) {
     await this._ensureMetadata()
-    const { includeDeprecated = false } = opts
-    this.logger.debug('findModels called', { query, includeDeprecated })
+    const { includeDeprecated = false, includeUnlisted = false } = opts
+    this.logger.debug('findModels called', { query, includeDeprecated, includeUnlisted })
 
     let models = await this.db.findModelsByPath(query).toArray()
 
     if (!includeDeprecated) {
       models = models.filter((m) => !m.deprecated)
+    }
+
+    if (!includeUnlisted) {
+      models = models.filter((m) => !m.unlisted)
     }
 
     return models
@@ -169,6 +173,7 @@ class QVACRegistryClient extends ReadyResource {
    * @param {string} [params.engine] - Filter by engine (exact match)
    * @param {string} [params.quantization] - Filter by quantization (partial match)
    * @param {boolean} [params.includeDeprecated=false] - Include deprecated models
+   * @param {boolean} [params.includeUnlisted=false] - Include unlisted models
    * @returns {Promise<Array>} Array of matching models
    */
   async findBy(params = {}) {

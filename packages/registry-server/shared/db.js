@@ -84,7 +84,13 @@ class RegistryDatabase extends ReadyResource {
   async findBy(params = {}) {
     if (!this.opened) await this.ready()
 
-    const { name, engine, quantization, includeDeprecated = false } = params
+    const {
+      name,
+      engine,
+      quantization,
+      includeDeprecated = false,
+      includeUnlisted = false
+    } = params
 
     let models
 
@@ -122,6 +128,7 @@ class RegistryDatabase extends ReadyResource {
     }
 
     if (!includeDeprecated) models = models.filter((m) => !m.deprecated)
+    if (!includeUnlisted) models = models.filter((m) => !m.unlisted)
 
     return models
   }
