@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Keep `@qvac/registry-client` as a `^0.6.1` development dependency for registry
+  downloads. It is no longer an optional peer, so consumer installs are not
+  asked to satisfy a registry-client peer range.
+
 ### Added
 
 - Optional `augmentCaptionWithMetadata` generation control. When enabled,

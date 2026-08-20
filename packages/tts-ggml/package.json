@@ -125,6 +125,7 @@
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/asr-ggml": "^0.3.2",
+    "@qvac/registry-client": "^0.6.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -143,7 +144,6 @@
     "@qvac/infer-base": "^0.6.2",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
-    "@qvac/registry-client": "^0.6.1",
     "bare-fs": "^4.5.6",
     "bare-https": "^3.0.0",
     "bare-os": "^3.8.0",

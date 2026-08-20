@@ -7,12 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Keep `@qvac/registry-client` as a `^0.6.1` development dependency for
+  IndicTrans registry downloads. It is no longer an optional peer, so consumer
+  installs (SDK, CLI) are not pinned to `^0.4.0` / hyperdb 4.x.
+
 ### Fixed
 
 - Declare all runtime modules required by the published model fetchers, mobile
   tests, and integration tests.
-- Declare lazy model downloader integrations as optional peers, report how to
-  install them when requested, and preserve nested missing-module errors.
+- Declare the Bergamot `bare-fetch` integration as an optional peer, report how
+  to install lazy downloaders when requested, and preserve nested missing-module
+  errors.
 
 ## [0.10.0] - 2026-08-18
 
