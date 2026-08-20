@@ -323,19 +323,50 @@ test('handleFinetune: dispatches pause requests through plugin reply handler', a
   clearPlugins()
   const modelId = 'finetune-dispatch-pause-model'
   let pauseCalls = 0
+  let resolveAwait: ((value: { op: 'finetune'; status: 'PAUSED'; stats: object }) => void) | null =
+    null
 
   registerFinetunePlugin()
   registerFinetuneModel(modelId, {
     finetune: async function () {
-      throw new Error('finetune should not be called for pause')
+      return {
+        on() {
+          return this
+        },
+        removeListener() {
+          return this
+        },
+        await() {
+          return new Promise((resolve) => {
+            resolveAwait = resolve
+          })
+        }
+      }
     },
+    // The addon-global pause is only reached for an ADMITTED finetune; it resolves
+    // that finetune as PAUSED.
     pause: async function () {
       pauseCalls++
+      resolveAwait?.({ op: 'finetune', status: 'PAUSED', stats: {} })
     },
     cancel: async function () {}
   } as unknown as AnyModel)
 
   try {
+    // Admit a finetune so it holds the model exclusively, then pause it.
+    const startPromise = handleFinetune({
+      type: 'finetune',
+      modelId,
+      operation: 'start',
+      options: {
+        trainDatasetDir: '/tmp/train.jsonl',
+        validation: { type: 'none' },
+        outputParametersDir: '/tmp/out'
+      }
+    })
+    // Let the finetune reach admission and park in handle.await().
+    await new Promise((r) => setTimeout(r, 20))
+
     const result: FinetuneResult = await handleFinetune({
       type: 'finetune',
       modelId,
@@ -345,6 +376,9 @@ test('handleFinetune: dispatches pause requests through plugin reply handler', a
     t.is(result.type, 'finetune')
     t.is(result.status, 'PAUSED')
     t.is(pauseCalls, 1)
+
+    const startResult = await startPromise
+    t.is(startResult.status, 'PAUSED')
   } finally {
     unregisterModel(modelId)
     clearPlugins()

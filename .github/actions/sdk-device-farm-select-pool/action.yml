@@ -2,26 +2,31 @@ name: "SDK Device Farm - Select Pool"
 description: >-
   Selects a single AWS Device Farm device pool from a candidate list. When a
   pool name is given, that pool is used as-is without touching Device Farm. When
-  no name is given, a random candidate is chosen, using the device availability
-  hint (via ListDevices) only as a soft preference — public-device availability
-  is a likelihood, not a guarantee, so it never fails on it. The downstream
-  "wait-device-farm-running" gate remains the real readiness arbiter. Output is
-  a single-element JSON array suitable for a matrix.
+  no name is given, an available private pool is preferred before a random
+  public candidate is chosen. Public-device availability (via ListDevices)
+  remains only a soft preference — it is a likelihood, not a guarantee, so it
+  never fails on it. The downstream "wait-device-farm-running" gate remains the
+  real readiness arbiter. Output is a single-element JSON array suitable for a
+  matrix.
 
 inputs:
   pools:
     description: >-
-      JSON array of candidate device pools [{name, arn, r?}]. The optional "r"
-      flag (default true) controls random eligibility: entries with "r": false
-      are excluded from random selection and reachable only by explicit
-      pool-name (e.g. manual-only devices), so PR/random runs never land on them.
+      JSON array of candidate device pools [{name, arn, p?, r?}]. Entries with
+      "p": true are private pools and are preferred only when a matching
+      physical device instance reports AVAILABLE. The optional "r" flag
+      (default true) controls public random eligibility: non-private entries with
+      "r": false are excluded from random selection and reachable only by
+      explicit pool-name (e.g. manual-only devices). Private entries may set
+      "r": false for compatibility with selectors that do not understand "p".
     required: true
   pool-name:
     description: >-
       Explicit pool name to select. When set, that pool is used as-is (no
       availability check) and may be any candidate, including "r": false
-      entries. When empty, a random candidate is chosen among the
-      random-eligible pools (r != false), with availability as a soft preference.
+      entries. When empty, an available private pool (p == true) is preferred;
+      otherwise a random-eligible public pool (p != true and r != false) is
+      chosen, with public availability as a soft preference.
     required: false
     default: ""
 
@@ -94,32 +99,51 @@ runs:
           exit 0
         fi
 
-        # --- No name given: pick a random pool, availability as soft hint -----
+        # --- No name given: prefer private, then pick a public fallback --------
         # For public devices, availability is a *likelihood* over the fleet of a
         # model+OS, not a per-unit free/busy flag, so we use it only to prefer a
         # candidate more likely to start quickly and never fail on it: Device
         # Farm queues the run until a unit frees up, and wait-device-farm-running
         # is the real readiness/timeout arbiter.
 
-        # Resolve the device ARNs referenced by a pool's rules (GetDevicePool),
-        # returned as a compact JSON array of strings. Pools defined by explicit
-        # device ARNs expose them directly; attribute-based pools (MODEL/OS
-        # filters) do not, yielding "[]" so the availability hint is skipped.
-        # AWS errors are surfaced, not swallowed.
-        resolve_device_arns() {
+        # Resolve positive device and private-instance ARN rules from a pool.
+        # Rule values are themselves JSON-encoded strings/arrays. Attribute-
+        # based pools (MODEL/OS filters) produce empty target arrays, while
+        # NOT_IN rules are deliberately ignored because they do not describe
+        # pool membership. AWS errors are surfaced and treated as no targets.
+        resolve_pool_targets() {
           local pool_arn="$1" rules err_file
           err_file="$(mktemp)"
           if ! rules=$(aws devicefarm get-device-pool --arn "$pool_arn" --query 'devicePool.rules' --output json 2>"$err_file"); then
             echo "    get-device-pool failed: $(tr '\n' ' ' <"$err_file")" >&2
             rm -f "$err_file"
-            echo "[]"
+            echo '{"deviceArns":[],"instanceArns":[]}'
             return 0
           fi
           rm -f "$err_file"
-          echo "$rules" | jq -r '.. | strings' 2>/dev/null \
-            | { grep -oE 'arn:aws:devicefarm:[a-z0-9-]+:[0-9]*:device:[A-Za-z0-9_/-]+' || true; } \
-            | sort -u \
-            | jq -Rsc 'split("\n") | map(select(length > 0))'
+          echo "$rules" | jq -c '
+            def decoded_values:
+              .value as $raw
+              | ($raw | fromjson? // $raw) as $decoded
+              | if ($decoded | type) == "array" then $decoded else [$decoded] end;
+            reduce .[] as $rule (
+              {deviceArns: [], instanceArns: []};
+              if (($rule.operator == "EQUALS" or $rule.operator == "IN") and $rule.attribute == "ARN") then
+                .deviceArns += (
+                  $rule | decoded_values
+                  | map(select(type == "string" and test(":device:")))
+                )
+              elif (($rule.operator == "EQUALS" or $rule.operator == "IN") and $rule.attribute == "INSTANCE_ARN") then
+                .instanceArns += (
+                  $rule | decoded_values
+                  | map(select(type == "string" and test(":deviceinstance:")))
+                )
+              else
+                .
+              end
+            )
+            | .deviceArns |= unique
+            | .instanceArns |= unique'
         }
 
         # Best availability across a pool's device ARNs via ListDevices (the OIDC
@@ -150,12 +174,115 @@ runs:
           fi
         }
 
-        # Random selection considers only random-eligible pools: entries with
-        # "r": false (e.g. manual-only devices) are excluded here and reachable
-        # solely via an explicit pool-name above.
-        RANDOM_POOLS=$(echo "$POOLS" | jq -c '[.[] | select(.r != false)]')
+        # Private pools can target a physical device instance via INSTANCE_ARN.
+        # Unlike the public-fleet availability likelihood, the authoritative
+        # readiness signal for a private device is its matching instance status:
+        # AVAILABLE is ready now; IN_USE/PREPARING is busy; NOT_AVAILABLE is
+        # temporarily unavailable. Pools with device ARN rules are supported by
+        # reducing the statuses of all private instances returned for the device.
+        get_private_availability() {
+          local targets_json="$1" instance_arns device_arns attribute arns_json
+          local filters devices statuses err_file
+          instance_arns=$(echo "$targets_json" | jq -c '.instanceArns')
+          device_arns=$(echo "$targets_json" | jq -c '.deviceArns')
+
+          if [ "$(echo "$instance_arns" | jq 'length')" -gt 0 ]; then
+            attribute="INSTANCE_ARN"
+            arns_json="$instance_arns"
+          elif [ "$(echo "$device_arns" | jq 'length')" -gt 0 ]; then
+            attribute="ARN"
+            arns_json="$device_arns"
+          else
+            echo "UNKNOWN"
+            return 0
+          fi
+
+          err_file="$(mktemp)"
+          filters=$(jq -cn --arg a "$attribute" --argjson v "$arns_json" '[{attribute: $a, operator: "IN", values: $v}]')
+          if ! devices=$(aws devicefarm list-devices --filters "$filters" --query 'devices[].{name: name, os: os, instances: instances[].{arn: arn, status: status}}' --output json 2>"$err_file"); then
+            echo "    list-devices failed: $(tr '\n' ' ' <"$err_file")" >&2
+            rm -f "$err_file"
+            echo "UNKNOWN"
+            return 0
+          fi
+          rm -f "$err_file"
+
+          if [ "$attribute" = "INSTANCE_ARN" ]; then
+            echo "$devices" | jq -r --argjson targets "$arns_json" '
+              .[] as $device
+              | $device.instances[]?
+              | select(.arn as $arn | $targets | index($arn))
+              | "      • " + ($device.name // "?") + " (os " + ($device.os // "?") + ", instance " + (.arn // "?") + "): " + (.status // "null")' >&2
+            statuses=$(echo "$devices" | jq -c --argjson targets "$arns_json" '
+              [.[] as $device
+                | $device.instances[]?
+                | select(.arn as $arn | $targets | index($arn))
+                | .status
+                | select(. != null)]')
+          else
+            echo "$devices" | jq -r '
+              .[] as $device
+              | $device.instances[]?
+              | "      • " + ($device.name // "?") + " (os " + ($device.os // "?") + ", instance " + (.arn // "?") + "): " + (.status // "null")' >&2
+            statuses=$(echo "$devices" | jq -c '[.[].instances[]?.status | select(. != null)]')
+          fi
+
+          echo "$statuses" | jq -r '
+            if   index("AVAILABLE")     != null then "AVAILABLE"
+            elif index("IN_USE")       != null then "BUSY"
+            elif index("PREPARING")    != null then "BUSY"
+            elif index("NOT_AVAILABLE") != null then "TEMPORARY_NOT_AVAILABLE"
+            else "UNKNOWN" end'
+        }
+
+        # Private devices are strict-priority candidates: select one only when
+        # it is ready now. BUSY, TEMPORARY_NOT_AVAILABLE, UNKNOWN, missing pool
+        # rules, and AWS probe failures all fall through immediately to the
+        # existing public selection path so private capacity never blocks runs.
+        PRIVATE_POOLS=$(echo "$POOLS" | jq -c '[.[] | select(.p == true)]')
+        PRIVATE_COUNT=$(echo "$PRIVATE_POOLS" | jq 'length')
+        if [ "$PRIVATE_COUNT" -gt 0 ]; then
+          mapfile -t PRIVATE_NAMES < <(echo "$PRIVATE_POOLS" | jq -r '.[].name')
+          mapfile -t PRIVATE_ARNS < <(echo "$PRIVATE_POOLS" | jq -r '.[].arn')
+
+          echo "Probing $PRIVATE_COUNT private device pool(s) (strict availability required)..."
+          for i in $(seq 0 $((PRIVATE_COUNT - 1)) | shuf); do
+            NAME="${PRIVATE_NAMES[$i]}"
+            ARN="${PRIVATE_ARNS[$i]}"
+            TARGETS=$(resolve_pool_targets "$ARN")
+
+            if [ "$(echo "$TARGETS" | jq '[.deviceArns[], .instanceArns[]] | length')" -eq 0 ]; then
+              echo "  - '$NAME': UNKNOWN (no positive device or instance ARN in pool rules)"
+              continue
+            fi
+
+            echo "  - '$NAME':"
+            AVAIL=$(get_private_availability "$TARGETS")
+            if [ "$AVAIL" = "AVAILABLE" ]; then
+              emit_pool "$NAME" "$ARN" "private: $AVAIL" "$AVAIL"
+              exit 0
+            fi
+            echo "    private pool not ready: $AVAIL"
+          done
+
+          echo ""
+          echo "Private device pool unavailable; continuing with public fallback."
+          {
+            echo "### Private device pool fallback"
+            echo ""
+            echo "No configured private pool had a physical instance with status \`AVAILABLE\`; using the public selection flow."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "No private device pool configured; using the public selection flow."
+        fi
+
+        # Public random selection preserves the previous behavior. Private pools
+        # are excluded even when r defaults to true, so an unavailable private
+        # device can never become the best-effort public fallback.
+        RANDOM_POOLS=$(echo "$POOLS" | jq -c '[.[] | select(.p != true and .r != false)]')
         if [ "$(echo "$RANDOM_POOLS" | jq 'length')" -eq 0 ]; then
-          echo "::error::no random-eligible device pool (every candidate has \"r\": false); pass a pool-name to select one explicitly"
+          echo "::error::no random-eligible public device pool; configure a non-private entry with \"r\" != false or pass a pool-name explicitly"
           exit 1
         fi
 
@@ -163,12 +290,13 @@ runs:
         mapfile -t NAMES < <(echo "$RANDOM_POOLS" | jq -r '.[].name')
         mapfile -t ARNS < <(echo "$RANDOM_POOLS" | jq -r '.[].arn')
 
-        # Manual-only pools (r=false) are excluded from random selection; they
-        # are probed and listed after the random candidates for transparency.
-        mapfile -t EXCL_NAMES < <(echo "$POOLS" | jq -r '.[] | select(.r == false) | .name')
-        mapfile -t EXCL_ARNS < <(echo "$POOLS" | jq -r '.[] | select(.r == false) | .arn')
+        # Non-private manual-only pools (r=false) are excluded from random
+        # selection; they are probed and listed after the public candidates for
+        # transparency. Private pools were already reported above.
+        mapfile -t EXCL_NAMES < <(echo "$POOLS" | jq -r '.[] | select(.p != true and .r == false) | .name')
+        mapfile -t EXCL_ARNS < <(echo "$POOLS" | jq -r '.[] | select(.p != true and .r == false) | .arn')
 
-        echo "Probing $COUNT random-eligible device pool(s) (availability = soft preference)..."
+        echo "Probing $COUNT public random-eligible device pool(s) (availability = soft preference)..."
 
         # Probe every candidate first so the full availability picture for all
         # random-eligible pools is visible in the log, then choose. Candidates
@@ -187,7 +315,8 @@ runs:
             FALLBACK_IDX="$i"
           fi
 
-          DEVICE_ARNS=$(resolve_device_arns "$ARN")
+          TARGETS=$(resolve_pool_targets "$ARN")
+          DEVICE_ARNS=$(echo "$TARGETS" | jq -c '.deviceArns')
           if [ "$(echo "$DEVICE_ARNS" | jq 'length')" -eq 0 ]; then
             echo "  - '$NAME': no device ARN in pool rules; skipping availability hint"
             AVAIL_BY_IDX[$i]="UNKNOWN"
@@ -214,7 +343,8 @@ runs:
           echo ""
           echo "Excluded from random (${#EXCL_NAMES[@]} manual-only pool(s), r=false; selectable by name):"
           for j in "${!EXCL_NAMES[@]}"; do
-            E_ARNS=$(resolve_device_arns "${EXCL_ARNS[$j]}")
+            E_TARGETS=$(resolve_pool_targets "${EXCL_ARNS[$j]}")
+            E_ARNS=$(echo "$E_TARGETS" | jq -c '.deviceArns')
             if [ "$(echo "$E_ARNS" | jq 'length')" -eq 0 ]; then
               echo "  - '${EXCL_NAMES[$j]}': UNKNOWN (skipped)"
             else
