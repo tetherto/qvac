@@ -1,14 +1,6 @@
 name: Stage integration models (S3)
 description: |
-  Generic model/data staging for the nx integration leaves. Reads a per-package
-  JSON manifest (from `project.json` `options.ci.modelS3`) and stages each entry
-  from the private S3 bucket via OIDC, reproducing what the legacy
-  `integration-test-<pkg>.yml` files did inline. Package-agnostic: the leaf
-  passes the manifest, this action does the auth + copy loop.
-
-  Manifest is a JSON array of objects:
-    { "src": "<path under bucket>", "dest": "<path under workdir>", "recursive": <bool> }
-  Each entry copies `s3://<bucket>/<src>` -> `<workdir>/<dest>`.
+  Stages models from the private S3 bucket via OIDC per a JSON manifest (project.json options.ci.modelS3) of { src, dest, recursive } entries copying s3://<bucket>/<src> -> <workdir>/<dest>.
 
 inputs:
   workdir:
@@ -19,11 +11,7 @@ inputs:
     required: false
     default: "[]"
   cache-hit:
-    description: |
-      `cache-hit` output of the package's model cache. When 'true', entries
-      marked `"skipOnCacheHit": true` are skipped (the cache already restored
-      them). Entries without the flag always download — legacy vla downloads
-      its pi05/GR00T oracle artefacts unconditionally while gating smolvla.
+    description: "cache-hit output of the model cache; when 'true', entries marked skipOnCacheHit are skipped (entries without the flag always download)."
     required: false
     default: ""
   aws-role:
@@ -40,9 +28,8 @@ inputs:
 runs:
   using: composite
   steps:
-    # Self-hosted macOS runners don't ship the AWS CLI; install it user-local
-    # exactly as the legacy ocr-ggml / vla files did. No-op elsewhere or if aws
-    # already resolves. Mirrors integration-test-ocr-ggml.yml:173-203.
+    # Self-hosted macOS runners don't ship the AWS CLI; install it user-local.
+    # No-op elsewhere or if aws already resolves.
     - name: Ensure AWS CLI (macOS)
       if: runner.os == 'macOS'
       shell: bash

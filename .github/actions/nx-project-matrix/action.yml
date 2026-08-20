@@ -44,13 +44,8 @@ runs:
       with:
         fetch-depth: 0
         persist-credentials: false
-    # On workflow_dispatch / workflow_call there is no nx-set-shas, and the head
-    # checkout above holds only the triggering ref, so `nx affected` (git diff
-    # BASE HEAD) and `git show CONFIG:...` die with "unknown revision". A second
-    # actions/checkout can't help: it cleans the workspace and drops the first
-    # ref. qvac is public, so fetch the base (+ any distinct config-ref) into
-    # local branches over the unauthenticated origin remote - no token touches
-    # disk - the same plain-fetch idiom on-pr-fabric.yml / on-pr-onnx.yml use.
+    # On dispatch/call there's no nx-set-shas and the checkout holds only the head
+    # ref, so fetch base (+ config-ref) into local branches over unauthenticated origin.
     - if: github.event_name != 'pull_request'
       shell: bash
       env:
@@ -71,11 +66,8 @@ runs:
       with:
         node-version: lts/*
     - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-    # --ignore-scripts: computing the nx affected graph only needs the nx CLI +
-    # each project's project.json (read from source), NOT built/linked workspace
-    # packages. Skipping lifecycle scripts avoids running every package's prepare
-    # (e.g. rag's `bare copy-hyperspec`, native addon builds) — wasteful here and
-    # a source of unrelated failures in a job that just derives the matrix.
+    # --ignore-scripts: the affected graph only needs the nx CLI + project.json,
+    # not built packages; running every package's prepare is wasteful and flaky here.
     - shell: bash
       run: pnpm install --frozen-lockfile --ignore-scripts
     - if: github.event_name == 'pull_request'
@@ -101,10 +93,8 @@ runs:
           exit 1
         }
 
-        # Explicit packages override: when non-empty, build the matrix from
-        # exactly these packages and skip nx-affected (no transitive dependents).
-        # on-merge-nx uses this to publish exactly the changed package per its
-        # detect matrix. Empty (the on-pr/dispatch default) => normal nx-affected.
+        # Explicit packages override: build from exactly these, skipping nx-affected
+        # (no transitive dependents). on-merge-nx uses it for per-package publish.
         if [ "$(echo "$INPUT_PACKAGES" | jq 'length')" -gt 0 ]; then
           AFFECTED=$(echo "$INPUT_PACKAGES" | jq -c 'map(sub("^@qvac/"; ""))')
           echo "Explicit packages ($TARGET, no affected computation): $AFFECTED"
@@ -115,10 +105,8 @@ runs:
           echo "Affected ($TARGET, transitive): $AFFECTED"
         fi
 
-        # Resolve a git-showable ref for CONFIG (the TRUSTED options.ci source,
-        # decoupled from the affected BASE): try it as-is, fall back to
-        # origin/<ref> (nx accepts bare branch names like "main" for --base,
-        # but `git show` needs a ref that actually resolves locally).
+        # Resolve a git-showable ref for CONFIG (the trusted options.ci source):
+        # try as-is, fall back to origin/<ref> (git show needs a locally-resolving ref).
         show_base() {
           local path="$1"
           git show "${CONFIG}:${path}" 2>/dev/null || git show "origin/${CONFIG}:${path}" 2>/dev/null
@@ -135,12 +123,8 @@ runs:
             continue
           fi
           ROOT=$(echo "$PROJECT_JSON" | jq -r '.root')
-          # Whether this package produces a prebuild bundle is DERIVED from its
-          # own build target, not declared per target: a package has prebuilds
-          # exactly when `build.options.ci` exists (that is what prebuilds-nx.yml
-          # builds from). Consumers gate on `matrix.hasPrebuilds == true`, so a
-          # package like decoder-audio, whose native code comes transitively from
-          # a dependency, needs no flag anywhere.
+          # hasPrebuilds is DERIVED (not declared): a package has prebuilds exactly
+          # when build.options.ci exists, so transitive consumers need no flag.
           HAS_PREBUILDS=$(echo "$PROJECT_JSON" | jq -c 'if .targets.build.options.ci then true else false end')
           PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" --argjson hasPrebuilds "$HAS_PREBUILDS" '
             (.platforms // [{}]) as $platforms
@@ -151,12 +135,8 @@ runs:
           ROWS=$(jq -c --argjson new "$PKG_ROWS" '. + $new' <<< "$ROWS")
         done
 
-        # Per-run overrides: a key is valid only if it already exists as a
-        # field on that package's own row (i.e. was declared in its
-        # options.ci for this target). Applied uniformly across every row
-        # belonging to that package. Comes from the dispatch/call input, same
-        # trust level as any other free-form workflow input — never sourced
-        # from PR-head project.json.
+        # Per-run overrides: a key is valid only if already declared in that
+        # package's options.ci. From dispatch/call input, never PR-head project.json.
         OVERRIDES="$INPUT_OVERRIDES"
         echo "$OVERRIDES" | jq -e 'type == "object"' >/dev/null || {
           echo "::error::overrides must be a JSON object, got: $OVERRIDES"
@@ -182,9 +162,8 @@ runs:
           map(. as $row | $row * ($overrides[$row.package] // {}))
         ' <<< "$ROWS")
 
-        # Partition: rows flagged carveOut are routed by the caller to their own
-        # bespoke reusable (they have no platforms/generic config), so keep them
-        # out of the generic matrix and surface just their package names.
+        # Partition: carveOut rows go to the caller's bespoke reusable, so keep
+        # them out of the generic matrix and surface just their package names.
         CARVEOUTS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut == true) | .package] | unique')
         ROWS=$(echo "$ROWS" | jq -c '[.[] | select(.carveOut != true)]')
 

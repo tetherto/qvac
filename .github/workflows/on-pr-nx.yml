@@ -2,10 +2,8 @@
 name: On PR Trigger (nx)
 
 on:
-  # Elevated trigger: the matrix job loads the action + reads options.ci from the
-  # trusted default branch (never PR head), and every code-running job gates on
-  # fork-approval + authorize, so running in the base (secrets-bearing) context is
-  # safe. Enforced by ci-trust-policy.test.mjs.
+  # Fork-safe: matrix loads the action + options.ci from the trusted default branch
+  # (never PR head); code-running jobs gate on fork-approval + authorize.
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
@@ -97,9 +95,8 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  # Affected packages + their on-pr flags (fold map), plus pre-filtered sublists
-  # for the flag-gated jobs (a uses: job can't gate per matrix row, so it runs
-  # over a filtered list). On pull_request nx-set-shas computes affected.
+  # Affected packages + on-pr flags, plus pre-filtered sublists for flag-gated
+  # jobs (a uses: job can't gate per matrix row, so it runs over a filtered list).
   matrix:
     needs: [authorize]
     if: needs.authorize.outputs.allowed == 'true'
@@ -116,20 +113,8 @@ jobs:
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
     steps:
-      # Load the action + read options.ci from the PR BASE ref (the branch the PR
-      # merges into) rather than default_branch: base is equally trusted (maintainer-
-      # controlled, never fork head), but unlike default_branch it already carries the
-      # action + project.json while the consolidation is unmerged, so on-pr-nx is green
-      # pre-merge. Falls back to default_branch for non-PR (workflow_dispatch) runs, and
-      # collapses to default_branch once the consolidation lands on main.
-      # Load the action + read options.ci ONLY from the trusted default branch
-      # (never PR head) — the fork-safe source for pull_request_target. Full
-      # (non-sparse) checkout: a sparse checkout leaves sparse config that leaks
-      # into the action's own internal checkout, starving it of the root
-      # package.json (pnpm pin) -> pnpm/action-setup "No pnpm version is specified".
-      # config_ref_override is for interim testing before the consolidation lands
-      # on main; until then this job is expected to be red on the feature PRs
-      # (main does not yet carry the action / project.json).
+      # Load the action + options.ci ONLY from the trusted default branch (never
+      # PR head). Full checkout: sparse config leaks into the action and breaks the pnpm pin.
       - name: Checkout nx-project-matrix composite (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -154,23 +139,18 @@ jobs:
             echo "coloadmobile=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true and (.package == "asr-ggml" or .package == "tts-ggml"))]')"
             echo "perfcomposite=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "composite" and .perfReportPattern != null)]')"
             echo "perfrtf=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "rtf")]')"
-            # Affected prebuild packages -> one qvac/prebuild-<key> status each for
-            # Merge Guard's verify-prebuilds. statusKey normalises the lone naming
-            # quirk: the nx project is vla-ggml but PREBUILD_KEYS + Merge Guard's
-            # changes map packages/vla-ggml -> "vla". unique_by drops duplicate
-            # platform rows so a package posts exactly one status.
+            # One qvac/prebuild-<key> status per affected prebuild package. statusKey
+            # maps the vla-ggml nx project -> "vla" (Merge Guard's key); unique_by dedupes rows.
             echo "prebuilds=$(echo "$M" | jq -c '[.[] | select(.hasPrebuilds == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
           } >> "$GITHUB_OUTPUT"
 
-  # The 4 leaves self-affect from their own project.json targets (and absorb
-  # their carve-out packages internally), so on-pr calls them uniformly. On
-  # pull_request the leaves' nx-set-shas computes affected from the PR diff.
+  # The 4 leaves self-affect from their own project.json targets (absorbing their
+  # carve-out packages internally), so on-pr calls them uniformly.
   prebuild:
     needs: [fork-approval, authorize, ci-router]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true'
-    # actions: read is required down the chain so the reuse action can list
-    # prior runs + download their artifacts (else the reusable job's request
-    # exceeds the caller grant -> startup_failure).
+    # actions: read required down the chain: the reuse action lists prior runs +
+    # downloads artifacts (else the reusable's request exceeds the grant -> startup_failure).
     permissions:
       contents: write
       packages: write
@@ -215,10 +195,8 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
-  # Mobile integration tests are NOT run on PRs (matches main: QVAC-23665 moved
-  # them to on-demand workflow_dispatch via the per-package
-  # integration-mobile-test-<pkg>.yml files). The ci-router `run_mobile` output
-  # is retained for a possible future revival but triggers nothing here.
+  # Mobile integration tests are NOT run on PRs (QVAC-23665 moved them to on-demand
+  # dispatch). ci-router's run_mobile output is retained but triggers nothing here.
 
   # Flag-gated per-package jobs, driven by the on-pr fold map. sanity runs for
   # every affected package; the rest run over their pre-filtered sublist.
@@ -348,9 +326,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
   # Perf reports (informational, not a merge gate). Composite variant
-  # (ocr/diffusion) via the shared combine-perf-reports action; rtf variant
-  # (asr) via its own aggregator. llm perf-report is pending (needs the
-  # composite extra-args extension for --addon-type vision).
+  # (ocr/diffusion) via combine-perf-reports; rtf variant (asr) via its own aggregator.
   perf-report:
     name: perf-report (${{ matrix.package }})
     needs: [fork-approval, authorize, matrix, run-integration-tests]
@@ -428,18 +404,8 @@ jobs:
             benchmark-artifacts/${{ matrix.perfReportOutputStem }}.html
           retention-days: 30
 
-  # Post qvac/prebuild-<key> commit statuses that Merge Guard's verify-prebuilds
-  # reads, once per affected prebuild package (matrix), mirroring the legacy
-  # per-package on-pr-<pkg> publish job. Without this, once the legacy on-pr-<pkg>
-  # workflows are retired, verify-prebuilds finds no producer and blocks every
-  # nx-package PR. PREBUILD_RESULT is the AGGREGATE prebuilds-nx result (the leaf
-  # exposes no per-package output), so any affected package failing fails every
-  # posted status - fail-closed by design; a reuse hit still surfaces as
-  # prebuild.result == 'success', so REUSE_HIT is unused. lib.mjs isRunFresh now
-  # also trusts on-pr-nx.yml as a producer. NOTE: on a plain pull_request a fork's
-  # GITHUB_TOKEN is read-only so the status POST 403s for forks - only same-repo
-  # PRs post today; the pull_request_target flip (deferred) fixes forks, hence the
-  # event_name guard admits both.
+  # Posts the qvac/prebuild-<key> statuses Merge Guard's verify-prebuilds reads,
+  # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
   publish-prebuild-status:
     needs: [prebuild, ci-router, matrix]
     if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'

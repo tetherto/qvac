@@ -1,31 +1,13 @@
 name: 'Prebuild artifact materialize'
 description: >
-  Downloads a package's prebuild bundle and places it into that package's working
-  directory in the ONLY layout the runtime and the published npm tarball accept,
-  i.e. <workdir>/prebuilds/<platform>-<arch>/. Single source of truth for that
-  placement — do NOT inline per workflow.
-
-  Artifact identity is DERIVED from the package, never configured. The producer
-  (reusable-prebuilds.yml) uploads per-leg artifacts as
-  prebuild-<package>-<platform>-<arch> and the merged bundle as
-  prebuilds-<package>; this action asks for prebuilds-<package>. That is what
-  lets several packages build in one workflow run: artifacts are scoped to the
-  RUN and a called reusable workflow shares its caller's run, and the artifact
-  service ACCEPTS duplicate names rather than rejecting them, so a shared name
-  silently yields two same-named artifacts and an ambiguous download.
-
-  There is deliberately no fallback to the historical shared `prebuilds` name:
-  the workflows that produced it are retired in this same change, and keeping a
-  fallback would let a run silently consume another package's bundle.
+  Downloads a package's prebuild bundle (prebuilds-<package>) into <workdir>/prebuilds/<platform>-<arch>/, the only layout the runtime and npm tarball accept. Single source of truth for that placement — do NOT inline per workflow.
 
 inputs:
   workdir:
     description: 'Package working directory, e.g. packages/asr-ggml'
     required: true
   package:
-    description: >
-      Package short-name, i.e. the packages/<dir> name. Used to build the
-      artifact name. Defaults to basename(workdir).
+    description: 'Package short-name (packages/<dir>). Used to build the artifact name. Defaults to basename(workdir).'
     required: false
     default: ''
   platform:
@@ -63,10 +45,8 @@ runs:
         name: ${{ steps.id.outputs.artifact }}
         path: ${{ runner.temp }}/prebuilds-staging
 
-    # Two implementations on purpose. Git Bash mangles RUNNER_TEMP on Windows
-    # ("C:\a\_temp" — \a and \_ read as escape sequences), which makes the source
-    # path invalid and the copy silently no-op, so win32 goes through PowerShell
-    # exactly as the integration-test-*.yml workflows already do.
+    # Two implementations: Git Bash mangles RUNNER_TEMP on Windows ("C:\a\_temp",
+    # \a/\_ read as escapes) and the copy silently no-ops, so win32 uses PowerShell.
     - name: Place prebuilds (Unix)
       if: runner.os != 'Windows'
       shell: bash
@@ -96,10 +76,8 @@ runs:
           cp -r "${STAGING}/." "${DEST}/"
         fi
 
-        # The published tarball ships `prebuilds` verbatim (package.json `files`)
-        # and require.addon() resolves prebuilds/<platform>-<arch>/<name>.bare, so
-        # any extra directory level here would publish fine and then break every
-        # consumer at runtime. Fail instead of shipping it.
+        # require.addon() resolves prebuilds/<platform>-<arch>/<name>.bare, so any
+        # extra directory level would break every consumer at runtime. Fail instead.
         for d in "$DEST"/*/; do
           base="$(basename "$d")"
           case "$base" in

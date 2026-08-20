@@ -1123,12 +1123,8 @@ test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branc
   const source = read('.github/workflows/on-pr-nx.yml')
   const matrix = jobBlock(source, 'matrix')
 
-  // (i) The composite that computes the matrix executes from a FULL (non-sparse)
-  // checkout of the trusted DEFAULT branch, pinned BEFORE `uses: ./…`. Never the
-  // PR head — that would let a fork swap the action body (RCE under
-  // pull_request_target). Non-sparse: a sparse checkout leaks sparse config into
-  // the action's own internal checkout and starves it of the root package.json
-  // (pnpm pin) -> pnpm/action-setup "No pnpm version is specified".
+  // (i) The matrix composite runs from a FULL (non-sparse) checkout of the trusted
+  // default branch, pinned before `uses:` — never PR head (fork RCE under pull_request_target).
   const checkoutRefLine = matrix
     .split('\n')
     .find((line) => line.trim().startsWith('ref:'))
@@ -1164,9 +1160,8 @@ test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branc
     'the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`',
   )
 
-  // (ii) The options.ci config source (config-ref) must resolve to the trusted
-  // default branch (or a dispatch override), never to any PR-head expression —
-  // otherwise a fork could point the trusted git-show read at its own tree.
+  // (ii) config-ref (the options.ci source) must resolve to the trusted default
+  // branch, never a PR-head expression (else a fork points the git-show at its tree).
   const configRefLine = matrix
     .split('\n')
     .find((line) => line.trim().startsWith('config-ref:'))

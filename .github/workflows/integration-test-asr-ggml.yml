@@ -259,20 +259,16 @@ jobs:
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
-      # Shared placement: downloads the well-known `prebuilds` bundle, strips the
-      # <package>/ level when the producer was the multi-package one
-      # (prebuilds-nx.yml), and handles the Windows path hazard where Git Bash
-      # mangles `runner.temp` ("C:\a\_temp", \a and \_ read as escapes) and the
-      # copy silently no-ops.
+      # Shared placement action: handles the Windows path hazard where Git Bash
+      # mangles runner.temp ("C:\a\_temp") and the copy silently no-ops.
       - name: Materialize prebuilds
         if: ${{ !inputs.prebuild_package }}
         uses: ./.github/actions/prebuild-artifact-materialize
         with:
           workdir: ${{ inputs.workdir }}
           package: asr-ggml
-          # Stage only THIS platform's dir (like the generic leaf). Without
-          # platform/arch the action copies the whole bundle and then rejects
-          # asr's non-<platform>-<arch> 'Android/' dir ("not a platform dir").
+          # Stage only THIS platform's dir: without platform/arch the action copies
+          # the whole bundle and rejects asr's non-<platform>-<arch> 'Android/' dir.
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 

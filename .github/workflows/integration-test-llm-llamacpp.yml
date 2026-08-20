@@ -169,11 +169,8 @@ jobs:
       - name: Install bare tooling
         run: npm install -g --force bare bare-make bare-runtime bare-https brittle
 
-      # Shared placement: downloads the well-known `prebuilds` bundle, strips the
-      # <package>/ level when the producer was the multi-package one
-      # (prebuilds-nx.yml), and handles the Windows path hazard where Git Bash
-      # mangles `runner.temp` ("C:\a\_temp", \a and \_ read as escapes) and the
-      # copy silently no-ops.
+      # Shared placement action: handles the Windows path hazard where Git Bash
+      # mangles runner.temp ("C:\a\_temp") and the copy silently no-ops.
       - name: Materialize prebuilds
         if: ${{ !inputs.prebuild_package }}
         uses: ./.github/actions/prebuild-artifact-materialize
@@ -314,10 +311,8 @@ jobs:
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
 
-      # Stamp the physical-device grouping label from the matrix so the two
-      # ubuntu 22/24 GPU legs collapse into one <platform>-<arch> column in the
-      # combined report. device.gpu (real hardware) is untouched. Set at source
-      # so the shared combine-perf-reports action needs no llm-specific folding.
+      # Stamp the device grouping label so the two ubuntu 22/24 GPU legs collapse
+      # into one <platform>-<arch> column; done at source so combine needs no llm fold.
       - name: Stamp device grouping label
         if: ${{ always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}
