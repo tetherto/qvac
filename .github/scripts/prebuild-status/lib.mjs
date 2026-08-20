@@ -78,19 +78,18 @@ export function selectNewestBotStatus(statuses, context) {
   )
 }
 
-// Trust the producing run only when it is the matching on-pr-<pkg> workflow AND
+// Trust the producing run only when it is the consolidated on-pr-nx workflow AND
 // was triggered at/after this PR event (created_at >= threshold, epoch seconds).
 // This rejects a superseded pre-label run whose skipped success merely
 // post-dates the label.
+//
+// on-pr-nx is now the SOLE trusted producer: the legacy per-package on-pr-<pkg>.yml
+// are removed on this line, but they still live on main and fire via
+// pull_request_target for any PR, co-posting qvac/prebuild-<pkg>. Trusting only
+// on-pr-nx.yml ensures the gate is satisfied by the consolidated pipeline itself,
+// not backstopped by a legacy run. `pkg` is retained for signature stability.
 export function isRunFresh(run, pkg, prUpdatedEpoch) {
-  // A status is trusted from either the legacy per-package on-pr-<pkg>.yml or the
-  // consolidated on-pr-nx.yml, which posts qvac/prebuild-<pkg> for every affected
-  // prebuild package. Keep the per-pkg literal so the ci-trust-policy assertion holds.
-  const validPaths = [
-    `.github/workflows/on-pr-${pkg}.yml`,
-    '.github/workflows/on-pr-nx.yml',
-  ]
-  if (!run || !validPaths.includes(run.path)) return false
+  if (!run || run.path !== '.github/workflows/on-pr-nx.yml') return false
   const createdMs = Date.parse(run.created_at)
   if (Number.isNaN(createdMs)) return false
   return Math.floor(createdMs / 1000) >= prUpdatedEpoch
@@ -107,12 +106,22 @@ export function classifyState(state) {
 // `lookupRun(runId)` returns the producing run object (or null) and is injected
 // so this stays pure and testable.
 export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
-  const status = selectNewestBotStatus(statuses, `qvac/prebuild-${pkg}`)
-  const runId = status ? parseRunId(status.target_url) : null
-  if (!runId) return 'pending'
-  const run = lookupRun(runId)
-  if (!isRunFresh(run, pkg, prUpdatedEpoch)) return 'pending'
-  return classifyState(status.state)
+  // Consider ALL bot statuses for this context and keep only those produced by a
+  // trusted+fresh run (on-pr-nx), then take the newest of those. Selecting the
+  // global-newest first would let a legacy on-pr-<pkg> status (co-posted from main
+  // via pull_request_target, and often newest by a few seconds) mask the
+  // consolidated producer and stall the gate at 'pending'.
+  const context = `qvac/prebuild-${pkg}`
+  const trusted = (statuses ?? [])
+    .filter(
+      (s) => s && s.context === context && s.creator && s.creator.login === BOT_LOGIN,
+    )
+    .filter((s) => isRunFresh(lookupRun(parseRunId(s.target_url)), pkg, prUpdatedEpoch))
+  if (trusted.length === 0) return 'pending'
+  const newest = trusted.reduce((best, s) =>
+    Date.parse(s.updated_at) >= Date.parse(best.updated_at) ? s : best,
+  )
+  return classifyState(newest.state)
 }
 
 // The verify.mjs poll loop, with I/O and timing injected so the retry / deadline

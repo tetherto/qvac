@@ -1109,8 +1109,8 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
   assert.match(
     lib,
-    /on-pr-\$\{pkg\}\.yml/,
-    'lib checks the producing run is the on-pr-<pkg> workflow',
+    /run\.path !== '\.github\/workflows\/on-pr-nx\.yml'/,
+    'lib trusts only the consolidated on-pr-nx.yml producer (legacy on-pr-<pkg> removed)',
   )
   assert.match(
     lib,
