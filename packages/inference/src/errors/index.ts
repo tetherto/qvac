@@ -536,6 +536,14 @@ export class InvalidImageInputError extends QvacErrorBase {
   }
 }
 
+export class InvalidAudioInputError extends QvacErrorBase {
+  constructor(details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(ERROR_CODES.INVALID_AUDIO_INPUT, details ? [details] : undefined, cause)
+    )
+  }
+}
+
 // ============== RAG operations ==============
 
 export class RAGSaveFailedError extends QvacErrorBase {

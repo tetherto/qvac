@@ -10,6 +10,13 @@ import {
   buildWhisperReloadConfig
 } from '@/plugins/builtin/asr-ggml/config'
 
+// The model's concurrent sequence slots. Missing / 0 / NaN all mean single-slot;
+// floor a fractional value so it can't over-admit.
+export function getModelParallel(config: { parallel?: number | undefined }) {
+  const n = Math.floor(Number(config.parallel))
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
 export function transformConfigForReload(modelType: ModelTypeInput, config: unknown) {
   const canonicalType = normalizeModelType(modelType)
 

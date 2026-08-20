@@ -82,23 +82,20 @@ export interface RequestContext {
  */
 let registry: RequestRegistry | null = null
 
-// `completion` and `batchCompletion` both run on the same `@qvac/llm-llamacpp`
-// instance, which funnels every `run()` (single-prompt and batch alike) through
-// one per-instance exclusive run queue plus a single-job native runner. They
-// therefore can't actually execute at once on the same model. Sharing one
-// admission lane makes the queue reflect that reality: a completion and a batch
-// on the same model serialize FIFO at the registry layer instead of both being
-// admitted and silently serializing inside the addon (which hides them from the
-// registry's queue-depth accounting, `requestId` diagnostics, and cancel).
+// One admission lane per model for the llama.cpp addon: completion,
+// batchCompletion, LLM translate, and finetune all key on
+// (LLAMACPP_COMPLETION_SLOT_GROUP, modelId), so they compete for the model's
+// `parallel` slots first-come-first-serve and share ONE bounded FIFO wait queue.
+// The queue depth is the per-model cap below (64): once 64 requests across those
+// kinds are waiting, the 65th begin is rejected with RequestRejectedByPolicyError.
+// Disk-KV-cache turns ride the same lane and serialise same-file writes per cache
+// path in the KV-cache session, so they need no separate group. NMT translate
+// passes an infinite cap and never enters the lane, so it stays ungated.
 const LLAMACPP_COMPLETION_SLOT_GROUP = 'llamacppCompletion'
 
 function installDefaultPolicies(r: RequestRegistry): void {
-  // A loaded model is a single native context (one KV-cache, single-slot
-  // decode), so two same-model completions can't run in parallel. Serialize
-  // rather than reject: the second waits FIFO. maxConcurrentPerModel: 1 is
-  // today's reality — raise it once continuous batching lands. The depth cap
-  // bounds queue memory. The shared slot group extends that serialization
-  // across `completion` + `batchCompletion` on the same model (see note above).
+  // Cap is the model's `parallel`, passed per request by the handlers; the value
+  // here is only the fallback when a caller supplies none.
   r.policy({
     kind: 'completion',
     maxConcurrentPerModel: 1,
@@ -109,6 +106,24 @@ function installDefaultPolicies(r: RequestRegistry): void {
   r.policy({
     kind: 'batchCompletion',
     maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64,
+    sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP
+  })
+  // Finetune's only stop is the addon's global cancel, which would kill
+  // concurrent completions. Run it exclusively so nothing else is on the model.
+  r.policy({
+    kind: 'finetune',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64,
+    sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP,
+    exclusive: true
+  })
+  // LLM translate shares the completion lane as a reader (capped by `parallel`),
+  // so a finetune blocks it too. NMT passes no cap and stays ungated.
+  r.policy({
+    kind: 'translate',
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64,
     sharedSlotGroup: LLAMACPP_COMPLETION_SLOT_GROUP
