@@ -1136,18 +1136,35 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   )
 })
 
-test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head', () => {
+test('on-pr-nx matrix job loads nx-project-matrix from a trusted base/default ref and reads config off it, never PR head', () => {
   const source = read('.github/workflows/on-pr-nx.yml')
   const matrix = jobBlock(source, 'matrix')
 
-  // (i) The composite that computes the matrix executes from a default-branch
-  // sparse checkout, pinned BEFORE `uses: ./.github/actions/nx-project-matrix`.
-  // This is what stops a PR head from swapping the action body (RCE surface
-  // once the trigger flips to pull_request_target).
+  // (i) The composite that computes the matrix executes from a sparse checkout of
+  // a TRUSTED ref, pinned BEFORE `uses: ./.github/actions/nx-project-matrix`. The
+  // trusted ref is the PR BASE branch (maintainer-controlled), falling back to the
+  // default branch for non-PR (workflow_dispatch) runs. It must NEVER be the PR
+  // head — that would let a fork swap the action body (an RCE surface once the
+  // trigger flips to pull_request_target). base.ref (not default_branch alone) is
+  // used so the action + project.json resolve while the consolidation is unmerged.
+  const checkoutRefLine = matrix
+    .split('\n')
+    .find((line) => line.trim().startsWith('ref:'))
+  assert.ok(checkoutRefLine, 'matrix job checkout pins a ref')
+  assert.doesNotMatch(
+    checkoutRefLine,
+    /github\.event\.pull_request\.head\./,
+    'matrix checkout ref must never resolve to a PR-head expression',
+  )
   assert.match(
-    matrix,
-    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
-    'matrix job must check out from the trusted default branch',
+    checkoutRefLine,
+    /github\.event\.pull_request\.base\.ref/,
+    'matrix checkout ref uses the trusted PR base ref (resolves pre-merge)',
+  )
+  assert.match(
+    checkoutRefLine,
+    /github\.event\.repository\.default_branch/,
+    'matrix checkout ref falls back to the trusted default branch',
   )
   assert.match(
     matrix,
@@ -1172,13 +1189,13 @@ test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branc
   assert.notEqual(usesIndex, -1, 'matrix job runs the nx-project-matrix composite')
   assert.ok(
     trustedCheckoutIndex !== -1 && trustedCheckoutIndex < usesIndex,
-    'the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`',
+    'the trusted (base/default) checkout must precede `uses: ./.github/actions/nx-project-matrix`',
   )
 
   // (ii) The options.ci config source (config-ref) must resolve to a trusted
-  // ref (default branch, or a dispatch override), never to any PR-head
-  // expression — otherwise a fork could point the trusted git-show read at its
-  // own tree.
+  // ref (PR base branch, default branch, or a dispatch override), never to any
+  // PR-head expression — otherwise a fork could point the trusted git-show read
+  // at its own tree.
   const configRefLine = matrix
     .split('\n')
     .find((line) => line.trim().startsWith('config-ref:'))
