@@ -3,8 +3,8 @@
 This report compares the QVAC `@qvac/audiogen-ggml` stack with
 `ServeurpersoCom/acestep.cpp`, with Android Adreno OpenCL as the target
 deployment question. It is a source and build comparison, followed by a
-real-device validation plan. It is not a claim that the two projects have been
-benchmarked like-for-like on Adreno.
+real-device validation protocol and its first attempted result. It is not a
+claim that the two projects have been benchmarked like-for-like on Adreno.
 
 ## Decision summary
 
@@ -76,7 +76,8 @@ external code was downloaded or executed.
 Claims in this report are limited to source, build wiring, committed tests,
 committed documentation, and the proposed QVAC measurement protocol:
 
-- No phone benchmark was run.
+- A phone functional acceptance run was attempted; it crashed before any
+  benchmark measurement completed.
 - No measured value is inferred from README performance statements or old log
   files.
 - The two implementations do not expose identical model sets, batching,
