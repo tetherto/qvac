@@ -23,13 +23,19 @@ async function main() {
   for (const [label, filePath] of Object.entries(files)) requireFile(`MiniMax-H3 ${label}`, filePath)
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
 
+  const config = {
+    device: process.env.H3_DEVICE || 'gpu',
+    diffusion_fa: true,
+    offload_to_cpu: process.env.H3_OFFLOAD_TO_CPU !== '0',
+    stream_layers: process.env.H3_STREAM_LAYERS === '1'
+  }
+  if (process.env.H3_BACKEND) config.backend = process.env.H3_BACKEND
+  if (process.env.H3_PARAMS_BACKEND) config.params_backend = process.env.H3_PARAMS_BACKEND
+  if (process.env.H3_MAX_VRAM) config.max_vram = process.env.H3_MAX_VRAM
+
   const model = new VideoStableDiffusion({
     files,
-    config: {
-      device: process.env.H3_DEVICE || 'gpu',
-      diffusion_fa: true,
-      offload_to_cpu: process.env.H3_OFFLOAD_TO_CPU !== '0'
-    },
+    config,
     opts: { stats: true },
     logger: console
   })

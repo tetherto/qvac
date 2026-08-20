@@ -323,21 +323,30 @@ void SdModel::load() {
   params.vae_auto_cpu_fallback_memory_ratio =
       config_.vaeAutoCpuFallbackMemoryRatio;
 
-  // August routes parameter residency through module assignments instead of
-  // per-context CPU/offload booleans. Keep the compatibility config surface,
-  // but translate it to the current `params_backend` grammar.
-  std::string paramsBackend;
-  auto appendParamsAssignment = [&](const char* assignment) {
-    if (!paramsBackend.empty())
-      paramsBackend += ",";
-    paramsBackend += assignment;
-  };
-  if (config_.offloadToCpu)
-    appendParamsAssignment("*=cpu");
-  if (config_.keepClipOnCpu)
-    appendParamsAssignment("te=cpu");
-  if (config_.keepVaeOnCpu)
-    appendParamsAssignment("vae=cpu");
+  params.max_vram =
+      config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
+  params.stream_layers = config_.streamLayers;
+
+  // Explicit module placement uses the current engine grammar. Legacy
+  // booleans remain supported only when params_backend is not supplied.
+  std::string paramsBackend = config_.paramsBackendSpec;
+  if (paramsBackend.empty()) {
+    auto appendParamsAssignment = [&](const char* assignment) {
+      if (!paramsBackend.empty())
+        paramsBackend += ",";
+      paramsBackend += assignment;
+    };
+    if (config_.offloadToCpu)
+      appendParamsAssignment("*=cpu");
+    if (config_.keepClipOnCpu)
+      appendParamsAssignment("te=cpu");
+    if (config_.keepVaeOnCpu)
+      appendParamsAssignment("vae=cpu");
+  } else if (config_.offloadToCpu || config_.keepClipOnCpu ||
+             config_.keepVaeOnCpu) {
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "params_backend overrides legacy CPU placement flags");
+  }
   params.params_backend =
       paramsBackend.empty() ? nullptr : paramsBackend.c_str();
 
@@ -355,9 +364,14 @@ void SdModel::load() {
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
   std::string mainGpuBackend;
-  if (!config_.mainGpu.empty() &&
-      sd_backend_selection::parseConfigDeviceString(config_.device) ==
-          sd_backend_selection::ConfigDevice::Gpu) {
+  if (!config_.backendSpec.empty()) {
+    params.backend = config_.backendSpec.c_str();
+    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "Explicit stable-diffusion backend assignment '" +
+                config_.backendSpec + "'");
+  } else if (!config_.mainGpu.empty() &&
+             sd_backend_selection::parseConfigDeviceString(config_.device) ==
+                 sd_backend_selection::ConfigDevice::Gpu) {
     auto mainGpuSpec = sd_backend_selection::parseMainGpu(config_.mainGpu);
     if (auto resolved =
             sd_backend_selection::resolveMainGpuBackendName(*mainGpuSpec);

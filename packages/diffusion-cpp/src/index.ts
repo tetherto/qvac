@@ -107,6 +107,10 @@ export interface SdConfig {
   diffusion_fa?: boolean
   mmap?: boolean
   offload_to_cpu?: boolean
+  backend?: string
+  params_backend?: string
+  max_vram?: NumericLike
+  stream_layers?: boolean
   prediction?: PredictionType
   flow_shift?: number
   diffusion_conv_direct?: boolean
