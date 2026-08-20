@@ -19,7 +19,7 @@ jobs:
   cpp-tests:
     runs-on: qvac-ubuntu2204-x64
     environment: release
-    timeout-minutes: 90
+    timeout-minutes: 120
     defaults:
       run:
         working-directory: ${{ env.WORKDIR }}
