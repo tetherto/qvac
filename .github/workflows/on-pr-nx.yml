@@ -22,6 +22,11 @@ on:
         required: false
         type: boolean
         default: true
+      config_ref_override:
+        description: "Override the trusted config ref (e.g. pnpm-monorepo-foundation) for interim testing before foundation lands on main."
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -104,11 +109,18 @@ jobs:
       perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Checkout nx-project-matrix composite (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/nx-project-matrix
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - id: compute
         uses: ./.github/actions/nx-project-matrix
         with:
           target: on-pr
+          config-ref: ${{ inputs.config_ref_override || github.event.repository.default_branch }}
       - id: filter
         shell: bash
         env:

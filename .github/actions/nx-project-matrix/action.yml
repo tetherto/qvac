@@ -13,6 +13,10 @@ inputs:
     description: 'Head ref for nx affected when not resolvable from a pull_request event'
     required: false
     default: 'HEAD'
+  config-ref:
+    description: 'Trusted ref to read each package''s options.ci from (git show). Defaults to the affected base when empty.'
+    required: false
+    default: ''
   overrides:
     description: 'JSON object of {package: {ciField: value}} to override per-run. Each field must already exist in that package''s own options.ci for this target.'
     required: false
@@ -55,30 +59,33 @@ runs:
         INPUT_TARGET: ${{ inputs.target }}
         INPUT_BASE_REF: ${{ inputs.base-ref }}
         INPUT_HEAD_REF: ${{ inputs.head-ref }}
+        INPUT_CONFIG_REF: ${{ inputs.config-ref }}
         INPUT_OVERRIDES: ${{ inputs.overrides }}
       run: |
         set -euo pipefail
         TARGET="$INPUT_TARGET"
         BASE="${NX_BASE:-$INPUT_BASE_REF}"
         HEAD="${NX_HEAD:-$INPUT_HEAD_REF}"
+        CONFIG="${INPUT_CONFIG_REF:-$BASE}"
 
         AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
           | tail -n1 \
           | jq -c 'map(sub("^@qvac/"; ""))')
         echo "Affected ($TARGET, transitive): $AFFECTED"
 
-        # Resolve a git-showable ref for BASE: try it as-is, fall back to
+        # Resolve a git-showable ref for CONFIG (the TRUSTED options.ci source,
+        # decoupled from the affected BASE): try it as-is, fall back to
         # origin/<ref> (nx accepts bare branch names like "main" for --base,
         # but `git show` needs a ref that actually resolves locally).
         show_base() {
           local path="$1"
-          git show "${BASE}:${path}" 2>/dev/null || git show "origin/${BASE}:${path}" 2>/dev/null
+          git show "${CONFIG}:${path}" 2>/dev/null || git show "origin/${CONFIG}:${path}" 2>/dev/null
         }
 
         ROWS='[]'
         for pkg in $(echo "$AFFECTED" | jq -r '.[]'); do
           PROJECT_JSON=$(show_base "packages/${pkg}/project.json") || {
-            echo "::warning::packages/${pkg}/project.json not found on base ref '${BASE}' — skipping (new package needs onboarding to base first, see plan)"
+            echo "::warning::packages/${pkg}/project.json not found on config ref '${CONFIG}' — skipping (new package needs onboarding to base first, see plan)"
             continue
           }
           CI=$(echo "$PROJECT_JSON" | jq -c --arg t "$TARGET" '.targets[$t].options.ci // empty')
