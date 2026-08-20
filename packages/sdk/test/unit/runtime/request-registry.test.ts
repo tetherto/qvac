@@ -82,6 +82,49 @@ test('registry: cancel by requestId aborts only that signal', async (t) => {
   t.is(b.state, 'running')
 })
 
+test('registry: a same-tick duplicate requestId is rejected', async (t) => {
+  const r = createRequestRegistry()
+  // Two begins with the same id, neither awaited before the other starts.
+  const p1 = r.begin({ requestId: 'dup', kind: 'completion', modelId: 'm1' })
+  const p2 = r.begin({ requestId: 'dup', kind: 'completion', modelId: 'm1' })
+  const [a, b] = await Promise.allSettled([p1, p2])
+
+  const fulfilled = [a, b].filter((x) => x.status === 'fulfilled')
+  const rejected = [a, b].filter((x) => x.status === 'rejected')
+  t.is(fulfilled.length, 1, 'exactly one begin admitted')
+  t.is(rejected.length, 1, 'the duplicate was rejected')
+  t.ok(
+    rejected[0]?.status === 'rejected' && rejected[0].reason instanceof RequestIdConflictError,
+    'duplicate rejected with RequestIdConflictError'
+  )
+  if (fulfilled[0]?.status === 'fulfilled') await fulfilled[0].value[Symbol.asyncDispose]()
+})
+
+test('registry: cancel-before-begin does not wait for a saturated lane', async (t) => {
+  const r = createRequestRegistry()
+  // Holder saturates a single-slot lane and is held for the whole test.
+  await using holder = await r.begin({
+    requestId: 'holder',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 1
+  })
+  t.ok(holder, 'holder admitted')
+
+  // Cancel lands BEFORE begin: it only records a cancel-before-begin marker.
+  r.cancel({ requestId: 'pre' })
+
+  // Without the fix this begin would queue behind the still-held holder and
+  // never resolve; with it, it skips admission and returns aborted at once.
+  await using pre = await r.begin({
+    requestId: 'pre',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 1
+  })
+  t.is(pre.signal.aborted, true, 'pre-cancelled begin resolves immediately aborted')
+})
+
 test('registry: cancel-by-requestId is idempotent and counts only first abort', async (t) => {
   const r = createRequestRegistry()
   await using ctx = await r.begin({
@@ -208,6 +251,39 @@ test('registry: duplicate requestId throws RequestIdConflictError', async (t) =>
   )
 })
 
+test('registry: an id stays reserved through async disposal, then frees cleanly', async (t) => {
+  const r = createRequestRegistry()
+
+  let releaseCleanup = () => {}
+  const cleanupBlocked = new Promise<void>((resolve) => {
+    releaseCleanup = resolve
+  })
+
+  const ctx = await r.begin({ requestId: 'dup-1', kind: 'completion', modelId: 'm1' })
+  // A blocking deferred cleanup holds the scope mid-dispose, so the id sits in
+  // the window where it is out of `entries` but teardown has not finished.
+  ctx.scope.defer(() => cleanupBlocked)
+  const disposing = ctx[Symbol.asyncDispose]()
+
+  await t.exception(
+    async () => {
+      await r.begin({ requestId: 'dup-1', kind: 'completion', modelId: 'm1' })
+    },
+    RequestIdConflictError as unknown as new () => Error,
+    'a same-id begin during disposal is rejected, not admitted concurrently'
+  )
+  t.is(r.cancel({ requestId: 'dup-1' }), 0, 'a cancel during disposal matches nothing')
+
+  releaseCleanup()
+  await disposing
+
+  // Teardown done: the id is reusable and must not inherit the disposal-window
+  // cancel as a stale cancel-before-begin marker.
+  await using fresh = await r.begin({ requestId: 'dup-1', kind: 'completion', modelId: 'm1' })
+  t.is(fresh.signal.aborted, false, 'the reused id starts clean, no stale cancel')
+  t.is(fresh.state, 'running')
+})
+
 test('registry: end(requestId) sets state, disposes scope, and removes slot', async (t) => {
   const r = createRequestRegistry()
   let cleanupRan = 0
@@ -305,6 +381,41 @@ test('registry: same-tick cancel-before-begin retroactively aborts the later beg
     'stop-button',
     'the recorded cancel reason is forwarded to the aborted controller'
   )
+})
+
+test('registry: a begin racing withModelDraining starts aborted (drain barrier, not a one-time snapshot)', async (t) => {
+  // begin() reserves its id then awaits acquireSlot, so the RegistryEntry lands
+  // a microtask after reservation. A drain that only
+  // snapshotted `entries` would miss such a begin and let it register an
+  // unaborted active request against a model being torn down. withModelDraining
+  // holds `drainingModels` across teardown, and begin() re-checks it AFTER slot
+  // acquisition, so a same-tick begin in the reservation gap starts aborted.
+  const r = createRequestRegistry()
+
+  // Start the begin but do NOT await it: it reserves 'race' and suspends on
+  // acquireSlot with an immediately-available slot.
+  const racing = r.begin({
+    requestId: 'race',
+    kind: 'completion',
+    modelId: 'm',
+    maxConcurrentPerModel: 1
+  })
+
+  // Drain the model to teardown while that begin is mid-admission.
+  let teardownRan = false
+  await r.withModelDraining('m', async () => {
+    teardownRan = true
+  })
+
+  await using ctx = await racing
+  t.is(teardownRan, true, 'teardown ran')
+  t.is(ctx.signal.aborted, true, 'the racing begin starts aborted, not a live unaborted request')
+  t.is(
+    String((ctx.signal as { reason?: unknown }).reason),
+    'modelUnload',
+    'aborted for model unload, not left running against a torn-down model'
+  )
+  t.is(ctx.state, 'cancelling', "context starts in 'cancelling'")
 })
 
 test('registry: a second begin() with the same id (UUID retry) after the race is consumed runs cleanly', async (t) => {
@@ -821,9 +932,9 @@ test("queue: onOverflow 'reject' still throws RequestRejectedByPolicyError", asy
 })
 
 test('queue: a sharedSlotGroup serializes different kinds on the same model', async (t) => {
-  // Mirrors the singleton wiring: completion + batchCompletion share one
-  // llama.cpp run queue, so they must contend for one admission lane per
-  // model rather than each getting an independent (kind, modelId) slot.
+  // Mirrors the singleton wiring: completion + batchCompletion share one lane
+  // so a completion and a batch on the same model contend for a single
+  // admission pool rather than each getting an independent (kind, modelId) slot.
   const r = createRequestRegistry()
   const sharedSlotGroup = 'llamacppCompletion'
   r.policy({
@@ -1109,4 +1220,479 @@ test('queue: cancelAll drains queued waiters so no begin() promise hangs', async
 
   await holder[Symbol.asyncDispose]()
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+// -----------------------------------------------------------------------------
+// Per-request concurrency (multi-job continuous batching).
+//
+// A loaded model's real slot count is its own `parallel`, which varies per
+// model — so the completionStream handler passes it as
+// `begin({ maxConcurrentPerModel })` instead of baking one number into the
+// per-kind policy. Disk-KV-cache completions ride the same lane and serialize
+// same-file writes per cache path inside the KV-cache session, so admission
+// stays uniform across cached and plain completions.
+// -----------------------------------------------------------------------------
+
+test('policy: per-request maxConcurrentPerModel overrides the kind default and admits N-way', async (t) => {
+  const r = createRequestRegistry()
+  // Policy default serializes; the per-request override opens the gate to the
+  // model's `parallel` (3 here).
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  const opts = (id: string) => ({
+    requestId: id,
+    kind: 'completion' as const,
+    modelId: 'm1',
+    maxConcurrentPerModel: 3
+  })
+
+  const a = await r.begin(opts('r-1'))
+  const b = await r.begin(opts('r-2'))
+  const c = await r.begin(opts('r-3'))
+  t.is(r.list().length, 3, 'three concurrent completions admitted on one model')
+
+  let fourthResolved = false
+  const fourth = r.begin(opts('r-4')).then((ctx) => {
+    fourthResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(fourthResolved, false, 'the fourth queues once the model is at its 3-slot cap')
+
+  await a[Symbol.asyncDispose]()
+  const d = await fourth
+  t.is(fourthResolved, true, 'freeing one slot admits the queued fourth')
+
+  await b[Symbol.asyncDispose]()
+  await c[Symbol.asyncDispose]()
+  await d[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('policy: per-request maxConcurrentPerModel is scoped per model', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  // m1 was loaded with parallel=2, m2 with parallel=1.
+  const big1 = await r.begin({
+    requestId: 'a-1',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  const big2 = await r.begin({
+    requestId: 'a-2',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  t.is(r.list().length, 2, 'm1 admits two concurrently at its own cap')
+
+  const small1 = await r.begin({
+    requestId: 'b-1',
+    kind: 'completion',
+    modelId: 'm2',
+    maxConcurrentPerModel: 1
+  })
+  let small2Resolved = false
+  const small2 = r
+    .begin({ requestId: 'b-2', kind: 'completion', modelId: 'm2', maxConcurrentPerModel: 1 })
+    .then((ctx) => {
+      small2Resolved = true
+      return ctx
+    })
+  await settle()
+  t.is(small2Resolved, false, "m2's second request queues at its own 1-slot cap, unaffected by m1")
+
+  await small1[Symbol.asyncDispose]()
+  const small2ctx = await small2
+  await big1[Symbol.asyncDispose]()
+  await big2[Symbol.asyncDispose]()
+  await small2ctx[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('policy: a cached completion shares the lane and counts toward the cap (no bypass)', async (t) => {
+  const r = createRequestRegistry()
+  const sharedSlotGroup = 'llamacppCompletion'
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue', sharedSlotGroup })
+
+  // A cached completion is admitted exactly like a plain one now — no separate
+  // slotGroup lane — so it counts toward `parallel` and keeps its FCFS place
+  // instead of jumping the queue. Same-file write safety lives in the KV-cache
+  // session, not here.
+  const opts = (id: string) => ({
+    requestId: id,
+    kind: 'completion' as const,
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+
+  const p1 = await r.begin(opts('p-1'))
+  const p2 = await r.begin(opts('p-2'))
+  t.is(r.list().length, 2, 'two completions fill the shared lane at cap=2')
+
+  let p3Resolved = false
+  const p3 = r.begin(opts('p-3')).then((ctx) => {
+    p3Resolved = true
+    return ctx
+  })
+  // A "cached" completion fired after p3 — identical admission opts, so it must
+  // queue behind p3 rather than bypass the cap onto a private lane.
+  let cachedResolved = false
+  const cached = r.begin(opts('c-1')).then((ctx) => {
+    cachedResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(p3Resolved, false, 'the third request queues once the lane is at cap')
+  t.is(cachedResolved, false, 'the cached completion does NOT bypass the cap or jump the queue')
+
+  await p1[Symbol.asyncDispose]()
+  const p3ctx = await p3
+  t.is(p3Resolved, true, 'freeing a slot admits p3 first (FCFS preserved)')
+  await settle()
+  t.is(cachedResolved, false, 'freeing one slot admits exactly one waiter, not the cached one too')
+
+  await p2[Symbol.asyncDispose]()
+  const cachedCtx = await cached
+  t.is(cachedResolved, true, 'the cached completion is admitted only after its FCFS turn')
+
+  await p3ctx[Symbol.asyncDispose]()
+  await cachedCtx[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('policy: completion and batchCompletion share one lane and run concurrently up to the cap', async (t) => {
+  const r = createRequestRegistry()
+  const sharedSlotGroup = 'llamacppCompletion'
+  // Mirrors the singleton: both kinds share the lane; the per-request cap is
+  // the model's `parallel` (2 here), so a single and a batch run together.
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue', sharedSlotGroup })
+  r.policy({
+    kind: 'batchCompletion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup
+  })
+
+  const single = await r.begin({
+    requestId: 's-1',
+    kind: 'completion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  const batch = await r.begin({
+    requestId: 'b-1',
+    kind: 'batchCompletion',
+    modelId: 'm1',
+    maxConcurrentPerModel: 2
+  })
+  t.is(r.list().length, 2, 'a single completion and a batch run concurrently on the shared lane')
+
+  let thirdResolved = false
+  const third = r
+    .begin({ requestId: 's-2', kind: 'completion', modelId: 'm1', maxConcurrentPerModel: 2 })
+    .then((ctx) => {
+      thirdResolved = true
+      return ctx
+    })
+  await settle()
+  t.is(thirdResolved, false, 'a third request queues once the shared lane is at its 2-slot cap')
+
+  await batch[Symbol.asyncDispose]()
+  const thirdCtx = await third
+  t.is(thirdResolved, true, 'freeing a shared slot admits the queued request regardless of kind')
+
+  await single[Symbol.asyncDispose]()
+  await thirdCtx[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+// -----------------------------------------------------------------------------
+// Exclusive (reader/writer) admission. A writer (finetune) holds the shared
+// lane alone; readers (completion) run N-way but never alongside it — so
+// finetune's only-global cancel can't touch a concurrent completion.
+// -----------------------------------------------------------------------------
+
+const RW_LANE = 'llamacppCompletion'
+function rwRegistry() {
+  const r = createRequestRegistry()
+  r.policy({
+    kind: 'completion',
+    maxConcurrentPerModel: 2,
+    onOverflow: 'queue',
+    sharedSlotGroup: RW_LANE
+  })
+  r.policy({
+    kind: 'finetune',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    sharedSlotGroup: RW_LANE,
+    exclusive: true
+  })
+  return r
+}
+
+test('exclusive: a writer waits until active readers drain, then is admitted', async (t) => {
+  const r = rwRegistry()
+  const c1 = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+  const c2 = await r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' })
+
+  let ftResolved = false
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' }).then((ctx) => {
+    ftResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(ftResolved, false, 'writer waits while two readers hold the lane')
+
+  await c1[Symbol.asyncDispose]()
+  await settle()
+  t.is(ftResolved, false, 'still waits with one reader active')
+
+  await c2[Symbol.asyncDispose]()
+  const ft = await ftP
+  t.is(ftResolved, true, 'writer admitted once the lane is empty')
+
+  await ft[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: an active writer blocks readers; releasing it drains them up to cap', async (t) => {
+  const r = rwRegistry()
+  const ft = await r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' })
+
+  const admitted: string[] = []
+  const enqueue = (id: string) =>
+    r.begin({ requestId: id, kind: 'completion', modelId: 'm1' }).then((ctx) => {
+      admitted.push(id)
+      return ctx
+    })
+  const p1 = enqueue('c-1')
+  const p2 = enqueue('c-2')
+  const p3 = enqueue('c-3')
+  await settle()
+  t.alike(admitted, [], 'no reader runs while the writer holds the lane')
+
+  await ft[Symbol.asyncDispose]()
+  const c1 = await p1
+  const c2 = await p2
+  await settle()
+  t.alike(admitted, ['c-1', 'c-2'], 'writer release drains readers up to cap=2; the third waits')
+
+  await c1[Symbol.asyncDispose]()
+  const c3 = await p3
+  t.alike(admitted, ['c-1', 'c-2', 'c-3'], 'freeing a reader admits the third')
+
+  await c2[Symbol.asyncDispose]()
+  await c3[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: a reader behind a queued writer waits (no barging past the writer)', async (t) => {
+  const r = rwRegistry()
+  const c1 = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+
+  let ftResolved = false
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' }).then((ctx) => {
+    ftResolved = true
+    return ctx
+  })
+  await settle()
+  t.is(ftResolved, false, 'writer queues behind the active reader')
+
+  // active(1) < cap(2), but the new reader must still queue behind the writer.
+  let c2Resolved = false
+  const c2P = r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' }).then((ctx) => {
+    c2Resolved = true
+    return ctx
+  })
+  await settle()
+  t.is(c2Resolved, false, 'a new reader does not barge past the queued writer')
+
+  await c1[Symbol.asyncDispose]()
+  const ft = await ftP
+  t.is(ftResolved, true, 'writer admitted after the lane drains')
+  t.is(c2Resolved, false, 'reader still waits behind the writer')
+
+  await ft[Symbol.asyncDispose]()
+  const c2 = await c2P
+  t.is(c2Resolved, true, 'reader admitted after the writer releases')
+
+  await c2[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: cancelling a queued writer releases the readers stacked behind it', async (t) => {
+  const r = rwRegistry()
+  const c1 = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' })
+  await settle()
+
+  let c2Resolved = false
+  const c2P = r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' }).then((ctx) => {
+    c2Resolved = true
+    return ctx
+  })
+  await settle()
+  t.is(c2Resolved, false, 'reader queued behind the writer')
+
+  t.is(r.cancel({ requestId: 'ft' }), 1, 'the queued writer is cancelled')
+  const ft = await ftP
+  t.is(ft.signal.aborted, true, 'cancelled writer resolves aborted')
+
+  const c2 = await c2P
+  t.is(c2Resolved, true, 'reader behind the cancelled writer is admitted')
+
+  await ft[Symbol.asyncDispose]()
+  await c1[Symbol.asyncDispose]()
+  await c2[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
+test('exclusive: cancelAll rejects a queued writer and its trailing readers', async (t) => {
+  const r = rwRegistry()
+  const holder = await r.begin({ requestId: 'c-1', kind: 'completion', modelId: 'm1' })
+  const ftP = r.begin({ requestId: 'ft', kind: 'finetune', modelId: 'm1' }).then(
+    () => 'resolved' as const,
+    (err) => err
+  )
+  const c2P = r.begin({ requestId: 'c-2', kind: 'completion', modelId: 'm1' }).then(
+    () => 'resolved' as const,
+    (err) => err
+  )
+  await settle()
+
+  await r.cancelAll('modelUnload')
+
+  t.ok((await ftP) instanceof RequestRejectedByPolicyError, 'queued writer rejected on teardown')
+  t.ok((await c2P) instanceof RequestRejectedByPolicyError, 'queued reader rejected on teardown')
+  t.is(holder.signal.aborted, true, 'the in-flight reader was aborted too')
+
+  await holder[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after cancelAll teardown')
+})
+
+test('withModelDraining: waits for an active request to finish disposing before teardown, and aborts a queued one', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+
+  const active = await r.begin({ requestId: 'active', kind: 'completion', modelId: 'm1' })
+
+  // Simulate a native teardown that takes time: the deferred cleanup blocks on
+  // a gate we release by hand, so the drain has something real to wait on.
+  let cleanupRan = false
+  let releaseCleanup = () => {}
+  const cleanupGate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve
+  })
+  active.scope.defer(async () => {
+    await cleanupGate
+    cleanupRan = true
+  })
+  // A real handler unwinds its `await using` on abort; emulate that here.
+  active.signal.addEventListener(
+    'abort',
+    () => {
+      void active[Symbol.asyncDispose]()
+    },
+    { once: true }
+  )
+
+  // A second request queues behind the cap-1 lane.
+  let queuedResolved = false
+  const queuedP = r
+    .begin({ requestId: 'queued', kind: 'completion', modelId: 'm1' })
+    .then((ctx) => {
+      queuedResolved = true
+      return ctx
+    })
+  await settle()
+  t.is(queuedResolved, false, 'second request queued behind the active one')
+
+  let teardownRan = false
+  let done = false
+  const p = r
+    .withModelDraining('m1', async () => {
+      teardownRan = true
+    })
+    .then(() => {
+      done = true
+    })
+  await settle()
+
+  // The drain runs before teardown, and can't finish while the active request's
+  // gated cleanup is still pending.
+  t.is(cleanupRan, false, 'deferred cleanup still blocked')
+  t.is(teardownRan, false, 'teardown waits for the drain')
+  t.is(done, false, 'withModelDraining still pending')
+
+  releaseCleanup()
+  await p
+  t.is(cleanupRan, true, 'deferred cleanup completed')
+  t.is(teardownRan, true, 'teardown ran after the drain')
+  t.is(r.get('active'), null, 'active request disposed and removed')
+
+  // The queued request was resolved into an aborted context, not left hanging.
+  const queued = await queuedP
+  t.is(queued.signal.aborted, true, 'queued request aborted by the drain')
+  await queued[Symbol.asyncDispose]()
+  t.is(r.list().length, 0, 'no entries remain once the queued request unwinds')
+})
+
+test('withModelDraining: holds an admission barrier during teardown, lifts it after', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 2, onOverflow: 'queue' })
+
+  let duringAborted: boolean | undefined
+  await r.withModelDraining('m1', async () => {
+    // Inside teardown the barrier is up: a begin for the model starts aborted,
+    // so it can't go active against a model being freed (closes the admission gap).
+    const during = await r.begin({ requestId: 'during', kind: 'completion', modelId: 'm1' })
+    duringAborted = during.signal.aborted
+    await during[Symbol.asyncDispose]()
+  })
+  t.is(duringAborted, true, 'begin during teardown is aborted')
+
+  // Barrier lifted once teardown resolves: a later reload admits normally.
+  const reload = await r.begin({ requestId: 'reload', kind: 'completion', modelId: 'm1' })
+  t.is(reload.signal.aborted, false, 'begin after teardown admits normally')
+  await reload[Symbol.asyncDispose]()
+})
+
+test('withModelDraining: waits for a request whose disposal already started', async (t) => {
+  const r = createRequestRegistry()
+  const ctx = await r.begin({ requestId: 'a', kind: 'completion', modelId: 'm1' })
+
+  let releaseCleanup = () => {}
+  const gate = new Promise<void>((resolve) => {
+    releaseCleanup = resolve
+  })
+  let cleanupDone = false
+  ctx.scope.defer(async () => {
+    await gate
+    cleanupDone = true
+  })
+
+  // Start disposal but gate its cleanup: this removes the entry from `entries`
+  // (so the drain's scan can't see it) while it is still tearing down.
+  const disposeP = ctx[Symbol.asyncDispose]()
+  await settle()
+  t.is(r.get('a'), null, 'entry left `entries` when disposal started')
+
+  let done = false
+  const p = r
+    .withModelDraining('m1', async () => {})
+    .then(() => {
+      done = true
+    })
+  await settle()
+  t.is(done, false, 'drain waits for the in-flight disposal it cannot see in entries')
+
+  releaseCleanup()
+  await disposeP
+  await p
+  t.is(cleanupDone, true, 'gated cleanup finished')
+  t.is(done, true, 'resolved only after the in-flight disposal completed')
 })

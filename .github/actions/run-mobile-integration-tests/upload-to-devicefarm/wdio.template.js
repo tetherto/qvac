@@ -50,7 +50,10 @@ exports.config = {
   mochaOpts: {
     ui: 'bdd',
     timeout: __MOCHA_TIMEOUT_MS__,
-    grep: '__MOCHA_GREP__',
+    // __MOCHA_GREP__ is substituted as a JSON-encoded string literal (with its
+    // own quotes) by action.yml, so it is safe against config injection even
+    // when the value originates from a manual dispatch `tests` input.
+    grep: __MOCHA_GREP__,
   },
 
   before: async function (capabilities, specs, browser) {
@@ -209,7 +212,8 @@ exports.config = {
     // Push test filter + perf config BEFORE clicking the Run button so the
     // on-device test code can read them when it starts processing.
     var isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
-    var testFilter = '__MOCHA_GREP__';
+    // JSON-encoded string literal (quotes included) — see mochaOpts.grep above.
+    var testFilter = __MOCHA_GREP__;
     if (testFilter.length > 0) {
       try {
         var filterPath = isAndroid
