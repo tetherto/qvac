@@ -120,11 +120,8 @@ jobs:
       base-ref: ${{ inputs.base-ref }}
       head-ref: ${{ inputs.head-ref }}
 
-  # Mobile RTF benchmarks: one static reusable call per package (GitHub does not
-  # allow matrix-templated `uses:`). Each job is gated on whether its package is
-  # in the nx affected matrix, so only affected packages spend Device Farm time.
-  # `with:` blocks are copied verbatim from each package's legacy
-  # benchmark-performance-<pkg>.yml mobile-benchmarks job.
+  # Mobile RTF benchmarks: one static reusable call per package (GitHub can't
+  # matrix-template `uses:`), each gated on its package being nx-affected.
 
   mobile-asr-ggml:
     needs: [matrix, context, prebuild]

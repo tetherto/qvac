@@ -358,10 +358,8 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.hardGateCommand }}
 
-      # Export testEnvVars (options.ci) as absolute paths. node (not jq) because
-      # self-hosted Windows git-bash has no jq. Values land in $GITHUB_ENV so the
-      # run step below inherits them. Absolute (github.workspace/<workdir>/<path>)
-      # because the run step's cwd is the workdir.
+      # Export testEnvVars as absolute paths into $GITHUB_ENV (run step's cwd is
+      # the workdir). node not jq: self-hosted Windows git-bash has no jq.
       - name: Resolve C++ test env vars
         if: matrix.testEnvVars
         shell: bash
@@ -387,10 +385,8 @@ jobs:
         env:
           ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
           LSAN_OPTIONS: suppressions=${{ github.workspace }}/${{ matrix.workdir }}/.lsan-suppressions.txt
-          # Package test:cpp:run scripts use POSIX syntax (cd ... && ./addon-test).
-          # npm's default script-shell on Windows is cmd, which chokes on `./`;
-          # force bash (git-bash resolves ./addon-test -> .exe) like the legacy
-          # per-package workflows, which ran the binary in a bash step directly.
+          # test:cpp:run uses POSIX syntax (./addon-test); npm's default Windows
+          # script-shell is cmd which chokes on `./`, so force bash (git-bash).
           npm_config_script_shell: bash
         run: |
           set -uo pipefail
@@ -432,9 +428,8 @@ jobs:
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
-  # Carve-out packages have bespoke C++ test flows outside the generic matrix
-  # (own vcpkg cache / Windows generator / stub / distinct reusable). Routed to
-  # their own reusable when nx flags them affected via options.ci carveOut:true.
+  # Carve-out packages have bespoke C++ test flows; routed to their own reusable
+  # when nx flags them affected via options.ci carveOut:true.
   cpp-tests-llm:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.carveouts || '[]'), 'llm-llamacpp')
