@@ -107,13 +107,5 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
   },
-  "peerDependencies": {
-    "@qvac/registry-client": "^0.6.1"
-  },
-  "peerDependenciesMeta": {
-    "@qvac/registry-client": {
-      "optional": true
-    }
-  },
   "types": "index.d.ts"
 }
