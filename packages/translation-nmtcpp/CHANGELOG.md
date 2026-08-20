@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-20
+
 ### Fixed
 
+- Declare `@qvac/registry-client` and `bare-fetch` as direct dependencies
+  instead of optional peers. The optional peer range `^0.4.0` disagreed with the
+  `^0.6.1` that `@qvac/sdk` pins, so `npm install` failed with `ERESOLVE` for
+  every SDK consumer. `bun install` resolved a second copy instead and hid it.
 - Declare all runtime modules required by the published model fetchers, mobile
   tests, and integration tests.
-- Declare lazy model downloader integrations as optional peers, report how to
-  install them when requested, and preserve nested missing-module errors.
+- Report how to install the lazy model downloader integrations when they are
+  missing, and preserve nested missing-module errors.
 
 ## [0.10.0] - 2026-08-18
 

@@ -113,16 +113,10 @@ Install the main translation package via npm:
 npm i @qvac/translation-nmtcpp
 ```
 
-Local model files require no downloader integration. To use automatic model
-downloads, install the integration for the selected source:
-
-```bash
-# Bergamot downloads from the Firefox CDN
-npm i bare-fetch
-
-# IndicTrans downloads from the QVAC model registry
-npm i @qvac/registry-client
-```
+The automatic model downloaders ship with the package: `bare-fetch` (Bergamot
+downloads from the Firefox CDN) and `@qvac/registry-client` (IndicTrans
+downloads from the QVAC model registry) are installed as dependencies. Local
+model files require neither.
 
 ## Usage
 
@@ -764,11 +758,7 @@ Bergamot weights are published by Mozilla's
 [firefox-translations-models](https://github.com/mozilla/firefox-translations-models)
 project. `lib/bergamot-model-fetcher` resolves and downloads a language pair
 from the Firefox CDN (using Remote Settings metadata) into a local directory.
-Automatic downloads require `bare-fetch`:
-
-```bash
-npm i bare-fetch
-```
+Automatic downloads use `bare-fetch`, which ships as a dependency.
 
 ```javascript
 const {
@@ -789,12 +779,7 @@ hosted in the QVAC model registry for CI and `@qvac/inference` consumption.
 
 IndicTrans2 GGML weights are hosted in the QVAC model registry.
 `lib/indictrans-model-fetcher` downloads them through `@qvac/registry-client`
-(peer-to-peer, checksum-verified). Install the registry client before using
-automatic downloads:
-
-```bash
-npm i @qvac/registry-client
-```
+(peer-to-peer, checksum-verified), which ships as a dependency.
 
 ```javascript
 const {

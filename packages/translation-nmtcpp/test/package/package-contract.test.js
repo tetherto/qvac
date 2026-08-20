@@ -29,7 +29,8 @@ const REQUIRED_FILES = [
   'lib/indictrans-model-fetcher.d.ts',
   'test/mobile/integration-runtime.cjs'
 ]
-const OPTIONAL_MODULES = ['bare-fetch', '@qvac/registry-client']
+const REGISTRY_CLIENT_MODULE = '@qvac/registry-client'
+const LAZY_MODULES = ['bare-fetch', REGISTRY_CLIENT_MODULE]
 const TRANSITIVE_MISSING_MODULE = 'translation-nmtcpp-transitive-missing'
 const NODE_BARE_MODULE_SHIM = `
 const Module = require('node:module')
@@ -92,12 +93,34 @@ function isExternalModule(specifier) {
   )
 }
 
-function optionalPeerModules(packageJson) {
-  return new Set(
-    Object.keys(packageJson.peerDependencies || {}).filter(
-      (moduleName) => packageJson.peerDependenciesMeta?.[moduleName]?.optional === true
-    )
+function sdkDependencyRange(moduleName) {
+  const sdkManifestPath = path.resolve(PACKAGE_ROOT, '..', 'sdk', 'package.json')
+  return JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8')).dependencies?.[moduleName]
+}
+
+function assertNoPeerDependencies(packageJson) {
+  assert.equal(
+    packageJson.peerDependencies,
+    undefined,
+    'addons must not declare peer dependencies: an optional peer range that disagrees with @qvac/sdk makes npm install fail with ERESOLVE'
   )
+  assert.equal(packageJson.peerDependenciesMeta, undefined)
+}
+
+function assertRegistryClientMatchesSdk(packageJson) {
+  assert.equal(
+    packageJson.dependencies[REGISTRY_CLIENT_MODULE],
+    sdkDependencyRange(REGISTRY_CLIENT_MODULE),
+    `${REGISTRY_CLIENT_MODULE} must track the range @qvac/sdk pins`
+  )
+}
+
+function assertLazyDependenciesAreDirect(packageJson) {
+  LAZY_MODULES.forEach((moduleName) => {
+    assert.ok(packageJson.dependencies?.[moduleName], `${moduleName} must be a direct dependency`)
+  })
+  assertNoPeerDependencies(packageJson)
+  assertRegistryClientMatchesSdk(packageJson)
 }
 
 function assertFileImportsDeclared(packageRoot, filePath, declaredModules) {
@@ -111,10 +134,7 @@ function assertFileImportsDeclared(packageRoot, filePath, declaredModules) {
 }
 
 function assertDeclaredImports(packageRoot, packageJson, packedFiles) {
-  const declaredModules = new Set([
-    ...Object.keys(packageJson.dependencies || {}),
-    ...optionalPeerModules(packageJson)
-  ])
+  const declaredModules = new Set(Object.keys(packageJson.dependencies || {}))
   packedFiles
     .filter((filePath) => JAVASCRIPT_FILE_PATTERN.test(filePath))
     .forEach((filePath) => assertFileImportsDeclared(packageRoot, filePath, declaredModules))
@@ -143,18 +163,18 @@ require.resolve('@qvac/translation-nmtcpp/marian')
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
 }
 
-function optionalModuleRoot(consumerRoot, moduleName) {
+function lazyModuleRoot(consumerRoot, moduleName) {
   return path.join(consumerRoot, 'node_modules', ...moduleName.split('/'))
 }
 
-function removeOptionalModules(consumerRoot) {
-  OPTIONAL_MODULES.forEach((moduleName) => {
-    fs.rmSync(optionalModuleRoot(consumerRoot, moduleName), { recursive: true, force: true })
+function removeLazyModules(consumerRoot) {
+  LAZY_MODULES.forEach((moduleName) => {
+    fs.rmSync(lazyModuleRoot(consumerRoot, moduleName), { recursive: true, force: true })
   })
 }
 
-function writeOptionalModule(consumerRoot, moduleName, source) {
-  const moduleRoot = optionalModuleRoot(consumerRoot, moduleName)
+function writeLazyModule(consumerRoot, moduleName, source) {
+  const moduleRoot = lazyModuleRoot(consumerRoot, moduleName)
   fs.mkdirSync(moduleRoot, { recursive: true })
   fs.writeFileSync(
     path.join(moduleRoot, 'package.json'),
@@ -163,13 +183,13 @@ function writeOptionalModule(consumerRoot, moduleName, source) {
   fs.writeFileSync(path.join(moduleRoot, 'index.js'), source)
 }
 
-function writeOptionalModules(consumerRoot, sourceForModule) {
-  OPTIONAL_MODULES.forEach((moduleName) => {
-    writeOptionalModule(consumerRoot, moduleName, sourceForModule(moduleName))
+function writeLazyModules(consumerRoot, sourceForModule) {
+  LAZY_MODULES.forEach((moduleName) => {
+    writeLazyModule(consumerRoot, moduleName, sourceForModule(moduleName))
   })
 }
 
-function optionalDependencyProbe(expectedBergamotMessage, expectedIndicTransMessage) {
+function lazyDependencyProbe(expectedBergamotMessage, expectedIndicTransMessage) {
   return `
 const bergamot = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
 const indictrans = require('@qvac/translation-nmtcpp/lib/indictrans-model-fetcher')
@@ -222,25 +242,25 @@ function assertProbeAcrossRuntimes(consumerRoot, probe) {
   assertProbe(BARE_COMMAND, consumerRoot, probe)
 }
 
-function assertDirectMissingOptionalDependencies(consumerRoot) {
-  removeOptionalModules(consumerRoot)
+function assertDirectMissingLazyDependencies(consumerRoot) {
+  removeLazyModules(consumerRoot)
   assertProbeAcrossRuntimes(
     consumerRoot,
-    optionalDependencyProbe(
+    lazyDependencyProbe(
       'Install bare-fetch to download Bergamot translation models',
       'Install @qvac/registry-client to download IndicTrans translation models'
     )
   )
 }
 
-function assertOptionalDependencyInitializationErrors(consumerRoot) {
-  writeOptionalModules(
+function assertLazyDependencyInitializationErrors(consumerRoot) {
+  writeLazyModules(
     consumerRoot,
     (moduleName) => `throw new Error(${JSON.stringify(`${moduleName} initialization failed`)})\n`
   )
   assertProbeAcrossRuntimes(
     consumerRoot,
-    optionalDependencyProbe(
+    lazyDependencyProbe(
       'bare-fetch initialization failed',
       '@qvac/registry-client initialization failed'
     )
@@ -248,19 +268,16 @@ function assertOptionalDependencyInitializationErrors(consumerRoot) {
 }
 
 function assertTransitiveMissingDependencies(consumerRoot) {
-  writeOptionalModules(
-    consumerRoot,
-    () => `require(${JSON.stringify(TRANSITIVE_MISSING_MODULE)})\n`
-  )
+  writeLazyModules(consumerRoot, () => `require(${JSON.stringify(TRANSITIVE_MISSING_MODULE)})\n`)
   assertProbeAcrossRuntimes(
     consumerRoot,
-    optionalDependencyProbe(TRANSITIVE_MISSING_MODULE, TRANSITIVE_MISSING_MODULE)
+    lazyDependencyProbe(TRANSITIVE_MISSING_MODULE, TRANSITIVE_MISSING_MODULE)
   )
 }
 
-function assertOptionalDependencyErrors(consumerRoot) {
-  assertDirectMissingOptionalDependencies(consumerRoot)
-  assertOptionalDependencyInitializationErrors(consumerRoot)
+function assertLazyDependencyErrors(consumerRoot) {
+  assertDirectMissingLazyDependencies(consumerRoot)
+  assertLazyDependencyInitializationErrors(consumerRoot)
   assertTransitiveMissingDependencies(consumerRoot)
 }
 
@@ -294,13 +311,10 @@ test('packed tarball preserves the public package contract', () => {
     assert.equal(packageJson.devDependencies['bare-os'], undefined)
     assert.equal(packageJson.devDependencies['bare-process'], undefined)
     assert.equal(packageJson.devDependencies.brittle, undefined)
-    assert.equal(packageJson.peerDependencies['bare-fetch'], '^3.0.1')
-    assert.equal(packageJson.peerDependencies['@qvac/registry-client'], '^0.4.0')
-    assert.equal(packageJson.peerDependenciesMeta['bare-fetch'].optional, true)
-    assert.equal(packageJson.peerDependenciesMeta['@qvac/registry-client'].optional, true)
+    assertLazyDependenciesAreDirect(packageJson)
     assertDeclaredImports(installedRoot, packageJson, packedFiles)
     assertRuntimeProbe(consumerRoot, installedRoot)
-    assertOptionalDependencyErrors(consumerRoot)
+    assertLazyDependencyErrors(consumerRoot)
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }
