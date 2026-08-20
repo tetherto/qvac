@@ -163,7 +163,6 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
-      run_rtf_benchmarks: true
 
   mobile-bci-whispercpp:
     needs: [matrix, context, prebuild]
@@ -227,7 +226,6 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
-      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
 
   mobile-tts-ggml:
     needs: [matrix, context, prebuild]
