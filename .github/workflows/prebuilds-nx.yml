@@ -34,6 +34,11 @@ on:
         required: false
         type: string
         default: ""
+      packages:
+        description: "JSON array of explicit package short-names to build, bypassing nx-affected (no transitive dependents). Used by on-merge-nx for per-package publish. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
 
 permissions:
   contents: read
@@ -53,6 +58,7 @@ jobs:
           target: build
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          packages: ${{ inputs.packages }}
 
   prebuild:
     name: Prebuild (${{ matrix.package }})

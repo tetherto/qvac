@@ -46,6 +46,11 @@ on:
         type: string
         required: false
         default: "{}"
+      packages:
+        description: "JSON array of explicit package short-names to test, bypassing nx-affected (no transitive dependents). Used by on-merge-nx for per-package pre-publish tests. Empty = normal nx-affected."
+        required: false
+        type: string
+        default: "[]"
 
 permissions:
   contents: read
@@ -67,6 +72,7 @@ jobs:
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
           overrides: ${{ inputs.overrides }}
+          packages: ${{ inputs.packages }}
 
   # Carve-outs: asr-ggml (S3 pin-model-manifest + RTF matrix) and llm-llamacpp
   # (perf-only subset + HTML report) have bespoke integration flows; routed to

@@ -21,6 +21,10 @@ inputs:
     description: 'JSON object of {package: {ciField: value}} to override per-run. Each field must already exist in that package''s own options.ci for this target.'
     required: false
     default: '{}'
+  packages:
+    description: 'JSON array of explicit package short-names (no @qvac/ prefix). When non-empty, skips nx-affected entirely and builds the matrix from exactly these packages — no transitive expansion. For callers that already know which package(s) to act on (e.g. on-merge-nx''s per-package publish) and must not pull in dependents.'
+    required: false
+    default: '[]'
 
 outputs:
   matrix:
@@ -84,6 +88,7 @@ runs:
         INPUT_HEAD_REF: ${{ inputs.head-ref }}
         INPUT_CONFIG_REF: ${{ inputs.config-ref }}
         INPUT_OVERRIDES: ${{ inputs.overrides }}
+        INPUT_PACKAGES: ${{ inputs.packages }}
       run: |
         set -euo pipefail
         TARGET="$INPUT_TARGET"
@@ -91,10 +96,24 @@ runs:
         HEAD="${NX_HEAD:-$INPUT_HEAD_REF}"
         CONFIG="${INPUT_CONFIG_REF:-$BASE}"
 
-        AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
-          | tail -n1 \
-          | jq -c 'map(sub("^@qvac/"; ""))')
-        echo "Affected ($TARGET, transitive): $AFFECTED"
+        echo "$INPUT_PACKAGES" | jq -e 'type == "array"' >/dev/null || {
+          echo "::error::packages must be a JSON array, got: $INPUT_PACKAGES"
+          exit 1
+        }
+
+        # Explicit packages override: when non-empty, build the matrix from
+        # exactly these packages and skip nx-affected (no transitive dependents).
+        # on-merge-nx uses this to publish exactly the changed package per its
+        # detect matrix. Empty (the on-pr/dispatch default) => normal nx-affected.
+        if [ "$(echo "$INPUT_PACKAGES" | jq 'length')" -gt 0 ]; then
+          AFFECTED=$(echo "$INPUT_PACKAGES" | jq -c 'map(sub("^@qvac/"; ""))')
+          echo "Explicit packages ($TARGET, no affected computation): $AFFECTED"
+        else
+          AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
+            | tail -n1 \
+            | jq -c 'map(sub("^@qvac/"; ""))')
+          echo "Affected ($TARGET, transitive): $AFFECTED"
+        fi
 
         # Resolve a git-showable ref for CONFIG (the TRUSTED options.ci source,
         # decoupled from the affected BASE): try it as-is, fall back to
