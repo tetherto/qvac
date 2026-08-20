@@ -25,6 +25,24 @@ on:
         required: false
         type: boolean
         default: true
+      run_mobile:
+        description: "Run mobile (Android/iOS) RTF benchmarks on Device Farm"
+        required: false
+        type: boolean
+        default: true
+      prebuild_package:
+        description: "Published NPM package spec (name@version) to benchmark instead of building prebuilds in-run. When set, the prebuild job is skipped and desktop/mobile pull this package."
+        required: false
+        type: string
+        default: ""
+      qvac_perf_runs:
+        description: "QVAC_PERF_RUNS — counted iterations per perf test"
+        required: false
+        type: string
+      qvac_perf_warmup_runs:
+        description: "QVAC_PERF_WARMUP_RUNS — warmup iterations before measurement"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -39,6 +57,7 @@ jobs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - id: compute
         uses: ./.github/actions/nx-project-matrix
         with:
@@ -75,6 +94,9 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
+      # prebuilds-nx's prebuild job requests actions: read (reuse action lists
+      # prior runs); the calling job must grant at least that or startup fails.
+      actions: read
     uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
     with:
@@ -98,15 +120,136 @@ jobs:
       base-ref: ${{ inputs.base-ref }}
       head-ref: ${{ inputs.head-ref }}
 
-  # Mobile RTF benchmarks are NOT consolidated: they remain on the per-package
-  # legacy benchmark-performance-<pkg>.yml (Device Farm), unchanged from main.
-  # This leaf covers the desktop RTF matrix only.
+  # Mobile RTF benchmarks: one static reusable call per package (GitHub does not
+  # allow matrix-templated `uses:`). Each job is gated on whether its package is
+  # in the nx affected matrix, so only affected packages spend Device Farm time.
+  # `with:` blocks are copied verbatim from each package's legacy
+  # benchmark-performance-<pkg>.yml mobile-benchmarks job.
+
+  mobile-asr-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"asr-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      run_rtf_benchmarks: true
+
+  mobile-audiogen-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"audiogen-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-audiogen-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-bci-whispercpp:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"bci-whispercpp"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-diffusion-cpp:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"diffusion-cpp"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-llm-llamacpp:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"llm-llamacpp"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      addon_npm_version: ${{ inputs.prebuild_package }}
+      qvac_perf_runs: ${{ inputs.qvac_perf_runs }}
+      qvac_perf_warmup_runs: ${{ inputs.qvac_perf_warmup_runs }}
+      qvac_perf_only: true
+
+  mobile-ocr-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"ocr-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-ocr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+
+  mobile-tts-ggml:
+    needs: [matrix, context, prebuild]
+    if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"tts-ggml"') }}
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ needs.context.outputs.repository }}
+      ref: ${{ needs.context.outputs.ref }}
+      prebuild_package: ${{ inputs.prebuild_package }}
+      # Legacy tts source passed inputs.mobile_run_rtf_benchmarks (default true);
+      # benchmark-nx does not define that input, so pin to its default.
+      run_rtf_benchmarks: true
 
   summarize:
     needs:
       - matrix
       - context
       - desktop-benchmarks
+      - mobile-asr-ggml
+      - mobile-audiogen-ggml
+      - mobile-bci-whispercpp
+      - mobile-diffusion-cpp
+      - mobile-llm-llamacpp
+      - mobile-ocr-ggml
+      - mobile-tts-ggml
     if: always() && needs.matrix.outputs.any == 'true'
     runs-on: ubuntu-latest
     permissions:
