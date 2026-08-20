@@ -58,6 +58,7 @@ jobs:
       run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
       run_desktop: ${{ steps.route.outputs.run_desktop }}
       run_mobile: ${{ steps.route.outputs.run_mobile }}
+      run_coload: ${{ steps.route.outputs.run_coload }}
     steps:
       - name: Checkout ci-router composite (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -106,6 +107,7 @@ jobs:
       tschecks: ${{ steps.filter.outputs.tschecks }}
       fabric: ${{ steps.filter.outputs.fabric }}
       coload: ${{ steps.filter.outputs.coload }}
+      coloadmobile: ${{ steps.filter.outputs.coloadmobile }}
       perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
@@ -138,6 +140,8 @@ jobs:
             echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true)]')"
             echo "fabric=$(echo "$M" | jq -c '[.[] | select(.hasFabricLockstep == true)]')"
             echo "coload=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true)]')"
+            # asr-ggml/tts-ggml are hardcoded: they are the only two packages that carry mobile coload on main.
+            echo "coloadmobile=$(echo "$M" | jq -c '[.[] | select(.hasCoload == true and .coloadActive == true and (.package == "asr-ggml" or .package == "tts-ggml"))]')"
             echo "perfcomposite=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "composite" and .perfReportPattern != null)]')"
             echo "perfrtf=$(echo "$M" | jq -c '[.[] | select(.perfReportVariant == "rtf")]')"
             # Affected prebuild packages -> one qvac/prebuild-<key> status each for
@@ -312,6 +316,27 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
+  coload-smoke-mobile:
+    name: coload-smoke-mobile (${{ matrix.package }})
+    needs: [authorize, ci-router, matrix, prebuild]
+    if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.matrix.outputs.coloadmobile != '[]' && needs.prebuild.result != 'cancelled'
+    permissions:
+      actions: read
+      id-token: write
+      contents: read
+      pull-requests: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.coloadmobile || '[]') }}
+    uses: ./.github/workflows/coload-smoke-mobile.yml
+    secrets: inherit
+    with:
+      addon: ${{ matrix.package }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
+
   # Perf reports (informational, not a merge gate). Composite variant
   # (ocr/diffusion) via the shared combine-perf-reports action; rtf variant
   # (asr) via its own aggregator. llm perf-report is pending (needs the
@@ -438,7 +463,7 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, coload-smoke]
+    needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, coload-smoke, coload-smoke-mobile]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
