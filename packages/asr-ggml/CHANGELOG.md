@@ -12,6 +12,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [0.3.3] - 2026-08-20
+
+### Changed
+
+- Bump `@qvac/registry-client` from `^0.4.0` to `^0.6.1` as a development
+  dependency so in-repo download and test tooling stays on the hyperdb v6 line.
+
 ## [0.3.2] - 2026-08-18
 
 ### Changed
