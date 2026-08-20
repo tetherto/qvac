@@ -107,20 +107,16 @@ function assertNoPeerDependencies(packageJson) {
   assert.equal(packageJson.peerDependenciesMeta, undefined)
 }
 
-function assertRegistryClientMatchesSdk(packageJson) {
-  assert.equal(
-    packageJson.dependencies[REGISTRY_CLIENT_MODULE],
-    sdkDependencyRange(REGISTRY_CLIENT_MODULE),
-    `${REGISTRY_CLIENT_MODULE} must track the range @qvac/sdk pins`
-  )
-}
-
 function assertLazyDependenciesAreDirect(packageJson) {
   LAZY_MODULES.forEach((moduleName) => {
     assert.ok(packageJson.dependencies?.[moduleName], `${moduleName} must be a direct dependency`)
+    assert.equal(
+      packageJson.dependencies[moduleName],
+      sdkDependencyRange(moduleName),
+      `${moduleName} must track the range @qvac/sdk pins`
+    )
   })
   assertNoPeerDependencies(packageJson)
-  assertRegistryClientMatchesSdk(packageJson)
 }
 
 function assertFileImportsDeclared(packageRoot, filePath, declaredModules) {

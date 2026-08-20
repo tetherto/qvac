@@ -40,6 +40,11 @@ const REQUIRED_PATHS = [
 ]
 const FORBIDDEN_PREFIXES = ['package/test/integration/', 'package/test/mobile/']
 
+function sdkDependencyRange(moduleName) {
+  const sdkManifestPath = path.resolve(PACKAGE_ROOT, '..', 'sdk', 'package.json')
+  return JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8')).dependencies[moduleName]
+}
+
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
   if (result.error) throw result.error
@@ -200,6 +205,11 @@ test('published package contains only consumer contract files', (t) => {
   t.ok(
     packedPackage.peerDependenciesMeta['@qvac/registry-client'].optional,
     'package marks the downloader runtime as an optional peer'
+  )
+  t.is(
+    packedPackage.peerDependencies['@qvac/registry-client'],
+    sdkDependencyRange('@qvac/registry-client'),
+    'optional peer range tracks the range @qvac/sdk pins (drift makes npm install fail with ERESOLVE for SDK consumers)'
   )
   t.is(
     packedPackage.dependencies['bare-process'],
