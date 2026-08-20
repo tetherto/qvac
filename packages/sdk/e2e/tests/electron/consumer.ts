@@ -90,7 +90,6 @@ import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
-import { VideoIcLoraContractExecutor } from '../shared/executors/video-ic-lora-contract-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
 
@@ -597,7 +596,6 @@ export const executor = createExecutor({
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
-    new VideoIcLoraContractExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

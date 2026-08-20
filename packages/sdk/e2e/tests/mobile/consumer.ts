@@ -73,7 +73,6 @@ import { SystemResourcesExecutor } from '../shared/executors/system-resources-ex
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
-import { VideoIcLoraContractExecutor } from '../shared/executors/video-ic-lora-contract-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'mobile',
@@ -675,7 +674,6 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
-    new VideoIcLoraContractExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

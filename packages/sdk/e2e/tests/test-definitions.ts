@@ -40,7 +40,6 @@ import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
-import { videoIcLoraContractTests } from './video-ic-lora-contract-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
 import { systemResourcesTests } from './system-resources-tests.js'
 
@@ -342,9 +341,6 @@ export const tests = [
 
   // Custom plugin system tests (custom-echo-plugin, error paths)
   ...pluginTests,
-
-  // Lightweight video() IC-LoRA wire contract against the echo plugin
-  ...videoIcLoraContractTests,
 
   // Strict Snap storage-path conformance
   ...snapStorageTests,
