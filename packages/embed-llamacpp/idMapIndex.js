@@ -25,6 +25,25 @@ function loadBinding() {
     binding ??= require('./binding');
     return binding;
 }
+function finalizeFilterHandle(handle) {
+    try {
+        loadBinding().idx_filter_dispose(handle);
+    }
+    catch {
+        // Finalizers cannot report cleanup failures to user code.
+    }
+}
+const filterFinalizer = typeof FinalizationRegistry === 'undefined'
+    ? null
+    : new FinalizationRegistry(finalizeFilterHandle);
+function releaseFilter(owner, filter) {
+    for (const ref of owner[FILTERS]) {
+        const candidate = ref.deref();
+        if (candidate === undefined || candidate === filter) {
+            owner[FILTERS].delete(ref);
+        }
+    }
+}
 function isPositiveInt32(value) {
     return Number.isInteger(value) && value > 0 && value <= INT32_MAX;
 }
@@ -98,9 +117,12 @@ class IdMapIndexFilter {
         }
         const owner = this[FILTER_OWNER];
         loadBinding().idx_filter_dispose(filterHandle);
+        filterFinalizer?.unregister(this);
         this[FILTER_HANDLE] = null;
         this[FILTER_OWNER] = null;
-        owner?.[FILTERS].delete(this);
+        if (owner !== null) {
+            releaseFilter(owner, this);
+        }
     }
 }
 exports.IdMapIndexFilter = IdMapIndexFilter;
@@ -108,6 +130,7 @@ function createFilter(owner, handle) {
     const filter = Object.create(IdMapIndexFilter.prototype);
     filter[FILTER_OWNER] = owner;
     filter[FILTER_HANDLE] = handle;
+    filterFinalizer?.register(filter, handle, filter);
     return filter;
 }
 /**
@@ -179,8 +202,12 @@ class IdMapIndex {
      */
     addWithIds(vectors, ids) {
         this.validateBatch('addWithIds', vectors, ids);
-        loadBinding().idx_add(ensureHandle(this), vectors, ids);
-        this.disposeFilters();
+        try {
+            loadBinding().idx_add(ensureHandle(this), vectors, ids);
+        }
+        finally {
+            this.disposeFilters();
+        }
     }
     /**
      * Add vectors and append a durable v4 delta record. The index must first be
@@ -222,15 +249,18 @@ class IdMapIndex {
         return loadBinding().idx_search_filtered(ensureHandle(this), queries, k, allowedIds);
     }
     /**
-     * Prepare an allowlist for repeated searches. Successful mutations invalidate
-     * all prepared filters created from this index.
+     * Prepare an allowlist for repeated searches. Native mutation attempts
+     * invalidate all prepared filters created from this index. Call `dispose()`
+     * when done to release native filter memory promptly; dropped filters are
+     * reclaimed by GC.
      */
     prepareFilter(allowedIds) {
         if (!(allowedIds instanceof BigUint64Array)) {
             throw new TypeError('prepareFilter: allowedIds must be a BigUint64Array');
         }
         const filter = createFilter(this, loadBinding().idx_filter_create(ensureHandle(this), allowedIds));
-        this[FILTERS].add(filter);
+        this.pruneFilters();
+        this[FILTERS].add(new WeakRef(filter));
         return filter;
     }
     /**
@@ -285,8 +315,12 @@ class IdMapIndex {
     }
     /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
     compact() {
-        loadBinding().idx_compact(ensureHandle(this));
-        this.disposeFilters();
+        try {
+            loadBinding().idx_compact(ensureHandle(this));
+        }
+        finally {
+            this.disposeFilters();
+        }
     }
     /** Return whether the index contains an external ID. */
     contains(id) {
@@ -345,10 +379,17 @@ class IdMapIndex {
         this[HANDLE] = null;
     }
     disposeFilters() {
-        for (const filter of this[FILTERS]) {
-            filter.dispose();
+        for (const ref of this[FILTERS]) {
+            ref.deref()?.dispose();
         }
         this[FILTERS].clear();
+    }
+    pruneFilters() {
+        for (const ref of this[FILTERS]) {
+            if (ref.deref() === undefined) {
+                this[FILTERS].delete(ref);
+            }
+        }
     }
     validateBatch(name, vectors, ids) {
         if (!(vectors instanceof Float32Array)) {

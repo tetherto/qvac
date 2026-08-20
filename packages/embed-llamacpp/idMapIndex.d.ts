@@ -60,7 +60,7 @@ export default class IdMapIndex {
     static IdMapIndex: typeof IdMapIndex;
     static IdMapIndexFilter: typeof IdMapIndexFilter;
     [HANDLE]: NativeHandle | null;
-    [FILTERS]: Set<IdMapIndexFilter>;
+    [FILTERS]: Set<WeakRef<IdMapIndexFilter>>;
     constructor(options: IdMapIndexOptions);
     /**
      * Load a v2/v3 snapshot or migrate legacy v1 storage. Legacy bit-width 8
@@ -112,8 +112,10 @@ export default class IdMapIndex {
     /** Exact search restricted to the supplied external IDs. */
     searchFiltered(queries: Float32Array, k: number, allowedIds: BigUint64Array): IdMapIndexSearchResult;
     /**
-     * Prepare an allowlist for repeated searches. Successful mutations invalidate
-     * all prepared filters created from this index.
+     * Prepare an allowlist for repeated searches. Native mutation attempts
+     * invalidate all prepared filters created from this index. Call `dispose()`
+     * when done to release native filter memory promptly; dropped filters are
+     * reclaimed by GC.
      */
     prepareFilter(allowedIds: BigUint64Array): IdMapIndexFilter;
     /**
@@ -164,6 +166,7 @@ export default class IdMapIndex {
     /** Release filters and native index resources. This operation is idempotent. */
     dispose(): void;
     private disposeFilters;
+    private pruneFilters;
     private validateBatch;
     private validateSearch;
     private validateId;

@@ -76,6 +76,28 @@ function loadBinding() {
   return binding
 }
 
+function finalizeFilterHandle(handle: NativeHandle) {
+  try {
+    loadBinding().idx_filter_dispose(handle)
+  } catch {
+    // Finalizers cannot report cleanup failures to user code.
+  }
+}
+
+const filterFinalizer =
+  typeof FinalizationRegistry === 'undefined'
+    ? null
+    : new FinalizationRegistry<NativeHandle>(finalizeFilterHandle)
+
+function releaseFilter(owner: IdMapIndex, filter: IdMapIndexFilter) {
+  for (const ref of owner[FILTERS]) {
+    const candidate = ref.deref()
+    if (candidate === undefined || candidate === filter) {
+      owner[FILTERS].delete(ref)
+    }
+  }
+}
+
 export type IdMapIndexBitWidth = 2 | 4 | 8 | 32
 export type IdMapIndexStorage = keyof typeof BIT_WIDTH_BY_STORAGE
 
@@ -194,9 +216,12 @@ export class IdMapIndexFilter {
 
     const owner = this[FILTER_OWNER]
     loadBinding().idx_filter_dispose(filterHandle)
+    filterFinalizer?.unregister(this)
     this[FILTER_HANDLE] = null
     this[FILTER_OWNER] = null
-    owner?.[FILTERS].delete(this)
+    if (owner !== null) {
+      releaseFilter(owner, this)
+    }
   }
 }
 
@@ -204,6 +229,7 @@ function createFilter(owner: IdMapIndex, handle: NativeHandle) {
   const filter = Object.create(IdMapIndexFilter.prototype) as IdMapIndexFilter
   filter[FILTER_OWNER] = owner
   filter[FILTER_HANDLE] = handle
+  filterFinalizer?.register(filter, handle, filter)
   return filter
 }
 
@@ -221,7 +247,7 @@ export default class IdMapIndex {
   static IdMapIndexFilter = IdMapIndexFilter;
 
   [HANDLE]: NativeHandle | null = null;
-  [FILTERS] = new Set<IdMapIndexFilter>()
+  [FILTERS] = new Set<WeakRef<IdMapIndexFilter>>()
 
   constructor(options: IdMapIndexOptions) {
     const { dim } = options ?? ({} as IdMapIndexOptions)
@@ -285,8 +311,11 @@ export default class IdMapIndex {
    */
   addWithIds(vectors: Float32Array, ids: BigUint64Array) {
     this.validateBatch('addWithIds', vectors, ids)
-    loadBinding().idx_add(ensureHandle(this), vectors, ids)
-    this.disposeFilters()
+    try {
+      loadBinding().idx_add(ensureHandle(this), vectors, ids)
+    } finally {
+      this.disposeFilters()
+    }
   }
 
   /**
@@ -331,8 +360,10 @@ export default class IdMapIndex {
   }
 
   /**
-   * Prepare an allowlist for repeated searches. Successful mutations invalidate
-   * all prepared filters created from this index.
+   * Prepare an allowlist for repeated searches. Native mutation attempts
+   * invalidate all prepared filters created from this index. Call `dispose()`
+   * when done to release native filter memory promptly; dropped filters are
+   * reclaimed by GC.
    */
   prepareFilter(allowedIds: BigUint64Array) {
     if (!(allowedIds instanceof BigUint64Array)) {
@@ -342,7 +373,8 @@ export default class IdMapIndex {
       this,
       loadBinding().idx_filter_create(ensureHandle(this), allowedIds)
     )
-    this[FILTERS].add(filter)
+    this.pruneFilters()
+    this[FILTERS].add(new WeakRef(filter))
     return filter
   }
 
@@ -401,8 +433,11 @@ export default class IdMapIndex {
 
   /** Physically reclaim tombstoned slots. Rejected on delta-bound handles. */
   compact() {
-    loadBinding().idx_compact(ensureHandle(this))
-    this.disposeFilters()
+    try {
+      loadBinding().idx_compact(ensureHandle(this))
+    } finally {
+      this.disposeFilters()
+    }
   }
 
   /** Return whether the index contains an external ID. */
@@ -470,10 +505,18 @@ export default class IdMapIndex {
   }
 
   private disposeFilters() {
-    for (const filter of this[FILTERS]) {
-      filter.dispose()
+    for (const ref of this[FILTERS]) {
+      ref.deref()?.dispose()
     }
     this[FILTERS].clear()
+  }
+
+  private pruneFilters() {
+    for (const ref of this[FILTERS]) {
+      if (ref.deref() === undefined) {
+        this[FILTERS].delete(ref)
+      }
+    }
   }
 
   private validateBatch(name: string, vectors: Float32Array, ids: BigUint64Array) {
