@@ -180,6 +180,10 @@ jobs:
         with:
           workdir: ${{ env.WORKDIR }}
           package: llm-llamacpp
+          # Stage only this platform's dir (like the generic leaf); avoids the
+          # action rejecting any non-<platform>-<arch> dir in the full bundle.
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
@@ -318,10 +322,14 @@ jobs:
         if: ${{ always() && !cancelled() }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
+        # node, not jq: Windows Git Bash has no jq ("command not found"), which
+        # failed the win32 leg. node is present on every runner.
+        env:
+          DEVICE_NAME: ${{ matrix.platform }}-${{ matrix.arch }}
         run: |
           f=test/results/performance-report.json
           if [ -f "$f" ]; then
-            jq --arg name "${{ matrix.platform }}-${{ matrix.arch }}" '.device.name = $name' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            node -e 'const fs=require("fs");const p="test/results/performance-report.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));j.device=j.device||{};j.device.name=process.env.DEVICE_NAME;fs.writeFileSync(p,JSON.stringify(j,null,2))'
           fi
 
       - name: Generate HTML performance report
