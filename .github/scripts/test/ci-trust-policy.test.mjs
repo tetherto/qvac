@@ -1085,10 +1085,21 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
     /sparse-checkout:\s*\.github\/scripts\/prebuild-status/,
     'verify-prebuilds checks out only the prebuild-status scripts',
   )
+  // Trusted ref: the PR base branch (maintainer-controlled), falling back to the
+  // default branch for non-PR runs. Never the PR head.
+  const verifyRefLine = verify
+    .split('\n')
+    .find((line) => line.trim().startsWith('ref:'))
+  assert.ok(verifyRefLine, 'verify-prebuilds checkout pins a ref')
+  assert.doesNotMatch(
+    verifyRefLine,
+    /github\.event\.pull_request\.head\./,
+    'verify-prebuilds checkout ref must never resolve to PR head',
+  )
   assert.match(
-    verify,
-    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
-    'verify-prebuilds checks out the trusted default branch, never PR head',
+    verifyRefLine,
+    /github\.event\.repository\.default_branch/,
+    'verify-prebuilds checkout falls back to the trusted default branch',
   )
   assert.match(
     verify,
