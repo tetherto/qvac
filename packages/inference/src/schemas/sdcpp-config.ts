@@ -115,6 +115,16 @@ export const sdcppConfigSchema = z.object({
   sampler_rng: z.enum(['cpu', 'cuda', 'std_default']).optional(),
   clip_on_cpu: z.boolean().optional().describe('Force CLIP text encoder to run on CPU'),
   vae_on_cpu: z.boolean().optional().describe('Force VAE decoder to run on CPU'),
+  vae_auto_cpu_fallback: z
+    .boolean()
+    .optional()
+    .describe('Automatically move the VAE to CPU when GPU memory is insufficient'),
+  vae_auto_cpu_fallback_memory_ratio: z
+    .number()
+    .gt(0)
+    .max(1)
+    .optional()
+    .describe('GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]'),
   vae_tiling: z.boolean().optional().describe('Enable VAE tiling for large images on limited VRAM'),
   offload_to_cpu: z
     .boolean()

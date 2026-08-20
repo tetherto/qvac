@@ -11965,6 +11965,16 @@
                       "description": "Force VAE decoder to run on CPU",
                       "type": "boolean"
                     },
+                    "vae_auto_cpu_fallback": {
+                      "description": "Automatically move the VAE to CPU when GPU memory is insufficient",
+                      "type": "boolean"
+                    },
+                    "vae_auto_cpu_fallback_memory_ratio": {
+                      "description": "GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]",
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1
+                    },
                     "vae_tiling": {
                       "description": "Enable VAE tiling for large images on limited VRAM",
                       "type": "boolean"

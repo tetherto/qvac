@@ -10170,6 +10170,20 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     vae_on_cpu: Annotated[
         bool | None, Field(description="Force VAE decoder to run on CPU")
     ] = None
+    vae_auto_cpu_fallback: Annotated[
+        bool | None,
+        Field(
+            description="Automatically move the VAE to CPU when GPU memory is insufficient"
+        ),
+    ] = None
+    vae_auto_cpu_fallback_memory_ratio: Annotated[
+        float | None,
+        Field(
+            description="GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]",
+            gt=0.0,
+            le=1.0,
+        ),
+    ] = None
     vae_tiling: Annotated[
         bool | None,
         Field(description="Enable VAE tiling for large images on limited VRAM"),

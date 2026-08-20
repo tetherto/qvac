@@ -51,6 +51,20 @@ test('sdcppConfigSchema: accepts LTX-2 video layout sources', (t: BrittleT) => {
   t.is(result.success, true)
 })
 
+test('sdcppConfigSchema: preserves automatic VAE CPU fallback settings', (t: BrittleT) => {
+  const result = sdcppConfigSchema.safeParse({
+    mode: 'video',
+    vae_auto_cpu_fallback: true,
+    vae_auto_cpu_fallback_memory_ratio: 0.9
+  })
+
+  t.is(result.success, true)
+  t.is(result.success && result.data.vae_auto_cpu_fallback, true)
+  t.is(result.success && result.data.vae_auto_cpu_fallback_memory_ratio, 0.9)
+  t.is(sdcppConfigSchema.safeParse({ vae_auto_cpu_fallback_memory_ratio: 0 }).success, false)
+  t.is(sdcppConfigSchema.safeParse({ vae_auto_cpu_fallback_memory_ratio: 1.1 }).success, false)
+})
+
 test('videoStatsSchema: accepts video runtime stats fields', (t: BrittleT) => {
   const result = videoStatsSchema.safeParse({
     modelLoadMs: 500,
