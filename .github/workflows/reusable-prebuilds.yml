@@ -161,6 +161,11 @@ jobs:
   prebuild:
     needs: detect-reuse
     if: needs.detect-reuse.outputs.reuse_hit != 'true'
+    # Backstop so a hung leg (e.g. android "Setup build host" apt-lock stall on
+    # a github-hosted VM) can't hold the whole prebuild matrix in_progress up to
+    # GitHub's 6h cap — which blocks every downstream job that `needs: prebuild`
+    # (integration, coload). A real prebuild leg finishes well under this.
+    timeout-minutes: 120
     permissions:
       contents: write
       pull-requests: write
@@ -246,6 +251,11 @@ jobs:
 
       - name: Setup build host (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
+        # Fast fail: this is just apt + toolchain env (normally < 5m). A stall
+        # here is a github-hosted apt-lock/mirror hang (e.g. background
+        # unattended-upgrades holding the dpkg lock) — bound it so it fails in
+        # minutes instead of hanging the whole prebuild job.
+        timeout-minutes: 20
         uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
         with:
           platform: ${{ matrix.platform }}
