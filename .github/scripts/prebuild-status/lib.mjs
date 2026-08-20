@@ -83,9 +83,8 @@ export function selectNewestBotStatus(statuses, context) {
 // This rejects a superseded pre-label run whose skipped success merely
 // post-dates the label.
 export function isRunFresh(run, pkg, prUpdatedEpoch) {
-  // A status is trusted from either the legacy per-package on-pr-<pkg>.yml or the
-  // consolidated on-pr-nx.yml, which posts qvac/prebuild-<pkg> for every affected
-  // prebuild package. Keep the per-pkg literal so the ci-trust-policy assertion holds.
+  // Trusted from either the legacy on-pr-<pkg>.yml or the consolidated on-pr-nx.yml.
+  // Keep the per-pkg literal so the ci-trust-policy assertion holds.
   const validPaths = [
     `.github/workflows/on-pr-${pkg}.yml`,
     '.github/workflows/on-pr-nx.yml',

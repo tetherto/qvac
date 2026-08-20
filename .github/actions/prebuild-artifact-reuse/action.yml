@@ -1,12 +1,6 @@
 name: 'Prebuild artifact reuse'
 description: >
-  Shared cross-run prebuild reuse for the addon caching workflows. On a
-  no-native-change push, finds the most recent prior run of THIS PR's head
-  branch that carries a matching per-PR marker (prebuilds-cache-pr-<num>-<hash>)
-  and downloads that run's `prebuilds` artifact, re-publishing it for downstream
-  jobs. Replaces actions/cache (which can't write on pull_request_target). Marker
-  is scoped by PR number, so a PR can only ever reuse ITS OWN prior prebuilds.
-  Single source of truth — do NOT inline per workflow.
+  Cross-run prebuild reuse: on a no-native-change push, finds this PR's prior run carrying a per-PR marker (prebuilds-cache-pr-<num>-<hash>) and re-publishes its prebuilds artifact. Marker is scoped by PR number, so a PR can only reuse its own prebuilds. Single source of truth — do NOT inline per workflow.
 
 inputs:
   github-token:
@@ -48,10 +42,8 @@ runs:
         RUN_ID: ${{ github.run_id }}
       run: |
         set -u
-        # Marker is scoped by PR NUMBER (globally unique in the base repo) so a
-        # PR can only ever reuse ITS OWN prior prebuilds — a malicious PR's
-        # artifact can never be served to a different (victim) PR even if they
-        # share a fork branch name and native_hash.
+        # Marker is scoped by PR NUMBER so a PR can only reuse ITS OWN prebuilds —
+        # a malicious PR's artifact can never be served to a victim PR.
         WANT="prebuilds-cache-pr-${PR_NUMBER}-${NATIVE_HASH}"
         echo "Looking for marker '$WANT' among prior runs of branch '$HEAD_REF'"
         RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?branch=${HEAD_REF}&per_page=40" \

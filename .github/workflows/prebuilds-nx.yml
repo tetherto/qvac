@@ -80,10 +80,8 @@ jobs:
       workdir: ${{ matrix.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository || 'tetherto/qvac' }}
-      # No artifact naming passed: the reusable derives both the per-leg names
-      # (prebuild-<package>-<platform>-<arch>) and the merged bundle name
-      # (prebuilds-<package>) from the package itself, so several packages can
-      # build in one run without sharing an artifact name.
+      # No artifact naming passed: the reusable derives both the per-leg and merged
+      # bundle names from the package, so several packages can build in one run.
       linux-extra-packages: ${{ matrix.linuxExtraPackages }}
       mac-brew-packages: ${{ matrix.macBrewPackages }}
       setup-python-on-windows: ${{ matrix.setupPythonOnWindows == true }}
@@ -94,10 +92,5 @@ jobs:
       reuse-workflow-file: ${{ inputs.reuse-workflow-file }}
     secrets: inherit
 
-  # No merge job here on purpose. The reusable merges each package's own legs
-  # into `prebuilds-<package>`, which is correct however this leaf is invoked —
-  # once with every affected package (on-pr) or once per package (on-merge-nx
-  # matrixes its prebuild job and calls this leaf per package). A merge at this
-  # level would run once per CALL rather than once per run, so in the on-merge
-  # topology it produced one same-named bundle per package, each racing to
-  # collect whatever artifacts existed at that moment.
+  # No merge job here on purpose: the reusable merges each package's legs into
+  # prebuilds-<package>. A merge at this level would run per-call and race in on-merge.

@@ -28,13 +28,7 @@ on:
         required: false
         default: "tetherto/qvac"
       # Artifact identity is DERIVED from the package (basename of `workdir`),
-      # never passed in: per-leg artifacts are
-      # `prebuild-<package>-<platform>-<arch><tags>` and the merged bundle is
-      # `prebuilds-<package>`. The old hand-maintained `artifact-name-prefix`
-      # table was not collision-free (embed-llamacpp and llm-llamacpp both
-      # declared `llama-cpp-`; translation-nmtcpp declared nothing), and the
-      # artifact service ACCEPTS duplicate names, so a shared name silently
-      # produced two same-named artifacts and an ambiguous download.
+      # never passed in: the old prefix table collided and yielded ambiguous downloads.
       linux-extra-packages:
         description: "Extra apt packages to install on linux runners"
         type: string
@@ -95,12 +89,7 @@ on:
         required: false
         default: false
       reuse-workflow-file:
-        description: >-
-          When set (e.g. on-pr-nx.yml), enables cross-run prebuild reuse: on a
-          PR push that did NOT touch this package's native files, a prior run's
-          `prebuilds-<pkg>` artifact is downloaded and re-published instead of
-          rebuilding. Empty disables reuse (dispatch / benchmark / on-merge
-          always build fresh). Matches the legacy per-package on-pr behaviour.
+        description: "When set (e.g. on-pr-nx.yml), enables cross-run prebuild reuse: a PR push that didn't touch native files re-publishes a prior run's prebuilds-<pkg> instead of rebuilding. Empty disables reuse."
         type: string
         required: false
         default: ""
@@ -109,18 +98,12 @@ permissions:
   contents: read
 
 jobs:
-  # Cross-run reuse gate (options: reuse-workflow-file). Per package: detect
-  # whether this PR push touched the package's native tree; if not, find and
-  # re-publish this PR's prior `prebuilds-<pkg>` artifact so the platform build
-  # matrix below can be skipped entirely. No-op (reuse_hit stays empty) for
-  # dispatch/push/benchmark/on-merge or when native files changed.
+  # Cross-run reuse gate (reuse-workflow-file): if this PR push didn't touch the
+  # package's native tree, re-publish its prior prebuilds-<pkg> and skip the build.
   detect-reuse:
     runs-on: ubuntu-latest
-    # No explicit permissions block: this reusable is called by ~17 workflows,
-    # and a reusable job can't request a scope its caller lacks (that is a
-    # startup_failure, not a runtime error). Inherit instead — the reuse step
-    # (the only thing needing actions: read) runs only when reuse-workflow-file
-    # is set, and that caller (on-pr-nx) grants actions: read down the chain.
+    # No explicit permissions block: a reusable job can't request a scope its
+    # caller lacks (startup_failure), so inherit; on-pr-nx grants actions: read.
     outputs:
       reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
       native_hash: ${{ steps.detect.outputs.native_hash }}
@@ -161,10 +144,8 @@ jobs:
   prebuild:
     needs: detect-reuse
     if: needs.detect-reuse.outputs.reuse_hit != 'true'
-    # Backstop so a hung leg (e.g. android "Setup build host" apt-lock stall on
-    # a github-hosted VM) can't hold the whole prebuild matrix in_progress up to
-    # GitHub's 6h cap — which blocks every downstream job that `needs: prebuild`
-    # (integration, coload). A real prebuild leg finishes well under this.
+    # Backstop so a hung leg can't hold the matrix up to GitHub's 6h cap, which
+    # would block every downstream `needs: prebuild` job. Real legs finish well under.
     timeout-minutes: 120
     permissions:
       contents: write
@@ -233,9 +214,8 @@ jobs:
           echo "Matrix arch: $MATRIX_ARCH"
           echo "Matrix tags: $MATRIX_TAGS"
 
-      # Single source of truth for artifact identity: the per-leg name and the
-      # merged bundle name both derive from this one value, so no caller
-      # maintains a prefix and the two can never disagree.
+      # Single source of truth for artifact identity: per-leg and merged bundle
+      # names both derive from this value, so no caller maintains a prefix.
       - name: Resolve package name from workdir
         id: pkg
         shell: bash
@@ -251,10 +231,8 @@ jobs:
 
       - name: Setup build host (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        # Fast fail: this is just apt + toolchain env (normally < 5m). A stall
-        # here is a github-hosted apt-lock/mirror hang (e.g. background
-        # unattended-upgrades holding the dpkg lock) — bound it so it fails in
-        # minutes instead of hanging the whole prebuild job.
+        # Fast fail: this is just apt + toolchain env (< 5m); a stall is a
+        # github-hosted apt-lock hang, so bound it instead of hanging the job.
         timeout-minutes: 20
         uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
         with:
@@ -568,10 +546,8 @@ jobs:
 
           Write-Output "OK: no dynamic C/C++ runtime dependency in Windows prebuilds"
 
-      # Name carries the package, so two packages building in the same run can
-      # never land on the same artifact name. Content stays FLAT
-      # (<platform>-<arch>/), which is what the runtime resolves and what the
-      # published tarball must contain, so no consumer has anything to strip.
+      # Name carries the package, so two packages in one run never collide.
+      # Content stays FLAT (<platform>-<arch>/) as the runtime + tarball require.
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
@@ -594,7 +570,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       # Same derivation as the build job — the package is the single source of
-      # truth for artifact identity on both sides.
+      # truth for artifact identity.
       - name: Resolve package name from workdir
         id: pkg
         shell: bash
@@ -609,10 +585,8 @@ jobs:
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      # Pattern-scoped to THIS package's legs. Downloading everything (the old
-      # behaviour) folded in unrelated artifacts, and in a multi-package run it
-      # raced: each package's merge picked up whatever existed at that moment,
-      # including the other package's merged bundle.
+      # Pattern-scoped to THIS package's legs. Downloading everything raced in a
+      # multi-package run, folding in another package's artifacts.
       - name: Download this package's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
@@ -626,9 +600,8 @@ jobs:
           name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds
 
-      # Tag this run so a later no-native-change push of the same PR can reuse
-      # the prebuilds-<pkg> just uploaded. native_hash is per-package, so the
-      # marker name is unique per package within the run.
+      # Tag this run so a later no-native-change push of the same PR can reuse the
+      # prebuilds-<pkg> just uploaded. native_hash keeps the marker per-package.
       - name: Save prebuild reuse marker
         if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.detect-reuse.outputs.native_hash != ''
         uses: ./.github/actions/prebuild-artifact-save
