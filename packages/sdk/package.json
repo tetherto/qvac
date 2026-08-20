@@ -68,6 +68,9 @@
       "import": "./dist/src/worker/index.js",
       "require": "./dist/src/worker/index.js"
     },
+    "./dist/server/worker.js": {
+      "import": "./dist/src/worker/legacy-worker-entry.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/src/worker/plugins/llamacpp-completion.d.ts",
       "import": "./dist/src/worker/plugins/llamacpp-completion.js"
@@ -138,6 +141,9 @@
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-lifecycle": {
       "import": "./dist/src/worker/lifecycle.js"
+    },
+    "./worker-core": {
+      "import": "./dist/src/worker/worker-core.js"
     },
     "./plugins": {
       "import": "./dist/src/server/plugins/index.js"
