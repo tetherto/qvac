@@ -191,8 +191,7 @@ void ParakeetStreamingProcessor::queueTerminalStats() {
   } catch (const std::exception& e) {
     QLOG(
         logger::Priority::WARNING,
-        std::string(
-            "ParakeetStreamingProcessor: queueTerminalStats failed: ") +
+        std::string("ParakeetStreamingProcessor: queueTerminalStats failed: ") +
             e.what());
   }
 }
