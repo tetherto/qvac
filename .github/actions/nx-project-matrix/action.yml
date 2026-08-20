@@ -36,6 +36,26 @@ outputs:
 runs:
   using: composite
   steps:
+    # On workflow_dispatch / workflow_call there is no nx-set-shas, and a single
+    # checkout leaves only the triggering ref, so `nx affected` (git diff BASE
+    # HEAD) and `git show CONFIG:...` die with "unknown revision". Check out the
+    # base (and any distinct config-ref) FIRST: actions/checkout authenticates the
+    # fetch itself (private repo) and creates a LOCAL branch of that name, and its
+    # refs/objects persist in .git. The primary head checkout runs LAST, so
+    # HEAD/worktree end on the head ref while base/config remain resolvable.
+    # persist-credentials:false keeps creds out of the workspace nx/pnpm run in.
+    - if: github.event_name != 'pull_request' && inputs.base-ref != '' && inputs.base-ref != 'HEAD'
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        ref: ${{ inputs.base-ref }}
+        fetch-depth: 0
+        persist-credentials: false
+    - if: github.event_name != 'pull_request' && inputs.config-ref != '' && inputs.config-ref != inputs.base-ref
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      with:
+        ref: ${{ inputs.config-ref }}
+        fetch-depth: 0
+        persist-credentials: false
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       with:
         fetch-depth: 0
