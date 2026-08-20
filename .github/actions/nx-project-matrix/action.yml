@@ -36,30 +36,33 @@ outputs:
 runs:
   using: composite
   steps:
-    # On workflow_dispatch / workflow_call there is no nx-set-shas, and a single
-    # checkout leaves only the triggering ref, so `nx affected` (git diff BASE
-    # HEAD) and `git show CONFIG:...` die with "unknown revision". Check out the
-    # base (and any distinct config-ref) FIRST: actions/checkout authenticates the
-    # fetch itself (private repo) and creates a LOCAL branch of that name, and its
-    # refs/objects persist in .git. The primary head checkout runs LAST, so
-    # HEAD/worktree end on the head ref while base/config remain resolvable.
-    # persist-credentials:false keeps creds out of the workspace nx/pnpm run in.
-    - if: github.event_name != 'pull_request' && inputs.base-ref != '' && inputs.base-ref != 'HEAD'
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      with:
-        ref: ${{ inputs.base-ref }}
-        fetch-depth: 0
-        persist-credentials: false
-    - if: github.event_name != 'pull_request' && inputs.config-ref != '' && inputs.config-ref != inputs.base-ref
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-      with:
-        ref: ${{ inputs.config-ref }}
-        fetch-depth: 0
-        persist-credentials: false
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       with:
         fetch-depth: 0
         persist-credentials: false
+    # On workflow_dispatch / workflow_call there is no nx-set-shas, and the head
+    # checkout above holds only the triggering ref, so `nx affected` (git diff
+    # BASE HEAD) and `git show CONFIG:...` die with "unknown revision". A second
+    # actions/checkout can't help: it cleans the workspace and drops the first
+    # ref. qvac is public, so fetch the base (+ any distinct config-ref) into
+    # local branches over the unauthenticated origin remote - no token touches
+    # disk - the same plain-fetch idiom on-pr-fabric.yml / on-pr-onnx.yml use.
+    - if: github.event_name != 'pull_request'
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        CONFIG_REF: ${{ inputs.config-ref }}
+      run: |
+        set -euo pipefail
+        fetch_ref() {
+          ref="$1"
+          [ -z "$ref" ] && return 0
+          [ "$ref" = "HEAD" ] && return 0
+          git rev-parse --verify --quiet "refs/heads/${ref}" >/dev/null 2>&1 && return 0
+          git fetch --no-tags --depth=1 origin "+refs/heads/${ref}:refs/heads/${ref}"
+        }
+        fetch_ref "$BASE_REF"
+        fetch_ref "$CONFIG_REF"
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
         node-version: lts/*
