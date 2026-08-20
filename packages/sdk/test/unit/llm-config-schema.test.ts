@@ -150,6 +150,24 @@ test('llmConfigSchema: explicit image_tile_mode overrides the default', (t) => {
   if (result.success) t.is(result.data.image_tile_mode, 'batched')
 })
 
+test('llmConfigBaseSchema: accepts valid image_no_upscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'on' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'off' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid image_no_upscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'maybe' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: true }).success, false)
+})
+
+// No default: unset must stay unset so the addon keeps the model's own GGUF value
+// rather than being forced to base preprocessing.
+test('llmConfigSchema: image_no_upscale has no default', (t) => {
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.image_no_upscale, undefined)
+})
+
 test('llmConfigBaseSchema: accepts mmproj-use-gpu boolean', (t) => {
   const enabled = llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': true })
   t.is(enabled.success, true)

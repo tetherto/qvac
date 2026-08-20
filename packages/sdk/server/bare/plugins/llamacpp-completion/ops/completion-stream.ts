@@ -9,7 +9,6 @@ import type {
   ToolCall,
   ToolDialect
 } from '@/schemas'
-import { TOOLS_MODE } from '@/schemas/tools'
 import {
   logCacheDisabled,
   logCacheInit,
@@ -29,11 +28,7 @@ import {
   type TurnHandle
 } from '@/server/bare/plugins/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/server/bare/runtime/disposable-scope'
-import {
-  appendToolsToHistory,
-  detectToolDialect,
-  prependToolsToHistory
-} from '@/server/utils/tool-integration'
+import { detectToolDialect, prependToolsToHistory } from '@/server/utils/tool-integration'
 import { parseToolCalls } from '@/server/utils/tools'
 import { getResponseFormatJsonSchema } from '@/server/utils/response-format'
 import { buildAutoCacheSaveHistory, type CacheMessage } from '@/server/utils'
@@ -183,7 +178,8 @@ async function initSystemPromptCache(
   model: AnyModel,
   cachePathToUse: string,
   systemPromptToUse: string,
-  cacheKey: string
+  cacheKey: string,
+  onResponse?: (response: { cancel(): Promise<void> }) => void
 ) {
   const primeMessages: ChatHistory[] = [{ role: 'system', content: systemPromptToUse }]
 
@@ -195,6 +191,8 @@ async function initSystemPromptCache(
     saveCacheToDisk: true,
     prefill: true
   })
+  // Register the prime so an abort during a cold-cache prefill cancels it.
+  onResponse?.(primeResponse)
 
   await primeResponse.await()
 }
@@ -205,30 +203,19 @@ type HistoryMsg = {
   attachments?: { path: string }[] | undefined
 }
 
-type ToolPlacement = 'static' | 'dynamic'
-
 /**
- * Attach the tool block to a turn payload at the position its placement
- * requires.
- *
- * Static mirrors the no-kv-cache path (`prependToolsToHistory`) and keeps the
- * block ahead of the conversation. Dynamic must leave it immediately after the
- * last anchor message, which is what the addon's `ToolsCompactController`
- * validates before it will anchor and later trim the block.
+ * Attach the tool block ahead of a turn payload, mirroring the no-kv-cache
+ * path (`prependToolsToHistory`).
  */
-function withToolBlock(
-  messages: ChatHistory[],
-  toolBlock: ChatHistory[],
-  placement: ToolPlacement
-): ChatHistory[] {
+function withToolBlock(messages: ChatHistory[], toolBlock: ChatHistory[]): ChatHistory[] {
   if (toolBlock.length === 0) return messages
-  return placement === 'static' ? [...toolBlock, ...messages] : [...messages, ...toolBlock]
+  return [...toolBlock, ...messages]
 }
 
 interface CachePayload {
   messages: ChatHistory[]
   /**
-   * Whether the prefix will hold a rendered static tool block once this turn
+   * Whether the prefix will hold a rendered tool block once this turn
    * commits — either it already did, or this payload carries one the template
    * will render.
    */
@@ -251,12 +238,10 @@ function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boo
 /**
  * Pick the messages that need to reach the model for the next turn.
  *
- * `placement` selects both the slicing strategy and where the tool block sits
- * in the payload. Tools are never baked into the primed prefix — a prefix with
- * no user turn is not a renderable conversation for every template — so they
- * travel with a turn instead.
+ * Tools are never baked into the primed prefix — a prefix with no user turn is
+ * not a renderable conversation for every template — so they travel with a
+ * turn instead.
  *
- * Static placement:
  *   - Empty history: nothing to slice; send whatever non-system messages
  *     exist. (The call site always reports the cache as existing, so this
  *     is the only way into this branch.)
@@ -269,20 +254,6 @@ function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boo
  *     the bad boundary doesn't propagate into the next turn.
  *   - The tool block travels only with the turn that writes it into the
  *     cache; see `skipToolBlock` below.
- *
- * Dynamic placement:
- *   - The addon anchors the tool block after the last user message and
- *     trims tools + the assistant's tool-call output from the cache once
- *     the chain resolves. After that trim, the cache only holds messages
- *     up to the last user turn, so the SDK has to ship the right slice
- *     plus the (possibly new) tool set:
- *       * tool-chain continuation (last role is "tool"): send the trailing
- *         consecutive tool messages, no tool block — tools are still
- *         anchored in the cache from the previous round.
- *       * new user turn after a chain (prev role is "assistant"): send
- *         [assistant, user] so the model sees its own final reply before
- *         the new prompt, then re-anchor the tool block.
- *       * otherwise: send just the last message + tool block.
  */
 function prepareMessagesForCache(
   session: KvCacheSession,
@@ -290,7 +261,6 @@ function prepareMessagesForCache(
   cacheExists: boolean,
   history: HistoryMsg[],
   tools?: Tool[],
-  placement: ToolPlacement = 'static',
   toolBlockEvictable = false
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
@@ -298,76 +268,43 @@ function prepareMessagesForCache(
   if (!(cacheExists && history.length > 0)) {
     const historyWithoutSystem = history.filter((msg) => msg.role !== 'system')
     return {
-      messages: withToolBlock(transformMessages(historyWithoutSystem), toolBlock, placement),
-      toolBlockCached: placement === 'static' && rendersToolBlock(historyWithoutSystem, toolBlock)
+      messages: withToolBlock(transformMessages(historyWithoutSystem), toolBlock),
+      toolBlockCached: rendersToolBlock(historyWithoutSystem, toolBlock)
     }
   }
 
-  if (placement === 'static') {
-    // Static path — slice from the turn's `savedCount` so callers can
-    // stage multiple messages between completions. `decideCachedHistorySlice`
-    // also guards against the QVAC-17780 stale-count regression: if the
-    // saved boundary would slice the history down to an empty payload
-    // (e.g. after a cancelled mid-decode), it falls back to the full
-    // non-system history and signals the caller to drop the bad entry.
-    // The session owns the entry; `dropStaleSavedCount` clears it
-    // without touching the on-disk file (the file is still trustworthy
-    // — only the boundary count is wrong).
-    const { messages, clearStaleCount } = decideCachedHistorySlice(
-      turn.savedCount,
-      cacheExists,
-      history
-    )
+  // Slice from the turn's `savedCount` so callers can
+  // stage multiple messages between completions. `decideCachedHistorySlice`
+  // also guards against the QVAC-17780 stale-count regression: if the
+  // saved boundary would slice the history down to an empty payload
+  // (e.g. after a cancelled mid-decode), it falls back to the full
+  // non-system history and signals the caller to drop the bad entry.
+  // The session owns the entry; `dropStaleSavedCount` clears it
+  // without touching the on-disk file (the file is still trustworthy
+  // — only the boundary count is wrong).
+  const { messages, clearStaleCount } = decideCachedHistorySlice(
+    turn.savedCount,
+    cacheExists,
+    history
+  )
 
-    if (clearStaleCount) {
-      session.dropStaleSavedCount(turn)
-    }
-
-    // Static never trims the block back out of the cache, so re-sending it
-    // every turn would leave one copy per turn and grow the prefix with the
-    // conversation. Skip it only when the prefix is known to hold a rendered
-    // one: `toolBlockCached` records that a previous turn actually got it into
-    // the cache, which a committed message count does not prove. A stale
-    // boundary means we are resending the whole conversation anyway, and an
-    // evictable block can no longer be assumed present.
-    const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
-    const blockToSend = skipToolBlock ? [] : toolBlock
-
-    return {
-      messages: withToolBlock(transformMessages(messages), blockToSend, placement),
-      toolBlockCached: skipToolBlock || rendersToolBlock(messages, blockToSend)
-    }
+  if (clearStaleCount) {
+    session.dropStaleSavedCount(turn)
   }
 
-  // Dynamic path. The addon trimmed tools after the previous round, so the
-  // cache no longer holds the saved-count we'd rely on for slicing — pick
-  // the right fragment based on the role of the last history message. Nothing
-  // tool-specific survives that trim, so the prefix never counts as holding a
-  // block and every turn re-anchors its own.
-  const lastMsg = history[history.length - 1]!
-
-  if (lastMsg.role === 'tool') {
-    const trailingTools: HistoryMsg[] = []
-    for (let i = history.length - 1; i >= 0; i--) {
-      const msg = history[i]!
-      if (msg.role !== 'tool') break
-      trailingTools.unshift(msg)
-    }
-    return { messages: transformMessages(trailingTools), toolBlockCached: false }
-  }
-
-  if (lastMsg.role === 'user') {
-    const prevMsg = history[history.length - 2]
-    const tail = prevMsg?.role === 'assistant' ? [prevMsg, lastMsg] : [lastMsg]
-    return {
-      messages: withToolBlock(transformMessages(tail), toolBlock, placement),
-      toolBlockCached: false
-    }
-  }
+  // The block is never trimmed back out of the cache, so re-sending it every
+  // turn would leave one copy per turn and grow the prefix with the
+  // conversation. Skip it only when the prefix is known to hold a rendered
+  // one: `toolBlockCached` records that a previous turn actually got it into
+  // the cache, which a committed message count does not prove. A stale
+  // boundary means we are resending the whole conversation anyway, and an
+  // evictable block can no longer be assumed present.
+  const skipToolBlock = turn.toolBlockCached && !clearStaleCount && !toolBlockEvictable
+  const blockToSend = skipToolBlock ? [] : toolBlock
 
   return {
-    messages: withToolBlock(transformMessages([lastMsg]), toolBlock, placement),
-    toolBlockCached: false
+    messages: withToolBlock(transformMessages(messages), blockToSend),
+    toolBlockCached: skipToolBlock || rendersToolBlock(messages, blockToSend)
   }
 }
 
@@ -379,7 +316,8 @@ async function* processModelResponse(
   tools?: Tool[],
   generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
-  dialect?: ToolDialect
+  dialect?: ToolDialect,
+  onResponse?: (response: { cancel(): Promise<void> }) => void
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & {
     generationParams?: CompletionGenerationParams
@@ -396,6 +334,8 @@ async function* processModelResponse(
 
   const modelStart = nowMs()
   const response = await runModel(model, messagesToSend, hasRunOptions ? runOptions : undefined)
+  // Hand the admitted response back so the caller can cancel just this job.
+  onResponse?.(response)
 
   let accumulatedText = ''
   let producedTokens = false
@@ -458,16 +398,12 @@ export async function* completion(
 
   const modelConfig = getModelConfig(modelId)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
-  const toolsMode = (modelConfig as { toolsMode?: string }).toolsMode
   const toolsActive = !!tools?.length && toolsEnabled
-  const dynamicTools = toolsActive && toolsMode === TOOLS_MODE.dynamic
-  const staticTools = toolsActive && !dynamicTools
   // Sliding is opt-in (`n_discarded` defaults to 0). Once on, the addon's
-  // discard window opens at the end of the primed prefix — which is where a
-  // static tool block sits, since the prime is the system prompt alone — and
-  // the clamp that would protect it only runs in dynamic mode. So while
-  // sliding is possible the block cannot be assumed to survive, and it has to
-  // travel with every turn.
+  // discard window opens at the end of the primed prefix — which is where the
+  // tool block sits, since the prime is the system prompt alone — and nothing
+  // protects it. So while sliding is possible the block cannot be assumed to
+  // survive, and it has to travel with every turn.
   const toolBlockEvictable = ((modelConfig as { n_discarded?: number }).n_discarded ?? 0) > 0
 
   const dialect =
@@ -493,53 +429,42 @@ export async function* completion(
 
   const model = getModel(modelId)
 
-  // Hard-cancel wiring: when the registry aborts the request's signal,
-  // forward to the addon so the C++ work stops as soon as it can. The
-  // SDK still treats `signal.aborted` as the truth for cancel detection
-  // (post-completion bookkeeping below) — this listener only shortens
-  // the latency between "user clicked stop" and "addon stops decoding".
-  //
-  // Fire-and-forget by construction (event listeners can't `await`), but
-  // `addon.cancel()` returns a Promise — if it ever rejects the bare
-  // `void` would leak it as an unhandledRejection. Attach `.catch(...)`
-  // so a rejection is logged and the process stays clean; the iterator
-  // below still sees EOF/empty tokens via the addon's normal cancel path
-  // so callers aren't affected.
-  const onAbort = () => {
-    const addon = model.addon
-    if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
-        requestLogger.warn(
-          `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-      })
-    }
+  // Per-request hard cancel: under continuous batching the model runs several
+  // jobs at once, so an abort must cancel only THIS request's job, not the
+  // whole model — `response.cancel()` routes to the addon's per-job cancel.
+  // `.catch(...)` keeps the fire-and-forget cancel from leaking a rejection.
+  let activeResponse: { cancel(): Promise<void> } | null = null
+  const cancelActive = () => {
+    activeResponse?.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] response.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    })
   }
+  // Publish each run's response as it's admitted; the `signal.aborted` re-check
+  // cancels it if the abort landed while run() was still being admitted.
+  const setActiveResponse = (response: { cancel(): Promise<void> }) => {
+    activeResponse = response
+    if (signal.aborted) cancelActive()
+  }
+  const onAbort = () => cancelActive()
   signal.addEventListener('abort', onAbort, { once: true })
-  // `addEventListener("abort", ..., { once: true })` does *not* fire if
-  // the signal is already aborted at register time — but the registry
-  // synchronously aborts a fresh controller when `parentSignal` was
-  // already aborted at `begin(...)`. Without this fall-through, the
-  // addon would keep decoding until the post-loop check notices.
-  // Re-using `onAbort` here keeps the listener body as the single
-  // source of truth for "what cancel does."
+  // `{ once: true }` won't fire for an already-aborted signal (e.g. an
+  // already-aborted parentSignal at begin), so fire once here; a no-op before
+  // any response exists.
   if (signal.aborted) onAbort()
 
-  // Detach the abort listener on every exit path (happy, throw, generator
-  // `return()` from upstream). `{ once: true }` already removes the
-  // listener if the signal fires, so the `removeEventListener` here is
-  // the cleanup hook for the signal-never-fired path.
   scope.defer(() => {
     signal.removeEventListener('abort', onAbort)
+    // Drop the ref so a late abort can't cancel an already-settled response.
+    activeResponse = null
   })
 
   if (!kvCache) {
     // KV-cache disabled — straight passthrough, no session involvement.
     let historyWithTools: Array<HistoryMsg | Tool> = history
-    if (staticTools && tools) {
+    if (toolsActive && tools) {
       historyWithTools = prependToolsToHistory(history, tools)
-    } else if (dynamicTools && tools) {
-      historyWithTools = appendToolsToHistory(history, tools)
     }
 
     const transformedHistory = transformMessages(historyWithTools)
@@ -551,7 +476,8 @@ export async function* completion(
       tools,
       mergedGenerationParams,
       undefined,
-      dialect
+      dialect,
+      setActiveResponse
     )
   }
 
@@ -564,11 +490,10 @@ export async function* completion(
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
-  // Static bakes the tool block into the cache on the turn that first sends it
-  // and never trims it, so a late or changed tool set has to land on a fresh
-  // cache rather than a warm prefix holding the old block. Dynamic trims its
-  // block after each chain, so nothing tool-specific survives in its cache.
-  const configHash = generateConfigHash(systemPromptFromHistory, staticTools ? tools : undefined)
+  // The tool block is baked into the cache on the turn that first sends it and
+  // never trimmed, so a late or changed tool set has to land on a fresh cache
+  // rather than a warm prefix holding the old block.
+  const configHash = generateConfigHash(systemPromptFromHistory, toolsActive ? tools : undefined)
 
   const systemPromptToUse =
     systemPromptFromHistory ||
@@ -580,7 +505,8 @@ export async function* completion(
       model,
       cachePath,
       systemPromptToUse,
-      typeof kvCache === 'string' ? kvCache : 'auto'
+      typeof kvCache === 'string' ? kvCache : 'auto',
+      setActiveResponse
     )
   }
 
@@ -590,7 +516,8 @@ export async function* completion(
       kind: 'custom',
       customKey: kvCache,
       configHash,
-      primeIfMissing
+      primeIfMissing,
+      signal
     })
   } else {
     const cacheMessages: CacheMessage[] = history.map((msg) => ({
@@ -602,7 +529,8 @@ export async function* completion(
       kind: 'auto',
       configHash,
       history: cacheMessages,
-      primeIfMissing
+      primeIfMissing,
+      signal
     })
   }
 
@@ -622,7 +550,6 @@ export async function* completion(
     /* cacheExists */ true,
     history,
     toolsActive ? tools : undefined,
-    dynamicTools ? 'dynamic' : 'static',
     toolBlockEvictable
   )
   const messagesToSend = payload.messages
@@ -634,7 +561,8 @@ export async function* completion(
     tools,
     mergedGenerationParams,
     { cacheKey: turn.cachePath, saveCacheToDisk: true },
-    dialect
+    dialect,
+    setActiveResponse
   )
   const shouldCommitTurn = shouldCommitCachedTurn({
     aborted: signal.aborted,

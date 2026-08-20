@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { modelSrcInputSchema } from '@/schemas/model-src-utils'
-import { TOOLS_MODE } from '@/schemas/tools'
 
 /**
  * Upper bound for `reasoning_budget`. Mirrors the llm-llamacpp addon, which
@@ -51,12 +50,6 @@ export const llmConfigBaseSchema = z.object({
    */
   parallel: z.number().int().min(1).optional(),
   tools: z.boolean().optional(),
-  toolsMode: z
-    .enum([TOOLS_MODE.static, TOOLS_MODE.dynamic])
-    .describe(
-      'Controls tool placement in the prompt. "static" (default) prepends the tool set once and reuses it across the session. "dynamic" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.'
-    )
-    .optional(),
   'cache-type-k': z.string().optional(),
   'cache-type-v': z.string().optional(),
   'main-gpu': z.union([z.number().int().min(0), z.enum(['integrated', 'dedicated'])]).optional(),
@@ -82,6 +75,18 @@ export const llmConfigBaseSchema = z.object({
    * Ignored by text-only models. Default is `"sequential"`.
    */
   image_tile_mode: z.enum(['disabled', 'batched', 'sequential']).optional(),
+  /**
+   * idefics3-style image preprocessing rule (multimodal models only):
+   *   - `"on"`: round the image's long side up to a whole number of slices and
+   *     cap it, so an image smaller than the cap keeps its own resolution and
+   *     becomes far fewer slices.
+   *   - `"off"`: always stretch the long side to the cap.
+   * When unset, the model's own GGUF value is used. Ignored with a warning by
+   * models that do not use idefics3-style preprocessing. Changes the number of
+   * image tokens, and therefore both accuracy and encode time, so a checkpoint
+   * whose GGUF omits the key needs this set to preprocess correctly.
+   */
+  image_no_upscale: z.enum(['on', 'off']).optional(),
   /**
    * Run the multimodal projector (mmproj / vision encoder) on the GPU
    * (multimodal models only). `true` forces GPU, `false` forces CPU. When

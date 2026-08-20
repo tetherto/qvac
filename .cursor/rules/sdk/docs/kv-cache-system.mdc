@@ -87,7 +87,7 @@ When a new cache key is used for the first time:
 
 - `cacheKey` — User-provided or auto-generated session identifier
 - `modelId` — Unique identifier for the loaded model instance
-- `configHash` — Hash of system prompt + tool names (ensures cache validity)
+- `configHash` — Hash of system prompt + complete canonical tool definitions (ensures cache validity)
 
 ### Auto-Cache Retention
 
@@ -99,7 +99,9 @@ Anonymous caches created by `kvCache: true` are tracked with internal marker met
 - Least-recently-used auto caches are removed when their total size exceeds 512 MiB on React Native or 4 GiB on other runtimes.
 - Cache paths used by active turns are excluded from eviction.
 
-Named string-key caches are not inferred from their directory names, are not subject to automatic retention, and remain caller-managed through `deleteCache()`. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.
+Named string-key caches are not inferred from their directory names and remain caller-managed through `deleteCache()`. Retention acts only on cache directories that carry an auto-cache marker, and a marker is written only on an auto (`kvCache: true`) turn — a purely named cache never gets one. The one exception: a named key chosen to exactly equal a generated auto key (16 lowercase hex characters) resolves to the *same* directory as that auto cache, so it shares the auto cache's lock and its retention. Avoid that shape for named keys you want to manage independently. Generated caches from older SDK versions become managed when they are next reused; operators can use `deleteCache({ all: true })` for a one-time removal of unreachable legacy caches.
+
+**Case-only key variants are unsupported.** Two named keys that differ only in case (e.g. `"Session"` and `"session"`) are the same file on case-insensitive filesystems (default macOS/Windows). The per-cache-path write lock case-folds its key so such variants still serialise and can't corrupt one file, but the other bookkeeping (active-path refs, saved-message counts, retention's directory matching) stays case-sensitive — so retention may not recognise a case-variant alias as active. Pick a single canonical case per named key.
 
 ## Key Implementation Files
 
@@ -139,6 +141,8 @@ if (shouldCommit) await session.commitTurn(turn, ...);  // suppresses the deferr
 
 `commitTurn` flips an internal flag on the turn handle; `rollback` reads the flag and short-circuits. The happy path commits and the deferred rollback becomes a no-op. Every other exit path (cancel, zero-token, addon error, rename failure, tool-call turn) lets `scope[Symbol.asyncDispose]` run the deferred rollback, which atomically unlinks the `.bin` file, deletes the `initializedCaches` entry, and forgets the `cachedMessageCounts` entry.
 
+**Late-commit vs cancel is intentional, not a race.** A commit only proceeds past its abort re-check for a turn that fully generated and whose file passed `verifySaveAndRecord`. If a cancel lands during the async commit (after that check, during rename/verify), the commit finishes: a **complete, verified** turn is persisted while the operation reports cancelled. This is by design — the persisted cache matches the tokens the client already received, and committing fully-generated verified work beats discarding it. A strict "cancel wins" rollback here would need target-aware cleanup and risks deleting valid completed state, so it is not done.
+
 The maps that backed `clearCacheRegistry` and `cachedMessageCounts` are **private to `kv-cache-session.ts`**. No other module reads or writes them.
 
 ### Cache Initialization (primeIfMissing) and Addon Non-Transactional Save
@@ -177,7 +181,7 @@ Injecting the prime via closure keeps `kv-cache-session.ts` free of model-regist
 
 ### Config Hash Generation (generateConfigHash)
 
-Cache validity is tied to a SHA-256 hash of system prompt content + sorted tool names. Model config is NOT included (per addon team: doesn't affect cache validity). Changing tools mid-session creates a new cache with the new tools anchored. Dynamic-mode tools intentionally do NOT participate in the hash so the cache can survive per-turn tool sets.
+Cache validity is tied to a SHA-256 hash of the system prompt content + complete canonical tool definitions. Object keys are sorted recursively to avoid cache misses caused only by insertion order; tool-array order is preserved because it matches the prompt sent to the model. Model config is NOT included (per addon team: doesn't affect cache validity). Changing any prompt-affecting tool field mid-session creates a new cache with the new tools anchored.
 
 ### Auto-Cache Rename Flow
 
@@ -233,7 +237,7 @@ Enable with `loggerLevel: "debug"` in config. Logs from `cache-logger.ts` show:
 
 ## MCP Compatibility
 
-KV Cache works with MCP tools. Only tool names are hashed (sorted alphabetically) — tool order, descriptions, and parameter changes don't affect cache key. Adding/removing tools creates a new cache.
+KV Cache works with MCP tools. Complete canonical tool definitions are hashed: object-key insertion order does not affect the cache key, while tool-array order and changes to names, descriptions, or parameters create a new cache.
 
 ## Common Issues
 

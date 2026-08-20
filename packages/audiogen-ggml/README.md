@@ -109,6 +109,7 @@ const response = await gen.run('energetic cumbia, brass stabs, live percussion, 
   bpm: 98,                    // tempo
   keyscale: 'A minor',        // key / scale
   timesignature: '4/4',       // time signature
+  augmentCaptionWithMetadata: true, // reinforce these hints in the conditioning caption
   duration: 150,              // target length in seconds (omit => the LM decides)
   seed: 42,                   // reproducible run
   lyrics: `[verse]
@@ -124,6 +125,9 @@ que esta cumbia no para ninguna`
 Anything you leave out is inferred: omit `bpm`/`keyscale`/`duration` and the LM
 picks them from the caption. `inferenceSteps` / `shift` are auto-tuned to the
 DiT you loaded (turbo vs sft), so you normally don't set them.
+`augmentCaptionWithMetadata` is opt-in and defaults to `false`. When enabled,
+ACE-Step appends BPM/tempo guidance, time signature, and key to its internal
+conditioning caption while result metadata keeps the original user caption.
 
 ### 3. Reference and cover audio
 
@@ -168,6 +172,55 @@ AUDIOGEN_MODEL_DIR=/path/to/models \
   AUDIOGEN_SOURCE_PCM=source.f32le \
   npm run example:cover
 ```
+
+### Ordered audio editing
+
+`edit()` starts a source-driven pipeline. `edit()`/`flowEdit()` and `repaint()`
+append independent operations and execute them in the exact order they are
+chained. Either operation can be used alone or repeated:
+
+```js
+const { AudioGen, RepaintMode } = require('@qvac/audiogen-ggml')
+
+const response = await gen
+  .edit({
+    pcm: sourcePcm,
+    sampleRate: 48000,
+    channels: 2
+  })
+  .edit({
+    from: {
+      caption: 'original pop song',
+      lyrics: originalLyrics
+    },
+    to: {
+      caption: 'guitar pop-rock',
+      lyrics: newLyrics
+    }
+  })
+  .repaint({
+    caption: 'analog synth solo',
+    lyrics: '[Instrumental]',
+    start: 10,
+    end: 20,
+    mode: RepaintMode.Balanced,
+    strength: 0.5
+  })
+  .edit({
+    from: { caption: 'guitar pop-rock' },
+    to: { caption: 'dark synthwave' }
+  })
+  .run({ seed: 22883 })
+```
+
+The source must be interleaved stereo PCM at 48 kHz. Both normalized
+`Float32Array` samples in `[-1, 1]` and addon-output `Int16Array` values are
+accepted. Out-of-range Float32 samples are rejected. Repaint preserves PCM
+outside its selected range; `start`/`end` must stay inside the source duration
+and span at least one latent frame (`1/25` s). Omitting `end` repaints through
+the end of the source. Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`) and
+changes musical/lyrical conditioning over its `nMin`/`nMax` diffusion window.
+Repainting an entire track is supported with `start: 0` and no `end`.
 
 ### Turning PCM into a file
 
@@ -271,6 +324,7 @@ wrapped by a level-gated `QvacLogger`.
 | `bpm` | Tempo in beats per minute. |
 | `keyscale` | Key and scale, such as `C minor`. |
 | `timesignature` | Time signature, such as `4/4`. |
+| `augmentCaptionWithMetadata` | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`. |
 | `duration` | Target length in seconds; omit to let the LM decide. |
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |

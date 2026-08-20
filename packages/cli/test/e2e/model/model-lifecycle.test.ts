@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { useModelServer } from '../helpers/server.js'
+import { multipart } from '../helpers/http.js'
+import { silenceWav } from '../helpers/fixtures.js'
 
 // Unloading mutates the server, so this runs against its own dedicated one and
 // stays independent of any other suite.
@@ -17,28 +19,44 @@ const server = useModelServer({
   }
 })
 
+function listedIds(app: ReturnType<typeof server>): Promise<string[]> {
+  return app
+    .inject({ method: 'GET', url: '/v1/models' })
+    .then((res) => (res.json() as { data: Array<{ id: string }> }).data.map((m) => m.id).sort())
+}
+
 describe('model lifecycle', () => {
-  it('DELETE /v1/models/:id unloads a model and drops it from the list', async () => {
-    const before = (await server().inject({ method: 'GET', url: '/v1/models' })).json() as {
-      data: Array<{ id: string }>
-    }
-    assert.equal(before.data.length, 2)
+  it('DELETE unloads a model but keeps the alias listed and reloadable', async () => {
+    const app = server()
+    const registry = app.qvac.registry
 
-    const d1 = (
-      await server().inject({ method: 'DELETE', url: '/v1/models/lc-transcribe' })
+    assert.deepEqual(await listedIds(app), ['lc-transcribe', 'lc-translate'])
+    assert.equal(registry.getEntry('lc-transcribe')?.state, registry.STATES.READY)
+
+    const del = (
+      await app.inject({ method: 'DELETE', url: '/v1/models/lc-transcribe' })
     ).json() as { id: string; deleted: boolean }
-    assert.equal(d1.id, 'lc-transcribe')
-    assert.equal(d1.deleted, true)
+    assert.equal(del.id, 'lc-transcribe')
+    assert.equal(del.deleted, true)
 
-    const d2 = (
-      await server().inject({ method: 'DELETE', url: '/v1/models/lc-translate' })
-    ).json() as { id: string; deleted: boolean }
-    assert.equal(d2.id, 'lc-translate')
-    assert.equal(d2.deleted, true)
+    // Non-destructive: the entry stays registered, reset to IDLE with no SDK handle.
+    const unloaded = registry.getEntry('lc-transcribe')
+    assert.equal(unloaded?.state, registry.STATES.IDLE)
+    assert.equal(unloaded?.sdkModelId, null)
 
-    const after = (await server().inject({ method: 'GET', url: '/v1/models' })).json() as {
-      data: Array<{ id: string }>
-    }
-    assert.equal(after.data.length, 0)
+    // Still listed (it lazy-reloads on the next request).
+    assert.deepEqual(await listedIds(app), ['lc-transcribe', 'lc-translate'])
+
+    // Reload path: a follow-up request loads it again and succeeds.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audio/transcriptions',
+      ...multipart([
+        { name: 'model', value: 'lc-transcribe' },
+        { name: 'file', filename: 'silence.wav', contentType: 'audio/wav', data: silenceWav() }
+      ])
+    })
+    assert.equal(res.statusCode, 200)
+    assert.equal(registry.getEntry('lc-transcribe')?.state, registry.STATES.READY)
   })
 })
