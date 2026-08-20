@@ -131,7 +131,7 @@ graph TB
 |---------|------|---------|---------|
 | @qvac/infer-base | Framework | (see package.json) | `createJobHandler`, `exclusiveRunQueue`, QvacResponse |
 | @qvac/logging | Runtime | ^0.1.0 | Logger bridge for JS and native logs |
-| @qvac/registry-client | Dev/example | ^0.4.0 | Optional model distribution examples, not runtime loading |
+| @qvac/registry-client | Dev/example | ^0.6.1 | Optional model distribution examples, not runtime loading |
 | inference-addon-cpp | Native | ≥1.1.5#1 | C++ addon framework (`AddonJs`/`AddonCpp`, runJob, cancel) |
 | ggml | Native | (vcpkg) | Tensor computation and GPU backends |
 | sentencepiece | Native | (vcpkg) | Subword tokenization |

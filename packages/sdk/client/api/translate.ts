@@ -1,4 +1,5 @@
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 import {
   translateResponseSchema,
   type TranslateRequest,
@@ -55,14 +56,20 @@ export function translate(
   tokenStream: AsyncGenerator<string>
   stats: Promise<TranslationStats | undefined>
   text: Promise<string>
+  requestId: string
 } {
+  // Stable identity generated client-side so `cancel({ requestId })` works the
+  // moment we return, before the first round-trip. Surfaced on the handle.
+  const requestId = generateClientRequestId()
+
   // Source-language auto-detection lives in the worker now
   // (server/bare/ops/translate.ts): `from` is passed through when present and
   // resolved server-side when absent, so every language binding shares one
   // detector instead of each shipping its own.
   const request: TranslateRequest = {
     type: 'translate',
-    ...params
+    ...params,
+    requestId
   }
 
   let stats: TranslationStats | undefined
@@ -73,16 +80,22 @@ export function translate(
 
   if (params.stream) {
     const tokenStream = (async function* () {
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === 'translate') {
-          const streamResponse = translateResponseSchema.parse(response)
-          if (!streamResponse.done) {
-            yield streamResponse.token
-          } else {
-            stats = streamResponse.stats
-            statsResolver(stats)
+      try {
+        for await (const response of streamRpc(request, options)) {
+          if (response.type === 'translate') {
+            const streamResponse = translateResponseSchema.parse(response)
+            if (!streamResponse.done) {
+              yield streamResponse.token
+            } else {
+              stats = streamResponse.stats
+              statsResolver(stats)
+            }
           }
         }
+      } finally {
+        // Settle stats even if the stream ended early (cancel) or errored, so
+        // `await handle.stats` can't hang. Idempotent if already resolved.
+        statsResolver(stats)
       }
     })()
 
@@ -91,7 +104,8 @@ export function translate(
     return {
       tokenStream,
       text: textPromise,
-      stats: statsPromise
+      stats: statsPromise,
+      requestId
     }
   } else {
     const tokenStream = (async function* () {
@@ -101,15 +115,21 @@ export function translate(
     const textPromise = (async () => {
       let buffer = ''
 
-      for await (const response of streamRpc(request, options)) {
-        if (response.type === 'translate') {
-          const streamResponse = translateResponseSchema.parse(response)
-          buffer += streamResponse.token
-          if (streamResponse.done) {
-            stats = streamResponse.stats
-            statsResolver(stats)
+      try {
+        for await (const response of streamRpc(request, options)) {
+          if (response.type === 'translate') {
+            const streamResponse = translateResponseSchema.parse(response)
+            buffer += streamResponse.token
+            if (streamResponse.done) {
+              stats = streamResponse.stats
+              statsResolver(stats)
+            }
           }
         }
+      } finally {
+        // Settle stats even if the stream ended early (cancel) or errored, so
+        // `await handle.stats` can't hang. Idempotent if already resolved.
+        statsResolver(stats)
       }
 
       return buffer
@@ -118,7 +138,8 @@ export function translate(
     return {
       tokenStream,
       text: textPromise,
-      stats: statsPromise
+      stats: statsPromise,
+      requestId
     }
   }
 }
