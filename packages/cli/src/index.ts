@@ -92,7 +92,7 @@ function setupCli(): void {
       collect,
       []
     )
-    .option('--force', 'Overwrite an alias in serve.models if it already exists')
+    .option('--force', 'Re-add a model that is already configured, overwriting its existing entry')
     .option('-q, --quiet', 'Suppress output')
     .action(
       async (options: {

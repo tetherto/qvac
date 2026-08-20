@@ -42,6 +42,18 @@ export function existingModelIdentities(config: QvacConfig): Set<string> {
   return ids
 }
 
+/** Map each configured model id (its `model`/`src`) to the alias that holds it —
+ * first alias wins. Lets `--force` overwrite the existing entry for a model in
+ * place instead of minting a new deduped alias. */
+export function existingAliasesByModel(config: QvacConfig): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const [alias, value] of Object.entries(config.serve?.models ?? {})) {
+    const id = typeof value === 'string' ? value : (value.model ?? value.src)
+    if (id !== undefined && !map.has(id)) map.set(id, alias)
+  }
+  return map
+}
+
 export function loadJsonConfig(path: string): QvacConfig {
   if (!existsSync(path)) return {}
   const raw = readFileSync(path, 'utf8').trim()

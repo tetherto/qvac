@@ -9,10 +9,15 @@ import {
   buildGenericEntry,
   modalityInfo,
   type AddedEntry,
+  type BuiltEntry,
   type Modality,
   type ServeModelEntry
 } from './presets.js'
 import { docsUrlForAddon } from './docs-links.js'
+
+// Sentinel a picker returns when the user chooses "Back". The delimiters can't
+// occur in a model constant id or a modality value, so it never collides.
+const BACK = '::back::'
 
 function fmtSize(bytes: number | null): string {
   if (bytes === null) return ''
@@ -21,10 +26,22 @@ function fmtSize(bytes: number | null): string {
 }
 
 function fmtRow(e: ModelCatalogEntry): string {
-  const meta = [e.params, e.quantization, fmtSize(e.size)].filter(Boolean).join(' · ')
+  const meta = [e.params, e.quantization, fmtSize(e.size)].filter(Boolean).join(' - ')
   return meta ? `${e.id}   ${meta}` : e.id
 }
 
+// Match a search term against the fields a user reaches for - not just the id,
+// but role/addon/engine/quantization/params - so "diffusion" or "q8" finds
+// models by capability, not only by name. Space-separated words must all match.
+function matches(e: ModelCatalogEntry, term: string): boolean {
+  const haystack = [e.id, e.role, e.addon, e.engine, e.quantization, e.params]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return term.split(/\s+/).every((word) => haystack.includes(word))
+}
+
+// Returns a chosen constant id, or BACK if the user backs out.
 function pickModel(
   pool: ModelCatalogEntry[],
   message: string,
@@ -37,12 +54,16 @@ function pickModel(
     message,
     source: (term) => {
       const t = term?.toLowerCase().trim()
-      const list = t ? ordered.filter((e) => e.id.toLowerCase().includes(t)) : ordered
-      return list.slice(0, 40).map((e) => ({
-        name: e.id === recommended ? `${fmtRow(e)}  ★ recommended` : fmtRow(e),
+      const list = t ? ordered.filter((e) => matches(e, t)) : ordered
+      const choices = list.slice(0, 40).map((e) => ({
+        name: e.id === recommended ? `${fmtRow(e)}  * recommended` : fmtRow(e),
         value: e.id,
         description: docsUrlForAddon(e.addon)
       }))
+      return [
+        ...choices,
+        { name: '<- Back', value: BACK, description: 'Return to the previous menu' }
+      ]
     }
   })
 }
@@ -77,6 +98,84 @@ async function editEntry(alias: string, entry: ServeModelEntry): Promise<ServeMo
   }
 }
 
+// Preview the entry, then Add / Edit / Back. After an edit the preview re-renders
+// with the edited result, so the user sees the final entry before adding.
+// Returns the confirmed addition, or BACK to return to the previous step.
+async function confirmEntry(
+  built: BuiltEntry,
+  taken: Set<string>,
+  canEdit: boolean
+): Promise<AddedEntry | typeof BACK> {
+  const alias = aliasFor(built.aliasBase, taken)
+  let entry = built.entry
+  for (;;) {
+    const proceed = await select<string>({
+      message: `${previewText(alias, entry, built.addon)}Proceed?`,
+      choices: [
+        { name: `Add it (alias: ${alias})`, value: 'add' },
+        ...(canEdit ? [{ name: 'Edit in $EDITOR...', value: 'edit' }] : []),
+        { name: '<- Back', value: 'back' }
+      ]
+    })
+    if (proceed === 'back') return BACK
+    if (proceed === 'edit') {
+      entry = await editEntry(alias, entry)
+      continue
+    }
+    taken.add(alias)
+    return { alias, addon: built.addon, entry }
+  }
+}
+
+async function addByCapability(
+  catalog: ModelCatalogEntry[],
+  taken: Set<string>,
+  canEdit: boolean
+): Promise<AddedEntry | typeof BACK> {
+  for (;;) {
+    const modality = await select<Modality | typeof BACK>({
+      message: 'Capability?',
+      choices: [
+        ...MODALITIES.map((m) => ({ name: m.label, value: m.id })),
+        { name: '<- Back', value: BACK }
+      ]
+    })
+    if (modality === BACK) return BACK
+
+    const info = modalityInfo(modality)
+    let constantName: string | undefined
+    if (info.pick) {
+      const pool = catalog.filter((e) => e.role === info.role)
+      const picked = await pickModel(
+        pool,
+        `Pick a ${info.label} model (type to search)`,
+        RECOMMENDED[modality]
+      )
+      if (picked === BACK) continue
+      constantName = picked
+    }
+
+    const res = await confirmEntry(buildEntry(modality, constantName), taken, canEdit)
+    if (res === BACK) continue
+    return res
+  }
+}
+
+async function addBySearch(
+  catalog: ModelCatalogEntry[],
+  taken: Set<string>,
+  canEdit: boolean
+): Promise<AddedEntry | typeof BACK> {
+  for (;;) {
+    const picked = await pickModel(catalog, 'Search all models (type to search)')
+    if (picked === BACK) return BACK
+    const found = catalog.find((e) => e.id === picked)
+    const res = await confirmEntry(buildGenericEntry(picked, found?.addon ?? null), taken, canEdit)
+    if (res === BACK) continue
+    return res
+  }
+}
+
 /** Interactive menu loop. Returns the aliased additions the user confirmed. */
 export async function runInteractive(
   catalog: ModelCatalogEntry[],
@@ -88,61 +187,23 @@ export async function runInteractive(
 
   for (;;) {
     const action = await select<string>({
-      message: 'What do you want to do?',
+      message: added.length ? `What next? (${added.length} queued)` : 'What do you want to do?',
       choices: [
         { name: 'Add a model by capability', value: 'capability' },
         { name: 'Search all models', value: 'search' },
-        { name: 'Done', value: 'done' }
+        { name: added.length ? 'Done - write config' : 'Done', value: 'done' }
       ]
     })
     if (action === 'done') break
 
-    let aliasBase: string
-    let entry: ServeModelEntry
-    let addon: string
+    const res =
+      action === 'capability'
+        ? await addByCapability(catalog, taken, canEdit)
+        : await addBySearch(catalog, taken, canEdit)
+    if (res === BACK) continue
 
-    if (action === 'capability') {
-      const modality = await select<Modality>({
-        message: 'Capability?',
-        choices: MODALITIES.map((m) => ({ name: m.label, value: m.id }))
-      })
-      const info = modalityInfo(modality)
-      let constantName: string | undefined
-      if (info.pick) {
-        const pool = catalog.filter((e) => e.role === info.role)
-        constantName = await pickModel(
-          pool,
-          `Pick a ${info.label} model (type to search)`,
-          RECOMMENDED[modality]
-        )
-      }
-      const built = buildEntry(modality, constantName)
-      aliasBase = built.aliasBase
-      entry = built.entry
-      addon = built.addon
-    } else {
-      const constantName = await pickModel(catalog, 'Search all models (type to search)')
-      const picked = catalog.find((e) => e.id === constantName)
-      const built = buildGenericEntry(constantName, picked?.addon ?? null)
-      aliasBase = built.aliasBase
-      entry = built.entry
-      addon = built.addon
-    }
-
-    const alias = aliasFor(aliasBase, taken)
-    const proceed = await select<string>({
-      message: `${previewText(alias, entry, addon)}Proceed?`,
-      choices: [
-        { name: `Add it (alias: ${alias})`, value: 'add' },
-        ...(canEdit ? [{ name: 'Edit before adding…', value: 'edit' }] : []),
-        { name: 'Back', value: 'back' }
-      ]
-    })
-    if (proceed === 'back') continue
-    if (proceed === 'edit') entry = await editEntry(alias, entry)
-
-    taken.add(alias)
-    added.push({ alias, addon, entry })
+    added.push(res)
+    process.stdout.write(`  + queued "${res.alias}"${res.addon ? ` (${res.addon})` : ''}\n`)
   }
 
   return added

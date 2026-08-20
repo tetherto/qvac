@@ -12,6 +12,7 @@ import {
 } from './presets.js'
 import { CONFIG_DOCS_URL, docsUrlForAddon } from './docs-links.js'
 import {
+  existingAliasesByModel,
   existingModelIdentities,
   foreignConfigPath,
   loadJsonConfig,
@@ -79,7 +80,17 @@ export async function runConfigure(options: ConfigureOptions): Promise<void> {
   } else {
     const { runInteractive } = await import('./prompts.js')
     const catalog = buildBuiltinCatalog(loadModelConstants())
-    additions = await runInteractive(catalog, existingAliases, process.stdout.isTTY === true)
+    try {
+      additions = await runInteractive(catalog, existingAliases, process.stdout.isTTY === true)
+    } catch (err) {
+      // Ctrl+C in a prompt throws ExitPromptError — treat it as a clean abort:
+      // "Done" is the only path that writes, so nothing is persisted here.
+      if (err instanceof Error && err.name === 'ExitPromptError') {
+        print('\nCancelled — nothing written.')
+        return
+      }
+      throw err
+    }
   }
 
   if (additions.length === 0) {
@@ -87,15 +98,22 @@ export async function runConfigure(options: ConfigureOptions): Promise<void> {
     return
   }
 
-  // Idempotent per model: skip a constant that's already configured unless --force.
+  // Idempotent per model: skip a constant that's already configured. With
+  // --force, re-add it — overwriting the existing alias in place rather than
+  // minting a deduped `<alias>-2` (aliasFor already uniqued against existing).
   const configuredIds = existingModelIdentities(existing)
+  const aliasByModel = options.force === true ? existingAliasesByModel(existing) : null
   const fresh: AddedEntry[] = []
   const alreadyConfigured: string[] = []
   for (const a of additions) {
     const id = a.entry.model ?? a.entry.src
-    if (id !== undefined && configuredIds.has(id) && options.force !== true) {
-      alreadyConfigured.push(id)
-      continue
+    if (id !== undefined && configuredIds.has(id)) {
+      if (options.force !== true) {
+        alreadyConfigured.push(id)
+        continue
+      }
+      const existingAlias = aliasByModel?.get(id)
+      if (existingAlias) a.alias = existingAlias
     }
     fresh.push(a)
   }
@@ -114,9 +132,14 @@ export async function runConfigure(options: ConfigureOptions): Promise<void> {
 
   writeConfigAtomically(targetPath, config)
 
-  print(
-    `\n✅ Wrote ${targetPath} (${added.length} model${added.length > 1 ? 's' : ''}: ${added.join(', ')})`
-  )
+  const total = Object.keys(config.serve?.models ?? {}).length
+  const quote = (a: string): string => `"${a}"`
+  const updated = added.filter((a) => existingAliases.has(a))
+  const newlyAdded = added.filter((a) => !existingAliases.has(a))
+  const parts: string[] = []
+  if (newlyAdded.length) parts.push(`added ${newlyAdded.map(quote).join(', ')}`)
+  if (updated.length) parts.push(`updated ${updated.map(quote).join(', ')}`)
+  print(`\n✅ ${parts.join('; ')} — ${targetPath} now has ${total} model${total === 1 ? '' : 's'}.`)
   if (alreadyConfigured.length) {
     print(`   Already configured (skipped): ${alreadyConfigured.join(', ')}`)
   }

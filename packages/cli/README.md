@@ -112,10 +112,11 @@ qvac doctor --quiet || exit 1
 ### `configure`
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac serve openai`. It searches the models the SDK provides, lets you pick by
-capability, previews each entry with a link to the addon's docs, and (with `$EDITOR`) lets
-you tweak an entry before adding it. Existing entries are preserved; re-running is
-idempotent per model.
+straight to `qvac serve openai`. It searches the models the SDK provides — by name or by
+capability (role, addon, quantization) — lets you pick by capability, previews each entry
+with a link to the addon's docs, and (with `$EDITOR`) lets you tweak an entry and review the
+result before adding it. Every menu has a `Back` option, and `Ctrl+C` aborts without
+writing. Existing entries are preserved; re-running is idempotent per model.
 
 ```bash
 qvac configure                 # interactive
@@ -128,7 +129,7 @@ qvac configure --modality chat --modality image
 | `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
 | `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
 | `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
-| `--force`             | Re-add a model that is already configured.                                                                  |
+| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                         |
 | `-q, --quiet`         | Suppress output.                                                                                            |
 
 Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.

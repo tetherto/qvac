@@ -32,7 +32,7 @@ export interface CatalogQuery {
 }
 
 const CATALOG_HINT =
-  'Not in serve.models — add it there to make it usable (a `qvac configure` command is planned).'
+  'Not in serve.models — run `qvac configure` (or add it there by hand) to make it usable.'
 
 export function roleForAddon(addon: string): string {
   return normalizeEndpointCategory(addon)

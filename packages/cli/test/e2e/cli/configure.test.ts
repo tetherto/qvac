@@ -63,6 +63,11 @@ describe('cli: configure', () => {
       assert.deepEqual(Object.keys(cfg.serve.models), ['qwen3-600m-inst-q4'])
       const forced = await runCli(['configure', '--modality', 'chat', '--force'], { cwd: dir })
       assert.equal(forced.code, 0, forced.output)
+      // --force overwrites the existing alias in place; it must not mint a
+      // deduped `qwen3-600m-inst-q4-2`.
+      const afterForce = await readConfig(dir)
+      assert.deepEqual(Object.keys(afterForce.serve.models), ['qwen3-600m-inst-q4'])
+      assert.match(forced.output, /updated/i)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
