@@ -21,7 +21,9 @@ import {
   TranslationFailedError
 } from '@/errors/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
+import { isAddonContextOverflowError } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { getModelParallel } from '@/utils/config-transform'
 import { getEngineLogger } from '@/logging/index'
 
 export function getLanguage(code: string | undefined): string {
@@ -113,41 +115,50 @@ export async function* translate(
   const fromLanguage = getLanguage(from)
   const toLanguage = getLanguage(to)
 
-  // Open a request-scoped lifecycle for both engine branches. LLM-
-  // translate inherits llamacpp-completion's `{ scope: "model",
-  // hard: true }` cancel surface; NMT-translate inherits nmtcpp's
-  // `{ scope: "none" }` — so the addon-cancel wiring below only
-  // engages on the LLM path. NMT cancel is purely soft: the loop
-  // exits on `signal.aborted`, scope unwinds, and the addon may run
-  // to completion in the background — acceptable because the result
-  // is dropped either way.
+  // Open a request-scoped lifecycle for both engine branches. The LLM
+  // path cancels only its own run response (wired below), so a peer
+  // completion on the same model keeps running; NMT-translate has no
+  // addon cancel — the loop exits on `signal.aborted`, scope unwinds,
+  // and the addon may run to completion in the background, which is
+  // fine because the result is dropped either way.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
     kind: 'translate',
-    modelId
+    modelId,
+    // LLM translate joins the completion lane (its cap = the model's own
+    // `parallel`); NMT passes no cap and stays ungated on its own model.
+    ...(isLlm && {
+      maxConcurrentPerModel: getModelParallel(entry.local.config as { parallel?: number })
+    })
   })
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
+  // Cancel only this run's response, not the addon's global cancel, so a peer
+  // completion keeps running.
+  let activeResponse: { cancel(): Promise<void> } | null = null
+  const cancelActive = () => {
+    activeResponse?.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] translate response.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    })
+  }
   if (isLlm) {
-    const onAbort = () => {
-      const addon = model.addon
-      if (addon?.cancel) {
-        addon.cancel.call(addon).catch((err: unknown) => {
-          requestLogger.warn(
-            `[cancel] addon.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-          )
-        })
-      }
-    }
-    ctx.signal.addEventListener('abort', onAbort, { once: true })
-    if (ctx.signal.aborted) onAbort()
+    ctx.signal.addEventListener('abort', cancelActive, { once: true })
+    if (ctx.signal.aborted) cancelActive()
     ctx.scope.defer(() => {
-      ctx.signal.removeEventListener('abort', onAbort)
+      ctx.signal.removeEventListener('abort', cancelActive)
+      activeResponse = null
     })
   }
 
   // Check if input is an array and model type is NMT
   if (Array.isArray(text) && canonicalModelType === ModelType.nmtcppTranslation) {
+    // A cancel that landed before native work (e.g. the model is being unloaded)
+    // must not start the batch. Bail before runBatch, dropping the result.
+    if (ctx.signal.aborted) {
+      return { modelExecutionMs: 0 }
+    }
     // Use runBatch for batch processing
     const modelStart = nowMs()
     const translations = await (model as unknown as TranslationNmtcpp).runBatch(text)
@@ -189,6 +200,16 @@ export async function* translate(
           }
         ]
 
+  // A translate cancelled before native work (queued-cancel, or the model being
+  // unloaded) must not call run(): LLM could decode against an exclusive finetune
+  // holding the lane, and either engine would run against a model being torn
+  // down. Bail with an empty soft-cancel result for both engines — the server
+  // never throws InferenceCancelledError (that error is client-constructed and
+  // would cross the RPC as a generic error).
+  if (ctx.signal.aborted) {
+    return { modelExecutionMs: 0 }
+  }
+
   const modelStart = nowMs()
   let response
   if (
@@ -201,6 +222,11 @@ export async function* translate(
   } else {
     response = await model.run(input)
   }
+  if (isLlm) {
+    activeResponse = response
+    // A cancel that landed while `run(...)` was admitting still applies.
+    if (ctx.signal.aborted) cancelActive()
+  }
 
   // Check if the response has an iterate method (like LLM models)
   if (
@@ -208,9 +234,20 @@ export async function* translate(
     typeof response.iterate === 'function'
   ) {
     const llmResponse = response as unknown as LlmResponse
-    for await (const token of llmResponse.iterate()) {
-      if (ctx.signal.aborted) break
-      yield token
+    try {
+      for await (const token of llmResponse.iterate()) {
+        if (ctx.signal.aborted) break
+        yield token
+      }
+    } catch (err) {
+      // A context-overflow rejection is a real terminal condition, not a
+      // cancellation — surface it even under an aborted signal, as completion does.
+      if (isAddonContextOverflowError(err)) throw err
+      // The request signal is the SDK-owned cancellation contract. Addon
+      // rejection shapes differ for active and queued native sequences, so once
+      // cancellation is accepted the translate ends cleanly regardless of that
+      // transport detail; without an abort, every error still propagates.
+      if (!ctx.signal.aborted) throw err
     }
     const modelExecutionMs = nowMs() - modelStart
 
