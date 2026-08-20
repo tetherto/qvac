@@ -1,6 +1,7 @@
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
 import type { VideoRuntimeStats } from '@qvac/diffusion-cpp'
 import type { z } from 'zod'
+import path from 'bare-path'
 import { getServerLogger } from '@/logging'
 import { getModel, getModelEntry } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
@@ -14,6 +15,7 @@ import { ModelType } from '@/schemas'
 import {
   ltxVideoRequestSchema,
   nonLtxVideoRequestSchema,
+  sdcppConfigSchema,
   singleExpertVideoRequestSchema,
   type VideoRequest,
   type VideoStreamResponse,
@@ -39,6 +41,15 @@ function parseVideoRequest(schema: z.ZodType, request: VideoRequest) {
   const result = schema.safeParse(request)
   if (!result.success) {
     throw new PluginRequestValidationFailedError('videoStream', formatZodError(result.error))
+  }
+}
+
+function validateProviderPaths(request: VideoRequest) {
+  if (request.lora !== undefined && !path.isAbsolute(request.lora)) {
+    throw new PluginRequestValidationFailedError(
+      'videoStream',
+      'lora must be an absolute path on the inference provider'
+    )
   }
 }
 
@@ -80,6 +91,18 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   if (ltxVideoModels.has(model)) parseVideoRequest(ltxVideoRequestSchema, request)
   else parseVideoRequest(nonLtxVideoRequestSchema, request)
   if (!moeCapableVideoModels.has(model)) parseVideoRequest(singleExpertVideoRequestSchema, request)
+  validateProviderPaths(request)
+  const modelEntry = getModelEntry(request.modelId)
+  const modelConfig =
+    modelEntry && !modelEntry.isDelegated
+      ? sdcppConfigSchema.safeParse(modelEntry.local.config)
+      : null
+  const loraApplyMode = modelConfig?.success ? (modelConfig.data.lora_apply_mode ?? 'auto') : 'auto'
+  if (request.lora !== undefined && loraApplyMode !== 'at_runtime') {
+    requestLogger.warn(
+      `[video] lora_apply_mode="${loraApplyMode}" may persist the request LoRA across later generations; use "at_runtime" for per-call application.`
+    )
+  }
 
   const onAbort = () => {
     model.cancel().catch((err: unknown) => {

@@ -259,7 +259,7 @@ test('ltxVideoRequestSchema: validates reference conditioning dependencies', (t:
   )
 })
 
-test('ltxVideoRequestSchema: reference conditioning requires at least 121 explicit frames', (t: BrittleT) => {
+test('ltxVideoRequestSchema: reference conditioning requires explicit addon-valid frames', (t: BrittleT) => {
   const base = {
     modelId: 'model-1',
     mode: 'txt2vid' as const,
@@ -269,7 +269,7 @@ test('ltxVideoRequestSchema: reference conditioning requires at least 121 explic
   }
 
   t.is(ltxVideoRequestSchema.safeParse(base).success, false)
-  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 113 }).success, false)
+  t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 97 }).success, true)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 121 }).success, true)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 257 }).success, true)
   t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 265 }).success, false)
