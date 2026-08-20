@@ -388,11 +388,35 @@ export const ttsCosyvoice3RuntimeConfigSchema = z
   .object(ttsCosyvoice3RuntimeConfigShape)
   .superRefine(refineCosyvoice3RuntimeConfig)
 
+const ttsAudio8RuntimeConfigShape = {
+  ttsEngine: z.literal('audio8'),
+  // Transcript of the load-time reference recording (zero-shot voice cloning).
+  // Paired with `referenceAudioSrc` on the load config; kept on the runtime
+  // config because it survives artifact resolution as plain data.
+  // Trimmed for the same reason as the CosyVoice3 instruct string: a
+  // whitespace-only transcript would reach the engine as a non-empty value.
+  referenceText: z.string().trim().min(1).optional(),
+  greedy: z.boolean().optional(),
+  temperature: z.number().nonnegative().optional(),
+  topK: ttsNonNegativeInt32Schema.optional(),
+  topP: z.number().positive().max(1).optional(),
+  // Codec frames on Audio8's ~46 ms grid (~21.5 frames/s); 0 = engine default.
+  maxFrames: ttsNonNegativeInt32Schema.optional(),
+  useGPU: z.boolean().optional(),
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  threads: ttsPositiveInt32Schema.optional(),
+  nGpuLayers: ttsInt32Schema.optional(),
+  seed: ttsInt32Schema.optional()
+}
+
+export const ttsAudio8RuntimeConfigSchema = z.object(ttsAudio8RuntimeConfigShape)
+
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
   ttsParlerRuntimeConfigSchema,
-  ttsCosyvoice3RuntimeConfigSchema
+  ttsCosyvoice3RuntimeConfigSchema,
+  ttsAudio8RuntimeConfigSchema
 ])
 
 // Optional LavaSR post-processing model sources, shared across engines. Supply
@@ -458,6 +482,51 @@ export const ttsCosyvoice3LoadConfigSchema = z
   })
   .superRefine(refineCosyvoice3LoadConfig)
 
+type TtsAudio8LoadRefinementInput = {
+  referenceText?: string | undefined
+  audio8CodecEncoderModelSrc?: ModelSrcInput | undefined
+  referenceAudioSrc?: ModelSrcInput | undefined
+}
+
+function refineAudio8LoadConfig(config: TtsAudio8LoadRefinementInput, ctx: z.RefinementCtx) {
+  if (config.referenceAudioSrc !== undefined && config.referenceText === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['referenceText'],
+      message:
+        'referenceText (the transcript of the reference recording) is required with referenceAudioSrc.'
+    })
+  }
+
+  if (config.referenceText !== undefined && config.referenceAudioSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['referenceAudioSrc'],
+      message: 'referenceAudioSrc is required when referenceText is set.'
+    })
+  }
+
+  if (config.referenceAudioSrc !== undefined && config.audio8CodecEncoderModelSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['audio8CodecEncoderModelSrc'],
+      message: 'Voice cloning requires the Audio8 codec encoder GGUF (audio8CodecEncoderModelSrc).'
+    })
+  }
+}
+
+// Audio8 loads from explicit per-component GGUFs: the primary `modelSrc` is
+// the DualAR LM, the codec decoder is required, and the codec encoder is only
+// needed for zero-shot voice cloning (reference audio + transcript).
+export const ttsAudio8LoadConfigSchema = z
+  .object({
+    ...ttsAudio8RuntimeConfigShape,
+    audio8CodecDecoderModelSrc: modelSrcInputSchema,
+    audio8CodecEncoderModelSrc: modelSrcInputSchema.optional(),
+    referenceAudioSrc: modelSrcInputSchema.optional()
+  })
+  .superRefine(refineAudio8LoadConfig)
+
 type TtsTokenizerAssetRefinementInput = {
   ttsEngine?: string
   language?: string
@@ -493,7 +562,8 @@ export const ttsLoadConfigSchema = z
     ttsChatterboxLoadConfigSchema,
     ttsSupertonicLoadConfigSchema,
     ttsParlerLoadConfigSchema,
-    ttsCosyvoice3LoadConfigSchema
+    ttsCosyvoice3LoadConfigSchema,
+    ttsAudio8LoadConfigSchema
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -536,7 +606,8 @@ export const ttsConfigSchema = z
     ttsChatterboxLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
     ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
     ttsParlerLoadConfigSchema.strict(),
-    ttsCosyvoice3LoadConfigSchema.strict()
+    ttsCosyvoice3LoadConfigSchema.strict(),
+    ttsAudio8LoadConfigSchema.strict()
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -622,6 +693,7 @@ export type TtsChatterboxLoadConfig = z.infer<typeof ttsChatterboxLoadConfigSche
 export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSchema>
 export type TtsParlerLoadConfig = z.infer<typeof ttsParlerLoadConfigSchema>
 export type TtsCosyvoice3LoadConfig = z.infer<typeof ttsCosyvoice3LoadConfigSchema>
+export type TtsAudio8LoadConfig = z.infer<typeof ttsAudio8LoadConfigSchema>
 export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>
 /** @deprecated Use {@link TtsChatterboxLoadConfig} */
 export type TtsChatterboxConfig = TtsChatterboxLoadConfig
@@ -631,6 +703,7 @@ export type TtsChatterboxRuntimeConfig = z.infer<typeof ttsChatterboxRuntimeConf
 export type TtsSupertonicRuntimeConfig = z.infer<typeof ttsSupertonicRuntimeConfigSchema>
 export type TtsParlerRuntimeConfig = z.infer<typeof ttsParlerRuntimeConfigSchema>
 export type TtsCosyvoice3RuntimeConfig = z.infer<typeof ttsCosyvoice3RuntimeConfigSchema>
+export type TtsAudio8RuntimeConfig = z.infer<typeof ttsAudio8RuntimeConfigSchema>
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>
 export type TtsConfig = z.infer<typeof ttsConfigSchema>
 export type TtsClientParamsInput = z.input<typeof ttsClientParamsSchema>

@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-08-19
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.5.0` -> `^0.6.0`, which carries `qvac-fabric`
+  `10069.1.0` -> `10069.1.1` (fixes MoE models emitting garbage on Adreno 830 OpenCL,
+  and re-enables the GPU MoE kernels that were falling back to CPU). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so the range
+  bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so
+  `^0.5.0` would not have resolved `0.6.0` on its own. No API change for this package.
+
+  This addon runs MobileNetV3-Small on CPU, so the Adreno fix does not change its own
+  inference path — the bump keeps it on the current shared runtime build rather than
+  leaving it on a superseded fabric.
+
 ## [0.19.1] - 2026-08-18
 
 ### Fixed
