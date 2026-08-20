@@ -77,11 +77,13 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    uses: ./.github/workflows/prebuilds-audiogen-ggml.yml
+      actions: read
+    uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
+      packages: '["audiogen-ggml"]'
     if: ${{ !inputs.prebuild_package }}
 
   desktop-benchmarks:
@@ -91,15 +93,14 @@ jobs:
     permissions:
       contents: read
       packages: read
-    uses: ./.github/workflows/integration-test-audiogen-ggml.yml
+      id-token: write
+    uses: ./.github/workflows/integration-test-nx.yml
     secrets: inherit
     with:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
       prebuild_package: ${{ inputs.prebuild_package }}
-      run_integration_tests: false
-      run_rtf_benchmarks: true
-      benchmark_matrix_json: ${{ needs.context.outputs.benchmark_matrix_json }}
+      packages: '["audiogen-ggml"]'
     if: ${{ !cancelled() && inputs.run_desktop && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
 
   mobile-benchmarks:

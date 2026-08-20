@@ -621,29 +621,12 @@ test('public-pr: trusted non-PR calls do not require verified', () => {
 })
 
 test('all ci-router callers re-run when a draft becomes ready', () => {
-  const workflowDirectory = join(root, '.github/workflows')
-  const workflowNames = [
-    'on-pr-asr-ggml.yml',
-    'on-pr-bci-whispercpp.yml',
-    'on-pr-classification-ggml.yml',
-    'on-pr-decoder-audio.yml',
-    'on-pr-diffusion-cpp.yml',
-    'on-pr-embed-llamacpp.yml',
-    'on-pr-fabric.yml',
-    'on-pr-llm-llamacpp.yml',
-    'on-pr-model-fit.yml',
-    'on-pr-ocr-ggml.yml',
-    'on-pr-onnx.yml',
-    'on-pr-translation-nmtcpp.yml',
-    'on-pr-tts-ggml.yml',
-    'on-pr-vla.yml',
-  ]
-
-  for (const workflowName of workflowNames) {
-    const source = readFileSync(join(workflowDirectory, workflowName), 'utf8')
-    assert.match(source, /uses:\s+\.\/\.github\/actions\/ci-router/)
-    assert.match(source, /ready_for_review/)
-  }
+  // The 14 per-package on-pr-<pkg>.yml orchestrators are consolidated into the
+  // single on-pr-nx.yml ci-router caller, which must still re-run on the
+  // draft->ready transition (ready_for_review trigger).
+  const source = read('.github/workflows/on-pr-nx.yml')
+  assert.match(source, /uses:\s+\.\/\.github\/actions\/ci-router/)
+  assert.match(source, /ready_for_review/)
   assert.match(read('.github/workflows/pr-gate-merge.yml'), /ready_for_review/)
 })
 
@@ -678,32 +661,32 @@ test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation 
     reusable,
     /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
   )
-  for (const path of [
-    '.github/workflows/on-pr-asr-ggml.yml',
-    '.github/workflows/on-pr-tts-ggml.yml',
-  ]) {
-    const block = jobBlock(read(path), 'coload-smoke-mobile')
-    assert.match(
-      block,
-      /uses:\s*\.\/\.github\/workflows\/coload-smoke-mobile\.yml/,
-      `${path} runs the reusable mobile co-load`,
-    )
-    assert.match(
-      block,
-      /needs\.ci-router\.outputs\.run_coload == 'true'/,
-      `${path} Device Farm co-load requires the co-load label`,
-    )
-    assert.match(
-      block,
-      /needs\.ci-router\.outputs\.run_mobile == 'true'/,
-      `${path} Device Farm co-load requires the mobile label`,
-    )
-    assert.match(
-      block,
-      /needs:[\s\S]*?\bfork-approval\b/,
-      `${path} Device Farm co-load requires fork-approval`,
-    )
-  }
+  // Consolidated into on-pr-nx.yml: its coload-smoke-mobile job runs the reusable
+  // mobile co-load, gated on the co-load + mobile labels and on PR authorisation.
+  // on-pr-nx enforces authorisation via `needs.authorize.outputs.allowed`, and
+  // the authorize job itself depends on fork-approval (fork-ci for external forks).
+  const path = '.github/workflows/on-pr-nx.yml'
+  const block = jobBlock(read(path), 'coload-smoke-mobile')
+  assert.match(
+    block,
+    /uses:\s*\.\/\.github\/workflows\/coload-smoke-mobile\.yml/,
+    `${path} runs the reusable mobile co-load`,
+  )
+  assert.match(
+    block,
+    /needs\.ci-router\.outputs\.run_coload == 'true'/,
+    `${path} Device Farm co-load requires the co-load label`,
+  )
+  assert.match(
+    block,
+    /needs\.ci-router\.outputs\.run_mobile == 'true'/,
+    `${path} Device Farm co-load requires the mobile label`,
+  )
+  assert.match(
+    block,
+    /needs\.authorize\.outputs\.allowed == 'true'/,
+    `${path} Device Farm co-load requires PR authorisation (authorize -> fork-approval)`,
+  )
 })
 
 const AWS_OIDC_SECRET = 'AWS_OIDC_ROLE_ARN'
@@ -1442,8 +1425,12 @@ test('fork-ci: every pull_request_target verified-surface workflow has the fork-
   // silently matching nothing (which would make every assertion below vacuous).
   // Lower it deliberately when workflow families are retired or consolidated —
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
-  // ocr-onnx CI was retired on main.
-  assert.ok(targets.length >= 18, `found ${targets.length} fork-ci target workflows`)
+  // ocr-onnx CI was retired on main, then to 5 when the 15 per-package
+  // pull_request_target on-pr-<pkg> workflows were consolidated into the single
+  // on-pr-nx.yml. on-pr-nx carries its own fork-approval + authorize chain, so it
+  // satisfies the per-target assertions below whether it triggers on pull_request
+  // (as today) or once it flips to pull_request_target and joins this surface.
+  assert.ok(targets.length >= 5, `found ${targets.length} fork-ci target workflows`)
   for (const path of targets) {
     const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
     assert.ok(gate, `${path}: must define a fork-approval gate job`)
