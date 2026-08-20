@@ -81,6 +81,9 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
+      # prebuilds-nx's prebuild job requests actions: read (reuse action lists
+      # prior runs); the calling job must grant at least that or startup fails.
+      actions: read
     uses: ./.github/workflows/prebuilds-nx.yml
     secrets: inherit
     with:
