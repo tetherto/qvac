@@ -1,8 +1,6 @@
 name: General CI/CD (libs)
-# Consolidated publish workflow for plain-shape libraries (dorny selects the
-# changed package, matrix publishes it).
-# Left out: cli, ai-sdk-provider, inference, openclaw-plugin, opencode-plugin,
-# langdetect-text-cld2, infer-base.
+# Consolidated publish workflow for plain-shape libraries; excludes
+# cli/inference/plugin/infer-base packages (non-standard shapes).
 
 on:
   push:
@@ -61,10 +59,8 @@ jobs:
         if: github.event_name == 'push'
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
         with:
-          # base == this branch -> dorny diffs the push delta (commit before the
-          # push -> after), not the default branch. Without it, dorny defaults
-          # to `main` and a diverged feature/tmp branch would match every lib,
-          # over-publishing instead of just the changed one.
+          # base == this branch so dorny diffs the push delta, not `main`; else a
+          # diverged feature/tmp branch matches every lib and over-publishes.
           base: ${{ github.ref_name }}
           filters: |
             rag: packages/rag/**
@@ -92,17 +88,8 @@ jobs:
             packages="${CHANGED:-[]}"
           fi
 
-          # Identity gate: a release-* branch is named release-<package>-x.y.z
-          # and must publish EXACTLY that package — checked against what this
-          # push/dispatch actually selected, before anything builds. Hard
-          # fail on any mismatch (wrong package, extra package, zero
-          # packages, malformed branch name, unknown package). Closes the gap
-          # in release-merge-guard: its package-identity check is a warning
-          # only (it hard-fails on version/changelog instead), so a
-          # same-versioned sibling lib with its own CHANGELOG touched in a
-          # later push on the SAME release branch could otherwise pass the
-          # guard and publish under someone else's release line. Applies to
-          # both push and workflow_dispatch.
+          # Identity gate: release-<pkg>-x.y.z must publish exactly that pkg. Closes a
+          # release-merge-guard gap where a sibling lib could publish on someone's release line.
           if [[ "$REF_NAME" == release-* ]]; then
             if [[ "$REF_NAME" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
               branch_pkg="${BASH_REMATCH[1]}"
@@ -161,9 +148,8 @@ jobs:
           package-json-path: packages/${{ matrix.package }}/package.json
           changelog-path: packages/${{ matrix.package }}/CHANGELOG.md
 
-  # Single GPR publish for main/feature/tmp. gpr_tag already resolves to
-  # dev/feature/temp per branch, so one job replaces the former three.
-  # OIDC publish: secret-token (NODE_AUTH_TOKEN) only; NPM_TOKEN is not used.
+  # Single GPR publish for main/feature/tmp; gpr_tag resolves to dev/feature/temp
+  # per branch, so one job replaces the former three.
   publish-gpr:
     needs:
       - detect
@@ -216,8 +202,7 @@ jobs:
       caller_event_name: ${{ github.event_name }}
 
   # Tag the published version (no GitHub Release; SDK-only releases policy).
-  # Release branches carry a single package, so the matrix is size 1 here and
-  # the published_version output resolves unambiguously.
+  # Release branches carry one package, so the size-1 matrix resolves unambiguously.
   create-tag:
     needs: [detect, publish-release-npm]
     if: needs.publish-release-npm.result == 'success' && needs.publish-release-npm.outputs.published_version != ''
