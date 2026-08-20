@@ -30,11 +30,10 @@ inputs:
   addon-npm-name:
     description: "NPM package name (used for npm fallback prebuild download)"
     required: true
-  # No prebuild-artifact-prefix input: per-leg artifact names are derived from the
-  # package as prebuild-<package>-<platform>-<arch>, with <package> taken from
-  # addon-workdir. The old hand-maintained prefixes were not unique
-  # (embed-llamacpp and llm-llamacpp both used `llama-cpp-`; translation-nmtcpp
-  # had none), and duplicate artifact names are accepted rather than rejected.
+  prebuild-artifact-prefix:
+    description: "Prefix used for prebuild artifact names (empty if none)"
+    required: false
+    default: ""
   skip-prebuilds:
     description: |
       When 'true', skip every prebuild handling step (artifact download,
@@ -136,30 +135,12 @@ runs:
         echo "Installing global dependencies..."
         npm install -g --force @expo/cli@latest
 
-    # Artifact identity is derived from the package, matching what
-    # reusable-prebuilds.yml uploads. The legacy prefix is still tried as a
-    # second pattern so artifacts from the retiring prebuilds-<pkg>.yml
-    # producers keep resolving.
-    - name: Resolve prebuild artifact names
-      id: prebuild_names
-      if: inputs.skip-prebuilds != 'true'
-      shell: bash
-      env:
-        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
-      run: |
-        set -euo pipefail
-        pkg="$(basename "$ADDON_WORKDIR")"
-        echo "package=$pkg" >> "$GITHUB_OUTPUT"
-        echo "leg_prefix=prebuild-$pkg-" >> "$GITHUB_OUTPUT"
-        echo "merged=prebuilds-$pkg" >> "$GITHUB_OUTPUT"
-        echo "package=$pkg"
-
     - name: Download Android prebuilds (from artifacts)
       if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
-        pattern: ${{ steps.prebuild_names.outputs.leg_prefix }}android-*
+        pattern: ${{ inputs.prebuild-artifact-prefix }}android-*
         merge-multiple: true
       continue-on-error: true
 
@@ -168,7 +149,7 @@ runs:
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
-        pattern: ${{ steps.prebuild_names.outputs.leg_prefix }}ios-*
+        pattern: ${{ inputs.prebuild-artifact-prefix }}ios-*
         merge-multiple: true
       continue-on-error: true
 
@@ -190,44 +171,19 @@ runs:
           echo "present=false" >> "$GITHUB_OUTPUT"
         fi
 
-    # Fallback for the cache-hit path: pull this package's merged bundle
-    # (prebuilds-<package>, produced by reusable-prebuilds.yml; contains every
+    # Fallback for the cache-hit path: pull the merged `prebuilds` artifact
+    # (well-known name produced by reusable-prebuilds.yml; contains every
     # platform dir, including android-*/ios-*). This keeps mobile E2E running
     # against the PR's own binaries on JS-only pushes instead of @latest from
     # npm. No-op for addons / runs that never produced this artifact (e.g.
     # genuine workflow_dispatch), where the npm fallback below still applies.
     - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
-      id: merged_fallback
       if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
-        name: ${{ steps.prebuild_names.outputs.merged }}
+        name: prebuilds
         path: addon/${{ inputs.addon-workdir }}/prebuilds
       continue-on-error: true
-
-    # Layout guard. Artifact content is flat <platform>-<arch>/ from every
-    # producer, and the runtime resolves prebuilds/<platform>-<arch>/, so
-    # anything else here means an artifact was assembled wrong and the device run
-    # would fail confusingly later.
-    - name: Verify prebuilds layout
-      if: inputs.skip-prebuilds != 'true'
-      shell: bash
-      working-directory: addon/${{ inputs.addon-workdir }}
-      run: |
-        set -euo pipefail
-        if [ ! -d prebuilds ]; then
-          echo "prebuilds/ absent — npm fallback below applies"
-          exit 0
-        fi
-        for d in prebuilds/*/; do
-          [ -d "$d" ] || continue
-          base="$(basename "$d")"
-          case "$base" in
-            *-*) : ;;
-            *) echo "::error::'${base}/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."; exit 1 ;;
-          esac
-        done
-        ls -A prebuilds 2>/dev/null || echo "prebuilds/ empty"
 
     # npm fallback — DISABLED for PR-triggered runs.
     # On a PR (pull_request / pull_request_target) the only acceptable
