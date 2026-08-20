@@ -78,16 +78,8 @@ export function selectNewestBotStatus(statuses, context) {
   )
 }
 
-// Trust the producing run only when it is the consolidated on-pr-nx workflow AND
-// was triggered at/after this PR event (created_at >= threshold, epoch seconds).
-// This rejects a superseded pre-label run whose skipped success merely
-// post-dates the label.
-//
-// on-pr-nx is now the SOLE trusted producer: the legacy per-package on-pr-<pkg>.yml
-// are removed on this line, but they still live on main and fire via
-// pull_request_target for any PR, co-posting qvac/prebuild-<pkg>. Trusting only
-// on-pr-nx.yml ensures the gate is satisfied by the consolidated pipeline itself,
-// not backstopped by a legacy run. `pkg` is retained for signature stability.
+// Trust a status only from a fresh on-pr-nx run: rejects superseded pre-label runs
+// and legacy on-pr-<pkg> co-posts main still fires. `pkg` kept for signature stability.
 export function isRunFresh(run, pkg, prUpdatedEpoch) {
   if (!run || run.path !== '.github/workflows/on-pr-nx.yml') return false
   const createdMs = Date.parse(run.created_at)
@@ -106,11 +98,8 @@ export function classifyState(state) {
 // `lookupRun(runId)` returns the producing run object (or null) and is injected
 // so this stays pure and testable.
 export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
-  // Consider ALL bot statuses for this context and keep only those produced by a
-  // trusted+fresh run (on-pr-nx), then take the newest of those. Selecting the
-  // global-newest first would let a legacy on-pr-<pkg> status (co-posted from main
-  // via pull_request_target, and often newest by a few seconds) mask the
-  // consolidated producer and stall the gate at 'pending'.
+  // Filter to trusted+fresh (on-pr-nx) statuses, then take the newest of those.
+  // Newest-first would let a legacy on-pr-<pkg> co-post mask the real producer.
   const context = `qvac/prebuild-${pkg}`
   const trusted = (statuses ?? [])
     .filter(
