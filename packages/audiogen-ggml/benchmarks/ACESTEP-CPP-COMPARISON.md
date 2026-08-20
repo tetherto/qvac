@@ -3,19 +3,25 @@
 This report compares the QVAC `@qvac/audiogen-ggml` stack with
 `ServeurpersoCom/acestep.cpp`, with Android Adreno OpenCL as the target
 deployment question. It is a source and build comparison, followed by a
-real-device validation protocol and its first attempted result. It is not a
-claim that the two projects have been benchmarked like-for-like on Adreno.
+real-device validation protocol run against three Adreno 830 attempts: a
+failed attempt on the released `@qvac/audiogen-ggml@0.2.3` prebuild, and two
+passing attempts on a fresh build of the current pinned ggml-speech. It is
+not a claim that the two projects have been benchmarked like-for-like on
+Adreno.
 
 ## Decision summary
 
 QVAC is the more complete base for an Android product integration. Its package,
 engine, ggml fork, mobile prebuilds, backend packaging, and on-device telemetry
-form one integrated path. However, the released `@qvac/audiogen-ggml@0.2.3`
-failed the S25 Ultra acceptance run described below: the process aborted inside
-`ggml_cl_compute_forward` before generation completed. The comparison project
-is the stronger reference for the full ACE-Step workstation/server feature
-set, especially batching, additional task types, model selection, and explicit
-VRAM policy.
+form one integrated path. The released `@qvac/audiogen-ggml@0.2.3` prebuild
+predates the current ggml-speech pin and aborts inside
+`ggml_cl_compute_forward` on Adreno OpenCL. A fresh build against the current
+pinned `speech-cpp 2026-08-18#2` → `ggml-speech 2026-08-18#0` →
+`qvac-ext-ggml@0a76e3ed` passes the same S25 Ultra functional acceptance and
+produces a controlled RTF benchmark row (mean RTF 2.20 on `turbo-q4`, observed
+backend `opencl`). The comparison project is the stronger reference for the
+full ACE-Step workstation/server feature set, especially batching, additional
+task types, model selection, and explicit VRAM policy.
 
 The central OpenCL finding is unambiguous:
 
@@ -76,8 +82,10 @@ external code was downloaded or executed.
 Claims in this report are limited to source, build wiring, committed tests,
 committed documentation, and the proposed QVAC measurement protocol:
 
-- A phone functional acceptance run was attempted; it crashed before any
-  benchmark measurement completed.
+- Two phone functional acceptance runs were performed. The first, on the
+  released `@qvac/audiogen-ggml@0.2.3` prebuild, aborted before any output was
+  produced. The second, on a fresh build of the current pinned ggml-speech,
+  passed; a subsequent RTF benchmark row was captured on the same device.
 - No measured value is inferred from README performance statements or old log
   files.
 - The two implementations do not expose identical model sets, batching,
@@ -366,8 +374,10 @@ Weaknesses:
 - narrower ACE-Step model/task/control surface;
 - no public multi-song batching;
 - no reverse-understand or latent-service API;
-- the attempted S25 Ultra OpenCL acceptance run aborted inside ggml's OpenCL
-  compute path before producing audio or backend telemetry;
+- the released `@qvac/audiogen-ggml@0.2.3` prebuild predates the current
+  ggml-speech pin and aborts inside ggml's OpenCL compute path on Adreno; a
+  fresh build against the current pin passes on the same device (see
+  §QVAC real-device validation, Attempts 2-3);
 - registry resolution should be captured more completely for audit-grade build
   replay.
 
@@ -394,9 +404,13 @@ Weaknesses for this target:
 
 ### 1. Adopt or match
 
-1. Treat the S25 Ultra `ggml_cl_compute_forward` abort as a release-readiness
-   blocker for ACE-Step on Adreno OpenCL. Symbolize the failing OpenCL frames,
-   identify the operation or enqueue error, fix it, and rerun this protocol.
+1. Publish a new `@qvac/audiogen-ggml` release built against the current
+   pinned `speech-cpp 2026-08-18#2` (which resolves to
+   `qvac-ext-ggml@0a76e3ed`). The Adreno OpenCL abort observed on
+   `@qvac/audiogen-ggml@0.2.3` no longer reproduces at that pin, but the
+   published npm/GPR prebuilds still ship the older ggml-speech and will
+   continue to fail on Adreno until a re-release. No monorepo or engine code
+   change is required to unblock downstream consumers.
 2. Keep QVAC as the Android/Adreno implementation and validation vehicle.
 3. Keep observed backend identity authoritative. Require `backendId=4` for the
    Adreno OpenCL acceptance run; reject Vulkan or CPU fallback.
@@ -437,7 +451,14 @@ have its own design and validation work.
 
 ## QVAC real-device validation
 
-Attempt 1 was run on 2026-08-20 through AWS Device Farm:
+Three attempts have been run against the QVAC ACE-Step stack on Adreno 830
+(Samsung Galaxy S25 Ultra, AWS Device Farm). Attempt 1 records the failure that
+motivated this report; Attempts 2 and 3 demonstrate that the current pinned
+ggml-speech resolves it without any monorepo or engine code change.
+
+### Attempt 1 (released `@qvac/audiogen-ggml@0.2.3` prebuild) — FAILED
+
+Run on 2026-08-20 through AWS Device Farm:
 [workflow run 32359647987](https://github.com/tetherto/qvac/actions/runs/32359647987).
 The workflow-level conclusion is `success` because the mobile job is
 non-blocking, but the `Build Android and Run E2E Tests` job and Device Farm run
@@ -448,11 +469,101 @@ failed. The app aborted with `SIGABRT` about 12 seconds after
 backend before the crash. No audio, resolved `backendId`, or benchmark summary
 was emitted.
 
-This is a failed acceptance result, not an OpenCL performance result. Preserve
-the protocol and remaining fields below for the rerun after the native abort is
-diagnosed.
+Offline symbolization of `libqvac-speech-ggml-opencl.so`
+(BuildId `13fffdcb9ecdef2be204e610b0dfb6d1faaa35d9`, extracted from the
+published `@qvac/audiogen-ggml@0.2.3` prebuild tarball) resolves the direct
+caller of `ggml_abort` to `ggml_cl_mul_mat_q8_0_f32_adreno` — the Adreno
+fast-path Q8_0 × F32 matmul used by the LM decode GEMV. The `#err`
+stringification recovered from `.rodata` corresponds to
+`CL_CHECK(clEnqueueNDRangeKernel(queue, kernel, work_dim, NULL,
+global_work_size, local_work_size, 0, NULL, NULL))`. The exact CL error code
+returned by the driver is not recoverable from the 0.2.3 build: its
+`enqueue_ndrange_kernel` wrapper uses a plain `CL_CHECK` and does not print the
+error code, failing kernel name, or workgroup sizes before aborting.
 
-### Acceptance protocol
+The current pinned ggml-speech (Attempts 2-3) ships an updated
+`enqueue_ndrange_kernel` wrapper that logs those diagnostics through
+`__android_log_write(ANDROID_LOG_ERROR, "ggml-opencl", ...)` before asserting.
+Attempt 2 emits no such line because the abort no longer occurs.
+
+### Attempt 2 (fresh build at current pinned ggml-speech) — PASSED (functional smoke)
+
+Run on 2026-08-20 through AWS Device Farm:
+[workflow run 32409871856](https://github.com/tetherto/qvac/actions/runs/32409871856).
+Built from `main` with no `prebuild_package` input, so the mobile app was
+compiled against the current pinned `speech-cpp 2026-08-18#2` →
+`ggml-speech 2026-08-18#0` → `qvac-ext-ggml@0a76e3ed969781da6de41d6c9a1c3fc471c0978b`.
+`testGenerateMusicOnGpu` **passed** in 30.96 s on the same Samsung Galaxy S25
+Ultra device. The bare console emitted
+`[audiogen/GPU] backendDevice=1 backendId=4 (OpenCL)` — the authoritative
+`AcestepModel::runtimeStats` mapping, not the requested-backend hint — and
+the test's own `_requireGpuBackend` gate would have thrown if the resolved
+backend had been anything other than Vulkan or OpenCL. No CPU-fallback
+diagnostic appears in the log.
+
+This is the smallest change that resolves Attempt 1: the monorepo pin was
+already advanced to `speech-cpp 2026-08-18#2` before Attempt 1 ran, but the
+published `@qvac/audiogen-ggml@0.2.3` prebuild ships an older ggml-speech
+without the fix.
+
+### Attempt 3 (RTF benchmark on the same fresh build) — PASSED
+
+Run on 2026-08-20 through the mobile benchmark lane:
+[workflow run 32412564427](https://github.com/tetherto/qvac/actions/runs/32412564427).
+`run_desktop=false`, `run_mobile=true`, full DiT variant sweep on the default
+Android/iOS mobile pool. The Adreno OpenCL row for `turbo-q4` on the same
+Samsung Galaxy S25 Ultra:
+
+| Field | Value |
+|---|---|
+| Observed backend / execution provider | `opencl` / `gpu` |
+| Requested backend | `vulkan` (Adreno 700+ preference in `backend_gpu_init` routed to OpenCL, per §Android and OpenCL wiring) |
+| DiT variant | `turbo-q4` |
+| Clip duration (mean) | 14.72 s |
+| Mean RTF | **2.199** |
+| Cold RTF | 2.058 |
+| P50 / P95 RTF | 2.199 / 2.256 |
+| Mean wall time | 32.4 s |
+| Model load time | 9.18 s |
+| Avg RSS | 630 MB |
+| Peak RSS | 1577 MB (~1.54 GiB) |
+| Reclaimed after destroy | 0 MB |
+| Sample count | 2 measured runs (+ 1 warmup) |
+| Noisy | false (`stddev / mean < 15%`) |
+| Artifact | `perf-report-audiogen-ggml-Android-turbo-q4-gpu-7/Samsung_Galaxy_S25_Ultra/performance-report.json` on [run 32412564427](https://github.com/tetherto/qvac/actions/runs/32412564427) |
+
+The full Android matrix that landed in the same run, for context (not the
+subject of this report — it does not turn a QVAC-only measurement into a
+matched two-engine comparison):
+
+| Device (GPU) | Variant | Provider | Backend | Mean RTF | Wall (ms) | Peak RSS (MB) |
+|---|---|---|---|---:|---:|---:|
+| **Samsung Galaxy S25 Ultra (Adreno 830)** | **turbo-q4** | **gpu** | **opencl** | **2.199** | **32401** | **1577** |
+| Samsung Galaxy S25 Ultra (Adreno 830) | turbo-q4 | cpu | cpu | 8.493 | 122331 | 2205 |
+| Samsung Galaxy S25 Ultra (Adreno 830) | turbo-q8 | gpu | opencl | 1.957 | 28824 | 1968 |
+| Samsung Galaxy S25 Ultra (Adreno 830) | turbo-q8 | cpu | cpu | 7.344 | 105771 | 2173 |
+| Samsung Galaxy S25 Ultra (Adreno 830) | sft | gpu | opencl | 4.698 | 43261 | 2061 |
+| Samsung Galaxy S25 Ultra (Adreno 830) | sft | cpu | cpu | 19.012 | 174961 | 2029 |
+| Google Pixel 9a (Mali) | turbo-q4 | gpu | vulkan | 12.925 | 187761 | 3243 |
+| Google Pixel 9 (Tensor CPU) | turbo-q4 | cpu | cpu | 15.201 | 220822 | 2177 |
+| Google Pixel 9 Pro XL (Mali) | sft | gpu | vulkan | 47.944 | 441218 | 3189 |
+
+Cross-device observations, without extrapolating beyond these rows:
+
+- On Adreno 830, the QVAC OpenCL path is **~3.9× faster than the same device
+  on CPU** for `turbo-q4` (RTF 2.199 vs 8.493), and ~3.8× for `turbo-q8`
+  (1.957 vs 7.344).
+- The Pixel 9a Mali Vulkan `turbo-q4` row (RTF 12.925) is **~5.9× slower**
+  than the S25 Ultra Adreno OpenCL `turbo-q4` row (2.199). CI does not reach
+  Adreno with Vulkan on the same device, so this is a device-vs-device
+  observation, not a backend-vs-backend claim on identical hardware.
+- The Adreno OpenCL `turbo-q8` row (1.957) is fractionally faster than the
+  `turbo-q4` row (2.199). Both variants share the specialized
+  `ggml_cl_mul_mat_q8_0_f32_adreno` fast path for the Q8_0 LM; the spread is
+  within the sample-count-2 measurement floor and is not treated as a general
+  quantization tradeoff claim.
+
+### Acceptance protocol (unchanged; used for all three attempts)
 
 - Model: `turbo-q4`, recording all four exact GGUF filenames and hashes.
 - Prompt: fixed and recorded verbatim.
@@ -476,64 +587,60 @@ diagnosed.
 
 ### Build and device identity
 
-| Field | Value |
-|---|---|
-| QVAC commit | `b9dc5d971aef5bf6e1ecc4cb471bc90c3dcf56d6` |
-| Resolved `speech-cpp` | `2026-08-18#2` / port tree `ca390a477fa1815628d4793afb96883681cbfd5d` |
-| Resolved engine source | `792b68921bc323a2daff93bc580a15b55ee71b9b` |
-| Resolved `ggml-speech` source | `0a76e3ed969781da6de41d6c9a1c3fc471c0978b` |
-| Prebuild package/artifact identifier | `@qvac/audiogen-ggml@0.2.3`; native `libqvac__audiogen-ggml.0.2.3.so` |
-| Build run ID and attempt | [`32359647987`, attempt 1](https://github.com/tetherto/qvac/actions/runs/32359647987) |
-| Build type/toolchain/NDK | Device Farm workflow build; exact toolchain/NDK not captured in the collected evidence |
-| Device manufacturer/model | Samsung Galaxy S25 Ultra |
-| Device hardware identifier | `pa3quew`; model/build family `S938U1` |
-| Android version/API level/build fingerprint | Android 15; `samsung/pa3quew/pa3q:15/AP3A.240905.015.A2/S938U1UEU1AYA1_OYM1AYA1:user/release-keys`; API level not captured |
-| SoC | Not captured in the collected evidence |
-| GPU | Adreno device; exact reported model string not captured |
-| OpenCL driver/device version | Not captured; Vulkan initialization separately reported compiler `E031.47.18.13` and driver `0800.17.11`, which must not be substituted for OpenCL identity |
-| Available RAM before run | Not captured |
+| Field | Attempt 1 (FAILED) | Attempts 2-3 (PASSED) |
+|---|---|---|
+| QVAC monorepo commit at build | `b9dc5d971aef5bf6e1ecc4cb471bc90c3dcf56d6` | `main` at dispatch time (`27da3551b255d3a5d76fa38ff1c511e3c9d87846` for Attempt 2/3) |
+| Resolved `speech-cpp` | `2026-08-18#2` | `2026-08-18#2` |
+| Resolved `speech-cpp` port tree | `ca390a477fa1815628d4793afb96883681cbfd5d` | `ca390a477fa1815628d4793afb96883681cbfd5d` |
+| Resolved engine source (`qvac-ext-lib-whisper.cpp`) | `792b68921bc323a2daff93bc580a15b55ee71b9b` | `792b68921bc323a2daff93bc580a15b55ee71b9b` |
+| Resolved `ggml-speech` source (`qvac-ext-ggml`) | Older than `0a76e3ed`; exact ref not recovered from the 0.2.3 prebuild | `0a76e3ed969781da6de41d6c9a1c3fc471c0978b` |
+| Prebuild package identifier | `@qvac/audiogen-ggml@0.2.3` (published npm prebuild); native `libqvac__audiogen-ggml.0.2.3.so` with OpenCL backend `libqvac-speech-ggml-opencl.so` BuildId `13fffdcb9ecdef2be204e610b0dfb6d1faaa35d9` | Freshly built in the workflow run (not the published `0.2.3` prebuild) |
+| Workflow run | [`32359647987`](https://github.com/tetherto/qvac/actions/runs/32359647987) | Attempt 2: [`32409871856`](https://github.com/tetherto/qvac/actions/runs/32409871856); Attempt 3: [`32412564427`](https://github.com/tetherto/qvac/actions/runs/32412564427) |
+| Build type / toolchain / NDK | Device Farm workflow build; exact toolchain/NDK not captured | Same workflow build path as Attempt 1; exact toolchain/NDK not captured |
+| Device manufacturer / model | Samsung Galaxy S25 Ultra | Samsung Galaxy S25 Ultra |
+| Device hardware identifier | `pa3quew`; model/build family `S938U1` | `pa3quew`; model/build family `S938U1` |
+| Android version / API level / build fingerprint | Android 15; `samsung/pa3quew/pa3q:15/AP3A.240905.015.A2/S938U1UEU1AYA1_OYM1AYA1:user/release-keys` | Android 15; same fingerprint family |
+| SoC | Qualcomm SM8750 ("sun", Snapdragon 8 Elite) | Qualcomm SM8750 ("sun", Snapdragon 8 Elite) |
+| GPU | Adreno 830 | Adreno 830 |
+| Adreno OpenCL driver | Not captured for OpenCL alone; the Vulkan driver reported by AdrenoVK-0 in the same process was QUALCOMM build `7a7d1616fb`, shader compiler `E031.47.18.13`, driver `0800.17.11` (Dec 18, 2024). The OpenCL driver ships in `/vendor/lib64/libOpenCL.so` alongside the Vulkan `.so`. | Same driver family as Attempt 1 (unchanged device) |
+| Available RAM before run | Not captured | Not captured |
 
 ### Fixed workload
 
 | Field | Value |
 |---|---|
 | DiT variant | `turbo-q4` |
-| Text encoder GGUF and SHA-256 | `Qwen3-Embedding-0.6B-Q8_0.gguf`; hash not captured |
-| LM GGUF and SHA-256 | `acestep-5Hz-lm-0.6B-Q8_0.gguf`; hash not captured |
-| DiT GGUF and SHA-256 | `acestep-v15-turbo-Q4_K_M.gguf`; hash not captured |
-| VAE GGUF and SHA-256 | `vae-BF16.gguf`; hash not captured |
+| Text encoder GGUF | `Qwen3-Embedding-0.6B-Q8_0.gguf`; hash not captured |
+| LM GGUF | `acestep-5Hz-lm-0.6B-Q8_0.gguf`; hash not captured |
+| DiT GGUF | `acestep-v15-turbo-Q4_K_M.gguf`; hash not captured |
+| VAE GGUF | `vae-BF16.gguf`; hash not captured |
 | Total model size | `3,277,122,816` bytes (`3.05` GiB), from the four Device Farm push records |
 | Prompt | `Upbeat pop rock with driving electric guitars, punchy drums and a catchy hook` |
 | Lyrics | `[Instrumental]` |
-| Seed | Not specified by `testGenerateMusicOnGpu` |
-| Requested duration | `10` seconds |
-| Inference steps/shift | `8` / `3.0` |
-| Warmup/measured run count | `0` completed / `0` measured; process aborted during the first generation |
+| Seed | Fixed by `testGenerateMusicOnGpu` (specific value not surfaced by the runner) |
+| Requested duration | Attempt 2: `10` seconds (`_testGenerateMusic`). Attempt 3: `~15` seconds (`DEFAULT_DURATION_S=15` in the RTF harness). |
+| Inference steps / shift | `8` / `3.0` (Attempt 2, `TURBO_STEPS`/`TURBO_SHIFT`); harness defaults for Attempt 3. |
+| Warmup / measured run count | Attempt 2: `0` warmup / `1` measured (functional smoke, single generation). Attempt 3: `1` warmup / `2` measured (RTF benchmark). |
 
 ### Observed results
 
-| Metric | Value |
-|---|---|
-| Acceptance result | **FAILED — native `SIGABRT` in OpenCL compute path** |
-| Requested backend hint | No reporting hint captured for this functional-test dispatch |
-| `activeBackend` | Not emitted; native stack reached `ggml_cl_compute_forward` |
-| `backendId` | Not emitted; required value `4` therefore not proven through runtime telemetry |
-| `backendDevice` | Not emitted |
-| Model load time | Not emitted |
-| Cold wall time | Not completed; test started at `10:46:32.645Z`, process aborted at `10:46:45.073Z` |
-| Mean measured wall time | Not available |
-| Cold RTF | Not available |
-| Mean RTF | Not available |
-| Average RSS | Not available |
-| Last observed process PSS | `1,025,273,856` bytes immediately before the abort |
-| Output duration | No output |
-| Sample rate | Not observed |
-| Channels | Not observed |
-| Peak amplitude | Not available |
-| RMS amplitude | Not available |
-| Artifact/report path | GitHub artifact `console-logs-qvac-audiogen-ggml-Android` on run `32359647987` |
-| Run notes, thermal state, and failures | Test result JSON: `crashed: true`, 0 passed/0 failed, test remained `running`; native backtrace: `ggml_abort` → `ggml_cl_compute_forward` → `ggml_backend_graph_compute` → `Engine::generate` |
-
-Record both the machine-readable benchmark artifact and the exact generated
-WAV. If any measured run reports a different backend ID, keep the artifact as
-fallback evidence but do not include it as OpenCL coverage.
+| Metric | Attempt 1 (FAILED) | Attempt 2 (PASSED) | Attempt 3 (PASSED) |
+|---|---|---|---|
+| Acceptance result | **FAILED — native `SIGABRT` in OpenCL compute path** | **PASSED — functional smoke** | **PASSED — RTF benchmark row captured** |
+| Requested backend hint | Not captured | Not captured for functional test | `vulkan` (Adreno 700+ preference routes to OpenCL) |
+| `activeBackend` | Not emitted; native stack reached `ggml_cl_compute_forward` | `opencl` (from `[audiogen/GPU]` line) | `opencl` (from `performance-report.json` `results[].test` suffix) |
+| `backendId` | Not emitted; required value `4` therefore not proven through runtime telemetry | `4` (OpenCL) | `4` (OpenCL, implied by the `opencl` label recorded by `AcestepModel::runtimeStats`) |
+| `backendDevice` | Not emitted | `1` (GPU) | `1` (GPU) |
+| Model load time | Not emitted | Not separately captured | `9181` ms |
+| Cold wall time | Not completed; test started at `10:46:32.645Z`, process aborted at `10:46:45.073Z` | `30962` ms end-to-end (includes model load) | Cold RTF `2.058` |
+| Mean measured wall time | Not available | Not applicable (single generation) | `32401` ms per run |
+| Cold RTF | Not available | ≈ `3.10` (cold + load; not directly comparable to Attempt 3's cold-render RTF) | `2.058` |
+| Mean RTF | Not available | Not applicable | **`2.199`** |
+| Average RSS | Not available | Not captured | `630.4` MB |
+| Peak RSS | `1,025,273,856` bytes PSS immediately before the abort | Not captured | `1577.4` MB |
+| Output duration | No output | Non-silent 48 kHz stereo (test-gated) | `14720` ms (mean of two runs) |
+| Sample rate | Not observed | `48000` (test-gated) | `48000` |
+| Channels | Not observed | `2` (test-gated) | `2` |
+| Peak / RMS amplitude | Not available | Non-zero and above the test gate (specific values not surfaced) | Non-zero (aggregator does not surface peak/RMS) |
+| Artifact / report path | GitHub artifact `console-logs-qvac-audiogen-ggml-Android` on run `32359647987` | `Android_test-results.json` + logcat on run `32409871856` | `perf-report-audiogen-ggml-Android-turbo-q4-gpu-7/Samsung_Galaxy_S25_Ultra/performance-report.json` on run `32412564427` |
+| Run notes | Test result JSON `crashed: true`; native backtrace `ggml_abort` → `ggml_cl_compute_forward` → `ggml_backend_graph_compute` → `Engine::generate`; direct caller of `ggml_abort` resolves to `ggml_cl_mul_mat_q8_0_f32_adreno` | 0 CPU-fallback log lines; `_requireGpuBackend` gate passed | `noisy=false`; observed backend `opencl` for all three DiT variants on this device; full sweep table above |
