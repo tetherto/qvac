@@ -418,7 +418,7 @@ jobs:
     # requires both prebuilds. NOTE: matrix.* is unavailable in a job-level if
     # (evaluated pre-fan-out), so the discriminator is inputs.platform, not matrix.
     if: ${{ !cancelled() && needs.resolve-framework.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && ((inputs.platform == 'Android' && needs.prebuild-android.result == 'success') || (inputs.platform == 'iOS' && needs.prebuild-ios.result == 'success') || (inputs.platform == '' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success')) }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     # Exceeds the 30m default: npm install + expo prebuild + Gradle/xcodebuild.
     timeout-minutes: 90
@@ -431,7 +431,7 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, build only the chosen platform. workflow_call
       # builds both platforms as before.
-      matrix: ${{ fromJSON(format(inputs.platform != '' && (inputs.platform == 'iOS' && '{{"include":[{{"platform":"iOS","os":"macos-14","runner":"{1}"}}]}}' || '{{"include":[{{"platform":"Android","os":"ubuntu-22.04","runner":"{0}"}}]}}') || '{{"include":[{{"platform":"Android","os":"ubuntu-22.04","runner":"{0}"}},{{"platform":"iOS","os":"macos-14","runner":"{1}"}}]}}', needs.runner_names.outputs.linux_ubuntu2204_x64, needs.runner_names.outputs.macos_ios)) }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04"},{"platform":"iOS","os":"macos-14"}]}') }}
 
     steps:
       # persist-credentials:false here too, not just on the addon checkout below:
