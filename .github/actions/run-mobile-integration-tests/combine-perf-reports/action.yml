@@ -23,10 +23,6 @@ inputs:
       generated without it, so they keep every row.
     required: false
     default: ''
-  extra-args:
-    description: 'Extra args appended to the combined aggregate.js call (e.g. "--addon-type vision --device-details").'
-    required: false
-    default: ''
 
 runs:
   using: composite
@@ -65,7 +61,6 @@ runs:
       shell: bash
       env:
         EXCLUDE: ${{ inputs.exclude }}
-        EXTRA_ARGS: ${{ inputs.extra-args }}
       run: |
         if ! find combined-reports -name "performance-report.json" -type f 2>/dev/null | grep -q .; then
           echo "No performance reports found."
@@ -80,16 +75,12 @@ runs:
         if [ -n "$EXCLUDE" ]; then
           EXCLUDE_ARG=(--exclude "$EXCLUDE")
         fi
-        EXTRA_ARGS_ARR=()
-        if [ -n "$EXTRA_ARGS" ]; then
-          read -ra EXTRA_ARGS_ARR <<< "$EXTRA_ARGS"
-        fi
         node scripts/perf-report/aggregate.js \
           --dir combined-reports \
           --output-html combined-output/performance-report-combined.html \
           --output-json combined-output/performance-summary-combined.json \
           --output combined-output/performance-report-combined.md \
-          "${EXCLUDE_ARG[@]}" "${EXTRA_ARGS_ARR[@]}"
+          "${EXCLUDE_ARG[@]}"
 
     - name: Generate per-device HTML reports
       if: always()
