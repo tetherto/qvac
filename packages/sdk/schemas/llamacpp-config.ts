@@ -22,7 +22,9 @@ export const llmConfigBaseSchema = z.object({
   ctx_size: z
     .number()
     .optional()
-    .describe("Context window size in tokens; `0` uses the model's trained context length. Default 1024."),
+    .describe(
+      "Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+    ),
   temp: z.number().min(0).max(2).optional().describe('Sampling temperature (0–2). Default 0.8.'),
   top_p: z
     .number()
@@ -83,7 +85,9 @@ export const llmConfigBaseSchema = z.object({
   stop_sequences: z
     .array(z.string())
     .optional()
-    .describe('Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).'),
+    .describe(
+      'Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).'
+    ),
   n_discarded: z
     .number()
     .optional()
@@ -149,7 +153,9 @@ export const llmConfigBaseSchema = z.object({
     ),
   projectionModelSrc: modelSrcInputSchema
     .optional()
-    .describe('Multimodal projection (mmproj / vision encoder) model source; multimodal models only.'),
+    .describe(
+      'Multimodal projection (mmproj / vision encoder) model source; multimodal models only.'
+    ),
   image_tile_mode: z
     .enum(['disabled', 'batched', 'sequential'])
     .optional()
