@@ -101,6 +101,8 @@ Existing Bare consumers running a custom worker entry can switch packages withou
 +import { nmtPlugin } from "@qvac/bare-sdk/nmtcpp-translation/plugin";
 ```
 
+Two subpaths have no `@qvac/bare-sdk` equivalent. `@qvac/sdk/commands` (the bundler) has no counterpart — bundle from `@qvac/sdk` with `npx qvac bundle`. `@qvac/sdk/worker-core` has no counterpart — bare-sdk has no worker, so register plugins explicitly as shown above. Importing `@qvac/bare-sdk/commands` or `@qvac/bare-sdk/worker-core` throws with this guidance.
+
 If your worker previously relied on the default plugin set (i.e. it never called `registerPlugin`), enumerate the plugins it uses via `plugins([...])` or `registerPlugin(...)` — see [Worker entry example](#worker-entry-example-nmt-only). bare-sdk has no implicit defaults.
 
 ## Behavior differences vs `@qvac/sdk`

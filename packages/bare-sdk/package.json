@@ -77,6 +77,14 @@
       "types": "./dist/models.d.ts",
       "import": "./dist/models.js"
     },
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "import": "./dist/commands.js"
+    },
+    "./worker-core": {
+      "types": "./dist/worker-core.d.ts",
+      "import": "./dist/worker-core.js"
+    },
     "./*/plugin": {
       "types": "./dist/plugins/*.d.ts",
       "import": "./dist/plugins/*.js"
