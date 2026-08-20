@@ -79,9 +79,7 @@ function requireNonNegativeInt32(value, name) {
 }
 function requireMinimaxCfgScale(value) {
     const scale = requireFiniteNumber(value, 'cfgScale');
-    if (scale < 0 ||
-        scale > FLOAT32_MAX ||
-        (scale > 0 && scale < FLOAT32_MIN_POSITIVE)) {
+    if (scale < 0 || scale > FLOAT32_MAX || (scale > 0 && scale < FLOAT32_MIN_POSITIVE)) {
         throw invalidInput('cfgScale must be 0 or a positive float32 value');
     }
     return scale;
@@ -233,9 +231,7 @@ function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
 }
 function validateEngineType(engine) {
-    if (engine !== undefined &&
-        engine !== exports.ENGINE_ACESTEP &&
-        engine !== exports.ENGINE_MINIMAX) {
+    if (engine !== undefined && engine !== exports.ENGINE_ACESTEP && engine !== exports.ENGINE_MINIMAX) {
         throw invalidInput(`engine must be '${exports.ENGINE_ACESTEP}' or '${exports.ENGINE_MINIMAX}'`);
     }
 }
@@ -271,9 +267,6 @@ function validateAcestepOptions(files, config) {
 function validateMinimaxConfig(config) {
     if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
         throw invalidInput('useGPU must be a boolean');
-    }
-    if (config.useGPU === true) {
-        throw invalidInput('MiniMax-Music3 supports CPU inference only');
     }
     if (config.shift !== undefined || config.nGpuLayers !== undefined) {
         throw invalidInput('MiniMax does not accept shift or nGpuLayers');
@@ -461,6 +454,7 @@ class AudioGen {
                 lmModelPath: files.lmModel,
                 synthModelPath: files.synthModel,
                 threads,
+                useGPU: config.useGPU ?? false,
                 backendsDir
             };
         }
@@ -631,9 +625,7 @@ class AudioGen {
             inferenceSteps: opts.inferenceSteps === undefined
                 ? this._defaultInferenceSteps
                 : requireMinimaxInferenceSteps(opts.inferenceSteps),
-            cfgScale: opts.cfgScale === undefined
-                ? this._defaultCfgScale
-                : requireMinimaxCfgScale(opts.cfgScale)
+            cfgScale: opts.cfgScale === undefined ? this._defaultCfgScale : requireMinimaxCfgScale(opts.cfgScale)
         };
     }
     _createAcestepJobData(caption, opts) {

@@ -195,6 +195,7 @@ JSAdapter::buildMinimaxConfig(js::Object configurationParams, js_env_t* env) {
   cfg.synthModelPath =
       readOptionalString(configurationParams, env, "synthModelPath");
   cfg.threads = readRequiredNonNegativeInt(configurationParams, env, "threads");
+  cfg.useGpu = readRequiredBool(configurationParams, env, "useGPU");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }

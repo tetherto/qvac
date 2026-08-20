@@ -9,6 +9,7 @@ struct MinimaxConfig {
   std::string lmModelPath;
   std::string synthModelPath;
   int threads = 0;
+  bool useGpu = false;
   std::string backendsDir;
 };
 

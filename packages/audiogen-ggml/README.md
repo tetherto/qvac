@@ -4,7 +4,7 @@ Generate **music from a text description** with
 [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or
 [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3). ACE-Step
 supports CPU and GPU generation across desktop and mobile. MiniMax-Music3 runs
-on desktop CPUs and returns stereo 44.1 kHz audio.
+on desktop CPUs and GPUs and returns stereo 44.1 kHz audio.
 
 ## How it works
 
@@ -80,8 +80,11 @@ const response = await gen.run('warm cinematic piano with gentle strings', {
 
 `duration` is converted to the model's 25 semantic frames per second. Use
 `maxFrames` instead for direct control. MiniMax-Music3 rejects ACE-Step-only
-controls such as BPM, DiT shift, frozen semantic codes, cover audio, and GPU
-offloading. See
+controls such as BPM, DiT shift, frozen semantic codes, cover audio, and
+`nGpuLayers`. Set `config.useGPU: true` to run the whole model pair on a GPU
+backend (CUDA, Vulkan, Metal — ~22 GB of device memory for the f16 pair); the
+engine falls back to CPU when no usable GPU exists and `stats.backendDevice`
+reports the backend actually used. See
 [`examples/generate-music-minimax.js`](examples/generate-music-minimax.js).
 
 ### 1. Simplest case — an instrumental

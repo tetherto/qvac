@@ -33,7 +33,12 @@ import {
   type AudioGenOutputCallback
 } from './audiogen'
 import { resolveDitModelPath, type DitVariant } from './models'
-import { encodePcm, type EncodeOptions, type EncodedAudio, type OutputFormat } from './lib/audio-format'
+import {
+  encodePcm,
+  type EncodeOptions,
+  type EncodedAudio,
+  type OutputFormat
+} from './lib/audio-format'
 import { ERR_CODES, QvacErrorAudioGen } from './error'
 
 export const ENGINE_ACESTEP = 'acestep'
@@ -76,8 +81,13 @@ export interface AudioGenRuntimeConfig {
   cfgScale?: number
   /** 0 = engine auto-picks per DiT architecture (turbo 3.0 / sft 1.0). */
   shift?: number
+  /**
+   * Run on a GPU backend (CUDA, Vulkan, Metal, ...) when one is usable; falls
+   * back to CPU otherwise — `stats.backendDevice` reports the backend actually
+   * in use. MiniMax puts the whole model pair on the device (~22 GB for f16).
+   */
   useGPU?: boolean
-  /** GPU layers to offload when `useGPU` is set (99 = all). Ignored when off. */
+  /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
   nGpuLayers?: number
   /** 0 = engine auto-picks. */
   threads?: number
@@ -298,7 +308,7 @@ interface NativeAudiogenData {
   progressTotal?: number
 }
 
-function asNativeData (data: unknown): NativeAudiogenData | null {
+function asNativeData(data: unknown): NativeAudiogenData | null {
   if (typeof data !== 'object' || data === null) return null
   // `object` is assignable to NativeAudiogenData (every field is optional); the
   // per-field `typeof` guards below do the real runtime narrowing.
@@ -309,7 +319,7 @@ function asNativeData (data: unknown): NativeAudiogenData | null {
 // NaN/Infinity to an integer is undefined behavior. Reject non-finite (and
 // non-integer, where required) values on the JS side with a clear error before
 // they ever reach C++.
-function requireFiniteNumber (value: number, name: string, integer = false): number {
+function requireFiniteNumber(value: number, name: string, integer = false): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw invalidInput(`${name} must be a finite number, got ${value}`)
   }
@@ -319,7 +329,7 @@ function requireFiniteNumber (value: number, name: string, integer = false): num
   return value
 }
 
-function optionalFiniteNumber (
+function optionalFiniteNumber(
   value: number | undefined,
   name: string,
   integer = false
@@ -327,7 +337,7 @@ function optionalFiniteNumber (
   return value === undefined ? undefined : requireFiniteNumber(value, name, integer)
 }
 
-function requireSafeInteger (value: number, name: string): number {
+function requireSafeInteger(value: number, name: string): number {
   requireFiniteNumber(value, name, true)
   if (!Number.isSafeInteger(value)) {
     throw invalidInput(`${name} must be a safe integer, got ${value}`)
@@ -335,17 +345,15 @@ function requireSafeInteger (value: number, name: string): number {
   return value
 }
 
-function requireMinimaxInferenceSteps (value: number): number {
+function requireMinimaxInferenceSteps(value: number): number {
   const steps = requireSafeInteger(value, 'inferenceSteps')
   if (steps < 0 || steps > MINIMAX_MAX_INFERENCE_STEPS) {
-    throw invalidInput(
-      `inferenceSteps must be between 0 and ${MINIMAX_MAX_INFERENCE_STEPS}`
-    )
+    throw invalidInput(`inferenceSteps must be between 0 and ${MINIMAX_MAX_INFERENCE_STEPS}`)
   }
   return steps
 }
 
-function requireNonNegativeInt32 (value: number, name: string): number {
+function requireNonNegativeInt32(value: number, name: string): number {
   const integer = requireSafeInteger(value, name)
   if (integer < 0 || integer > INT32_MAX) {
     throw invalidInput(`${name} must be between 0 and ${INT32_MAX}`)
@@ -353,13 +361,9 @@ function requireNonNegativeInt32 (value: number, name: string): number {
   return integer
 }
 
-function requireMinimaxCfgScale (value: number): number {
+function requireMinimaxCfgScale(value: number): number {
   const scale = requireFiniteNumber(value, 'cfgScale')
-  if (
-    scale < 0 ||
-    scale > FLOAT32_MAX ||
-    (scale > 0 && scale < FLOAT32_MIN_POSITIVE)
-  ) {
+  if (scale < 0 || scale > FLOAT32_MAX || (scale > 0 && scale < FLOAT32_MIN_POSITIVE)) {
     throw invalidInput('cfgScale must be 0 or a positive float32 value')
   }
   return scale
@@ -371,7 +375,7 @@ const LATENT_FRAME_SECONDS = 1 / AUDIO_LATENT_RATE
 const REPAINT_RANGE_EPSILON_SECONDS = 1e-5
 const FLOW_EDIT_TURBO_VARIANTS = 'turbo-q4, turbo-q8'
 
-function optionalTaskType (value: string | undefined): string | undefined {
+function optionalTaskType(value: string | undefined): string | undefined {
   if (value === undefined) return undefined
   if (typeof value !== 'string' || !GENERATE_TASK_TYPES.has(value)) {
     throw invalidInput('taskType must be one of text2music|cover|cover-nofsq')
@@ -379,7 +383,7 @@ function optionalTaskType (value: string | undefined): string | undefined {
   return value
 }
 
-function requireFinitePcm (value: Float32Array, name: string): void {
+function requireFinitePcm(value: Float32Array, name: string): void {
   for (const sample of value) {
     if (!Number.isFinite(sample)) {
       throw invalidInput(`${name} must contain only finite samples`)
@@ -387,7 +391,7 @@ function requireFinitePcm (value: Float32Array, name: string): void {
   }
 }
 
-function requireNormalizedPcm (value: Float32Array, name: string): void {
+function requireNormalizedPcm(value: Float32Array, name: string): void {
   for (const sample of value) {
     if (!Number.isFinite(sample) || sample < -1 || sample > 1) {
       throw invalidInput(`${name} must contain finite samples in [-1, 1]`)
@@ -395,7 +399,7 @@ function requireNormalizedPcm (value: Float32Array, name: string): void {
   }
 }
 
-function int16ToNormalizedFloat32 (pcm: Int16Array): Float32Array {
+function int16ToNormalizedFloat32(pcm: Int16Array): Float32Array {
   const converted = new Float32Array(pcm.length)
   for (let i = 0; i < pcm.length; ++i) {
     const sample = pcm[i]
@@ -404,25 +408,18 @@ function int16ToNormalizedFloat32 (pcm: Int16Array): Float32Array {
   return converted
 }
 
-function isSftDit (
-  ditVariant: DitVariant | undefined,
-  ditModelPath: string | undefined
-): boolean {
+function isSftDit(ditVariant: DitVariant | undefined, ditModelPath: string | undefined): boolean {
   if (ditVariant === 'sft') return true
   if (ditModelPath === undefined) return false
   const file = ditModelPath.split(/[/\\]/).pop() ?? ''
   return /(?:^|[^a-z])sft(?:[^a-z]|$)/i.test(file.replace(/\.gguf$/i, ''))
 }
 
-function sourceDurationSeconds (source: AudioEditSource): number {
+function sourceDurationSeconds(source: AudioEditSource): number {
   return source.pcm.length / source.channels / source.sampleRate
 }
 
-function requireRepaintRange (
-  source: AudioEditSource,
-  start: number,
-  end: number
-): void {
+function requireRepaintRange(source: AudioEditSource, start: number, end: number): void {
   const duration = sourceDurationSeconds(source)
   const resolvedEnd = end === -1 ? duration : end
   if (start > duration + REPAINT_RANGE_EPSILON_SECONDS) {
@@ -436,7 +433,7 @@ function requireRepaintRange (
   }
 }
 
-function optionalStereoPcm (
+function optionalStereoPcm(
   value: Float32Array | undefined,
   name: string
 ): Float32Array | undefined {
@@ -451,7 +448,7 @@ function optionalStereoPcm (
   return value
 }
 
-function requireEditSource (source: AudioEditSource): Float32Array {
+function requireEditSource(source: AudioEditSource): Float32Array {
   if (typeof source !== 'object' || source === null) {
     throw invalidInput('edit source must be an audio source object')
   }
@@ -477,7 +474,7 @@ function requireEditSource (source: AudioEditSource): Float32Array {
   return int16ToNormalizedFloat32(source.pcm)
 }
 
-function requirePrompt (prompt: AudioEditPrompt, name: string): AudioEditPrompt {
+function requirePrompt(prompt: AudioEditPrompt, name: string): AudioEditPrompt {
   if (typeof prompt !== 'object' || prompt === null) {
     throw invalidInput(`${name} must be an object`)
   }
@@ -490,15 +487,15 @@ function requirePrompt (prompt: AudioEditPrompt, name: string): AudioEditPrompt 
   return prompt
 }
 
-function isCoverTask (taskType: string | undefined): boolean {
+function isCoverTask(taskType: string | undefined): boolean {
   return taskType === 'cover' || taskType === 'cover-nofsq'
 }
 
-function invalidInput (message: string): QvacErrorAudioGen {
+function invalidInput(message: string): QvacErrorAudioGen {
   return new QvacErrorAudioGen({ code: ERR_CODES.INVALID_INPUT, adds: message })
 }
 
-function errorMessage (error: unknown): string {
+function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
@@ -530,21 +527,17 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'coverNoiseStrength'
 ]
 
-function hasAnyFile (files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
+function hasAnyFile(files: AudioGenFiles, keys: Array<keyof AudioGenFiles>): boolean {
   return keys.some((key) => files[key] !== undefined)
 }
 
-function validateEngineType (engine: string | undefined): void {
-  if (
-    engine !== undefined &&
-    engine !== ENGINE_ACESTEP &&
-    engine !== ENGINE_MINIMAX
-  ) {
+function validateEngineType(engine: string | undefined): void {
+  if (engine !== undefined && engine !== ENGINE_ACESTEP && engine !== ENGINE_MINIMAX) {
     throw invalidInput(`engine must be '${ENGINE_ACESTEP}' or '${ENGINE_MINIMAX}'`)
   }
 }
 
-export function detectEngineType (
+export function detectEngineType(
   files: AudioGenFiles = {},
   explicitEngine?: AudioGenEngine
 ): AudioGenEngine {
@@ -554,7 +547,7 @@ export function detectEngineType (
   return ENGINE_ACESTEP
 }
 
-function validateMinimaxFiles (files: AudioGenFiles): void {
+function validateMinimaxFiles(files: AudioGenFiles): void {
   if (hasAnyFile(files, ACESTEP_FILE_KEYS)) {
     throw invalidInput('MiniMax does not accept ACE-Step text encoder, DiT, or VAE files')
   }
@@ -569,10 +562,7 @@ function validateMinimaxFiles (files: AudioGenFiles): void {
   }
 }
 
-function validateAcestepOptions (
-  files: AudioGenFiles,
-  config: AudioGenRuntimeConfig
-): void {
+function validateAcestepOptions(files: AudioGenFiles, config: AudioGenRuntimeConfig): void {
   if (files.synthModel !== undefined) {
     throw invalidInput('ACE-Step does not accept synthModel')
   }
@@ -581,19 +571,16 @@ function validateAcestepOptions (
   }
 }
 
-function validateMinimaxConfig (config: AudioGenRuntimeConfig): void {
+function validateMinimaxConfig(config: AudioGenRuntimeConfig): void {
   if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
     throw invalidInput('useGPU must be a boolean')
-  }
-  if (config.useGPU === true) {
-    throw invalidInput('MiniMax-Music3 supports CPU inference only')
   }
   if (config.shift !== undefined || config.nGpuLayers !== undefined) {
     throw invalidInput('MiniMax does not accept shift or nGpuLayers')
   }
 }
 
-function assertNoAcestepGenerateOptions (options: GenerateOptions): void {
+function assertNoAcestepGenerateOptions(options: GenerateOptions): void {
   for (const key of ACESTEP_GENERATE_KEYS) {
     if (options[key] !== undefined) {
       throw invalidInput(`MiniMax does not accept ${key}`)
@@ -601,7 +588,7 @@ function assertNoAcestepGenerateOptions (options: GenerateOptions): void {
   }
 }
 
-function assertNoMinimaxGenerateOptions (options: GenerateOptions): void {
+function assertNoMinimaxGenerateOptions(options: GenerateOptions): void {
   if (
     options.maxFrames !== undefined ||
     options.inferenceSteps !== undefined ||
@@ -611,7 +598,7 @@ function assertNoMinimaxGenerateOptions (options: GenerateOptions): void {
   }
 }
 
-function resolveMinimaxMaxFrames (options: GenerateOptions): number {
+function resolveMinimaxMaxFrames(options: GenerateOptions): number {
   if (options.maxFrames !== undefined && options.duration !== undefined) {
     throw invalidInput('MiniMax accepts either maxFrames or duration, not both')
   }
@@ -623,16 +610,13 @@ function resolveMinimaxMaxFrames (options: GenerateOptions): number {
   if (options.duration !== undefined) {
     const duration = requireFiniteNumber(options.duration, 'duration')
     if (duration <= 0) throw invalidInput('duration must be greater than 0')
-    const frames = Math.max(
-      MINIMAX_MIN_FRAMES,
-      Math.round(duration * MINIMAX_FRAMES_PER_SECOND)
-    )
+    const frames = Math.max(MINIMAX_MIN_FRAMES, Math.round(duration * MINIMAX_FRAMES_PER_SECOND))
     return requireSafeInteger(frames, 'duration-derived maxFrames')
   }
   return MINIMAX_DEFAULT_MAX_FRAMES
 }
 
-function isMobilePlatform (): boolean {
+function isMobilePlatform(): boolean {
   const platform = os.platform()
   return platform === 'android' || platform === 'ios'
 }
@@ -651,14 +635,14 @@ export class AudioEditSession {
   private readonly _operations: AudioEditOperationData[] = []
   private _started = false
 
-  constructor (
+  constructor(
     private readonly _source: AudioEditSource,
     private readonly _runner: EditRunner,
     private readonly _allowFlowEdit: boolean
   ) {}
 
   /** Append a Flow-Edit operation. v1 supports turbo DiT only. */
-  flowEdit (options: FlowEditOptions): this {
+  flowEdit(options: FlowEditOptions): this {
     if (this._started) throw invalidInput('cannot modify an edit session after run()')
     if (!this._allowFlowEdit) {
       throw invalidInput(
@@ -691,12 +675,12 @@ export class AudioEditSession {
   }
 
   /** Alias for `flowEdit()` so `.edit().repaint().edit()` reads naturally. */
-  edit (options: FlowEditOptions): this {
+  edit(options: FlowEditOptions): this {
     return this.flowEdit(options)
   }
 
   /** Append a timeline Repaint operation. */
-  repaint (options: RepaintOptions): this {
+  repaint(options: RepaintOptions): this {
     if (this._started) throw invalidInput('cannot modify an edit session after run()')
     const prompt = requirePrompt(options, 'repaint')
     const start = requireFiniteNumber(options.start, 'repaint.start')
@@ -726,9 +710,7 @@ export class AudioEditSession {
     return this
   }
 
-  async run (
-    options: AudioEditRunOptions = {}
-  ): Promise<QvacResponse<AudiogenOutputChunk>> {
+  async run(options: AudioEditRunOptions = {}): Promise<QvacResponse<AudiogenOutputChunk>> {
     if (this._started) throw invalidInput('edit session run() may only be called once')
     if (this._operations.length === 0) {
       throw invalidInput('edit session requires at least one edit or repaint operation')
@@ -770,7 +752,7 @@ export class AudioGen {
   private _cancellingResponse: QvacResponse<AudiogenOutputChunk> | null
   private _cancelTerminalResolve: (() => void) | null
 
-  constructor (options: AudioGenOptions = {}) {
+  constructor(options: AudioGenOptions = {}) {
     this._logger = new QvacLogger(options.logger)
     const files = options.files ?? {}
     const config = options.config ?? {}
@@ -785,9 +767,7 @@ export class AudioGen {
       }
       validateMinimaxFiles(files)
       validateMinimaxConfig(config)
-      this._defaultInferenceSteps = requireMinimaxInferenceSteps(
-        config.inferenceSteps ?? 0
-      )
+      this._defaultInferenceSteps = requireMinimaxInferenceSteps(config.inferenceSteps ?? 0)
       this._defaultCfgScale = requireMinimaxCfgScale(config.cfgScale ?? 0)
       this._configuration = {
         engineType: ENGINE_MINIMAX,
@@ -795,6 +775,7 @@ export class AudioGen {
         lmModelPath: files.lmModel,
         synthModelPath: files.synthModel,
         threads,
+        useGPU: config.useGPU ?? false,
         backendsDir
       }
     } else {
@@ -839,21 +820,18 @@ export class AudioGen {
   }
 
   /** Create the native engine and load its GGUF files. Idempotent. */
-  async load (): Promise<void> {
+  async load(): Promise<void> {
     const revision = this._lifecycleRevision
     return this._runExclusive(() => this._load(revision))
   }
 
-  private async _load (revision: number): Promise<void> {
+  private async _load(revision: number): Promise<void> {
     if (revision !== this._lifecycleRevision || this._destroyed) {
       throw this._lifecycleError()
     }
     if (this.addon) return
     this._logger.info(`audiogen-ggml: loading ${this._engineType} engine`)
-    const addon = this._createAddon(
-      this._configuration,
-      this._addonOutputCallback.bind(this)
-    )
+    const addon = this._createAddon(this._configuration, this._addonOutputCallback.bind(this))
     this.addon = addon
     // If activation fails, tear down the half-initialized native handle and
     // clear `this.addon` so a later load() can retry instead of no-op'ing on a
@@ -884,7 +862,10 @@ export class AudioGen {
    * Generate music from a text prompt. Returns a `QvacResponse` that streams
    * progress ticks + the PCM chunk and resolves (`await()`) with the run stats.
    */
-  async run (caption: string, opts: GenerateOptions = {}): Promise<QvacResponse<AudiogenOutputChunk>> {
+  async run(
+    caption: string,
+    opts: GenerateOptions = {}
+  ): Promise<QvacResponse<AudiogenOutputChunk>> {
     const jobData = this._createJobData(caption, opts)
     const revision = this._lifecycleRevision
     return new Promise((resolve, reject) => {
@@ -900,7 +881,7 @@ export class AudioGen {
    * be repeated and are executed in the exact order in which they are chained.
    * Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`).
    */
-  edit (source: AudioEditSource): AudioEditSession {
+  edit(source: AudioEditSource): AudioEditSession {
     if (this._engineType === ENGINE_MINIMAX) {
       throw invalidInput('MiniMax-Music3 does not support audio editing')
     }
@@ -911,7 +892,7 @@ export class AudioGen {
     )
   }
 
-  private async _runEdit (
+  private async _runEdit(
     source: AudioEditSource,
     operations: readonly AudioEditOperationData[],
     options: AudioEditRunOptions
@@ -933,7 +914,7 @@ export class AudioGen {
     })
   }
 
-  private async _admitAndWait (
+  private async _admitAndWait(
     jobData: AudioGenJobData,
     revision: number,
     resolve: (response: QvacResponse<AudiogenOutputChunk>) => void,
@@ -969,7 +950,7 @@ export class AudioGen {
     } catch {}
   }
 
-  private _createJobData (caption: string, opts: GenerateOptions): AudioGenJobData {
+  private _createJobData(caption: string, opts: GenerateOptions): AudioGenJobData {
     if (typeof caption !== 'string' || caption.trim().length === 0) {
       throw invalidInput('caption must be a non-empty string')
     }
@@ -982,10 +963,7 @@ export class AudioGen {
     return this._createAcestepJobData(caption, opts)
   }
 
-  private _createMinimaxJobData (
-    caption: string,
-    opts: GenerateOptions
-  ): AudioGenJobData {
+  private _createMinimaxJobData(caption: string, opts: GenerateOptions): AudioGenJobData {
     assertNoAcestepGenerateOptions(opts)
     return {
       type: 'text',
@@ -998,16 +976,11 @@ export class AudioGen {
           ? this._defaultInferenceSteps
           : requireMinimaxInferenceSteps(opts.inferenceSteps),
       cfgScale:
-        opts.cfgScale === undefined
-          ? this._defaultCfgScale
-          : requireMinimaxCfgScale(opts.cfgScale)
+        opts.cfgScale === undefined ? this._defaultCfgScale : requireMinimaxCfgScale(opts.cfgScale)
     }
   }
 
-  private _createAcestepJobData (
-    caption: string,
-    opts: GenerateOptions
-  ): AudioGenJobData {
+  private _createAcestepJobData(caption: string, opts: GenerateOptions): AudioGenJobData {
     assertNoMinimaxGenerateOptions(opts)
     if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
       throw invalidInput('lmPhase1 must be a boolean')
@@ -1051,13 +1024,11 @@ export class AudioGen {
     }
   }
 
-  async cancel (): Promise<void> {
+  async cancel(): Promise<void> {
     const response = this._job.active
     if (!response) return
     if (this._cancelPromise) return this._cancelPromise
-    const cancellation = this._cancelActiveResponse(
-      response as QvacResponse<AudiogenOutputChunk>
-    )
+    const cancellation = this._cancelActiveResponse(response as QvacResponse<AudiogenOutputChunk>)
     this._cancelPromise = cancellation
     const cancellationError = new QvacErrorAudioGen({ code: ERR_CODES.CANCELLED })
     try {
@@ -1070,9 +1041,7 @@ export class AudioGen {
     }
   }
 
-  private async _cancelActiveResponse (
-    response: QvacResponse<AudiogenOutputChunk>
-  ): Promise<void> {
+  private async _cancelActiveResponse(response: QvacResponse<AudiogenOutputChunk>): Promise<void> {
     this._cancellingResponse = response
     const terminal = new Promise<void>((resolve) => {
       this._cancelTerminalResolve = resolve
@@ -1087,17 +1056,17 @@ export class AudioGen {
     }
   }
 
-  async unload (): Promise<void> {
+  async unload(): Promise<void> {
     await this._stop(new QvacErrorAudioGen({ code: ERR_CODES.MODEL_UNLOADED }))
   }
 
-  async destroy (): Promise<void> {
+  async destroy(): Promise<void> {
     if (this._destroyed) return
     this._destroyed = true
     await this._stop(new QvacErrorAudioGen({ code: ERR_CODES.INSTANCE_DESTROYED }))
   }
 
-  private async _stop (settlementError: QvacErrorAudioGen): Promise<void> {
+  private async _stop(settlementError: QvacErrorAudioGen): Promise<void> {
     this._lifecycleRevision++
     const addon = this.addon
     this.addon = null
@@ -1142,9 +1111,9 @@ export class AudioGen {
    * format for one file, or an array to produce several at once (input order).
    * See {@link OUTPUT_FORMATS} for the allowed values.
    */
-  static encode (pcm: Uint8Array, format?: OutputFormat, opts?: EncodeOptions): EncodedAudio
-  static encode (pcm: Uint8Array, formats: OutputFormat[], opts?: EncodeOptions): EncodedAudio[]
-  static encode (
+  static encode(pcm: Uint8Array, format?: OutputFormat, opts?: EncodeOptions): EncodedAudio
+  static encode(pcm: Uint8Array, formats: OutputFormat[], opts?: EncodeOptions): EncodedAudio[]
+  static encode(
     pcm: Uint8Array,
     formats?: OutputFormat | OutputFormat[],
     opts?: EncodeOptions
@@ -1152,12 +1121,12 @@ export class AudioGen {
     return encodePcm(pcm, formats, opts)
   }
 
-  static getModelKey (_params?: unknown): string {
+  static getModelKey(_params?: unknown): string {
     void _params
     return 'audiogen-ggml'
   }
 
-  private _createAddon (
+  private _createAddon(
     configuration: AudioGenConfigurationParams,
     outputCallback: AudioGenOutputCallback
   ): AudioGenInterface {
@@ -1166,7 +1135,7 @@ export class AudioGen {
     return new AudioGenInterface(binding, configuration, outputCallback)
   }
 
-  private _addonOutputCallback (
+  private _addonOutputCallback(
     _handle: unknown,
     _event: unknown,
     data: unknown,
@@ -1229,18 +1198,18 @@ export class AudioGen {
     }
   }
 
-  private _requireAddon (): AudioGenInterface {
+  private _requireAddon(): AudioGenInterface {
     if (!this.addon) throw this._lifecycleError()
     return this.addon
   }
 
-  private _lifecycleError (): QvacErrorAudioGen {
+  private _lifecycleError(): QvacErrorAudioGen {
     return new QvacErrorAudioGen({
       code: this._destroyed ? ERR_CODES.INSTANCE_DESTROYED : ERR_CODES.NOT_LOADED
     })
   }
 
-  private _failedCancelError (error: unknown): QvacErrorAudioGen {
+  private _failedCancelError(error: unknown): QvacErrorAudioGen {
     return new QvacErrorAudioGen({
       code: ERR_CODES.FAILED_TO_CANCEL,
       adds: errorMessage(error),

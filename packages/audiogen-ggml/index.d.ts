@@ -33,8 +33,13 @@ export interface AudioGenRuntimeConfig {
     cfgScale?: number;
     /** 0 = engine auto-picks per DiT architecture (turbo 3.0 / sft 1.0). */
     shift?: number;
+    /**
+     * Run on a GPU backend (CUDA, Vulkan, Metal, ...) when one is usable; falls
+     * back to CPU otherwise — `stats.backendDevice` reports the backend actually
+     * in use. MiniMax puts the whole model pair on the device (~22 GB for f16).
+     */
     useGPU?: boolean;
-    /** GPU layers to offload when `useGPU` is set (99 = all). Ignored when off. */
+    /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
     nGpuLayers?: number;
     /** 0 = engine auto-picks. */
     threads?: number;

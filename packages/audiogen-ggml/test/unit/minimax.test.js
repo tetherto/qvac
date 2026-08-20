@@ -109,6 +109,12 @@ test('AudioGen configures the MiniMax native engine', (t) => {
   t.is(gen._configuration.lmModelPath, '/models/mm3-lm-q8.gguf')
   t.is(gen._configuration.synthModelPath, '/models/mm3-synth-q8.gguf')
   t.is(gen._configuration.threads, 6)
+  t.is(gen._configuration.useGPU, false)
+})
+
+test('AudioGen forwards MiniMax useGPU to the native engine', (t) => {
+  const { gen } = createHarness({ config: { useGPU: true } })
+  t.is(gen._configuration.useGPU, true)
 })
 
 test('AudioGen forwards MiniMax frame and flow controls', async (t) => {
@@ -156,15 +162,6 @@ test('AudioGen uses the MiniMax default frame cap', async (t) => {
 })
 
 test('AudioGen rejects unsupported MiniMax construction options', (t) => {
-  t.exception(
-    () =>
-      new AudioGen({
-        engine: ENGINE_MINIMAX,
-        files: { modelDir: '/models/minimax' },
-        config: { useGPU: true }
-      }),
-    /CPU inference only/
-  )
   t.exception(
     () =>
       new AudioGen({

@@ -12,6 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add desktop CPU support for MiniMax-Music3 through local LM and synthesis
   GGUF files, with engine-specific validation, progress, cancellation, runtime
   statistics, and a skippable model-backed integration regression.
+- Add desktop GPU support for MiniMax-Music3 via `config.useGPU`: the model
+  pair runs on the first usable ggml GPU backend (CUDA, Vulkan, Metal) with
+  CPU fallback, and `stats.backendDevice`/`backendId` report the backend
+  actually in use.
+
+### Fixed
+
+- MiniMax-Music3 produced tonal noise instead of music: the pinned
+  `speech-cpp` engine negated the flow DiT velocity (vestigial
+  `mm3.dit.output_negated` GGUF metadata) and reused a condition upload the
+  graph allocator had recycled, so every flow step after the first ran on
+  garbage conditioning. Both are fixed in `speech-cpp` `2026-08-20`
+  (qvac-ext-lib-whisper.cpp PR #158); the native replay of the official
+  Diffusers prompt/codes/noise now reproduces the official mix at 0.9993
+  audio correlation.
 - Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
   chain order and can be mixed or repeated. The source is interleaved stereo PCM
   at 48 kHz (`Float32Array` samples in `[-1, 1]`, or addon-output `Int16Array`).

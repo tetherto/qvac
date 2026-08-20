@@ -18,9 +18,30 @@ constexpr float K_INT16_MINIMUM = -32768.0F;
 constexpr float K_TARGET_PEAK = 0.9F;
 constexpr float K_MINIMUM_NORMALIZATION_PEAK = 1e-3F;
 constexpr int64_t K_BACKEND_DEVICE_CPU = 0;
-constexpr int64_t K_BACKEND_ID_CPU = 0;
+constexpr int64_t K_BACKEND_DEVICE_GPU = 1;
 constexpr int K_STEREO_CHANNELS = 2;
 constexpr double K_MILLISECONDS_PER_SECOND = 1000.0;
+
+// Mirrors tts-ggml's BackendUtils.hpp mapping (and AcestepModel.cpp) so the
+// codes the engines report cannot drift apart. Metal registers as "MTL" on
+// newer ggml.
+int64_t backendIdFromName(const std::string& name) {
+  if (name == "CPU")
+    return 0;
+  if (name.rfind("Metal", 0) == 0 || name.rfind("MTL", 0) == 0)
+    return 1;
+  if (name.rfind("CUDA", 0) == 0)
+    return 2;
+  if (name.rfind("Vulkan", 0) == 0)
+    return 3;
+  if (name.rfind("OpenCL", 0) == 0)
+    return 4;
+  return 99;
+}
+
+int64_t backendDeviceFromName(const std::string& name) {
+  return name == "CPU" ? K_BACKEND_DEVICE_CPU : K_BACKEND_DEVICE_GPU;
+}
 
 class CancellationReset {
 public:
@@ -115,11 +136,15 @@ void MinimaxModel::loadLocked() {
   options.lm_model_path = config_.lmModelPath;
   options.synth_model_path = config_.synthModelPath;
   options.n_threads = config_.threads;
+  // "gpu" falls back to CPU with a warning when no usable GPU backend exists;
+  // runtimeStats reports the backend actually in use.
+  options.device = config_.useGpu ? "gpu" : "cpu";
   options.backends_dir = resolveBackendsDir(config_.backendsDir);
   engine_ = tts_cpp::minimax::Engine::create(options);
   if (!engine_) {
     throw std::runtime_error("MinimaxModel: failed to create MiniMax engine");
   }
+  backendName_ = engine_->backend_name();
   sampleRate_ = engine_->sample_rate();
   channels_ = K_STEREO_CHANNELS;
 }
@@ -207,8 +232,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats MinimaxModel::runtimeStats() const {
   stats.emplace_back("totalTimeMs", totalTimeMs_);
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
-  stats.emplace_back("backendDevice", K_BACKEND_DEVICE_CPU);
-  stats.emplace_back("backendId", K_BACKEND_ID_CPU);
+  stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
+  stats.emplace_back("backendId", backendIdFromName(backendName_));
   return stats;
 }
 

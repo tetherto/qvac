@@ -79,6 +79,7 @@ private:
   double realTimeFactor_ = 0.0;
   int sampleRate_ = 0;
   int channels_ = 0;
+  std::string backendName_ = "CPU";
 };
 
 } // namespace qvac::audiogenggml::minimax
