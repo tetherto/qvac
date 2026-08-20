@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qvac-audiogen-diffusers"
+version = "0.1.0"
+description = "Official CUDA Diffusers worker for QVAC MiniMax-Music3"
+requires-python = ">=3.10"
+dependencies = [
+  "accelerate",
+  "diffusers @ git+https://github.com/huggingface/diffusers@9cdd65902a576493acea190d6bc115afb41d4709",
+  "huggingface-hub",
+  "numpy",
+  "safetensors",
+  "torch",
+  "transformers"
+]
+
+[tool.setuptools.packages.find]
+include = ["qvac_audiogen_diffusers*"]
