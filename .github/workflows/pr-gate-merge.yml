@@ -10,15 +10,6 @@ on:
       - ready_for_review
     branches:
       - main
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled
-      - ready_for_review
-    branches:
-      - feature-nx-workflow-consolidation
   workflow_dispatch:
 
 permissions:
@@ -67,7 +58,7 @@ jobs:
           github-token: ${{ github.token }}
 
   changes:
-    if: github.event_name == 'pull_request_target' || github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
