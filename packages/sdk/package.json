@@ -124,6 +124,11 @@
       "types": "./dist/schemas/plugin.d.ts",
       "import": "./dist/schemas/plugin.js"
     },
+    "./schemas": {
+      "types": "./dist/schemas/public.d.ts",
+      "import": "./dist/schemas/public.js",
+      "require": "./dist/schemas/public.js"
+    },
     "./expo-plugin": "./dist/expo/plugins/index.js",
     "./electron-forge": {
       "require": "./electron-forge/index.cjs",
