@@ -1136,17 +1136,16 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   )
 })
 
-test('on-pr-nx matrix job loads nx-project-matrix from a trusted base/default ref and reads config off it, never PR head', () => {
+test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head', () => {
   const source = read('.github/workflows/on-pr-nx.yml')
   const matrix = jobBlock(source, 'matrix')
 
-  // (i) The composite that computes the matrix executes from a sparse checkout of
-  // a TRUSTED ref, pinned BEFORE `uses: ./.github/actions/nx-project-matrix`. The
-  // trusted ref is the PR BASE branch (maintainer-controlled), falling back to the
-  // default branch for non-PR (workflow_dispatch) runs. It must NEVER be the PR
-  // head — that would let a fork swap the action body (an RCE surface once the
-  // trigger flips to pull_request_target). base.ref (not default_branch alone) is
-  // used so the action + project.json resolve while the consolidation is unmerged.
+  // (i) The composite that computes the matrix executes from a FULL (non-sparse)
+  // checkout of the trusted DEFAULT branch, pinned BEFORE `uses: ./…`. Never the
+  // PR head — that would let a fork swap the action body (RCE under
+  // pull_request_target). Non-sparse: a sparse checkout leaks sparse config into
+  // the action's own internal checkout and starves it of the root package.json
+  // (pnpm pin) -> pnpm/action-setup "No pnpm version is specified".
   const checkoutRefLine = matrix
     .split('\n')
     .find((line) => line.trim().startsWith('ref:'))
@@ -1158,23 +1157,13 @@ test('on-pr-nx matrix job loads nx-project-matrix from a trusted base/default re
   )
   assert.match(
     checkoutRefLine,
-    /github\.event\.pull_request\.base\.ref/,
-    'matrix checkout ref uses the trusted PR base ref (resolves pre-merge)',
-  )
-  assert.match(
-    checkoutRefLine,
     /github\.event\.repository\.default_branch/,
-    'matrix checkout ref falls back to the trusted default branch',
+    'matrix checkout ref is the trusted default branch',
   )
-  assert.match(
+  assert.doesNotMatch(
     matrix,
     /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
-    'matrix job must sparse-checkout only .github/actions/nx-project-matrix',
-  )
-  assert.match(
-    matrix,
-    /sparse-checkout-cone-mode:\s*false/,
-    'matrix job must disable cone mode so the single path resolves',
+    'matrix job must NOT sparse-checkout (sparse config leaks into the action checkout and breaks the pnpm pin)',
   )
   assert.match(
     matrix,
@@ -1183,19 +1172,18 @@ test('on-pr-nx matrix job loads nx-project-matrix from a trusted base/default re
   )
 
   const trustedCheckoutIndex = matrix.search(
-    /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
+    /uses: actions\/checkout@[0-9a-f]{40}/,
   )
   const usesIndex = matrix.indexOf('uses: ./.github/actions/nx-project-matrix')
   assert.notEqual(usesIndex, -1, 'matrix job runs the nx-project-matrix composite')
   assert.ok(
     trustedCheckoutIndex !== -1 && trustedCheckoutIndex < usesIndex,
-    'the trusted (base/default) checkout must precede `uses: ./.github/actions/nx-project-matrix`',
+    'the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`',
   )
 
-  // (ii) The options.ci config source (config-ref) must resolve to a trusted
-  // ref (PR base branch, default branch, or a dispatch override), never to any
-  // PR-head expression — otherwise a fork could point the trusted git-show read
-  // at its own tree.
+  // (ii) The options.ci config source (config-ref) must resolve to the trusted
+  // default branch (or a dispatch override), never to any PR-head expression —
+  // otherwise a fork could point the trusted git-show read at its own tree.
   const configRefLine = matrix
     .split('\n')
     .find((line) => line.trim().startsWith('config-ref:'))
@@ -1208,7 +1196,7 @@ test('on-pr-nx matrix job loads nx-project-matrix from a trusted base/default re
   assert.match(
     configRefLine,
     /github\.event\.repository\.default_branch/,
-    'config-ref falls back to the trusted default branch',
+    'config-ref resolves to the trusted default branch',
   )
 })
 

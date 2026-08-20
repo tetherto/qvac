@@ -2,7 +2,11 @@
 name: On PR Trigger (nx)
 
 on:
-  pull_request:
+  # Elevated trigger: the matrix job loads the action + reads options.ci from the
+  # trusted default branch (never PR head), and every code-running job gates on
+  # fork-approval + authorize, so running in the base (secrets-bearing) context is
+  # safe. Enforced by ci-trust-policy.test.mjs.
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
     paths:
@@ -116,18 +120,24 @@ jobs:
       # action + project.json while the consolidation is unmerged, so on-pr-nx is green
       # pre-merge. Falls back to default_branch for non-PR (workflow_dispatch) runs, and
       # collapses to default_branch once the consolidation lands on main.
-      - name: Checkout nx-project-matrix composite (trusted base ref)
+      # Load the action + read options.ci ONLY from the trusted default branch
+      # (never PR head) — the fork-safe source for pull_request_target. Full
+      # (non-sparse) checkout: a sparse checkout leaves sparse config that leaks
+      # into the action's own internal checkout, starving it of the root
+      # package.json (pnpm pin) -> pnpm/action-setup "No pnpm version is specified".
+      # config_ref_override is for interim testing before the consolidation lands
+      # on main; until then this job is expected to be red on the feature PRs
+      # (main does not yet carry the action / project.json).
+      - name: Checkout nx-project-matrix composite (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/nx-project-matrix
-          sparse-checkout-cone-mode: false
+          ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - id: compute
         uses: ./.github/actions/nx-project-matrix
         with:
           target: on-pr
-          config-ref: ${{ inputs.config_ref_override || github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          config-ref: ${{ inputs.config_ref_override || github.event.repository.default_branch }}
       - id: filter
         shell: bash
         env:
@@ -152,7 +162,7 @@ jobs:
   # their carve-out packages internally), so on-pr calls them uniformly. On
   # pull_request the leaves' nx-set-shas computes affected from the PR diff.
   prebuild:
-    needs: [authorize, ci-router]
+    needs: [fork-approval, authorize, ci-router]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_prebuilds == 'true'
     # actions: read is required down the chain so the reuse action can list
     # prior runs + download their artifacts (else the reusable job's request
@@ -173,7 +183,7 @@ jobs:
       reuse-workflow-file: on-pr-nx.yml
 
   cpp-tests:
-    needs: [authorize, ci-router]
+    needs: [fork-approval, authorize, ci-router]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_cpp_tests == 'true'
     permissions:
       contents: read
@@ -189,7 +199,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
   run-integration-tests:
-    needs: [authorize, ci-router, prebuild]
+    needs: [fork-approval, authorize, ci-router, prebuild]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_desktop == 'true' && needs.prebuild.result != 'cancelled'
     permissions:
       contents: read
@@ -210,7 +220,7 @@ jobs:
   # every affected package; the rest run over their pre-filtered sublist.
   sanity-checks:
     name: sanity-checks (${{ matrix.package }})
-    needs: [authorize, ci-router, matrix]
+    needs: [fork-approval, authorize, ci-router, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.any == 'true'
     strategy:
       fail-fast: false
@@ -232,7 +242,7 @@ jobs:
 
   cpp-lint:
     name: cpp-lint (${{ matrix.package }})
-    needs: [authorize, ci-router, matrix]
+    needs: [fork-approval, authorize, ci-router, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.cpplint != '[]'
     strategy:
       fail-fast: false
@@ -248,7 +258,7 @@ jobs:
 
   ts-checks:
     name: ts-checks (${{ matrix.package }})
-    needs: [authorize, matrix]
+    needs: [fork-approval, authorize, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.tschecks != '[]'
     strategy:
       fail-fast: false
@@ -280,7 +290,7 @@ jobs:
 
   fabric-lockstep:
     name: fabric-lockstep (${{ matrix.package }})
-    needs: [authorize, matrix]
+    needs: [fork-approval, authorize, matrix]
     if: needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.fabric != '[]'
     strategy:
       fail-fast: false
@@ -295,7 +305,7 @@ jobs:
 
   coload-smoke:
     name: coload-smoke (${{ matrix.package }})
-    needs: [authorize, ci-router, matrix, prebuild]
+    needs: [fork-approval, authorize, ci-router, matrix, prebuild]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.coload != '[]' && needs.prebuild.result != 'cancelled'
     permissions:
       contents: read
@@ -318,7 +328,7 @@ jobs:
   # composite extra-args extension for --addon-type vision).
   perf-report:
     name: perf-report (${{ matrix.package }})
-    needs: [authorize, matrix, run-integration-tests]
+    needs: [fork-approval, authorize, matrix, run-integration-tests]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfcomposite != '[]'
     permissions:
       contents: read
@@ -351,7 +361,7 @@ jobs:
 
   perf-report-rtf:
     name: perf-report-rtf (${{ matrix.package }})
-    needs: [authorize, matrix, run-integration-tests]
+    needs: [fork-approval, authorize, matrix, run-integration-tests]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.matrix.outputs.perfrtf != '[]'
     permissions:
       contents: read
@@ -438,7 +448,7 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, coload-smoke]
+    needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, cpp-lint, ts-checks, fabric-lockstep, prebuild, cpp-tests, run-integration-tests, coload-smoke]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
