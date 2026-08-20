@@ -86,10 +86,10 @@ function declaredPackagesFor(filePath) {
 function undeclaredImports(filePath, declaredPackages) {
   if (!runtimeExtensions.has(path.extname(filePath))) return []
   const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
+  // Packed download helpers lazy-require this; it is a devDependency only.
   return externalSpecifiers(source)
     .map(packageName)
     .filter((name) => name !== packageJson.name && !declaredPackages.has(name))
-    // Packed download helpers lazy-require this; it is a devDependency only.
     .filter((name) => name !== '@qvac/registry-client')
     .map((name) => `${filePath}: ${name}`)
 }
