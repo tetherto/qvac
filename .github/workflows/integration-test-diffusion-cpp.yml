@@ -360,10 +360,24 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem ${{ env.WORKDIR }}/prebuilds
 
-      - name: Linux - install dependencies
-        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
+      # QVAC-23767: these GitHub-hosted arm64 legs used to install
+      # mesa-vulkan-drivers, whose libvulkan1 dependency masked the hard
+      # libvulkan.so.1 link the linux prebuilds carried (gh#3853). Now the leg
+      # asserts the opposite: a host that has never had a graphics stack, so
+      # the whole arm64 CPU suite is the regression gate for "worker starts on
+      # a CPU-only server". GitHub-hosted runners only — never strip packages
+      # from self-hosted runners.
+      - name: Linux arm64 - ensure no graphics stack (no libvulkan)
+        if: matrix.platform == 'linux' && matrix.arch == 'arm64' && matrix.no_gpu == 'true'
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+        run: |
+          sudo dpkg --force-depends --remove libvulkan1 2>/dev/null || true
+          sudo ldconfig
+          if ldconfig -p | grep -q libvulkan; then
+            echo "::error::libvulkan is still present; this leg must run without a graphics stack"
+            exit 1
+          fi
+          echo "libvulkan absent - true CPU-only environment"
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
