@@ -2,6 +2,12 @@
 name: "Benchmark Performance (nx)"
 
 on:
+  # TEMP (tmp-benchmark-leaf-test only): benchmark-nx cannot be workflow_dispatch'd
+  # because the file is not on the default branch. This scoped pull_request trigger
+  # lets a PR into feature-nx-workflow-consolidation fire it so nx-set-shas computes
+  # affected == {llm-llamacpp, diffusion-cpp} from the 2 marker files. Revert before merge.
+  pull_request:
+    branches: [feature-nx-workflow-consolidation]
   workflow_dispatch:
     inputs:
       base-ref:
@@ -85,7 +91,8 @@ jobs:
 
   desktop-benchmarks:
     needs: [matrix, context, prebuild]
-    if: needs.matrix.outputs.any == 'true' && !cancelled() && inputs.run_desktop && needs.prebuild.result == 'success'
+    # TEMP (tmp-benchmark-leaf-test): admit pull_request so the desktop leg runs without inputs.run_desktop. Revert before merge.
+    if: needs.matrix.outputs.any == 'true' && !cancelled() && (inputs.run_desktop || github.event_name == 'pull_request') && needs.prebuild.result == 'success'
     permissions:
       contents: read
       packages: read
