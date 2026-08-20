@@ -4,6 +4,29 @@ QVAC CI uses a mix of **GitHub-hosted** runners (`ubuntu-*`, `macos-*`, `windows
 
 This document explains the **Manual Workspace Cleanup** step used at the start of many workflows, and why two fields are required on that step.
 
+## Addon runner labels (QVAC-14347)
+
+Specialized runner labels used by addon workflows (`cpp-tests-*`, `integration-test-*`, `integration-mobile-test-*`, `reusable-prebuilds.yml`, and related files) live in [`.github/runners.yaml`](../../.github/runners.yaml). `ubuntu-latest` orchestration jobs stay hardcoded.
+
+GitHub evaluates `runs-on` and `strategy.matrix` before any step runs, so callers cannot read that YAML directly. A generated reusable workflow exports the labels as job outputs:
+
+1. Edit [`.github/runners.yaml`](../../.github/runners.yaml).
+2. Run `node .github/scripts/sync-runner-names.mjs` to regenerate [`.github/workflows/reusable-runner-names.yml`](../../.github/workflows/reusable-runner-names.yml). Do not hand-edit the reusable workflow.
+3. Run `node --test .github/scripts/test/runner-names.test.mjs` (or `node .github/scripts/validate-runner-names.mjs`).
+4. In addon workflows, add a bootstrap job and reference outputs instead of hardcoding labels:
+
+```yaml
+jobs:
+  runner_names:
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  test-cpp:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+```
+
+Keep [`.github/actionlint.yaml`](../../.github/actionlint.yaml) in sync: every `qvac-*` label in the catalog must be listed there. Prefer `runner.environment` for cleanup gating so steps do not couple to `qvac-` prefixes.
+
 ## Manual Workspace Cleanup
 
 Several workflows begin with a step named **Manual Workspace Cleanup** that runs before `actions/checkout`:
@@ -76,6 +99,7 @@ Example: [`.github/workflows/cpp-tests-classification.yml`](../../.github/workfl
 2. Include `working-directory: .` on that step.
 3. Include `if: runner.environment != 'github-hosted'` when the matrix mixes hosted and self-hosted runners.
 4. Prefer `runner.environment` over `startsWith(matrix.runner, 'qvac-')` for any self-hosted-only step.
+5. Addon jobs that need a specialized runner must take the label from `needs.runner_names.outputs.*` (see [Addon runner labels](#addon-runner-labels-qvac-14347)). Do not hardcode `qvac-*`, `macos-14`, or other catalog labels.
 
 ## See also
 

@@ -100,6 +100,9 @@ concurrency:
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
+  runner_names:
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   # Defense-in-depth gate for workflow_dispatch. The repository's PR entry
   # point (on-pr-vla.yml) already runs authorize-pr before invoking this
   # workflow over workflow_call, so workflow_call runs are pre-authorized.
@@ -176,7 +179,7 @@ jobs:
     # workflow_call: validate-devices is skipped; its `skipped` result keeps
     # this job running exactly as before.
     # workflow_dispatch: a bad/empty device selection blocks this job.
-    needs: [authorize, authorize-dispatch, validate-devices]
+    needs: [runner_names, authorize, authorize-dispatch, validate-devices]
     if: |
       always() &&
       (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success') &&
@@ -195,7 +198,7 @@ jobs:
       fail-fast: false
       # On workflow_dispatch, run only the chosen platform (devices come from
       # the manual inputs). workflow_call runs both platforms as before.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]}') || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(format(inputs.platform != '' && (inputs.platform == 'iOS' && '{{"include":[{{"platform":"iOS","os":"macos-14","runner":"{1}"}}]}}' || '{{"include":[{{"platform":"Android","os":"ubuntu-22.04","runner":"{0}"}}]}}') || '{{"include":[{{"platform":"Android","os":"ubuntu-22.04","runner":"{0}"}},{{"platform":"iOS","os":"macos-14","runner":"{1}"}}]}}', needs.runner_names.outputs.linux_ubuntu2204_x64, needs.runner_names.outputs.macos_ios)) }}
 
     steps:
       - name: Validate Dispatch Inputs
@@ -536,3 +539,4 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
