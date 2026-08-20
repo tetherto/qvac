@@ -19,6 +19,7 @@ on:
       - ready_for_review
     branches:
       - feature-nx-workflow-consolidation
+      - feature-nx-legacy-cleanup
   workflow_dispatch:
 
 permissions:
