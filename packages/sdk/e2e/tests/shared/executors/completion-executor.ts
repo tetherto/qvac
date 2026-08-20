@@ -63,6 +63,9 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       if (test.testId === 'completion-concurrent-requests') {
         return [test.testId, this.concurrentRequests.bind(this)]
       }
+      if (test.testId === 'completion-concurrent-overlap') {
+        return [test.testId, this.concurrentOverlap.bind(this)]
+      }
       if (test.testId === 'completion-seed-reproducibility') {
         return [test.testId, this.seedReproducibility.bind(this)]
       }
@@ -148,6 +151,90 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       output:
         `FIFO concurrency policy enforced: ${fulfilled.length} completed, ` +
         `${rejected.length} rejected (of ${CONCURRENCY} issued)`
+    }
+  }
+
+  // Proves concurrent scheduling on a parallel>1 model. Gates on the engine signal
+  // (avgConcurrentSeq > 1), which is authoritative for native sequence co-residency,
+  // and reports the client content-token-window overlap as a supporting diagnostic
+  // only: that client-side signal is transport-buffering sensitive, so gating on it
+  // would make the test flaky even when the server genuinely decoded concurrently.
+  async concurrentOverlap(
+    params: CompletionTestParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const llmModelId = await this.resources.ensureLoaded('llm-batch')
+    const CONCURRENCY = 4
+
+    const intervals = await Promise.all(
+      Array.from({ length: CONCURRENCY }, async () => {
+        const run = completion({
+          modelId: llmModelId,
+          ...params,
+          stream: true
+        } as CompletionFnParams)
+        let start = 0
+        let end = 0
+        let text = ''
+        for await (const token of run.tokenStream) {
+          const now = Date.now()
+          if (start === 0) start = now
+          end = now
+          text += token
+        }
+        const stats = (await run.stats) as { avgConcurrentSeq?: number } | undefined
+        return { start, end, text, avgConcurrentSeq: stats?.avgConcurrentSeq }
+      })
+    )
+
+    // Sweep line over the decode intervals: peak number live at once. Ties
+    // resolve end-before-start, so touching intervals don't count as overlap.
+    const events = intervals.flatMap(({ start, end }) => [
+      { t: start, delta: 1 },
+      { t: end, delta: -1 }
+    ])
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta)
+    let live = 0
+    let peakOverlap = 0
+    for (const event of events) {
+      live += event.delta
+      if (live > peakOverlap) peakOverlap = live
+    }
+
+    const empty = intervals.filter((i) => i.text.length === 0).length
+    if (empty > 0) {
+      return {
+        passed: false,
+        output: `${empty}/${CONCURRENCY} concurrent completions produced no output`
+      }
+    }
+
+    const seqs = intervals.map((i) => i.avgConcurrentSeq)
+    const maxSeq = seqs.reduce<number>((m, s) => (typeof s === 'number' && s > m ? s : m), 0)
+    if (!seqs.some((s) => typeof s === 'number')) {
+      return {
+        passed: false,
+        output: 'Engine did not report avgConcurrentSeq; cannot prove native concurrency'
+      }
+    }
+    if (maxSeq <= 1) {
+      return {
+        passed: false,
+        output:
+          `Engine avgConcurrentSeq peaked at ${maxSeq} (<= 1): no multi-sequence ` +
+          `co-residency was observed. Content-token interval peak was ${peakOverlap}/${CONCURRENCY}.`
+      }
+    }
+    const failed = intervals
+      .map((i) => ValidationHelpers.validate(i.text, expectation))
+      .find((result) => !result.passed)
+    if (failed) {
+      return { passed: false, output: `Concurrent completion failed expectation: ${failed.output}` }
+    }
+
+    return {
+      passed: true,
+      output: `Concurrent decoding proven: engine avgConcurrentSeq peaked at ${maxSeq.toFixed(2)}, client interval peak ${peakOverlap}/${CONCURRENCY}`
     }
   }
 

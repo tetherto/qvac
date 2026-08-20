@@ -26,7 +26,7 @@ import {
   type LlmConfigInput
 } from '@/schemas'
 import { createStreamLogger, registerAddonLogger } from '@/logging'
-import { getFirstShardPath } from '@/server/utils'
+import { getFirstShardPath, getModelParallel } from '@/server/utils'
 import { completion } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stream'
 import { batchCompletion } from '@/server/bare/plugins/llamacpp-completion/ops/batch-completion-stream'
 import { finetune } from '@/server/bare/plugins/llamacpp-completion/ops/finetune'
@@ -45,7 +45,6 @@ import {
   parseContextOverflowMessage
 } from '@/server/bare/plugins/llamacpp-completion/ops/context-overflow'
 import { stoppedByLength } from '@/server/bare/plugins/llamacpp-completion/ops/completion-stats'
-import { isAddonCancelledError } from '@/server/bare/plugins/llamacpp-completion/ops/batch-cancelled'
 import { isMobile } from '@/server/bare/registry/runtime-context-registry'
 import { stripMultiGpuKeys } from '@/server/utils/multi-gpu-mobile'
 
@@ -68,6 +67,10 @@ function createLlmModel(
     }
   }
 
+  // Addon overflow flag: at a single slot the addon throws when driven over
+  // capacity, at parallel>1 it queues the surplus. Not on the SDK surface.
+  const rejectWhenBusy = getModelParallel(llmConfig) <= 1
+
   const model = new LlmLlamacpp({
     files: {
       model: [getFirstShardPath(modelPath)],
@@ -75,7 +78,7 @@ function createLlmModel(
     },
     config: llmConfigStrings,
     logger,
-    opts: { stats: true }
+    opts: { stats: true, rejectWhenBusy }
   })
 
   return { model }
@@ -147,7 +150,8 @@ export const llmPlugin = definePlugin({
       requestSchema: batchCompletionStreamRequestSchema,
       responseSchema: batchCompletionStreamResponseSchema,
       streaming: true,
-      cancel: { scope: 'model', hard: true },
+      // Request-scope: a model-wide cancel would kill concurrent batching peers.
+      cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
@@ -180,10 +184,14 @@ export const llmPlugin = definePlugin({
           return normalizer
         }
 
+        // Batches share the completion lane at the `parallel` cap. The cap counts
+        // requests, not the prompts inside a batch (the addon schedules those).
+        const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: 'batchCompletion',
-          modelId: request.modelId
+          modelId: request.modelId,
+          maxConcurrentPerModel: parallel
         })
         const requestLogger = withRequestContext(getServerLogger(), ctx)
 
@@ -279,14 +287,11 @@ export const llmPlugin = definePlugin({
             )
             throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err)
           }
-          // Cancelling a batch that still has prompts queued behind the
-          // `parallel` slot limit fails the whole native batch group with
-          // a `Cancelled` error (the addon rejects `run()` rather than
-          // resolving with partial outputs — see continuous-batching docs).
-          // Ride the same graceful "done" path the non-overflow cancel
-          // uses: emit cancelled terminals per id so the client surfaces
-          // `InferenceCancelledError`, not a generic `CompletionFailedError`.
-          if (ctx.signal.aborted && isAddonCancelledError(err)) {
+          // Once the registry accepts cancellation, the request signal owns the
+          // terminal outcome. The addon may reject with different shapes
+          // depending on whether native sequences were active or queued; those
+          // transport details must not change the SDK cancellation contract.
+          if (ctx.signal.aborted) {
             const cancelledIds =
               ids.length > 0
                 ? ids
@@ -316,7 +321,8 @@ export const llmPlugin = definePlugin({
       requestSchema: completionStreamRequestSchema,
       responseSchema: completionStreamResponseSchema,
       streaming: true,
-      cancel: { scope: 'model', hard: true },
+      // Request-scope: a model-wide cancel would kill concurrent batching peers.
+      cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
         const filteredHistory = request.history.map(({ role, content, attachments }) => ({
@@ -352,10 +358,14 @@ export const llmPlugin = definePlugin({
         // client can target this run with `cancel({ requestId })`.
         // Falls back to a server-generated id if the client (e.g. an
         // older release) didn't send one.
+        // Admit up to `parallel` jobs. Disk-KV-cache turns share this lane too;
+        // same-file writes serialise per cache path inside the KV-cache session.
+        const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateServerRequestId(),
           kind: 'completion',
-          modelId: request.modelId
+          modelId: request.modelId,
+          maxConcurrentPerModel: parallel
         })
 
         const requestLogger = withRequestContext(getServerLogger(), ctx)
@@ -448,19 +458,30 @@ export const llmPlugin = definePlugin({
             modelExecutionMs
           )
         } catch (err) {
-          // The llama.cpp addon emits a structured `ContextOverflow` status
-          // (LlmErrors.hpp::ContextOverflow = 14) when the prompt exceeds
-          // the model's `ctx_size`. Bare's `js_throw_error(env, code, msg)`
-          // surfaces it as a JS Error with `.code = "[ <addonId> :: ContextOverflow ]"`
-          // and `.message` carrying the C++-formatted detail. Rethrow as
-          // a typed `ContextOverflowError` so consumers can switch on the
-          // class (and `err.code === SDK_SERVER_ERROR_CODES.CONTEXT_OVERFLOW`)
-          // instead of substring-matching on the raw addon message.
+          // Classify a structured ContextOverflow first, even under an aborted
+          // signal, so a real overflow racing a cancel surfaces as a typed
+          // ContextOverflowError.
           if (isAddonContextOverflowError(err)) {
             const { promptTokens, ctxSize } = parseContextOverflowMessage(
               err instanceof Error ? err.message : ''
             )
             throw new ContextOverflowError(promptTokens, ctxSize, request.modelId, err)
+          }
+          // Context overflow is classified above. For every other error after
+          // accepted cancellation, the request signal owns the terminal outcome
+          // regardless of the addon's active/queued error shape.
+          if (ctx.signal.aborted) {
+            yield attachModelExecutionMs(
+              {
+                type: 'completionStream' as const,
+                done: true,
+                events: normalizer.finish({ stopReason: 'cancelled' as const })
+              },
+              // The error path has no model execution time to report; omit it
+              // rather than claim 0.
+              undefined
+            )
+            return
           }
           throw err
         } finally {
@@ -491,7 +512,8 @@ export const llmPlugin = definePlugin({
       requestSchema: translateRequestSchema,
       responseSchema: translateResponseSchema,
       streaming: true,
-      cancel: { scope: 'model', hard: true },
+      // LLM translate cancels its own run (request-scoped), like completion.
+      cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
         const stream = translate(request, request.requestId)

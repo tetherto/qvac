@@ -109,6 +109,7 @@ const response = await gen.run('energetic cumbia, brass stabs, live percussion, 
   bpm: 98,                    // tempo
   keyscale: 'A minor',        // key / scale
   timesignature: '4/4',       // time signature
+  augmentCaptionWithMetadata: true, // reinforce these hints in the conditioning caption
   duration: 150,              // target length in seconds (omit => the LM decides)
   seed: 42,                   // reproducible run
   lyrics: `[verse]
@@ -124,6 +125,9 @@ que esta cumbia no para ninguna`
 Anything you leave out is inferred: omit `bpm`/`keyscale`/`duration` and the LM
 picks them from the caption. `inferenceSteps` / `shift` are auto-tuned to the
 DiT you loaded (turbo vs sft), so you normally don't set them.
+`augmentCaptionWithMetadata` is opt-in and defaults to `false`. When enabled,
+ACE-Step appends BPM/tempo guidance, time signature, and key to its internal
+conditioning caption while result metadata keeps the original user caption.
 
 ### 3. Reference and cover audio
 
@@ -320,6 +324,7 @@ wrapped by a level-gated `QvacLogger`.
 | `bpm` | Tempo in beats per minute. |
 | `keyscale` | Key and scale, such as `C minor`. |
 | `timesignature` | Time signature, such as `4/4`. |
+| `augmentCaptionWithMetadata` | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`. |
 | `duration` | Target length in seconds; omit to let the LM decide. |
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |

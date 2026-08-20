@@ -86,6 +86,7 @@ public:
     int         bpm = 0;        // 0 => let the LM infer
     std::string keyscale;       // optional, e.g. "C minor"
     std::string timesignature;  // optional, e.g. "4/4"
+    bool augmentCaptionWithMetadata = false;
     float       duration = 0.0F;  // 0 => keep engine default / let LM decide
     float lmTemperature = 0.85F;
     float lmTopP = 0.9F;
