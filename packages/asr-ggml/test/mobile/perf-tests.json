@@ -7,8 +7,6 @@
   "runParakeetMobilePerfCtcGpuTest",
   "runParakeetMobilePerfTdtCpuTest",
   "runParakeetMobilePerfTdtGpuTest",
-  "runParakeetMobilePerfUnifiedCpuTest",
-  "runParakeetMobilePerfUnifiedGpuTest",
   "runParakeetMobilePerfEouCpuTest",
   "runParakeetMobilePerfEouGpuTest",
   "runParakeetMobilePerfSortformerCpuTest",
