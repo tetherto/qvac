@@ -118,12 +118,15 @@ jobs:
       # action + project.json while the consolidation is unmerged, so on-pr-nx is green
       # pre-merge. Falls back to default_branch for non-PR (workflow_dispatch) runs, and
       # collapses to default_branch once the consolidation lands on main.
+      # Full (non-sparse) checkout: a sparse checkout here leaves sparse config in
+      # the workspace that leaks into the action's own internal checkout, so the
+      # root package.json (pnpm packageManager pin) never materialises and
+      # pnpm/action-setup dies with "No pnpm version is specified". Fork-safety is
+      # the trusted REF (base branch / default_branch, never PR head), not sparsity.
       - name: Checkout nx-project-matrix composite (trusted base ref)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/nx-project-matrix
-          sparse-checkout-cone-mode: false
           persist-credentials: false
       - id: compute
         uses: ./.github/actions/nx-project-matrix

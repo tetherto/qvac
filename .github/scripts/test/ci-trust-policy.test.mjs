@@ -1151,22 +1151,15 @@ test('on-pr-nx matrix job loads nx-project-matrix from a trusted base/default re
   )
   assert.match(
     matrix,
-    /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
-    'matrix job must sparse-checkout only .github/actions/nx-project-matrix',
-  )
-  assert.match(
-    matrix,
-    /sparse-checkout-cone-mode:\s*false/,
-    'matrix job must disable cone mode so the single path resolves',
-  )
-  assert.match(
-    matrix,
     /persist-credentials:\s*false/,
     'matrix job checkout must not persist credentials',
   )
 
+  // A full (non-sparse) checkout of the trusted ref must precede `uses: ./…`.
+  // (Sparse is intentionally NOT used here: it leaks sparse config into the
+  // action's own checkout and starves it of the root package.json / pnpm pin.)
   const trustedCheckoutIndex = matrix.search(
-    /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
+    /uses: actions\/checkout@[0-9a-f]{40}/,
   )
   const usesIndex = matrix.indexOf('uses: ./.github/actions/nx-project-matrix')
   assert.notEqual(usesIndex, -1, 'matrix job runs the nx-project-matrix composite')
