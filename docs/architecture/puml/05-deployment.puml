@@ -9,7 +9,7 @@ Deployment_Node(host_worker, "Host + Bare worker") {
         Container(client, "Host Client", "TypeScript / Python")
     }
     Deployment_Node(worker_proc, "Bare worker") {
-        Container(worker, "@qvac/inference", "TypeScript/C++")
+        Container(worker, "Worker + @qvac/inference", "TypeScript/C++")
     }
     ContainerDb(store_hw, "Local Storage", "Models cache + RAG DB")
 }

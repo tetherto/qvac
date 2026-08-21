@@ -1,5 +1,6 @@
 @startuml
 !include <C4/C4_Component>
+HIDE_STEREOTYPE()
 
 title QVAC SDK Family - Internal Components
 
