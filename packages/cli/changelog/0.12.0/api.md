@@ -17,6 +17,25 @@ curl -X DELETE http://localhost:11434/v1/models/my-llm
 curl http://localhost:11434/v1/models
 ```
 
+New `qvac serve openai` flags controlling the lazy load:
+
+```bash
+qvac serve openai --no-lazy-load                   # 503 model_not_loaded instead of loading
+qvac serve openai --load-concurrency 2             # max simultaneous loads (default: 1)
+qvac serve openai --load-timeout 300000            # per-load timeout in ms (default: unbounded)
+qvac serve openai --no-cancel-load-on-disconnect   # keep loading if the client disconnects
+```
+
+Equivalent config, which the flags override:
+
+```json
+{
+  "serve": {
+    "load": { "lazy": true, "concurrency": 1, "timeoutMs": null, "cancelOnDisconnect": true }
+  }
+}
+```
+
 ---
 
 ## Browse models by capability (serve catalog)

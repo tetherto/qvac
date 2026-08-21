@@ -2,7 +2,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.12.0
 
-This release makes `qvac serve openai` behave the way its model configuration always promised. Models marked `preload: false` now load on first use instead of failing forever, unloading a model is reversible, and a new catalog endpoint lets clients browse the models the SDK provides — not just the ones already configured.
+This release makes `qvac serve openai` behave the way its model configuration always promised. Models marked `preload: false` now load on first use instead of failing forever, unloading a model is reversible, and a new catalog endpoint lets clients browse the models the SDK provides — not just the ones already configured. New flags and a `serve.load` config block let you tune or switch off that lazy loading.
 
 ## New APIs
 
@@ -44,6 +44,43 @@ Entries are deliberately **not** OpenAI `model` objects — they are `model_cata
 Every row carries `configured`, `usable`, and a `state` that includes a `not_configured` value for catalog-only models, plus a `hint` pointing at how to configure it. `GET /v1/models` remains the single authoritative list of callable models, so a browsable model can never be mistaken for a ready one.
 
 Browsing is fully in-process: it triggers no SDK call, no model load, and no download. Sizes, parameter counts, quantizations, and roles come from the constants, while configured models report their live registry state.
+
+## New Flags
+
+### Lazy loading is tunable, and can be turned off
+
+Lazy loading is on by default. Four new `qvac serve openai` flags control it:
+
+```bash
+# Refuse to load on demand — an unloaded model returns 503 model_not_loaded
+qvac serve openai --no-lazy-load
+
+# Allow two models to load at once (default: 1)
+qvac serve openai --load-concurrency 2
+
+# Give up on a cold start after 5 minutes (default: unbounded)
+qvac serve openai --load-timeout 300000
+
+# Finish a load even if the client that triggered it disconnects
+qvac serve openai --no-cancel-load-on-disconnect
+```
+
+The same settings are available in the config file under a new `serve.load` block, which the flags override:
+
+```json
+{
+  "serve": {
+    "load": {
+      "lazy": true,
+      "concurrency": 1,
+      "timeoutMs": null,
+      "cancelOnDisconnect": true
+    }
+  }
+}
+```
+
+`concurrency` and `timeoutMs` must be positive integers; `timeoutMs: null` means no timeout. A config value that is the wrong type or out of range fails startup with the offending path named, rather than being silently ignored.
 
 ## Bug Fixes
 
