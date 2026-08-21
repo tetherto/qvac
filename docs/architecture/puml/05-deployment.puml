@@ -16,7 +16,7 @@ Deployment_Node(host_worker, "Host + Bare worker") {
 
 Deployment_Node(inproc, "In-process Bare") {
     Deployment_Node(bare_app, "Bare Application") {
-        Container(engine, "@qvac/inference + Plugins", "TypeScript/C++")
+        Container(engine, "@qvac/inference", "TypeScript/C++")
     }
     ContainerDb(store_ip, "Local Storage", "Models cache + RAG DB")
 }

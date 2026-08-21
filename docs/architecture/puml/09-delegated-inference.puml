@@ -5,7 +5,7 @@ title QVAC SDK - Delegated Inference
 
 Container_Boundary(provider, "Provider") {
     Component(listener, "DHT + RPC listener", "Hyperswarm", "Listens on a keypair and serves local inference")
-    Component(local_model, "Local Model", "Native Addon", "Executes inference")
+    Component(local_model, "Local Models", "Native Addon", "Executes inference")
 }
 
 Container_Boundary(consumer, "Consumer") {

@@ -8,25 +8,25 @@ Person(dev, "Application Developer", "Integrates QVAC into JS, Python, Bare, des
 
 System_Boundary(sdk, "QVAC SDK Family") {
     Container(client, "Host Client", "TypeScript / Python", "Public API, config, and RPC transport")
-    Container(worker, "Bare Worker", "TypeScript on Bare", "Process lifecycle and RPC adapter around the engine")
+    Container(worker, "Bare Worker", "TypeScript on Bare", "RPC shell and process lifecycle")
     Container(engine, "@qvac/inference", "TypeScript on Bare", "Plugin host, models, P2P, registry, RAG, request lifecycle")
     ContainerDb(cache, "Model Cache", "Filesystem", "Downloaded and expanded model artifacts")
     ContainerDb(rag_store, "RAG Storage", "HyperDB / Corestore", "Vector embeddings per workspace")
 }
 
-System_Ext(central, "Centralized model supply", "Registry catalog and HTTP / CDN downloads")
-System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT, Hyperdrive seeders, delegated inference providers")
+System_Ext(http, "HTTP / CDN", "Direct model file downloads")
+System_Ext(p2p, "Holepunch P2P Network", "Registry, Hyperblobs, Hyperdrive, DHT, delegated inference")
 
 Rel_D(dev, client, "Calls host API")
 Rel_D(client, worker, "bare-rpc", "socket, BareKit, or loopback TCP")
 Rel_D(worker, engine, "In-process engine calls")
 Rel_L(engine, cache, "Reads/writes model files")
 Rel_R(engine, rag_store, "Persists/queries vectors")
-Rel_D(engine, central, "Catalog queries and HTTP downloads")
-Rel_D(engine, p2p, "Peer discovery, P2P model sync, delegated inference")
+Rel_D(engine, http, "HTTP model downloads")
+Rel_D(engine, p2p, "Registry, P2P sync, delegated inference")
 
 Lay_D(client, worker)
 Lay_D(worker, engine)
-Lay_R(central, p2p)
+Lay_R(http, p2p)
 
 @enduml

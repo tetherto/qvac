@@ -10,17 +10,17 @@ Container_Boundary(host_side, "Host") {
 
 Container_Boundary(engine_side, "Engine (@qvac/inference)") {
     Component(dispatch, "Dispatch", "TypeScript", "Validate, route, stream, apply device defaults")
-    Component(plugin_registry, "Plugin Registry", "TypeScript", "Resolve handlers by modelType")
+    Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
     Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
     Component(model_registry, "Model Registry", "TypeScript", "Loaded local and delegated models")
-    Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, and DHT")
+    Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
     Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
     Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
 }
 
 Rel_D(api, rpc_client, "Serializes calls")
 Rel_D(rpc_client, dispatch, "Request envelope")
-Rel_D(dispatch, plugin_registry, "Dispatches by modelType")
+Rel_D(dispatch, plugin_registry, "Looks up model, then plugin")
 Rel_D(plugin_registry, plugins, "Invokes handler")
 Rel_D(dispatch, model_registry, "Registers models")
 Rel_D(dispatch, distribution, "Resolves and fetches models")

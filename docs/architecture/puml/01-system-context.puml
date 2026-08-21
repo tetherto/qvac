@@ -7,7 +7,7 @@ Person(dev, "Application Developer", "Builds JS, Python, Bare, desktop, and mobi
 
 System(sdk, "QVAC SDK Family", "Local-first P2P inference. JS, Python, and Bare entry points share one engine")
 
-System_Ext(registry, "QVAC Model Registry", "Catalog, search, and HTTP model download")
+System_Ext(registry, "QVAC Model Registry", "Catalog, search, and Hyperblob download")
 System_Ext(http, "HTTP / CDN", "Direct model file downloads")
 System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT, Hyperdrive seeders, delegated inference providers")
 
