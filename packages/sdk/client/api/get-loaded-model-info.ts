@@ -20,6 +20,12 @@ import { InvalidResponseError } from '@/utils/errors-client'
  *
  * Throws `ModelNotFoundError` if no entry exists for `modelId`.
  *
+ * @param params - The identifier of the loaded model to inspect.
+ * @param rpcOptions - Optional timeout, profiling, and connection settings.
+ * @returns The model's local handler metadata or delegated-provider summary.
+ * @throws {InvalidResponseError} When the worker returns an unexpected response.
+ * @throws {ModelNotFoundError} When no loaded model has the requested ID.
+ *
  * @example
  * ```typescript
  * const info = await getLoadedModelInfo({ modelId });
