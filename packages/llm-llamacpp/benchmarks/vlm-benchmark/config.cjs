@@ -103,17 +103,13 @@ const GEMMA4_Q4 = {
     { license: 'Gemma', link: 'https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF' })
 }
 
-// VisionPsy-Nano-460M (QVAC-23075). Two checkpoints, base and Flash, differ ONLY in
-// whether the preprocessor upscales the long side to 2048, so they need separate
-// entries, and three main-model quants each so a run is a quant sweep. Not
-// registry-published, so no `registry` annotation: the report shows Source = HF.
-// blob modelNames are the models.manifest.json keys, which is where the sha256/bytes
-// pins live; a name absent from the manifest aborts the addon leg (see #3195).
+// VisionPsy-Nano-460M (QVAC-23075). Base and Flash differ ONLY in whether the preprocessor
+// upscales the long side to 2048, hence separate entries rather than one with a flag.
+// modelNames must be models.manifest.json keys or the addon leg aborts (see #3195).
 //
-// These need a fabric addon: the published prebuild has neither the VisionPsy projector
-// type nor the image-no-upscale load-config key. A two-models dispatch on the published
-// addon therefore fails at model load, and only after both blobs have downloaded. Compare
-// them with several-sources against `fabric@<ref>`, or wait for the addon to ship it.
+// These need a fabric addon: the published prebuild has neither the VisionPsy projector type
+// nor the image-no-upscale load-config key, so a two-models dispatch on it fails at load,
+// after both blobs have downloaded. Use several-sources against `fabric@<ref>`.
 const VISIONPSY_BASE = {
   id: 'visionpsy',
   name: 'VisionPsy-Nano-460M',
@@ -169,16 +165,12 @@ const VISIONPSY_FLASH_Q4 = visionpsy(VISIONPSY_FLASH, 'q4', 'q4_0')
 const VISIONPSY_FLASH_Q8 = visionpsy(VISIONPSY_FLASH, 'q8', 'q8_0')
 const VISIONPSY_FLASH_IQ3M = visionpsy(VISIONPSY_FLASH, 'iq3m', 'iq3_m-imat')
 
-// Same model and preprocessing as visionpsy-flash-q4, with the projector forced onto the
-// GPU. It reaches one path no other entry can: the addon auto-defaults the projector
-// backend by GPU class (LlamaModel.cpp), GPU on Adreno 800+ and CPU on Mali, so a plain
-// `device: gpu` leg on a Mali phone runs the vision encoder on CPU and never exercises
-// Vulkan for it.
-//
-// A separate entry rather than a flag on the existing one, because the auto-default exists
-// for a reason: the Mali projector encodes slower on GPU than on CPU (QVAC-21257), so
-// forcing it in the standard entry would make every routine Pixel run measure a
-// configuration nobody ships. Check the log line rather than the timing, it must read
+// visionpsy-flash-q4 with the projector forced onto the GPU, which reaches a path no other
+// entry can: the addon auto-defaults the projector backend by GPU class (LlamaModel.cpp),
+// CPU on Mali, so a plain `device: gpu` leg on a Mali phone never runs the vision encoder on
+// Vulkan. Kept separate because that auto-default is deliberate, the Mali projector being
+// slower on GPU than CPU (QVAC-21257), so forcing it everywhere would have routine Pixel runs
+// measure a configuration nobody ships. Check the log line, not the timing: it must read
 // `GPU (mmproj-use-gpu override)`.
 const VISIONPSY_FLASH_Q4_MMPROJ_GPU = {
   ...VISIONPSY_FLASH_Q4,

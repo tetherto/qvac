@@ -753,17 +753,14 @@ jobs:
               return 1
             fi
             echo ">> fetching $1"
-            # Only attach the HF token to an actual huggingface.co URL. matrix_models'
-            # json: escape hatch lets a caller point downloadUrl anywhere, and this secret
-            # must never ride along to a non-HF host.
+            # Attach the HF token only to a huggingface.co URL: matrix_models' json: escape
+            # hatch lets a caller point downloadUrl anywhere, and the secret must not follow.
             #
-            # The host check alone is not enough, because -L would carry the token past it:
-            # curl sends a -H header on every hop of a redirect chain, its own docs for -H
-            # say so, and the credential-scoping that --location-trusted gates covers only
-            # -u, not -H. HF resolve URLs always 302 to a separate CDN host, so -L plus the
-            # token hands it to whatever that redirect names. Resolve the hop with the token
-            # and no -L, then fetch the target without it. The CDN link is presigned and
-            # needs no auth, so nothing is lost.
+            # The host check alone is not enough, because curl sends a -H header on every hop
+            # of a redirect chain, and --location-trusted scopes only -u, not -H. HF resolve
+            # URLs always 302 to a CDN host, so -L plus the token would hand it over. Hence
+            # the two calls below: resolve the hop with the token and no -L, then fetch the
+            # presigned target without it.
             case "$2" in
               https://huggingface.co/*)
                 if [ -n "$HF_TOKEN" ]; then

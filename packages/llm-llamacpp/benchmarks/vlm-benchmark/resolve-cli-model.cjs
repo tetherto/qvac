@@ -1,16 +1,13 @@
 'use strict'
-// Resolve the several-sources model to shell variables for the workflow's native-CLI
-// step. Same resolution as harness.cjs runAll(): the QVAC_VLM_MODELS launch param
-// (first token) if set, else config.sourcesModel. The CLI legs need the on-disk blob
-// names (what the addon leg downloads, `modelName`), the download URLs (so a CLI-only
-// comparison can fetch them with no addon leg), and the provenance strings the report
-// prints per source.
+// Resolve the several-sources model to shell variables for the workflow's native-CLI step,
+// the same way harness.cjs runAll() does, so both legs read the same two files.
 //
 // Usage: node resolve-cli-model.cjs > "$RUNNER_TEMP/cli-model.env" && . "$RUNNER_TEMP/cli-model.env"
-// Write it outside the workspace: a URL here can be a presigned link, which is a bearer
+// Outside the workspace, because a URL here can be a presigned link, which is a bearer
 // credential, and a self-hosted runner's workspace outlives the job.
-// URL is empty for registry-type sources (P2P, addon-only), and the caller must
-// error out if the blob is not already on disk.
+//
+// A registry source emits an empty URL: those are addon-only, so the caller has to find the
+// blob on disk or fail.
 
 const { parseModels } = require('./models.cjs')
 const { serializeCliArgs } = require('./cli-args.cjs')

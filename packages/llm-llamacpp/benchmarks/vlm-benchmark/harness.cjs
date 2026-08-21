@@ -492,15 +492,10 @@ function runModel (spec) {
 }
 
 // One test file -> one mobile test function -> one Device Farm spec -> one phone.
-// two-models runs the QVAC_VLM_MODELS launch param (catalog names, or json: specs; see
-// models.cjs / CONTRACT.md §3. Ad-hoc <llm-url>|<mmproj-url> pairs parse here but reach the
-// CLI legs only, since the addon leg downloads only manifest-pinned blobs),
-// falling back to the committed config.models pair; several-sources runs ONE model
-// across the engines (the other engines run via cli-fixture-runner.cjs, same log).
-// several-sources honours the same launch param, first token only, so a model that
-// has no catalog entry can be compared across engines without a config commit;
-// empty falls back to config.sourcesModel. The workflow's CLI step resolves the
-// blob filenames the same way, so both legs read the same two files.
+// two-models takes the pair from QVAC_VLM_MODELS, several-sources one model across the
+// engines from its first token; empty falls back to the committed config. See CONTRACT.md §3.
+// The gotcha: an ad-hoc <llm-url>|<mmproj-url> pair parses here but reaches the CLI legs
+// only, because the addon leg runs manifest-pinned blobs exclusively.
 function runAll () {
   const models = MODE === 'several-sources'
     ? parseModels(env('QVAC_VLM_MODELS'), config.catalog, [config.sourcesModel]).slice(0, 1)

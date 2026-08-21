@@ -87,22 +87,15 @@ function parsePair (token) {
 // only of dots, and `..` is a path segment that walks up one level.
 const MODEL_NAME_RE = /^(?!\.+$)[A-Za-z0-9._-]+$/
 
-// cliArgs and addonConfig exist for ONE purpose: per-model image preprocessing that the
-// GGUF cannot declare, e.g. VisionPsy Flash's --image-no-upscale. Allow exactly that
-// family and reject every other flag, rather than blocklisting the ones the harness sets.
-// A blocklist cannot be made safe here, because llama.cpp gives most options several
-// spellings (common/arg.cpp: -n / --predict / --n-predict, -ngl / --gpu-layers /
-// --n-gpu-layers) and extra args are appended AFTER buildCliArgs' fixed flags, so a late
-// alias wins and a fabric bump can add one without touching this file.
+// Per-model image preprocessing the GGUF cannot declare, e.g. VisionPsy Flash's
+// --image-no-upscale. An allowlist, not a blocklist: llama.cpp gives most options several
+// spellings and extra args are appended after buildCliArgs' fixed ones, so a late alias
+// would win and a fabric bump could add one without touching this file.
 //
-// One descriptor per option, so the CLI and addon sides cannot drift apart: both
-// allowlists and the twin lookup below are derived from it. `addon: null` means the
-// option has no addon handler and so cannot be set on both legs, which is why
-// --image-max-tiles is absent entirely: arg.cpp takes it, the addon does not.
-// mmproj-use-gpu is addon-only in the other direction. It picks the projector backend,
-// which `device` does not control, and on Android the addon auto-defaults it per GPU
-// class (LlamaModel.cpp: GPU for Adreno 800+, CPU for Mali and anything undetected), so
-// validating the projector on a Mali GPU is impossible without overriding it.
+// One entry per option, so the two sides cannot drift apart: both allowlists and the twin
+// lookup are derived from here. A null side means the option exists on one leg only and so
+// can never be paired, which is why --image-max-tiles is absent entirely (arg.cpp takes it,
+// the addon has no handler) and why mmproj-use-gpu is addon-only. See CONTRACT.md section 3.
 const MODEL_OPTIONS = Object.freeze([
   { cli: '--image-no-upscale', addon: 'image-no-upscale' },
   { cli: '--image-tile-mode', addon: 'image-tile-mode' },
