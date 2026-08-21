@@ -381,6 +381,71 @@ test(
 )
 
 test(
+  'conflicting key aliases are rejected before backend initialization',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    // Two allowlisted spellings of one field would otherwise both be applied
+    // while iterating an unordered_map, so the answer would depend on
+    // hash-bucket order rather than on the request.
+    for (const [first, second] of [
+      ['gpu-layers', 'n-gpu-layers'],
+      ['gpu_layers', 'n_gpu_layers'],
+      ['kv-offload', 'no-kv-offload'],
+      ['op-offload', 'no-op-offload']
+    ]) {
+      const direct = await runDirectBinding({
+        modelPath: path.join(__dirname, 'no-such-model.gguf'),
+        params: { device: 'gpu', [first]: '10', [second]: '40' }
+      })
+      t.is(direct.signal, null, `${first}/${second} must not initialize a backend`)
+      t.is(direct.code, 0)
+      const answer = JSON.parse(direct.stdout)
+      t.is(answer.ok, false)
+      t.ok(answer.message.includes('use only one of'))
+      t.is(direct.stderr, '')
+    }
+  }
+)
+
+test(
+  'valueless llama flags reject a false the flag cannot express',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    // `--no-host` and `--swa-full` are handler_void upstream: the value token is
+    // never consulted, so the real load sets the flag whatever the caller
+    // wrote. Projecting the opposite placement would answer for a different
+    // load than the one that runs.
+    // These are allowlisted keys, so classification happens after backend
+    // discovery and after the readability check — hence a readable path, and no
+    // stderr assertion, since backend registration legitimately logs there.
+    const readablePath = require.resolve('../../package.json')
+    for (const key of ['no-host', 'no_host', 'swa-full']) {
+      const direct = await runDirectBinding({
+        modelPath: readablePath,
+        params: { device: 'cpu', [key]: 'false' }
+      })
+      t.is(direct.signal, null)
+      t.is(direct.code, 0)
+      t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
+    }
+
+    // Settings qvac-fabric registers no option for cannot describe a load
+    // either, so they must not be silently accepted. These are not allowlisted,
+    // so they are answered before any backend is touched.
+    for (const key of ['no-extra-bufts', 'extra-bufts', 'host']) {
+      const direct = await runDirectBinding({
+        modelPath: path.join(__dirname, 'no-such-model.gguf'),
+        params: { device: 'cpu', [key]: 'true' }
+      })
+      t.is(direct.signal, null)
+      t.is(direct.code, 0)
+      t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
+      t.is(direct.stderr, '')
+    }
+  }
+)
+
+test(
   'v2 round-trips through the disposable native runner',
   { skip: !HAS_NATIVE_PREBUILD },
   async (t) => {
@@ -390,15 +455,14 @@ test(
         params: { device: 'cpu' }
       })
     )
-    if (
-      process.platform === 'darwin' &&
-      outcome.signal === 'SIGSEGV' &&
-      outcome.stderr.includes('ggml_metal_device_get: initialising device')
-    ) {
-      t.pass('known local Metal backend initialisation crash was isolated in the child')
-      return
-    }
-
+    // A crash is a failure, not a tolerated outcome: the child exists so a
+    // native fault is isolated from the harness, not so it can be reported as a
+    // pass.
+    t.is(
+      outcome.signal,
+      null,
+      `native runner must not crash; code=${outcome.code} stderr=${outcome.stderr}`
+    )
     t.is(outcome.code, 0)
     const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
     t.is(response.version, FIT_PROCESS_PROTOCOL_VERSION_V2)

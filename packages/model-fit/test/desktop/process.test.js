@@ -49,8 +49,31 @@ function completedFitResult() {
   }
 }
 
-function runRunner(input, deadlineMs = 120_000) {
+const RUNNER_DEADLINE_MS = 10_000
+// A cold spawn on darwin compiles the embedded Metal library before the fitter
+// can answer, which is far slower than the protocol paths.
+const NATIVE_DEADLINE_MS = 120_000
+
+function invocationErrorResponse(message) {
+  return {
+    version: 1,
+    status: 'invocation-error',
+    error: { name: 'Error', message }
+  }
+}
+
+function encodedResponseBytes(response) {
+  return Buffer.byteLength(`${JSON.stringify(response)}\n`, 'utf8')
+}
+
+// The runner has no timeout of its own, so the harness supplies one. Without it
+// a stuck child is a bare assertion timeout with no output and an orphaned
+// process left on the runner.
+function runRunner(input, deadlineMs = RUNNER_DEADLINE_MS) {
   return new Promise((resolve, reject) => {
+    // Overlapped, not plain pipes: libuv gives a child synchronous stdio handles
+    // on Windows, and a Bare child then emulates async reads with a worker
+    // thread and never sees the request. The flag is a no-op off Windows.
     const child = spawn(process.execPath, [resolveFitProcessRunnerPath()], {
       stdio: ['overlapped', 'overlapped', 'overlapped']
     })
@@ -61,7 +84,12 @@ function runRunner(input, deadlineMs = 120_000) {
       if (settled) return
       settled = true
       child.kill('SIGKILL')
-      reject(new Error(`runner timed out; stdout=${stdout} stderr=${stderr}`))
+      reject(
+        new Error(
+          `runner did not exit within ${deadlineMs}ms; ` +
+            `stdout=${JSON.stringify(stdout)} stderr=${JSON.stringify(stderr)}`
+        )
+      )
     }, deadlineMs)
 
     function settle(result, error) {
@@ -186,23 +214,51 @@ test('process public boundary contains only public codec functions', (t) => {
     'resolveFitProcessRunnerPath'
   ])
   t.ok(packageJson.files.includes('process-runner.js'))
+  t.ok(packageJson.files.includes('process-runner.d.ts'))
+  t.ok(packageJson.files.includes('process-internal.js'))
+  t.ok(packageJson.files.includes('process-internal.d.ts'))
   t.absent(packageJson.exports['./process-runner'])
+  t.absent(packageJson.exports['./process-internal'])
+})
+
+test('the runner smoke is reachable from both test lanes', (t) => {
+  // Both lanes must reach this file, because only the prebuild-backed one
+  // un-skips the native round-trip. The wiring has to live here: reusable
+  // workflows resolve from the base branch, so a workflow edit would not take
+  // effect on its own PR.
+  t.ok(packageJson.scripts['test:unit'].includes('npm run test:process'))
+  t.ok(packageJson.scripts['test:integration'].includes('npm run test:process'))
+
+  // The integration job appends `<platform>-<arch>`, and npm appends run args to
+  // the end of the script, so the bare invocation has to be last.
+  t.ok(packageJson.scripts['test:integration'].endsWith('npm run test:integration:suite'))
+  t.ok(
+    packageJson.scripts['test:integration:suite'].endsWith('bare test/integration/all.js --exit')
+  )
+
+  // The C++ unit targets are behind BUILD_TESTING, which is off by default, so
+  // the only thing that keeps them running is a script CI can call.
+  t.ok(packageJson.scripts['test:cpp:build'].includes('BUILD_TESTING=ON'))
+  t.ok(packageJson.scripts['test:cpp'].includes('npm run test:cpp:build'))
+  t.ok(packageJson.scripts['test:cpp'].includes('npm run test:cpp:run'))
 })
 
 test('runner path resolves to the private packaged entrypoint', (t) => {
   const resolved = resolveFitProcessRunnerPath()
   t.is(resolved, require.resolve('../../process-runner.js'))
   t.ok(path.isAbsolute(resolved))
+  t.is(path.basename(resolved), 'process-runner.js')
 })
 
 test('process core handles malformed JSON without invoking fit', (t) => {
   let invoked = false
   const outcome = runFitProcessLine('not-json', () => {
     invoked = true
-    return completedFitResult()
+    throw new Error('unreachable')
   })
   t.is(outcome.exitCode, 2)
   t.is(outcome.response.status, 'invocation-error')
+  t.is(outcome.response.error.name, 'SyntaxError')
   t.is(outcome.response.version, FIT_PROCESS_PROTOCOL_VERSION)
   t.is(invoked, false)
 })
@@ -255,6 +311,10 @@ test('process core preserves v1 completed and invocation-error envelopes', (t) =
     () => result
   )
   t.alike(completed.response, { version: 1, status: 'completed', result })
+  t.is(completed.response.result, result)
+  // The outcome carries the encoded line so the runner writes it without a
+  // second pass over a response that may approach 1 MiB.
+  t.is(completed.responseLine, encodeFitProcessResponse(completed.response))
 
   const failed = runFitProcessLine(
     JSON.stringify({ version: 1, config: { modelPath: '/model.gguf' } }),
@@ -276,12 +336,59 @@ test('process core bounds request and response sizes', (t) => {
   t.is(request.exitCode, 2)
   t.ok(request.response.error.message.includes('64 KiB'))
 
+  // One byte less leaves room for the newline the sender pays for, so the
+  // failure moves from the size guard to JSON parsing.
+  const withinBudget = runFitProcessLine('x'.repeat(FIT_PROCESS_MAX_REQUEST_BYTES - 1), () => {
+    throw new Error('unreachable')
+  })
+  t.is(withinBudget.response.error.name, 'SyntaxError')
+
   const response = runFitProcessLine(
     JSON.stringify({ version: 1, config: { modelPath: '/model.gguf' } }),
     () => ({ detail: 'x'.repeat(FIT_PROCESS_MAX_RESPONSE_BYTES) })
   )
   t.is(response.exitCode, 1)
   t.ok(response.response.error.message.includes('1 MiB'))
+  t.ok(Buffer.byteLength(response.responseLine, 'utf8') <= FIT_PROCESS_MAX_RESPONSE_BYTES)
+})
+
+test('every request the encoder produces fits the runner budget', (t) => {
+  const probe = encodeFitProcessRequest({ modelPath: '/model.gguf', backendsDir: '/' })
+  const padding = FIT_PROCESS_MAX_REQUEST_BYTES - Buffer.byteLength(probe, 'utf8')
+  const line = encodeFitProcessRequest({
+    modelPath: '/model.gguf',
+    backendsDir: `/${'x'.repeat(padding)}`
+  })
+
+  t.is(Buffer.byteLength(line, 'utf8'), FIT_PROCESS_MAX_REQUEST_BYTES)
+
+  let invoked = false
+  const outcome = runFitProcessLine(line.slice(0, -1), () => {
+    invoked = true
+    return completedFitResult()
+  })
+
+  t.is(outcome.exitCode, 0)
+  t.is(invoked, true)
+})
+
+test('response encoding accepts the 1 MiB byte boundary', (t) => {
+  const message = messageForEncodedBytes(FIT_PROCESS_MAX_RESPONSE_BYTES)
+  const atBoundary = invocationErrorResponse(message)
+
+  t.is(encodedResponseBytes(atBoundary), FIT_PROCESS_MAX_RESPONSE_BYTES)
+
+  const line = encodeFitProcessResponse(atBoundary)
+  t.is(Buffer.byteLength(line, 'utf8'), FIT_PROCESS_MAX_RESPONSE_BYTES)
+})
+
+test('response encoding rejects above the 1 MiB byte boundary', async (t) => {
+  const message = messageForEncodedBytes(FIT_PROCESS_MAX_RESPONSE_BYTES + 1)
+
+  await t.exception.all(
+    () => encodeFitProcessResponse(invocationErrorResponse(message)),
+    /Fit process response exceeds 1 MiB/
+  )
 })
 
 test('response encoder is newline-delimited', (t) => {
@@ -293,38 +400,58 @@ test('response encoder is newline-delimited', (t) => {
   t.is(encodeFitProcessResponse(response), `${JSON.stringify(response)}\n`)
 })
 
+// No prebuild guard: a malformed request is answered without loading the addon,
+// so this runs everywhere and covers the spawn/flush/exit path on its own.
 test('runner writes one flushed malformed-request response', async (t) => {
-  const outcome = await runRunner('not-json\n', 10_000)
+  const outcome = await runRunner('not-json\n')
   const response = JSON.parse(outcome.stdout)
   t.is(outcome.code, 2)
+  t.is(outcome.signal, null)
   t.is(response.status, 'invocation-error')
+  t.is(response.error.name, 'SyntaxError')
   t.is(outcome.stdout.split('\n').length, 2)
+  t.is(outcome.stderr, '')
+})
+
+test('fit process runner answers a closed stdin without a request', async (t) => {
+  const outcome = await runRunner('')
+
+  t.is(outcome.code, 2)
+  t.is(JSON.parse(outcome.stdout).status, 'invocation-error')
 })
 
 test(
   'runner returns a real v1 fit through the native boundary',
   { skip: !HAS_NATIVE_PREBUILD },
   async (t) => {
+    t.timeout(NATIVE_DEADLINE_MS * 1.5)
+
+    // The only test that loads the addon in the child. A path that cannot exist
+    // is a documented ERROR outcome rather than a throw, so this exercises
+    // native load, backend registration and the response encoding without a
+    // model file. A crash is a failure here, not a tolerated outcome: the child
+    // exists so the crash is isolated, not so it can be reported as a pass.
     const outcome = await runRunner(
       encodeFitProcessRequest({
         modelPath: path.join(__dirname, 'no-such-model.gguf')
-      })
+      }),
+      NATIVE_DEADLINE_MS
     )
-    if (
-      process.platform === 'darwin' &&
-      outcome.signal === 'SIGSEGV' &&
-      outcome.stderr.includes('ggml_metal_device_get: initialising device')
-    ) {
-      t.pass('known local Metal backend initialisation crash was isolated in the child')
-      return
-    }
-    t.ok(
-      outcome.stdout.length > 0,
-      `native runner must answer; code=${outcome.code} signal=${outcome.signal} stderr=${outcome.stderr}`
+    t.is(
+      outcome.signal,
+      null,
+      `native runner must not crash; code=${outcome.code} stderr=${outcome.stderr}`
     )
     const response = parseFitProcessResponse(JSON.parse(outcome.stdout))
+
     t.is(outcome.code, 0)
     t.is(response.status, 'completed')
     t.is(response.result.status, 2)
+    t.ok(['model-unreadable', 'no-backend-device'].includes(response.result.reason))
   }
 )
+
+function messageForEncodedBytes(targetBytes) {
+  const baseBytes = encodedResponseBytes(invocationErrorResponse(''))
+  return 'x'.repeat(Math.max(0, targetBytes - baseBytes))
+}
