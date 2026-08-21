@@ -267,6 +267,48 @@ Response:
 { "id": "my-llm", "object": "model", "deleted": true }
 ```
 
+### Model catalog (browse)
+
+`GET /v1/models/catalog` is a discovery endpoint (a QVAC extension, not part of OpenAI). It
+lists your configured models **and** every model the SDK ships with, so you can find one by
+capability. Browsing loads nothing — it's fully in-process.
+
+Rows are catalog entries (`object: "model_catalog_entry"`), not usable `model` objects. A
+model that isn't configured shows `state: "not_configured"`, `usable: false` and a `hint` —
+it **cannot be called** until you add it to `serve.models`. Configured models show
+`configured: true` with their live load `state`. (Only `GET /v1/models` lists callable
+models.)
+
+Filter with query params (combined with AND): `search` (id substring), `role`
+(chat/embedding/transcription/speech/image/…), `addon`/`type` (llm/tts/whisper/diffusion/…),
+`quantization`, `engine`, `configured`, `limit` (omit for no limit), `offset`.
+
+```bash
+curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
+```
+
+Response: `{ "object": "list", "data": [ … ], "has_more": <bool> }`, each entry:
+
+```json
+{
+  "object": "model_catalog_entry",
+  "id": "QWEN3_600M_INST_Q4",
+  "source": "builtin",
+  "configured": false,
+  "usable": false,
+  "state": "not_configured",
+  "role": "chat",
+  "addon": "llm",
+  "quantization": "q4",
+  "params": "600M",
+  "size": 382156480,
+  "hint": "Not in serve.models — add it there to make it usable."
+}
+```
+
+`GET /v1/models/catalog/:id` returns a single catalog entry. The live remote registry and
+on-disk download state are planned follow-ups.
+
 ### Chat
 
 OpenAI-compatible chat completions backed by any alias whose endpoint category is `chat` in `serve.models`.

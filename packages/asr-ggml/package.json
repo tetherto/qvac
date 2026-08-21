@@ -1,6 +1,6 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
   "addon": true,
   "engines": {
@@ -127,7 +127,7 @@
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/registry-client": "^0.4.0",
+    "@qvac/registry-client": "^0.6.1",
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",
     "bare-ffmpeg": "^1.0.0-32",
