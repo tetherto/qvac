@@ -62,15 +62,20 @@ function fmtRow(e: ModelCatalogEntry): string {
   return meta ? `${e.id}   ${meta}` : e.id
 }
 
-// Match a search term against the fields a user reaches for - not just the id,
-// but role/addon/engine/quantization/params - so "diffusion" or "q8" finds
-// models by capability, not only by name. Space-separated words must all match.
-function matches(e: ModelCatalogEntry, term: string): boolean {
-  const haystack = [e.id, e.role, e.addon, e.engine, e.quantization, e.params]
+// Score a term against a model; 0 = no match. All words must appear somewhere in
+// id/role/addon/quantization/params so "diffusion" or "q8" finds models by
+// capability, not only by name. `engine` is deliberately excluded: its backend
+// name (e.g. "llamacpp-completion") contains "llama"/"cpp" and would match every
+// model of that backend, drowning out a name search. Matches in the id score
+// higher, so typing "llama" surfaces the LLAMA_* models first.
+function matchScore(e: ModelCatalogEntry, words: string[]): number {
+  const id = e.id.toLowerCase()
+  const haystack = [e.id, e.role, e.addon, e.quantization, e.params]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
-  return term.split(/\s+/).every((word) => haystack.includes(word))
+  if (!words.every((word) => haystack.includes(word))) return 0
+  return 1 + words.filter((word) => id.includes(word)).length
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -123,8 +128,18 @@ function pickModel(
         pageSize,
         source: (term) => {
           const t = term?.toLowerCase().trim()
-          const list = t ? ordered.filter((e) => matches(e, t)) : ordered
-          const choices = list.slice(0, 100).map((e) => ({
+          let list: ModelCatalogEntry[]
+          if (t) {
+            const words = t.split(/\s+/)
+            list = ordered
+              .map((e) => ({ e, score: matchScore(e, words) }))
+              .filter((x) => x.score > 0)
+              .sort((a, b) => b.score - a.score)
+              .map((x) => x.e)
+          } else {
+            list = ordered
+          }
+          const choices = list.slice(0, 200).map((e) => ({
             name: e.id === recommended ? `${fmtRow(e)}  * recommended` : fmtRow(e),
             value: e.id,
             description: describeChoice(e, wide, previewEntry)
