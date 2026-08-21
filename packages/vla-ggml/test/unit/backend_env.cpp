@@ -12,8 +12,8 @@
 
 // The ggml Vulkan backend leaks a small, one-time allocation while enumerating
 // devices at registration — a known upstream ggml issue, benign (one-time,
-// non-growing). Suppress that specific third-party leak so LeakSanitizer doesn't
-// fail the run when ASan is enabled on addon-test.
+// non-growing). Suppress that specific third-party leak so LeakSanitizer
+// doesn't fail the run when ASan is enabled on addon-test.
 extern "C" const char* __lsan_default_suppressions() {
   return "leak:ggml_backend_vk_reg_get_device\n";
 }
