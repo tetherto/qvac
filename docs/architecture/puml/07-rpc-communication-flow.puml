@@ -1,45 +1,19 @@
 @startuml
 title RPC Communication Flow
 
-participant "Client Application" as Client
-participant "Host Adapter" as RPC
-participant "Worker Dispatch" as Dispatch
-participant "Worker Core (Bare)" as Server
+participant "Client" as Client
+participant "Transport" as Transport
+participant "Engine" as Engine
 
-Client -> RPC : loadModel({ modelSrc, ... })
-RPC -> Dispatch : JSON request
-Dispatch -> Server : route loadModel
+Client -> Transport : completion({ modelId, history })
+Transport -> Engine : JSON request
 
-note over Server : Download model (if needed)
-Server --> Dispatch : progress: { downloaded, total }
-Dispatch --> RPC : progress frame
-RPC --> Client : progress: { downloaded, total }
-
-note over Server : Plugin.createModel -> load native addon
-Server -> Dispatch : response: { modelId }
-Dispatch -> RPC : response frame
-RPC -> Client : response: { modelId }
-
-Client -> RPC : completion({ modelId, history })
-RPC -> Dispatch : JSON request
-Dispatch -> Server : route completionStream
-
-note over Server : Plugin handler (streaming)
 loop Token streaming
-    Server --> Dispatch : stream: token chunk
-    Dispatch --> RPC : stream frame
-    RPC --> Client : stream: token chunk
+    Engine --> Transport : token chunk
+    Transport --> Client : token chunk
 end
 
-Server -> Dispatch : final: { stats }
-Dispatch -> RPC : final frame
-RPC -> Client : final: { stats }
-
-note over RPC
-  Node/Bun/Electron: Unix socket or Windows named pipe
-  Expo: BareKit Worklet IPC
-  Python: loopback TCP
-  Bare direct: in-process adapter
-end note
+Engine -> Transport : final { stats }
+Transport -> Client : final { stats }
 
 @enduml
