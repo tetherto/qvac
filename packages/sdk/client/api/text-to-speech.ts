@@ -421,9 +421,17 @@ export function encodeTextToSpeechFragment(textFragment: string | Uint8Array) {
 
 /**
  * Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or
- * Uint8Array should be a complete UTF-8 fragment. The worker forwards them to ONNX TTS `runStreaming`
+ * Uint8Array should be a complete UTF-8 fragment. The worker forwards them to the TTS streaming handler
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
+ *
+ * @param params - The loaded TTS model, input mode, buffering controls, and
+ *   optional voice settings.
+ * @param options - Optional timeout, profiling, and connection settings.
+ * @returns A single-consumer duplex session for writing text fragments and
+ *   iterating PCM response frames.
+ * @throws {TextToSpeechStreamFailedError} When the session is iterated more
+ *   than once, receives a server error, or is written after closing.
  */
 export async function textToSpeechStream(
   params: TextToSpeechStreamClientParams,
