@@ -148,10 +148,10 @@ running `opencode` from the terminal.
   for managed mode (AI SDK 7). The host proxies on behalf of the managed serve,
   so it needs the provider's `ManagedQvacProvider.apiKey` getter — see
   [Provider compatibility](#provider-compatibility).
-- [`@qvac/cli@^0.11.0`](https://www.npmjs.com/package/@qvac/cli) available so the
-  host can run `qvac serve` (SDK 0.17 runtime). 0.11.0 is also the first CLI that
-  accepts `--api-key-file`, which keeps the managed serve's bearer key out of the
-  process command line.
+- [`@qvac/cli@^0.12.0`](https://www.npmjs.com/package/@qvac/cli) available so the
+  host can run `qvac serve` (SDK 0.18 runtime). `--api-key-file`, which keeps the
+  managed serve's bearer key out of the process command line, has been accepted
+  since CLI 0.11.0.
 - Node.js 22 or newer.
 
 ### Provider compatibility
