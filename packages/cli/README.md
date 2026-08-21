@@ -115,9 +115,11 @@ Interactively build a `qvac.config.json` with a starter `serve.models`, so you c
 straight to `qvac serve openai`. It searches the models the SDK provides — by name or by
 capability (role, addon, quantization) — and on a wide terminal previews, for the
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
-its alias, and (with `$EDITOR`) tweak the entry and review the result before adding it. Press
-`Esc` (or choose `Back`) to step back one menu; `Ctrl+C` aborts without writing. Existing
-entries are preserved; re-running is idempotent per model.
+its alias, set config parameters (guided by the SDK's config schema — each field shows its
+type and description and is validated on entry, for model types the SDK exposes a schema for;
+currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the
+result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
+aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
 ```bash
 qvac configure                 # interactive

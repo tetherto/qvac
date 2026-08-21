@@ -15,6 +15,13 @@ import {
   type ServeModelEntry
 } from './presets.js'
 import { docsUrlForAddon } from './docs-links.js'
+import {
+  configSchemaForAddon,
+  coerceParam,
+  paramFields,
+  validateParam,
+  type ParamField
+} from './param-schemas.js'
 
 // Sentinel a prompt resolves to when the user backs out (Esc, or a "Back"
 // choice). The delimiters can't occur in a model id or a modality value.
@@ -171,10 +178,74 @@ async function editEntry(alias: string, entry: ServeModelEntry): Promise<ServeMo
   }
 }
 
-// Preview the entry, then Add / Rename / Edit / Back. The alias is editable
-// before and after an $EDITOR pass; after an edit the preview re-renders with
-// the edited result, so the user sees the final entry before adding.
-// Returns the confirmed addition, or BACK to return to the previous step.
+// Guided, schema-driven editing of a model's config params: each field carries
+// its type hint and description from the SDK schema, and input is validated
+// against the real field schema. Esc / "Done" returns the updated entry.
+async function configureParams(
+  entry: ServeModelEntry,
+  fields: ParamField[]
+): Promise<ServeModelEntry> {
+  const config: Record<string, unknown> = { ...(entry.config ?? {}) }
+  for (;;) {
+    const pick = await askWithBack((ctx) =>
+      search<string>(
+        {
+          message: 'Set a parameter (Esc when done)',
+          source: (term) => {
+            const t = term?.toLowerCase().trim()
+            const list = t
+              ? fields.filter(
+                  (f) => f.name.toLowerCase().includes(t) || f.description.toLowerCase().includes(t)
+                )
+              : fields
+            const rows = list.slice(0, 100).map((f) => ({
+              name:
+                config[f.name] !== undefined
+                  ? `${f.name} = ${JSON.stringify(config[f.name])}   [${f.type}]`
+                  : `${f.name}   [${f.type}]`,
+              value: f.name,
+              description: f.description
+            }))
+            return [
+              ...rows,
+              { name: '<- Done', value: BACK, description: 'Finish setting parameters' }
+            ]
+          }
+        },
+        ctx
+      )
+    )
+    if (pick === BACK) break
+    const field = fields.find((f) => f.name === pick)
+    if (!field) continue
+    const current = config[field.name]
+    const raw = await askWithBack((ctx) =>
+      input(
+        {
+          message: `${field.name} [${field.type}]${field.description ? ` - ${field.description}` : ''}`,
+          default: current !== undefined ? JSON.stringify(current) : '',
+          validate: (v) => validateParam(field, v)
+        },
+        ctx
+      )
+    )
+    if (raw === BACK) continue
+    const coerced = coerceParam(raw)
+    if (coerced === undefined) delete config[field.name]
+    else config[field.name] = coerced
+  }
+  if (Object.keys(config).length === 0) {
+    const next = { ...entry }
+    delete next.config
+    return next
+  }
+  return { ...entry, config }
+}
+
+// Preview the entry, then Add / Rename / Set params / Edit / Back. The alias and
+// config are editable before and after an $EDITOR pass; after any change the
+// preview re-renders with the result, so the user sees the final entry before
+// adding. Returns the confirmed addition, or BACK to return to the previous step.
 async function confirmEntry(
   built: BuiltEntry,
   taken: Set<string>,
@@ -182,6 +253,8 @@ async function confirmEntry(
 ): Promise<AddedEntry | typeof BACK> {
   let alias = aliasFor(built.aliasBase, taken)
   let entry = built.entry
+  const schema = configSchemaForAddon(built.addon)
+  const fields = schema ? paramFields(schema) : null
   for (;;) {
     const proceed = await askWithBack((ctx) =>
       select<string>(
@@ -190,6 +263,7 @@ async function confirmEntry(
           choices: [
             { name: `Add it (alias: ${alias})`, value: 'add' },
             { name: 'Rename alias...', value: 'alias' },
+            ...(fields ? [{ name: 'Set config parameters...', value: 'params' }] : []),
             ...(canEdit ? [{ name: 'Edit in $EDITOR...', value: 'edit' }] : []),
             { name: '<- Back', value: 'back' }
           ]
@@ -198,6 +272,10 @@ async function confirmEntry(
       )
     )
     if (proceed === BACK || proceed === 'back') return BACK
+    if (proceed === 'params' && fields) {
+      entry = await configureParams(entry, fields)
+      continue
+    }
     if (proceed === 'alias') {
       const next = await askWithBack((ctx) =>
         input(
