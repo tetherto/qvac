@@ -15,6 +15,13 @@ on:
         type: string
         required: false
         default: "packages/vla-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
@@ -132,6 +139,22 @@ jobs:
         run: |
           npm install
 
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
@@ -139,14 +162,6 @@ jobs:
         name: Set Vulkan SDK Path on Linux
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
-
-      # vla requests qvac-fabric[hip-backend] (linux-x64), which requires ROCm at
-      # build time — install it so the addon's C++ tests build with HIP.
-      # Omit `with:` so version/gfx/sha256 all come from the action defaults
-      # and match /opt/rocm/.qvac-rocm when this job runs on a stamped image.
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Setup ROCm SDK for HIP cross-compile
-        uses: ./.github/actions/setup-rocm
 
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
@@ -293,6 +308,10 @@ jobs:
           # GrootEmbodimentSweep skips cleanly when unset.
           GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
+          # addon-test links AddressSanitizer but dynamically loads the non-ASan,
+          # -static-libstdc++ @qvac/fabric prebuild. See
+          # packages/vla-ggml/test/unit/CMakeLists.txt for the full rationale.
+          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: |
           set -euo pipefail
 

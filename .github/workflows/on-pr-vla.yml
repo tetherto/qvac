@@ -16,6 +16,8 @@ on:
     paths:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
+      - "packages/fabric/vcpkg.json"
+      - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
 
   workflow_call:
@@ -86,24 +88,62 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  verify-fabric-lockstep:
+  detect-fabric-stack:
     if: needs.authorize.outputs.allowed == 'true'
-    needs: [fork-approval, authorize]
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
     steps:
-      - name: Checkout code
+      - name: Checkout repository (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
+      - name: Warn when a stack PR builds against released fabric
+        if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
+        shell: bash
+        run: |
+          echo "::warning::This PR changes packages/fabric, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs here build against the released @qvac/fabric, not this PR's. Add the 'prebuilds' label to exercise the stack."
 
-      - name: Verify qvac-fabric versions are lockstep
-        id: lockstep
-        uses: ./.github/actions/verify-qvac-fabric-lockstep
-
-      - name: Report verified version
-        run: 'echo "Verified qvac-fabric version: ${{ steps.lockstep.outputs.version }}"'
+  resolve-fabric-prebuilds:
+    if: needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - detect-fabric-stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Wait for fabric-prebuilds from on-pr-fabric
+        uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          github-token: ${{ github.token }}
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Re-publish fabric-prebuilds for downstream jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
 
   sanity-checks:
-    if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, verify-fabric-lockstep, ci-router, fork-approval]
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -119,21 +159,17 @@ jobs:
           workdir: packages/vla-ggml
 
   cpp-lint:
-    # Runs on PRs (base SHA diff target) and on manual workflow_dispatch, where
-    # cpp-lint.yaml's Resolve refs falls back to HEAD~1 for the format/tidy diff
-    # base. Manual dispatch pointing at a branch lets us validate workflow
-    # changes (e.g. the hip-backend ROCm setup) before they land on the base.
-    if: always() && !cancelled() && needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true' && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')
-    needs: [authorize, ci-router, fork-approval]
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true' && (github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch')
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
-      sha: ${{ github.event.pull_request.base.sha }}
-      pr_head_sha: ${{ github.event.pull_request.head.sha }}
+      sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/vla-ggml
-      # vla pulls qvac-fabric[hip-backend]; ggml-config find_dependency(hip)
-      # needs ROCm on the lint runner at configure time.
-      include-rocm-sdk: true
 
   cpp-tests:
     permissions:
@@ -141,17 +177,33 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write # OIDC to pull the GR00T parity model from S3 (cpp-tests-vla)
-    if: always() && !cancelled() && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, sanity-checks, ci-router, fork-approval]
+    if: |
+      always() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
+    needs:
+      - fork-approval
+      - authorize
+      - sanity-checks
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     uses: ./.github/workflows/cpp-tests-vla.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   ts-checks:
-    if: needs.authorize.outputs.allowed == 'true'
-    needs: [authorize, fork-approval]
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -165,7 +217,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: packages/vla-ggml
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Type declaration check
         working-directory: packages/vla-ggml
@@ -202,8 +254,14 @@ jobs:
           workdir: packages/vla-ggml
 
   prebuild-artifact-reuse:
-    if: needs.detect-native-changes.outputs.native_changed == 'false'
-    needs: [detect-native-changes, sanity-checks, fork-approval]
+    if: |
+      needs.detect-native-changes.outputs.native_changed == 'false' &&
+      needs.detect-fabric-stack.outputs.fabric_stack != 'true'
+    needs:
+      - fork-approval
+      - detect-native-changes
+      - detect-fabric-stack
+      - sanity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -233,19 +291,29 @@ jobs:
       packages: write
       pull-requests: write
       id-token: write
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - sanity-checks
+      - detect-native-changes
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+      - prebuild-artifact-reuse
     if: |
       always() &&
-      !cancelled() &&
       needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
-    needs: [authorize, ci-router, sanity-checks, detect-native-changes, prebuild-artifact-reuse, fork-approval]
     uses: ./.github/workflows/prebuilds-vla.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   prebuild-artifact-save:
     if: always() && !cancelled() && needs.prebuild.result == 'success'
@@ -268,8 +336,21 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   integration-tests:
-    needs: [authorize, prebuild, prebuild-artifact-reuse, ci-router, fork-approval]
-    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    needs:
+      - fork-approval
+      - authorize
+      - prebuild
+      - prebuild-artifact-reuse
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+    if: |
+      always() &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_desktop == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     permissions:
       contents: read
       packages: read
@@ -277,8 +358,9 @@ jobs:
     uses: ./.github/workflows/integration-test-vla.yml
     secrets: inherit
     with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   # Mobile integration tests are no longer run on PRs. They run on demand via
   # `integration-mobile-test-vla.yml` (workflow_dispatch), where the dispatcher
@@ -324,9 +406,30 @@ jobs:
 
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
-    needs: [authorize, verify-fabric-lockstep, sanity-checks, cpp-lint, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, integration-tests, ts-checks, ci-router]
+    needs:
+      [
+        authorize,
+        ci-router,
+        sanity-checks,
+        ts-checks,
+        cpp-lint,
+        cpp-tests,
+        detect-fabric-stack,
+        resolve-fabric-prebuilds,
+        detect-native-changes,
+        prebuild-artifact-reuse,
+        prebuild,
+        prebuild-artifact-save,
+        integration-tests,
+        publish-prebuild-status,
+      ]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
+    permissions:
+      contents: read
+      pull-requests: write
+      packages: read
     with:
-      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && needs.ts-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
+      integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped') }}
