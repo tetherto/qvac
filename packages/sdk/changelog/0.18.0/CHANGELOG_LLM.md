@@ -1,19 +1,12 @@
----
-title: SDK Release Notes — v0.18.x (latest)
-description: Release notes for QVAC SDK v0.18.0.
----
-
-## v0.18.0
-
-### @qvac/sdk
+# QVAC SDK v0.18.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.0
 
 QVAC SDK 0.18.0 adds VisionPsy Nano multimodal constants, Audio8 and CosyVoice3 TTS engines, Indic Conformer transcription, and ACE-Step cover generation from a source track. One loaded LLM can now serve several completions at once, sharded GGUFs load directly from disk, and `loadModel` can fall back to a backup source when the origin fails. The dynamic `toolsMode` config is removed, and CosyVoice3 `pace` is restricted to `slow` | `moderate` | `fast`.
 
-#### Breaking Changes
+## Breaking Changes
 
-##### Dynamic toolsMode Removed
+### Dynamic toolsMode Removed
 
 `TOOLS_MODE`, `ToolsMode`, and the `toolsMode` load-config field are gone. Tools are always prepended after the system message (the previous static default). Passing `toolsMode` to `loadModel` now fails validation instead of being ignored. Drop the key from existing configs.
 
@@ -43,7 +36,7 @@ const modelId = await loadModel({
 
 Existing automatic KV-cache prefixes that were primed under dynamic tools mode are not reusable; the next turn rebuilds the prefix.
 
-##### CosyVoice3 Pace Values
+### CosyVoice3 Pace Values
 
 `textToSpeech` `pace` no longer accepts engine-specific strings such as `'very fast'`. Use `'slow'`, `'moderate'`, or `'fast'`.
 
@@ -59,9 +52,9 @@ textToSpeech({ modelId, text, pace: "very fast" });
 textToSpeech({ modelId, text, pace: "fast" });
 ```
 
-#### New APIs
+## New APIs
 
-##### Continuous Batching
+### Continuous Batching
 
 One loaded LLM can run several `completion` calls at once. A new request takes a free slot without waiting for the whole batch to drain. Cancelling one request leaves the others running, and each result reports its own timings. Single-slot models and fine-tuning stay one-at-a-time.
 
@@ -74,7 +67,7 @@ const outputs = await Promise.all(runs.map((r) => r.final));
 await cancel({ requestId: runs[0].requestId });
 ```
 
-##### loadModel fallbackSrc
+### loadModel fallbackSrc
 
 If the primary `modelSrc` cannot be fetched, `loadModel` retries from `fallbackSrc` (URL or local path) so callers do not have to build their own origin failover.
 
@@ -87,7 +80,7 @@ const modelId = await loadModel({
 });
 ```
 
-##### AudioGen Cover From a Source Track
+### AudioGen Cover From a Source Track
 
 AudioGen can now generate a cover from source audio, not only a text caption. Pass `taskType: "cover-nofsq"` with `sourceAudio` (path or stereo 48 kHz f32le PCM) and optional `referenceAudio` for timbre.
 
@@ -104,7 +97,7 @@ const cover = audioGen({
 });
 ```
 
-##### CosyVoice3 TTS
+### CosyVoice3 TTS
 
 Load CosyVoice3 with `ttsEngine: "cosyvoice3"`. Companion files download with the LLM; `instruct` accepts exactly one of dialect, emotion, or pace.
 
@@ -125,7 +118,7 @@ const result = textToSpeech({
 });
 ```
 
-##### Audio8 TTS
+### Audio8 TTS
 
 Audio8 is a multilingual LM + codec stack with optional zero-shot cloning via reference audio and matching transcript.
 
@@ -142,7 +135,7 @@ await loadModel({
 });
 ```
 
-##### Streaming Transcription Stats
+### Streaming Transcription Stats
 
 `transcribeStream` sessions now expose `stats` after the stream ends (`audioDuration`, `realTimeFactor`).
 
@@ -155,7 +148,7 @@ const stats = await session.stats;
 console.log(stats?.audioDuration, stats?.realTimeFactor);
 ```
 
-##### Vision image_no_upscale
+### Vision image_no_upscale
 
 VisionPsy (and other llama.cpp multimodal loads) can set `image_no_upscale: "on"` in `modelConfig` so the projector does not upscale tiles.
 
@@ -170,21 +163,21 @@ await loadModel({
 });
 ```
 
-#### Features
+## Features
 
-##### Indic Conformer Transcription
+### Indic Conformer Transcription
 
 Parakeet Indic Conformer CTC models are in the registry (`PARAKEET_INDIC_CONFORMER_CTC_*`). They use the existing unified ASR transcription path.
 
-##### OCR pipelineType Inference
+### OCR pipelineType Inference
 
 Doctr OCR models no longer require `langList`. EasyOCR still defaults to `['en']` when `langList` is omitted, and explicit lists are forwarded unchanged.
 
-##### NMT Timing Units
+### NMT Timing Units
 
 Translation stats (`totalTime` and related fields) are true milliseconds, matching the documented schema. Values that previously looked like `1.5` are now `1500`.
 
-#### Bug Fixes
+## Bug Fixes
 
 Sharded llama.cpp models load by pointing the addon at the on-disk files instead of concatenating shards in memory, so large split GGUFs start faster and fine-tuning a sharded model works.
 
@@ -192,11 +185,11 @@ Tool definitions are kept out of the primed KV-cache prefix, so changing tools a
 
 Audio-format constants no longer require the optional `@qvac/decoder-audio` package to be installed.
 
-#### Model Changes
+## Model Changes
 
 This release adds VisionPsy Nano (base and Flash) multimodal constants, Indic Conformer transcription weights, Audio8 codec + LM constants, CosyVoice3 companions, and Qwen3-8 27B multimodal shards. `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` is updated.
 
-##### Added Models
+### Added Models
 
 ```text
 MMPROJ_QWEN3_8_27B_MULTIMODAL_F16
@@ -223,7 +216,7 @@ VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
 VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
 ```
 
-##### Updated Models
+### Updated Models
 
 ```text
 TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
