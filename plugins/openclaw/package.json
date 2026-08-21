@@ -1,6 +1,6 @@
 {
   "name": "@qvac/openclaw-plugin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "OpenClaw provider plugin that runs a local QVAC serve through OpenClaw localService",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "@qvac/ai-sdk-provider": "^0.6.0",
-    "@qvac/cli": "^0.11.0"
+    "@qvac/cli": "^0.12.0"
   },
   "devDependencies": {
     "@types/node": "^24.2.1",
