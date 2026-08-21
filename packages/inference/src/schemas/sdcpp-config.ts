@@ -862,11 +862,12 @@ function refineLtxVideoRequest(
         message: 'reference_images requires lora.'
       })
     }
-    if (data.video_frames === undefined) {
+    if (data.video_frames === undefined || data.video_frames < 121) {
       ctx.addIssue({
         code: 'custom',
         path: ['video_frames'],
-        message: 'LTX reference conditioning requires video_frames to be explicitly set.'
+        message:
+          'LTX reference conditioning requires video_frames to be explicitly set to at least 121.'
       })
     }
   } else {
