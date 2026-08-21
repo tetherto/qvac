@@ -57,15 +57,34 @@ const std::unordered_set<std::string> FIT_CRITICAL_INTEGER_KEYS = {
 };
 
 // This exact experimental subset must be classified before backend discovery.
+// `host`, `extra-bufts` and `no-extra-bufts` are deliberately absent:
+// qvac-fabric registers no such option for LLAMA_EXAMPLE_COMMON, so neither the
+// addons nor this package can express them, and accepting them here would
+// answer for a placement the load cannot reproduce.
 const std::unordered_set<std::string> SUPPORTED_LOAD_KEYS = {
     "device",       "main-gpu",      "split-mode",  "tensor-split",
     "ctx-size",     "batch-size",    "ubatch-size", "parallel",
     "gpu-layers",   "n-gpu-layers",  "flash-attn",  "cache-type-k",
     "cache-type-v", "no-mmap",       "swa-full",    "fit-ctx",
     "n-cpu-moe",    "no-kv-offload", "kv-offload",  "no-op-offload",
-    "op-offload",   "no-host",       "host",        "no-extra-bufts",
-    "extra-bufts",
+    "op-offload",   "no-host",
 };
+
+// Distinct allowlisted keys that write the same field. `canonicalizeConfig`
+// only folds `_` into `-`, so both spellings survive it and
+// `parseGenericConfig` applies both handlers while iterating an unordered_map —
+// which value lands would be decided by hash-bucket order rather than by the
+// request. The addons reject conflicting alias pairs outright
+// (BackendSelection.cpp for main-gpu, LoadFitNormalization.cpp for split-mode),
+// and `aliasedInteger` in binding.cpp already does it for
+// ctx-size/batch-size/ubatch-size, so do the same here rather than answering a
+// request non-deterministically.
+constexpr std::array<std::pair<std::string_view, std::string_view>, 3>
+    EXCLUSIVE_LOAD_KEY_PAIRS = {{
+        {"gpu-layers", "n-gpu-layers"},
+        {"kv-offload", "no-kv-offload"},
+        {"op-offload", "no-op-offload"},
+    }};
 
 const std::array<std::string_view, 18> UNSUPPORTED_KEY_PARTS = {
     "lora",
@@ -145,6 +164,14 @@ LlamaConfigMap canonicalizeConfig(const LlamaConfigMap& config) {
     if (!canonical.emplace(key, value).second) {
       throw std::invalid_argument(
           "model-fit: duplicate llama config key aliases for '" + key + "'");
+    }
+  }
+  for (const auto& [first, second] : EXCLUSIVE_LOAD_KEY_PAIRS) {
+    if (canonical.contains(std::string(first)) &&
+        canonical.contains(std::string(second))) {
+      throw std::invalid_argument(
+          std::string("model-fit: use only one of '") + std::string(first) +
+          "' and '" + std::string(second) + "'");
     }
   }
   return canonical;
@@ -331,14 +358,6 @@ NormalizedLlamaLoad parseGenericConfig(
     if (IGNORED_NON_MEMORY_KEYS.contains(key)) {
       continue;
     }
-    if (key == "no-host") {
-      params.no_host = parseBoolean(value, key);
-      continue;
-    }
-    if (key == "no-extra-bufts") {
-      params.no_extra_bufts = parseBoolean(value, key);
-      continue;
-    }
     if (keyIsUnsupported(key)) {
       return unsupported("unsupported llama load setting: " + key);
     }
@@ -356,6 +375,11 @@ NormalizedLlamaLoad parseGenericConfig(
         const bool enabled = polarity ? requested : !requested;
         option.handler_bool(params, enabled);
       } else if (option.handler_void != nullptr) {
+        // Valueless upstream flags (`--no-host`, `--swa-full`): the token is
+        // never consulted, so passing the flag always means "on". A caller who
+        // wrote `false` described a load this flag cannot express, and the real
+        // load would have set the flag anyway — report that rather than
+        // projecting the opposite placement.
         if (!parseBoolean(value, key)) {
           return unsupported(
               "false cannot be represented for llama flag: " + key);
@@ -563,9 +587,14 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
   const bool useGpu = selected != nullptr && requestedDevice == "gpu";
 
   if (!useGpu) {
+    // No `gpu-layers` override: the addons leave `n_gpu_layers` alone on the
+    // CPU path (LoadFitNormalization.cpp:780-792 only resets split mode and
+    // main-gpu), and pinning it to 0 here both diverged from the load and made
+    // `common_fit_params` abort with "n_gpu_layers already set by user to 0"
+    // when the projection needed to adjust it. The zero-device list below is
+    // what keeps the weights off the GPU.
     splitMode = LLAMA_SPLIT_MODE_NONE;
     config.erase("tensor-split");
-    config["gpu-layers"] = "0";
   } else if (
       splitMode == LLAMA_SPLIT_MODE_ROW &&
       !allGpuDevicesSupportSplit(devices)) {
@@ -592,10 +621,15 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
       config["flash-attn"] = isBitnet ? "off" : "on";
     }
   }
+  // Exact `on`, matching `llm-llamacpp`'s `valueIs("flash-attn", "flash_attn",
+  // "on")` (LoadFitNormalization.cpp:287). The broader truthiness diverged:
+  // with `flash_attn: 'true'` the addon's q8_0 KV auto-default below does not
+  // fire and the load keeps f16, so treating it as enabled here halved the
+  // projected KV footprint — the direction that reports `fits` for a load that
+  // will not. Widening the spelling belongs in `llm-llamacpp` first so both
+  // move together.
   const bool flashEnabled =
-      config.contains("flash-attn") &&
-      (lower(config.at("flash-attn")) == "on" ||
-       common_arg_utils::is_truthy(config.at("flash-attn")));
+      config.contains("flash-attn") && lower(config.at("flash-attn")) == "on";
   const auto isQuantizedCache = [](const std::string& value) {
     const std::string type = lower(value);
     return type == "q8_0" || type == "q4_0" || type == "q4_1" ||
@@ -665,19 +699,45 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     }
     out.params.n_ubatch = out.params.n_batch;
   }
+  // `llama_model_params::devices` is a NULL-terminated list (llama.h:296) and
+  // `llama_prepare_model_devices` walks it looking for that terminator
+  // (llama.cpp:154) on every load, `no_alloc` fits included. An empty vector is
+  // not the same as an empty list either: `common_model_params_to_llama` only
+  // forwards a non-empty vector (common.cpp:1645), so clearing it left
+  // `devices` null and sent fabric down its "default device selection" branch —
+  // every GPU enumerated, and the host-memory arm of `common/fit.cpp` that
+  // actually constrains a CPU load skipped. The addons avoid both by emitting
+  // `--device none` / `--device <name>` and letting `parse_device_list` append
+  // the sentinel (common/arg.cpp:978); these lists carry it explicitly.
   if (!useGpu) {
-    out.params.devices.clear();
+    out.params.devices = {nullptr};
     out.params.main_gpu = -1;
-    out.params.n_gpu_layers = 0;
   } else {
     if (splitMode == LLAMA_SPLIT_MODE_NONE && selected->handle != nullptr) {
-      out.params.devices = {selected->handle};
+      out.params.devices = {selected->handle, nullptr};
       out.params.main_gpu = 0;
     } else {
       out.params.main_gpu = mainGpu.value_or(0);
     }
   }
   return out;
+}
+
+void applyEmbeddingContextPolicy(common_params& params, uint32_t trainedCtx) {
+  // Mirrors `embed-llamacpp`'s `adjustEmbeddingContextSize`
+  // (BertModel.cpp:293-316). The pin is the load-bearing half: `common/fit.h`
+  // documents that the fitter rewrites the context size "if and only if equal
+  // to 0", so leaving an unset embedding context at 0 invites it to report a
+  // reduced `nCtx` — and a correspondingly reduced memory figure — for a load
+  // that will run at the full trained context. The cap is the other direction:
+  // the addon accepts an oversized request after capping it, so rejecting it
+  // here would hard-error on a load that succeeds.
+  if (trainedCtx == 0) {
+    return;
+  }
+  if (params.n_ctx == 0 || static_cast<uint32_t>(params.n_ctx) > trainedCtx) {
+    params.n_ctx = static_cast<int32_t>(trainedCtx);
+  }
 }
 
 NormalizedLlamaLoad normalizeLlamaLoadConfig(

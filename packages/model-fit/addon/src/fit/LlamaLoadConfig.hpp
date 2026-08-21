@@ -97,6 +97,12 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     const ModelTraits& traits, const std::vector<BackendDevice>& devices,
     LlamaFitPlatform platform);
 
+// Applies `embed-llamacpp`'s embedding context rules (pin an unset context to
+// the model's trained context, cap an oversized one) to an already-normalized
+// load. Split out from `normalizeLlamaLoadConfig`, which never sees the model's
+// trained context.
+void applyEmbeddingContextPolicy(common_params& params, uint32_t trainedCtx);
+
 LlamaFitExecution invokeLlamaFit(
     const std::string& modelPath, common_params& params, uint32_t marginMiB,
     uint32_t nCtxMin, const LlamaFitInvoker& invoker);

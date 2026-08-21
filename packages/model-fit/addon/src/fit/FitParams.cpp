@@ -1,6 +1,5 @@
 #include "fit/FitParams.hpp"
 
-#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <iterator>
@@ -480,6 +479,12 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   LlamaFitExecution execution;
   const bool supported =
       withSupportedLlamaLoad(normalized, [&](common_params& params) {
+        // Embedding loads pin the context before the oversize check, so an
+        // oversized request is capped the way `embed-llamacpp` caps it rather
+        // than rejected. Completion keeps the reject.
+        if (req.loadKind == LlamaLoadKind::Embedding) {
+          applyEmbeddingContextPolicy(params, trainedCtx);
+        }
         if (trainedCtx > 0 && params.n_ctx > 0 &&
             static_cast<uint32_t>(params.n_ctx) > trainedCtx) {
           throw std::invalid_argument(
@@ -488,10 +493,18 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
               std::to_string(trainedCtx) + ")");
         }
 
+        // No clamp at zero: fabric's `--ctx-size 0` handler encodes "do not
+        // reduce the context" by storing `UINT32_MAX` in the `int32_t`
+        // `fit_params_min_ctx` (common/arg.cpp:1455-1461, common/common.h:486),
+        // so the sentinel arrives here as -1. `std::max(-1, 0)` erased it and
+        // the `nCtxMin == 0` fallback below then turned the one configuration
+        // that forbids reduction into a 4096 floor. The addons pass the field
+        // through unclamped (LoadFitNormalization.cpp:101); do the same and let
+        // the signed-to-unsigned round trip restore the sentinel. The fallback
+        // still catches a genuine zero.
         uint32_t nCtxMin =
-            req.nCtxMin == 0
-                ? static_cast<uint32_t>(std::max(params.fit_params_min_ctx, 0))
-                : req.nCtxMin;
+            req.nCtxMin == 0 ? static_cast<uint32_t>(params.fit_params_min_ctx)
+                             : req.nCtxMin;
         if (nCtxMin == 0) {
           nCtxMin = DEFAULT_N_CTX_MIN;
         }

@@ -2,7 +2,9 @@
 
 #include <array>
 #include <iostream>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <common/common.h>
 
@@ -14,12 +16,12 @@ using model_fit::LlamaConfigMap;
 using model_fit::LlamaLoadKind;
 using model_fit::ModelTraits;
 
-int failures = 0;
+int g_failures = 0;
 
 void expect(bool condition, const char* message) {
   if (!condition) {
     std::cerr << message << '\n';
-    ++failures;
+    ++g_failures;
   }
 }
 
@@ -57,6 +59,21 @@ BackendDevice device(
       .supportsSplitBuffer = false,
       .handle = reinterpret_cast<ggml_backend_dev_t>(handle),
       .registryName = registryName};
+}
+
+// `llama_model_params::devices` is a NULL-terminated list (llama.h:296), so a
+// CPU placement is the bare sentinel and a pinned single-GPU placement is the
+// handle followed by it. Asserting the terminator is the point: without it
+// `llama_prepare_model_devices` walks past the end of the allocation.
+bool isCpuPlacement(const common_params& params) {
+  return params.devices.size() == 1 && params.devices.front() == nullptr &&
+         params.main_gpu == -1;
+}
+
+bool isPinnedGpu(const common_params& params, const BackendDevice& expected) {
+  return params.devices.size() == 2 &&
+         params.devices.front() == expected.handle &&
+         params.devices.back() == nullptr && params.main_gpu == 0;
 }
 
 } // namespace
@@ -103,10 +120,12 @@ int main() {
     expect(
         normalized.params.split_mode == LLAMA_SPLIT_MODE_NONE,
         "CPU config must use NONE split mode");
-    expect(normalized.params.main_gpu == -1, "CPU config must use main_gpu -1");
     expect(
-        normalized.params.n_gpu_layers == 0,
-        "CPU config must disable GPU layers");
+        isCpuPlacement(normalized.params),
+        "CPU config must pass the NULL-terminated zero-device list");
+    expect(
+        normalized.params.n_gpu_layers == 8,
+        "CPU config must leave gpu-layers as the caller wrote it");
     expect(
         normalized.params.n_ctx == 2048,
         "ctx-size must be parsed by qvac-fabric");
@@ -128,8 +147,8 @@ int main() {
     const llama_context_params contextParams =
         common_context_params_to_llama(convertedParams);
     expect(
-        modelParams.n_gpu_layers == 0,
-        "model conversion must preserve CPU placement");
+        modelParams.n_gpu_layers == 8,
+        "model conversion must preserve the requested gpu-layers");
     expect(
         contextParams.n_ctx == 2048,
         "context conversion must preserve context size");
@@ -211,12 +230,8 @@ int main() {
           ModelTraits{.architecture = "bitnet", .hasOneBitQuantization = true},
           {openCl, cpu()});
       expect(
-          bitnetEmbedding.params.devices.size() == 1 &&
-              bitnetEmbedding.params.devices.front() == openCl.handle,
+          isPinnedGpu(bitnetEmbedding.params, openCl),
           "BitNet embedding must select eligible Adreno OpenCL");
-      expect(
-          bitnetEmbedding.params.n_gpu_layers != 0,
-          "BitNet embedding must not inherit completion CPU fallback");
     }
   }
 
@@ -383,8 +398,7 @@ int main() {
             {"device", "cpu"},
             {"no-kv-offload", "true"},
             {"no-op-offload", "false"},
-            {"no-host", "true"},
-            {"no-extra-bufts", "false"}},
+            {"no-host", "true"}},
         ModelTraits{},
         {cpu()});
     expect(booleans.supported, "memory-bearing negated booleans must parse");
@@ -395,18 +409,11 @@ int main() {
         !booleans.params.no_op_offload,
         "no-op-offload=false must keep op offload");
     expect(booleans.params.no_host, "no-host=true must disable host buffers");
-    expect(
-        !booleans.params.no_extra_bufts,
-        "no-extra-bufts=false must keep extra buffer types");
 
     const auto positiveAliases = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
         LlamaConfigMap{
-            {"device", "cpu"},
-            {"kv_offload", "false"},
-            {"op-offload", "true"},
-            {"no_host", "false"},
-            {"no_extra_bufts", "true"}},
+            {"device", "cpu"}, {"kv_offload", "false"}, {"op-offload", "true"}},
         ModelTraits{},
         {cpu()});
     expect(positiveAliases.supported, "positive boolean aliases must parse");
@@ -416,12 +423,111 @@ int main() {
     expect(
         !positiveAliases.params.no_op_offload,
         "op-offload=true must keep op offload");
+
+    // `--no-host` is a valueless flag upstream (handler_void, no negative
+    // form): the token is never consulted, so the real load sets `no_host`
+    // whichever value the caller wrote. A `false` therefore describes a
+    // placement the flag cannot express and must not project the opposite one.
+    const auto falseVoidFlag = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "cpu"}, {"no_host", "false"}},
+        ModelTraits{},
+        {cpu()});
     expect(
-        !positiveAliases.params.no_host,
-        "no-host=false must keep host buffers");
+        !falseVoidFlag.supported && falseVoidFlag.unsupportedDetail.find(
+                                        "no-host") != std::string::npos,
+        "no-host=false must be unsupported rather than keep host buffers");
+
+    // qvac-fabric registers no `--no-extra-bufts` / `--extra-bufts` for
+    // LLAMA_EXAMPLE_COMMON, so neither this package nor the addons can express
+    // it and it must not be silently accepted.
+    for (const char* key : {"no-extra-bufts", "extra-bufts", "host"}) {
+      const auto absentFlag = model_fit::normalizeLlamaLoadConfig(
+          "/model.gguf",
+          LlamaConfigMap{{"device", "cpu"}, {key, "true"}},
+          ModelTraits{},
+          {cpu()});
+      expect(
+          !absentFlag.supported,
+          "settings qvac-fabric does not register must be unsupported");
+    }
+  }
+
+  {
+    // Two allowlisted spellings of one field would otherwise be applied in
+    // unordered_map order, making the verdict depend on hash buckets.
+    const std::array<std::pair<const char*, const char*>, 3> conflicts = {
+        {{"gpu-layers", "n-gpu-layers"},
+         {"kv-offload", "no-kv-offload"},
+         {"op-offload", "no-op-offload"}}};
+    for (const auto& [first, second] : conflicts) {
+      bool rejected = false;
+      try {
+        static_cast<void>(model_fit::normalizeLlamaLoadConfig(
+            "/model.gguf",
+            LlamaConfigMap{{"device", "gpu"}, {first, "10"}, {second, "40"}},
+            ModelTraits{},
+            {metal(), cpu()}));
+      } catch (const std::invalid_argument& error) {
+        rejected = std::string(error.what()).find("use only one of") !=
+                   std::string::npos;
+      }
+      expect(rejected, "conflicting key aliases must be rejected loudly");
+    }
+  }
+
+  {
+    // The q8_0 KV auto-default must fire on exactly the spelling
+    // `llm-llamacpp` recognizes, or the projection halves the KV footprint the
+    // load will actually use.
+    const auto flashOn = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"flash-attn", "on"}},
+        ModelTraits{},
+        {metal(), cpu()});
     expect(
-        positiveAliases.params.no_extra_bufts,
-        "no-extra-bufts=true must disable extra buffer types");
+        flashOn.params.cache_type_k == GGML_TYPE_Q8_0 &&
+            flashOn.params.cache_type_v == GGML_TYPE_Q8_0,
+        "flash-attn=on must apply the quantized KV auto-default");
+
+    const auto flashTruthy = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "gpu"}, {"flash_attn", "true"}},
+        ModelTraits{},
+        {metal(), cpu()});
+    expect(
+        flashTruthy.params.cache_type_k == GGML_TYPE_F16 &&
+            flashTruthy.params.cache_type_v == GGML_TYPE_F16,
+        "flash-attn=true must keep f16 KV, matching llm-llamacpp");
+  }
+
+  {
+    // `common/fit.h`: the fitter rewrites the context size "if and only if
+    // equal to 0", so an unset embedding context has to be pinned or the fit
+    // reports a reduced nCtx for a load that runs at the trained context.
+    common_params unset;
+    unset.n_ctx = 0;
+    model_fit::applyEmbeddingContextPolicy(unset, 2048);
+    expect(unset.n_ctx == 2048, "unset embedding context must pin to trained");
+
+    common_params oversized;
+    oversized.n_ctx = 8192;
+    model_fit::applyEmbeddingContextPolicy(oversized, 2048);
+    expect(
+        oversized.n_ctx == 2048,
+        "oversized embedding context must cap, matching embed-llamacpp");
+
+    common_params within;
+    within.n_ctx = 1024;
+    model_fit::applyEmbeddingContextPolicy(within, 2048);
+    expect(within.n_ctx == 1024, "in-range embedding context must be kept");
+
+    common_params unknownTrained;
+    unknownTrained.n_ctx = 0;
+    model_fit::applyEmbeddingContextPolicy(unknownTrained, 0);
+    expect(
+        unknownTrained.n_ctx == 0,
+        "unreadable trained context must leave the request alone");
   }
 
   {
@@ -437,12 +543,9 @@ int main() {
         {cpu(), gpuOne, gpuTwo});
     expect(selected.supported, "valid global main-gpu index must be supported");
     expect(
-        selected.params.devices.size() == 1 &&
-            selected.params.devices.front() == gpuTwo.handle,
-        "main-gpu must select the requested global device");
-    expect(
-        selected.params.main_gpu == 0,
-        "split NONE must index the selected one-device set at zero");
+        isPinnedGpu(selected.params, gpuTwo),
+        "main-gpu must select the requested global device and terminate the "
+        "list");
 
     const auto fallback = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -452,12 +555,8 @@ int main() {
         {cpu(), gpuOne, gpuTwo});
     expect(fallback.supported, "invalid main-gpu index must fall back");
     expect(
-        fallback.params.devices.size() == 1 &&
-            fallback.params.devices.front() == gpuOne.handle,
+        isPinnedGpu(fallback.params, gpuOne),
         "invalid main-gpu must fall back to ordinary GPU selection");
-    expect(
-        fallback.params.main_gpu == 0,
-        "fallback split NONE placement must use selected-set index zero");
 
     const auto selectedCpu = model_fit::normalizeLlamaLoadConfig(
         "/model.gguf",
@@ -467,8 +566,7 @@ int main() {
         {cpu(), gpuOne});
     expect(selectedCpu.supported, "valid CPU main-gpu index must be supported");
     expect(
-        selectedCpu.params.n_gpu_layers == 0 &&
-            selectedCpu.params.main_gpu == -1,
+        isCpuPlacement(selectedCpu.params),
         "valid CPU main-gpu index must examine only CPU and fall back to CPU");
 
     const BackendDevice accelerator =
@@ -483,8 +581,7 @@ int main() {
         selectedAccelerator.supported,
         "valid accelerator main-gpu index must be supported");
     expect(
-        selectedAccelerator.params.n_gpu_layers == 0 &&
-            selectedAccelerator.params.main_gpu == -1,
+        isCpuPlacement(selectedAccelerator.params),
         "valid accelerator main-gpu index must examine only it and fall back "
         "to CPU");
 
@@ -525,7 +622,7 @@ int main() {
         ModelTraits{},
         {rpc, cpu()});
     expect(
-        rpcOnly.params.n_gpu_layers == 0 && rpcOnly.params.main_gpu == -1,
+        isCpuPlacement(rpcOnly.params),
         "RPC-only inventory must fall back to CPU");
 
     const auto mixed = model_fit::normalizeLlamaLoadConfig(
@@ -534,8 +631,7 @@ int main() {
         ModelTraits{},
         {rpc, vulkan, cpu()});
     expect(
-        mixed.params.devices.size() == 1 &&
-            mixed.params.devices.front() == vulkan.handle,
+        isPinnedGpu(mixed.params, vulkan),
         "mixed inventory must ignore RPC and select local GPU");
 
     const auto nonAdrenoOpenCl = model_fit::normalizeLlamaLoadConfig(
@@ -545,8 +641,7 @@ int main() {
         {device("OpenCL0", "Mali GPU", BackendDeviceType::Gpu, 43, "OpenCL"),
          cpu()});
     expect(
-        nonAdrenoOpenCl.params.n_gpu_layers == 0 &&
-            nonAdrenoOpenCl.params.main_gpu == -1,
+        isCpuPlacement(nonAdrenoOpenCl.params),
         "non-Adreno OpenCL inventory must fall back to CPU");
 
     const BackendDevice adrenoOpenCl =
@@ -557,8 +652,7 @@ int main() {
         ModelTraits{},
         {adrenoOpenCl, cpu()});
     expect(
-        eligibleAdrenoOpenCl.params.devices.size() == 1 &&
-            eligibleAdrenoOpenCl.params.devices.front() == adrenoOpenCl.handle,
+        isPinnedGpu(eligibleAdrenoOpenCl.params, adrenoOpenCl),
         "Adreno OpenCL inventory must remain eligible");
   }
 
@@ -572,8 +666,7 @@ int main() {
         bitnetAdrenoBelow800.supported,
         "Vulkan-only Adreno BitNet fallback must remain representable");
     expect(
-        bitnetAdrenoBelow800.params.n_gpu_layers == 0 &&
-            bitnetAdrenoBelow800.params.main_gpu == -1,
+        isCpuPlacement(bitnetAdrenoBelow800.params),
         "one-bit BitNet on Adreno <800 must fall back to CPU");
 
     const auto bitnetLike = model_fit::normalizeLlamaLoadConfig(
@@ -585,7 +678,8 @@ int main() {
         bitnetLike.supported,
         "non-one-bit bitnet-like metadata must be supported");
     expect(
-        bitnetLike.params.n_gpu_layers != 0 &&
+        !bitnetLike.params.devices.empty() &&
+            bitnetLike.params.devices.front() != nullptr &&
             bitnetLike.params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_ENABLED,
         "non-one-bit bitnet-like metadata must use ordinary GPU defaults");
 
@@ -597,7 +691,7 @@ int main() {
           {device("OpenCL0", description, BackendDeviceType::Gpu, 8, "OpenCL"),
            cpu()});
       expect(
-          completion.params.n_gpu_layers == 0,
+          isCpuPlacement(completion.params),
           "BitNet completion Adreno policy must remain CPU fallback");
     }
   }
@@ -852,5 +946,5 @@ int main() {
     expect(!streaming.supported, "streaming loads must be unsupported");
   }
 
-  return failures == 0 ? 0 : 1;
+  return g_failures == 0 ? 0 : 1;
 }
