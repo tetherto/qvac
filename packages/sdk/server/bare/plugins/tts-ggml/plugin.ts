@@ -16,11 +16,13 @@ import {
   type PluginModelResult,
   type ResolveContext,
   type ResolveResult,
+  type TtsAudio8LoadConfig,
   type TtsChatterboxLoadConfig,
   type TtsCosyvoice3LoadConfig,
   type TtsParlerLoadConfig,
   type TtsSupertonicLoadConfig,
   type TtsRuntimeConfig,
+  type TtsAudio8RuntimeConfig,
   type TtsChatterboxRuntimeConfig,
   type TtsCosyvoice3RuntimeConfig,
   type TtsParlerRuntimeConfig,
@@ -143,6 +145,33 @@ async function resolveCosyvoice3Config(
   )
 
   return { config: runtime, artifacts: lavasrArtifacts }
+}
+
+async function resolveAudio8Config(
+  config: TtsAudio8LoadConfig,
+  ctx: ResolveContext
+): Promise<ResolveResult<TtsRuntimeConfig>> {
+  const { audio8CodecDecoderModelSrc, audio8CodecEncoderModelSrc, referenceAudioSrc, ...runtime } =
+    config
+  if (!audio8CodecDecoderModelSrc) {
+    throw new TtsArtifactsRequiredError()
+  }
+
+  const resolve = ctx.resolveModelPath
+  const [audio8CodecDecoderPath, audio8CodecEncoderPath, referenceAudioPath] = await Promise.all([
+    resolve(audio8CodecDecoderModelSrc),
+    audio8CodecEncoderModelSrc ? resolve(audio8CodecEncoderModelSrc) : Promise.resolve(undefined),
+    referenceAudioSrc ? resolve(referenceAudioSrc) : Promise.resolve(undefined)
+  ])
+
+  return {
+    config: runtime,
+    artifacts: {
+      audio8CodecDecoderPath,
+      ...(audio8CodecEncoderPath ? { audio8CodecEncoderPath } : {}),
+      ...(referenceAudioPath ? { referenceAudioPath } : {})
+    }
+  }
 }
 
 // Build the optional LavaSR `files` entries from resolved artifacts. Supplying
@@ -362,6 +391,55 @@ function createCosyvoice3Model(
   return { model }
 }
 
+function createAudio8Model(
+  modelId: string,
+  config: TtsAudio8RuntimeConfig,
+  params: CreateModelParams,
+  artifacts: Record<string, string | undefined>
+): PluginModelResult {
+  const audio8Lm = params.modelPath
+  const audio8CodecDecoder = artifacts['audio8CodecDecoderPath']
+  const audio8CodecEncoder = artifacts['audio8CodecEncoderPath']
+  const referenceAudioPath = artifacts['referenceAudioPath']
+
+  if (!audio8Lm || !audio8CodecDecoder) {
+    throw new TtsArtifactsRequiredError()
+  }
+
+  const logger = createStreamLogger(modelId, ModelType.ttsGgml)
+
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_AUDIO8,
+    files: {
+      audio8Lm,
+      audio8CodecDecoder,
+      ...(audio8CodecEncoder ? { audio8CodecEncoder } : {})
+    },
+    ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
+    ...(config.referenceText !== undefined ? { referenceText: config.referenceText } : {}),
+    ...(config.greedy !== undefined ? { greedy: config.greedy } : {}),
+    ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+    ...(config.topK !== undefined ? { topK: config.topK } : {}),
+    ...(config.topP !== undefined ? { topP: config.topP } : {}),
+    ...(config.maxFrames !== undefined ? { maxFrames: config.maxFrames } : {}),
+    ...(config.threads !== undefined ? { threads: config.threads } : {}),
+    ...(config.nGpuLayers !== undefined ? { nGpuLayers: config.nGpuLayers } : {}),
+    ...(config.seed !== undefined ? { seed: config.seed } : {}),
+    config: {
+      ...(config.useGPU !== undefined ? { useGPU: config.useGPU } : {}),
+      ...(config.outputSampleRate !== undefined
+        ? { outputSampleRate: config.outputSampleRate }
+        : {})
+    },
+    logger,
+    opts: { stats: true },
+    exclusiveRun: true
+  })
+
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
+  return { model }
+}
+
 export const ttsPlugin = definePlugin({
   modelType: ModelType.ttsGgml,
   displayName: 'TTS (GGML)',
@@ -378,6 +456,9 @@ export const ttsPlugin = definePlugin({
     if (ttsEngine === 'cosyvoice3') {
       return resolveCosyvoice3Config(cfg as TtsCosyvoice3LoadConfig, ctx)
     }
+    if (ttsEngine === 'audio8') {
+      return resolveAudio8Config(cfg as TtsAudio8LoadConfig, ctx)
+    }
     if (ttsEngine === 'supertonic') {
       return resolveSupertonicConfig(cfg as TtsSupertonicLoadConfig, ctx)
     }
@@ -393,6 +474,9 @@ export const ttsPlugin = definePlugin({
     }
     if (config.ttsEngine === 'cosyvoice3') {
       return createCosyvoice3Model(params.modelId, config, params, artifacts)
+    }
+    if (config.ttsEngine === 'audio8') {
+      return createAudio8Model(params.modelId, config, params, artifacts)
     }
     if (config.ttsEngine === 'supertonic') {
       return createSupertonicModel(params.modelId, config, params, artifacts)

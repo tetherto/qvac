@@ -12,6 +12,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [0.3.3] - 2026-08-20
+
+### Changed
+
+- Bump `@qvac/registry-client` from `^0.4.0` to `^0.6.1` as a development
+  dependency so in-repo download and test tooling stays on the hyperdb v6 line.
+
 ## [0.3.2] - 2026-08-18
 
 ### Changed
@@ -34,6 +41,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   ggml update fixes an uncatchable abort in the OpenCL elementwise ops on a
   non-contiguous input and speeds up pad, small-M matmul and argmax dispatches
   on Adreno.
+
+### Added
+
+- Add NVIDIA `parakeet-unified-en-0.6b` RNN-T support for CPU and GPU
+  transcription, model staging, conversion, examples, and performance coverage.
+
+### Changed
+
+- Recognize the native engine's new `parakeet.model.type = "rnnt"` metadata as
+  standard Parakeet ASR.
+- Require `speech-cpp` 2026-08-17 for native Unified RNN-T inference.
 
 ### Fixed
 

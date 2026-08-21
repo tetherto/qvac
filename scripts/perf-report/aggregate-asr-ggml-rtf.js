@@ -40,8 +40,8 @@ const ASR_ADDONS = new Set(['whisper', 'parakeet', 'asr-ggml'])
 // Parakeet model types, in test-name bracket form. `sortformer-streaming`
 // (v2.1) must precede `sortformer` (v1) so the more specific token wins the
 // alternation.
-const PARAKEET_MODEL_TYPE_RE = /\[(tdt|ctc|eou|sortformer-streaming|sortformer)\]/
-const PARAKEET_MODEL_TYPES = new Set(['tdt', 'ctc', 'eou', 'sortformer-streaming', 'sortformer'])
+const PARAKEET_MODEL_TYPE_RE = /\[(tdt|unified|ctc|eou|sortformer-streaming|sortformer)\]/
+const PARAKEET_MODEL_TYPES = new Set(['tdt', 'unified', 'ctc', 'eou', 'sortformer-streaming', 'sortformer'])
 
 function parseArgs (argv) {
   const args = {
