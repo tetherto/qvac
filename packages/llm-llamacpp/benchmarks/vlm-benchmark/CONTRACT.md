@@ -31,6 +31,12 @@ validates it (and the config wiring) without running any model.
 | `rss_mb` | peak process memory so far (MB); populated on desktop and mobile (Android + iOS), `null` only where the platform doesn't expose it. CLI legs read it from the `/usr/bin/time -v` wrapper, which is Linux-only, so they report `null` on macOS and Windows |
 
 `[VLMSEG]`/`[VLMMETA]` gain `v`, `scenario`, `source_id`, `source_ref` (SEG also `block`).
+`[VLMMETA]` also carries `preproc`: the per-model preprocessing that leg actually applied, as
+a sorted `key=value` string on the addon spelling, so an addon leg configured through
+`addonConfig` and a CLI leg configured through `cliArgs` are directly comparable. An empty
+string means base preprocessing; absent means the log predates the field. Where the legs of one
+model disagree, the report says so under the origins table rather than letting the rows read as
+like for like.
 New optional `[VLMBLOCK]{json}` — one per measurement round: `{scenario, source_id,
 source_ref, model, device, block, stability:{kind:'temp'|'probe', value_ms?, waited_ms}}`.
 

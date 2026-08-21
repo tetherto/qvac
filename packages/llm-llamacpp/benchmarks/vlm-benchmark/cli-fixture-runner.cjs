@@ -17,6 +17,7 @@ const path = require('path')
 const { runOnceCli } = require('./cli-case-runner')
 const { parseStdoutMetrics } = require('./stdout-parser')
 const { parseCliArgs } = require('./cli-args.cjs')
+const { preprocLabel } = require('./models.cjs')
 const fixture = require('./fixture.data.cjs')
 
 function arg (name, def) { const i = process.argv.indexOf(`--${name}`); return i >= 0 ? process.argv[i + 1] : def }
@@ -90,7 +91,10 @@ function main () {
     main_origin: MAIN_ORIGIN,
     main_source: MAIN_SOURCE,
     mmproj_origin: MMPROJ_ORIGIN,
-    mmproj_source: MMPROJ_SOURCE
+    mmproj_source: MMPROJ_SOURCE,
+    // What this leg actually applied. Empty on upstream-cli by design, and the report marks
+    // that rather than leaving two legs looking like the same configuration.
+    preproc: preprocLabel({ cliArgs: EXTRA_ARGS })
   }) + '[/VLMMETA]')
 
   const items = selectedItems()

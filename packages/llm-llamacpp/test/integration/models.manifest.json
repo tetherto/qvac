@@ -128,8 +128,7 @@
         "https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf"
       ],
       "sha256": "5a6b15da0f483b9e320a5b86b787ad1831953dfaa706e2c5d91de830ea70d784",
-      "bytes": 115923680,
-      "warm": false
+      "bytes": 115923680
     },
     "mmproj-Qwen3.5-2B-F16.gguf": {
       "urls": [

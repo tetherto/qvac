@@ -9,6 +9,8 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('path')
+const fs = require('fs')
+const os = require('os')
 const { execFileSync } = require('child_process')
 
 const DIR = path.resolve(__dirname, '..')
@@ -48,6 +50,41 @@ test('the warmup block is excluded from the measured row count', () => {
   const row = details[details.length - 1]
   assert.ok(row, 'expected a q8 GPU details row')
   assert.equal(row.split('|')[3].trim(), '5')
+})
+
+// An upstream-cli leg never receives cliArgs, because they are fabric-fork flags, so it can
+// run base preprocessing under the same model label as an addon leg that applied them. The
+// numbers alone give no hint of that, which is what these two assertions guard.
+const ASYM = (() => {
+  const meta = (cell, preproc) => '[VLMMETA]' + JSON.stringify({
+    v: 2, scenario: 'default', cell, source: cell, model: 'flash-q4',
+    main_origin: 'repo@sha', main_source: 'HF', mmproj_origin: 'repo@sha · mmproj', mmproj_source: 'HF', preproc
+  }) + '[/VLMMETA]'
+  const row = (cell, ms) => '[VLMROW]' + JSON.stringify({
+    v: 2, scenario: 'default', block: 1, cell, source: cell, model: 'flash-q4', device: 'gpu', rep: 0,
+    task: 'textvqa', id: 'textvqa_0', metric: 'vqa', gold: ['paris'], pred: 'paris', ms, ttft_ms: 100,
+    decode_tps: 10, gen_tokens: 5, prompt_tokens: 30
+  }) + '[/VLMROW]'
+  const file = path.join(os.tmpdir(), 'vlm-aggregate-asym.log')
+  fs.writeFileSync(file, [meta('addon', 'image-no-upscale=on'), row('addon', 500), meta('upstream-cli', ''), row('upstream-cli', 600)].join('\n') + '\n')
+  const out = runAggregate(['--title', 'probe', file])
+  fs.unlinkSync(file)
+  return out
+})()
+
+test('the origins table reports what preprocessing each leg applied', () => {
+  assert.match(ASYM, /\| `addon` \|.*\| `image-no-upscale=on` \|/)
+  assert.match(ASYM, /\| `upstream-cli` \|.*\| base \|/)
+})
+
+test('legs of one model that preprocessed differently are called out', () => {
+  assert.match(ASYM, /Preprocessing differs across the legs of `flash-q4`/)
+  assert.match(ASYM, /`upstream-cli` ran base preprocessing/)
+})
+
+test('a log with no preproc field gets no mismatch warning', () => {
+  // Older logs predate the field, and absent must not read as "ran base preprocessing".
+  assert.doesNotMatch(OUT, /Preprocessing differs/)
 })
 
 test('passing the same log twice does not change the aggregate', () => {

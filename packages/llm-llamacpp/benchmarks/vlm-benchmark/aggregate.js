@@ -613,15 +613,37 @@ function build (rows, vision, meta, provText, title, opts = {}) {
   }
   if (Object.keys(meta).length) {
     L.push('### Models & origins (Source = Registry / HF / S3 / URL · pinned commits)\n')
-    L.push('| Cell | main model | mmproj |')
-    L.push('|---|---|---|')
+    L.push('| Cell | main model | mmproj | preprocessing |')
+    L.push('|---|---|---|---|')
     for (const cell of Object.keys(meta).sort()) {
       const m = meta[cell]
       const main = `**${m.main_source || '—'}** · ${m.main_origin || '—'}`
       const proj = `**${m.mmproj_source || '—'}** · ${m.mmproj_origin || '—'}`
-      L.push(`| \`${cell}\` | ${main} | ${proj} |`)
+      const pre = m.preproc ? `\`${m.preproc}\`` : (m.preproc === '' ? 'base' : '—')
+      L.push(`| \`${cell}\` | ${main} | ${proj} | ${pre} |`)
     }
     L.push('')
+    // Two legs of one model that applied different preprocessing are not comparable, and the
+    // numbers give no hint of it. The usual cause is an upstream-cli leg, which never receives
+    // cliArgs because they are fabric-fork flags, so say so instead of letting a reader treat
+    // the rows as like for like.
+    const byModel = {}
+    for (const [cell, m] of Object.entries(meta)) {
+      if (m.preproc == null) continue
+      const key = m.model || cell
+      byModel[key] = byModel[key] || {}
+      byModel[key][m.preproc] = byModel[key][m.preproc] || []
+      byModel[key][m.preproc].push(cell)
+    }
+    const split = Object.entries(byModel).filter(([, v]) => Object.keys(v).length > 1)
+    if (split.length) {
+      for (const [model, variants] of split) {
+        const parts = Object.entries(variants).map(([pre, cells]) =>
+          `${cells.map(c => `\`${c}\``).join(', ')} ran ${pre ? `\`${pre}\`` : 'base preprocessing'}`)
+        L.push(`> **Preprocessing differs across the legs of \`${model}\`**: ${parts.join('; ')}. Those rows are not like for like.`)
+      }
+      L.push('')
+    }
   }
   if (provText && provText.trim()) {
     L.push('### Provenance — hardware & software\n')

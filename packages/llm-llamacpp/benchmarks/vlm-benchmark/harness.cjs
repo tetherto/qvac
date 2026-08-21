@@ -22,7 +22,7 @@ const { ensureModel, resolveModelEntry, loadManifest } = require('../../test/int
 const LlmLlamacpp = require('../../index.js')
 const fixture = require('./fixture.data.cjs')
 const config = require('./config.cjs')
-const { parseModels } = require('./models.cjs')
+const { parseModels, preprocLabel } = require('./models.cjs')
 const { stabilityGuard } = require('./methodology.cjs')
 
 // Resolve a fixture image. Images live in a fixture object store (not git): CI syncs
@@ -366,7 +366,10 @@ function runModel (spec) {
         main_source: sourceType(spec.llm),
         mmproj_origin: spec.mmproj.origin,
         mmproj_url: displayUrl(spec.mmproj),
-        mmproj_source: sourceType(spec.mmproj)
+        mmproj_source: sourceType(spec.mmproj),
+        // Same canonical form the CLI legs emit, so the report can tell a leg that applied
+        // the model's preprocessing from one that ran the weights without it.
+        preproc: preprocLabel({ addonConfig: spec.addonConfig })
       })) + '[/VLMMETA]')
       // Size the output cap to the heaviest task in this run (ocr-page needs ~768).
       const items = selectedItems()

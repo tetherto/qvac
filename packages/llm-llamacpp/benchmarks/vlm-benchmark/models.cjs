@@ -298,6 +298,25 @@ function parseModels (raw, catalog, fallback) {
   return specs
 }
 
+// One canonical string for the per-model preprocessing a leg actually applied, so the report
+// can compare legs that were configured through different mechanisms. The addon leg passes
+// its addonConfig, the CLI legs the argv they were handed, and both come out as the same
+// sorted `key=value` form keyed on the addon spelling. Empty means base preprocessing, which
+// is the honest answer for an upstream-cli leg: cliArgs are fabric-fork flags and never reach
+// it, so it runs the model without them even when the addon leg does not.
+function preprocLabel ({ cliArgs, addonConfig } = {}) {
+  const applied = new Map()
+  for (const [k, v] of Object.entries(addonConfig || {})) applied.set(k.replace(/_/g, '-'), String(v))
+  for (const [flag, value] of cliArgsToMap(cliArgs || [])) {
+    const key = CLI_TO_ADDON.get(flag) || flag
+    if (!applied.has(key)) applied.set(key, value)
+  }
+  return [...applied.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([k, v]) => (v === '' ? k : `${k}=${v}`))
+    .join(' ')
+}
+
 // assertTwinsMatch is exported so a test can hold the committed catalog to the same rule
 // as a json: spec; normalizeSpec only runs on the latter.
-module.exports = { parseModels, parsePair, blobFromUrl, assertTwinsMatch, MODEL_OPTIONS }
+module.exports = { parseModels, parsePair, blobFromUrl, assertTwinsMatch, preprocLabel, MODEL_OPTIONS }
