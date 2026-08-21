@@ -90,12 +90,21 @@ jobs:
     uses: ./.github/workflows/prebuilds-ocr-ggml.yml
     secrets: inherit
 
+  verify-generated:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: packages/ocr-ggml
+
   publish-gpr:
     needs:
       - build
       - publish-logic
+      - verify-generated
     if: >-
-      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
+      needs.verify-generated.result == 'success' &&
+      ((needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     timeout-minutes: 20
     outputs:
       published_version: ${{ steps.publish.outputs.npm_published_version }}
@@ -137,8 +146,10 @@ jobs:
       - build
       - publish-logic
       - release-merge-guard
+      - verify-generated
     if: >-
-      (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      needs.verify-generated.result == 'success' &&
+      ((!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')))
     continue-on-error: false
     timeout-minutes: 20
     outputs:

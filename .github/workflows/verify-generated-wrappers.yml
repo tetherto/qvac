@@ -1,0 +1,58 @@
+name: Verify Generated Wrappers
+
+# Verifies that a package's committed tsc output matches src/, in a job with no
+# publish privilege, so the publish jobs never have to run `tsc` (and therefore
+# never have to install the devDependency closure) themselves.
+#
+# Why this exists as its own workflow rather than only in sanity-checks:
+# sanity-checks runs on pull_request_target only, but on-merge-*.yml also
+# publishes on workflow_dispatch and on pushes to release-*/feature-*/tmp-*.
+# Those events never open a PR, so without this job they would publish whatever
+# is committed with nothing checking it. Callers gate publish on this job's
+# result.
+#
+# Deliberately declares no secrets and contents: read only. Everything it runs
+# -- npm install of the package's own dependency tree, then tsc -- is untrusted
+# third-party code, which is exactly why it must not sit next to PAT_TOKEN,
+# id-token: write or contents: write.
+
+on:
+  workflow_call:
+    inputs:
+      workdir:
+        description: "Package directory containing package.json (e.g. packages/ocr-ggml)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-generated:
+    name: Verify generated wrappers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      # Fails if the committed .js/.d.ts differ from a fresh build, or if an
+      # emitted file was never committed. Not --if-present: every package wired
+      # into this workflow is expected to define the script, and silently
+      # passing because of a typo in the script name would defeat the gate.
+      - name: Verify generated wrappers match src
+        working-directory: ${{ inputs.workdir }}
+        run: npm run check:generated
