@@ -107,9 +107,9 @@ const GEMMA4_Q4 = {
 // upscales the long side to 2048, hence separate entries rather than one with a flag.
 // modelNames must be models.manifest.json keys or the addon leg aborts (see #3195).
 //
-// These need a fabric addon: the published prebuild has neither the VisionPsy projector type
-// nor the image-no-upscale load-config key, so a two-models dispatch on it fails at load,
-// after both blobs have downloaded. Use several-sources against `fabric@<ref>`.
+// The addon leg can run these: the projector arrived in qvac-fabric 10069.1.0 and vcpkg.json
+// pins >= 10069.1.1, and the addon accepts image-no-upscale (LoadConfigHandlers.cpp, #3725).
+// So two-models works here, not only several-sources against a fabric branch.
 const VISIONPSY_BASE = {
   id: 'visionpsy',
   name: 'VisionPsy-Nano-460M',
