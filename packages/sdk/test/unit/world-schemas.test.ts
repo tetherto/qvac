@@ -137,6 +137,70 @@ test('worldSceneRequestSchema: dimensions must be positive multiples of 32', (t)
   t.absent(worldSceneRequestSchema.safeParse({ ...base, width: -832 }).success, 'negative width')
 })
 
+// Neither the SDK nor the addon bounded these before: the addon checks only
+// "positive multiple of 32", and the pack ceiling in ops/world.ts runs after
+// native generation has already allocated and written, so it cannot prevent the
+// OOM it is named for.
+test('worldSceneRequestSchema: allocation inputs are bounded before native dispatch', (t) => {
+  const base = { modelId: 'm', prompt: 'a path through a forest', image: 'aGVsbG8=' }
+
+  t.ok(
+    worldSceneRequestSchema.safeParse({ ...base, width: 1920, height: 1088 }).success,
+    'the 1920x1088 pixel budget is inclusive'
+  )
+  t.absent(
+    worldSceneRequestSchema.safeParse({ ...base, width: 1920, height: 1120 }).success,
+    'one 32-row step over the pixel budget'
+  )
+  t.absent(
+    worldSceneRequestSchema.safeParse({ ...base, width: 4128 }).success,
+    'one 32-column step over the per-axis ceiling'
+  )
+  // Both axes are individually legal here; only the product catches it.
+  t.absent(
+    worldSceneRequestSchema.safeParse({ ...base, width: 4096, height: 4096 }).success,
+    'legal axes, illegal area'
+  )
+})
+
+/** Well-formed base64 decoding to exactly `bytes`, padding included. */
+function base64OfBytes(bytes: number): string {
+  const groups = Math.ceil(bytes / 3)
+  const padding = groups * 3 - bytes
+  return 'A'.repeat(groups * 4 - padding) + '='.repeat(padding)
+}
+
+test('base64DecodedBytes: reports the decoded length without allocating', async (t) => {
+  const { base64DecodedBytes } = await import('@/schemas/sdcpp-config')
+
+  t.is(base64DecodedBytes('aGVsbG8='), 5, '"hello" is 5 bytes with one pad')
+  t.is(base64DecodedBytes('aGVsbG8h'), 6, '"hello!" is 6 bytes with no pad')
+  t.is(base64DecodedBytes('aGVsbG8hIQ=='), 7, '"hello!!" is 7 bytes with two pads')
+  t.is(base64DecodedBytes(''), 0, 'the empty string decodes to nothing')
+
+  // Round-trips against the generator the boundary tests below rely on, so a
+  // mistake in either shows up here rather than as a silently loose ceiling.
+  t.is(base64DecodedBytes(base64OfBytes(1)), 1, 'one byte')
+  t.is(base64DecodedBytes(base64OfBytes(3)), 3, 'a whole group')
+  t.is(base64DecodedBytes(base64OfBytes(1_000_000)), 1_000_000, 'a large non-multiple of 3')
+})
+
+test('worldSceneRequestSchema: an oversized first frame is refused', async (t) => {
+  const { MAX_SCENE_IMAGE_BYTES } = await import('@/schemas/sdcpp-config')
+  const base = { modelId: 'm', prompt: 'a path through a forest' }
+
+  t.ok(
+    worldSceneRequestSchema.safeParse({ ...base, image: base64OfBytes(MAX_SCENE_IMAGE_BYTES) })
+      .success,
+    'exactly at the ceiling'
+  )
+  t.absent(
+    worldSceneRequestSchema.safeParse({ ...base, image: base64OfBytes(MAX_SCENE_IMAGE_BYTES + 3) })
+      .success,
+    'three bytes over it'
+  )
+})
+
 test('cancel: the world kind is reachable from the public broad-cancel schema', async (t) => {
   const { cancelRequestSchema } = await import('@/schemas/cancel')
 

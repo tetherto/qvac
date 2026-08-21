@@ -10174,7 +10174,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         int | None,
         Field(
             alias="frameJpegQuality",
-            description="Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at that quality on the standard scale (higher = better quality and larger frames). A block is roughly 14 MB of raw pixels, so 85 is a good choice whenever frames cross a process or network boundary.",
+            description="Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at that quality on the standard scale (higher = better quality and larger frames). A block is roughly 14 MB of raw pixels at 832x480 and the default numFramePerBlock — more at a higher resolution or a larger block — so 85 is a good choice whenever frames cross a process or network boundary.",
             ge=0,
             le=100,
         ),
@@ -13622,7 +13622,8 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
     image: Annotated[
         str,
         Field(
-            description="Base64 PNG/JPEG bytes of the first frame. Any size — it is cover-scaled and center-cropped to width x height.",
+            description="Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded. It is cover-scaled and center-cropped to width x height, so a frame larger than the target resolution buys nothing.",
+            max_length=4194304,
             min_length=1,
             pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
         ),
@@ -13632,7 +13633,7 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
         Field(
             description="Scene width in pixels, a multiple of 32. Defaults to 832.",
             gt=0,
-            le=9007199254740991,
+            le=4096,
             multiple_of=32,
         ),
     ] = None
@@ -13641,7 +13642,7 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
         Field(
             description="Scene height in pixels, a multiple of 32. Defaults to 480.",
             gt=0,
-            le=9007199254740991,
+            le=4096,
             multiple_of=32,
         ),
     ] = None

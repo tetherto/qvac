@@ -268,8 +268,10 @@ export const sdcppConfigSchema = z.object({
         .describe(
           'Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at ' +
             'that quality on the standard scale (higher = better quality and ' +
-            'larger frames). A block is roughly 14 MB of raw pixels, so 85 is a ' +
-            'good choice whenever frames cross a process or network boundary.'
+            'larger frames). A block is roughly 14 MB of raw pixels at 832x480 and ' +
+            'the default numFramePerBlock — more at a higher resolution or a larger ' +
+            'block — so 85 is a good choice whenever frames cross a process or ' +
+            'network boundary.'
         ),
       kvCache: z
         .boolean()
@@ -1144,7 +1146,75 @@ export const worldStepStreamResponseSchema = z.object({
 
 export type WorldStepStreamResponse = z.infer<typeof worldStepStreamResponseSchema>
 
-export const worldSceneRequestSchema = z.object({
+/**
+ * Per-axis ceiling for a generated world. Neither the SDK nor the addon bounded
+ * these before: the addon checks only "positive multiple of 32", and the pack
+ * ceiling in ops/world.ts runs after native generation has already allocated the
+ * GPU buffers and written the file, so it cannot prevent the OOM.
+ */
+export const MAX_SCENE_DIMENSION = 4096
+
+/**
+ * Total pixel budget, ~1080p rounded onto the 32 grid. Bounds the product as
+ * well as each axis, so 4096x4096 is refused even though both axes pass. The
+ * validated 832x480 tier sits 5x under it.
+ */
+export const MAX_SCENE_PIXELS = 1920 * 1088
+
+/**
+ * Decoded first-frame ceiling. The image is cover-scaled and cropped to
+ * width x height, but decoding it is where the memory goes, so it is bounded
+ * before dispatch rather than after.
+ *
+ * 3 MB is generous for a frame that ends up at most 1920x1088 — and it is also
+ * the largest value this can be *enforced* at today. `BASE64_PATTERN` is a
+ * starred quad group, and V8/JSC stop matching it somewhere between 4.2M and
+ * 5.6M characters: a perfectly valid base64 string above that returns `false`
+ * and is rejected as malformed rather than oversized. 3 MB decodes to 4194304
+ * characters, inside the range that still matches. See the note in
+ * `refineWorldSceneBudget` — the pattern is shared with the diffusion, upscale
+ * and VLA image fields, so fixing it belongs in its own change.
+ */
+export const MAX_SCENE_IMAGE_BYTES = 3 * 1024 * 1024
+
+/** Base64 characters for `MAX_SCENE_IMAGE_BYTES`, four per three bytes. */
+export const MAX_SCENE_IMAGE_BASE64_CHARS = (MAX_SCENE_IMAGE_BYTES / 3) * 4
+
+/** Decoded length of a base64 payload, without allocating the buffer to find out. */
+export function base64DecodedBytes(value: string): number {
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  return Math.floor(value.length / 4) * 3 - padding
+}
+
+/**
+ * Cross-field ceilings for a scene request. Kept as a named function because
+ * both the plain and the stream request schema have to enforce it, and because
+ * the pixel budget is a contract worth testing directly.
+ */
+export function refineWorldSceneBudget(
+  value: { width?: number | undefined; height?: number | undefined },
+  ctx: z.RefinementCtx
+) {
+  const width = value.width ?? 832
+  const height = value.height ?? 480
+  if (width * height > MAX_SCENE_PIXELS) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['width'],
+      message:
+        `A ${width}x${height} world is ${width * height} pixels, over the ` +
+        `${MAX_SCENE_PIXELS}-pixel ceiling. Scene creation allocates for the full ` +
+        'frame before anything can check the result, so this is refused up front.'
+    })
+  }
+  // The size ceiling itself is a `.max()` on the field, declared ahead of the
+  // base64 pattern so an oversized image reports its size rather than failing as
+  // malformed — which matters here more than usual, because BASE64_PATTERN stops
+  // matching valid input a little above that ceiling anyway (see
+  // MAX_SCENE_IMAGE_BYTES).
+}
+
+const worldSceneRequestShape = {
   modelId: z.string().describe("Identifier of a model loaded with modelConfig.mode: 'world'."),
   requestId: z
     .string()
@@ -1165,16 +1235,21 @@ export const worldSceneRequestSchema = z.object({
   image: z
     .string()
     .min(1)
+    // Declared before the pattern so an oversized frame reports its size instead
+    // of failing as malformed base64.
+    .max(MAX_SCENE_IMAGE_BASE64_CHARS)
     .regex(BASE64_PATTERN)
     .describe(
-      'Base64 PNG/JPEG bytes of the first frame. Any size — it is cover-scaled and ' +
-        'center-cropped to width x height.'
+      'Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded. It is ' +
+        'cover-scaled and center-cropped to width x height, so a frame larger than ' +
+        'the target resolution buys nothing.'
     ),
   width: z
     .number()
     .int()
     .positive()
     .multipleOf(32)
+    .max(MAX_SCENE_DIMENSION)
     .optional()
     .describe('Scene width in pixels, a multiple of 32. Defaults to 832.'),
   height: z
@@ -1182,6 +1257,7 @@ export const worldSceneRequestSchema = z.object({
     .int()
     .positive()
     .multipleOf(32)
+    .max(MAX_SCENE_DIMENSION)
     .optional()
     .describe('Scene height in pixels, a multiple of 32. Defaults to 480.'),
   returnPack: z
@@ -1194,13 +1270,17 @@ export const worldSceneRequestSchema = z.object({
         'live on the session. Turn it on to persist a world, then pass the saved ' +
         'file back as modelConfig.sceneSrc on a later load to walk it again.'
     )
-})
+}
+
+export const worldSceneRequestSchema = z
+  .object(worldSceneRequestShape)
+  .superRefine(refineWorldSceneBudget)
 
 export type WorldSceneRequest = z.input<typeof worldSceneRequestSchema>
 
-export const worldSceneStreamRequestSchema = worldSceneRequestSchema.extend({
-  type: z.literal('worldSceneStream')
-})
+export const worldSceneStreamRequestSchema = z
+  .object({ ...worldSceneRequestShape, type: z.literal('worldSceneStream') })
+  .superRefine(refineWorldSceneBudget)
 
 export type WorldSceneStreamRequest = z.input<typeof worldSceneStreamRequestSchema>
 
