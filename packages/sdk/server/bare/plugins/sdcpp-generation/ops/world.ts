@@ -120,6 +120,17 @@ const worldSessions = new WeakSet<object>()
  * matter — `createScene` writes exactly where the native session was
  * constructed to read — comes from calling this ONCE per session and storing
  * the result in `files.scene`, not from the path being reproducible.
+ *
+ * No garbage collection, deliberately. `unload()` removes the pack, and so does
+ * worker shutdown, so only a crash or SIGKILL leaks one — bounded at roughly
+ * 10 MB per lost session, and never adopted by a later run because the name is
+ * unique. The obvious mtime-based sweep is NOT safe here: a pack is written once
+ * at promotion and never touched again, so a session walking for hours looks
+ * exactly as old as an orphan, and ~/.qvac is shared across worker processes.
+ * Doing this properly needs a liveness marker like the one
+ * `planAutoCacheEvictions` gets from `activeCachePaths` in
+ * `server/bare/ops/kv-cache-retention.ts`. Tracked as a follow-up rather than
+ * guessed at here.
  */
 export function worldScenePath(modelId: string): string {
   const session = generateShortHash(generateServerRequestId())
@@ -468,7 +479,14 @@ export async function* worldStep(
   // its dispatch inside its guard for the same reason.
   let response: StepResponseWithStats & { iterate(): AsyncIterable<unknown> }
   let frameIndex = 0
-  let stepFailed = false
+  // Set only when `iterate()` runs to its own end. Every other way out of the
+  // block below leaves the native session advanced past frames the caller never
+  // saw, which is the same hazard as a cancel and needs the same teardown. A
+  // consumer that stops early — a dropped transport, a `break`, an explicit
+  // `.return()` on the generator — unwinds through `finally` as a RETURN
+  // completion: `catch` does not run and `ctx.signal.aborted` is false, so
+  // neither of the other two flags can stand in for this one.
+  let drained = false
 
   try {
     response = (await session.run(() =>
@@ -486,8 +504,8 @@ export async function* worldStep(
       // The native progress tick carries step/frames/elapsed_ms, all of which
       // the terminal stats already report — so it is not forwarded.
     }
+    drained = !ctx.signal.aborted
   } catch (error) {
-    stepFailed = true
     // Native cancellation surfaces as the addon's own `Diffusion/Cancelled`
     // error out of `iterate()`. Rethrowing it raw hands the client a generic RPC
     // error for what this API promises as a typed cancellation — and the
@@ -515,8 +533,9 @@ export async function* worldStep(
     // the same promoted pack.
     //
     // A cancel does not reach the `catch` above: the loop breaks on the abort
-    // flag rather than throwing, so the abort has to be tested here too.
-    if (stepFailed || ctx.signal.aborted) {
+    // flag rather than throwing, so the abort has to be tested here too. And an
+    // early consumer exit reaches neither, which is what `drained` covers.
+    if (!drained) {
       try {
         await session.deactivate()
       } catch (teardownError) {
@@ -529,12 +548,14 @@ export async function* worldStep(
     }
   }
 
-  // A cancelled block must not be reported as a finished one. The DiT already
-  // committed it to the session history, so the frames we did not deliver are
-  // gone for good and the walk resumes past them — yielding `done` here would
-  // hand the caller a silent gap dressed up as success. The addon makes the
-  // step itself reject for the same reason; this covers the race where we stop
-  // iterating before that rejection lands.
+  // A cancelled block must not be reported as a finished one. Native compute for
+  // the block may well finish, but its history is discarded with the session in
+  // the teardown above, so the frames we did not deliver are gone for good —
+  // yielding `done` here would hand the caller a silent gap dressed up as
+  // success. The next step rebuilds from the promoted pack and the walk restarts
+  // from the world's beginning. The addon makes the step itself reject for the
+  // same reason; this covers the race where we stop iterating before that
+  // rejection lands.
   if (ctx.signal.aborted) {
     throw new InferenceCancelledError(ctx.requestId)
   }
@@ -567,12 +588,33 @@ export async function* worldCreateScene(
     )
   }
 
+  // A cancel that lands BEFORE `begin(...)` resolves is not merely early: the
+  // registry consumes the marker and SKIPS admission entirely (see the
+  // `preCancel` branch in request-registry.ts), so this context holds NO world
+  // slot. Another request may own it and be mid-generation right now. Carrying
+  // on would tear its session down under it, overwrite the `inFlight` guard
+  // teardown waits on, and — via `discardStagedScene` in the `finally` below —
+  // delete the staging file it is generating into, since that path is shared per
+  // session. Refuse before touching any of it.
+  if (ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId)
+  }
+
   // Replacing the world of a live session: the native session pins the scene it
   // was activated with, and `load()` is a no-op once loaded, so a rewritten pack
   // underneath it would be ignored and the walk would silently continue in the
   // old world. Dropping the session first also frees its ~16 GB before the
   // encoders (~6.9 GB) load, which a 24 GB card needs.
   await session.deactivate()
+
+  // `deactivate()` awaits the session lock and any in-flight native job, so a
+  // cancel can land across it. Re-check: the same slot-less race applies to
+  // everything below, and unlike `worldStep` there is no abort hook to fall back
+  // on — `createScene` takes no abort predicate, so once dispatched it runs to
+  // completion whatever the caller does.
+  if (ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId)
+  }
 
   // Generated into a staging file and promoted only on success: a failed
   // generation must leave the caller with the world they already had, not with

@@ -474,6 +474,144 @@ test('world step op: a dispatch-time step failure drops the session too', async 
   })
 })
 
+// An early consumer exit unwinds the generator as a RETURN completion: the
+// `catch` never runs and the signal is not aborted, so neither of the two flags
+// the teardown used to test can see it. The native session is left advanced past
+// frames the caller never received, which is the same hazard as a cancel.
+test('world step op: abandoning the frame stream drops the advanced session', async function (t) {
+  const { worldStep } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+
+  let loads = 0
+  let unloads = 0
+  const driver = makeResponse([new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])])
+  const counting = {
+    load: async () => {
+      loads++
+    },
+    unload: async () => {
+      unloads++
+    },
+    step: async () => driver.response,
+    createScene: async () => driver.response,
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId }) => {
+    const stream = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+
+    const first = await stream.next()
+    t.ok((first.value as { data?: string } | undefined)?.data, 'the first frame was delivered')
+
+    // Walk away mid-block. The native job still has to finish, so release it and
+    // let the settle the teardown waits on complete.
+    driver.releaseStream()
+    driver.settleJob()
+    await stream.return(undefined)
+
+    t.is(unloads, 1, 'the session advanced past undelivered frames is torn down')
+
+    driver.releaseStream()
+    driver.settleJob()
+    const next = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+    await next.next()
+    await next.return(undefined)
+    t.is(loads, 2, 'the next step rebuilt the session from the promoted pack')
+  })
+})
+
+// A cancel landing BEFORE begin() resolves makes the registry skip admission
+// entirely, so the context holds no world slot. Carrying on would tear down and
+// overwrite a session another request legitimately owns.
+test('world scene op: an already-cancelled request touches nothing', async function (t) {
+  const fs = await import('bare-fs')
+  const [{ worldCreateScene }, { getRequestRegistry }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime')
+  ])
+  const driver = makeResponse([])
+
+  let scenes = 0
+  let unloads = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {
+      unloads++
+    },
+    step: async () => driver.response,
+    createScene: async () => {
+      scenes++
+      return driver.response
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId, session }) => {
+    // Stand in for the staging file of a request that already holds the slot.
+    fs.writeFileSync(session.stagingScenePath, 'another request is generating into this')
+
+    const requestId = makeId('req')
+    const stream = worldCreateScene({
+      modelId,
+      requestId,
+      prompt: 'a scene',
+      image: Buffer.from('image').toString('base64')
+    })
+    getRequestRegistry().cancel({ requestId })
+
+    await t.exception(stream.next(), /cancelled/i, 'the scene request rejects as a cancellation')
+    t.is(scenes, 0, 'no native scene generation was dispatched')
+    t.is(unloads, 0, 'the live session was not deactivated underneath its owner')
+    t.ok(
+      fs.existsSync(session.stagingScenePath),
+      "the in-flight request's staging file was not discarded"
+    )
+    fs.unlinkSync(session.stagingScenePath)
+  })
+})
+
+// The second guard: `deactivate()` awaits the session lock and any in-flight
+// native job, so a cancel can land across it. `createScene` takes no abort
+// predicate, so once dispatched it runs to completion whatever the caller does.
+test('world scene op: a cancel during deactivate stops before native dispatch', async function (t) {
+  const [{ worldCreateScene }, { getRequestRegistry }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime')
+  ])
+  const driver = makeResponse([])
+  const requestId = makeId('req')
+
+  let scenes = 0
+  const counting = {
+    load: async () => {},
+    // Fires while `deactivate()` is in progress, which is the only window this
+    // second check exists for.
+    unload: async () => {
+      getRequestRegistry().cancel({ requestId })
+    },
+    step: async () => driver.response,
+    createScene: async () => {
+      scenes++
+      return driver.response
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId, session }) => {
+    // Activate first, so `deactivate()` has real work to do and reaches unload().
+    await session.ensureActivated()
+
+    const stream = worldCreateScene({
+      modelId,
+      requestId,
+      prompt: 'a scene',
+      image: Buffer.from('image').toString('base64')
+    })
+
+    await t.exception(stream.next(), /cancelled/i, 'the scene request rejects as a cancellation')
+    t.is(scenes, 0, 'the cancel that landed during deactivate stopped the dispatch')
+  })
+})
+
 test('world scene op: a dispatch that never starts leaves no staged file behind', async function (t) {
   const fs = await import('bare-fs')
   const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
