@@ -157,9 +157,9 @@ test('world step op: a cancelled block rejects instead of reporting done', async
     driver.releaseStream()
     driver.settleJob()
 
-    // The DiT already committed this block, so the undelivered frames are
-    // gone and the walk resumes past them. Reporting `done` here would hand
-    // the caller a silent gap dressed as success.
+    // The undelivered frames are gone: the session that advanced past them is
+    // torn down, and the next step restarts from the promoted pack. Reporting
+    // `done` here would hand the caller a silent gap dressed as success.
     let terminal: IteratorResult<unknown> | undefined
     let threw: Error | undefined
     try {
@@ -519,6 +519,59 @@ test('world step op: abandoning the frame stream drops the advanced session', as
   })
 })
 
+// The same slotless race as the scene op, but worse: `onAbort` fires
+// `session.cancel()`, which is a MODEL-WIDE native cancel. A pre-cancelled step
+// holding no slot would reach across and kill the block belonging to whichever
+// request legitimately owns the lane.
+test('world step op: a pre-cancelled step leaves the lane owner alone', async function (t) {
+  const [{ worldStep }, { getRequestRegistry }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime')
+  ])
+  const driver = makeResponse([new Uint8Array([1]), new Uint8Array([2])])
+
+  let steps = 0
+  let nativeCancels = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => {
+      steps++
+      return driver.response
+    },
+    createScene: async () => driver.response,
+    cancel: async () => {
+      nativeCancels++
+    }
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId }) => {
+    // The owner: admitted, holding the single world slot, block in flight.
+    const owner = worldStep({ modelId, requestId: makeId('owner'), keys: ['W'] })
+    const firstFrame = await owner.next()
+    t.ok((firstFrame.value as { data?: string } | undefined)?.data, 'the owner is mid-block')
+    t.is(steps, 1, 'exactly one native block is running')
+
+    // The intruder: cancelled before its `begin(...)` resolves, so the registry
+    // skips admission and it never holds the slot the owner has.
+    const intruderId = makeId('intruder')
+    const intruder = worldStep({ modelId, requestId: intruderId, keys: ['W'] })
+    getRequestRegistry().cancel({ requestId: intruderId })
+
+    await t.exception(intruder.next(), /cancelled/i, 'the intruder rejects as a cancellation')
+    t.is(nativeCancels, 0, "the owner's in-flight block was not cancelled out from under it")
+    t.is(steps, 1, 'and no second native block was dispatched')
+
+    // The owner is still healthy and still delivering.
+    const second = await owner.next()
+    t.ok((second.value as { data?: string } | undefined)?.data, 'the owner keeps streaming')
+
+    driver.releaseStream()
+    driver.settleJob()
+    await owner.return(undefined).catch(() => {})
+  })
+})
+
 // A cancel landing BEFORE begin() resolves makes the registry skip admission
 // entirely, so the context holds no world slot. Carrying on would tear down and
 // overwrite a session another request legitimately owns.
@@ -609,6 +662,70 @@ test('world scene op: a cancel during deactivate stops before native dispatch', 
 
     await t.exception(stream.next(), /cancelled/i, 'the scene request rejects as a cancellation')
     t.is(scenes, 0, 'the cancel that landed during deactivate stopped the dispatch')
+  })
+})
+
+// Promotion is not instantaneous: it awaits the session lock, a stat, a rename
+// and optionally a whole readFile. A cancel accepted across any of those used to
+// fall through to the terminal `done` payload and report success for a request
+// the caller had already withdrawn.
+test('world scene op: a cancel during promotion rejects instead of reporting done', async function (t) {
+  const fs = await import('bare-fs')
+  const [{ worldCreateScene }, { getRequestRegistry }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/bare/runtime')
+  ])
+  const driver = makeResponse(['{"scene":"/server/path.safetensors","elapsed_ms":10}'])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ modelId, session }) => {
+    const requestId = makeId('scene')
+
+    // Deterministic gate on the real promotion, rather than racing a timer: the
+    // cancel is issued while the genuine promoteStagedScene is in flight, so the
+    // signal is set by the time it resolves. The session is a plain object, so
+    // wrapping the method exercises the real code path either side of it.
+    const promote = session.promoteStagedScene.bind(session)
+    let promotions = 0
+    session.promoteStagedScene = async (readBytes: boolean) => {
+      promotions++
+      const inFlight = promote(readBytes)
+      getRequestRegistry().cancel({ requestId })
+      return inFlight
+    }
+
+    fs.writeFileSync(session.stagingScenePath, 'a finished pack')
+
+    const stream = worldCreateScene({
+      modelId,
+      requestId,
+      prompt: 'a forest path',
+      image: Buffer.from([1, 2, 3]).toString('base64')
+    })
+
+    const pending = stream.next()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    driver.releaseStream()
+    driver.settleJob()
+
+    let terminal: IteratorResult<unknown> | undefined
+    let threw: Error | undefined
+    try {
+      terminal = await pending
+    } catch (error) {
+      threw = error as Error
+    }
+
+    t.is(promotions, 1, 'promotion really did run, so the cancel landed across it')
+    t.ok(threw, 'the withdrawn request rejects')
+    t.absent(
+      (terminal?.value as { done?: boolean } | undefined)?.done,
+      'no terminal success payload is emitted for a cancelled scene'
+    )
+    // The rename already happened, so the world is real and the caller's
+    // previous one is gone. Undoing it to honour a soft cancel would destroy a
+    // valid world; the contract is that DELIVERY stops, not that the encode is
+    // rolled back.
+    t.ok(fs.existsSync(session.scenePath), 'the promoted world is left in place')
   })
 })
 

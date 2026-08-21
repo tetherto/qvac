@@ -441,6 +441,19 @@ export async function* worldStep(
     modelId: request.modelId
   })
   const requestLogger = withRequestContext(getServerLogger(), ctx)
+
+  // Before ANYTHING touches the session. A cancel that landed before `begin(...)`
+  // resolved makes the registry skip admission, so this context holds no world
+  // slot and another step may legitimately own the lane right now. Everything
+  // below reaches across to that owner: `ensureActivated()` can re-activate a
+  // session it is using, and `onAbort` fires `session.cancel()`, which is a
+  // MODEL-WIDE native cancel — it would kill the owner's in-flight block, not
+  // ours, since we have none. The later pre-dispatch check cannot help; by then
+  // the listener has already run.
+  if (ctx.signal.aborted) {
+    throw new InferenceCancelledError(ctx.requestId)
+  }
+
   const session = asWorldSession(getModel(request.modelId), request.modelId, 'worldStep')
   await session.ensureActivated()
 
@@ -668,6 +681,21 @@ export async function* worldCreateScene(
 
     scene = await session.promoteStagedScene(request.returnPack === true)
     promoted = true
+
+    // Promotion is not instantaneous: it awaits the session lock, a stat, a
+    // rename and optionally a whole readFile. A cancel accepted across any of
+    // those would otherwise fall through to the terminal `done` payload below
+    // and report success for a request the caller already withdrew.
+    //
+    // Checked AFTER `promoted = true` on purpose. The rename has happened, so
+    // the world is real and the caller's previous one is already gone —
+    // discarding now would destroy a valid world to honour a cancel. The
+    // soft-cancel contract is that delivery stops, not that the encode is
+    // undone; this suppresses the payload and leaves the world in place for the
+    // next step to activate.
+    if (ctx.signal.aborted) {
+      throw new InferenceCancelledError(ctx.requestId)
+    }
   } finally {
     if (!promoted) await session.discardStagedScene()
   }
