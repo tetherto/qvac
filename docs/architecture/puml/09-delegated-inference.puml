@@ -13,6 +13,6 @@ Container_Boundary(consumer, "Consumer") {
 }
 
 Rel(listener, local_model, "Invokes")
-BiRel(dialer, listener, "Noise stream over DHT")
+BiRel(dialer, listener, "Delegated inference", "Noise / Hyperswarm")
 
 @enduml

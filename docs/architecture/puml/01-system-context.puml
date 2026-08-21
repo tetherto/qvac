@@ -12,8 +12,8 @@ System_Ext(http, "HTTP / CDN", "Direct model file downloads")
 System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT, Hyperdrive seeders, delegated inference providers")
 
 Rel_D(dev, sdk, "Calls SDK API")
-Rel_L(sdk, registry, "Catalog queries and downloads")
-Rel_D(sdk, http, "HTTP model downloads")
-Rel_R(sdk, p2p, "Peer discovery, P2P model sync, delegated inference")
+Rel_L(sdk, registry, "Queries catalog and downloads", "Hyperblobs")
+Rel_D(sdk, http, "Downloads models", "HTTPS")
+Rel_R(sdk, p2p, "Peer discovery, sync, delegated inference", "Hyperswarm")
 
 @enduml

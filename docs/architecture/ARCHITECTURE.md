@@ -35,7 +35,7 @@ The core execution model is the same across packages:
 
 [PlantUML source](puml/01-system-context.puml)
 
-*Key - Blue: system in scope; grey: external systems; arrows: dependency direction. Holepunch P2P includes DHT, Hyperdrive seeders, and delegated providers.*
+*Key - Blue: system in scope; grey: external systems; arrows: intent [protocol]. Holepunch P2P includes DHT, Hyperdrive seeders, and delegated providers.*
 
 The family is one software system at this zoom. Package choice is in the [executive summary](#product-executive-summary). Runtime boxes are on the [container diagram](#container-diagram).
 
@@ -47,7 +47,7 @@ The family is one software system at this zoom. Package choice is in the [execut
 
 [PlantUML source](puml/02-container.puml)
 
-*Key - Blue: runtime containers; grey: external systems; cylinder: data store. Package choice is in the [executive summary](#product-executive-summary). External I/O leaves `@qvac/inference`.*
+*Key - Blue: runtime boxes; grey: external systems; cylinder: data store; arrows: intent [protocol]. Package choice is in the [executive summary](#product-executive-summary). External I/O leaves `@qvac/inference`. Platform transports for `bare-rpc` are in the [deployment table](#deployment-diagram).*
 
 Host, worker, and `@qvac/inference` are the runtime path for `@qvac/sdk` and Python. Bare apps call `@qvac/inference` in process and skip the worker.
 
@@ -59,7 +59,7 @@ Host, worker, and `@qvac/inference` are the runtime path for `@qvac/sdk` and Pyt
 
 [PlantUML source](puml/03-component-overview.puml)
 
-*Key - Left: host process; right: `@qvac/inference`. Direct Bare calls dispatch in process (same engine boxes, no socket). Python uses the same public API, generated from the wire contract.*
+*Key - Host process above, `@qvac/inference` below. Host to engine is `bare-rpc` (or in-process on direct Bare). Internal engine arrows are in-process. Python uses the same public API, generated from the wire contract.*
 
 Physical process placement is covered in the [Deployment Diagram](#deployment-diagram).
 
@@ -133,7 +133,7 @@ The bundle command emits:
 
 [PlantUML source](puml/05-deployment.puml)
 
-*Key - Nested boxes: deployment environment; blue: container instances; cylinder: persistent storage. Two topologies: host plus Bare worker, or in-process `@qvac/inference`.*
+*Key - Nested boxes: deployment environment; blue: runtime instances; cylinder: persistent storage; arrows: intent [protocol]. Two topologies: host plus Bare worker, or in-process `@qvac/inference`.*
 
 | Platform | Host | Worker placement | Transport |
 |---|---|---|---|
@@ -187,7 +187,7 @@ In-process Bare (`@qvac/inference`) bypasses sockets and calls the dispatch laye
 
 [PlantUML source](puml/09-delegated-inference.puml)
 
-*Key - Left: provider; right: consumer. One Noise stream over DHT; the provider invokes a local model.*
+*Key - Consumer above, provider below. Wire path is delegated inference [Noise / Hyperswarm]. The provider invokes a local model in process.*
 
 **Delegation Workflow:**
 

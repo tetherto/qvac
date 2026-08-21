@@ -9,22 +9,31 @@ Container_Boundary(host_side, "Host") {
 }
 
 Container_Boundary(engine_side, "Engine (@qvac/inference)") {
+    Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
     Component(dispatch, "Dispatch", "TypeScript", "Validate, route, stream, apply device defaults")
     Component(plugin_registry, "Plugin Registry", "TypeScript", "Handlers keyed by modelType")
     Component(plugins, "Plugins", "TypeScript/C++", "Built-in and custom addons")
     Component(model_registry, "Model Registry", "TypeScript", "Loaded local and delegated models")
     Component(distribution, "Model Distribution", "TypeScript", "HTTP, registry, Hyperdrive, local")
     Component(rag, "RAG", "TypeScript", "HyperDB workspaces and vector search")
-    Component(logging, "Logging", "TypeScript", "Host, engine, and addon logs")
 }
 
 Rel_D(api, rpc_client, "Serializes calls")
-Rel_D(rpc_client, dispatch, "Request envelope")
-Rel_D(dispatch, plugin_registry, "Looks up model, then plugin")
+Rel_D(rpc_client, dispatch, "Sends requests", "bare-rpc")
+Rel_U(logging, rpc_client, "Streams logs", "bare-rpc")
+Rel_D(dispatch, plugin_registry, "Looks up handler")
 Rel_D(plugin_registry, plugins, "Invokes handler")
 Rel_D(dispatch, model_registry, "Registers models")
-Rel_D(dispatch, distribution, "Resolves and fetches models")
-Rel_D(dispatch, rag, "Vector search and persistence")
-Rel_U(logging, rpc_client, "Streams logs to host")
+Rel_D(dispatch, distribution, "Fetches models")
+Rel_D(dispatch, rag, "Searches vectors")
+
+Lay_D(api, rpc_client)
+Lay_D(rpc_client, dispatch)
+Lay_L(logging, dispatch)
+Lay_D(dispatch, plugin_registry)
+Lay_R(plugin_registry, model_registry)
+Lay_R(model_registry, distribution)
+Lay_R(distribution, rag)
+Lay_D(plugin_registry, plugins)
 
 @enduml

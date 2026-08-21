@@ -21,8 +21,8 @@ Deployment_Node(inproc, "In-process Bare") {
     ContainerDb(store_ip, "Local Storage", "Models cache + RAG DB")
 }
 
-Rel(client, worker, "RPC")
-Rel(worker, store_hw, "Reads/Writes")
-Rel(engine, store_ip, "Reads/Writes")
+Rel(client, worker, "RPC", "bare-rpc")
+Rel(worker, store_hw, "Reads/writes", "filesystem / HyperDB")
+Rel(engine, store_ip, "Reads/writes", "filesystem / HyperDB")
 
 @enduml
