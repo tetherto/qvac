@@ -29,6 +29,11 @@ type TtsGgmlDebugModel = {
   _cosyvoiceLlmModelPath?: string
   _instruct?: string
   _pace?: string
+  _audio8LmPath?: string
+  _audio8CodecDecoderPath?: string
+  _audio8CodecEncoderPath?: string
+  _referenceText?: string
+  _greedy?: boolean
   _config?: {
     language?: string
     useGPU?: boolean
@@ -414,4 +419,88 @@ test('ttsPlugin createModel: renders the CosyVoice3 structured instruct', async 
 
   const model = result.model as TtsGgmlDebugModel
   t.is(model._instruct, '请用广东话表达。')
+})
+
+test('ttsPlugin resolveConfig: resolves Audio8 component GGUFs and strips *Src', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+  const resolved: string[] = []
+
+  const result = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'audio8',
+      greedy: true,
+      referenceText: 'Exactly what the recording says.',
+      audio8CodecDecoderModelSrc: 'registry://s3/audio-8/audio8-codec-decoder-q8_0.gguf',
+      audio8CodecEncoderModelSrc: 'registry://s3/audio-8/audio8-codec-encoder-q8_0.gguf',
+      referenceAudioSrc: 'registry://s3/audio-8/voice.wav'
+    },
+    {
+      resolveModelPath: async (src) => {
+        const value = typeof src === 'string' ? src : (src as { src: string }).src
+        resolved.push(value)
+        return `/cache/${value.split('/').pop()}`
+      },
+      modelSrc: 'registry://s3/audio-8/audio8-lm-q8_0.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved, [
+    'registry://s3/audio-8/audio8-codec-decoder-q8_0.gguf',
+    'registry://s3/audio-8/audio8-codec-encoder-q8_0.gguf',
+    'registry://s3/audio-8/voice.wav'
+  ])
+  t.alike(result.config, {
+    ttsEngine: 'audio8',
+    greedy: true,
+    referenceText: 'Exactly what the recording says.'
+  })
+  t.alike(result.artifacts, {
+    audio8CodecDecoderPath: '/cache/audio8-codec-decoder-q8_0.gguf',
+    audio8CodecEncoderPath: '/cache/audio8-codec-encoder-q8_0.gguf',
+    referenceAudioPath: '/cache/voice.wav'
+  })
+})
+
+test('ttsPlugin createModel: wires the Audio8 constructor surface', async (t) => {
+  const { ttsPlugin } = await import('@/server/bare/plugins/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-audio8-test',
+    modelPath: '/tmp/audio8-lm-q8_0.gguf',
+    artifacts: {
+      audio8CodecDecoderPath: '/tmp/audio8-codec-decoder-q8_0.gguf',
+      audio8CodecEncoderPath: '/tmp/audio8-codec-encoder-q8_0.gguf',
+      referenceAudioPath: '/tmp/voice.wav'
+    },
+    modelConfig: {
+      ttsEngine: 'audio8',
+      referenceText: 'Exactly what the recording says.',
+      temperature: 0.7,
+      topK: 50,
+      topP: 0.9,
+      maxFrames: 430,
+      useGPU: true,
+      outputSampleRate: 44100,
+      threads: 4,
+      nGpuLayers: 99,
+      seed: 42
+    }
+  })
+
+  const model = result.model as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'audio8')
+  t.is(model._audio8LmPath, '/tmp/audio8-lm-q8_0.gguf')
+  t.is(model._audio8CodecDecoderPath, '/tmp/audio8-codec-decoder-q8_0.gguf')
+  t.is(model._audio8CodecEncoderPath, '/tmp/audio8-codec-encoder-q8_0.gguf')
+  t.is(model._referenceText, 'Exactly what the recording says.')
+  t.is(model._temperature, 0.7)
+  t.is(model._topK, 50)
+  t.is(model._topP, 0.9)
+  t.is(model._maxFrames, 430)
+  t.is(model._threads, 4)
+  t.is(model._nGpuLayers, 99)
+  t.is(model._seed, 42)
+  t.is(model._outputSampleRate, 44100)
+  t.alike(model._config, { useGPU: true, outputSampleRate: 44100 })
 })

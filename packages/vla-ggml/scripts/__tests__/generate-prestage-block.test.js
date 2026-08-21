@@ -31,7 +31,10 @@ function withAssetsDir(fn) {
   }
 }
 
-function runWithStubs(script, { adbExit = 0, curlExit = 0, mkdirExit = null }) {
+function runWithStubs(
+  script,
+  { adbExit = 0, curlExit = 0, mkdirExit = null, grep = 'runAddonTest' }
+) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vla-prestage-shell-'))
   const binDir = path.join(dir, 'bin')
   const testsDir = path.join(dir, 'tests')
@@ -44,7 +47,10 @@ function runWithStubs(script, { adbExit = 0, curlExit = 0, mkdirExit = null }) {
   }
   fs.writeFileSync(
     path.join(testsDir, 'wdio.config.devicefarm.js'),
-    "exports.config = { mochaOpts: { grep: 'runAddonTest' } }\n"
+    // Double quotes: upload-to-devicefarm JSON-encodes the grep into the wdio
+    // config, so the prestage extractor must read a double-quoted value (a
+    // single-quote-only regex would silently stage the whole manifest).
+    `exports.config = { mochaOpts: { grep: ${JSON.stringify(grep)} } }\n`
   )
   try {
     return childProcess.spawnSync('sh', ['-c', script], {
@@ -107,7 +113,7 @@ test('buildScript reads the shard grep and stages only matching models via adb o
   assert.match(script, new RegExp(b64.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')))
   assert.match(script, /adb push/)
   assert.match(script, /device will use network fallback/)
-  assert.doesNotMatch(script, /FATAL/)
+  assert.match(script, /matched no known runner \(test-groups <-> model-map drift\)/)
   assert.match(script, /\[prestage\] done/)
   const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
   assert.equal(syntax.status, 0, syntax.stderr)
@@ -120,6 +126,48 @@ test('buildScript reads the shard grep and stages only matching models via adb o
   const failedTempSetup = runWithStubs(script, { mkdirExit: 1 })
   assert.equal(failedTempSetup.status, 0, failedTempSetup.stderr)
   assert.match(failedTempSetup.stdout, /host temp setup failed/)
+})
+
+test('shard grep is a regex: partial matches stage, an unbaked-but-known shard falls back, a drift typo fails closed', () => {
+  const man = {
+    runAddonTest: [{ name: 'smolvla.gguf', url: 'https://x/smolvla.gguf' }],
+    runGrootTest: [{ name: 'groot.gguf', url: 'https://x/groot.gguf' }]
+  }
+  const script = buildScript(Buffer.from(JSON.stringify(man)).toString('base64'))
+
+  // The count/warn lines are on stderr (console.error); staging + fallback
+  // notices are on stdout (echo). Assert against the combined stream.
+  const out = (r) => `${r.stdout}${r.stderr}`
+
+  // Partial regex "runGroot" used to find no exact key and stage nothing; it
+  // must now match runGrootTest and stage its model.
+  const partial = runWithStubs(script, { grep: 'runGroot' })
+  assert.equal(partial.status, 0, partial.stderr)
+  assert.match(out(partial), /1 model\(s\) for 1 test\(s\)/)
+  assert.match(out(partial), /staging groot\.gguf/)
+
+  // Alternation selects both shards.
+  const both = runWithStubs(script, { grep: 'runAddonTest|runGrootTest' })
+  assert.equal(both.status, 0, both.stderr)
+  assert.match(out(both), /2 model\(s\) for 2 test\(s\)/)
+
+  // A grep that matches a KNOWN runner whose presigned URL is not baked yet
+  // (or the mobile-deferred pi05) is NOT drift: warn and let the device fall
+  // back to the network. Manifest here has no runGrootTest key.
+  const unbaked = buildScript(
+    Buffer.from(JSON.stringify({ runAddonTest: man.runAddonTest })).toString('base64')
+  )
+  const missingUrl = runWithStubs(unbaked, { grep: 'runGrootTest' })
+  assert.equal(missingUrl.status, 0, missingUrl.stderr)
+  assert.match(out(missingUrl), /known runner with no baked URL yet/)
+  assert.match(out(missingUrl), /0 model\(s\) for 0 test\(s\)/)
+
+  // A typo that matches NO known runner is a test-groups <-> model-map drift.
+  // The workflow_call lanes never run validate-devices, so this must fail
+  // closed on device rather than silently ship an under-staged run.
+  const typo = runWithStubs(script, { grep: 'runNope' })
+  assert.notEqual(typo.status, 0)
+  assert.match(out(typo), /matched no known runner \(test-groups <-> model-map drift\)/)
 })
 
 test('buildScript ios backend uses pymobiledevice3 apps push into Documents', () => {
@@ -138,7 +186,7 @@ test('buildScript ios backend uses pymobiledevice3 apps push into Documents', ()
   assert.match(script, /device will use network fallback/)
   assert.doesNotMatch(script, /adb push/)
   assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
-  assert.doesNotMatch(script, /FATAL/)
+  assert.match(script, /matched no known runner \(test-groups <-> model-map drift\)/)
   const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
   assert.equal(syntax.status, 0, syntax.stderr)
 })

@@ -1,12 +1,12 @@
 name: 'Detect fabric stack'
 description: >
   Read-only detection for fabric-stack PRs. Sets fabric_stack=true when the PR's
-  own diff — merge base to head, never the base branch tip — touches the
-  qvac-fabric overlay port or a packages/fabric file that changes the built
-  artifact. Used to disable stale prebuild reuse and to wire npm-runtime
-  consumers to PR-built @qvac/fabric prebuilds. The predicate must stay in
-  lockstep with detect-native-changes: claiming a prebuild the producer never
-  makes leaves the consumer polling until timeout.
+  own diff — merge base to head, never the base branch tip — touches a
+  packages/fabric file that changes the built artifact. Used to disable stale
+  prebuild reuse and to wire npm-runtime consumers to PR-built @qvac/fabric
+  prebuilds. The predicate must stay in lockstep with detect-native-changes:
+  claiming a prebuild the producer never makes leaves the consumer polling
+  until timeout.
 
 inputs:
   github-token:
@@ -111,10 +111,12 @@ runs:
           # Only paths that change the built artifact. A `case` glob's `*`
           # spans `/`, so `packages/fabric/*.cpp` also covers `addon/`.
           # Docs, release notes and tests are deliberately excluded: they
-          # never produce a prebuild for the consumer to wait on.
+          # never produce a prebuild for the consumer to wait on. qvac-fabric
+          # itself is a registry port, not an overlay — a new port revision
+          # reaches the build only through the vcpkg manifests below, so
+          # vcpkg-overlays/ is not part of the predicate.
           while IFS= read -r file; do
             case "$file" in
-              vcpkg-overlays/ports/qvac-fabric/*) STACK=true; break ;;
               packages/fabric/*.cpp|packages/fabric/*.hpp|packages/fabric/*.c|packages/fabric/*.h) STACK=true; break ;;
               packages/fabric/*CMakeLists.txt) STACK=true; break ;;
               packages/fabric/cmake/*) STACK=true; break ;;

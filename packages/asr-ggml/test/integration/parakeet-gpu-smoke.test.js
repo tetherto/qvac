@@ -1,6 +1,6 @@
 'use strict'
 
-// GPU smoke tests across all 4 parakeet model types.
+// GPU smoke tests across all supported parakeet model types.
 //
 // Today every other integration test sets `useGPU: false`, so the
 // integration matrix only exercises the CPU fallback path on real

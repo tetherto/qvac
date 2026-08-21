@@ -15,6 +15,8 @@ interface AddonInterface {
 interface ModelRunResponse {
   iterate(): AsyncIterable<unknown>
   await(): Promise<unknown>
+  // Cancels just this run's job, leaving concurrent peers on the model decoding.
+  cancel(): Promise<void>
 }
 
 export interface AnyModel {
