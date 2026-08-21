@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.1
 
-QVAC SDK 0.18.1 adds human-readable descriptions on every llamacpp `modelConfig` field and exports those schemas from `@qvac/sdk/schemas`. CLI, typed-client, and Python generators can now surface what each completion and embedding option means. Load and inference behavior is unchanged.
+QVAC SDK 0.18.1 adds human-readable descriptions on every llamacpp `modelConfig` field and exports those schemas from `@qvac/sdk/schemas`. CLI, typed-client, and Python generators can now surface what each completion and embedding option means. The CosyVoice3 companion-set cache key also changes, so the first load after upgrade uses a new companion cache folder. Load APIs are otherwise unchanged.
 
 ## New APIs
 
@@ -20,6 +20,12 @@ llamacppCompletionConfigSchema.shape.ctx_size.description
 ```
 
 The internal schema identifiers are unchanged.
+
+## Bug Fixes
+
+### CosyVoice3 companion cache folder
+
+CosyVoice3 companion files still download with the LLM, as in 0.18.0. The companion-set cache key for `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` changed, so the first load after upgrading fills a new cache folder. Later loads reuse that folder. Speech APIs and `pace` / `instruct` rules are unchanged.
 
 ## [0.18.0]
 
