@@ -28,7 +28,7 @@ import { generateServerRequestId } from "@/server/bare/runtime/request-id";
 
 async function* handleX(req: XRequest): AsyncGenerator<XEvent> {
   const registry = getRequestRegistry();
-  await using ctx = registry.begin({
+  await using ctx = await registry.begin({
     // Falls back to a server-minted UUID when the client (older
     // release / non-SDK consumer) didn't generate one.
     requestId: req.requestId ?? generateServerRequestId(),
@@ -61,7 +61,7 @@ async function* handleX(req: XRequest): AsyncGenerator<XEvent> {
 
 Key invariants in this shape:
 
-1. **`await using ctx = registry.begin(...)`** — the registry mints a `ManagedRequestContext` whose `Symbol.asyncDispose` removes the entry and unwinds the scope. `await using` guarantees disposal on every exit path (return / throw / generator close / cancellation).
+1. **`await using ctx = await registry.begin(...)`** — `begin(...)` is async (it may await an admission slot), so await it first, then `await using` binds the resolved `ManagedRequestContext` whose `Symbol.asyncDispose` removes the entry and unwinds the scope. `await using` guarantees disposal on every exit path (return / throw / generator close / cancellation).
 2. **Signal consumed at one place only** — the addon binding leaf. After that the addon throws or returns, the loop exits naturally, and the scope unwinds.
 3. **`{ once: true }` listener + `scope.defer(removeEventListener)`** — `{ once: true }` auto-removes if the signal fires; the `scope.defer(...)` is the cleanup hook for the signal-never-fired path. Both together mean no leaked listeners on long-lived parent signals. Use `scope.defer` rather than a bare `try/finally` so the listener-detach runs in LIFO order with any other resource cleanups the handler registers (e.g. `restorePrompt` in transcribe, `clearFinetuneRuntimeState` in finetune).
 4. **`if (ctx.signal.aborted) onAbort()` fall-through** — `addEventListener("abort", ..., { once: true })` does NOT fire if the signal is already aborted at register time. This line handles the case where the registry synchronously aborts a fresh controller because the `parentSignal` was already aborted at `begin(...)`, or the Stop-button race retroactively aborted the new controller from the `cancelled-before-begin` map.
@@ -172,7 +172,7 @@ defineHandler({
   // ...
   cancel: { scope: "model", hard: true },
   handler: async function* (request) {
-    await using ctx = registry.begin({ requestId: ..., kind: ..., modelId: ... });
+    await using ctx = await registry.begin({ requestId: ..., kind: ..., modelId: ... });
     const stream = addon.run(..., { signal: ctx.signal });
     // ... yield events; signal cancellation is the addon's contract,
     //     not the handler's.
@@ -192,7 +192,7 @@ completionStream: defineHandler({
   requestSchema: completionStreamRequestSchema,
   responseSchema: completionStreamResponseSchema,
   streaming: true,
-  cancel: { scope: "model", hard: true },
+  cancel: { scope: "request", hard: true },
   handler: async function* (request) { /* ... */ },
 }),
 ```
@@ -200,7 +200,7 @@ completionStream: defineHandler({
 `cancel.scope`:
 
 - `"request"` — addon targets a specific in-flight request by id. Framework can route `cancel({ requestId })` straight to the addon without colliding with siblings on the same model.
-- `"model"` — addon cancels "whatever is currently running on this model" (today's `addon.cancel()` semantics). Sufficient under a one-at-a-time concurrency policy.
+- `"model"` — addon cancels "whatever is currently running on this model" (`addon.cancel()` semantics). Under continuous batching this also stops concurrent peers on the same model, so it is a coarse fallback, not a per-request cancel. `finetune` uses it (it runs as an exclusive writer, so no peer is on the model to hit); `completionStream`, `batchCompletionStream`, and LLM `translate` route per-request cancel through the run response instead.
 - `"none"` — addon does not expose a cancel surface. SDK falls back to soft-cancel (stop yielding, drop result, skip post-processing; C++ work runs to completion).
 
 `cancel.hard` (only meaningful for `"model"` / `"request"`):
@@ -214,7 +214,9 @@ Omitting the field entirely is equivalent to `{ scope: "none" }`. The runtime sc
 
 | Plugin                       | Handler(s)                            | `cancel`                          |
 |------------------------------|---------------------------------------|-----------------------------------|
-| `llamacpp-completion`        | `completionStream`, `translate`       | `{ scope: "model", hard: true }`  |
+| `llamacpp-completion`        | `completionStream`                    | `{ scope: "request", hard: true }`|
+| `llamacpp-completion`        | `batchCompletionStream`               | `{ scope: "request", hard: true }`|
+| `llamacpp-completion`        | `translate` (LLM)                     | `{ scope: "request", hard: true }`|
 | `llamacpp-completion`        | `finetune`                            | `{ scope: "model", hard: true }`  |
 | `llamacpp-embedding`         | `embed`                               | `{ scope: "model", hard: true }`  |
 | `whispercpp-transcription`   | `transcribe`, `transcribeStream`      | `{ scope: "model", hard: true }`  |
@@ -237,10 +239,10 @@ The truth table above describes the addon-level capability for plugin handlers. 
 
 | `RequestKind`     | Dispatched from                                                  | Cancel reach                                                 | Notes                                                                                                                                                                                              |
 |-------------------|------------------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (`addon.cancel()` mid-decode)                            | Reference handler. Serializing policy (shared `llamacppCompletion` lane).                                                                                                                                                    |
+| `completion`      | `llamacpp-completion/plugin.ts` → `completion-stream.ts`         | Hard (per-job `response.cancel()` mid-decode)                 | Reference handler. Shared `llamacppCompletion` lane, admitting up to the model's `parallel`.                                                                                                                                 |
 | `embeddings`      | `llamacpp-embedding/plugin.ts` → `server/bare/ops/embed.ts`      | Hard (`addon.cancel()` mid-decode)                            | Unary op (no streaming). Single `addon.embedText` call wrapped in the registry context; post-await `signal.aborted` check is the soft-cancel safety net for the gap between `model.run(...)` and `response.await()`. |
 | `transcribe`      | `whispercpp-transcription` / `parakeet-transcription` plugins → `server/bare/ops/transcribe.ts` | Hard (`addon.cancel()` mid-decode); per-iteration soft check on the response loop | `restorePrompt` registered via `scope.defer`; per-iteration `if (ctx.signal.aborted) break;` in the streaming response loop is the canonical soft-cancel pattern. |
-| `translate`       | `llamacpp-completion` / `nmtcpp-translation` plugins → `server/bare/ops/translate.ts` | Mixed: LLM branch hard (`addon.cancel()`), NMT branch soft (`nmtcpp-translation.translate` declares `scope: "none"`) | Both branches share the registry context. LLM branch wires `signal → addon.cancel()`; NMT branch relies on a per-iteration soft-cancel guard around `runBatch(...)` and the early-return path. |
+| `translate`       | `llamacpp-completion` / `nmtcpp-translation` plugins → `server/bare/ops/translate.ts` | Mixed: LLM branch hard (per-job `response.cancel()`), NMT branch soft (`nmtcpp-translation.translate` declares `scope: "none"`) | Both branches share the registry context. LLM branch cancels its own run response; NMT branch relies on a per-iteration soft-cancel guard around `runBatch(...)` and the early-return path. |
 | `finetune`        | `llamacpp-completion/plugin.ts` → `llamacpp-completion/ops/finetune.ts` | Hard (`model.cancel()` interrupts the running job)           | `clearFinetuneRuntimeState` + `handle.removeListener` registered via `scope.defer`; the legacy `cancelFinetune(modelId)` wrapper is a thin layer over `registry.cancel({ modelId, kind: "finetune" })`. |
 | `loadModel`       | `server/rpc/handlers/load-model/handler.ts`                      | Mixed: download phase hard (signal threaded to `resolveModelPath`); load phase soft (addon `createModel`/`load(false)` has no signal) | The handler checks `ctx.signal.aborted` at the download/load phase boundary and again after the load to surface `InferenceCancelledError`; the orphan-model edge case during load is a documented follow-up. |
 | `downloadAsset`   | `server/rpc/handlers/download-asset.ts`                          | Hard (signal threaded to `resolveModelPath`)                  | Per-`requestId` cancel preserves the content-addressed dedup in `download-manager.ts` — two subscribers on the same `downloadKey` share one transfer, and the transfer aborts only when the **last** subscriber leaves. |
@@ -276,15 +278,17 @@ interface RequestRegistry {
 }
 ```
 
-A policy turns admission into a per-`(lane, modelId)` FIFO queue with a configurable concurrency limit. `maxConcurrentPerModel` is the slot count (`1` serializes — today's single-context reality; bump it to the addon's batching width once continuous batching lands; `Infinity`/omitted leaves the kind ungated). `onOverflow` decides what an over-capacity `begin(...)` does: `"queue"` (the default) waits FIFO for a slot; `"reject"` throws immediately. A `begin` rejects with `RequestRejectedByPolicyError` (code 52420) when `onOverflow: "reject"` hits capacity, the `(maxQueueDepthPerModel + 1)`th waiter would exceed the depth cap, or a queued waiter exceeds `queueTimeoutMs` — a typed error carrying `requestId` / `kind` / `modelId` / `reason` that survives the RPC boundary so clients can `instanceof`-narrow. `oneAtATimePerModel: true` is a back-compat alias for `{ maxConcurrentPerModel: 1, onOverflow: "reject" }`.
+A policy turns admission into a per-`(lane, modelId)` FIFO queue with a configurable **top-level request-permit** limit. `maxConcurrentPerModel: 1` serializes; the completion handlers pass the loaded model's `parallel` as the maximum number of concurrently admitted requests; `Infinity`/omitted leaves the kind ungated. This is request-count admission, not native sequence accounting: one single completion and one multi-prompt batch each consume one permit, even though the batch may occupy several native sequences and queue additional work inside the addon. `maxConcurrentPerModel` accepts a per-request override on `begin(...)` that wins over the kind policy. `onOverflow` is a per-kind policy value: `"queue"` (the default) waits FIFO for a permit; `"reject"` throws immediately. A `begin` rejects with `RequestRejectedByPolicyError` (code 52420) when `onOverflow: "reject"` hits capacity, the `(maxQueueDepthPerModel + 1)`th waiter would exceed the depth cap, or a queued waiter exceeds `queueTimeoutMs` — a typed error carrying `requestId` / `kind` / `modelId` / `reason` that survives the RPC boundary so clients can `instanceof`-narrow. `oneAtATimePerModel: true` is a back-compat alias for `{ maxConcurrentPerModel: 1, onOverflow: "reject" }`.
 
 ### Shared slot groups
 
 `sharedSlotGroup` keys the admission slot on `(group, modelId)` instead of `(kind, modelId)`, so **different kinds** that target the same model contend for one slot pool. This exists to mirror an addon that serializes unrelated kinds on a single native context.
 
-`getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `completion` and `batchCompletion` on first use, both serializing (`maxConcurrentPerModel: 1, onOverflow: "queue", maxQueueDepthPerModel: 64`) and both keyed to the **same** `sharedSlotGroup: "llamacppCompletion"`. The reason: `@qvac/llm-llamacpp` funnels every `run()` (single-prompt **and** batch) through one per-instance `exclusiveRunQueue` plus a single-job native runner, so a completion and a batch on the same model can never actually execute at once. Sharing one lane makes the SDK admission queue the authoritative serialization point — a batch fired while a completion runs waits FIFO at the SDK layer instead of both being admitted and silently serializing inside the addon (which would hide the second request from the registry's queue-depth accounting, `requestId` diagnostics, and cancel routing). `audiogen` has its own one-slot FIFO policy because ACE-Step supports one active job per model and replaces the prior response when another run starts.
+`getRequestRegistry()` (the worker-process singleton in `request-registry-singleton.ts`) registers `completion` and `batchCompletion` on first use, both keyed to the **same** `sharedSlotGroup: "llamacppCompletion"` so single completions and batches compete for one request-permit pool per model first-come-first-serve. `@qvac/llm-llamacpp` now accepts multiple concurrent top-level `run()` calls and schedules their native sequences through its continuous-batching backend. The registered `maxConcurrentPerModel: 1` is only the fallback; each handler passes the loaded model's `parallel` as its request-permit cap. That cap deliberately does not weight a batch by prompt count, so the addon's native scheduler remains authoritative for actual sequence occupancy. Admission always queues surplus top-level requests FIFO (`onOverflow: "queue"`): a single-permit model (`parallel: 1` or unset) admits one request at a time and the rest wait; an N-permit model admits up to `parallel` requests and queues the surplus. Disk-KV-cache completions ride this same lane, so they consume permits and keep their first-come-first-serve place. Same-file write safety comes from a per-cache-path lock inside `KvCacheSession` (acquired in `beginTurn` and held across the whole turn), so two turns writing the same cache file serialize while turns on different cache keys may decode concurrently. Both single-completion and batch cancel are per-request: `response.cancel()` routes to `cancelJob` for that call's own job or batch group, so cancelling one leaves concurrent peers on the model decoding. Both `completionStream` and `batchCompletionStream` therefore advertise `cancel: { scope: "request" }`.
 
-Kinds without a registered policy are unconstrained, and a policy without `sharedSlotGroup` only contends with its own kind. `embeddings` / `transcribe` / `translate` / `finetune` deliberately register no policy — those addons tolerate concurrent requests against the same model (and the registry's per-request lifecycle is enough for cancel routing). Note this means `translate` / `finetune` on an llama.cpp model are *not* in the completion lane today; they still serialize against completion inside the addon's run queue, just not at the SDK admission layer. Fold them into `llamacppCompletion` if that addon-level serialization ever needs to be SDK-visible.
+Kinds without a registered policy are unconstrained, and a policy without `sharedSlotGroup` only contends with its own kind. `embeddings` / `transcribe` and NMT `translate` register no policy — those addons tolerate concurrent requests against the same model (and the registry's per-request lifecycle is enough for cancel routing). `finetune` and LLM `translate`, by contrast, join the shared `llamacppCompletion` lane: `finetune` as an *exclusive writer* (it needs the lane empty so its model-wide cancel can't hit a concurrent completion), and LLM `translate` as a *reader* capped at the model's `parallel`. NMT `translate` passes no cap and stays ungated on its own model.
+
+**Availability cost of the exclusive writer:** while a `finetune` runs, it holds the lane alone, so every `completion`, `batchCompletion`, and LLM `translate` on that model queues behind it for the finetune's *entire* duration. The per-model queue is bounded (`maxQueueDepthPerModel`, default 64) but the *wait* is not — a queued reader can be blocked for the whole finetune with no timeout. This is deliberate: adding a queue timeout here would turn ordinary inference into a new typed failure, so any bound needs an owner/QIP-approved duration and a policy consistent across every shared-lane kind. Callers that need inference responsiveness during training should not share a model between finetune and interactive requests.
 
 Policy enforcement runs in `registry.begin(...)` **before** any controller / scope allocation, so a rejected `begin` leaves no entry behind. Tests pin the FIFO wait, the shared-lane cross-kind serialization, and the "no slot leak" property in `packages/sdk/test/unit/runtime/request-registry.test.ts`.
 
@@ -310,7 +314,7 @@ import {
 import { getServerLogger } from "@/logging";
 
 async function* handleX(req: XRequest): AsyncGenerator<XEvent> {
-  await using ctx = getRequestRegistry().begin({
+  await using ctx = await getRequestRegistry().begin({
     requestId: req.requestId,
     kind: "completion",
     modelId: req.modelId,
@@ -488,7 +492,7 @@ import type {
 
 ```typescript
 interface RequestRegistry {
-  begin(opts: BeginOpts): ManagedRequestContext;
+  begin(opts: BeginOpts): Promise<ManagedRequestContext>;
   get(requestId: string): RequestContext | null;
   list(): RequestContext[];
   cancel(target: CancelTarget): number; // count of contexts whose abort fired this call

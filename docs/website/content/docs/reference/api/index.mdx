@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.17.x (latest)
+title: API Summary — v0.18.x (latest)
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -12,7 +12,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 51 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 52 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -46,6 +46,16 @@ for await (const progress of run.progressStream) {
 }
 const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
 const stats = await run.stats;
+
+// Re-render an existing song with a new caption (cover) and a timbre reference:
+const cover = audioGen({
+  modelId,
+  caption: "orchestral arrangement with dramatic strings",
+  taskType: "cover-nofsq",
+  sourceAudio: "/path/to/source.wav",
+  referenceAudio: "/path/to/reference.mp3",
+  coverNoiseStrength: 0.75,
+});
 ```
 
 ---
@@ -699,6 +709,13 @@ const modelId = await loadModel({
   modelSrc: "/path/to/model.gguf",
   modelType: "llamacpp-completion",
   logger // Pass logger in options
+});
+
+// Catalog model with an alternate source used when the registry is unreachable
+import { LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
+const resilientId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  fallbackSrc: "https://mirror.example.com/llama-3.2-1b-instruct-q4_0.gguf"
 });
 ```
 
@@ -1504,7 +1521,7 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 **Signature**:
 
 ```ts
-function translate(params: TranslateClientParams, options?: RPCOptions): { stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
+function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string> };
 ```
 
 **Throws**:
@@ -1748,6 +1765,44 @@ function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, 
 
 ---
 
+### `vlaSetEmbodiment`
+
+Switch a loaded multi-embodiment GR00T model to another embodiment shipped
+in the same GGUF — no reload, only that embodiment's weight rows are re-read.
+
+The returned hparams follow the newly active embodiment: re-read
+`numCameras` (and re-size buffers if needed) before the next `vla()` call.
+`selectedEmbodimentTag` / `selectedEmbodimentCatId` report what was
+resolved. Selecting by `catId` reports that id's canonical tag, which may
+differ from the alias used to select — the id is the stable identity.
+
+Rejects (leaving the current embodiment active) for a non-GR00T or
+single-embodiment model, an unknown tag or `cat_id`, one not stored in the
+GGUF, an embodiment with no known camera count and no `numCameras`
+override, or while an inference response is still pending — await the
+in-flight `vla()` call first.
+
+**Signature**:
+
+```ts
+function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }): Promise<{ hparams: VlaHparams }>;
+```
+
+**Example**:
+```ts
+import { loadModel, vlaSetEmbodiment, vlaHparams } from "@qvac/sdk";
+
+const modelId = await loadModel({
+  modelSrc: "/path/to/groot-multi.gguf",
+  modelType: "vla",
+  modelConfig: { embodiment: "libero_sim" }, // initial selection at load
+});
+const { hparams } = await vlaSetEmbodiment({ modelId, embodiment: "real_droid" });
+console.log(hparams.selectedEmbodimentTag, hparams.numCameras);
+```
+
+---
+
 ## Objects
 
 ### `profiler`
@@ -1886,6 +1941,7 @@ and read `error.code` / `error.cause`. Code ranges:
 | `INFERENCE_CANCELLED` | 52419 | Inference request "…" was cancelled before it could complete |
 | `REQUEST_REJECTED_BY_POLICY` | 52420 | Request "…" (kind: …, modelId: …) was rejected by registry concurrency policy: … |
 | `CONTEXT_OVERFLOW` | 52421 | … prompt tokens |
+| `INVALID_AUDIO_INPUT` | 52422 | Invalid audio input… |
 | `RAG_SAVE_FAILED` | 52800 | Failed to save embeddings… |
 | `RAG_SEARCH_FAILED` | 52801 | Failed to search embeddings… |
 | `RAG_DELETE_FAILED` | 52802 | Failed to delete embeddings… |

@@ -167,7 +167,7 @@ class DatasetLoader:
             Tuple of (prompts, ground_truths, config)
         """
         config = get_dataset_configs()['squad']
-        dataset = load_dataset("squad_v2", split="validation")
+        dataset = load_dataset("rajpurkar/squad_v2", split="validation")
         if num_samples:
             dataset = dataset.shuffle(seed=RANDOM_SEED).select(range(min(num_samples, len(dataset))))
         
@@ -239,7 +239,7 @@ class DatasetLoader:
             Tuple of (prompts, ground_truths, config)
         """
         config = get_dataset_configs()['gsm8k']
-        dataset = load_dataset("gsm8k", "main", split="test")
+        dataset = load_dataset("openai/gsm8k", "main", split="test")
         if num_samples:
             dataset = dataset.shuffle(seed=RANDOM_SEED).select(range(min(num_samples, len(dataset))))
         
