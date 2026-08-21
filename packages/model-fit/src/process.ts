@@ -1,4 +1,4 @@
-import type { FitConfig, FitResult } from './index'
+import type { FitConfig, FitDeviceInventory, FitPlan, FitResult } from './index'
 
 export const FIT_PROCESS_PROTOCOL_VERSION = 1 as const
 export const FIT_PROCESS_PROTOCOL_VERSION_V2 = 2 as const
@@ -34,10 +34,30 @@ export interface FitProcessCompletedResponseV1 {
   result: FitResult
 }
 
+/**
+ * Outcome of a raw llama-load fit: everything `FitResult` can be, plus the one
+ * outcome only this path produces — a load configuration the normalization
+ * cannot represent, which is advisory and must never deny a load.
+ *
+ * Deliberately a separate type. `fitParams()` can never return
+ * `unsupported-config`, so putting it on `FitResult` would oblige every
+ * existing low-level consumer to narrow a branch it can never reach.
+ */
+export type FitLlamaResult =
+  | FitResult
+  | ({
+    status: 2
+    fits: false
+    reason: 'unsupported-config'
+  } & Partial<FitPlan> & FitDeviceInventory)
+
+/** Stable, machine-readable explanation of a raw llama-load fit outcome. */
+export type FitLlamaReason = FitLlamaResult['reason']
+
 export interface FitProcessCompletedResponseV2 {
   version: typeof FIT_PROCESS_PROTOCOL_VERSION_V2
   status: 'completed'
-  result: FitResult
+  result: FitLlamaResult
 }
 
 export interface FitProcessInvocationErrorResponseV1 {
@@ -116,7 +136,13 @@ function assertFitPlan (result: Record<string, unknown>, required: boolean): voi
   }
 }
 
-function assertFitResult (value: unknown): asserts value is FitResult {
+// `unsupported-config` is reachable only through the v2 llama-load path, so the
+// parser enforces that rather than accepting it on either envelope: a v1
+// response carrying it is malformed, not merely unusual.
+const V1_ERROR_REASONS = ['model-unreadable', 'no-backend-device']
+const V2_ERROR_REASONS = [...V1_ERROR_REASONS, 'unsupported-config']
+
+function assertFitResultShape (value: unknown, errorReasons: string[]): void {
   if (!isRecord(value)) {
     throw new TypeError('Fit process result must be an object')
   }
@@ -141,12 +167,7 @@ function assertFitResult (value: unknown): asserts value is FitResult {
       assertFitPlan(value, false)
       return
     case 2:
-      if (
-        value['fits'] !== false ||
-        !['model-unreadable', 'no-backend-device', 'unsupported-config'].includes(
-          value['reason'] as string
-        )
-      ) {
+      if (value['fits'] !== false || !errorReasons.includes(value['reason'] as string)) {
         throw new TypeError('Fit process result reason is invalid for status 2')
       }
       assertFitPlan(value, false)
@@ -154,6 +175,14 @@ function assertFitResult (value: unknown): asserts value is FitResult {
     default:
       throw new TypeError(`Fit process result status is invalid: ${String(value['status'])}`)
   }
+}
+
+function assertFitResult (value: unknown): asserts value is FitResult {
+  assertFitResultShape(value, V1_ERROR_REASONS)
+}
+
+function assertFitLlamaResult (value: unknown): asserts value is FitLlamaResult {
+  assertFitResultShape(value, V2_ERROR_REASONS)
 }
 
 function encodeFitProcessRequestEnvelope (request: FitProcessRequest): string {
@@ -256,6 +285,10 @@ export function parseFitProcessResponse (value: unknown): FitProcessResponse {
 
   switch (value['status']) {
     case 'completed':
+      if (version === FIT_PROCESS_PROTOCOL_VERSION_V2) {
+        assertFitLlamaResult(value['result'])
+        return { version, status: 'completed', result: value['result'] }
+      }
       assertFitResult(value['result'])
       return { version, status: 'completed', result: value['result'] }
     case 'invocation-error': {

@@ -160,13 +160,19 @@ export interface FitPlan {
  * meaning: the plan is only valid on SUCCESS, and every non-success branch
  * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
  * apart from "could not read the model" or "no backend registered".
+ *
+ * This is the contract of `fitParams()` and nothing else. The raw llama-load
+ * path adds one further outcome, `unsupported-config`, which this API cannot
+ * produce — it has no normalization step to fail — so that reason lives on
+ * `FitLlamaResult` in `./process` rather than widening the union every existing
+ * consumer has to narrow.
  */
 export type FitResult =
   | ({ status: 0, fits: true, reason: 'fits' } & FitPlan & FitDeviceInventory)
   | ({ status: 1, fits: false, reason: 'does-not-fit' } & Partial<FitPlan> & FitDeviceInventory)
-  | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' | 'unsupported-config' } & Partial<FitPlan> & FitDeviceInventory)
+  | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' } & Partial<FitPlan> & FitDeviceInventory)
 
-/** Stable, machine-readable explanation of a fit outcome. */
+/** Stable, machine-readable explanation of a `fitParams()` outcome. */
 export type FitReason = FitResult['reason']
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.

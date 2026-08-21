@@ -149,14 +149,16 @@ function runFitProcessLine(line, fit, fitLlama = () => {
         return boundedInvocationError(error, 2, recognizableRequestVersion(parsed));
     }
     try {
-        const result = request.version === process_1.FIT_PROCESS_PROTOCOL_VERSION
-            ? fit(request.config)
-            : fitLlama(request.loadKind, request.config);
-        const response = {
-            version: request.version,
-            status: 'completed',
-            result
-        };
+        // Built per branch rather than from a shared `result`: the version and the
+        // result type are correlated — only v2 can answer `unsupported-config` —
+        // and assembling the envelope once would decorrelate them.
+        const response = request.version === process_1.FIT_PROCESS_PROTOCOL_VERSION
+            ? { version: request.version, status: 'completed', result: fit(request.config) }
+            : {
+                version: request.version,
+                status: 'completed',
+                result: fitLlama(request.loadKind, request.config)
+            };
         return { response, responseLine: encodeFitProcessResponse(response), exitCode: 0 };
     }
     catch (error) {

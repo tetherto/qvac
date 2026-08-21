@@ -56,7 +56,12 @@ function assertFitPlan(result, required) {
         }
     }
 }
-function assertFitResult(value) {
+// `unsupported-config` is reachable only through the v2 llama-load path, so the
+// parser enforces that rather than accepting it on either envelope: a v1
+// response carrying it is malformed, not merely unusual.
+const V1_ERROR_REASONS = ['model-unreadable', 'no-backend-device'];
+const V2_ERROR_REASONS = [...V1_ERROR_REASONS, 'unsupported-config'];
+function assertFitResultShape(value, errorReasons) {
     if (!isRecord(value)) {
         throw new TypeError('Fit process result must be an object');
     }
@@ -80,8 +85,7 @@ function assertFitResult(value) {
             assertFitPlan(value, false);
             return;
         case 2:
-            if (value['fits'] !== false ||
-                !['model-unreadable', 'no-backend-device', 'unsupported-config'].includes(value['reason'])) {
+            if (value['fits'] !== false || !errorReasons.includes(value['reason'])) {
                 throw new TypeError('Fit process result reason is invalid for status 2');
             }
             assertFitPlan(value, false);
@@ -89,6 +93,12 @@ function assertFitResult(value) {
         default:
             throw new TypeError(`Fit process result status is invalid: ${String(value['status'])}`);
     }
+}
+function assertFitResult(value) {
+    assertFitResultShape(value, V1_ERROR_REASONS);
+}
+function assertFitLlamaResult(value) {
+    assertFitResultShape(value, V2_ERROR_REASONS);
 }
 function encodeFitProcessRequestEnvelope(request) {
     const encoded = `${JSON.stringify(request)}\n`;
@@ -173,6 +183,10 @@ function parseFitProcessResponse(value) {
     const version = value['version'];
     switch (value['status']) {
         case 'completed':
+            if (version === exports.FIT_PROCESS_PROTOCOL_VERSION_V2) {
+                assertFitLlamaResult(value['result']);
+                return { version, status: 'completed', result: value['result'] };
+            }
             assertFitResult(value['result']);
             return { version, status: 'completed', result: value['result'] };
         case 'invocation-error': {

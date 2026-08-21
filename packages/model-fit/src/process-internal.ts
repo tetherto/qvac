@@ -5,6 +5,7 @@ import {
   FIT_PROCESS_PROTOCOL_VERSION,
   FIT_PROCESS_PROTOCOL_VERSION_V2,
   type FitLlamaProcessConfig,
+  type FitLlamaResult,
   type FitProcessRequest,
   type FitProcessResponse,
   type LlamaLoadKind
@@ -20,7 +21,7 @@ export type FitProcessFit = (config: FitConfig) => FitResult
 export type FitProcessLlamaFit = (
   loadKind: LlamaLoadKind,
   config: FitLlamaProcessConfig
-) => FitResult
+) => FitLlamaResult
 
 function isRecord (value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -201,15 +202,17 @@ export function runFitProcessLine (
   }
 
   try {
-    const result =
+    // Built per branch rather than from a shared `result`: the version and the
+    // result type are correlated — only v2 can answer `unsupported-config` —
+    // and assembling the envelope once would decorrelate them.
+    const response: FitProcessResponse =
       request.version === FIT_PROCESS_PROTOCOL_VERSION
-        ? fit(request.config)
-        : fitLlama(request.loadKind, request.config)
-    const response: FitProcessResponse = {
-      version: request.version,
-      status: 'completed',
-      result
-    }
+        ? { version: request.version, status: 'completed', result: fit(request.config) }
+        : {
+            version: request.version,
+            status: 'completed',
+            result: fitLlama(request.loadKind, request.config)
+          }
     return { response, responseLine: encodeFitProcessResponse(response), exitCode: 0 }
   } catch (error) {
     return boundedInvocationError(error, 1, request.version)

@@ -11,7 +11,7 @@ import {
   type FitProcessOutcome
 } from './process-internal'
 import { FIT_PROCESS_MAX_REQUEST_BYTES } from './process'
-import type { FitResult } from './index'
+import type { FitLlamaResult } from './process'
 
 interface RunnerInput {
   setEncoding(encoding: 'utf8'): void
@@ -76,7 +76,7 @@ function fitLlama (...args: Parameters<FitProcessLlamaFit>): ReturnType<FitProce
       backendsDir?: string
       marginMiB?: number
       nCtxMin?: number
-    }): FitResult
+    }): FitLlamaResult
   }
   let resolved = config
   if (config.backendsDir === undefined) {

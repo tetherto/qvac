@@ -1,4 +1,4 @@
-import type { FitConfig, FitResult } from './index';
+import type { FitConfig, FitDeviceInventory, FitPlan, FitResult } from './index';
 export declare const FIT_PROCESS_PROTOCOL_VERSION: 1;
 export declare const FIT_PROCESS_PROTOCOL_VERSION_V2: 2;
 export declare const FIT_PROCESS_MAX_REQUEST_BYTES: number;
@@ -26,10 +26,26 @@ export interface FitProcessCompletedResponseV1 {
     status: 'completed';
     result: FitResult;
 }
+/**
+ * Outcome of a raw llama-load fit: everything `FitResult` can be, plus the one
+ * outcome only this path produces — a load configuration the normalization
+ * cannot represent, which is advisory and must never deny a load.
+ *
+ * Deliberately a separate type. `fitParams()` can never return
+ * `unsupported-config`, so putting it on `FitResult` would oblige every
+ * existing low-level consumer to narrow a branch it can never reach.
+ */
+export type FitLlamaResult = FitResult | ({
+    status: 2;
+    fits: false;
+    reason: 'unsupported-config';
+} & Partial<FitPlan> & FitDeviceInventory);
+/** Stable, machine-readable explanation of a raw llama-load fit outcome. */
+export type FitLlamaReason = FitLlamaResult['reason'];
 export interface FitProcessCompletedResponseV2 {
     version: typeof FIT_PROCESS_PROTOCOL_VERSION_V2;
     status: 'completed';
-    result: FitResult;
+    result: FitLlamaResult;
 }
 export interface FitProcessInvocationErrorResponseV1 {
     version: typeof FIT_PROCESS_PROTOCOL_VERSION;

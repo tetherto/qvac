@@ -1,10 +1,12 @@
-import type { FitReason } from '../../index'
+import type { FitReason, FitResult } from '../../index'
 import {
   encodeFitLlamaProcessRequest,
   FIT_PROCESS_PROTOCOL_VERSION_V2
 } from '../../process'
 import type {
   FitLlamaProcessConfig,
+  FitLlamaReason,
+  FitLlamaResult,
   FitProcessRequest,
   LlamaLoadKind
 } from '../../process'
@@ -26,10 +28,25 @@ const request: FitProcessRequest = {
   loadKind,
   config
 }
-const reason: FitReason = 'unsupported-config'
+const reason: FitLlamaReason = 'unsupported-config'
 void requestLine
 void request
 void reason
+
+// A v1 reason is still a valid llama-load reason — the v2 type widens the v1
+// contract rather than replacing it.
+const shared: FitLlamaReason = 'no-backend-device'
+void shared
+
+// ...and every FitResult is a valid FitLlamaResult, so a consumer that already
+// handles the low-level outcomes needs no rewrite to read a v2 result.
+declare const lowLevel: FitResult
+const widened: FitLlamaResult = lowLevel
+void widened
+
+// @ts-expect-error the v2-only reason is not part of the fitParams contract
+const narrowed: FitReason = 'unsupported-config'
+void narrowed
 
 // @ts-expect-error load kind must be neutral completion or embedding
 encodeFitLlamaProcessRequest('llm', config)

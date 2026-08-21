@@ -14,6 +14,7 @@ import type {
   FitProcessResponse
 } from '../../process'
 import type { FitConfig, FitResult } from '../../index'
+import type { FitLlamaResult } from '../../process'
 
 declare function assertNever (value: never): never
 
@@ -43,8 +44,19 @@ void v2Request
 
 const response: FitProcessResponse = parseFitProcessResponse(null as unknown)
 if (response.status === 'completed') {
-  const result: FitResult = response.result
-  void result
+  // Correlated on version: the v1 envelope carries the low-level contract
+  // unchanged, and only the v2 one can report `unsupported-config`.
+  if (response.version === FIT_PROCESS_PROTOCOL_VERSION) {
+    const v1Result: FitResult = response.result
+    void v1Result
+
+    // @ts-expect-error a v1 response cannot report the raw llama-load outcome
+    const leaked: 'unsupported-config' = response.result.reason
+    void leaked
+  } else {
+    const v2Result: FitLlamaResult = response.result
+    void v2Result
+  }
 } else {
   const name: string = response.error.name
   void name

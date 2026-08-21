@@ -64,7 +64,9 @@ if (result.status === FIT_STATUS.SUCCESS) {
   void ctx
 } else {
   // Every remaining branch is an ERROR, with a cause the SDK can act on.
-  const reason: 'model-unreadable' | 'no-backend-device' | 'unsupported-config' = result.reason
+  // `unsupported-config` is absent by design: `fitParams()` has no
+  // normalization step to fail, so it lives on `FitLlamaResult` instead.
+  const reason: 'model-unreadable' | 'no-backend-device' = result.reason
   void reason
 }
 
@@ -86,3 +88,10 @@ void valid
 // @ts-expect-error not a member of the reason union
 const invalid: FitReason = 'out-of-memory'
 void invalid
+
+// The raw llama-load reason must not leak onto the low-level contract: this is
+// what keeps existing `fitParams()` consumers from having to narrow a branch
+// they can never reach.
+// @ts-expect-error unsupported-config belongs to FitLlamaReason, not FitReason
+const v2Only: FitReason = 'unsupported-config'
+void v2Only
