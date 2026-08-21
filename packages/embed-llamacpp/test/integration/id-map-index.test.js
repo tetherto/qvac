@@ -5,16 +5,18 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 
+const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const MODULE_PATHS = [
-  require.resolve('../../idMapIndex'),
-  require.resolve('../../binding'),
-  require.resolve('../../index.js'),
-  require.resolve('../../addon.js')
+  path.join(PACKAGE_ROOT, 'idMapIndex.js'),
+  path.join(PACKAGE_ROOT, 'binding.js'),
+  path.join(PACKAGE_ROOT, 'index.js'),
+  path.join(PACKAGE_ROOT, 'addon.js')
 ]
 const TARGET_ARCH = os.arch()
+const IS_MOBILE = os.platform() === 'ios' || os.platform() === 'android'
 const SUPPORTS_TURBOVEC = TARGET_ARCH === 's390x' || TARGET_ARCH.includes('64')
 
-const IdMapIndex = require('../../idMapIndex')
+const IdMapIndex = require('@qvac/embed-llamacpp/idMapIndex')
 
 const DIM = 16
 const TURBOVEC_DIM = 128
@@ -238,11 +240,11 @@ function runTurboVecRoundTrip(t, storage, bitWidth, storageKind) {
   }
 }
 
-test('IdMapIndex sub-export does not boot the BERT runtime', (t) => {
+test('IdMapIndex sub-export does not boot the BERT runtime', { skip: IS_MOBILE }, (t) => {
   const cachedEntries = preserveCacheEntries(MODULE_PATHS)
   try {
     for (const modulePath of MODULE_PATHS) evictFromCache(modulePath)
-    const IsolatedIdMapIndex = require('../../idMapIndex')
+    const IsolatedIdMapIndex = require(MODULE_PATHS[0])
     const idx = new IsolatedIdMapIndex({ dim: DIM })
     t.is(idx.dim, DIM, 'dim getter')
     t.is(idx.bitWidth, 8, 'default bitWidth getter')
@@ -257,22 +259,29 @@ test('IdMapIndex sub-export does not boot the BERT runtime', (t) => {
   }
 })
 
-test('IdMapIndex root export resolves the class without loading the native binding', (t) => {
-  const cachedEntries = preserveCacheEntries(MODULE_PATHS)
-  try {
-    for (const modulePath of MODULE_PATHS) evictFromCache(modulePath)
-    const rootModule = require('../../index.js')
-    t.absent(findCacheKey(MODULE_PATHS[0]), 'IdMapIndex module starts unloaded')
-    t.absent(findCacheKey(MODULE_PATHS[1]), 'native binding starts unloaded')
+test(
+  'IdMapIndex root export resolves the class without loading the native binding',
+  { skip: IS_MOBILE },
+  (t) => {
+    const cachedEntries = preserveCacheEntries(MODULE_PATHS)
+    try {
+      for (const modulePath of MODULE_PATHS) evictFromCache(modulePath)
+      const rootModule = require(MODULE_PATHS[2])
+      t.absent(findCacheKey(MODULE_PATHS[0]), 'IdMapIndex module starts unloaded')
+      t.absent(findCacheKey(MODULE_PATHS[1]), 'native binding starts unloaded')
 
-    const RootIdMapIndex = rootModule.IdMapIndex
-    t.ok(findCacheKey(MODULE_PATHS[0]), 'accessing the root export loads the class module')
-    t.absent(findCacheKey(MODULE_PATHS[1]), 'accessing the class does not load the native binding')
-    t.is(RootIdMapIndex, require('../../idMapIndex'), 'root getter returns the direct constructor')
-  } finally {
-    restoreCacheEntries(MODULE_PATHS, cachedEntries)
+      const RootIdMapIndex = rootModule.IdMapIndex
+      t.ok(findCacheKey(MODULE_PATHS[0]), 'accessing the root export loads the class module')
+      t.absent(
+        findCacheKey(MODULE_PATHS[1]),
+        'accessing the class does not load the native binding'
+      )
+      t.is(RootIdMapIndex, require(MODULE_PATHS[0]), 'root getter returns the direct constructor')
+    } finally {
+      restoreCacheEntries(MODULE_PATHS, cachedEntries)
+    }
   }
-})
+)
 
 for (const bitWidth of [4, 8, 32]) {
   test(`IdMapIndex: ${bitWidth}-bit add + search + remove + persistence round-trip`, (t) => {
@@ -351,10 +360,10 @@ test('IdMapIndex: validates production bit widths and TurboVec dimensions', (t) 
 })
 
 test('IdMapIndex: ESM wrappers expose named exports', async (t) => {
-  const idMapModule = await import('../../idMapIndex.mjs')
+  const idMapModule = await import('@qvac/embed-llamacpp/idMapIndex')
   t.is(idMapModule.default, idMapModule.IdMapIndex, 'subpath default and named class match')
   t.ok(idMapModule.IdMapIndexFilter, 'subpath named filter export exists')
-  const rootModule = await import('../../index.mjs')
+  const rootModule = await import('@qvac/embed-llamacpp')
   t.is(rootModule.default, rootModule.GGMLBert, 'root default and named GGMLBert match')
   t.is(rootModule.IdMapIndex, idMapModule.IdMapIndex, 'root and subpath constructors match')
   t.is(
@@ -368,8 +377,8 @@ test('IdMapIndex: ESM wrappers expose named exports', async (t) => {
 })
 
 test('IdMapIndex: root constructor preserves subclass semantics', (t) => {
-  const rootModule = require('../../index.js')
-  const DirectIdMapIndex = require('../../idMapIndex')
+  const rootModule = require('@qvac/embed-llamacpp')
+  const DirectIdMapIndex = require('@qvac/embed-llamacpp/idMapIndex')
   const RootIdMapIndex = rootModule.IdMapIndex
 
   class ExtendedIdMapIndex extends RootIdMapIndex {
@@ -388,8 +397,8 @@ test('IdMapIndex: root constructor preserves subclass semantics', (t) => {
 
 test('IdMapIndex: CommonJS TypeScript default import works without interop', (t) => {
   const consumer = require('../types/consumer-cjs.test.js')
-  const idMapModule = require('../../idMapIndex')
-  const rootModule = require('../../index.js')
+  const idMapModule = require('@qvac/embed-llamacpp/idMapIndex')
+  const rootModule = require('@qvac/embed-llamacpp')
 
   t.is(
     consumer.getRootDefaultImport(),

@@ -1,5 +1,8 @@
-import GGMLBert from '../..'
-import IdMapIndex, { IdMapIndex as NamedIdMapIndex, IdMapIndexFilter } from '../../idMapIndex'
+import GGMLBert from '@qvac/embed-llamacpp'
+import IdMapIndex, {
+  IdMapIndex as NamedIdMapIndex,
+  IdMapIndexFilter
+} from '@qvac/embed-llamacpp/idMapIndex'
 
 const rootConstructor: typeof GGMLBert = GGMLBert
 const sameConstructor: typeof NamedIdMapIndex = IdMapIndex

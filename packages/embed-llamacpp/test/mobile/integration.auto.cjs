@@ -194,8 +194,3 @@ async function runMultiInstanceTest (options = {}) { // eslint-disable-line no-u
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runMultiInstanceTest')) return __FILTERED
   return runIntegrationModule('../integration/multi-instance.test.js', options)
 }
-
-async function runRagIdMapIndexTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runRagIdMapIndexTest')) return __FILTERED
-  return runIntegrationModule('../integration/rag-id-map-index.test.js', options)
-}
