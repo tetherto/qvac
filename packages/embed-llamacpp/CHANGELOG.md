@@ -1,10 +1,18 @@
 # Changelog
 
-## [0.36.0] - 2026-08-21
+## [0.35.0] - 2026-08-21
 
-This release adds CPU vector indexing to `@qvac/embed-llamacpp` through the new
-`IdMapIndex` API. It gives consumers a native path for local vector search with
+This release first updates `@qvac/embed-llamacpp` to the `qvac-fabric` runtime
+with TurboVec CPU support. It then exposes that capability through the new
+`IdMapIndex` API, giving consumers a native path for local vector search with
 TurboVec-backed storage modes while keeping CommonJS and ESM entrypoints aligned.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+- Fabric vector-index support is enabled for embed builds, with lifecycle and
+  filter invalidation behavior aligned to the current TurboVec CPU contract.
 
 ### Added
 
@@ -16,22 +24,10 @@ TurboVec-backed storage modes while keeping CommonJS and ESM entrypoints aligned
 - Integration, mobile registration, type-consumer coverage, and a TurboVec CPU
   benchmark covering the new vector-index surface.
 
-### Changed
-
-- Fabric vector-index support is enabled for embed builds, with lifecycle and
-  filter invalidation behavior aligned to the current TurboVec CPU contract.
-
 ### Pull Requests
 
 - [#3786](https://github.com/tetherto/qvac/pull/3786) - QVAC-20631 feat[api]:
   add TurboVec CPU vector indexing
-
-## [0.35.0] - 2026-08-20
-
-### Changed
-
-- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
-  support from the fabric runtime; no API change for this package).
 
 ## [0.34.0] - 2026-08-18
 

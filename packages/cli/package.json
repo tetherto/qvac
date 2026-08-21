@@ -60,6 +60,7 @@
     "@fastify/multipart": "^9.0.0",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
+    "@inquirer/prompts": "8.5.2",
     "@qvac/sdk": "^0.17.0",
     "close-with-grace": "^2.1.0",
     "commander": "^14.0.3",
