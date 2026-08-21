@@ -170,19 +170,15 @@ function base64OfBytes(bytes: number): string {
   return 'A'.repeat(groups * 4 - padding) + '='.repeat(padding)
 }
 
-test('base64DecodedBytes: reports the decoded length without allocating', async (t) => {
-  const { base64DecodedBytes } = await import('@/schemas/sdcpp-config')
-
-  t.is(base64DecodedBytes('aGVsbG8='), 5, '"hello" is 5 bytes with one pad')
-  t.is(base64DecodedBytes('aGVsbG8h'), 6, '"hello!" is 6 bytes with no pad')
-  t.is(base64DecodedBytes('aGVsbG8hIQ=='), 7, '"hello!!" is 7 bytes with two pads')
-  t.is(base64DecodedBytes(''), 0, 'the empty string decodes to nothing')
-
-  // Round-trips against the generator the boundary tests below rely on, so a
-  // mistake in either shows up here rather than as a silently loose ceiling.
-  t.is(base64DecodedBytes(base64OfBytes(1)), 1, 'one byte')
-  t.is(base64DecodedBytes(base64OfBytes(3)), 3, 'a whole group')
-  t.is(base64DecodedBytes(base64OfBytes(1_000_000)), 1_000_000, 'a large non-multiple of 3')
+// The boundary tests below are only as good as this generator, so it is checked
+// against a real decode rather than against arithmetic that could be wrong in
+// the same direction. A generator that produced slightly-too-short strings would
+// otherwise make an at-ceiling case pass for the wrong reason.
+test('base64OfBytes: the boundary generator really produces that many bytes', (t) => {
+  t.is(Buffer.from(base64OfBytes(1), 'base64').length, 1, 'one byte, two pads')
+  t.is(Buffer.from(base64OfBytes(2), 'base64').length, 2, 'two bytes, one pad')
+  t.is(Buffer.from(base64OfBytes(3), 'base64').length, 3, 'a whole group, no pad')
+  t.is(Buffer.from(base64OfBytes(1_000_000), 'base64').length, 1_000_000, 'a large input')
 })
 
 test('worldSceneRequestSchema: an oversized first frame is refused', async (t) => {

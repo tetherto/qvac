@@ -1177,14 +1177,14 @@ export const MAX_SCENE_PIXELS = 1920 * 1088
  */
 export const MAX_SCENE_IMAGE_BYTES = 3 * 1024 * 1024
 
-/** Base64 characters for `MAX_SCENE_IMAGE_BYTES`, four per three bytes. */
+/**
+ * Base64 characters for `MAX_SCENE_IMAGE_BYTES`, four per three bytes. The
+ * ceiling is enforced on the encoded length rather than the decoded one so it
+ * costs a string compare instead of a decode — and, since padding only ever
+ * shortens the payload, a string within this many characters can never exceed
+ * `MAX_SCENE_IMAGE_BYTES` once decoded.
+ */
 export const MAX_SCENE_IMAGE_BASE64_CHARS = (MAX_SCENE_IMAGE_BYTES / 3) * 4
-
-/** Decoded length of a base64 payload, without allocating the buffer to find out. */
-export function base64DecodedBytes(value: string): number {
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
-  return Math.floor(value.length / 4) * 3 - padding
-}
 
 /**
  * Cross-field ceilings for a scene request. Kept as a named function because
