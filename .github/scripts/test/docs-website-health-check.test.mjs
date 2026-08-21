@@ -115,10 +115,13 @@ test('buildUrlSet rebases sitemap URLs onto a different origin', () => {
     sitemapXml,
     redirectsText: ''
   })
-  const urls = entries.map((e) => e.url)
-  assert.ok(urls.includes('https://docs.qvac.tether.su/quickstart/'))
-  assert.ok(urls.includes('https://docs.qvac.tether.su/quickstart.md'))
-  assert.ok(!urls.some((u) => u.startsWith(ORIGIN)))
+  const urls = new Set(entries.map((e) => e.url))
+  assert.ok(urls.has('https://docs.qvac.tether.su/quickstart/'))
+  assert.ok(urls.has('https://docs.qvac.tether.su/quickstart.md'))
+  // Every collected URL must live on the requested origin (nothing left on .io).
+  for (const url of urls) {
+    assert.equal(new URL(url).origin, 'https://docs.qvac.tether.su')
+  }
 })
 
 test('probeUrl reports ok for 2xx and failure for 4xx', async () => {

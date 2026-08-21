@@ -58,12 +58,15 @@ export function parseSitemapLocs (xml) {
 }
 
 function decodeXmlEntities (value) {
+  // `&amp;` is decoded LAST so a decoded `&` cannot recombine with following
+  // characters into another entity that then gets decoded again (double
+  // unescaping): e.g. `&amp;lt;` must yield literal `&lt;`, not `<`.
   return value
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
 }
 
 /** Rebase any absolute URL onto `origin`, preserving only its path. */
