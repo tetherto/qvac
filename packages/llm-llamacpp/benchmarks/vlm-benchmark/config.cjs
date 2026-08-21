@@ -109,6 +109,11 @@ const GEMMA4_Q4 = {
 // registry-published, so no `registry` annotation: the report shows Source = HF.
 // blob modelNames are the models.manifest.json keys, which is where the sha256/bytes
 // pins live; a name absent from the manifest aborts the addon leg (see #3195).
+//
+// These need a fabric addon: the published prebuild has neither the VisionPsy projector
+// type nor the image-no-upscale load-config key. A two-models dispatch on the published
+// addon therefore fails at model load, and only after both blobs have downloaded. Compare
+// them with several-sources against `fabric@<ref>`, or wait for the addon to ship it.
 const VISIONPSY_BASE = {
   id: 'visionpsy',
   name: 'VisionPsy-Nano-460M',
@@ -164,19 +169,17 @@ const VISIONPSY_FLASH_Q4 = visionpsy(VISIONPSY_FLASH, 'q4', 'q4_0')
 const VISIONPSY_FLASH_Q8 = visionpsy(VISIONPSY_FLASH, 'q8', 'q8_0')
 const VISIONPSY_FLASH_IQ3M = visionpsy(VISIONPSY_FLASH, 'iq3m', 'iq3_m-imat')
 
-// Same model and same preprocessing as visionpsy-flash-q4, with the projector forced
-// onto the GPU. It exists to reach ONE path no other entry can: on Android the addon
-// auto-defaults the projector backend by GPU class (LlamaModel.cpp), GPU on Adreno 800+
-// and CPU on Mali, so a plain `device: gpu` leg on a Mali phone runs the vision encoder
-// on CPU and never exercises Vulkan for it. Run 31409445243 shows exactly that,
-// `multimodal projector backend: CPU (auto-default, Mali GPU)` on pixel9 against
-// `GPU (auto-default, Adreno 800+)` on s25.
+// Same model and preprocessing as visionpsy-flash-q4, with the projector forced onto the
+// GPU. It reaches one path no other entry can: the addon auto-defaults the projector
+// backend by GPU class (LlamaModel.cpp), GPU on Adreno 800+ and CPU on Mali, so a plain
+// `device: gpu` leg on a Mali phone runs the vision encoder on CPU and never exercises
+// Vulkan for it.
 //
-// Deliberately a SEPARATE entry rather than a flag on the existing one. The auto-default
-// is there because the Mali projector encodes slower on GPU than on CPU (QVAC-21257), so
+// A separate entry rather than a flag on the existing one, because the auto-default exists
+// for a reason: the Mali projector encodes slower on GPU than on CPU (QVAC-21257), so
 // forcing it in the standard entry would make every routine Pixel run measure a
-// configuration nobody ships. Dispatch this one to validate the Mali Vulkan encoder, and
-// check the log line rather than the timing: it must read `GPU (mmproj-use-gpu override)`.
+// configuration nobody ships. Check the log line rather than the timing, it must read
+// `GPU (mmproj-use-gpu override)`.
 const VISIONPSY_FLASH_Q4_MMPROJ_GPU = {
   ...VISIONPSY_FLASH_Q4,
   label: 'visionpsy-flash-q4-mmproj-gpu',

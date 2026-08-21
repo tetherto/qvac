@@ -19,18 +19,30 @@ const config = require('./config.cjs')
 // A json: spec supplies repo, sha and file, and this URL is the one the workflow sends the
 // HF token to. Constrain each part to the characters a real HF path uses so a spec cannot
 // steer the authenticated request off the resolve path it is meant to hit.
-const HF_PART_RE = /^[\w.-]+$/
+//
+// `file` is a path, not a single segment: HF repos nest, and the pair form accepts URLs
+// like .../resolve/<sha>/tinyllamas/stories260K.gguf. So allow `/` between segments while
+// rejecting anything that could climb or escape: an empty segment, `.`, or `..`.
+const HF_SEGMENT_RE = /^[\w.-]+$/
 const HF_REPO_RE = /^[\w.-]+\/[\w.-]+$/
+
+function checkedHfPath (value, what) {
+  const segments = String(value == null ? '' : value).split('/')
+  if (!segments.length || segments.some(seg => seg === '' || seg === '.' || seg === '..' || !HF_SEGMENT_RE.test(seg))) {
+    throw new Error(`hf source: ${what} must be a path of plain segments with no '.' or '..' (got '${String(value).slice(0, 60)}')`)
+  }
+  return value
+}
 
 function hfUrl (s) {
   if (!HF_REPO_RE.test(String(s.repo || ''))) {
     throw new Error(`hf source: repo must be '<owner>/<name>' (got '${String(s.repo).slice(0, 60)}')`)
   }
-  for (const part of ['sha', 'file']) {
-    if (!HF_PART_RE.test(String(s[part] || ''))) {
-      throw new Error(`hf source: ${part} must be a bare path segment (got '${String(s[part]).slice(0, 60)}')`)
-    }
+  // A commit sha is always one segment; only `file` may nest.
+  if (!HF_SEGMENT_RE.test(String(s.sha || ''))) {
+    throw new Error(`hf source: sha must be a bare path segment (got '${String(s.sha).slice(0, 60)}')`)
   }
+  checkedHfPath(s.file, 'file')
   return `https://huggingface.co/${s.repo}/resolve/${s.sha}/${s.file}`
 }
 

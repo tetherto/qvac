@@ -9,7 +9,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { parseModels } = require('../models.cjs')
+const { parseModels, assertTwinsMatch } = require('../models.cjs')
 const { serializeCliArgs, parseCliArgs } = require('../cli-args.cjs')
 
 const BLOBS = {
@@ -17,23 +17,26 @@ const BLOBS = {
   mmproj: { source: { type: 'url', url: 'https://example.com/mmproj.gguf' }, modelName: 'mmproj.gguf' }
 }
 
-function parseSpec (cliArgs) {
+function parseSpec (cliArgs, addonConfig) {
   const spec = Object.assign({ label: 'probe', cliArgs }, BLOBS)
+  if (addonConfig !== undefined) spec.addonConfig = addonConfig
   return parseModels('json:' + JSON.stringify([spec]), null, null)[0]
 }
 
+// Every accepted case carries the addonConfig twin, because a flag set on one leg only is
+// rejected now. The twin rule has its own cases further down.
 const ACCEPTED = [
-  ['split form', ['--image-no-upscale', 'on']],
+  ['split form', ['--image-no-upscale', 'on'], { 'image-no-upscale': 'on' }],
   // llama.cpp rewrites `_` to `-` before looking an option up, so the allowlist canonicalises
-  // it the same way instead of comparing the literal spelling.
-  ['underscore form', ['--image_no_upscale', 'on']],
-  ['negative number value', ['--image-max-tokens', '-1']],
-  ['no args at all', []]
+  // it the same way instead of comparing the literal spelling. Same for the addon key.
+  ['underscore form', ['--image_no_upscale', 'on'], { image_no_upscale: 'on' }],
+  ['negative number value', ['--image-max-tokens', '-1'], { 'image-max-tokens': '-1' }],
+  ['no args at all', [], undefined]
 ]
 
-for (const [name, args] of ACCEPTED) {
+for (const [name, args, addonConfig] of ACCEPTED) {
   test(`cliArgs accepts the ${name} and survives the env round trip`, () => {
-    const spec = parseSpec(args)
+    const spec = parseSpec(args, addonConfig)
     assert.deepEqual(spec.cliArgs, args)
     assert.deepEqual(parseCliArgs(serializeCliArgs(spec.cliArgs)), args)
   })
@@ -83,10 +86,48 @@ test('cliArgs checks a token that only looks like a negative number', () => {
 })
 
 test('cliArgs rejects a flag with no addonConfig twin', () => {
-  // The two allowlists move together: a flag the addon cannot be told to match would put the
-  // CLI leg on different preprocessing from the addon leg under one model label.
-  assert.throws(() => parseSpec(['--image-max-tiles', '8']),
+  // Both allowlists come off one descriptor: a flag the addon cannot be told to match is on
+  // neither, so it cannot put the two legs on different preprocessing under one label.
+  assert.throws(() => parseSpec(['--image-max-tiles', '8'], { 'image-max-tiles': '8' }),
     /may only carry per-model image preprocessing flags/)
+})
+
+// The pairing is what keeps a several-sources comparison honest, so it is enforced per spec
+// and not just documented. Without it a Flash leg on upstream-cli silently runs base
+// preprocessing under the same model label as the addon leg.
+test('a cliArgs flag with no addonConfig entry is rejected', () => {
+  assert.throws(() => parseSpec(['--image-no-upscale', 'on'], {}),
+    /must set the same preprocessing on both legs/)
+})
+
+test('a cliArgs flag with no addonConfig at all is rejected', () => {
+  assert.throws(() => parseSpec(['--image-no-upscale', 'on']),
+    /addonConfig has no 'image-no-upscale'/)
+})
+
+test('an addonConfig key with no cliArgs flag is rejected', () => {
+  assert.throws(() => parseSpec([], { 'image-no-upscale': 'on' }),
+    /cliArgs has no --image-no-upscale/)
+})
+
+test('the two legs disagreeing on a value is rejected', () => {
+  assert.throws(() => parseSpec(['--image-tile-mode', 'batched'], { 'image-tile-mode': 'sequential' }),
+    /is 'batched' but addonConfig 'image-tile-mode' is 'sequential'/)
+})
+
+test('mmproj-use-gpu needs no cliArgs twin', () => {
+  // Addon-only by design: it picks the projector backend, which the CLI legs have no flag for.
+  const spec = parseSpec([], { 'mmproj-use-gpu': 'on' })
+  assert.deepEqual(spec.addonConfig, { 'mmproj-use-gpu': 'on' })
+})
+
+test('every committed catalog entry satisfies the twin rule', () => {
+  // normalizeSpec only runs on json: specs, so the catalog would otherwise never be checked,
+  // and it is exactly where a silent one-leg flag would ship.
+  const { catalog } = require('../config.cjs')
+  for (const [name, spec] of Object.entries(catalog)) {
+    assert.doesNotThrow(() => assertTwinsMatch(spec, name), `catalog entry ${name}`)
+  }
 })
 
 test('the env round trip preserves token count for every accepted spelling', () => {

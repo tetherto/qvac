@@ -73,8 +73,11 @@ can be compared across engines with no config commit. A dispatch with CLI source
 (`matrix_sources=fabric@<ref>`) runs no addon leg at all, and the CLI step downloads the two
 blobs itself, which is what a model the published addon cannot load yet needs. Those downloads
 are checked against a sha256 pin, taken from `models.manifest.json` when the `modelName` is a
-manifest key and otherwise from a `sha256` field on the blob; a blob with neither is fetched
-with a warning and no integrity check.
+manifest key and otherwise from a `sha256` field on the blob. A blob with neither fails the
+leg, because an unverified GGUF's own chat template goes on to reach `--chat-template`; set the
+`allow_unverified_models` dispatch input to run one anyway. A blob that fails the check is
+deleted and fetched once more before the leg gives up, so a truncated file left behind by a
+cancelled run recovers by itself instead of failing every rerun.
 
 A model needing a per-model flag (VisionPsy Flash needs `--image-no-upscale on`, else it runs
 base preprocessing and the run measures the wrong thing) carries it as `cliArgs` for the native
@@ -92,11 +95,22 @@ so that the legs stay comparable.
 This is an allowlist on purpose: llama.cpp gives most options several spellings (`-n` /
 `--predict` / `--n-predict`, `-ngl` / `--gpu-layers` / `--n-gpu-layers`, `--temp` /
 `--temperature`), extra args are appended after the harness's own, so a late alias would win,
-and a fabric bump can add a spelling at any time. Widening the list is a deliberate code
-change, and the two lists move together: a flag with no `addonConfig` twin cannot be set on
-both legs, so a spec using it would compare different preprocessing under one model label.
-`--image-max-tiles` is on neither list for that reason, since arg.cpp takes it but the addon
-has no handler.
+and a fabric bump can add a spelling at any time. Widening it is a deliberate code change to
+the single `MODEL_OPTIONS` descriptor in `models.cjs`, which both allowlists are derived from,
+so the CLI and addon sides cannot drift apart. `--image-max-tiles` is absent from it because
+arg.cpp takes it and the addon has no handler, so it could only ever be set on one leg.
+
+**An option with a twin must be set on both legs, with the same value.** This is enforced per
+spec, not merely documented: a `json:` spec with `cliArgs: ['--image-no-upscale', 'on']` and no
+matching `addonConfig` is rejected at parse time, as is one where the two values disagree. A
+one-sided flag would otherwise have the CLI leg and the addon leg run different preprocessing
+under a single model label, which is the exact failure the pairing exists to prevent.
+`mmproj-use-gpu` is exempt because it has no CLI equivalent to match.
+
+Note that `fabric` and `upstream` remain deliberately asymmetric: `cliArgs` reach the fabric
+CLI only, since these flags are fork additions and `upstream-cli` aborts on an unknown
+argument. So an `upstream-cli` leg of a model needing a flag runs base preprocessing by
+design. Read that leg as a baseline, not as the same configuration.
 
 Write `cliArgs` in the split form, `['--image-no-upscale', 'on']`. arg.cpp looks the whole
 argv token up and never splits on `=`, so `--image-no-upscale=on` is an unknown argument to

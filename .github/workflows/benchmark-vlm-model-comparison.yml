@@ -52,6 +52,11 @@ on:
         required: false
         type: string
         default: ""
+      allow_unverified_models:
+        description: "  allow a CLI leg to run a blob with no sha256 pin (a json: spec whose modelName is not a manifest key and that carries no sha256). Off by default: an unverified GGUF's own chat template reaches --chat-template."
+        required: false
+        type: boolean
+        default: false
       matrix_mobile:
         description: "  mobile (AWS Device Farm) legs, comma-sep <device>[any][-<backend>]: s26,s25,pixel9,iphone16,iphone17,iphone17pro — plain token = that EXACT model; 'any' suffix (e.g. pixel9any) = any subfamily variant, availability-picked. e.g. 's26-cpu,pixel9any,iphone17pro' (bare device = cpu+gpu in one session; empty = no mobile)"
         required: false
@@ -115,15 +120,26 @@ jobs:
         run: |
           repo="$REPO"
           ref="${INPUT_REF:-$REF_NAME}"
-          # Delimited form, because `ref` comes from a workflow input: a newline in a plain
-          # `key=value` line would let the dispatcher append step outputs of its own.
+          # `ref` is a workflow input, so it is untrusted. A git ref cannot contain
+          # whitespace anyway, so reject it outright rather than trying to encode it: that
+          # closes the newline-injection route into GITHUB_OUTPUT at the source, instead of
+          # relying on a delimiter the value might also contain.
+          case "$ref" in
+            *[[:space:]]*|"")
+              echo "::error::ref must be a single git ref with no whitespace"
+              exit 1
+              ;;
+          esac
+          # Belt and braces: a per-run random delimiter, so even a value that somehow
+          # carried a newline could not terminate the block and append its own output.
+          delim="EOF_$(openssl rand -hex 16)"
           {
-            echo "repository<<__EOF_REPO__"
+            echo "repository<<$delim"
             echo "$repo"
-            echo "__EOF_REPO__"
-            echo "ref<<__EOF_REF__"
+            echo "$delim"
+            echo "ref<<$delim"
             echo "$ref"
-            echo "__EOF_REF__"
+            echo "$delim"
           } >> "$GITHUB_OUTPUT"
       # Resolve the mobile timeout (minutes) so matrix-mobile can forward it to the
       # reusable workflow's mocha_timeout_ms / per_test_timeout_minutes inputs.
@@ -666,6 +682,7 @@ jobs:
           SAMPLES: ${{ inputs.matrix_samples }}
           PRESET: ${{ inputs.matrix_preset }}
           MATRIX_SOURCES: ${{ inputs.matrix_sources }}
+          ALLOW_UNVERIFIED: ${{ inputs.allow_unverified_models }}
           QVAC_VLM_MODELS: ${{ inputs.matrix_models }} # '' → config.sourcesModel (same resolution as harness.cjs)
         run: |
           # Match the addon leg's run size: samples + repeats come from the active
@@ -733,7 +750,7 @@ jobs:
             [ -s "$1" ] && return 0
             if [ -z "$2" ]; then
               echo "::error::$1 is missing and its source has no download URL. Registry sources are addon-only: they need an addon leg in this same job, which leaves the blob in $ADDON_MODEL_DIR. A CLI-only dispatch cannot fetch one."
-              exit 1
+              return 1
             fi
             echo ">> fetching $1"
             # Only attach the HF token to an actual huggingface.co URL. matrix_models'
@@ -755,8 +772,14 @@ jobs:
                   if [ -n "$hf_redirect" ]; then
                     curl -fL --retry 3 -o "$1" "$hf_redirect"
                   else
-                    # Served inline, no redirect to follow, so no hop the token could leak on.
-                    curl -f --retry 3 -H "Authorization: Bearer $HF_TOKEN" -o "$1" "$2"
+                    # No redirect on the probe, so fetch inline with the token. --max-redirs 0
+                    # keeps the token off any hop the probe did not predict: if the GET
+                    # redirects anyway, curl fails here with a clear message instead of saving
+                    # the redirect body and failing later at the sha check.
+                    if ! curl -f --retry 3 --max-redirs 0 -H "Authorization: Bearer $HF_TOKEN" -o "$1" "$2"; then
+                      echo "::error::$1 redirected on the tokenized GET after the HEAD probe reported none, refusing to follow it with the token attached"
+                      return 1
+                    fi
                   fi
                 else
                   curl -fL --retry 3 -o "$1" "$2"
@@ -767,14 +790,6 @@ jobs:
                 ;;
             esac
           }
-          # Both at once. These are multi-GB and bandwidth-bound, and a stalled download is
-          # the usual way this leg dies, so do not serialise the two exposure windows.
-          fetch_blob "$LLM" "$LLM_URL" &
-          llm_pid=$!
-          fetch_blob "$MMPROJ" "$MMPROJ_URL" &
-          mmproj_pid=$!
-          wait "$llm_pid" || { echo "::error::could not fetch $LLM_NAME"; exit 1; }
-          wait "$mmproj_pid" || { echo "::error::could not fetch $MMPROJ_NAME"; exit 1; }
           # Check the bytes against the pin. The addon leg gets this from ensureModel(), but a
           # CLI-only dispatch fetches the URL itself, so without this it benchmarks whatever
           # the host served, and a GGUF's own chat template goes on to reach --chat-template.
@@ -785,20 +800,43 @@ jobs:
               echo "$2  $1" | shasum -a 256 -c - >/dev/null 2>&1
             fi
           }
-          verify_blob () {
-            if [ -z "$3" ]; then
-              echo "::warning::$2 has no sha256 pin, so the fetched bytes cannot be verified"
+          # Fetch, verify, and on a mismatch delete and refetch once before giving up. A
+          # truncated blob left in MODEL_DIR by an earlier cancelled run would otherwise fail
+          # this leg on every rerun, since fetch_blob skips a file that is merely non-empty,
+          # and on a self-hosted runner nothing clears it.
+          fetch_verified_blob () {
+            path=$1; name=$2; url=$3; want=$4
+            fetch_blob "$path" "$url" || return 1
+            if [ -z "$want" ]; then
+              if [ "$ALLOW_UNVERIFIED" = "true" ]; then
+                echo "::warning::$name has no sha256 pin and allow_unverified_models is set, using it unverified"
+                return 0
+              fi
+              echo "::error::$name has no sha256 pin, so its bytes cannot be verified. Give the blob a modelName that models.manifest.json pins, or an explicit sha256 in the json: spec. Set allow_unverified_models to override."
+              return 1
+            fi
+            if sha256_check "$path" "$want"; then
+              echo ">> verified $name against its sha256 pin"
               return 0
             fi
-            if sha256_check "$1" "$3"; then
-              echo ">> verified $2 against its sha256 pin"
-            else
-              echo "::error::$2 does not match its pinned sha256 ($3)"
-              exit 1
+            echo "::warning::$name does not match its pinned sha256, discarding it and fetching once more"
+            rm -f "$path"
+            fetch_blob "$path" "$url" || return 1
+            if sha256_check "$path" "$want"; then
+              echo ">> verified $name against its sha256 pin after refetch"
+              return 0
             fi
+            echo "::error::$name does not match its pinned sha256 ($want) after a refetch"
+            return 1
           }
-          verify_blob "$LLM" "$LLM_NAME" "$LLM_SHA256"
-          verify_blob "$MMPROJ" "$MMPROJ_NAME" "$MMPROJ_SHA256"
+          # Both at once. These are multi-GB and bandwidth-bound, and a stalled download is
+          # the usual way this leg dies, so do not serialise the two exposure windows.
+          fetch_verified_blob "$LLM" "$LLM_NAME" "$LLM_URL" "$LLM_SHA256" &
+          llm_pid=$!
+          fetch_verified_blob "$MMPROJ" "$MMPROJ_NAME" "$MMPROJ_URL" "$MMPROJ_SHA256" &
+          mmproj_pid=$!
+          wait "$llm_pid" || { echo "::error::could not fetch or verify $LLM_NAME"; exit 1; }
+          wait "$mmproj_pid" || { echo "::error::could not fetch or verify $MMPROJ_NAME"; exit 1; }
           run_src () {
             echo ">> $1 over fixture ($2)"
             # Model-specific flags (e.g. VisionPsy Flash's --image-no-upscale) are fabric-fork

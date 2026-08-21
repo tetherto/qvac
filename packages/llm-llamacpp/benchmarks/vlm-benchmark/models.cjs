@@ -87,41 +87,42 @@ function parsePair (token) {
 // only of dots, and `..` is a path segment that walks up one level.
 const MODEL_NAME_RE = /^(?!\.+$)[A-Za-z0-9._-]+$/
 
-// cliArgs exists for ONE purpose: per-model image preprocessing that the GGUF cannot
-// declare, e.g. VisionPsy Flash's --image-no-upscale. So allow exactly that family and
-// reject every other flag, rather than blocklisting the ones the harness sets.
+// cliArgs and addonConfig exist for ONE purpose: per-model image preprocessing that the
+// GGUF cannot declare, e.g. VisionPsy Flash's --image-no-upscale. Allow exactly that
+// family and reject every other flag, rather than blocklisting the ones the harness sets.
+// A blocklist cannot be made safe here, because llama.cpp gives most options several
+// spellings (common/arg.cpp: -n / --predict / --n-predict, -ngl / --gpu-layers /
+// --n-gpu-layers) and extra args are appended AFTER buildCliArgs' fixed flags, so a late
+// alias wins and a fabric bump can add one without touching this file.
 //
-// A blocklist cannot be made safe here. llama.cpp gives most options several spellings
-// (common/arg.cpp: {"-n","--predict","--n-predict"}, {"-s","--seed"},
-// {"--temp","--temperature"}, {"-mm","--mmproj"}, {"-ngl","--gpu-layers",
-// "--n-gpu-layers"}), extraArgs are appended AFTER buildCliArgs' fixed flags so a late
-// alias wins, and a fabric bump can add another alias without touching this file. An
-// allowlist cannot rot that way: a new spelling of --seed is still not on it.
-//
-// These are single-spelling in arg.cpp (:2418 :2425 :2452 :2463) and none of them is set
-// by buildCliArgs. Adding to this list is a deliberate act; do it when a model genuinely
-// needs a new preprocessing knob, and only once ALLOWED_ADDON_KEYS has the twin. A flag
-// with no addon twin cannot be set on both legs, so a spec using it would put the two
-// legs on different preprocessing under one model label. --image-max-tiles is the case in
-// point: arg.cpp takes it, the addon has no handler, so it stays off both lists.
-const ALLOWED_CLI_FLAGS = new Set([
-  '--image-no-upscale', '--image-tile-mode',
-  '--image-max-tokens', '--image-min-tokens'
+// One descriptor per option, so the CLI and addon sides cannot drift apart: both
+// allowlists and the twin lookup below are derived from it. `addon: null` means the
+// option has no addon handler and so cannot be set on both legs, which is why
+// --image-max-tiles is absent entirely: arg.cpp takes it, the addon does not.
+// mmproj-use-gpu is addon-only in the other direction. It picks the projector backend,
+// which `device` does not control, and on Android the addon auto-defaults it per GPU
+// class (LlamaModel.cpp: GPU for Adreno 800+, CPU for Mali and anything undetected), so
+// validating the projector on a Mali GPU is impossible without overriding it.
+const MODEL_OPTIONS = Object.freeze([
+  { cli: '--image-no-upscale', addon: 'image-no-upscale' },
+  { cli: '--image-tile-mode', addon: 'image-tile-mode' },
+  { cli: '--image-max-tokens', addon: 'image-max-tokens' },
+  { cli: '--image-min-tokens', addon: 'image-min-tokens' },
+  { cli: null, addon: 'mmproj-use-gpu' }
 ])
 
-// The addon twin. LOAD_CONFIG_HANDLERS in the addon accepts both spellings of each key,
-// so both are listed. reasoning-budget is deliberately absent: the harness pins it to 0
-// for every leg, so a spec that set it would be changing the comparison, not the model.
-// mmproj-use-gpu is here rather than treated as a device setting: `device` picks the
-// backend for the LLM layers, this picks it for the projector only, and on Android the
-// addon auto-defaults it per GPU class (LlamaModel.cpp: GPU for Adreno 800+, CPU for
-// Mali and anything undetected). Validating the projector on a Mali GPU is therefore
-// impossible without overriding it, so a dispatch has to be able to set it.
-const ALLOWED_ADDON_KEYS = new Set([
-  'image-no-upscale', 'image_no_upscale', 'image-tile-mode', 'image_tile_mode',
-  'image-max-tokens', 'image_max_tokens', 'image-min-tokens', 'image_min_tokens',
-  'mmproj-use-gpu', 'mmproj_use_gpu'
-])
+// The addon accepts either spelling of each key (LOAD_CONFIG_HANDLERS), so list both.
+// reasoning-budget is deliberately absent everywhere: the harness pins it to 0 on every
+// leg, so a spec setting it would change the comparison, not the model.
+const addonSpellings = (key) => [key, key.replace(/-/g, '_')]
+
+const ALLOWED_CLI_FLAGS = new Set(MODEL_OPTIONS.filter(o => o.cli).map(o => o.cli))
+const ALLOWED_ADDON_KEYS = new Set(MODEL_OPTIONS.filter(o => o.addon).flatMap(o => addonSpellings(o.addon)))
+
+// Canonical CLI flag -> addon key, and back. Both sides canonicalise before lookup, so
+// --image_no_upscale and image_no_upscale land on the same option.
+const CLI_TO_ADDON = new Map(MODEL_OPTIONS.filter(o => o.cli && o.addon).map(o => [o.cli, o.addon]))
+const ADDON_TO_CLI = new Map(MODEL_OPTIONS.filter(o => o.cli && o.addon).map(o => [o.addon, o.cli]))
 
 // llama.cpp rewrites `_` to `-` on any `--` argument before it looks the option up
 // (common/arg.cpp, both parse loops), so `--image_no_upscale` reaches the same option
@@ -158,6 +159,47 @@ function assertNoEqualsForm (args, i, label) {
   const bad = args.filter(a => a.includes('='))
   if (bad.length) {
     throw new Error(`json model #${i} ('${label || '?'}'): cliArgs must use the split form, llama.cpp does not accept --flag=value; write ['--image-no-upscale', 'on'] instead of ${bad.map(a => JSON.stringify(a)).join(', ')}`)
+  }
+}
+
+// Pair a cliArgs array down to {canonical flag -> value}. A flag with no following value,
+// or followed by another flag, is a valueless switch and pairs to ''.
+function cliArgsToMap (args) {
+  const out = new Map()
+  for (let n = 0; n < args.length; n++) {
+    if (!isFlagToken(args[n])) continue
+    const next = args[n + 1]
+    out.set(canonicalCliFlag(args[n]), next != null && !isFlagToken(next) ? next : '')
+  }
+  return out
+}
+
+// An option set on one leg only silently compares different preprocessing under one model
+// label, which is the failure the pairing exists to prevent. So a spec that sets an option
+// having a twin must set both sides to the same value. Options with no twin, currently
+// mmproj-use-gpu, are exempt: there is nothing to match them against.
+function assertTwinsMatch (spec, i) {
+  const label = spec.label || '?'
+  const cli = cliArgsToMap(spec.cliArgs || [])
+  const addon = new Map()
+  for (const [k, v] of Object.entries(spec.addonConfig || {})) {
+    addon.set(k.replace(/_/g, '-'), String(v))
+  }
+  const problems = []
+  for (const [flag, value] of cli) {
+    const twin = CLI_TO_ADDON.get(flag)
+    if (!twin) continue
+    if (!addon.has(twin)) problems.push(`${flag} is set for the CLI legs but addonConfig has no '${twin}'`)
+    else if (addon.get(twin) !== value) problems.push(`${flag} is '${value}' but addonConfig '${twin}' is '${addon.get(twin)}'`)
+  }
+  for (const [key, value] of addon) {
+    const twin = ADDON_TO_CLI.get(key)
+    if (!twin) continue
+    if (!cli.has(twin)) problems.push(`addonConfig '${key}' is set but cliArgs has no ${twin}`)
+    else if (cli.get(twin) !== value) problems.push(`addonConfig '${key}' is '${value}' but ${twin} is '${cli.get(twin)}'`)
+  }
+  if (problems.length) {
+    throw new Error(`json model #${i} ('${label}'): cliArgs and addonConfig must set the same preprocessing on both legs, otherwise the report compares different settings under one label; ${problems.join('; ')}`)
   }
 }
 
@@ -220,6 +262,7 @@ function normalizeSpec (spec, i) {
       throw new Error(`json model #${i} ('${spec.label || '?'}'): addonConfig may only carry per-model image preprocessing keys (${[...ALLOWED_ADDON_KEYS].join(', ')}); rejected ${bad.join(', ')}`)
     }
   }
+  assertTwinsMatch(spec, i)
   if (!spec.label) spec.label = `json-model-${i}`
   if (!spec.name) spec.name = spec.label
   if (!spec.ctx_size) spec.ctx_size = '4096'
@@ -255,4 +298,6 @@ function parseModels (raw, catalog, fallback) {
   return specs
 }
 
-module.exports = { parseModels, parsePair, blobFromUrl }
+// assertTwinsMatch is exported so a test can hold the committed catalog to the same rule
+// as a json: spec; normalizeSpec only runs on the latter.
+module.exports = { parseModels, parsePair, blobFromUrl, assertTwinsMatch, MODEL_OPTIONS }
