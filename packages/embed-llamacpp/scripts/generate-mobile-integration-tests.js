@@ -8,6 +8,11 @@ const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
+const MOBILE_EXCLUDED_INTEGRATION_FILES = new Set([
+  // This test is desktop-only and uses package-root relative imports that do
+  // not resolve after the mobile test app copies integration tests.
+  'rag-id-map-index.test.js'
+])
 
 // The benchmark-perf-*.test.js shards are generated, not committed (see
 // .gitignore), but the committed integration.auto.cjs references them. Enumerating
@@ -37,6 +42,7 @@ function getIntegrationFiles() {
   return fs
     .readdirSync(integrationDir)
     .filter((entry) => entry.endsWith('.test.js'))
+    .filter((entry) => !MOBILE_EXCLUDED_INTEGRATION_FILES.has(entry))
     .sort()
 }
 

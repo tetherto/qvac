@@ -10373,6 +10373,20 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     vae_on_cpu: Annotated[
         bool | None, Field(description="Force VAE decoder to run on CPU")
     ] = None
+    vae_auto_cpu_fallback: Annotated[
+        bool | None,
+        Field(
+            description="Automatically move the VAE to CPU when GPU memory is insufficient"
+        ),
+    ] = None
+    vae_auto_cpu_fallback_memory_ratio: Annotated[
+        float | None,
+        Field(
+            description="GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]",
+            gt=0.0,
+            le=1.0,
+        ),
+    ] = None
     vae_tiling: Annotated[
         bool | None,
         Field(description="Enable VAE tiling for large images on limited VRAM"),
@@ -10393,7 +10407,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     lora_apply_mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode | None,
         Field(
-            description="How LoRA adapters passed via diffusion({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent diffusion() calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted.",
+            description="How LoRA adapters passed via diffusion({ lora }) or video({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent generation calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted; use this mode for the LTX Ingredients workflow.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
         ),
     ] = None
@@ -13181,6 +13195,7 @@ class VideoStreamRequestScheduler(Enum):
     smoothstep = "smoothstep"
     kl_optimal = "kl_optimal"
     bong_tangent = "bong_tangent"
+    ltx2 = "ltx2"
 
 
 class VideoStreamRequestHighNoiseSampler(Enum):
@@ -13246,6 +13261,16 @@ class VideoStreamRequestMode(Enum):
     img2vid = "img2vid"
 
 
+class ReferenceImage(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            min_length=1,
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
+    ]
+
+
 class VideoStreamRequest(GeneratedBaseModel):
     model_id: Annotated[
         str,
@@ -13268,6 +13293,38 @@ class VideoStreamRequest(GeneratedBaseModel):
     negative_prompt: Annotated[
         str | None,
         Field(description="Optional negative prompt describing what to avoid."),
+    ] = None
+    lora: Annotated[
+        str | None,
+        Field(
+            description="LTX video only. Worker-local absolute path to a LoRA adapter. Under delegated inference the file must already exist on the provider.",
+            min_length=1,
+            pattern="^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)",
+        ),
+    ] = None
+    lora_strength: Annotated[
+        float | None,
+        Field(
+            description="LTX video only. Runtime LoRA multiplier in [0, 10]; requires lora.",
+            ge=0.0,
+            le=10.0,
+        ),
+    ] = None
+    stg_scale: Annotated[
+        float | None,
+        Field(
+            description="LTX video only. Spatiotemporal guidance scale in [0, 10].",
+            ge=0.0,
+            le=10.0,
+        ),
+    ] = None
+    stg_block: Annotated[
+        int | None,
+        Field(
+            description="LTX video only. Transformer block skipped for spatiotemporal guidance.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     width: Annotated[
         int | None,
@@ -13443,6 +13500,28 @@ class VideoStreamRequest(GeneratedBaseModel):
             description="img2vid denoise strength in [0, 1]; rejected for txt2vid.",
             ge=0.0,
             le=1.0,
+        ),
+    ] = None
+    reference_images: Annotated[
+        list[ReferenceImage] | None,
+        Field(
+            description="LTX txt2vid only. Exactly one base64-encoded composite reference sheet; requires lora.",
+            max_length=1,
+            min_length=1,
+        ),
+    ] = None
+    reference_attention_strength: Annotated[
+        float | None,
+        Field(
+            description="LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires reference_images.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    reference_downscale_factor: Annotated[
+        Literal[1] | None,
+        Field(
+            description="LTX txt2vid only. Reference-image spatial factor; currently exactly 1."
         ),
     ] = None
     type: Literal["videoStream"] = "videoStream"
