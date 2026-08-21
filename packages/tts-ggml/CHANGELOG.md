@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-08-20
+
 ### Changed
 
 - Move `@qvac/registry-client` from a runtime dependency to a `^0.6.1`

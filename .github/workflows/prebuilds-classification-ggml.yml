@@ -25,6 +25,13 @@ on:
         required: false
         type: string
         default: "packages/classification-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -48,4 +55,5 @@ jobs:
       # find_dependency(Vulkan) is separately removed under DL by qvac-fabric
       # 8828.0.2#5, but the fabric's own Vulkan backend build still needs it.
       include-vulkan-sdk: true
+      fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit
