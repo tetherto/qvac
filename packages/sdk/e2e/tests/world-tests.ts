@@ -171,9 +171,15 @@ export const worldConcurrentStepRejected = createWorldTest(
 
 // Cancellation is block-granular — the engine cannot abort mid-block — but an
 // accepted cancel must still make the step reject rather than resolve, or a
-// truncated block would read as success. The executor asserts that, then
-// reloads the session and walks it again: the validation here covers the walk
-// after the reload, which is what proves the session is reusable.
+// truncated block would read as success. The executor warms the session with a
+// completed step first so the cancel hits a block genuinely in flight rather
+// than deferred activation, then steps again on the SAME loaded model with no
+// eviction and no second worldCreateScene.
+//
+// 9 rather than 12 is the assertion that matters: 9 is the first block after a
+// load, so it only appears if the SDK really did drop the cancelled session and
+// rebuild it from the promoted pack. A session that survived the cancel would
+// deliver 12 and fail here.
 export const worldCancelThenReload = createWorldTest(
   'world-cancel-then-reload',
   { image: 'elephant.jpg', keys: ['W'] },

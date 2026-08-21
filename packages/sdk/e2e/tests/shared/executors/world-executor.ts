@@ -260,20 +260,31 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
     const modelId = await this.resources.ensureLoaded(RESOURCE)
     await this.createWorld(modelId, params)
 
+    // Warm the session with a COMPLETED step first. Without this the cancel
+    // races `ensureActivated()` — the session defers activation to the first
+    // step, so a cancel arriving during that load is refused before dispatch and
+    // no block ever runs. That path is worth having, but it is not the one this
+    // test is named for: cancelling a block that is genuinely in flight.
+    const warmup = await worldStep({ modelId, keys: params['keys'] as string[] }).frames
+    if (!Array.isArray(warmup) || warmup.length === 0) {
+      return {
+        passed: false,
+        output: 'warm-up step delivered no frames, so nothing was in flight to cancel'
+      }
+    }
+
     const inFlight = worldStep({ modelId, keys: params['keys'] as string[] })
 
-    // Cancel while the block is unambiguously in flight, and AWAIT the cancel so
-    // the assertion below rests on a cancel the server actually accepted — an
-    // unsuccessful one throws CancelFailedError.
+    // AWAIT the cancel so the assertion rests on one the server accepted — an
+    // unsuccessful cancel throws CancelFailedError.
     //
-    // The earlier version fired the cancel from a 1500 ms timer and accepted
-    // either outcome, on the grounds that a cancel landing after the block
-    // finished legitimately resolves. That reasoning is sound but it made the
-    // test unfalsifiable: with cancellation entirely removed, every run would
-    // take the "resolved" branch and still pass. A cancel accepted against a
-    // live request must make the step reject — the op raises
-    // InferenceCancelledError rather than yielding `done`, precisely so a
-    // truncated block is never dressed up as success.
+    // The original version fired from a 1500 ms timer and accepted either
+    // outcome, on the grounds that a cancel landing after the block finished
+    // legitimately resolves. Sound, but it made the test unfalsifiable: with
+    // cancellation removed entirely every run would take the "resolved" branch
+    // and still pass. A cancel accepted against a live request must make the
+    // step reject — the op raises InferenceCancelledError rather than yielding
+    // `done`, precisely so a truncated block is never dressed up as success.
     await new Promise((resolve) => setTimeout(resolve, 300))
     await cancel({ requestId: inFlight.requestId })
 
@@ -294,12 +305,17 @@ export class WorldExecutor extends AbstractModelExecutor<typeof worldTests> {
       }
     }
 
-    await this.resources.evict(RESOURCE)
-    const reloaded = await this.resources.ensureLoaded(RESOURCE)
-    await this.createWorld(reloaded, params)
-    const frames = await worldStep({ modelId: reloaded, keys: ['W'] }).frames
+    // The documented recovery: SAME loaded model, no eviction and no second
+    // worldCreateScene. The SDK drops the cancelled session itself, so this step
+    // must transparently rebuild it from the pack already promoted above. The
+    // previous version evicted and recreated the scene, which is exactly the
+    // unloadModel/loadModel cycle the recovery exists to make unnecessary — so
+    // it would have passed even with the rebuild removed.
+    const frames = await worldStep({ modelId, keys: ['W'] }).frames
     const result = ValidationHelpers.validate(frames, expectation)
-    // Surface which branch ran so the report shows whether the cancel landed.
-    return { ...result, output: `${result.output} [in-flight step: ${cancelOutcome}]` }
+    return {
+      ...result,
+      output: `${result.output} [warm-up: ${warmup.length} frames; in-flight step: ${cancelOutcome}]`
+    }
   }
 }
