@@ -538,7 +538,9 @@ jobs:
     # Exceeds the 30m default: waits on the AWS Device Farm run (queue + device
     # provisioning + on-device execution), which routinely takes >30m.
     timeout-minutes: 120
-    continue-on-error: true # advisory until on-device flake is characterised
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger. NOTE: this workflow IS called by on-pr-inference-addon-cpp.yml,
+    # so a failing on-device test now blocks the PR (intended — no silent green).
     permissions:
       contents: read
       packages: read
