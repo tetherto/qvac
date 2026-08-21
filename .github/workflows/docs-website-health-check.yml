@@ -131,6 +131,14 @@ jobs:
                 title,
                 body,
                 labels: [label],
+                assignees: [
+                  'BrunoCampana',
+                  'GSServita',
+                  'costin-busioc',
+                  'opaninakuffo',
+                  'Proletter',
+                  'sidj-thr',
+                ],
               });
               core.info(`Opened new issue #${created.data.number}`);
             }
