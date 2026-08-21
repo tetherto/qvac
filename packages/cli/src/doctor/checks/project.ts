@@ -23,6 +23,11 @@ function resolveSdkPackageJson(projectRoot: string): string | null {
   }
 }
 
+export function resolveSdkEntrypoint(projectRoot: string): string {
+  const req = createRequire(path.join(projectRoot, 'package.json'))
+  return req.resolve(DEFAULT_SDK_NAME)
+}
+
 export const checkSdkInstalled: Check = (ctx) => {
   const projectRoot = ctx.projectRoot
   const pkgPath = resolveSdkPackageJson(projectRoot)
