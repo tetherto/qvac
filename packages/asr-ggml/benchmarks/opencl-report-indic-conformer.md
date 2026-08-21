@@ -5,11 +5,10 @@ stack's new **Indic Conformer** case on Adreno 830 (Samsung Galaxy S25 Ultra)
 through OpenCL, captured on
 [workflow run 32489751168](https://github.com/tetherto/qvac/actions/runs/32489751168).
 
-It is the acceptance artefact for
-[QVAC-23659](https://app.asana.com/1/45238840754660/project/1214153063536860/task/1217458943702095)
-("[ASR] Add support to Indic Conformer Parakeet model on OpenCL GPU"), scoped
-to the OpenCL execution path only. A companion run on a Mali/Vulkan device
-(Pixel 9 / Mali-G715, [run 32483218937](https://github.com/tetherto/qvac/actions/runs/32483218937))
+It is the acceptance artefact for adding Indic Conformer coverage to the
+`parakeet-gpu-smoke` matrix, scoped to the OpenCL execution path only. A
+companion run on a Mali/Vulkan device (Pixel 9 / Mali-G715,
+[run 32483218937](https://github.com/tetherto/qvac/actions/runs/32483218937))
 validates the same wiring on the alternative Android GPU path.
 
 ## Summary
@@ -50,8 +49,8 @@ existing OpenCL wiring (already used for parakeet-ctc-0.6b) also covers the
 | Workflow run (OpenCL, S25 Ultra / Adreno 830) | [`32489751168`](https://github.com/tetherto/qvac/actions/runs/32489751168) |
 | Companion run (Vulkan, Pixel 9 / Mali-G715) | [`32483218937`](https://github.com/tetherto/qvac/actions/runs/32483218937) |
 | Trigger | Manual `workflow_dispatch` on `integration-mobile-test-asr-ggml.yml`, `tests=runParakeetGpuSmokeTest` |
-| Branch | `feat/QVAC-23659-indic-conformer-opencl-gpu` |
-| Head commit | `c4e7745d508773a246bd956c884d9ba2d957f875` (`QVAC-23659 doc[asr-ggml]: note Indic Conformer OpenCL smoke coverage`) |
+| Branch | this PR branch |
+| Head commit | `c4e7745d508773a246bd956c884d9ba2d957f875` (`doc[asr-ggml]: note Indic Conformer OpenCL smoke coverage`) |
 | Resolved `speech-cpp` | pinned via `packages/asr-ggml/vcpkg.json`, `opencl` feature enabled on `android` (unchanged in this PR) |
 | Prebuild package identifier | Freshly built in the workflow run; native binaries include `libqvac-speech-ggml-opencl.so` (2.0 MB) alongside `libqvac-speech-ggml-vulkan.so` (61.7 MB) for every Android ABI |
 | Device manufacturer / model | Samsung Galaxy S25 Ultra |
@@ -136,7 +135,7 @@ tolerance.
 
 ```bash
 gh workflow run integration-mobile-test-asr-ggml.yml \
-  --ref feat/QVAC-23659-indic-conformer-opencl-gpu \
+  --ref <this PR branch> \
   -f platform=Android \
   -f device="Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \
