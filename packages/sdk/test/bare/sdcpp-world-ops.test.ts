@@ -433,6 +433,47 @@ test('world step op: a terminal step failure drops the session so the next step 
   })
 })
 
+// The dispatch rejects before any frame streams — `runStep` throwing on VRAM
+// exhaustion is the documented shape. The addon fails the native job on its way
+// out, so this is just as terminal as a mid-block failure and must reach the
+// same teardown.
+test('world step op: a dispatch-time step failure drops the session too', async function (t) {
+  const { worldStep } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+
+  let loads = 0
+  let unloads = 0
+  const failing = {
+    load: async () => {
+      loads++
+    },
+    unload: async () => {
+      unloads++
+    },
+    step: async () => {
+      throw new Error('native dispatch failed')
+    },
+    createScene: async () => ({
+      async *iterate() {},
+      await: async () => {}
+    }),
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(failing, async ({ modelId }) => {
+    const stream = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+    await t.exception(stream.next(), /native dispatch failed/, 'the failure reaches the caller')
+    t.is(unloads, 1, 'a dispatch rejection tears the session down, not just an iteration failure')
+
+    const second = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+    await t.exception(
+      second.next(),
+      /native dispatch failed/,
+      'the next step still surfaces failures'
+    )
+    t.is(loads, 2, 'the next step rebuilt the session rather than reusing the dead one')
+  })
+})
+
 test('world scene op: a dispatch that never starts leaves no staged file behind', async function (t) {
   const fs = await import('bare-fs')
   const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')

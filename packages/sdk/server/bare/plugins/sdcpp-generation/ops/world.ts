@@ -459,12 +459,21 @@ export async function* worldStep(
     throw new InferenceCancelledError(ctx.requestId)
   }
 
-  const response = await session.run(() => session.step(request.keys ?? []))
-
+  // The dispatch sits INSIDE the guard, not in front of it: `step()` rejects at
+  // admission too (`runStep` throwing on VRAM exhaustion, the addon's busy
+  // guard), and the addon's `_stepInternal` fails the native job on its way
+  // out. A rejection in front of the `try` would skip both `settle()` and the
+  // terminal teardown below and leave `activated` true over a dead session —
+  // the exact wedge that teardown exists to prevent. `worldCreateScene` puts
+  // its dispatch inside its guard for the same reason.
+  let response: StepResponseWithStats & { iterate(): AsyncIterable<unknown> }
   let frameIndex = 0
   let stepFailed = false
 
   try {
+    response = (await session.run(() =>
+      session.step(request.keys ?? [])
+    )) as unknown as StepResponseWithStats & { iterate(): AsyncIterable<unknown> }
     for await (const chunk of response.iterate()) {
       if (ctx.signal.aborted) break
       if (chunk instanceof Uint8Array) {
@@ -530,7 +539,7 @@ export async function* worldStep(
     throw new InferenceCancelledError(ctx.requestId)
   }
 
-  const { stats } = response as unknown as StepResponseWithStats
+  const { stats } = response
   yield {
     type: 'worldStepStream',
     done: true,
