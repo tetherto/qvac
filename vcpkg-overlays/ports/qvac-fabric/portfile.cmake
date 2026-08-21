@@ -1,9 +1,12 @@
-vcpkg_from_github(
+# Temporary embed validation pin for the dev-nid TurboVec branch:
+# https://github.com/dev-nid/qvac-fabric-llm.cpp/tree/turbovec-cpu-pr1-core
+#
+# Fetch by commit SHA so rebases do not require maintaining a GitHub archive
+# SHA512 in this validation overlay.
+vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
-  REPO tetherto/qvac-fabric-llm.cpp
-  REF 8e8948f9100bad9c8841237c66fc543c855b3c1e
-  SHA512 d0343574fa44081b1086e5855f3f77073b9480b42b273888e681b67f1c65955696e3ef748d344fd0871c33e458c31d9791c91d90d5b9cfa3ee6c923150e7a421
-  HEAD_REF qvac-b10297
+  URL https://github.com/dev-nid/qvac-fabric-llm.cpp.git
+  REF 3fc662dec17ea17523148d1337e7c9cb4c88da7b
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -12,6 +15,7 @@ vcpkg_check_features(
   FEATURES
     force-profiler FORCE_GGML_VK_PERF_LOGGER
     llama BUILD_LLAMA
+    vector-index GGML_VECTOR_INDEX
 )
 
 # Portfile-only feature flags (drive PLATFORM_OPTIONS; not upstream cache vars).

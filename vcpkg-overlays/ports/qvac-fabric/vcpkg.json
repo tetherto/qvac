@@ -51,6 +51,9 @@
     "llama": {
       "description": "Build llama components."
     },
+    "vector-index": {
+      "description": "Build ggml vector index support."
+    },
     "openmp": {
       "description": "Enable openmp on Android."
     }
