@@ -92,14 +92,8 @@ export async function ragChunk(params: RagChunkParams, options?: RPCOptions): Pr
  * **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
  * The workspace remains open until closed.
  *
- * @param params - The parameters for ingestion
- * @param params.modelId - The embedding model identifier
- * @param params.documents - Documents to ingest (string or array)
- * @param params.chunk - Whether to chunk documents (default: true)
- * @param params.chunkOpts - Chunking options
- * @param params.workspace - Workspace for isolated storage (default: "default"). Created if it doesn't exist.
- * @param params.onProgress - Progress callback (stage, current, total)
- * @param params.progressInterval - Minimum interval between progress updates in ms
+ * @param params - The embedding model, documents, optional chunking settings,
+ *   workspace (default: `"default"`), and progress callback configuration.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Processing results and dropped indices
  * @throws {RAGSaveFailedError} When the operation fails
@@ -203,11 +197,8 @@ async function runRagIngest(
  * **Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.
  * The workspace remains open until closed.
  *
- * @param params - The parameters for saving
- * @param params.documents - Pre-embedded documents (must have id, content, embedding, embeddingModelId)
- * @param params.workspace - Workspace for isolated storage (default: "default"). Created if it doesn't exist.
- * @param params.onProgress - Progress callback (stage, current, total)
- * @param params.progressInterval - Minimum interval between progress updates in ms
+ * @param params - The pre-embedded documents, workspace (default:
+ *   `"default"`), and optional progress callback configuration.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Array of save results
  * @throws {RAGSaveFailedError} When the operation fails
@@ -403,9 +394,8 @@ export async function ragDeleteEmbeddings(
  * For HyperDB, this is 16 documents by default. If there are insufficient documents,
  * `reindexed` will be `false` with `details` explaining the reason.
  *
- * @param params - The parameters for reindexing
- * @param params.workspace - Workspace to reindex (default: "default"). Must already exist.
- * @param params.onProgress - Progress callback (stage, current, total)
+ * @param params - The existing workspace to reindex (default: `"default"`)
+ *   and optional progress callback.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @returns Reindex result with `reindexed` boolean and optional `details`
  * @throws {RAGSaveFailedError} When the operation fails or workspace doesn't exist
@@ -544,9 +534,8 @@ export async function ragListWorkspaces(options?: RPCOptions): Promise<RagWorksp
  * This function explicitly closes them, releasing memory and file locks. The workspace data
  * remains on disk unless `deleteOnClose` is set to true.
  *
- * @param params - The parameters for closing
- * @param params.workspace - Name of the workspace to close (default: "default")
- * @param params.deleteOnClose - If true, deletes the workspace data from disk after closing (default: false)
+ * @param params - The workspace to close (default: `"default"`) and whether
+ *   its on-disk data should also be deleted.
  * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
  * @throws {RAGCloseWorkspaceFailedError} When the operation fails
  *
