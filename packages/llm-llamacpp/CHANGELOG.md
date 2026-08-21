@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.46.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
 ## [0.45.0] - 2026-08-18
 
 ### Changed

@@ -49,6 +49,14 @@ function detectScale(pixels: PixelsInput): number {
  * Letterbox places the resized content at the **bottom-right** with padding
  * at top/left (`padLeft = size - newW`, `padTop = size - newH`), matching
  * the reference smolvla.cpp behavior.
+ *
+ * @param pixels - RGB pixel values in HWC or CHW layout.
+ * @param width - Source image width in pixels.
+ * @param height - Source image height in pixels.
+ * @param opts - Target size, source layout, and optional input-range scale.
+ * @returns A normalized CHW tensor with shape `(3, size, size)`.
+ * @throws {TypeError} When width or height is not a positive integer.
+ * @throws {RangeError} When the pixel count does not match the dimensions.
  */
 export function vlaPreprocessImage(
   pixels: PixelsInput,
@@ -146,6 +154,12 @@ export function vlaPreprocessImage(
  * Zero-pad a state vector to `targetDim`. Extra entries are zero-initialised;
  * input longer than `targetDim` raises. Mirrors how smolvla.cpp expects the
  * state tensor (`max_state_dim` = 32 by default).
+ *
+ * @param state - Robot state values to copy into the padded tensor.
+ * @param targetDim - Required output dimension (default: 32).
+ * @returns A `Float32Array` of exactly `targetDim` values.
+ * @throws {TypeError} When `targetDim` is not a positive integer.
+ * @throws {RangeError} When `state` is longer than `targetDim`.
  */
 export function vlaPadState(state: ArrayLike<number>, targetDim: number = 32): Float32Array {
   if (!Number.isInteger(targetDim) || targetDim <= 0) {

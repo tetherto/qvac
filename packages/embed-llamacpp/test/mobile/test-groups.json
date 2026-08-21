@@ -1,10 +1,10 @@
 {
   "ios": {
-    "core": ["runAddonTest", "runModelLoadingTest"],
+    "core": ["runAddonTest", "runIdMapIndexTest", "runModelLoadingTest"],
     "multi": ["runMultiGpuTest", "runMultiInstanceTest"]
   },
   "android": {
-    "core": ["runAddonTest", "runModelLoadingTest"],
+    "core": ["runAddonTest", "runIdMapIndexTest", "runModelLoadingTest"],
     "multi": ["runMultiGpuTest", "runMultiInstanceTest"]
   }
 }

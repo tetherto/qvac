@@ -8057,36 +8057,45 @@
                   "type": "object",
                   "properties": {
                     "ctx_size": {
+                      "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
                       "type": "number"
                     },
                     "temp": {
+                      "description": "Sampling temperature (0–2). Default 0.8.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 2
                     },
                     "top_p": {
+                      "description": "Top-p (nucleus) sampling cutoff (0–1). Default 0.9.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1
                     },
                     "top_k": {
+                      "description": "Top-k sampling — keep only the top K tokens (0–128). Default 40.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 128
                     },
                     "seed": {
+                      "description": "Sampling RNG seed; `-1` (default) picks a random seed.",
                       "type": "number"
                     },
                     "gpu_layers": {
+                      "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "number"
                     },
                     "lora": {
+                      "description": "Path to a LoRA adapter file to apply on top of the base model.",
                       "type": "string"
                     },
                     "device": {
+                      "description": "Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`.",
                       "type": "string"
                     },
                     "predict": {
+                      "description": "Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
                       "anyOf": [
                         {
                           "type": "number",
@@ -8104,49 +8113,62 @@
                       ]
                     },
                     "system_prompt": {
+                      "description": "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`",
                       "type": "string"
                     },
                     "no_mmap": {
+                      "description": "Disable memory-mapped model loading. Default false.",
                       "type": "boolean"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number",
                       "enum": [0, 1, 2, 3],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"
                     },
                     "presence_penalty": {
+                      "description": "Presence penalty applied to tokens that have already appeared. Default 0.",
                       "type": "number"
                     },
                     "frequency_penalty": {
+                      "description": "Frequency penalty applied to tokens by their frequency so far. Default 0.",
                       "type": "number"
                     },
                     "repeat_penalty": {
+                      "description": "Repetition penalty applied to repeated tokens. Default 1.1.",
                       "type": "number"
                     },
                     "stop_sequences": {
+                      "description": "Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).",
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "n_discarded": {
+                      "description": "Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).",
                       "type": "number"
                     },
                     "parallel": {
+                      "description": "Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "tools": {
+                      "description": "Enable tool calling via the model's jinja chat template. Default false.",
                       "type": "boolean"
                     },
                     "cache-type-k": {
+                      "description": "KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
                       "type": "string"
                     },
                     "cache-type-v": {
+                      "description": "KV-cache value quantization type; quantizing the value cache requires flash attention. Unset selects a backend-safe default.",
                       "type": "string"
                     },
                     "main-gpu": {
+                      "description": "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -8161,22 +8183,27 @@
                       ]
                     },
                     "split-mode": {
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
                       "type": "string",
                       "enum": ["none", "layer", "row"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
                     "tensor-split": {
+                      "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
                     },
                     "openclCacheDir": {
+                      "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
                       "type": "string"
                     },
                     "reasoning_budget": {
+                      "description": "Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).",
                       "type": "integer",
                       "minimum": -1,
                       "maximum": 2147483647
                     },
                     "projectionModelSrc": {
+                      "description": "Multimodal projection (mmproj / vision encoder) model source; multimodal models only.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -8260,16 +8287,19 @@
                       ]
                     },
                     "image_tile_mode": {
+                      "description": "Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models.",
                       "type": "string",
                       "enum": ["disabled", "batched", "sequential"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
                     },
                     "image_no_upscale": {
+                      "description": "idefics3-style image preprocessing rule (multimodal models only): `'on'` rounds the image's long side up to a whole number of slices and caps it, so an image smaller than the cap keeps its own resolution and becomes far fewer slices; `'off'` always stretches the long side to the cap. When unset, the model's own GGUF value is used; ignored with a warning by models that do not use idefics3-style preprocessing. Changes the number of image tokens (and therefore both accuracy and encode time), so a checkpoint whose GGUF omits the key needs this set to preprocess correctly.",
                       "type": "string",
                       "enum": ["on", "off"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"
                     },
                     "mmproj-use-gpu": {
+                      "description": "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
                       "type": "boolean"
                     }
                   },
@@ -9128,41 +9158,49 @@
                   "type": "object",
                   "properties": {
                     "gpuLayers": {
+                      "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "device": {
+                      "description": "Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`.",
                       "type": "string",
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice"
                     },
                     "batchSize": {
+                      "description": "Tokens processed per batch (input throughput). Default 1024.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "pooling": {
+                      "description": "Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, `'last'`, or `'rank'`. Unset uses the model default.",
                       "type": "string",
                       "enum": ["none", "mean", "cls", "last", "rank"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"
                     },
                     "attention": {
+                      "description": "Attention type: `'causal'` or `'non-causal'`. Unset uses the model default.",
                       "type": "string",
                       "enum": ["causal", "non-causal"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention"
                     },
                     "embdNormalize": {
+                      "description": "Embedding normalization: `-1` none, `0` max-abs int16, `1` taxicab, `2` euclidean, `>2` p-norm. Default 2 (euclidean).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "flashAttention": {
+                      "description": "Flash attention: `'on'`, `'off'`, or `'auto'`. Default `'auto'`.",
                       "type": "string",
                       "enum": ["on", "off", "auto"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention"
                     },
                     "mainGpu": {
+                      "description": "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -9177,19 +9215,23 @@
                       ]
                     },
                     "splitMode": {
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
                       "type": "string",
                       "enum": ["none", "layer", "row"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode"
                     },
                     "tensorSplit": {
+                      "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number",
                       "enum": [0, 1, 2, 3],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"
                     },
                     "openclCacheDir": {
+                      "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
                       "type": "string"
                     }
                   },
