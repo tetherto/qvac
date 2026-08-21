@@ -87,7 +87,7 @@ Load the model with `modelConfig.parallel >= 2`, then call `completion()` severa
 
 The default is `1` (one request at a time), so you have to set `parallel` explicitly to enable batching. Also raise `ctx_size` with it: the model's context window is split evenly across the `parallel` slots, so `parallel: 4` on a `ctx_size: 4096` model gives each request only ~1024 tokens. Size `ctx_size` for `parallel × per-request context`.
 
-`completion()` and `batchCompletion()` share the same `parallel` slots on the model, so mixing them does not add concurrency past `parallel`. Extras wait in a first-come-first-serve queue on the model. If you already have every prompt ready up front, [`batchCompletion()`](/ai-capabilities/batch-processing) is often simpler; use concurrent `completion()` when prompts arrive over time or you want independent streams and cancellation per call.
+`completion()` and `batchCompletion()` share the model's `parallel` slots. Each call is one request — a big `batchCompletion({ prompts: N })` never blocks more than one concurrent `completion()` from starting — but every prompt in the batch takes one decode slot, so a large batch fills all `parallel` slots itself and any concurrent `completion()` you launch will only start decoding once the batch has room. If you already have every prompt ready up front, [`batchCompletion()`](/ai-capabilities/batch-processing) is often simpler; use concurrent `completion()` when prompts arrive over time or you want independent streams and cancellation per call.
 
 The following script loads a `parallel: 4` model, fires four completions at once, and then cancels one of two long runs to show its peer keeps decoding:
 
