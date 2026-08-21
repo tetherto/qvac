@@ -317,6 +317,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     modelInput.seed = static_cast<long long>(*v);
   if (auto v = optNum("bpm"))
     modelInput.bpm = static_cast<int>(*v);
+  if (auto v = optBool("augmentCaptionWithMetadata"))
+    modelInput.augmentCaptionWithMetadata = *v;
   if (auto v = optNum("duration"))
     modelInput.duration = static_cast<float>(*v);
   if (auto v = optNum("lmTemperature"))

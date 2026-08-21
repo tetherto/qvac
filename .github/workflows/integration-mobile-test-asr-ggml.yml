@@ -11,7 +11,7 @@ name: Mobile Integration Tests (ASR GGML)
 # Benchmark runs (run_rtf_benchmarks=true) narrow each matrix row to the single
 # mobile-perf runner registered in test/mobile/perf-tests.json that matches the
 # row's engine + model/model_type + use_gpu: whisper tiny CPU/GPU, parakeet
-# ctc/tdt/unified CPU+GPU and eou/sortformer CPU, per platform.
+# ctc/tdt CPU+GPU and eou/sortformer CPU, per platform.
 #
 # Mobile pre-stages models on the Device Farm host (presigned URLs + platform
 # push) before device tests.
@@ -189,10 +189,10 @@ jobs:
       fail-fast: false
       # Benchmark matrix (run_rtf_benchmarks=true) sweeps engine x model x
       # backend on Android + iOS: whisper ggml-tiny CPU/GPU (the old whisper
-      # mobile perf lanes), parakeet ctc/tdt/unified CPU+GPU and eou/sortformer CPU.
+      # mobile perf lanes), parakeet ctc/tdt CPU+GPU and eou/sortformer CPU.
       # `use_gpu:true` selects Vulkan on Android / Metal on iOS. Parakeet GPU
       # eou/sortformer lanes are omitted to bound the Device Farm run count
-      # (20 total). The default (non-benchmark) matrix runs both engines'
+      # (16 total). The default (non-benchmark) matrix runs both engines'
       # suites in one app per platform.
       #
       # There is deliberately no `vad` axis either: the whisper perf runner
@@ -209,7 +209,7 @@ jobs:
       # test-groups" step below maps each row to the single runner function in
       # test/mobile/perf-tests.json that is hard-parameterised for exactly that
       # combination, and passes it as the Mocha grep.
-      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"unified","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"unified","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"unified","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"unified","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","engine":"parakeet","model_type":"sortformer","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"whisper","model":"ggml-tiny","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"ctc","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"tdt","use_gpu":true},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"eou","use_gpu":false},{"platform":"iOS","os":"macos-14","runner":"macos-14","engine":"parakeet","model_type":"sortformer","use_gpu":false}]}' || '{"include":[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
       - name: Manual Workspace Cleanup
@@ -448,7 +448,6 @@ jobs:
               case "$MODEL_TYPE" in
                 ctc) RUNNER="runParakeetMobilePerfCtc${BACKEND_TAG}Test" ;;
                 tdt) RUNNER="runParakeetMobilePerfTdt${BACKEND_TAG}Test" ;;
-                unified) RUNNER="runParakeetMobilePerfUnified${BACKEND_TAG}Test" ;;
                 eou) RUNNER="runParakeetMobilePerfEou${BACKEND_TAG}Test" ;;
                 sortformer) RUNNER="runParakeetMobilePerfSortformer${BACKEND_TAG}Test" ;;
                 sortformer-streaming) RUNNER="runParakeetMobilePerfSortformerStreaming${BACKEND_TAG}Test" ;;
