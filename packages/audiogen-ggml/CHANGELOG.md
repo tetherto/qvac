@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support the full `audioCoverStrength` range for `cover-nofsq`. Values below
+  `1` follow the source for that fraction of the diffusion run and finish
+  freely afterwards; `0.5` starts as a cover and diverges halfway.
+
 ## [0.3.1] - 2026-08-28
 
 ### Added

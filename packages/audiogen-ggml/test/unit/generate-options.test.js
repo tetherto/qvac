@@ -127,6 +127,22 @@ test('AudioGen.run forwards reference/source audio, taskType and cover strengths
   t.is(job.coverNoiseStrength, 0.25)
 })
 
+test('AudioGen.run forwards partial audioCoverStrength for cover-nofsq', async (t) => {
+  const { gen, received } = createHarness()
+  const sourceAudio = new Float32Array([0.3, -0.3, 0.4, -0.4])
+
+  const response = await gen.run('cover that diverges halfway', {
+    taskType: 'cover-nofsq',
+    sourceAudio,
+    audioCoverStrength: 0.5
+  })
+  await response.await()
+
+  const job = received()
+  t.is(job.taskType, 'cover-nofsq')
+  t.is(job.audioCoverStrength, 0.5)
+})
+
 test('AudioGen.run forwards text2music with optional referenceAudio only', async (t) => {
   const { gen, received } = createHarness()
   const referenceAudio = new Float32Array([0, 0, 0.5, -0.5])
