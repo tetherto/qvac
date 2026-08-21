@@ -136,9 +136,10 @@ void MinimaxModel::loadLocked() {
   options.lm_model_path = config_.lmModelPath;
   options.synth_model_path = config_.synthModelPath;
   options.n_threads = config_.threads;
-  // "gpu" falls back to CPU with a warning when no usable GPU backend exists;
-  // runtimeStats reports the backend actually in use.
-  options.device = config_.useGpu ? "gpu" : "cpu";
+  // "auto" keeps the addon's useGPU contract: take a GPU when one is usable,
+  // otherwise fall back to CPU (the engine's "gpu" would fail creation
+  // instead). runtimeStats reports the backend actually in use.
+  options.device = config_.useGpu ? "auto" : "cpu";
   options.backends_dir = resolveBackendsDir(config_.backendsDir);
   engine_ = tts_cpp::minimax::Engine::create(options);
   if (!engine_) {
