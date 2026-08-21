@@ -126,6 +126,24 @@ test('sdcpp plugin resolveConfig: world drops the upscaler block', async (t) => 
   t.is('upscaler' in resolved.config, false, 'ESRGAN does not apply to a walk session')
 })
 
+// The 9/12 frame counts everything documents are defaults of the block shape,
+// not constants. A non-default numFramePerBlock has to survive resolveConfig
+// untouched and reach the addon, or the knob is documented but inert.
+test('sdcpp plugin resolveConfig: a non-default block shape reaches the addon', async (t) => {
+  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+
+  const resolved = await diffusionPlugin.resolveConfig!(
+    { ...WORLD_BASE, world: { numFramePerBlock: 6, localAttnSize: 128 } },
+    resolveCtx
+  )
+
+  t.alike(
+    resolved.config.world,
+    { numFramePerBlock: 6, localAttnSize: 128 },
+    'the block shape is forwarded verbatim rather than normalised to the default'
+  )
+})
+
 test('sdcpp plugin createModel: world session defers activation when there is no scene', async (t) => {
   const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
 
@@ -292,4 +310,54 @@ test('sdcpp plugin createModel: world without taehv artifact throws ModelLoadFai
   } catch (error) {
     t.ok(error instanceof ModelLoadFailedError, 'throws the structured load error')
   }
+})
+
+// `fallbackToLocal` is a promise that a load the provider cannot serve still
+// lands locally — and locally is exactly where a world session works. The
+// rejection used to run in front of the try that implements that promise, so
+// the caller opted into the fallback and got a throw instead.
+const DELEGATED_WORLD = {
+  type: 'loadModel' as const,
+  modelSrc: '/nonexistent/abot-world-dit.gguf',
+  modelType: 'sdcpp-generation',
+  modelConfig: { mode: 'world' }
+}
+
+test('delegated loadModel: world without fallbackToLocal is refused up front', async (t) => {
+  const { handleLoadModelDelegated } = await import('@/server/rpc/handlers/load-model-delegated')
+
+  try {
+    await handleLoadModelDelegated({
+      ...DELEGATED_WORLD,
+      delegate: { providerPublicKey: 'a'.repeat(64), fallbackToLocal: false }
+    } as never)
+    t.fail('expected the undelegatable world load to throw')
+  } catch (error) {
+    t.ok(
+      error instanceof Error && /cannot be delegated/.test(error.message),
+      'the error names the reason rather than failing on the first step'
+    )
+  }
+})
+
+test('delegated loadModel: world with fallbackToLocal loads locally instead', async (t) => {
+  const { handleLoadModelDelegated } = await import('@/server/rpc/handlers/load-model-delegated')
+
+  // The local load fails too — the path is deliberately bogus, and standing up a
+  // real 13.3 GB world session is not what this is testing. What matters is WHICH
+  // failure comes back: anything other than "cannot be delegated" proves the
+  // request reached the local path instead of being refused in front of it.
+  let outcome = 'resolved'
+  try {
+    const response = await handleLoadModelDelegated({
+      ...DELEGATED_WORLD,
+      delegate: { providerPublicKey: 'a'.repeat(64), fallbackToLocal: true }
+    } as never)
+    outcome = response.success ? 'resolved' : (response.error ?? 'unknown')
+  } catch (error) {
+    outcome = error instanceof Error ? error.message : String(error)
+  }
+
+  t.absent(/cannot be delegated/.test(outcome), 'the delegation refusal did not short-circuit it')
+  t.not(outcome, 'resolved', 'the bogus local path still failed, so a local load was attempted')
 })
