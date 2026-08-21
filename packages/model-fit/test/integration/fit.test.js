@@ -38,7 +38,9 @@ test('fitParams rejects invalid config', async function (t) {
 
 test('native raw fitting validates load kind, params, and relationships', async function (t) {
   const base = { modelPath: UNREACHABLE_MODEL }
-  const binding = require('../../binding.js')
+  // The raw load-config fitter lives on the private surface: `./binding.js` is
+  // a public export and deliberately carries `paramsFit` only.
+  const binding = require('../../binding-internal.js')
 
   await t.exception.all(
     () => binding.llamaConfigFit({ ...base, params: { device: 'cpu' } }),
@@ -70,13 +72,15 @@ test('native raw fitting validates load kind, params, and relationships', async 
         params: { device: 'cpu', 'ctx-size': '512' },
         nCtxMin: 1024
       }),
-    /nCtxMin must not exceed/
+    // The native message quotes its field names; the JS wrapper's does not, so
+    // the loose pattern used for `fitParams` never matched here.
+    /'nCtxMin' must not exceed concrete 'ctx-size'/
   )
 })
 
 test('native raw fitting uses explicit completion and embedding load kinds', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
-  const binding = require('../../binding.js')
+  const binding = require('../../binding-internal.js')
   const completion = binding.llamaConfigFit({
     loadKind: 'completion',
     modelPath,
@@ -106,8 +110,18 @@ test('native raw fitting uses explicit completion and embedding load kinds', asy
 
   t.not(completion.reason, 'unsupported-config', 'completion config reaches common_fit_params')
   t.not(embedding.reason, 'unsupported-config', 'embedding config reaches common_fit_params')
-  t.is(completion.nGpuLayers, 0, 'completion config preserves CPU placement')
-  t.is(embedding.nGpuLayers, 0, 'embedding config preserves CPU placement')
+
+  // CPU placement is the zero-device list (`devices = {nullptr}`), not a pinned
+  // `n_gpu_layers` — the addons leave that field alone on their CPU path, and
+  // pinning it to 0 made `common_fit_params` abort when it needed to adjust it.
+  // `main_gpu` is the observable CPU signal both kinds carry.
+  t.is(completion.mainGpu, -1, 'completion config preserves CPU placement')
+  t.is(embedding.mainGpu, -1, 'embedding config preserves CPU placement')
+
+  // An explicit `gpu-layers: '0'` is still passed through; the embedding config
+  // does not send one, so it keeps qvac-fabric's default.
+  t.is(completion.nGpuLayers, 0, 'an explicit gpu-layers is passed through')
+  t.ok(embedding.nGpuLayers < 0, 'an unset gpu-layers stays at the llama default')
 })
 
 test('fitParams rejects values that would truncate or wrap in the binding', async function (t) {
