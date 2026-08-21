@@ -65,8 +65,10 @@ function fit (config: Parameters<FitProcessFit>[0]): ReturnType<FitProcessFit> {
 
 function fitLlama (...args: Parameters<FitProcessLlamaFit>): ReturnType<FitProcessLlamaFit> {
   const [loadKind, config] = args
+  // `./binding-internal`, not `./binding`: the raw load-config fitter is not
+  // public API, and `./binding.js` is a public export.
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
-  const binding = require('./binding') as {
+  const binding = require('./binding-internal') as {
     llamaConfigFit(request: {
       loadKind: Parameters<FitProcessLlamaFit>[0]
       modelPath: string

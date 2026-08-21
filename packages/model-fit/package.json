@@ -35,6 +35,7 @@
   },
   "files": [
     "binding.js",
+    "binding-internal.js",
     "index.js",
     "index.d.ts",
     "process.js",

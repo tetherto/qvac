@@ -35,8 +35,10 @@ function fit(config) {
 }
 function fitLlama(...args) {
     const [loadKind, config] = args;
+    // `./binding-internal`, not `./binding`: the raw load-config fitter is not
+    // public API, and `./binding.js` is a public export.
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
-    const binding = require('./binding');
+    const binding = require('./binding-internal');
     let resolved = config;
     if (config.backendsDir === undefined) {
         try {

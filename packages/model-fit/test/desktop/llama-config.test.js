@@ -11,6 +11,7 @@ const {
   parseFitProcessResponse
 } = require('../../process')
 const { parseFitProcessRequest, runFitProcessLine } = require('../../process-internal')
+const packageJson = require('../../package.json')
 
 const PREBUILDS_DIR = path.join(__dirname, '../../prebuilds')
 const HAS_NATIVE_PREBUILD =
@@ -117,6 +118,24 @@ test('top-level API does not export raw llama fitting', (t) => {
     return
   }
   t.alike(Object.keys(publicIndex).sort(), ['FIT_STATUS', 'fitParams'])
+})
+
+test('the public binding does not export raw llama fitting either', (t) => {
+  // `./binding.js` is a public export, so anything it re-exports is in-process
+  // public API. The raw load-config fitter is reachable only from the runner,
+  // through the unexported `./binding-internal.js`.
+  t.ok(packageJson.exports['./binding.js'])
+  t.absent(packageJson.exports['./binding-internal.js'])
+  t.absent(packageJson.exports['./binding-internal'])
+  t.ok(packageJson.files.includes('binding.js'))
+  t.ok(packageJson.files.includes('binding-internal.js'))
+
+  if (!HAS_NATIVE_PREBUILD) {
+    t.pass('native surface check skipped before prebuild availability')
+    return
+  }
+  t.alike(Object.keys(require('../../binding.js')).sort(), ['paramsFit'])
+  t.ok(typeof require('../../binding-internal.js').llamaConfigFit === 'function')
 })
 
 test('v2 rejects legacy envelope fields while v1 remains permissive', async (t) => {

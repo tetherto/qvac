@@ -1,7 +1,7 @@
 'use strict'
 
 const process = require('bare-process')
-const binding = require('../../binding.js')
+const binding = require('../../binding-internal.js')
 
 try {
   const result = binding.llamaConfigFit(JSON.parse(process.argv[2]))
