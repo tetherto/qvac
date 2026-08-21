@@ -242,17 +242,24 @@ export function createWorldStepResult(
   return { requestId, frameStream, frames: framesOut.promise, stats: statsOut.promise }
 }
 
-// Overloaded on the literal so `returnPack: true` is the only way to reach a
-// result carrying `scene`. `createWorldSceneResult({ returnPack: false })` and
-// the omitted case both land on the pack-free shape.
+// Three overloads, not two. Two was wrong for a params object typed
+// `WorldSceneClientParams`: `returnPack` widens to `boolean | undefined` there,
+// so a call passing `returnPack: true` through a variable failed the literal
+// overload, fell to the broad one, and was typed as having no `scene` even
+// though the runtime hands one back. The widened case now gets a union the
+// caller has to narrow, which is honest about what is known at compile time.
 export function createWorldSceneResult(
   params: WorldSceneClientParams & { returnPack: true },
   streamFactory: WorldSceneStreamFactory
 ): WorldSceneResultWithPack
 export function createWorldSceneResult(
-  params: WorldSceneClientParams,
+  params: WorldSceneClientParams & { returnPack?: false | undefined },
   streamFactory: WorldSceneStreamFactory
 ): WorldSceneResult
+export function createWorldSceneResult(
+  params: WorldSceneClientParams,
+  streamFactory: WorldSceneStreamFactory
+): WorldSceneResult | WorldSceneResultWithPack
 export function createWorldSceneResult(
   params: WorldSceneClientParams,
   streamFactory: WorldSceneStreamFactory

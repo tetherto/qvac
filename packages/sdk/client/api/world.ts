@@ -64,7 +64,12 @@ import {
 export function worldCreateScene(
   params: WorldSceneClientParams & { returnPack: true }
 ): WorldSceneResultWithPack
-export function worldCreateScene(params: WorldSceneClientParams): WorldSceneResult
+export function worldCreateScene(
+  params: WorldSceneClientParams & { returnPack?: false | undefined }
+): WorldSceneResult
+export function worldCreateScene(
+  params: WorldSceneClientParams
+): WorldSceneResult | WorldSceneResultWithPack
 export function worldCreateScene(
   params: WorldSceneClientParams
 ): WorldSceneResult | WorldSceneResultWithPack {
