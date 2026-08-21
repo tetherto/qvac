@@ -1,10 +1,22 @@
 # Changelog
 
-## [0.23.0] - 2026-08-24
+## [0.23.0] - 2026-08-21
 
 ### Changed
 
-- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+- Migrated the ggml runtime off the static `qvac-fabric` vcpkg port and onto the
+  shared `@qvac/fabric` npm dependency (`^0.6.0`). The addon no longer bundles
+  ggml or its compute backends; on desktop it resolves the single `@qvac/fabric`
+  install and loads backend modules from
+  `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to
+  this addon's own `prebuilds/` on mobile (where the package tree isn't
+  resolvable from the packed worklet bundle). Run `npm install` so `@qvac/fabric`
+  is present before `bare-make generate`/`build`, and ensure the dependency isn't
+  pruned at runtime.
+- The `qvac-fabric[hip-backend]` vcpkg feature is removed from this package; ROCm/HIP
+  backends are provided by `@qvac/fabric` when present in its prebuilds.
+- `@qvac/fabric` dependency carries `qvac-fabric` `10069.2.0` (TurboVec CPU
+  support from the shared runtime; no API change for this package).
 
 ## [0.22.0] - 2026-08-20
 

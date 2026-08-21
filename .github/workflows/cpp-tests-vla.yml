@@ -166,16 +166,6 @@ jobs:
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
 
-      # vla requests qvac-fabric[hip-backend] (linux-x64), which requires ROCm at
-      # build time — install it so the addon's C++ tests build with HIP.
-      # Omit `with:` so version/gfx/sha256 all come from the action defaults
-      # and match /opt/rocm/.qvac-rocm when this job runs on a stamped image.
-      # Harmless after #3998 drops hip-backend (setup-rocm is a no-op for
-      # configure when the feature is absent); #3998 can delete this step.
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Setup ROCm SDK for HIP cross-compile
-        uses: ./.github/actions/setup-rocm
-
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
