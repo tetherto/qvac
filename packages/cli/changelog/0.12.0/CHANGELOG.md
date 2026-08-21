@@ -2,6 +2,11 @@
 
 Release Date: 2026-08-21
 
+## ✨ Features
+
+- Add deep SDK runtime checks to qvac doctor. (see PR [#3492](https://github.com/tetherto/qvac/pull/3492))
+- Add `qvac configure` interactive config generator. (see PR [#3953](https://github.com/tetherto/qvac/pull/3953))
+
 ## 🔌 API
 
 - Honor preload:false via lazy-load, keep DELETE reversible. (see PR [#3906](https://github.com/tetherto/qvac/pull/3906)) - See [API changes](./api.md)

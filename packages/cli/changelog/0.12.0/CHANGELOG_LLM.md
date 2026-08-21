@@ -2,7 +2,27 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.12.0
 
-This release makes `qvac serve openai` behave the way its model configuration always promised. Models marked `preload: false` now load on first use instead of failing forever, unloading a model is reversible, and a new catalog endpoint lets clients browse the models the SDK provides — not just the ones already configured. New flags and a `serve.load` config block let you tune or switch off that lazy loading.
+This release closes the gap between installing the CLI and having a working server. `qvac configure` writes a valid `qvac.config.json` for you, a new catalog endpoint lets you browse the models the SDK provides, and `qvac serve openai` finally honours `preload: false` by loading on first use instead of failing forever. `qvac doctor --deep` can now prove the installed SDK actually starts.
+
+## New Commands
+
+### `qvac configure` builds your config for you
+
+Getting from a fresh install to a working `qvac serve openai` used to mean hand-writing `serve.models` and knowing model constant names. `qvac configure` does it interactively: add a model by capability or search everything, preview the entry it will write, edit it in `$EDITOR` if you want, then merge and save.
+
+```bash
+qvac configure                                  # interactive
+qvac configure --yes                            # chat + transcription starter
+qvac configure --modality chat --modality image  # pick specific capabilities
+```
+
+Search matches on name, role, addon, and quantization, with id matches ranked first. Aliases are derived from the model name (`QWEN3_600M_INST_Q4` → `qwen3-600m-inst-q4`) and deduped. For llamacpp chat and embedding entries the prompts are schema-driven — type hints, field descriptions, and per-field validation come from the SDK's own config schemas.
+
+Writes are safe: the config is written atomically, an existing `qvac.config.json` is merged rather than replaced, and the command refuses to shadow a non-JSON config (`.js`/`.ts`), printing guidance instead. Re-running is idempotent per model; `--force` overwrites an existing entry in place. `Esc` steps back one menu and `Ctrl+C` aborts without writing anything.
+
+Chat, embedding, transcription, and image presets are runnable as written. TTS is an example template carrying a `referenceAudioSrc` placeholder and a link to the addon docs, because a voice reference cannot be guessed — the command is honest about where you have to finish the job by hand.
+
+This is the actionable end of the catalog's `not_configured` hint: browse a model with `GET /v1/models/catalog`, then run `qvac configure` to make it callable.
 
 ## New APIs
 
@@ -46,6 +66,18 @@ Every row carries `configured`, `usable`, and a `state` that includes a `not_con
 Browsing is fully in-process: it triggers no SDK call, no model load, and no download. Sizes, parameter counts, quantizations, and roles come from the constants, while configured models report their live registry state.
 
 ## New Flags
+
+### `qvac doctor --deep` proves the SDK actually runs
+
+The static `qvac doctor` checks could pass on an install whose SDK worker could not start, finish its heartbeat, or shut down cleanly. `--deep` exercises the installed `@qvac/sdk` in an isolated child process — import, worker heartbeat, and shutdown — without loading a model:
+
+```bash
+qvac doctor --deep
+qvac doctor --deep --verbose   # include probe diagnostics
+qvac doctor --deep --json      # machine-readable result
+```
+
+It requires a structured IPC result and a matching process exit code, so a probe that dies quietly is a failure rather than a pass. Common CPU, native-library, Visual C++ runtime, Vulkan, Bare, and worker-handshake failures are classified rather than reported as one generic error. Plain `qvac doctor` behaviour is unchanged unless `--deep` is passed.
 
 ### Lazy loading is tunable, and can be turned off
 
@@ -109,3 +141,9 @@ curl -X DELETE http://localhost:11434/v1/models/my-llm
 ```
 
 Listing follows the same principle. `GET /v1/models` reports every configured model whether or not it is loaded, and `GET /v1/models/{id}` resolves any configured alias, so loading stays transparent to the client. All inference gates — the model requirement check, audio speech, and vector-store embedding — now share one readiness helper, so they agree on when a model is usable.
+
+## Requirements
+
+This release requires `@qvac/sdk@^0.19.0`. `qvac configure` reads its llamacpp field descriptions and validation from the `@qvac/sdk/schemas` subpath, which earlier SDK lines do not export.
+
+It also adds one third-party dependency, `@inquirer/prompts` (pinned to `8.5.2`), for the interactive prompts.
