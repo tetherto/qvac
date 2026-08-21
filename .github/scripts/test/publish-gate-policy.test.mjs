@@ -1,30 +1,11 @@
-// Locks the wrapper-drift gate on the TypeScript-wrapper publish pipelines.
+// Locks the wrapper-drift gate on the publish pipelines. Nothing else can:
+// on-merge-* never runs on a pull request, and actionlint checks structure,
+// not semantics.
 //
-// The publish jobs in on-merge-*.yml no longer build the wrapper themselves;
-// they rely on the unprivileged verify-generated-wrappers.yml job having
-// checked that the committed .js/.d.ts match src/. That guarantee is only
-// fail-closed if two things hold, and neither is verifiable at PR time:
-// on-merge-* never runs on a pull request, and actionlint has nothing to say
-// about semantics.
-//
-//   1. `verify-generated` is in the publish job's `needs:`.
-//   2. The job's `if:` tests `needs.verify-generated.result == 'success'`.
-//
-// (2) is not redundant with (1). When an `if:` contains `!cancelled()`,
-// `always()` or `failure()`, GitHub stops skipping the job on a failed
-// dependency, so `needs:` alone silently fail-opens -- the same defect as the
-// continue-on-error sweep (M5). Every publish-npm job uses `!cancelled()`.
-//
-// The gate must also be ANDed against a *parenthesised* original condition.
-// `&&` binds tighter than `||`, so `A || B || C && gate` parses as
-// `A || B || (C && gate)` and publishes on a failed gate whenever A or B is
-// true. Five publish-gpr conditions are top-level OR chains, so this is not
-// hypothetical.
-//
-// The pipeline list is derived, not hardcoded: a tenth wrapper pipeline is
-// covered the day it is added. This pattern propagated through nine packages
-// unnoticed once already (QVAC-23347) precisely because each addition looked
-// local.
+// The `result == 'success'` assertion below is not redundant with the `needs:`
+// one. An `if:` containing `!cancelled()`, `always()` or `failure()` stops
+// GitHub skipping the job on a failed dependency, so `needs:` alone silently
+// fail-opens (the M5 defect); every publish-npm job uses `!cancelled()`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -40,8 +21,8 @@ function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
 }
 
-// The workflow's own comments name the privileges it must not have, so the
-// negative assertions below have to run against code only.
+// The negative assertions below must see code only: a comment may legitimately
+// name a privilege the workflow must not hold.
 function withoutComments(source) {
   return source
     .split('\n')

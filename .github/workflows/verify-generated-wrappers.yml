@@ -1,20 +1,15 @@
 name: Verify Generated Wrappers
 
-# Verifies that a package's committed tsc output matches src/, in a job with no
-# publish privilege, so the publish jobs never have to run `tsc` (and therefore
-# never have to install the devDependency closure) themselves.
+# Callers gate publish on this job, so publish never runs tsc itself.
 #
-# Why this exists as its own workflow rather than only in sanity-checks:
-# sanity-checks runs on pull_request_target only, but on-merge-*.yml also
-# publishes on workflow_dispatch and on pushes to release-*/feature-*/tmp-*.
-# Those events never open a PR, so without this job they would publish whatever
-# is committed with nothing checking it. Callers gate publish on this job's
-# result.
+# Separate from the sanity-checks copy of this check because sanity-checks only
+# runs on pull_request_target, while on-merge-*.yml also publishes on
+# workflow_dispatch and on pushes to release-*/feature-*/tmp-* -- events that
+# never open a PR.
 #
-# Deliberately declares no secrets and contents: read only. Everything it runs
-# -- npm install of the package's own dependency tree, then tsc -- is untrusted
-# third-party code, which is exactly why it must not sit next to PAT_TOKEN,
-# id-token: write or contents: write.
+# The privileges below are deliberately minimal: everything this runs is
+# untrusted third-party code, which is the whole reason it does not live in the
+# publish job.
 
 on:
   workflow_call:
@@ -49,10 +44,8 @@ jobs:
         working-directory: ${{ inputs.workdir }}
         run: npm install --ignore-scripts --package-lock=false
 
-      # Fails if the committed .js/.d.ts differ from a fresh build, or if an
-      # emitted file was never committed. Not --if-present: every package wired
-      # into this workflow is expected to define the script, and silently
-      # passing because of a typo in the script name would defeat the gate.
+      # Not --if-present: a renamed or typo'd script must fail the gate rather
+      # than silently pass it.
       - name: Verify generated wrappers match src
         working-directory: ${{ inputs.workdir }}
         run: npm run check:generated
