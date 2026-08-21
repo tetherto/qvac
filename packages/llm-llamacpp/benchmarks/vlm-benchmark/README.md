@@ -113,7 +113,7 @@ shows the dispatch flag; most also have a `config.cjs` field and/or a `QVAC_VLM_
 | OCR CER/WER/BLEU | ✅ | ✅ | OCR presets | Separate table (↓CER/WER, ↑BLEU), never folded into Overall %. |
 | Speed: mmproj vision-encode | ✅ | ❌ | always | From llama.cpp stderr — **not captured on mobile**; the report shows `—` and uses **TTFT** as the mobile proxy. |
 | Speed: TTFT / decode TPS / wall | ✅ | ✅ | always | |
-| **Peak RSS** | ✅ | ✅ | Details table | Process high-water (`getrusage`). Populated on Linux/macOS/Windows **and Android + iOS**. ⚠️ CLI engine sources show `—` (separate subprocess). |
+| **Peak RSS** | ✅ | ✅ | Details table | Process high-water (`getrusage`). Populated on Linux/macOS/Windows **and Android + iOS**. ⚠️ CLI engine sources are separate subprocesses, measured by the `/usr/bin/time -v` wrapper, so they report on Linux only and show `—` on macOS/Windows. |
 | **Δ % column** | ✅ | ✅ | **two-models** Highlights | Relative %, next to the absolute Δ, in all 3 comparison tables. `—` when baseline = 0. |
 | Summary one-liner | ✅ | ✅ | **two-models** Highlights | 🚀/⚖️/🐢 + avg speed & quality across legs. Quality **blends VQA + OCR**. |
 | **Engine versions table** | ✅ | — | **several-sources** Details | Build used + most-recent per source; *chosen automatically* / *set manually*. |
@@ -213,8 +213,10 @@ Tuning lives in `config.cjs` `methodology`.
   mobile only works with **direct download links** (hf/url/s3).
 - **mmproj vision-encode time is unavailable on mobile** — neither Android logcat nor the
   iOS console carry llama.cpp's native stderr; the report shows `—` and uses **TTFT**.
-- **CLI-source Peak RSS shows `—`** — the CLIs are separate subprocesses; the in-process
-  `getrusage` sampler measures the addon (and mobile addon), not a spawned CLI.
+- **CLI-source Peak RSS is Linux-only.** The CLIs are separate subprocesses, so the
+  in-process `getrusage` sampler cannot see them; `cli-case-runner.js` wraps them in
+  `/usr/bin/time -v` instead, which exists on the Linux runners only. macOS and Windows
+  CLI legs report nothing.
 - **Candidate-vs-baseline on mobile can be flaky.** The desktop comparison and the mobile
   `addon@baseline` leg are solid; the mobile `addon@candidate` leg has timed out at the
   Device-Farm monitor under the candidate's longer pipeline (a fresh prebuild build) plus

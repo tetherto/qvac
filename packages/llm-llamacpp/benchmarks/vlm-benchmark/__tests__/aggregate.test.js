@@ -39,11 +39,15 @@ test('speed per leg is stable and the delta keeps its sign convention', () => {
   assert.match(gpu, /\| 658 \| -175 \| -21\.0% \|/)
 })
 
-test('the warmup block does not reach the averages', () => {
-  // The sample's block 0 row carries pred "warmup" against gold "philippe molitor". Counting
-  // it would drag candidate quality below the locked 91.7 above, so that assertion plus this
-  // one pin the warmup handling from both sides.
-  assert.doesNotMatch(OUT, /warmup/i)
+test('the warmup block is excluded from the measured row count', () => {
+  // The sample's one block 0 row belongs to qwen3.5-q8 on GPU, so the Details table's n for
+  // that leg is 5 with the warmup dropped and 6 without. Asserting on n rather than on the
+  // absence of the word "warmup": aggregate.js scores `pred` but never prints it, so a text
+  // match cannot tell a dropped warmup row from a counted one.
+  const details = OUT.split('\n').filter(l => l.startsWith('| `qwen3.5-q8` · GPU |'))
+  const row = details[details.length - 1]
+  assert.ok(row, 'expected a q8 GPU details row')
+  assert.equal(row.split('|')[3].trim(), '5')
 })
 
 test('passing the same log twice does not change the aggregate', () => {

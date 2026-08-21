@@ -6,7 +6,9 @@
 // comparison can fetch them with no addon leg), and the provenance strings the report
 // prints per source.
 //
-// Usage: node resolve-cli-model.cjs > cli-model.env && . ./cli-model.env
+// Usage: node resolve-cli-model.cjs > "$RUNNER_TEMP/cli-model.env" && . "$RUNNER_TEMP/cli-model.env"
+// Write it outside the workspace: a URL here can be a presigned link, which is a bearer
+// credential, and a self-hosted runner's workspace outlives the job.
 // URL is empty for registry-type sources (P2P, addon-only), and the caller must
 // error out if the blob is not already on disk.
 
@@ -14,7 +16,23 @@ const { parseModels } = require('./models.cjs')
 const { serializeCliArgs } = require('./cli-args.cjs')
 const config = require('./config.cjs')
 
-const hfUrl = (s) => `https://huggingface.co/${s.repo}/resolve/${s.sha}/${s.file}`
+// A json: spec supplies repo, sha and file, and this URL is the one the workflow sends the
+// HF token to. Constrain each part to the characters a real HF path uses so a spec cannot
+// steer the authenticated request off the resolve path it is meant to hit.
+const HF_PART_RE = /^[\w.-]+$/
+const HF_REPO_RE = /^[\w.-]+\/[\w.-]+$/
+
+function hfUrl (s) {
+  if (!HF_REPO_RE.test(String(s.repo || ''))) {
+    throw new Error(`hf source: repo must be '<owner>/<name>' (got '${String(s.repo).slice(0, 60)}')`)
+  }
+  for (const part of ['sha', 'file']) {
+    if (!HF_PART_RE.test(String(s[part] || ''))) {
+      throw new Error(`hf source: ${part} must be a bare path segment (got '${String(s[part]).slice(0, 60)}')`)
+    }
+  }
+  return `https://huggingface.co/${s.repo}/resolve/${s.sha}/${s.file}`
+}
 
 // The workflow curls whatever this emits. Empty is fine and handled there (registry
 // sources have no URL and need an addon leg), but anything non-empty must be https:
@@ -37,11 +55,25 @@ function blobUrl (blob) {
   return ''
 }
 
+// sha256 for the workflow to check a fetched blob against. The addon leg gets this for
+// free, since ensureModel() verifies the manifest pin, but a CLI-only dispatch fetches the
+// URL itself and had nothing to compare against. Prefer a spec's own sha256 so a json: blob
+// outside the manifest can still be pinned; empty means unverifiable and the caller warns.
+// The manifest is required directly rather than through test/integration/utils, which is a
+// bare-runtime module and cannot load under plain node.
+const manifest = require('../../test/integration/models.manifest.json')
+
+function blobSha256 (blob) {
+  if (blob.sha256) return String(blob.sha256)
+  const entry = manifest.models[blob.modelName]
+  return (entry && entry.sha256) || ''
+}
+
 // Report Source column, same mapping as harness.cjs sourceType().
 function sourceKind (blob) {
   if (blob.registry) return 'Registry'
   const t = (blob.source && blob.source.type) || ''
-  return ({ hf: 'HF', s3: 'S3', url: 'URL' })[t] || (t || '?')
+  return ({ hf: 'HF', s3: 'S3', url: 'URL' })[t] || (t || '—')
 }
 
 // Single-quote for `.`-sourcing. A literal quote is escaped the shell way rather than
@@ -54,8 +86,10 @@ const spec = parseModels(process.env.QVAC_VLM_MODELS, config.catalog, [config.so
 console.log([
   sh('LLM_NAME', spec.llm.modelName),
   sh('LLM_URL', blobUrl(spec.llm)),
+  sh('LLM_SHA256', blobSha256(spec.llm)),
   sh('MMPROJ_NAME', spec.mmproj.modelName),
   sh('MMPROJ_URL', blobUrl(spec.mmproj)),
+  sh('MMPROJ_SHA256', blobSha256(spec.mmproj)),
   sh('MAIN_ORIGIN', spec.llm.origin || spec.llm.modelName),
   sh('MMPROJ_ORIGIN', spec.mmproj.origin || spec.mmproj.modelName),
   sh('MODEL_LABEL', spec.label),

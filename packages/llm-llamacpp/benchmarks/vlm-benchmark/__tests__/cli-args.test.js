@@ -24,11 +24,10 @@ function parseSpec (cliArgs) {
 
 const ACCEPTED = [
   ['split form', ['--image-no-upscale', 'on']],
-  ['equals form', ['--image-no-upscale=on']],
   // llama.cpp rewrites `_` to `-` before looking an option up, so the allowlist canonicalises
   // it the same way instead of comparing the literal spelling.
-  ['underscore form', ['--image_no_upscale=on']],
-  ['negative number value', ['--image-max-tiles', '-1']],
+  ['underscore form', ['--image_no_upscale', 'on']],
+  ['negative number value', ['--image-max-tokens', '-1']],
   ['no args at all', []]
 ]
 
@@ -41,10 +40,10 @@ for (const [name, args] of ACCEPTED) {
 }
 
 const REJECTED = [
-  ['a space', ['--image-no-upscale=on --ctx-size=1']],
-  ['a tab', ['--image-no-upscale=on\t--ctx-size=1']],
+  ['a space', ['--image-no-upscale on --ctx-size 1']],
+  ['a tab', ['--image-no-upscale\t--ctx-size']],
   ['a trailing space', ['--image-no-upscale ']],
-  ['a newline', ['--image-no-upscale=on\n--ctx-size=1']]
+  ['a newline', ['--image-no-upscale\n--ctx-size']]
 ]
 
 for (const [name, args] of REJECTED) {
@@ -53,12 +52,40 @@ for (const [name, args] of REJECTED) {
   })
 }
 
+// arg.cpp looks the whole argv token up in arg_to_options and never splits on `=`, so the
+// equals form reaches llama.cpp as an unknown argument and aborts the run. The workflow logs
+// that as a warning, so the only visible symptom is an engine leg with no rows.
+const EQUALS_FORM = [
+  ['a flag on the allowlist', ['--image-no-upscale=on']],
+  ['the underscore spelling', ['--image_no_upscale=on']],
+  ['a value element', ['--image-no-upscale', 'on=off']]
+]
+
+for (const [name, args] of EQUALS_FORM) {
+  test(`cliArgs rejects the equals form on ${name}`, () => {
+    assert.throws(() => parseSpec(args), /must use the split form/)
+  })
+}
+
 test('cliArgs rejects a flag that is not on the allowlist', () => {
   assert.throws(() => parseSpec(['--ctx-size', '1']), /may only carry per-model image preprocessing flags/)
 })
 
 test('cliArgs rejects a forbidden flag hidden behind an accepted one', () => {
-  assert.throws(() => parseSpec(['--image-no-upscale=on', '--ctx-size=1']),
+  assert.throws(() => parseSpec(['--image-no-upscale', 'on', '--ctx-size', '1']),
+    /may only carry per-model image preprocessing flags/)
+})
+
+test('cliArgs checks a token that only looks like a negative number', () => {
+  // isFlagToken exempts negative numbers because `-1` is a legitimate value. The exemption is
+  // anchored to a complete number so a token like this is still checked, not waved through.
+  assert.throws(() => parseSpec(['-1--ctx-size']), /may only carry per-model image preprocessing flags/)
+})
+
+test('cliArgs rejects a flag with no addonConfig twin', () => {
+  // The two allowlists move together: a flag the addon cannot be told to match would put the
+  // CLI leg on different preprocessing from the addon leg under one model label.
+  assert.throws(() => parseSpec(['--image-max-tiles', '8']),
     /may only carry per-model image preprocessing flags/)
 })
 

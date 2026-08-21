@@ -98,11 +98,14 @@ const MODEL_NAME_RE = /^(?!\.+$)[A-Za-z0-9._-]+$/
 // alias wins, and a fabric bump can add another alias without touching this file. An
 // allowlist cannot rot that way: a new spelling of --seed is still not on it.
 //
-// These five are single-spelling in arg.cpp (:2418 :2425 :2432 :2452 :2463) and none
-// of them is set by buildCliArgs. Adding to this list is a deliberate act; do it when a
-// model genuinely needs a new preprocessing knob.
+// These are single-spelling in arg.cpp (:2418 :2425 :2452 :2463) and none of them is set
+// by buildCliArgs. Adding to this list is a deliberate act; do it when a model genuinely
+// needs a new preprocessing knob, and only once ALLOWED_ADDON_KEYS has the twin. A flag
+// with no addon twin cannot be set on both legs, so a spec using it would put the two
+// legs on different preprocessing under one model label. --image-max-tiles is the case in
+// point: arg.cpp takes it, the addon has no handler, so it stays off both lists.
 const ALLOWED_CLI_FLAGS = new Set([
-  '--image-no-upscale', '--image-tile-mode', '--image-max-tiles',
+  '--image-no-upscale', '--image-tile-mode',
   '--image-max-tokens', '--image-min-tokens'
 ])
 
@@ -122,17 +125,17 @@ const ALLOWED_ADDON_KEYS = new Set([
 
 // llama.cpp rewrites `_` to `-` on any `--` argument before it looks the option up
 // (common/arg.cpp, both parse loops), so `--image_no_upscale` reaches the same option
-// as `--image-no-upscale`. Match that, and split `--flag=value` so the flag is compared
-// on its own.
+// as `--image-no-upscale`. Match that.
 function canonicalCliFlag (a) {
-  const head = a.split('=')[0]
-  return head.startsWith('--') ? head.replace(/_/g, '-') : head
+  return a.startsWith('--') ? a.replace(/_/g, '-') : a
 }
 
 // A token is a flag if it starts with `-` and is not a negative number, since values
-// like `-1` are legitimate arguments to the flag before them.
+// like `-1` are legitimate arguments to the flag before them. Anchored to a complete
+// number so a token such as `-1--ctx-size` is still treated as a flag and checked against
+// the allowlist rather than waved through as a value.
 function isFlagToken (a) {
-  return a.startsWith('-') && !/^-\d/.test(a)
+  return a.startsWith('-') && !/^-\d+(\.\d+)?$/.test(a)
 }
 
 // One array element must stay one CLI token, because resolve-cli-model.cjs joins the array
@@ -144,6 +147,17 @@ function assertNoWhitespace (args, i, label) {
   const bad = args.filter(a => /\s/.test(a))
   if (bad.length) {
     throw new Error(`json model #${i} ('${label || '?'}'): cliArgs elements must not contain whitespace, one element is one argument; rejected ${bad.map(a => JSON.stringify(a)).join(', ')}`)
+  }
+}
+
+// arg.cpp looks the whole argv token up in arg_to_options and never splits on `=`, so
+// `--image-no-upscale=on` is an unknown argument to it and aborts the run. The workflow
+// swallows that as a warning, which shows up as an engine leg with no rows rather than an
+// error, so reject the form here where the message can say why.
+function assertNoEqualsForm (args, i, label) {
+  const bad = args.filter(a => a.includes('='))
+  if (bad.length) {
+    throw new Error(`json model #${i} ('${label || '?'}'): cliArgs must use the split form, llama.cpp does not accept --flag=value; write ['--image-no-upscale', 'on'] instead of ${bad.map(a => JSON.stringify(a)).join(', ')}`)
   }
 }
 
@@ -190,6 +204,7 @@ function normalizeSpec (spec, i) {
       throw new Error(`json model #${i} ('${spec.label || '?'}'): cliArgs must be an array of strings`)
     }
     assertNoWhitespace(spec.cliArgs, i, spec.label)
+    assertNoEqualsForm(spec.cliArgs, i, spec.label)
     const bad = spec.cliArgs.filter(a => isFlagToken(a) && !ALLOWED_CLI_FLAGS.has(canonicalCliFlag(a)))
     if (bad.length) {
       throw new Error(`json model #${i} ('${spec.label || '?'}'): cliArgs may only carry per-model image preprocessing flags (${[...ALLOWED_CLI_FLAGS].join(', ')}); rejected ${bad.join(', ')}`)
@@ -226,7 +241,9 @@ function parseModels (raw, catalog, fallback) {
     return arr.map(normalizeSpec)
   }
   const specs = raw.split(',').map(t => t.trim()).filter(Boolean).map(t => {
-    if (catalog && catalog[t]) return catalog[t]
+    // Own-property check, so a name like `constructor` or `toString` falls through to the
+    // unknown-model error below instead of resolving to an Object.prototype member.
+    if (catalog && Object.prototype.hasOwnProperty.call(catalog, t)) return catalog[t]
     if (t.includes('|')) return parsePair(t)
     throw new Error(`unknown model '${t}' — not a catalog name (${Object.keys(catalog || {}).join(', ')}) and not an <llm-url>|<mmproj-url> pair`)
   })

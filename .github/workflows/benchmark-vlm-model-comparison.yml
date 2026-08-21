@@ -115,8 +115,16 @@ jobs:
         run: |
           repo="$REPO"
           ref="${INPUT_REF:-$REF_NAME}"
-          echo "repository=$repo" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          # Delimited form, because `ref` comes from a workflow input: a newline in a plain
+          # `key=value` line would let the dispatcher append step outputs of its own.
+          {
+            echo "repository<<__EOF_REPO__"
+            echo "$repo"
+            echo "__EOF_REPO__"
+            echo "ref<<__EOF_REF__"
+            echo "$ref"
+            echo "__EOF_REF__"
+          } >> "$GITHUB_OUTPUT"
       # Resolve the mobile timeout (minutes) so matrix-mobile can forward it to the
       # reusable workflow's mocha_timeout_ms / per_test_timeout_minutes inputs.
       # Precedence: workflow input > config.cjs `mobileTimeoutMin` > '' (pipeline default).
@@ -663,20 +671,23 @@ jobs:
           # Match the addon leg's run size: samples + repeats come from the active
           # preset in config.cjs (matrix_samples still overrides samples). CLI build +
           # runner are vendored into this folder (no vlm-performance dependency).
-          PRESET_SAMPLES=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).samplesPerTask||3)")
-          REPEATS=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).repeats||1)")
+          # $PRESET is read through process.env inside each -e script, never spliced into the
+          # source: it comes from a workflow input, and a value carrying a quote would
+          # otherwise close the string literal and run as JavaScript on the runner.
+          PRESET_SAMPLES=$(node -e "console.log((require('./config.cjs').presets[process.env.PRESET]||{}).samplesPerTask||3)")
+          REPEATS=$(node -e "console.log((require('./config.cjs').presets[process.env.PRESET]||{}).repeats||1)")
           SAMPLES="${SAMPLES:-$PRESET_SAMPLES}"
           # Per-task sample caps from the preset (e.g. full caps ocr-page to 1) so the
           # CLI legs run the SAME items as the addon leg.
-          TASK_SAMPLES=$(node -e "console.log(JSON.stringify((require('./config.cjs').presets['$PRESET']||{}).taskSamples||{}))")
+          TASK_SAMPLES=$(node -e "console.log(JSON.stringify((require('./config.cjs').presets[process.env.PRESET]||{}).taskSamples||{}))")
           # Distinct-task cap from the preset (e.g. smoke=1) so the CLI legs cover the
           # SAME tasks as the addon leg — otherwise smoke mismatches (addon 1 task, CLI all).
-          MAX_TASKS=$(node -e "console.log((require('./config.cjs').presets['$PRESET']||{}).maxTasks||0)")
+          MAX_TASKS=$(node -e "console.log((require('./config.cjs').presets[process.env.PRESET]||{}).maxTasks||0)")
           # Task list + id allowlist from the preset so the CLI legs run the SAME items as the
           # addon: preset.tasks (e.g. cognitive's 5 VQA) restricts tasks; preset.ids
           # (ocr1page/ocr5pages) pins exact items and wins over --tasks. Empty → all tasks.
-          PRESET_TASKS=$(node -e "const t=(require('./config.cjs').presets['$PRESET']||{}).tasks; console.log(Array.isArray(t)?t.join(','):'')")
-          PRESET_IDS=$(node -e "const i=(require('./config.cjs').presets['$PRESET']||{}).ids; console.log(Array.isArray(i)?i.join(','):'')")
+          PRESET_TASKS=$(node -e "const t=(require('./config.cjs').presets[process.env.PRESET]||{}).tasks; console.log(Array.isArray(t)?t.join(','):'')")
+          PRESET_IDS=$(node -e "const i=(require('./config.cjs').presets[process.env.PRESET]||{}).ids; console.log(Array.isArray(i)?i.join(','):'')")
           # Build only the CLI engines actually requested in matrix_sources (don't build or
           # report a source the user didn't ask for).
           CLI_SRCS=""
@@ -689,21 +700,39 @@ jobs:
           # same way harness.cjs does (matrix_models first token, else config.sourcesModel).
           # Hardcoding the qwen registry filenames here made every several-sources run
           # measure qwen even when matrix_models asked for something else.
-          node resolve-cli-model.cjs > cli-model.env
+          # Under RUNNER_TEMP, not the workspace: a json: spec's URL can be a presigned link,
+          # which is a bearer credential, and the workspace on a self-hosted runner outlives
+          # this job. Removed as soon as the values are in the environment.
+          ENV_FILE="$RUNNER_TEMP/cli-model.env"
+          node resolve-cli-model.cjs > "$ENV_FILE"
           # Everything except the URLs, which a json: spec can point at a presigned S3 link
           # whose signature is in the query string. Names, origins and sources still print,
           # so the log still says what ran and where it came from.
-          grep -v '_URL=' cli-model.env
-          . ./cli-model.env
+          grep -v '_URL=' "$ENV_FILE"
+          . "$ENV_FILE"
+          rm -f "$ENV_FILE"
           LLM="$MODEL_DIR/$LLM_NAME"
           MMPROJ="$MODEL_DIR/$MMPROJ_NAME"
           # The addon leg normally downloads these. A CLI-only comparison runs no addon
           # leg, so fetch what is missing here.
           mkdir -p "$MODEL_DIR"
+          # A registry source has no URL, and the addon leg puts those blobs in
+          # benchmarks/model/ rather than MODEL_DIR (harness.cjs ensureBlob's custom-fetch
+          # path), so look there before calling a blob missing. Hard-linked so a multi-GB
+          # blob is not copied when both directories sit on the same filesystem.
+          ADDON_MODEL_DIR="$(cd .. && pwd)/model"
+          adopt_addon_blob () {
+            [ -s "$1" ] && return 0
+            [ -s "$ADDON_MODEL_DIR/$2" ] || return 0
+            echo ">> reusing $2 fetched by the addon leg ($ADDON_MODEL_DIR)"
+            ln "$ADDON_MODEL_DIR/$2" "$1" 2>/dev/null || cp "$ADDON_MODEL_DIR/$2" "$1"
+          }
+          adopt_addon_blob "$LLM" "$LLM_NAME"
+          adopt_addon_blob "$MMPROJ" "$MMPROJ_NAME"
           fetch_blob () {
             [ -s "$1" ] && return 0
             if [ -z "$2" ]; then
-              echo "::error::$1 is missing and its source has no download URL (registry sources need an addon leg)"
+              echo "::error::$1 is missing and its source has no download URL. Registry sources are addon-only: they need an addon leg in this same job, which leaves the blob in $ADDON_MODEL_DIR. A CLI-only dispatch cannot fetch one."
               exit 1
             fi
             echo ">> fetching $1"
@@ -738,8 +767,38 @@ jobs:
                 ;;
             esac
           }
-          fetch_blob "$LLM" "$LLM_URL"
-          fetch_blob "$MMPROJ" "$MMPROJ_URL"
+          # Both at once. These are multi-GB and bandwidth-bound, and a stalled download is
+          # the usual way this leg dies, so do not serialise the two exposure windows.
+          fetch_blob "$LLM" "$LLM_URL" &
+          llm_pid=$!
+          fetch_blob "$MMPROJ" "$MMPROJ_URL" &
+          mmproj_pid=$!
+          wait "$llm_pid" || { echo "::error::could not fetch $LLM_NAME"; exit 1; }
+          wait "$mmproj_pid" || { echo "::error::could not fetch $MMPROJ_NAME"; exit 1; }
+          # Check the bytes against the pin. The addon leg gets this from ensureModel(), but a
+          # CLI-only dispatch fetches the URL itself, so without this it benchmarks whatever
+          # the host served, and a GGUF's own chat template goes on to reach --chat-template.
+          sha256_check () {
+            if command -v sha256sum >/dev/null 2>&1; then
+              echo "$2  $1" | sha256sum -c - >/dev/null 2>&1
+            else
+              echo "$2  $1" | shasum -a 256 -c - >/dev/null 2>&1
+            fi
+          }
+          verify_blob () {
+            if [ -z "$3" ]; then
+              echo "::warning::$2 has no sha256 pin, so the fetched bytes cannot be verified"
+              return 0
+            fi
+            if sha256_check "$1" "$3"; then
+              echo ">> verified $2 against its sha256 pin"
+            else
+              echo "::error::$2 does not match its pinned sha256 ($3)"
+              exit 1
+            fi
+          }
+          verify_blob "$LLM" "$LLM_NAME" "$LLM_SHA256"
+          verify_blob "$MMPROJ" "$MMPROJ_NAME" "$MMPROJ_SHA256"
           run_src () {
             echo ">> $1 over fixture ($2)"
             # Model-specific flags (e.g. VisionPsy Flash's --image-no-upscale) are fabric-fork
@@ -925,15 +984,23 @@ jobs:
       # this workflow. See CONTRACT.md for the marker schema it consumes.
       - name: Aggregate matrix logs
         shell: bash
+        # Through env, not textual substitution: a quote in either input would otherwise
+        # close the shell string it lands in and run as a command on the runner.
+        env:
+          MATRIX_MODE: ${{ inputs.matrix_mode }}
+          MATRIX_PRESET: ${{ inputs.matrix_preset }}
+          ENGINE: ${{ needs.context.outputs.engine }}
+          VERSIONS_B64: ${{ needs.context.outputs.versions_b64 }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           node packages/llm-llamacpp/benchmarks/vlm-benchmark/combine.cjs \
             --dir matrix-logs \
             --out consolidated/vlm-matrix-consolidated.md \
-            --title "VLM Matrix — ${{ inputs.matrix_mode }} / ${{ inputs.matrix_preset }} (run #${{ github.run_number }})" \
-            --mode "${{ inputs.matrix_mode }}" --engine "${{ needs.context.outputs.engine }}" \
-            --preset "${{ inputs.matrix_preset }}" \
-            --versions-b64 "${{ needs.context.outputs.versions_b64 }}" \
-            --run-number "${{ github.run_number }}"
+            --title "VLM Matrix — $MATRIX_MODE / $MATRIX_PRESET (run #$RUN_NUMBER)" \
+            --mode "$MATRIX_MODE" --engine "$ENGINE" \
+            --preset "$MATRIX_PRESET" \
+            --versions-b64 "$VERSIONS_B64" \
+            --run-number "$RUN_NUMBER"
 
       - name: Post step summary
         if: always()

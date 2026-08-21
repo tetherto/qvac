@@ -24,6 +24,10 @@
 //     source.type 'hf'  : { type:'hf', repo, sha, file } -> pinned HuggingFace commit
 //     source.type 'url' : { type:'url', url }             -> arbitrary direct link
 //     source.type 's3'  : { type:'s3', url }              -> S3 (presigned URL)
+//   Two optional per-model fields carry preprocessing a model needs but its mmproj does
+//   not declare: `cliArgs` for the native CLI legs and `addonConfig`, its addon-side twin.
+//   Both are allowlisted in models.cjs and must be set together or the legs diverge.
+//   See CONTRACT.md section 3.
 
 // Pinned commit SHAs (immutable provenance).
 const SHA = {
@@ -141,7 +145,10 @@ function visionpsy (ckpt, quantId, fileQuant) {
   const at = `${ckpt.repo}@${ckpt.sha.slice(0, 10)}`
   return {
     label: `${ckpt.id}-${quantId}`,
-    name: `${ckpt.name} · ${quantOf(main).toUpperCase()} + mmproj-Q8`,
+    // quantOf returns null for a quant its regex does not know (fp32, mxfp4), and this
+    // runs at require time, so falling back to quantId degrades the label instead of
+    // taking down every consumer of config.cjs on a one-token edit.
+    name: `${ckpt.name} · ${(quantOf(main) || quantId).toUpperCase()} + mmproj-Q8`,
     ctx_size: '4096',
     cliArgs: ckpt.cliArgs,
     addonConfig: ckpt.addonConfig,

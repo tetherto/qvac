@@ -22,7 +22,9 @@ const CLI_BATCH_LOG = [
   '0.00.353.442 I mtmd batch encoding done in 27 ms'
 ].join('\n')
 
-// Real addon encode log lines, one per slice.
+// Addon encode log lines, one per slice. mtmd-helper.cpp always emits the `slice encoded`
+// form; the sliceless third line is not a shape fabric produces, and is here only to hold the
+// regex's tolerance for it in place.
 const ADDON_HELPER_LOG = [
   'image slice encoded in 150 ms',
   'image slice encoded in 142 ms',

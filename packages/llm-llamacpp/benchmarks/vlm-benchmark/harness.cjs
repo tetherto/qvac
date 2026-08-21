@@ -18,7 +18,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
-const { ensureModel, resolveModelEntry } = require('../../test/integration/utils')
+const { ensureModel, resolveModelEntry, loadManifest } = require('../../test/integration/utils')
 const LlmLlamacpp = require('../../index.js')
 const fixture = require('./fixture.data.cjs')
 const config = require('./config.cjs')
@@ -199,23 +199,28 @@ async function fetchFromRegistry (source, destPath) {
   }
 }
 
-// Download a blob to test/model/, honouring its source descriptor. Mirrors
-// ensureModel()'s cache-by-name behaviour for the custom-fetch (registry) path.
+// Honour a blob's source descriptor. Manifest-pinned blobs go to ensureModel()'s own
+// directory (test/model/); the custom-fetch (registry) path lands in benchmarks/model/
+// and mirrors ensureModel()'s cache-by-name behaviour there.
 async function ensureBlob (blob) {
   const plan = resolveBlob(blob)
   if (plan.downloadUrl) {
     // ensureModel() resolves modelName against models.manifest.json and verifies the
     // sha256 pinned there; it never reads downloadUrl. So the addon leg can only run
-    // blobs the manifest pins, and a generated adhoc-* name never is one. Fail with
-    // that, rather than letting resolveModelEntry report a missing manifest entry as
-    // if the manifest were at fault.
+    // blobs the manifest pins, and a generated adhoc-* name never is one. Say that when
+    // the name is genuinely absent, rather than reporting every manifest problem as a
+    // missing entry: resolveModelEntry also throws for an entry with no URL, no sha256
+    // or no byte-size pin, and those want the reader in models.manifest.json, not here.
     try {
       resolveModelEntry(plan.modelName)
-    } catch (_) {
+    } catch (err) {
+      const manifest = loadManifest()
+      if (manifest.models[plan.modelName] != null) throw err
       throw new Error(
         `${plan.modelName}: the addon leg runs only blobs pinned in models.manifest.json, so a bare ` +
         '<llm-url>|<mmproj-url> pair cannot run on it. Use a catalog name, or a json: spec whose ' +
-        'modelName matches a manifest key. CLI-only dispatches fetch the URL directly and are unaffected.'
+        'modelName matches a manifest key. CLI-only dispatches fetch the URL directly and are unaffected.',
+        { cause: err }
       )
     }
     return ensureModel({ modelName: plan.modelName })

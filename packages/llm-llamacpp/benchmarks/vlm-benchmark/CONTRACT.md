@@ -28,7 +28,7 @@ validates it (and the config wiring) without running any model.
 | `source_id` | which build produced the row: `addon`, `addon@candidate`, `addon@baseline`, `fabric@<ref>`, `upstream@<ref>` |
 | `source_ref` | resolved version: `npm:<ver>` \| `git:<sha>` \| tag |
 | `block` | measurement round: `0` = warmup (excluded from stats), `1..N` = measured; report takes the **median** across blocks |
-| `rss_mb` | peak process memory so far (MB); populated on desktop and mobile (Android + iOS), `null` only where the platform doesn't expose it |
+| `rss_mb` | peak process memory so far (MB); populated on desktop and mobile (Android + iOS), `null` only where the platform doesn't expose it. CLI legs read it from the `/usr/bin/time -v` wrapper, which is Linux-only, so they report `null` on macOS and Windows |
 
 `[VLMSEG]`/`[VLMMETA]` gain `v`, `scenario`, `source_id`, `source_ref` (SEG also `block`).
 New optional `[VLMBLOCK]{json}` — one per measurement round: `{scenario, source_id,
@@ -60,15 +60,21 @@ which resolves the blob by `modelName` against `models.manifest.json` and verifi
 pinned there, so a URL it has never seen has no integrity pin and is refused. Use the pair form
 for a CLI-only dispatch (`matrix_sources=fabric@<ref>`); anything with an addon leg needs a
 catalog name, or a `json:` spec whose `modelName` matches a manifest key.
-Registry-type sources: `json:` form only, desktop-only (no registry client in the mobile app).
-Presigned S3 URLs work for a one-off dispatch but expire — don't commit them to the catalog.
+Registry-type sources: `json:` form only, desktop-only (no registry client in the mobile app),
+and addon-only. Only the addon leg has a registry client, so a registry blob reaches a CLI leg
+only when an addon leg in the same job already fetched it; a CLI-only dispatch cannot compare
+one. Presigned S3 URLs work for a one-off dispatch but expire, so don't commit them to the
+catalog.
 
 In **several-sources** mode the model axis is fixed, so only the FIRST token is used; empty
 falls back to `config.sourcesModel`. Both legs resolve it identically (`harness.cjs runAll()`
 for the addon, `resolve-cli-model.cjs` for the native CLIs), so a model with no catalog entry
 can be compared across engines with no config commit. A dispatch with CLI sources only
 (`matrix_sources=fabric@<ref>`) runs no addon leg at all, and the CLI step downloads the two
-blobs itself, which is what a model the published addon cannot load yet needs.
+blobs itself, which is what a model the published addon cannot load yet needs. Those downloads
+are checked against a sha256 pin, taken from `models.manifest.json` when the `modelName` is a
+manifest key and otherwise from a `sha256` field on the blob; a blob with neither is fetched
+with a warning and no integrity check.
 
 A model needing a per-model flag (VisionPsy Flash needs `--image-no-upscale on`, else it runs
 base preprocessing and the run measures the wrong thing) carries it as `cliArgs` for the native
@@ -78,10 +84,25 @@ such a model, not the pair form.
 
 Both are restricted to per-model **multimodal** settings and nothing else, checked at parse
 time on both sides. `cliArgs` accepts only `--image-no-upscale`, `--image-tile-mode`,
-`--image-max-tiles`, `--image-max-tokens`, `--image-min-tokens`; `addonConfig` the `image-*`
-keys plus `mmproj-use-gpu`, in either spelling. Everything else is rejected, including the
-model files, device, sampling params, context size and `reasoning-budget`, all of which the
-harness fixes so that the legs stay comparable.
+`--image-max-tokens`, `--image-min-tokens`; `addonConfig` the same `image-*` keys plus
+`mmproj-use-gpu`, in either spelling. Everything else is rejected, including the model files,
+device, sampling params, context size and `reasoning-budget`, all of which the harness fixes
+so that the legs stay comparable.
+
+This is an allowlist on purpose: llama.cpp gives most options several spellings (`-n` /
+`--predict` / `--n-predict`, `-ngl` / `--gpu-layers` / `--n-gpu-layers`, `--temp` /
+`--temperature`), extra args are appended after the harness's own, so a late alias would win,
+and a fabric bump can add a spelling at any time. Widening the list is a deliberate code
+change, and the two lists move together: a flag with no `addonConfig` twin cannot be set on
+both legs, so a spec using it would compare different preprocessing under one model label.
+`--image-max-tiles` is on neither list for that reason, since arg.cpp takes it but the addon
+has no handler.
+
+Write `cliArgs` in the split form, `['--image-no-upscale', 'on']`. arg.cpp looks the whole
+argv token up and never splits on `=`, so `--image-no-upscale=on` is an unknown argument to
+it; models.cjs rejects that form rather than letting the CLI abort mid-run. Values must also
+match on both sides: `--image-tile-mode` takes only `batched` / `sequential` / `disabled` on
+the CLI, while the addon additionally accepts `0` / `1` / `2`, so use the words.
 
 `mmproj-use-gpu` is allowed because it selects the backend for the **projector only**, which
 `device` does not control. On Android the addon auto-defaults it by GPU class: GPU on Adreno
@@ -89,11 +110,7 @@ harness fixes so that the legs stay comparable.
 phone therefore runs the language model on Vulkan and the vision encoder on CPU, so exercising
 the Mali Vulkan encoder requires setting this explicitly. The addon logs which it picked,
 `[LlamaModel] multimodal projector backend: GPU|CPU (<reason>)`, and that line is the only
-reliable way to tell from a run which path was measured. This is an allowlist on purpose: llama.cpp gives most options
-several spellings (`-n` / `--predict` / `--n-predict`, `-ngl` / `--gpu-layers` /
-`--n-gpu-layers`, `--temp` / `--temperature`), extra args are appended after the harness's own,
-so a late alias would win, and a fabric bump can add a spelling at any time. Widening the list
-is a deliberate code change.
+reliable way to tell from a run which path was measured.
 
 **`matrix_sources`** — comma-separated builds-under-comparison: `addon` (published, default) ·
 `addon@candidate` / `addon@baseline` *(build comparison)* · `fabric@<ref>` ·

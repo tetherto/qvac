@@ -123,6 +123,14 @@
       "sha256": "56e4c6cfe73b0c82e3e82bc518d7591997e61d81f723fc41a586f4fa69ea2453",
       "bytes": 204987232
     },
+    "mmproj-Qwen3.5-0.8B-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf"
+      ],
+      "sha256": "5a6b15da0f483b9e320a5b86b787ad1831953dfaa706e2c5d91de830ea70d784",
+      "bytes": 115923680,
+      "warm": false
+    },
     "mmproj-Qwen3.5-2B-F16.gguf": {
       "urls": [
         "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf"
@@ -215,6 +223,14 @@
       ],
       "sha256": "3397f2e15859d268dc91782e92e70c485c7780448d57d622d145374390168f71",
       "bytes": 985653760
+    },
+    "mmproj-gemma-4-E2B-it-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/a1dac71d3ab220618f5a7573a52acdc4baf3ae3b/mmproj-gemma-4-E2B-it-Q8_0.gguf"
+      ],
+      "sha256": "8a82e0fd831bb7cb5c8898b86393eb14042986b950a60e1034bf21d061aac8a8",
+      "bytes": 557367776,
+      "warm": false
     },
     "SmolVLM2-500M-Video-Instruct-Q8_0.gguf": {
       "urls": [
@@ -334,22 +350,6 @@
       ],
       "sha256": "bbb0691873a4e638f6928898b3c3be9a4730bd4ced301197726a4fcb549695d0",
       "bytes": 108782144,
-      "warm": false
-    },
-    "mmproj-Qwen3.5-0.8B-Q8_0.gguf": {
-      "urls": [
-        "https://huggingface.co/mradermacher/Qwen3.5-0.8B-GGUF/resolve/9d48fdbc0d8f133716da87ec1d904e5d2c7175a6/Qwen3.5-0.8B.mmproj-Q8_0.gguf"
-      ],
-      "sha256": "5a6b15da0f483b9e320a5b86b787ad1831953dfaa706e2c5d91de830ea70d784",
-      "bytes": 115923680,
-      "warm": false
-    },
-    "mmproj-gemma-4-E2B-it-Q8_0.gguf": {
-      "urls": [
-        "https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/a1dac71d3ab220618f5a7573a52acdc4baf3ae3b/mmproj-gemma-4-E2B-it-Q8_0.gguf"
-      ],
-      "sha256": "8a82e0fd831bb7cb5c8898b86393eb14042986b950a60e1034bf21d061aac8a8",
-      "bytes": 557367776,
       "warm": false
     }
   }

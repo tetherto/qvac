@@ -30,10 +30,9 @@ const EXTRA_ARGS = parseCliArgs(arg('extra-args', ''))
 const BACKEND = arg('backend', 'cpu')
 // Context size for the run, from the spec the addon leg also uses (catalog ctx_size,
 // a json: spec's, or @ctx=N on a URL pair). Both engines must see the same one.
-// 0 is a real value here, not a missing one: it means "let the engine pick the model
-// default", and the addon leg keeps it (LlamaModel.cpp guards on n_ctx != 0). Falling back
-// on it would put the two legs on different context sizes, which is what this flag exists
-// to prevent, so only a non-number falls back.
+// 0 means "let the engine pick the model default", so only a non-number falls back. Note
+// that models.cjs normalizeSpec already rewrites a falsy ctx_size to 4096, so 0 only ever
+// arrives here from @ctx=0 on a URL pair.
 const CTX_SIZE_ARG = parseInt(arg('ctx-size', '4096'), 10)
 const CTX_SIZE = Number.isNaN(CTX_SIZE_ARG) ? 4096 : CTX_SIZE_ARG
 const SAMPLES = parseInt(arg('samples', '3'), 10)
@@ -140,8 +139,9 @@ function main () {
           ttft_ms: ttft,
           gen_tokens: m.decodeTokens != null ? m.decodeTokens : null,
           prompt_tokens: m.promptTokens != null ? m.promptTokens : null,
-          // runOnceCli reads this from the `/usr/bin/time -v` wrapper. It was being
-          // dropped here, so the report's peak-RSS row was empty for every CLI leg.
+          // runOnceCli reads this from the `/usr/bin/time -v` wrapper, so it is Linux-only
+          // and stays null on macOS and Windows. It was being dropped here even on Linux,
+          // so the report's peak-RSS row was empty for every CLI leg.
           rss_mb: r.peakRssMb != null ? r.peakRssMb : null,
           // Per-row encode time and slice count, the same fields the addon harness
           // emits, so the report has them even when the log-scraping path misses.
