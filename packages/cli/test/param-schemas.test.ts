@@ -45,6 +45,22 @@ describe('configure: param-schemas', () => {
     assert.deepEqual(coerceParam('["stop"]'), ['stop'])
   })
 
+  it('renders enum values bare and accepts bare/single/double-quoted input', () => {
+    const schema = configSchemaForAddon('embeddings')
+    assert.ok(schema)
+    const attention = paramFields(schema).find((f) => f.name === 'attention')
+    assert.ok(attention)
+    // hint shows bare values, matching how they're typed (no surrounding quotes)
+    assert.equal(attention.type, 'causal | non-causal')
+    // all three forms the user might type (incl. the single-quoted form the
+    // description renders) coerce and validate the same
+    assert.equal(coerceParam("'causal'"), 'causal')
+    assert.equal(validateParam(attention, 'causal'), true)
+    assert.equal(validateParam(attention, "'causal'"), true)
+    assert.equal(validateParam(attention, '"causal"'), true)
+    assert.equal(validateParam(attention, "'non-causal'"), true)
+  })
+
   it('validates input against the real field schema', () => {
     const schema = configSchemaForAddon('llm')
     assert.ok(schema)

@@ -38,9 +38,12 @@ type JsonNode = {
 
 function typeLabel(node: JsonNode | undefined): string {
   if (!node) return 'value'
-  if (Array.isArray(node.enum)) return node.enum.map((v) => JSON.stringify(v)).join(' | ')
+  // Render enum/const values bare (`causal | non-causal`, not `"causal" | ...`)
+  // so the hint matches what the user types; coerceParam accepts bare, single-,
+  // or double-quoted forms.
+  if (Array.isArray(node.enum)) return node.enum.map((v) => String(v)).join(' | ')
   if (Array.isArray(node.anyOf)) return node.anyOf.map((n) => typeLabel(n as JsonNode)).join(' | ')
-  if (node.const !== undefined) return JSON.stringify(node.const)
+  if (node.const !== undefined) return String(node.const)
   if (node.type === 'array') return `${typeLabel(node.items as JsonNode)}[]`
   const base = typeof node.type === 'string' ? node.type : 'value'
   const bounds: string[] = []
@@ -66,14 +69,18 @@ export function paramFields(schema: ConfigSchema): ParamField[] {
 }
 
 // Coerce a raw string into the value the field expects. JSON handles
-// numbers/booleans/arrays/quoted strings; a bare word stays a plain string.
+// numbers/booleans/arrays/double-quoted strings; if that fails, a value wrapped
+// in single quotes (as field hints render enum values, e.g. 'causal') is
+// unwrapped, otherwise the bare string is used. So `causal`, `'causal'`, and
+// `"causal"` all coerce to the same value.
 export function coerceParam(raw: string): unknown {
   const t = raw.trim()
   if (t === '') return undefined
   try {
     return JSON.parse(t)
   } catch {
-    return t
+    const singleQuoted = t.match(/^'(.*)'$/)
+    return singleQuoted ? singleQuoted[1] : t
   }
 }
 
