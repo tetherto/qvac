@@ -101,9 +101,13 @@ can drop. Drive the next step off the previous one.
   `worldStep` rebuilds it** from the same promoted pack, so no
   `unloadModel`/`loadModel` cycle is needed — the walk restarts from the world's
   beginning rather than resuming past the frames you did not receive.
-- **The same applies if you stop reading early.** Abandoning the frame stream —
-  breaking out of the loop, a dropped transport — leaves the session advanced
-  past frames you never saw, so it is torn down and rebuilt on the next step too.
+- **Breaking out of `frameStream` does not stop anything.** The client pumps the
+  RPC stream independently of the generator you iterate, so `break` closes only
+  your local projection: the block finishes, and `frames` and `stats` still
+  resolve normally. To actually stop delivery, call `cancel({ requestId })`.
+  A genuine transport disconnect has the same effect as a cancel — the server
+  sees the stream end early, and because that leaves the session advanced past
+  frames nobody received, it is torn down and rebuilt on the next step.
 - **`worldCreateScene` is uninterruptible.** The engine takes no abort predicate
   for it. Cancelling suppresses delivery, but the encode runs to completion and
   the model's concurrency slot is held until it does. Await the result before

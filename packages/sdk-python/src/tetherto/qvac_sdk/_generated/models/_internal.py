@@ -13913,7 +13913,7 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
     width: Annotated[
         int | None,
         Field(
-            description="Scene width in pixels, a multiple of 32. Defaults to 832.",
+            description="Scene width in pixels, a multiple of 32, at most 4096. Defaults to 832. width x height must also stay within 2088960 pixels (1920x1088). That product rule is a cross-field constraint, so it is NOT expressed in the generated JSON Schema or Python client — those validate each axis only, and the combined limit is enforced by the worker, which rejects the request before any GPU memory is allocated.",
             gt=0,
             le=4096,
             multiple_of=32,
@@ -13922,7 +13922,7 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
     height: Annotated[
         int | None,
         Field(
-            description="Scene height in pixels, a multiple of 32. Defaults to 480.",
+            description="Scene height in pixels, a multiple of 32, at most 4096. Defaults to 480. See `width` for the total-pixel ceiling, which bounds the product as well as each axis and is enforced server-side.",
             gt=0,
             le=4096,
             multiple_of=32,
