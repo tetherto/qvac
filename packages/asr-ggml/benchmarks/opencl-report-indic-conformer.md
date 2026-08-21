@@ -35,7 +35,7 @@ validates the same wiring on the alternative Android GPU path.
   wall time is dominated by first-touch model load.
 - **No missing OpenCL ops**: the Indic Conformer encoder graph loaded and ran
   on OpenCL without falling back to Vulkan or CPU. No upstream
-  `qvac-ext-ggml` speech-branch kernel additions were needed. No changes to
+  `qvac-ext-ggml` speech kernel additions were needed. No changes to
   `qvac-ext-whisper.cpp`.
 
 The run is the smallest reproducible artefact that proves the QVAC monorepo's
@@ -49,9 +49,7 @@ existing OpenCL wiring (already used for parakeet-ctc-0.6b) also covers the
 | Workflow run (OpenCL, S25 Ultra / Adreno 830) | [`32489751168`](https://github.com/tetherto/qvac/actions/runs/32489751168) |
 | Companion run (Vulkan, Pixel 9 / Mali-G715) | [`32483218937`](https://github.com/tetherto/qvac/actions/runs/32483218937) |
 | Trigger | Manual `workflow_dispatch` on `integration-mobile-test-asr-ggml.yml`, `tests=runParakeetGpuSmokeTest` |
-| Branch | this PR branch |
-| Head commit | `c4e7745d508773a246bd956c884d9ba2d957f875` (`doc[asr-ggml]: note Indic Conformer OpenCL smoke coverage`) |
-| Resolved `speech-cpp` | pinned via `packages/asr-ggml/vcpkg.json`, `opencl` feature enabled on `android` (unchanged in this PR) |
+| Resolved `speech-cpp` | pinned via `packages/asr-ggml/vcpkg.json`, `opencl` feature enabled on `android` (unchanged) |
 | Prebuild package identifier | Freshly built in the workflow run; native binaries include `libqvac-speech-ggml-opencl.so` (2.0 MB) alongside `libqvac-speech-ggml-vulkan.so` (61.7 MB) for every Android ABI |
 | Device manufacturer / model | Samsung Galaxy S25 Ultra |
 | Android version | Android 15 |
@@ -135,7 +133,7 @@ tolerance.
 
 ```bash
 gh workflow run integration-mobile-test-asr-ggml.yml \
-  --ref <this PR branch> \
+  --ref <ref-under-test> \
   -f platform=Android \
   -f device="Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \
@@ -147,9 +145,9 @@ Adreno 750) to sanity-check on a lower tier of the same family.
 
 ## Notes
 
-- No `qvac-ext-ggml` speech-branch kernels were added or modified for this
-  ticket; the sibling parakeet-ctc-0.6b's existing OpenCL coverage already
-  provides the Conformer encoder ops used by Indic Conformer.
+- No `qvac-ext-ggml` speech kernels were added or modified for this change;
+  the sibling parakeet-ctc-0.6b's existing OpenCL coverage already provides
+  the Conformer encoder ops used by Indic Conformer.
 - No `qvac-ext-whisper.cpp` changes — Indic Conformer is pure Conformer + CTC
   and does not import the whisper compute path.
 - Only `q4_0` is exercised on mobile per the existing `loadGgufOrSkip` mobile
