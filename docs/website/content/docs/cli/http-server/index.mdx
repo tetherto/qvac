@@ -35,7 +35,17 @@ See [System requirements](/system-requirements#environment-setup) for environmen
 </Step>
 
 <Step>
-Create the `qvac.config.*` file at the root of your project declaring which models the server can load. For example:
+Create the `qvac.config.json` file at the root of your project declaring which models the server can load. The recommended way is to let the CLI assemble it for you:
+
+```bash
+qvac configure           # interactive: pick models by capability or search
+qvac configure --yes     # non-interactive: chat + transcription starter
+```
+
+`qvac configure` searches the SDK's model catalog, previews the exact `serve.models` entry it will write, and merges into an existing `qvac.config.json` — see [`qvac configure`](/cli#qvac-configure) for the full reference.
+
+<Callout type="info">
+**Prefer to write it by hand?** Any of `qvac.config.{json,js,mjs,ts}` works. `qvac configure` only writes JSON; skip it and author the file yourself if you want a `.js` or `.ts` config, or if you need to set fields beyond `serve.models` (such as `plugins`, `cacheDirectory`, or `serve.cors`) at the same time. See [Configuration — `ServeConfig`](/configuration#serveconfig) for the full schema. Minimal example:
 
 ```json title="qvac.config.json"
 {
@@ -50,6 +60,7 @@ Create the `qvac.config.*` file at the root of your project declaring which mode
   }
 }
 ```
+</Callout>
 </Step>
 
 <Step>
