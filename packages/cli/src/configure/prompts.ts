@@ -1,4 +1,5 @@
-import { select, search, editor, confirm } from '@inquirer/prompts'
+import { emitKeypressEvents } from 'node:readline'
+import { select, search, editor, confirm, input } from '@inquirer/prompts'
 import type { ModelCatalogEntry } from '../serve/core/model-catalog.js'
 import { parseServeConfig } from '../serve/config.js'
 import {
@@ -15,9 +16,33 @@ import {
 } from './presets.js'
 import { docsUrlForAddon } from './docs-links.js'
 
-// Sentinel a picker returns when the user chooses "Back". The delimiters can't
-// occur in a model constant id or a modality value, so it never collides.
+// Sentinel a prompt resolves to when the user backs out (Esc, or a "Back"
+// choice). The delimiters can't occur in a model id or a modality value.
 const BACK = '::back::'
+
+// Run an @inquirer prompt with Esc bound to "go back one step": a keypress
+// listener aborts the prompt's signal, which rejects with AbortPromptError;
+// that is caught and surfaced as BACK. Ctrl+C still throws ExitPromptError and
+// is handled one level up (a full abort, not a step back).
+function askWithBack<T>(
+  run: (ctx: { signal: AbortSignal }) => Promise<T>
+): Promise<T | typeof BACK> {
+  const controller = new AbortController()
+  const stdin = process.stdin
+  const onKeypress = (_str: string | undefined, key: { name?: string } | undefined): void => {
+    if (key?.name === 'escape') controller.abort()
+  }
+  emitKeypressEvents(stdin)
+  stdin.on('keypress', onKeypress)
+  return run({ signal: controller.signal })
+    .catch((err: unknown): typeof BACK => {
+      if (err instanceof Error && err.name === 'AbortPromptError') return BACK
+      throw err
+    })
+    .finally(() => {
+      stdin.off('keypress', onKeypress)
+    })
+}
 
 function fmtSize(bytes: number | null): string {
   if (bytes === null) return ''
@@ -41,36 +66,84 @@ function matches(e: ModelCatalogEntry, term: string): boolean {
   return term.split(/\s+/).every((word) => haystack.includes(word))
 }
 
-// Returns a chosen constant id, or BACK if the user backs out.
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(n, hi))
+}
+
+interface PickOptions {
+  recommended?: string | undefined
+  // Builds the serve.models entry a given model would produce, so the picker can
+  // preview it for the highlighted row (shown only when the terminal is wide).
+  previewEntry?: ((id: string, addon: string | null) => ServeModelEntry) | undefined
+}
+
+// The @inquirer picker shows the highlighted choice's `description` below the
+// list. On a wide terminal, show the concrete serve.models entry the model would
+// produce (a real config example); otherwise just the docs link.
+function describeChoice(
+  e: ModelCatalogEntry,
+  wide: boolean,
+  previewEntry: PickOptions['previewEntry']
+): string {
+  const docs = `Docs: ${docsUrlForAddon(e.addon)}`
+  if (!wide || !previewEntry) return docs
+  const alias = aliasFor(e.id, new Set())
+  const json = JSON.stringify({ [alias]: previewEntry(e.id, e.addon) }, null, 2)
+  return `${json}\n\n${docs}`
+}
+
+// Returns a chosen constant id, or BACK if the user backs out (Esc / "Back").
 function pickModel(
   pool: ModelCatalogEntry[],
   message: string,
-  recommended?: string
+  opts: PickOptions = {}
 ): Promise<string> {
+  const { recommended, previewEntry } = opts
   const ordered = recommended
     ? [...pool].sort((a, b) => (a.id === recommended ? -1 : b.id === recommended ? 1 : 0))
     : pool
-  return search<string>({
-    message,
-    source: (term) => {
-      const t = term?.toLowerCase().trim()
-      const list = t ? ordered.filter((e) => matches(e, t)) : ordered
-      const choices = list.slice(0, 40).map((e) => ({
-        name: e.id === recommended ? `${fmtRow(e)}  * recommended` : fmtRow(e),
-        value: e.id,
-        description: docsUrlForAddon(e.addon)
-      }))
-      return [
-        ...choices,
-        { name: '<- Back', value: BACK, description: 'Return to the previous menu' }
-      ]
-    }
-  })
+  const cols = process.stdout.columns ?? 80
+  const rows = process.stdout.rows ?? 0
+  const wide = cols >= 90 && previewEntry !== undefined
+  // Fill the terminal with results, leaving headroom for the message, the
+  // description (taller when it carries a config example), and the shell prompt.
+  const reserve = wide ? 16 : 4
+  const pageSize = rows > 0 ? clamp(rows - reserve, 7, 30) : wide ? 8 : 12
+  return askWithBack((ctx) =>
+    search<string>(
+      {
+        message: `${message} (Esc to go back)`,
+        pageSize,
+        source: (term) => {
+          const t = term?.toLowerCase().trim()
+          const list = t ? ordered.filter((e) => matches(e, t)) : ordered
+          const choices = list.slice(0, 100).map((e) => ({
+            name: e.id === recommended ? `${fmtRow(e)}  * recommended` : fmtRow(e),
+            value: e.id,
+            description: describeChoice(e, wide, previewEntry)
+          }))
+          return [
+            ...choices,
+            { name: '<- Back', value: BACK, description: 'Return to the previous menu' }
+          ]
+        }
+      },
+      ctx
+    )
+  )
 }
 
 function previewText(alias: string, entry: ServeModelEntry, addon: string): string {
   const json = JSON.stringify({ [alias]: entry }, null, 2)
   return `\n${json}\n\n  Docs: ${docsUrlForAddon(addon)}\n`
+}
+
+function validateAlias(value: string, current: string, taken: Set<string>): string | true {
+  const s = value.trim()
+  if (!s) return 'Alias cannot be empty'
+  if (!/^[a-zA-Z0-9._-]+$/.test(s)) return 'Use letters, numbers, dot, dash or underscore'
+  if (s !== current && taken.has(s)) return `Alias "${s}" is already used`
+  return true
 }
 
 // Open the entry's JSON in $EDITOR; re-open until it parses and validates.
@@ -98,26 +171,47 @@ async function editEntry(alias: string, entry: ServeModelEntry): Promise<ServeMo
   }
 }
 
-// Preview the entry, then Add / Edit / Back. After an edit the preview re-renders
-// with the edited result, so the user sees the final entry before adding.
+// Preview the entry, then Add / Rename / Edit / Back. The alias is editable
+// before and after an $EDITOR pass; after an edit the preview re-renders with
+// the edited result, so the user sees the final entry before adding.
 // Returns the confirmed addition, or BACK to return to the previous step.
 async function confirmEntry(
   built: BuiltEntry,
   taken: Set<string>,
   canEdit: boolean
 ): Promise<AddedEntry | typeof BACK> {
-  const alias = aliasFor(built.aliasBase, taken)
+  let alias = aliasFor(built.aliasBase, taken)
   let entry = built.entry
   for (;;) {
-    const proceed = await select<string>({
-      message: `${previewText(alias, entry, built.addon)}Proceed?`,
-      choices: [
-        { name: `Add it (alias: ${alias})`, value: 'add' },
-        ...(canEdit ? [{ name: 'Edit in $EDITOR...', value: 'edit' }] : []),
-        { name: '<- Back', value: 'back' }
-      ]
-    })
-    if (proceed === 'back') return BACK
+    const proceed = await askWithBack((ctx) =>
+      select<string>(
+        {
+          message: `${previewText(alias, entry, built.addon)}Proceed? (Esc to go back)`,
+          choices: [
+            { name: `Add it (alias: ${alias})`, value: 'add' },
+            { name: 'Rename alias...', value: 'alias' },
+            ...(canEdit ? [{ name: 'Edit in $EDITOR...', value: 'edit' }] : []),
+            { name: '<- Back', value: 'back' }
+          ]
+        },
+        ctx
+      )
+    )
+    if (proceed === BACK || proceed === 'back') return BACK
+    if (proceed === 'alias') {
+      const next = await askWithBack((ctx) =>
+        input(
+          {
+            message: 'Alias',
+            default: alias,
+            validate: (v) => validateAlias(v, alias, taken)
+          },
+          ctx
+        )
+      )
+      if (next !== BACK) alias = next.trim()
+      continue
+    }
     if (proceed === 'edit') {
       entry = await editEntry(alias, entry)
       continue
@@ -133,24 +227,28 @@ async function addByCapability(
   canEdit: boolean
 ): Promise<AddedEntry | typeof BACK> {
   for (;;) {
-    const modality = await select<Modality | typeof BACK>({
-      message: 'Capability?',
-      choices: [
-        ...MODALITIES.map((m) => ({ name: m.label, value: m.id })),
-        { name: '<- Back', value: BACK }
-      ]
-    })
+    const modality = await askWithBack((ctx) =>
+      select<Modality | typeof BACK>(
+        {
+          message: 'Capability? (Esc to go back)',
+          choices: [
+            ...MODALITIES.map((m) => ({ name: m.label, value: m.id })),
+            { name: '<- Back', value: BACK }
+          ]
+        },
+        ctx
+      )
+    )
     if (modality === BACK) return BACK
 
     const info = modalityInfo(modality)
     let constantName: string | undefined
     if (info.pick) {
       const pool = catalog.filter((e) => e.role === info.role)
-      const picked = await pickModel(
-        pool,
-        `Pick a ${info.label} model (type to search)`,
-        RECOMMENDED[modality]
-      )
+      const picked = await pickModel(pool, `Pick a ${info.label} model (type to search)`, {
+        recommended: RECOMMENDED[modality],
+        previewEntry: (id) => buildEntry(modality, id).entry
+      })
       if (picked === BACK) continue
       constantName = picked
     }
@@ -167,7 +265,9 @@ async function addBySearch(
   canEdit: boolean
 ): Promise<AddedEntry | typeof BACK> {
   for (;;) {
-    const picked = await pickModel(catalog, 'Search all models (type to search)')
+    const picked = await pickModel(catalog, 'Search all models (type to search)', {
+      previewEntry: (id, addon) => buildGenericEntry(id, addon).entry
+    })
     if (picked === BACK) return BACK
     const found = catalog.find((e) => e.id === picked)
     const res = await confirmEntry(buildGenericEntry(picked, found?.addon ?? null), taken, canEdit)

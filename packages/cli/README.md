@@ -113,10 +113,11 @@ qvac doctor --quiet || exit 1
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
 straight to `qvac serve openai`. It searches the models the SDK provides — by name or by
-capability (role, addon, quantization) — lets you pick by capability, previews each entry
-with a link to the addon's docs, and (with `$EDITOR`) lets you tweak an entry and review the
-result before adding it. Every menu has a `Back` option, and `Ctrl+C` aborts without
-writing. Existing entries are preserved; re-running is idempotent per model.
+capability (role, addon, quantization) — and on a wide terminal previews, for the
+highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
+its alias, and (with `$EDITOR`) tweak the entry and review the result before adding it. Press
+`Esc` (or choose `Back`) to step back one menu; `Ctrl+C` aborts without writing. Existing
+entries are preserved; re-running is idempotent per model.
 
 ```bash
 qvac configure                 # interactive
