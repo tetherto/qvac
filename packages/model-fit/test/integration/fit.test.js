@@ -114,14 +114,18 @@ test('native raw fitting uses explicit completion and embedding load kinds', asy
   // CPU placement is the zero-device list (`devices = {nullptr}`), not a pinned
   // `n_gpu_layers` — the addons leave that field alone on their CPU path, and
   // pinning it to 0 made `common_fit_params` abort when it needed to adjust it.
-  // `main_gpu` is the observable CPU signal both kinds carry.
-  t.is(completion.mainGpu, -1, 'completion config preserves CPU placement')
-  t.is(embedding.mainGpu, -1, 'embedding config preserves CPU placement')
-
-  // An explicit `gpu-layers: '0'` is still passed through; the embedding config
-  // does not send one, so it keeps qvac-fabric's default.
+  //
+  // These two are post-fit *outputs*, though, and the fitter rewrites what it
+  // needs while searching: on a host that registers a GPU but is handed a
+  // zero-device list it reports the host-memory plan as ngl 0 / main-gpu 0,
+  // where elsewhere it returns the values it was given. So assert what holds on
+  // every host — a CPU request never comes back offloading layers — and leave
+  // the exact input placement to `isCpuPlacement` in LlamaLoadConfig.test.cpp,
+  // which drives `normalizeLlamaLoadConfig` against a synthetic device list and
+  // therefore pins `devices == {nullptr}` and `main_gpu == -1` with no platform
+  // dependence at all.
   t.is(completion.nGpuLayers, 0, 'an explicit gpu-layers is passed through')
-  t.ok(embedding.nGpuLayers < 0, 'an unset gpu-layers stays at the llama default')
+  t.ok(embedding.nGpuLayers <= 0, 'an embedding CPU config offloads no layers')
 })
 
 test('fitParams rejects values that would truncate or wrap in the binding', async function (t) {
