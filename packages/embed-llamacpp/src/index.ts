@@ -18,15 +18,36 @@ import {
   type BertJobInput,
   type GGMLConfig,
 } from "./addon";
+import type ActualIdMapIndex from "./idMapIndex";
+import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
 
-export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon } from "./addon";
+export type {
+  GGMLConfig,
+  NumericLike,
+  AddonConfigurationParams,
+  RuntimeStats,
+  Addon,
+} from "./addon";
+export type {
+  IdMapIndexBitWidth,
+  IdMapIndexOptions,
+  IdMapIndexSearchResult,
+  IdMapIndexStorage,
+} from "./idMapIndex";
 export { BertInterface } from "./addon";
 export type { QvacResponse };
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 
-const RUN_BUSY_ERROR_MESSAGE =
-  "Cannot set new job: a job is already set or being processed";
+const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
+
+function loadIdMapIndex() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
+  return require("./idMapIndex") as typeof ActualIdMapIndex;
+}
+
+export declare const IdMapIndex: typeof ActualIdMapIndex;
+export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;
 
 export interface GGMLBertArgs {
   files: { model: string[] };
@@ -171,7 +192,10 @@ export class GGMLBert {
     });
     finalized.catch((err: unknown) => {
       const detail =
-        (err && typeof err === "object" && "message" in err && (err as { message?: unknown }).message) ||
+        (err &&
+          typeof err === "object" &&
+          "message" in err &&
+          (err as { message?: unknown }).message) ||
         err;
       this.logger?.warn?.("Inference response rejected:", detail);
     });
@@ -251,11 +275,25 @@ export class GGMLBert {
 export default GGMLBert;
 
 const cjsExports = GGMLBert as typeof GGMLBert & {
+  default?: typeof GGMLBert;
   pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
+  readonly IdMapIndex?: typeof IdMapIndex;
+  readonly IdMapIndexFilter?: typeof IdMapIndexFilter;
 };
+cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
+Object.defineProperties(cjsExports, {
+  IdMapIndex: {
+    enumerable: true,
+    get: loadIdMapIndex,
+  },
+  IdMapIndexFilter: {
+    enumerable: true,
+    get: () => loadIdMapIndex().IdMapIndexFilter,
+  },
+});
 module.exports = cjsExports;

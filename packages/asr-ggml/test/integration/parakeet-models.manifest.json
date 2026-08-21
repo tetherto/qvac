@@ -1,5 +1,5 @@
 {
-  "cacheEpoch": 2,
+  "cacheEpoch": 3,
   "source": "s3",
   "models": {
     "parakeet-tdt-0.6b-v3.f16.gguf": {

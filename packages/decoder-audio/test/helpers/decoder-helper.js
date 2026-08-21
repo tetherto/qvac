@@ -3,7 +3,7 @@
 const path = require('bare-path')
 const fs = require('bare-fs')
 
-function getBytesPerSample (audioFormat) {
+function getBytesPerSample(audioFormat) {
   if (audioFormat === 'f32le') {
     return 4
   } else if (audioFormat === 's16le') {
@@ -16,7 +16,7 @@ function getBytesPerSample (audioFormat) {
   return 2
 }
 
-function validateExpectations (expectation, sampleCount, durationMs, totalBytes) {
+function validateExpectations(expectation, sampleCount, durationMs, totalBytes) {
   let passed = true
   const errors = []
 
@@ -32,12 +32,16 @@ function validateExpectations (expectation, sampleCount, durationMs, totalBytes)
 
   if (expectation.minDurationMs !== undefined && durationMs < expectation.minDurationMs) {
     passed = false
-    errors.push(`Expected at least ${expectation.minDurationMs}ms duration, got ${durationMs.toFixed(0)}ms`)
+    errors.push(
+      `Expected at least ${expectation.minDurationMs}ms duration, got ${durationMs.toFixed(0)}ms`
+    )
   }
 
   if (expectation.maxDurationMs !== undefined && durationMs > expectation.maxDurationMs) {
     passed = false
-    errors.push(`Expected at most ${expectation.maxDurationMs}ms duration, got ${durationMs.toFixed(0)}ms`)
+    errors.push(
+      `Expected at most ${expectation.maxDurationMs}ms duration, got ${durationMs.toFixed(0)}ms`
+    )
   }
 
   if (expectation.minBytes !== undefined && totalBytes < expectation.minBytes) {
@@ -53,13 +57,13 @@ function validateExpectations (expectation, sampleCount, durationMs, totalBytes)
   return { passed, errors }
 }
 
-async function processDecoderResponse (response, audioFormat, sampleRate) {
+async function processDecoderResponse(response, audioFormat, sampleRate) {
   let outputArray = []
   let totalBytes = 0
   let chunksReceived = 0
 
   await response
-    .onUpdate(data => {
+    .onUpdate((data) => {
       if (data && data.outputArray) {
         const bytes = new Uint8Array(data.outputArray)
         outputArray = outputArray.concat(Array.from(bytes))
@@ -84,7 +88,17 @@ async function processDecoderResponse (response, audioFormat, sampleRate) {
   }
 }
 
-function buildResult (audioFilePath, outputArray, totalBytes, chunksReceived, jobStats, sampleCount, durationMs, errors, passed) {
+function buildResult(
+  audioFilePath,
+  outputArray,
+  totalBytes,
+  chunksReceived,
+  jobStats,
+  sampleCount,
+  durationMs,
+  errors,
+  passed
+) {
   const stats = jobStats || null
 
   // Build stats info string based on available runtime stats
@@ -114,7 +128,7 @@ function buildResult (audioFilePath, outputArray, totalBytes, chunksReceived, jo
   }
 }
 
-async function runDecoder (decoder, audioFilePath, expectation = {}, params = {}, defaultRawPath) {
+async function runDecoder(decoder, audioFilePath, expectation = {}, params = {}, defaultRawPath) {
   if (!decoder) {
     return {
       output: 'Error: Missing required parameter: decoder',
@@ -144,18 +158,17 @@ async function runDecoder (decoder, audioFilePath, expectation = {}, params = {}
     audioStream = fs.createReadStream(audioFilePath)
     const response = await decoder.run(audioStream)
 
-    const {
-      outputArray,
-      totalBytes,
-      chunksReceived,
-      jobStats,
+    const { outputArray, totalBytes, chunksReceived, jobStats, sampleCount, durationMs } =
+      await processDecoderResponse(response, audioFormat, sampleRate)
+
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    const { passed, errors } = validateExpectations(
+      expectation,
       sampleCount,
-      durationMs
-    } = await processDecoderResponse(response, audioFormat, sampleRate)
-
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    const { passed, errors } = validateExpectations(expectation, sampleCount, durationMs, totalBytes)
+      durationMs,
+      totalBytes
+    )
 
     if (params.saveRaw !== false && outputArray.length > 0) {
       const rawPath = params.rawOutputPath || defaultRawPath
@@ -170,7 +183,17 @@ async function runDecoder (decoder, audioFilePath, expectation = {}, params = {}
       fs.writeFileSync(rawPath, Buffer.from(outputArray))
     }
 
-    return buildResult(audioFilePath, outputArray, totalBytes, chunksReceived, jobStats, sampleCount, durationMs, errors, passed)
+    return buildResult(
+      audioFilePath,
+      outputArray,
+      totalBytes,
+      chunksReceived,
+      jobStats,
+      sampleCount,
+      durationMs,
+      errors,
+      passed
+    )
   } catch (error) {
     return {
       output: `Error: ${error.message}`,
@@ -184,4 +207,10 @@ async function runDecoder (decoder, audioFilePath, expectation = {}, params = {}
   }
 }
 
-module.exports = { runDecoder, getBytesPerSample, validateExpectations, processDecoderResponse, buildResult }
+module.exports = {
+  runDecoder,
+  getBytesPerSample,
+  validateExpectations,
+  processDecoderResponse,
+  buildResult
+}

@@ -17,10 +17,13 @@ import {
 } from '@/schemas'
 import { InvalidResponseError, StreamEndedError } from '@/utils/errors-client'
 import { parseClientInput } from '@/client/parse-input'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 
 export interface FinetuneHandle {
   progressStream: AsyncGenerator<FinetuneProgress>
   result: Promise<FinetuneResult>
+  /** Stable id for this run; pass to `cancel({ requestId })` to stop it. */
+  requestId: string
 }
 
 type FinetuneReplyParams = FinetuneStopParams | FinetuneGetStateParams
@@ -162,6 +165,9 @@ export function finetune(
   }
 
   const runParams = parseClientInput(finetuneRunParamsSchema, params)
+  // Client-side id so the run is cancellable via cancel({ requestId }) the
+  // moment the handle is returned. Surfaced on the handle below.
+  const requestId = generateClientRequestId()
 
   let resultResolver: (value: FinetuneResult) => void = () => {}
   let resultRejecter: (error: unknown) => void = () => {}
@@ -183,6 +189,7 @@ export function finetune(
       const request = parseClientInput(finetuneRunRequestSchema, {
         type: 'finetune',
         ...runParams,
+        requestId,
         withProgress: true
       })
       const responses: AsyncGenerator<unknown> = streamRpc(request, rpcOptions)
@@ -270,6 +277,7 @@ export function finetune(
 
   return {
     progressStream,
-    result: resultPromise
+    result: resultPromise,
+    requestId
   }
 }

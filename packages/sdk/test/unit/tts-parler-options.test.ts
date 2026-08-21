@@ -145,3 +145,20 @@ test('CosyVoice3 accepts a per-call emotion with the disengaging moderate pace',
     )
   )
 })
+
+test('per-call conditioning options are rejected for Audio8 models', (t) => {
+  const request = ttsRequestSchema.parse({
+    type: 'textToSpeech',
+    modelId: 'audio8',
+    text: 'Hello.',
+    emotion: 'happy'
+  })
+  const options = getParlerJobOptions(request)
+
+  try {
+    assertParlerJobOptionsSupported({ getEngineType: () => 'audio8' }, options, 'textToSpeech')
+    t.fail('expected conditioning options to be rejected for Audio8')
+  } catch (error) {
+    t.ok(error instanceof PluginRequestValidationFailedError)
+  }
+})

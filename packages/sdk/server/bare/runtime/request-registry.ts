@@ -28,6 +28,18 @@ export interface BeginOpts {
    * the parent does not require iterating the registry.
    */
   parentSignal?: AbortSignal
+  /**
+   * Per-request override of the kind policy's `maxConcurrentPerModel`. The
+   * policy value is one number for every model of a kind, but handlers may
+   * use a loaded model's `parallel` as its top-level request-permit cap.
+   * This counts requests, not native sequences: a multi-prompt batch still
+   * consumes one permit and the addon schedules its sequences internally.
+   * Must be uniform across all requests routed to the same `(lane, modelId)`
+   * (a given model always yields the same `parallel`): the FIFO slot
+   * hand-off assumes one cap per lane and does not re-check it. A finite
+   * value below 1 is floored to 1.
+   */
+  maxConcurrentPerModel?: number
 }
 
 export interface CancelByRequestId {
@@ -110,6 +122,13 @@ export interface ConcurrencyPolicy {
    * internal queue.
    */
   sharedSlotGroup?: string
+  /**
+   * Admit at most one such request per lane AND only while no other request
+   * holds the lane — a writer in a reader/writer lock. Used for finetune,
+   * whose only cancel is the addon's global cancel: making it exclusive keeps
+   * completions out of the addon while it runs, so that cancel can't hit them.
+   */
+  exclusive?: boolean
 }
 
 /**
@@ -191,6 +210,15 @@ export interface RequestRegistry {
   cancelAll(reason: 'shutdown' | 'modelUnload'): Promise<void>
 
   /**
+   * Cancel every request for a model and wait for each to fully dispose (native
+   * context freed, slot released) before running `teardown` with an admission
+   * barrier held — any begin for the model starts aborted — then lift it. Used
+   * by model unload so the model object isn't freed while a request is still
+   * mid-teardown, and no new request goes active against it during teardown.
+   */
+  withModelDraining(modelId: string, teardown: () => Promise<void>): Promise<void>
+
+  /**
    * Mark a request finished and dispose its scope. Equivalent to
    * `await ctx[Symbol.asyncDispose]()` with an explicit outcome.
    * Idempotent — calling `end` after a scope dispose is a no-op.
@@ -217,6 +245,23 @@ interface RegistryEntry {
    * handed back in `disposeEntry` once the scope has fully unwound.
    */
   slotKey: string | undefined
+  /** Held the lane as an exclusive writer; passed back to `releaseSlot`. */
+  exclusive: boolean
+  /**
+   * Set synchronously the moment disposal starts. The scope reports
+   * `disposed === false` for the whole in-progress async unwind, so two
+   * concurrent `disposeEntry` calls would both pass that guard and release the
+   * slot twice; this flag makes the second return early.
+   */
+  disposing: boolean
+  /**
+   * Resolves once `disposeEntry` has fully unwound this entry's scope (native
+   * context freed, slot released). `cancelAndDrain` awaits it so a model isn't
+   * unloaded while one of its requests is still mid-teardown.
+   */
+  disposed: Promise<void>
+  /** Resolver for `disposed`; called in `disposeEntry`'s finally. */
+  resolveDisposed: () => void
 }
 
 /**
@@ -248,6 +293,8 @@ interface NormalizedPolicy {
    * `undefined` ⇒ slot is keyed on the request's own `kind`.
    */
   slotGroup: string | undefined
+  /** Reader/writer-lock writer: exclusive over the whole lane. */
+  exclusive: boolean
 }
 
 /**
@@ -266,6 +313,10 @@ interface SlotWaiter {
   reject: (err: unknown) => void
   /** `queueTimeoutMs` timer, cleared on resolve / reject / drain. */
   timer: ReturnType<typeof setTimeout> | undefined
+  /** Exclusive writer (admit only when the lane is empty). */
+  exclusive: boolean
+  /** This waiter's own slot cap, captured so `drain` restores N-way. */
+  cap: number
 }
 
 /**
@@ -277,6 +328,15 @@ interface SlotWaiter {
 interface KeyState {
   active: number
   waiters: SlotWaiter[]
+  /** A writer holds the lane exclusively; no reader may be admitted. */
+  exclusiveActive: boolean
+  /**
+   * Reader cap pinned from the first reader admitted into this lane. Every
+   * later reader is measured against it, so a request arriving with a larger
+   * cap can't over-admit the shared pool. Reset when the lane goes idle (the
+   * `KeyState` is deleted). Undefined until the first reader admits.
+   */
+  readerCap?: number
 }
 
 /**
@@ -331,6 +391,26 @@ export function createRequestRegistry(options?: {
    * FIFO in O(1) without scanning every `KeyState`.
    */
   const waitersById = new Map<string, { key: string; waiter: SlotWaiter }>()
+  /**
+   * Ids reserved synchronously at `begin(...)` start and cleared once the entry
+   * lands in `entries` (or the begin throws). A same-tick second `begin(...)`
+   * with the same id runs before the first reaches `entries`/`waitersById`, so
+   * without this it would slip past the duplicate check and both would execute.
+   */
+  const reservedIds = new Set<string>()
+  // Models being torn down: a begin(...) for one starts aborted. The barrier
+  // half of cancelAndDrain — catches begins its scan can't see yet.
+  const drainingModels = new Set<string>()
+  // Entries whose disposal has started but not finished. disposeEntry removes
+  // from `entries` before unwinding, so a drain must consult this too or it
+  // would return while a request is still tearing down natively.
+  const disposingEntries = new Set<RegistryEntry>()
+  // Request ids whose entry is mid-disposal. disposeEntry drops the id from
+  // `entries` before its async scope unwinds; without this the id looks free
+  // during that gap, so a same-id begin could activate concurrently with the
+  // still-tearing-down request and a cancel would land as a cancel-before-begin
+  // tripwire that aborts a later reuse. Held until teardown completes.
+  const disposingIds = new Set<string>()
 
   function logLifecycle(
     event: 'begin' | 'cancel' | 'end',
@@ -421,7 +501,7 @@ export function createRequestRegistry(options?: {
    * removal resolves (granted / graceful cancel) or rejects (timeout /
    * teardown).
    */
-  function removeWaiter(key: string, waiter: SlotWaiter): void {
+  function removeWaiter(key: string, waiter: SlotWaiter, drainAfter = true): void {
     if (waiter.timer !== undefined) {
       clearTimeout(waiter.timer)
       waiter.timer = undefined
@@ -431,7 +511,13 @@ export function createRequestRegistry(options?: {
     if (!st) return
     const i = st.waiters.indexOf(waiter)
     if (i >= 0) st.waiters.splice(i, 1)
-    if (st.active <= 0 && st.waiters.length === 0) keyStates.delete(key)
+    // Removing a queued writer can unblock the readers behind it, so drain
+    // (which also deletes the KeyState once idle). `cancelAll` passes false:
+    // it's tearing every waiter down, so granting one mid-sweep is wrong.
+    if (drainAfter) drain(st, key)
+    else if (st.active <= 0 && !st.exclusiveActive && st.waiters.length === 0) {
+      keyStates.delete(key)
+    }
   }
 
   /**
@@ -448,31 +534,52 @@ export function createRequestRegistry(options?: {
    * across a hand-off — that's what guarantees FIFO fairness with no
    * acquire/release race in the single-threaded event loop.
    */
-  async function acquireSlot(opts: BeginOpts): Promise<{ slotKey: string | undefined }> {
-    if (opts.modelId === undefined) return { slotKey: undefined }
+  async function acquireSlot(
+    opts: BeginOpts
+  ): Promise<{ slotKey: string | undefined; exclusive: boolean }> {
+    if (opts.modelId === undefined) return { slotKey: undefined, exclusive: false }
     const policy = policies.get(opts.kind)
-    if (!policy || !Number.isFinite(policy.maxConcurrent)) {
-      return { slotKey: undefined }
+    if (!policy) return { slotKey: undefined, exclusive: false }
+    // The per-request override (the model's own `parallel`) wins over the
+    // per-kind default. A non-finite effective cap disables gating entirely.
+    const requestedMax = opts.maxConcurrentPerModel ?? policy.maxConcurrent
+    if (!Number.isFinite(requestedMax)) {
+      return { slotKey: undefined, exclusive: false }
     }
+    const maxConcurrent = clampSlotCount(requestedMax)
     // A parent (worker-shutdown) signal that's already aborted: don't
     // queue behind live work that may never drain — let begin() proceed
     // and abort immediately via the parentSignal path.
-    if (opts.parentSignal?.aborted) return { slotKey: undefined }
+    if (opts.parentSignal?.aborted) return { slotKey: undefined, exclusive: false }
 
     const modelId = opts.modelId
-    // A shared lane lets unrelated kinds (e.g. completion + batchCompletion)
-    // contend for one slot pool per model, matching an addon that serializes
-    // them on a single native context.
+    // Lane precedence: the policy's shared group → the kind itself. A shared
+    // lane lets unrelated kinds contend for one slot pool per model.
     const key = slotKey(policy.slotGroup ?? opts.kind, modelId)
     let st = keyStates.get(key)
     if (!st) {
-      st = { active: 0, waiters: [] }
+      st = { active: 0, waiters: [], exclusiveActive: false }
       keyStates.set(key, st)
     }
 
-    if (st.active < policy.maxConcurrent) {
-      st.active++
-      return { slotKey: key }
+    const exclusive = policy.exclusive
+    // A reader admits below the lane's pinned cap (see `readerCap`); an exclusive
+    // writer needs the lane empty. A queued waiter (of any kind) blocks admission
+    // so a writer isn't starved by a steady reader stream. For reader-only lanes
+    // `waiters` is empty whenever `active < cap`, so this guard is a no-op there.
+    const readerCap = st.readerCap ?? maxConcurrent
+    const canAdmit =
+      st.waiters.length === 0 &&
+      !st.exclusiveActive &&
+      (exclusive ? st.active === 0 : st.active < readerCap)
+    if (canAdmit) {
+      if (exclusive) {
+        st.exclusiveActive = true
+      } else {
+        st.active++
+        if (st.readerCap === undefined) st.readerCap = maxConcurrent
+      }
+      return { slotKey: key, exclusive }
     }
 
     if (policy.onOverflow === 'reject') {
@@ -502,7 +609,9 @@ export function createRequestRegistry(options?: {
         enqueuedAt: Date.now(),
         resolve,
         reject,
-        timer: undefined
+        timer: undefined,
+        exclusive,
+        cap: maxConcurrent
       }
       if (policy.queueTimeoutMs !== undefined) {
         const timeoutMs = policy.queueTimeoutMs
@@ -522,31 +631,53 @@ export function createRequestRegistry(options?: {
       waitersById.set(opts.requestId, { key, waiter })
     })
 
-    return granted ? { slotKey: key } : { slotKey: undefined }
+    return granted ? { slotKey: key, exclusive } : { slotKey: undefined, exclusive: false }
   }
 
   /**
-   * Hand a freed slot to the next FIFO waiter, or free it outright when
-   * none are queued. Called from `disposeEntry` after the scope has fully
-   * unwound, so the native context is genuinely free before the next
-   * same-model request is admitted.
+   * Grant the lane to as many FIFO-head waiters as now fit: an exclusive writer
+   * only when the lane is idle, readers up to each one's own cap. Stops at the
+   * first head that can't be admitted, so FIFO order holds. Deletes the
+   * `KeyState` once fully idle.
    */
-  function releaseSlot(key: string): void {
+  function drain(st: KeyState, key: string): void {
+    while (st.waiters.length > 0) {
+      const head = st.waiters[0]
+      if (head === undefined) break
+      if (head.exclusive) {
+        if (st.exclusiveActive || st.active > 0) break
+        st.exclusiveActive = true
+      } else {
+        const readerCap = st.readerCap ?? head.cap
+        if (st.exclusiveActive || st.active >= readerCap) break
+        st.active++
+        if (st.readerCap === undefined) st.readerCap = head.cap
+      }
+      st.waiters.shift()
+      waitersById.delete(head.requestId)
+      if (head.timer !== undefined) {
+        clearTimeout(head.timer)
+        head.timer = undefined
+      }
+      head.resolve(true)
+    }
+    if (st.active <= 0 && !st.exclusiveActive && st.waiters.length === 0) {
+      keyStates.delete(key)
+    }
+  }
+
+  /**
+   * Release a held slot, then hand the freed capacity to waiters. Called from
+   * `disposeEntry` after the scope has fully unwound, so its deferred teardown
+   * (for llama.cpp completion, disposing the run response that stops native
+   * decode) has run before the next same-model request is admitted.
+   */
+  function releaseSlot(key: string, wasExclusive: boolean): void {
     const st = keyStates.get(key)
     if (!st) return
-    const next = st.waiters.shift()
-    if (next) {
-      // Hand off: the waiter inherits the slot, so `active` is unchanged.
-      waitersById.delete(next.requestId)
-      if (next.timer !== undefined) {
-        clearTimeout(next.timer)
-        next.timer = undefined
-      }
-      next.resolve(true)
-      return
-    }
-    st.active--
-    if (st.active <= 0 && st.waiters.length === 0) keyStates.delete(key)
+    if (wasExclusive) st.exclusiveActive = false
+    else st.active--
+    drain(st, key)
   }
 
   function cancelEntry(entry: RegistryEntry, reason?: string): boolean {
@@ -558,7 +689,12 @@ export function createRequestRegistry(options?: {
   }
 
   async function disposeEntry(entry: RegistryEntry, outcome: RequestOutcome): Promise<void> {
-    if (entry.scope.disposed) return
+    if (entry.scope.disposed || entry.disposing) return
+    entry.disposing = true
+    disposingEntries.add(entry)
+    // Keep the id reserved across async teardown so a same-id begin can't
+    // activate concurrently and a cancel can't strand a tripwire for a reuse.
+    disposingIds.add(entry.ctx.requestId)
     entry.ctx.state = outcome
     entry.detachParent()
     logLifecycle('end', entry.ctx, Date.now() - entry.startedAt)
@@ -574,49 +710,87 @@ export function createRequestRegistry(options?: {
       // (and start decoding) until this one has actually let go. `finally`
       // guarantees the slot is freed even if a deferred cleanup throws,
       // otherwise a throwing teardown would strand the queue forever.
-      if (entry.slotKey !== undefined) releaseSlot(entry.slotKey)
+      if (entry.slotKey !== undefined) releaseSlot(entry.slotKey, entry.exclusive)
+      disposingEntries.delete(entry)
+      // The id is free for reuse only now that native teardown is complete.
+      disposingIds.delete(entry.ctx.requestId)
+      // Signal any `cancelAndDrain` waiting on this request that its native
+      // teardown is complete.
+      entry.resolveDisposed()
     }
   }
 
   async function begin(opts: BeginOpts): Promise<ManagedRequestContext> {
-    // A request id is reserved for its whole lifecycle, including the time
-    // it spends *queued* for an admission slot. `waitersById` holds the
-    // still-queued begins (they aren't in `entries` yet), so a duplicate id
-    // must be rejected against both maps — otherwise a second begin with the
-    // same id would enqueue behind the first and overwrite its `waitersById`
-    // index, leaving the original waiter unreachable by `cancel({ requestId })`.
-    if (entries.has(opts.requestId) || waitersById.has(opts.requestId)) {
+    // A request id is reserved for its whole lifecycle: the time it spends
+    // *queued* for an admission slot, while it is active, and while it is
+    // tearing down. `waitersById` holds the still-queued begins (not yet in
+    // `entries`) and `disposingIds` holds the ones whose async teardown hasn't
+    // finished, so a duplicate id must be rejected against all of them —
+    // otherwise a second begin with the same id would enqueue behind the first
+    // and overwrite its `waitersById` index (unreachable by `cancel(...)`), or
+    // activate while the prior request is still releasing its native context.
+    if (
+      entries.has(opts.requestId) ||
+      waitersById.has(opts.requestId) ||
+      reservedIds.has(opts.requestId) ||
+      disposingIds.has(opts.requestId)
+    ) {
       throw new RequestIdConflictError(opts.requestId)
     }
+    // Reserve synchronously so a same-tick duplicate begin is rejected before
+    // this one reaches `entries`/`waitersById`. Cleared on every exit below.
+    reservedIds.add(opts.requestId)
 
-    // Admission control runs before allocation so a rejected begin leaves
-    // no controller / scope behind. This may await: a gated `(kind,
-    // modelId)` at capacity queues the begin FIFO and resolves once a slot
-    // frees (or rejects on overflow / queue-depth cap / timeout).
-    const { slotKey } = await acquireSlot(opts)
+    // A request cancelled BEFORE begin must not queue for a slot on a saturated
+    // lane: consume its marker first and skip admission, so it resolves at once
+    // into an aborted context holding no slot instead of waiting for the holder.
+    let preCancel = consumeCancelBeforeBegin(opts.requestId)
 
-    // The only interleaving point in this otherwise synchronous body is the
-    // await above. A duplicate id could (astronomically unlikely) have
-    // landed while we were queued — re-check and hand the just-acquired
-    // slot back rather than stranding it on the conflicting throw.
-    if (entries.has(opts.requestId)) {
-      if (slotKey !== undefined) releaseSlot(slotKey)
-      throw new RequestIdConflictError(opts.requestId)
+    // Admission control runs before allocation so a rejected begin leaves no
+    // controller / scope behind. This may await: a gated `(kind, modelId)` at
+    // capacity queues the begin FIFO and resolves once a slot frees (or rejects
+    // on overflow / queue-depth cap / timeout).
+    let slotKey: string | undefined
+    let exclusive = false
+    if (!preCancel) {
+      // Plain try/catch, not `.catch()`, so admission adds no extra microtask
+      // and observers still see the request registered on the same tick.
+      let acquired: { slotKey: string | undefined; exclusive: boolean }
+      try {
+        acquired = await acquireSlot(opts)
+      } catch (err) {
+        reservedIds.delete(opts.requestId)
+        throw err
+      }
+      slotKey = acquired.slotKey
+      exclusive = acquired.exclusive
+
+      // The only interleaving point in this otherwise synchronous body is the
+      // await above. A duplicate id could (astronomically unlikely) have landed
+      // while we were queued — re-check and hand the just-acquired slot back
+      // rather than stranding it on the conflicting throw.
+      if (entries.has(opts.requestId)) {
+        if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
+        reservedIds.delete(opts.requestId)
+        throw new RequestIdConflictError(opts.requestId)
+      }
+
+      // A cancel that landed WHILE we were queued resolved acquireSlot with no
+      // slot and recorded a marker; consume it so the context starts aborted.
+      preCancel = consumeCancelBeforeBegin(opts.requestId)
     }
+
+    // A begin arriving while its model is being torn down starts aborted — no
+    // native work against a model about to be freed.
+    const drainReason =
+      opts.modelId !== undefined && drainingModels.has(opts.modelId) ? 'modelUnload' : undefined
 
     const controller = new AbortController()
     const scope = createDisposableScope()
-
-    // Stop-button race close. If a
-    // `cancel({ requestId })` already arrived for this id, abort the
-    // new controller before observers can subscribe to it. The
-    // tripwire entry is consumed so a later, separate `begin(...)`
-    // with the same id is unaffected (in practice ids are UUIDv4 and
-    // never reused; this guard just keeps the contract self-
-    // consistent under retries).
-    const preCancel = consumeCancelBeforeBegin(opts.requestId)
     if (preCancel) {
       controller.abort(preCancel.reason)
+    } else if (drainReason) {
+      controller.abort(drainReason)
     }
 
     let detachParent = () => {}
@@ -643,18 +817,27 @@ export function createRequestRegistry(options?: {
       // already aborted at begin time. Both branches abort the
       // controller above, so without this guard observers would see a
       // momentarily-`running` context with an already-aborted signal.
-      state: preCancel || opts.parentSignal?.aborted ? 'cancelling' : 'running'
+      state: preCancel || drainReason || opts.parentSignal?.aborted ? 'cancelling' : 'running'
     }
 
+    let resolveDisposed: () => void = () => {}
+    const disposed = new Promise<void>((resolve) => {
+      resolveDisposed = resolve
+    })
     const entry: RegistryEntry = {
       ctx,
       controller,
       scope,
       detachParent,
       startedAt: Date.now(),
-      slotKey
+      slotKey,
+      exclusive,
+      disposing: false,
+      disposed,
+      resolveDisposed
     }
     entries.set(opts.requestId, entry)
+    reservedIds.delete(opts.requestId)
     logLifecycle('begin', ctx)
 
     return {
@@ -725,6 +908,11 @@ export function createRequestRegistry(options?: {
         cancelQueuedWaiterGracefully(queued.key, queued.waiter, target.reason)
         return cancelled + 1
       }
+      // Mid-disposal: the request already reached a terminal outcome and is
+      // releasing its native context. There is nothing to cancel, and a
+      // cancel-before-begin marker would wrongly abort a later begin that
+      // reuses this id once teardown frees it.
+      if (disposingIds.has(target.requestId)) return cancelled
       // Stop-button race: the client beat its own
       // `begin(...)`. Record the cancel so the next matching `begin`
       // aborts immediately. The return value stays 0 — no in-flight
@@ -763,7 +951,7 @@ export function createRequestRegistry(options?: {
     // so there is nothing left for them to run. Snapshot first —
     // `removeWaiter` mutates `waitersById`.
     for (const { key, waiter } of Array.from(waitersById.values())) {
-      removeWaiter(key, waiter)
+      removeWaiter(key, waiter, false)
       waiter.reject(
         new RequestRejectedByPolicyError(
           waiter.requestId,
@@ -773,11 +961,41 @@ export function createRequestRegistry(options?: {
         )
       )
     }
-    // The interface returns Promise<void> so we can later make this an
-    // async sweep that awaits per-handler scope unwinding (e.g. join on
-    // the disposers). Today every handler unwinds on its own dispose
-    // path, so the function only needs to fire-and-forget the abort.
+    // Fire-and-forget the abort; each handler unwinds on its own dispose path.
     return Promise.resolve()
+  }
+
+  // Cancel and drain every request for a model, then run `teardown` with the
+  // admission barrier held — any begin for the model (including one still
+  // suspended in admission) starts aborted — lifting it afterward. Scoped so the
+  // barrier can't be left raised.
+  async function withModelDraining(modelId: string, teardown: () => Promise<void>): Promise<void> {
+    drainingModels.add(modelId)
+    try {
+      // Abort each active request and collect its disposal promise, so we wait
+      // for every handler's scope to fully unwind (native context freed, slot
+      // released) before teardown. Snapshot first — `disposeEntry` mutates
+      // `entries`.
+      const draining: Array<Promise<void>> = []
+      for (const entry of entries.values()) {
+        if (entry.ctx.modelId !== modelId) continue
+        cancelEntry(entry, 'modelUnload')
+        draining.push(entry.disposed)
+      }
+      // Requests already mid-disposal are out of `entries` but may still be
+      // tearing down natively — wait for them too.
+      for (const entry of disposingEntries) {
+        if (entry.ctx.modelId === modelId) draining.push(entry.disposed)
+      }
+      // Queued waiters never held a slot, so just abort their begins.
+      for (const { key, waiter } of Array.from(waitersById.values())) {
+        if (waiter.modelId === modelId) cancelQueuedWaiterGracefully(key, waiter, 'modelUnload')
+      }
+      await Promise.all(draining)
+      await teardown()
+    } finally {
+      drainingModels.delete(modelId)
+    }
   }
 
   async function end(requestId: string, outcome: RequestOutcome): Promise<void> {
@@ -796,6 +1014,7 @@ export function createRequestRegistry(options?: {
     list,
     cancel,
     cancelAll,
+    withModelDraining,
     end,
     policy,
     // Test-only: lets the registry race tests assert the bound
@@ -812,6 +1031,13 @@ export function createRequestRegistry(options?: {
     __cancelBeforeBeginSize: () => number
     __keyStateSize: () => number
   }
+}
+
+// A finite slot count floored to an integer >= 1: a value below 1 would gate
+// every request forever and a fractional one could over-admit. Callers gate on
+// `Number.isFinite` first — Infinity means "ungated" and must stay Infinity.
+function clampSlotCount(count: number): number {
+  return Math.max(1, Math.floor(count))
 }
 
 /**
@@ -836,16 +1062,15 @@ function normalizePolicy(opts: ConcurrencyPolicy): NormalizedPolicy {
     onOverflow = opts.onOverflow ?? 'queue'
   }
 
-  // A finite limit below 1 would gate every request forever; clamp to the
-  // smallest sensible serial limit.
-  if (Number.isFinite(maxConcurrent) && maxConcurrent < 1) maxConcurrent = 1
+  if (Number.isFinite(maxConcurrent)) maxConcurrent = clampSlotCount(maxConcurrent)
 
   return {
     maxConcurrent,
     onOverflow,
     maxQueueDepth: opts.maxQueueDepthPerModel ?? DEFAULT_MAX_QUEUE_DEPTH_PER_MODEL,
     queueTimeoutMs: opts.queueTimeoutMs,
-    slotGroup: opts.sharedSlotGroup
+    slotGroup: opts.sharedSlotGroup,
+    exclusive: opts.exclusive === true
   }
 }
 
