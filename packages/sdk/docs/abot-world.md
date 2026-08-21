@@ -92,13 +92,18 @@ can drop. Drive the next step off the previous one.
 - **`worldStep` is block-granular.** The engine exposes no mid-block abort, so
   the current block finishes internally; cancelling stops frame delivery and
   makes the step reject with `InferenceCancelledError`. It never resolves with a
-  truncated block — the DiT has already committed that block to the session
-  history, so the undelivered frames are gone and the walk resumes past them.
+  truncated block: the undelivered frames are gone, so reporting `done` would
+  dress a silent gap up as success.
 - **A cancelled step is terminal for the native session**, exactly like a failed
-  one: the engine's RNG and history cannot be resumed either way. The SDK drops
-  the session for you and the **next `worldStep` rebuilds it** from the same
-  promoted pack, so no `unloadModel`/`loadModel` cycle is needed — the walk
-  simply restarts from the world's beginning.
+  one: the engine's RNG and history cannot be resumed either way. Native compute
+  for the block may run to completion, but the history it advanced is discarded
+  along with the session. The SDK drops the session for you and the **next
+  `worldStep` rebuilds it** from the same promoted pack, so no
+  `unloadModel`/`loadModel` cycle is needed — the walk restarts from the world's
+  beginning rather than resuming past the frames you did not receive.
+- **The same applies if you stop reading early.** Abandoning the frame stream —
+  breaking out of the loop, a dropped transport — leaves the session advanced
+  past frames you never saw, so it is torn down and rebuilt on the next step too.
 - **`worldCreateScene` is uninterruptible.** The engine takes no abort predicate
   for it. Cancelling suppresses delivery, but the encode runs to completion and
   the model's concurrency slot is held until it does. Await the result before
@@ -106,7 +111,12 @@ can drop. Drive the next step off the previous one.
 
 ## Frame size
 
-A block is 9 frames on the first step after a load (decoder warmup) and 12
-after, at roughly 14 MB of raw pixels per block. Frames are lossless PNG by
-default; set `world.frameJpegQuality` to 1..100 for JPEG (85 is a good value)
-whenever frames cross a process or network boundary.
+**At the default `world.numFramePerBlock`**, a block is 9 frames on the first
+step after a load (decoder warmup) and 12 after, at roughly 14 MB of raw pixels
+per block at 832x480. All three numbers move with the block shape: raising
+`world.numFramePerBlock` raises the frame count and the byte count with it, and
+the resolution you passed to `worldCreateScene` scales the bytes again. Read the
+count off `stats.frames` rather than assuming 9/12.
+
+Frames are lossless PNG by default; set `world.frameJpegQuality` to 1..100 for
+JPEG (85 is a good value) whenever frames cross a process or network boundary.

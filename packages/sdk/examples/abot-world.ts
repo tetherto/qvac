@@ -49,6 +49,12 @@ try {
     modelType: 'sdcpp-generation',
     modelConfig: {
       mode: 'world',
+      // Two different VAEs, and the names are close enough to swap by accident:
+      //   taehvModelSrc — taew2_2, the tiny STREAMING decoder. Turns each block's
+      //     latents into pixels during the walk. Used by every worldStep.
+      //   vaeModelSrc   — the full-precision Wan2.2 VAE. ENCODES the first frame
+      //     during worldCreateScene, and is not touched again after that.
+      // Swapping them loads at first and fails once the walk starts.
       taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
       t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
       vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
@@ -113,8 +119,14 @@ try {
   // outcomes are correct, so handle each.
   console.log('▸ Cancelling a block mid-flight to show the contract...')
   const cancelling = worldStep({ modelId, keys: ['W'] })
-  setTimeout(() => {
-    void cancel({ requestId: cancelling.requestId })
+  // The timer can fire after the block already finished, and cancelling a
+  // request that is no longer in flight rejects. Handle it here rather than
+  // leaving a floating promise: an unhandled rejection from a fire-and-forget
+  // cancel would take the whole example down for the race it is demonstrating.
+  const cancelTimer = setTimeout(() => {
+    cancel({ requestId: cancelling.requestId }).catch(() => {
+      // The block won the race; the await below reports that outcome.
+    })
   }, 200)
   try {
     await cancelling.frames
@@ -123,10 +135,14 @@ try {
     console.log(
       `  cancelled as expected: ${error instanceof Error ? error.message : String(error)}`
     )
+  } finally {
+    clearTimeout(cancelTimer)
   }
 
-  // A cancelled session stays usable: unloading here, but load() again with the
-  // same config to keep walking.
+  // A cancelled step is terminal for the native session, but the SDK drops it
+  // for you: another worldStep on this same modelId would transparently rebuild
+  // from the promoted pack, with no unloadModel/loadModel cycle. Unloading here
+  // only because the example is finished.
   await unloadModel({ modelId })
 } catch (error) {
   console.error('✖ World walk failed:', error instanceof Error ? error.message : error)

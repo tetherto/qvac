@@ -74,9 +74,11 @@ export function worldCreateScene(
 /**
  * Generates the next block of an ABot-World walk under the keys held for it.
  *
- * One call produces one block: 9 frames for the first block after the session
- * loads (decoder warmup), 12 thereafter. Frames arrive on `frameStream` as they
- * are decoded, so a viewer can display them without waiting for the block.
+ * One call produces one block: at the default `world.numFramePerBlock`, 9 frames
+ * for the first block after the session loads (decoder warmup) and 12
+ * thereafter. Both counts move with `numFramePerBlock`, so read `stats.frames`
+ * rather than assuming them. Frames arrive on `frameStream` as they are decoded,
+ * so a viewer can display them without waiting for the block.
  *
  * Only one block runs at a time per model — a second call while one is in
  * flight is rejected rather than queued, so drive the next call off the
