@@ -145,24 +145,45 @@ export const diffusionPlugin = definePlugin({
         )
       }
     } else {
-      // The mirror of the rule above. Only `config.world` reaches the native
-      // walk session, so a flat compute key here is accepted by the schema and
-      // then silently dropped: `device: 'cpu'` — the documented escape hatch
-      // every other mode honours — would hand back a GPU session with no
-      // feedback, and `threads` would be ignored while `world.threads` works.
-      const worldEquivalent = {
+      // The mirror of the rule above, as an ALLOW-list rather than a deny-list.
+      // Only `config.world` and the four world artifact sources reach the walk
+      // session; every other top-level field is accepted by the schema and then
+      // silently dropped. That splits into two kinds of harm, and a deny-list
+      // would have to be extended by hand every time a diffusion or video field
+      // is added:
+      //   - compute keys such as `device: 'cpu'` — the escape hatch every other
+      //     mode honours — hand back a GPU session with no feedback;
+      //   - companion SOURCES such as `clipLModelSrc` are resolved below, which
+      //     DOWNLOADS them, before createModel throws them away.
+      const worldSupported = new Set([
+        'mode',
+        'taehvModelSrc',
+        'sceneSrc',
+        'world',
+        't5XxlModelSrc',
+        'vaeModelSrc'
+      ])
+      // Where world has a nested equivalent, name it — the rest just say so.
+      const worldEquivalent: Record<string, string> = {
         device: 'world.backend',
         'main-gpu': 'world.backend',
         threads: 'world.threads',
         offload_to_cpu: 'world.offloadParamsToCpu'
-      } as const
-      const dropped = (Object.keys(worldEquivalent) as (keyof typeof worldEquivalent)[]).find(
-        (key) => cfg[key] !== undefined
+      }
+      const unsupported = Object.keys(cfg).filter(
+        (key) => !worldSupported.has(key) && cfg[key as keyof typeof cfg] !== undefined
       )
-      if (dropped) {
+      if (unsupported.length > 0) {
+        const key = unsupported[0]!
+        const pointer = worldEquivalent[key]
         throw new ModelLoadFailedError(
-          `modelConfig.${dropped} does not reach the ABot-World session. Use ` +
-            `modelConfig.${worldEquivalent[dropped]} instead, which is forwarded to it.`
+          `modelConfig.${key} does not reach the ABot-World session. ` +
+            (pointer
+              ? `Use modelConfig.${pointer} instead, which is forwarded to it.`
+              : 'World mode accepts only taehvModelSrc, sceneSrc, t5XxlModelSrc, ' +
+                'vaeModelSrc and the world block; everything else describes a ' +
+                'sampler pipeline the walk session does not have.') +
+            (unsupported.length > 1 ? ` Also unsupported: ${unsupported.slice(1).join(', ')}.` : '')
         )
       }
       if (!cfg.taehvModelSrc) {
@@ -226,9 +247,10 @@ export const diffusionPlugin = definePlugin({
       )
     }
 
-    // Neither video nor world applies ESRGAN, so we drop the whole `upscaler`
-    // object for both.
-    const effectiveUpscaler = cfg.mode === 'video' || cfg.mode === 'world' ? undefined : upscaler
+    // Video does not apply ESRGAN, so the whole `upscaler` object is dropped.
+    // World does not either, but it REJECTS the field above rather than dropping
+    // it silently, so it cannot reach here.
+    const effectiveUpscaler = cfg.mode === 'video' ? undefined : upscaler
     const { model_src: esrganModelSrc, ...upscalerRuntime } = effectiveUpscaler ?? {}
     const runtimeConfig = {
       ...rest,

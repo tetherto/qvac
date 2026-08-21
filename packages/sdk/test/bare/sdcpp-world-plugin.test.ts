@@ -115,15 +115,53 @@ test('sdcpp plugin resolveConfig: world that can neither walk nor build is rejec
   )
 })
 
-test('sdcpp plugin resolveConfig: world drops the upscaler block', async (t) => {
+// Was "world drops the upscaler block". Dropping it silently is the behaviour
+// this rule now refuses: ESRGAN does not apply to a walk session, so saying so
+// beats accepting the field and ignoring it.
+test('sdcpp plugin resolveConfig: world rejects the upscaler block', async (t) => {
   const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
 
-  const resolved = await diffusionPlugin.resolveConfig!(
-    { ...WORLD_BASE, upscaler: { tile_size: 128 } },
-    resolveCtx
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, upscaler: { tile_size: 128 } }, resolveCtx),
+    /upscaler does not reach the ABot-World session/,
+    'ESRGAN does not apply to a walk session, and that is now said out loud'
+  )
+})
+
+// Two distinct harms, so both are pinned. A runtime key is merely ignored; a
+// companion SOURCE is resolved first, which DOWNLOADS a multi-gigabyte file
+// before createModel discards it.
+test('sdcpp plugin resolveConfig: world rejects every unsupported top-level field', async (t) => {
+  const { diffusionPlugin } = await import('@/server/bare/plugins/sdcpp-generation/plugin')
+
+  await t.exception(
+    diffusionPlugin.resolveConfig!(
+      { ...WORLD_BASE, clipLModelSrc: 'registry://hf/clip-l.gguf' },
+      resolveCtx
+    ),
+    /clipLModelSrc does not reach the ABot-World session/,
+    'a companion source is refused before it can be downloaded and dropped'
   )
 
-  t.is('upscaler' in resolved.config, false, 'ESRGAN does not apply to a walk session')
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, vae_tiling: true }, resolveCtx),
+    /vae_tiling does not reach the ABot-World session/,
+    'a sampler-pipeline runtime key is refused rather than ignored'
+  )
+
+  await t.exception(
+    diffusionPlugin.resolveConfig!({ ...WORLD_BASE, verbosity: 2 }, resolveCtx),
+    /verbosity does not reach the ABot-World session/,
+    'verbosity only reaches the ESRGAN path, so world must not appear to honour it'
+  )
+
+  // The allow-list is what makes this hold for fields nobody has added yet, so
+  // the happy path has to keep passing with every supported key present.
+  const ok = await diffusionPlugin.resolveConfig!(
+    { ...WORLD_BASE, sceneSrc: '/worlds/forest.safetensors', world: { seed: 1 } },
+    resolveCtx
+  )
+  t.ok(ok.artifacts?.['taehvModelPath'], 'the supported set still resolves')
 })
 
 // The 9/12 frame counts everything documents are defaults of the block shape,
@@ -347,7 +385,7 @@ test('delegated loadModel: world with fallbackToLocal loads locally instead', as
   // real 13.3 GB world session is not what this is testing. What matters is WHICH
   // failure comes back: anything other than "cannot be delegated" proves the
   // request reached the local path instead of being refused in front of it.
-  let outcome = 'resolved'
+  let outcome: string
   try {
     const response = await handleLoadModelDelegated({
       ...DELEGATED_WORLD,
