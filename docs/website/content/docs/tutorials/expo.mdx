@@ -137,6 +137,18 @@ Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugin
 </Step>
 
 <Step>
+Create `qvac.config.json` in the project root and enable only the LLM plugin used by this tutorial:
+
+```json title="qvac.config.json"
+{
+  "plugins": ["@qvac/sdk/llamacpp-completion/plugin"]
+}
+```
+
+Without a `plugins` selection, QVAC bundles every built-in AI capability. Keeping this tutorial to the LLM plugin avoids linking native engines the app does not use.
+</Step>
+
+<Step>
 Prebuild your project to generate the native files:
 
 ```bash
@@ -154,7 +166,7 @@ Before creating the chat UI, we'll run a smoke test to validate the full QVAC li
 Replace the contents of `App.tsx` with the following code:
 <WrapCode>
 
-```ts title="Apps.tsx" lineNumbers
+```ts title="App.tsx" lineNumbers
 import React, { useEffect, useState } from "react";
 import { Platform, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
@@ -204,9 +216,12 @@ export default function App() {
             if (!cancelled) setProgressPct(Math.round(progress.percentage));
           },
         });
-        setProgressPct(null);
 
-        if (cancelled) return;
+        if (cancelled) {
+          await unloadModel({ modelId, clearStorage: false });
+          return;
+        }
+        setProgressPct(null);
 
         // 3) Run a streaming completion and update UI as tokens arrive.
         setStatus("Running completion…");
@@ -223,9 +238,9 @@ export default function App() {
           if (!cancelled) setOutput(acc);
         }
 
-        setStatus("Done ✅");
+        if (!cancelled) setStatus("Done ✅");
       } catch (e: any) {
-        setStatus(`Error: ${e?.message ?? String(e)}`);
+        if (!cancelled) setStatus(`Error: ${e?.message ?? String(e)}`);
       }
     })();
 
@@ -312,7 +327,7 @@ Now that QVAC is working in your Expo app, we'll replace the smoke test UI with 
 Replace the contents of `App.tsx` with the following code:
 <WrapCode>
 
-```ts title="Apps.tsx" lineNumbers
+```ts title="App.tsx" lineNumbers
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -378,6 +393,7 @@ export default function App() {
   useEffect(() => {
     // Initialize the model once on mount.
     let cancelled = false;
+    let loadedModelId: string | null = null;
 
     (async () => {
       try {
@@ -408,8 +424,12 @@ export default function App() {
           },
         });
 
-        if (cancelled) return;
+        if (cancelled) {
+          await unloadModel({ modelId: id, clearStorage: false });
+          return;
+        }
 
+        loadedModelId = id;
         setModelId(id);
         setStatus("Ready");
         setDownloadPct(null);
@@ -426,13 +446,12 @@ export default function App() {
 
       // Cleanup: unload the model (don’t clear cache by default).
       // Note: React cleanup can’t be async directly, so we fire-and-forget.
-      const id = modelId;
+      const id = loadedModelId;
       if (id) {
         void unloadModel({ modelId: id, clearStorage: false }).catch(() => {});
       }
     };
-    // Intentionally do NOT depend on modelId to avoid re-running init.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Run the initialization lifecycle once for this screen.
   }, []);
 
   async function handleSend() {

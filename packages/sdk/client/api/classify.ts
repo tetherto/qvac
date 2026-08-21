@@ -13,6 +13,8 @@ import { encodeBase64 } from '@/utils/encoding'
  * The bundled MobileNetV3-Small model produces 3 labels: `"food"`, `"report"`, `"other"`.
  * Custom models may emit different labels sourced from the GGUF metadata.
  *
+ * @param params - The loaded model ID, image data, optional raw-image
+ *   dimensions, and result limit.
  * @param params.modelId - The identifier of the loaded classification model
  * @param params.image - JPEG or PNG buffer; raw RGB bytes also accepted with `width`, `height`, `channels`
  * @param params.topK - Limit results to top-K classes (default: all)
