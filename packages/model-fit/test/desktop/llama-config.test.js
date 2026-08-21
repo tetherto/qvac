@@ -437,6 +437,12 @@ test(
     // These are allowlisted keys, so classification happens after backend
     // discovery and after the readability check — hence a readable path, and no
     // stderr assertion, since backend registration legitimately logs there.
+    //
+    // `no-backend-device` is accepted alongside the verdict: on a runner where
+    // ggml registers nothing, `runLlamaFit` answers that before normalization
+    // runs, so the classification underneath is unreachable there. It is pinned
+    // without any machine dependency in `LlamaLoadConfig.test.cpp`, which calls
+    // `normalizeLlamaLoadConfig` against a synthetic device list.
     const readablePath = require.resolve('../../package.json')
     for (const key of ['no-host', 'no_host', 'swa-full']) {
       const direct = await runDirectBinding({
@@ -445,7 +451,11 @@ test(
       })
       t.is(direct.signal, null)
       t.is(direct.code, 0)
-      t.is(JSON.parse(direct.stdout).result.reason, 'unsupported-config')
+      const { reason } = JSON.parse(direct.stdout).result
+      t.ok(
+        ['unsupported-config', 'no-backend-device'].includes(reason),
+        `${key}=false must not project a load; got ${reason}`
+      )
     }
 
     // Settings qvac-fabric registers no option for cannot describe a load
