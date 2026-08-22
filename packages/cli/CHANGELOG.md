@@ -146,7 +146,7 @@ Listing follows the same principle. `GET /v1/models` reports every configured mo
 
 ## Requirements
 
-This release requires `@qvac/sdk@^0.19.0`. `qvac configure` reads its llamacpp field descriptions and validation from the `@qvac/sdk/schemas` subpath, which earlier SDK lines do not export.
+This release requires `@qvac/sdk@^0.18.1`. `qvac configure` reads its llamacpp field descriptions and validation from the `@qvac/sdk/schemas` subpath, which 0.18.1 is the first SDK release to export.
 
 It also adds one third-party dependency, `@inquirer/prompts` (pinned to `8.5.2`), for the interactive prompts.
 
