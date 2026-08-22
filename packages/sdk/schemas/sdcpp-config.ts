@@ -1344,9 +1344,11 @@ export const MAX_SCENE_DIMENSION = 4096
 export const MAX_SCENE_PIXELS = 1920 * 1088
 
 /**
- * Decoded first-frame ceiling. The image is cover-scaled and cropped to
- * width x height, but decoding it is where the memory goes, so it is bounded
- * before dispatch rather than after.
+ * Ceiling on the ENCODED first frame — what crosses the wire, not what the
+ * decoder allocates. Those differ by orders of magnitude for a compressed
+ * format, so this is not the decompression-bomb guard; the declared-dimension
+ * check in `ops/world.ts` is. This one keeps a multi-megabyte base64 string off
+ * the worker in the first place.
  *
  * 3 MB is generous for a frame that ends up at most 1920x1088 — and it is also
  * the largest value this can be *enforced* at today. `BASE64_PATTERN` is a
@@ -1389,11 +1391,11 @@ export function refineWorldSceneBudget(
         'frame before anything can check the result, so this is refused up front.'
     })
   }
-  // The size ceiling itself is a `.max()` on the field, declared ahead of the
-  // base64 pattern so an oversized image reports its size rather than failing as
-  // malformed — which matters here more than usual, because BASE64_PATTERN stops
-  // matching valid input a little above that ceiling anyway (see
-  // MAX_SCENE_IMAGE_BYTES).
+  // The encoded-size ceiling is a `.max()` on the field rather than a check here.
+  // Note Zod runs every check on a string regardless of order, so an oversized
+  // image collects the `too_big` issue AND whatever BASE64_PATTERN reports — the
+  // ordering only decides which reads first, it does not short-circuit. See
+  // MAX_SCENE_IMAGE_BYTES for why the pattern cannot be relied on at that size.
 }
 
 const worldSceneRequestShape = {
