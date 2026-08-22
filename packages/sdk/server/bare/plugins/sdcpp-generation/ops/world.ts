@@ -361,8 +361,15 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
       await withSessionLock(async () => {
         if (!activated) return
         await settleInFlight()
-        await world.unload()
-        activated = false
+        try {
+          await world.unload()
+        } finally {
+          // Same reason as the `finally` in `unload()`. This is the terminal
+          // recovery path: if a rejecting native unload left `activated` true,
+          // every later step would dispatch into the dead session this call
+          // exists to drop — re-wedging exactly what it was meant to fix.
+          activated = false
+        }
       })
     },
 
@@ -678,7 +685,19 @@ export async function* worldCreateScene(
   // would reject formats the native decoder may accept today.
   const image = Buffer.from(request.image, 'base64')
   const declared = readImageDimensions(image)
-  if (declared && declared.width * declared.height > MAX_SCENE_IMAGE_PIXELS) {
+  if (!declared) {
+    // Fail CLOSED. The sender picks the format, so treating "cannot size this"
+    // as "allow it" makes the ceiling below trivially skippable — deliver the
+    // same bomb as a BMP and nothing checks it. The schema documents PNG/JPEG,
+    // so this refuses exactly what it already says it does not accept.
+    throw new PluginRequestValidationFailedError(
+      'worldSceneStream',
+      'The first-frame image is not a readable PNG or JPEG. Its dimensions have ' +
+        'to be checked before anything decodes it, so a frame whose header ' +
+        'cannot be read is refused rather than allocated.'
+    )
+  }
+  if (declared.width * declared.height > MAX_SCENE_IMAGE_PIXELS) {
     throw new PluginRequestValidationFailedError(
       'worldSceneStream',
       `The first-frame image declares ${declared.width}x${declared.height} ` +

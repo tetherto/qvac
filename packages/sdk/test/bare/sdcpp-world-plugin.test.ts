@@ -252,9 +252,20 @@ test('sdcpp plugin createModel: world scene path is derived from a hash, not the
     worldScenePath('stable-id'),
     'each session gets its own pack, so concurrent workers and crash leftovers cannot collide'
   )
-  t.ok(
-    worldScenePath('stable-id').includes(worldScenePath('stable-id').split('-')[0]!),
-    'the model-derived prefix is still stable, so packs remain attributable to their model'
+  // Compare the BASENAME's model-hash segment. Splitting the whole path on '-'
+  // returns everything before the hyphen in "world-scenes" — the shared cache
+  // directory — so the previous form asserted only that two paths live in the
+  // same folder, which is true of any two calls and of two different models.
+  const modelHash = (p: string) => p.slice(p.lastIndexOf('/') + 1).split('-')[0]!
+  t.is(
+    modelHash(worldScenePath('stable-id')),
+    modelHash(worldScenePath('stable-id')),
+    'the model-derived prefix is stable, so packs remain attributable to their model'
+  )
+  t.not(
+    modelHash(worldScenePath('stable-id')),
+    modelHash(worldScenePath('a-different-id')),
+    'and it actually varies by model, which the folder-prefix form never checked'
   )
 })
 

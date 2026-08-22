@@ -11,6 +11,25 @@ function makeId(prefix: string): string {
   return `${prefix}-${idCounter}-${Date.now()}`
 }
 
+/**
+ * A minimal but VALID PNG header declaring `width`x`height`.
+ *
+ * The scene op refuses a first frame whose dimensions it cannot read — a size
+ * guard that failed open on an unreadable header would be skippable by sending
+ * any other format — so tests have to hand it something real rather than a few
+ * arbitrary bytes.
+ */
+function pngHeader(width = 448, height = 256): string {
+  const buf = Buffer.alloc(24)
+  buf[0] = 0x89
+  buf[1] = 0x50
+  buf[2] = 0x4e
+  buf[3] = 0x47
+  buf.writeUInt32BE(width, 16)
+  buf.writeUInt32BE(height, 20)
+  return buf.toString('base64')
+}
+
 /** A QvacResponse stand-in whose stream and settlement the test drives. */
 function makeResponse(chunks: readonly unknown[]) {
   let releaseStream = () => {}
@@ -239,7 +258,7 @@ test('world scene op: the model slot is held until uninterruptible work settles'
       modelId,
       requestId: makeId('scene'),
       prompt: 'a forest path',
-      image: Buffer.from([1, 2, 3]).toString('base64')
+      image: pngHeader()
     })
 
     // Start the op, then abandon the consumer mid-encode. The native encode
@@ -729,7 +748,7 @@ test('world scene op: an already-cancelled request touches nothing', async funct
       modelId,
       requestId,
       prompt: 'a scene',
-      image: Buffer.from('image').toString('base64')
+      image: pngHeader()
     })
     getRequestRegistry().cancel({ requestId })
 
@@ -779,7 +798,7 @@ test('world scene op: a cancel during deactivate stops before native dispatch', 
       modelId,
       requestId,
       prompt: 'a scene',
-      image: Buffer.from('image').toString('base64')
+      image: pngHeader()
     })
 
     await t.exception(stream.next(), /cancelled/i, 'the scene request rejects as a cancellation')
@@ -821,7 +840,7 @@ test('world scene op: a cancel during promotion rejects instead of reporting don
       modelId,
       requestId,
       prompt: 'a forest path',
-      image: Buffer.from([1, 2, 3]).toString('base64')
+      image: pngHeader()
     })
 
     const pending = stream.next()
@@ -872,20 +891,13 @@ test('world scene op: a decompression bomb is refused before native dispatch', a
 
   // A minimal PNG header declaring 40000x40000 — 1.6 gigapixels, roughly 4.8 GB
   // once the native decoder expands it, from a payload of a few dozen bytes.
-  const bomb = Buffer.alloc(24)
-  bomb[0] = 0x89
-  bomb[1] = 0x50
-  bomb[2] = 0x4e
-  bomb[3] = 0x47
-  bomb.writeUInt32BE(40000, 16)
-  bomb.writeUInt32BE(40000, 20)
 
   await withWorldSession(counting, async ({ modelId }) => {
     const stream = worldCreateScene({
       modelId,
       requestId: makeId('scene'),
       prompt: 'a forest path',
-      image: bomb.toString('base64')
+      image: pngHeader(40000, 40000)
     })
 
     await t.exception(stream.next(), /over the .*-pixel ceiling/, 'the bomb is refused')
@@ -912,14 +924,6 @@ test('world scene op: a rejected first frame does not cost the caller their sess
     cancel: async () => {}
   } as unknown as NativeWorldSession
 
-  const bomb = Buffer.alloc(24)
-  bomb[0] = 0x89
-  bomb[1] = 0x50
-  bomb[2] = 0x4e
-  bomb[3] = 0x47
-  bomb.writeUInt32BE(40000, 16)
-  bomb.writeUInt32BE(40000, 20)
-
   await withWorldSession(counting, async ({ modelId, session }) => {
     await session.ensureActivated()
     t.is(unloads, 0, 'the session is live before the rejected request')
@@ -928,7 +932,7 @@ test('world scene op: a rejected first frame does not cost the caller their sess
       modelId,
       requestId: makeId('scene'),
       prompt: 'a forest path',
-      image: bomb.toString('base64')
+      image: pngHeader(40000, 40000)
     })
     await t.exception(stream.next(), /over the .*-pixel ceiling/, 'the request is refused')
 
@@ -954,20 +958,13 @@ test('world scene op: a normal first frame is unaffected by the pixel guard', as
 
   // A 12 MP camera photo — 4000x3000, the realistic worst case a caller sends
   // for an 832x480 world. It is cover-scaled and cropped, so it must pass.
-  const ok = Buffer.alloc(24)
-  ok[0] = 0x89
-  ok[1] = 0x50
-  ok[2] = 0x4e
-  ok[3] = 0x47
-  ok.writeUInt32BE(4000, 16)
-  ok.writeUInt32BE(3000, 20)
 
   await withWorldSession(counting, async ({ modelId, session }) => {
     const stream = worldCreateScene({
       modelId,
       requestId: makeId('scene'),
       prompt: 'a forest path',
-      image: ok.toString('base64')
+      image: pngHeader(4000, 3000)
     })
     const pending = stream.next()
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -981,15 +978,65 @@ test('world scene op: a normal first frame is unaffected by the pixel guard', as
   })
 })
 
-// Unreadable headers stay permitted on purpose: the guard cannot size what it
-// cannot parse, and refusing here would reject any format the native decoder
-// accepts beyond PNG and JPEG.
-test('world scene op: an unrecognised image header is not refused by the pixel guard', async function (t) {
-  const { readImageDimensions } = await import('@/server/utils')
+// The guard fails CLOSED. Failing open on an unreadable header would make the
+// pixel ceiling skippable by simply sending another format — the sender picks
+// it — so anything that cannot be sized is refused. The schema documents
+// PNG/JPEG, so this enforces what is already published.
+test('world scene op: an unreadable image header is refused, not waved through', async function (t) {
+  const [{ worldCreateScene }, { readImageDimensions }] = await Promise.all([
+    import('@/server/bare/plugins/sdcpp-generation/ops/world'),
+    import('@/server/utils')
+  ])
+  const driver = makeResponse([])
 
   t.is(readImageDimensions(Buffer.from('BM' + 'x'.repeat(40))), null, 'a BMP magic reads as null')
   t.is(readImageDimensions(Buffer.alloc(2)), null, 'a runt buffer reads as null')
   t.is(readImageDimensions(Buffer.from([0x89, 0x50, 0x4e, 0x47])), null, 'a truncated PNG header')
+
+  let scenes = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => driver.response,
+    createScene: async () => {
+      scenes++
+      return driver.response
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(counting, async ({ modelId }) => {
+    const stream = worldCreateScene({
+      modelId,
+      requestId: makeId('scene'),
+      prompt: 'a forest path',
+      // A BMP carrying the same gigapixel payload the PNG bomb does. Fail-open
+      // would have let exactly this through.
+      image: Buffer.from('BM' + 'x'.repeat(200)).toString('base64')
+    })
+
+    await t.exception(stream.next(), /not a readable PNG or JPEG/, 'the unsized frame is refused')
+    t.is(scenes, 0, 'nothing reached the native decoder')
+  })
+})
+
+// JPEG allows any run of 0xFF fill bytes before a marker (ITU-T T.81 B.1.1.2).
+// Reading a fill byte AS the marker desynchronises the segment walk and returns
+// null — which, once the guard fails closed, turns a valid photo into a refusal.
+test('image dimensions: a JPEG with fill bytes before its SOF still reads', async function (t) {
+  const { readImageDimensions } = await import('@/server/utils')
+
+  // SOI, an APP0-shaped segment, then TWO fill bytes ahead of the SOF0 marker.
+  const jpeg = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xff, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02,
+    0x58, 0x01, 0xc0, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01
+  ])
+
+  t.alike(
+    readImageDimensions(jpeg),
+    { width: 448, height: 600 },
+    'the fill bytes are skipped rather than parsed as a marker'
+  )
 })
 
 test('world scene op: a dispatch that never starts leaves no staged file behind', async function (t) {
@@ -1016,7 +1063,7 @@ test('world scene op: a dispatch that never starts leaves no staged file behind'
       modelId,
       requestId: makeId('req'),
       prompt: 'a scene',
-      image: Buffer.from('image').toString('base64')
+      image: pngHeader()
     })
 
     await t.exception(
@@ -1043,7 +1090,7 @@ test('world scene op: abandoning the generator drops the staged file', async fun
       modelId,
       requestId: makeId('req'),
       prompt: 'a scene',
-      image: Buffer.from('image').toString('base64')
+      image: pngHeader()
     })
     const pending = stream.next()
 

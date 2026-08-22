@@ -7,9 +7,11 @@
  * gigapixels and several GB in one native allocation. Bounding the encoded bytes
  * does not prevent that; bounding the declared dimensions does.
  *
- * Returns `null` when the header is not a recognised PNG or JPEG, which callers
- * should treat as "unknown", not as "empty" — refusing on `null` would reject
- * any other format the native decoder happens to accept.
+ * Returns `null` when the dimensions cannot be read. A size guard MUST treat that
+ * as a refusal, not as a pass: the sender chooses the format, so failing open on
+ * an unreadable header means a bomb only has to arrive as a BMP to skip the
+ * check entirely. `worldSceneRequestSchema` documents PNG/JPEG, so refusing
+ * anything this cannot size enforces the contract that is already published.
  *
  * `@qvac/diffusion-cpp` ships its own copy of this, and so does the world e2e
  * suite. Deliberately independent of both: the addon's is exported only from
@@ -40,6 +42,13 @@ export function readImageDimensions(buf: Uint8Array): ImageDimensions | null {
     let offset = 2
     while (offset + 9 < buf.length) {
       if (buf[offset] !== 0xff) return null
+      // A marker may be preceded by any number of 0xFF fill bytes (ITU-T T.81
+      // B.1.1.2). Skipping them matters for more than tidiness: reading the fill
+      // byte AS the marker desynchronises the walk, the next getUint16 reads
+      // payload as a segment length, and the whole thing returns null — which,
+      // for a size guard, is a bypass rather than a parse failure.
+      while (offset + 1 < buf.length && buf[offset + 1] === 0xff) offset++
+      if (offset + 9 >= buf.length) return null
       const marker = buf[offset + 1]!
       const length = view.getUint16(offset + 2, false)
       if (length < 2) return null
