@@ -39,6 +39,7 @@ export { upscale } from './upscale'
 export { worldCreateScene, worldStep } from './world'
 export {
   type WorldStepResult,
+  type WorldStepProgressTick,
   type WorldSceneResult,
   type WorldSceneResultWithPack
 } from './world-result'

@@ -64,6 +64,53 @@ test('worldStep result: frames stream as they arrive and collect into the block'
   t.ok(result.requestId.length > 0, 'exposes a requestId for cancel()')
 })
 
+test('worldStep result: progress ticks stream separately from frames', async (t) => {
+  // Interleaved the way the server yields them: ticks while the block computes,
+  // then the frames at the end.
+  async function* stubStream() {
+    yield { type: 'worldStepStream', step: 1, totalSteps: 3, elapsedMs: 600 }
+    yield { type: 'worldStepStream', step: 2, totalSteps: 9, elapsedMs: 1800 }
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+    yield {
+      type: 'worldStepStream',
+      done: true,
+      stats: { stepMs: 1800, totalSteps: 2, frames: 1, width: 448, height: 256 }
+    }
+  }
+
+  const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, stubStream)
+
+  const ticks: number[] = []
+  for await (const tick of result.progressStream) ticks.push(tick.totalSteps)
+
+  t.alike(ticks, [3, 9], 'both ticks arrive, in order, on their own stream')
+  t.is((await result.frames).length, 1, 'frames are unaffected by the tick branch')
+  t.is((await result.stats)?.frames, 1, 'and so are stats')
+})
+
+test('worldStep result: a stream failure reaches progressStream too', async (t) => {
+  // A caller watching only progress must still learn the walk died, or its
+  // spinner spins forever.
+  async function* failingStream() {
+    yield { type: 'worldStepStream', step: 1, totalSteps: 3, elapsedMs: 600 }
+    throw new Error('Job cancelled')
+  }
+
+  const result = createWorldStepResult({ modelId: 'm' }, failingStream)
+
+  await t.exception(
+    (async () => {
+      for await (const _ of result.progressStream) {
+        // drain until it throws
+      }
+    })(),
+    /cancelled/i,
+    'the progress stream rejects rather than ending cleanly'
+  )
+  await result.frames.catch(() => {})
+  await result.stats.catch(() => {})
+})
+
 test('worldStep result: a mid-stream failure reaches both the stream and the promises', async (t) => {
   async function* failingStream() {
     yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }

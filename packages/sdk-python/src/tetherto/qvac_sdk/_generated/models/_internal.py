@@ -14104,6 +14104,30 @@ class WorldStepStreamResponse(GeneratedBaseModel):
         extra="forbid",
     )
     type: Literal["worldStepStream"] = "worldStepStream"
+    step: Annotated[
+        int | None,
+        Field(
+            description="Denoise step reached within this block, as the engine reports it.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    total_steps: Annotated[
+        int | None,
+        Field(
+            alias="totalSteps",
+            description="Frames decoded so far in this block — the engine reports progress in frames.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    elapsed_ms: Annotated[
+        float | None,
+        Field(
+            alias="elapsedMs",
+            description="Milliseconds elapsed within this block so far.",
+        ),
+    ] = None
     data: Annotated[
         str | None,
         Field(

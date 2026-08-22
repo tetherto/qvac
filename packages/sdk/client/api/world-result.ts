@@ -25,10 +25,25 @@ export type WorldStepStreamFactory = (request: WorldStepStreamRequest) => AsyncG
 
 export type WorldSceneStreamFactory = (request: WorldSceneStreamRequest) => AsyncGenerator<unknown>
 
+/** Mirrors `VideoProgressTick` / `DiffusionProgressTick`. */
+export interface WorldStepProgressTick {
+  step: number
+  /** Frames decoded so far in this block — a world block counts progress in frames. */
+  totalSteps: number
+  elapsedMs: number
+}
+
 export interface WorldStepResult {
   requestId: string
   /** Frames of this block, yielded as they arrive rather than at the end. */
   frameStream: AsyncGenerator<Uint8Array>
+  /**
+   * Liveness while the block computes. Every frame of a block arrives at its
+   * END — 1.8s with the KV cache, ~7.5s without — so without this the stream is
+   * silent for the whole block and a UI cannot tell "generating" from "hung".
+   * Same shape and same guarantees as `video`'s and `diffusion`'s.
+   */
+  progressStream: AsyncGenerator<WorldStepProgressTick>
   /** Every frame of the block, once it completes. */
   frames: Promise<Uint8Array[]>
   stats: Promise<WorldStepStats | undefined>
@@ -169,9 +184,14 @@ export function createWorldStepResult(
 
   const collected: Uint8Array[] = []
   const pending: Uint8Array[] = []
+  // Its own queue and its own waker: a progress tick must not wake the frame
+  // generator into an empty buffer, and a consumer may iterate either stream
+  // alone.
+  const progressPending: WorldStepProgressTick[] = []
   let done = false
   let streamError: Error | null = null
   let wake: (() => void) | null = null
+  let progressWake: (() => void) | null = null
 
   const framesOut = deferred<Uint8Array[]>()
   const statsOut = deferred<WorldStepStats | undefined>()
@@ -188,6 +208,16 @@ export function createWorldStepResult(
           continue
         }
         const parsed = worldStepStreamResponseSchema.parse(response)
+
+        if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
+          progressPending.push({
+            step: parsed.step,
+            totalSteps: parsed.totalSteps,
+            elapsedMs: parsed.elapsedMs
+          })
+          progressWake?.()
+          progressWake = null
+        }
 
         if (parsed.data) {
           const frame = decodeBase64(parsed.data)
@@ -218,9 +248,26 @@ export function createWorldStepResult(
     done = true
     wake?.()
     wake = null
+    progressWake?.()
+    progressWake = null
   }
 
   void pump()
+
+  const progressStream = (async function* (): AsyncGenerator<WorldStepProgressTick> {
+    while (true) {
+      if (progressPending.length > 0) {
+        yield progressPending.shift()!
+      } else if (done) {
+        if (streamError) throw streamError as Error
+        return
+      } else {
+        await new Promise<void>((resolve) => {
+          progressWake = resolve
+        })
+      }
+    }
+  })()
 
   const frameStream = (async function* (): AsyncGenerator<Uint8Array> {
     while (true) {
@@ -240,7 +287,13 @@ export function createWorldStepResult(
     }
   })()
 
-  return { requestId, frameStream, frames: framesOut.promise, stats: statsOut.promise }
+  return {
+    requestId,
+    frameStream,
+    progressStream,
+    frames: framesOut.promise,
+    stats: statsOut.promise
+  }
 }
 
 // Three overloads, not two. Two was wrong for a params object typed

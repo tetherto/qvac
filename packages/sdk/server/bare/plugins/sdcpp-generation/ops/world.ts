@@ -550,9 +550,30 @@ export async function* worldStep(
           data: Buffer.from(chunk).toString('base64'),
           frameIndex: frameIndex++
         }
+      } else if (typeof chunk === 'string') {
+        // The addon emits `{"step":N,"frames":M,"elapsed_ms":T}` while the block
+        // is still computing. Forwarded for the same reason ops/video.ts:213 and
+        // ops/diffusion.ts forward theirs: the payload duplicates the terminal
+        // stats, but its TIMING is the only liveness a caller gets across a
+        // 1.8-7.5s block that delivers every frame at the end.
+        //
+        // `frames` maps onto `totalSteps` rather than a field of its own so the
+        // wire shape stays identical to its two siblings — the engine counts a
+        // world block's progress in decoded frames, not in sampler steps.
+        try {
+          const tick = JSON.parse(chunk) as Record<string, unknown>
+          if ('step' in tick) {
+            yield {
+              type: 'worldStepStream',
+              step: tick['step'] as number,
+              totalSteps: tick['frames'] as number,
+              elapsedMs: tick['elapsed_ms'] as number
+            }
+          }
+        } catch {
+          // Non-JSON string output — skip, as the sibling ops do.
+        }
       }
-      // The native progress tick carries step/frames/elapsed_ms, all of which
-      // the terminal stats already report — so it is not forwarded.
     }
     drained = !ctx.signal.aborted
   } catch (error) {

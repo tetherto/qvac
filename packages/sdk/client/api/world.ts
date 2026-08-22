@@ -108,8 +108,12 @@ export function worldCreateScene(
  * `keys` accepts an array, a key-state object, or a raw 8-bit mask. WASD move,
  * IJKL steer the camera; omit for an idle block.
  *
+ * Every frame of a block arrives at its END, so `progressStream` is what tells a
+ * caller the block is alive in the meantime — `{ step, totalSteps, elapsedMs }`
+ * ticks, the same shape `video` and `diffusion` emit.
+ *
  * @param params - Loaded world model ID and the keys held for this block.
- * @returns `requestId`, `frameStream`, `frames` (the whole block), and `stats`.
+ * @returns `requestId`, `frameStream`, `progressStream`, `frames` (the whole block), and `stats`.
  * @throws {RequestValidationFailedError} Client-side, before any RPC, on an
  *   unknown walk key.
  * @throws {ModelOperationNotSupportedError} If the model was not loaded with
@@ -128,6 +132,15 @@ export function worldCreateScene(
  * for await (const frame of frameStream) {
  *   display(frame); // PNG, or JPEG when world.frameJpegQuality is set
  * }
+ * ```
+ *
+ * @example Keep a UI responsive across the block
+ * ```typescript
+ * const { progressStream, frames } = worldStep({ modelId, keys: ["W"] });
+ * for await (const { totalSteps, elapsedMs } of progressStream) {
+ *   showSpinner(`${totalSteps} frames, ${elapsedMs}ms`);
+ * }
+ * for (const frame of await frames) display(frame);
  * ```
  *
  * @example Drive a key loop off the one-block-at-a-time contract

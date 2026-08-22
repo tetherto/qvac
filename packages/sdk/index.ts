@@ -46,6 +46,7 @@ export {
   worldCreateScene,
   worldStep,
   type WorldStepResult,
+  type WorldStepProgressTick,
   type WorldSceneResult,
   type WorldSceneResultWithPack,
   modelRegistryList,

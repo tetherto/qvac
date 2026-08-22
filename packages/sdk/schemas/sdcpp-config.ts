@@ -1313,6 +1313,21 @@ export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema
 
 export const worldStepStreamResponseSchema = z.object({
   type: z.literal('worldStepStream'),
+  // Same three fields, same names, as diffusionStream and videoStream. A block
+  // is 1.8s with the KV cache and ~7.5s without, and every frame arrives at the
+  // end of it — so without these the stream is silent for the whole block and a
+  // UI cannot tell "generating" from "hung".
+  step: z
+    .number()
+    .int()
+    .optional()
+    .describe('Denoise step reached within this block, as the engine reports it.'),
+  totalSteps: z
+    .number()
+    .int()
+    .optional()
+    .describe('Frames decoded so far in this block — the engine reports progress in frames.'),
+  elapsedMs: z.number().optional().describe('Milliseconds elapsed within this block so far.'),
   data: z
     .string()
     .optional()

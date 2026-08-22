@@ -176,6 +176,55 @@ test('world step op: a cancelled block rejects instead of reporting done', async
   })
 })
 
+// A block delivers every frame at its end, so the addon's mid-block tick is the
+// only liveness a caller gets across 1.8-7.5s. ops/video.ts:213 and
+// ops/diffusion.ts forward theirs the same way.
+test('world step op: the mid-block progress tick is forwarded', async function (t) {
+  const { worldStep } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+
+  // Interleaved exactly as the addon emits: progress JSON while computing, then
+  // frames. Includes a non-JSON string and a JSON object with no `step`, both of
+  // which must be dropped rather than yielded or thrown on.
+  const driver = makeResponse([
+    '{"step":1,"frames":3,"elapsed_ms":600}',
+    'not json at all',
+    '{"unrelated":true}',
+    new Uint8Array([1]),
+    '{"step":2,"frames":9,"elapsed_ms":1800}'
+  ])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ modelId }) => {
+    const stream = worldStep({ modelId, requestId: makeId('req'), keys: ['W'] })
+
+    const ticks: Array<Record<string, unknown>> = []
+    const frames: Array<Record<string, unknown>> = []
+    const collect = (async () => {
+      for await (const chunk of stream) {
+        const c = chunk as unknown as Record<string, unknown>
+        if (c['data'] !== undefined) frames.push(c)
+        else if (c['step'] !== undefined) ticks.push(c)
+      }
+    })()
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    driver.releaseStream()
+    driver.settleJob()
+    await collect.catch(() => {})
+
+    t.is(ticks.length, 2, 'both progress ticks reached the caller')
+    t.alike(
+      ticks[0],
+      { type: 'worldStepStream', step: 1, totalSteps: 3, elapsedMs: 600 },
+      'the tick keeps the sibling field names, with frames mapped onto totalSteps'
+    )
+    t.is(frames.length, 1, 'the frame is still delivered')
+    t.absent(
+      ticks.some((tick) => tick['data'] !== undefined),
+      'a tick is never confused for a frame'
+    )
+  })
+})
+
 test('world scene op: the model slot is held until uninterruptible work settles', async function (t) {
   const [{ worldCreateScene }, { getRequestRegistry }, { RequestRejectedByPolicyError }] =
     await Promise.all([

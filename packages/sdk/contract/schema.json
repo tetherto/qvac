@@ -17542,6 +17542,22 @@
           "type": "string",
           "const": "worldStepStream"
         },
+        "step": {
+          "description": "Denoise step reached within this block, as the engine reports it.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "totalSteps": {
+          "description": "Frames decoded so far in this block — the engine reports progress in frames.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "elapsedMs": {
+          "description": "Milliseconds elapsed within this block so far.",
+          "type": "number"
+        },
         "data": {
           "description": "Base64 of one decoded frame — PNG, or JPEG when world.frameJpegQuality is 1..100.",
           "type": "string"
