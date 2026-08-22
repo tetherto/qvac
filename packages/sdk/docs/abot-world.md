@@ -37,10 +37,18 @@ at the first block**, so it needs **≥ 20 GB free VRAM on a dedicated GPU** —
 the first block even though loading succeeded. A **448x256** tier runs on ~6 GB
 cards; it is far below interactive frame rates but is what the E2E lane uses.
 
-A world session is bound to the worker holding that GPU. The world operations
-have **no delegated route**, so `loadModel` with a `delegate` and
-`mode: 'world'` is rejected at load time rather than failing later on the first
-step. Load it on a host with the GPU and omit `delegate`.
+A world session is bound to the worker holding that GPU, and the world
+operations have **no delegated route**. So `loadModel` with a `delegate` and
+`mode: 'world'` is settled at load time rather than failing later on the first
+step, in one of two ways:
+
+- **`delegate.fallbackToLocal: true`** — the load goes straight to the local
+  path, without a round trip to a provider that cannot serve it. This is the
+  point of the flag, and local is exactly where a world session works.
+- **otherwise** — the load is rejected with an error naming the reason.
+
+Either way, the session ends up on the host holding the GPU. Omitting
+`delegate` entirely is the direct way to say that.
 
 ## Activation is deferred when there is no world yet
 
@@ -74,8 +82,8 @@ create-then-walk-now flow never reads. `sceneSrc` takes a path or URL; a supplie
 pack is copied into the managed slot and the caller's own file is never touched
 or deleted.
 
-Creating a world on a session that is already walking **replaces** it and
-restarts from the beginning. The replacement is staged: generation writes to a
+Creating a world on a session that already has one **replaces** it and restarts
+the walk from the beginning. The replacement is staged: generation writes to a
 staging file and is promoted atomically only on success, so a failed or
 cancelled generation leaves the previous world intact and walkable rather than
 leaving the model with none.
@@ -83,7 +91,8 @@ leaving the model with none.
 ## Concurrency
 
 One job at a time per model. A second `worldStep`, or a `worldCreateScene`
-arriving mid-walk, is **rejected rather than queued** — a walk is driven by live
+arriving while a step is still in flight, is **rejected rather than queued** — a
+walk is driven by live
 key input, so a backlog of stale keypresses is worse than a refusal the caller
 can drop. Drive the next step off the previous one.
 

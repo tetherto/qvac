@@ -14,7 +14,7 @@ import {
  *
  * Run this once per world. The world is live on the session as soon as this
  * completes — `stats` is the completion signal. Creating a world on a session
- * that is already walking replaces it and restarts the walk from the beginning.
+ * that already has one replaces it and restarts the walk from the beginning.
  *
  * The pack itself is NOT returned by default: it is 10+ MB, a third larger again
  * as base64, and the common create-then-walk-now flow never touches the bytes.
@@ -28,6 +28,18 @@ import {
  *
  * @param params - Loaded world model ID, scene prompt, first-frame image bytes, optional dimensions, and `returnPack`.
  * @returns `requestId` and `stats`; plus `scene` (promise of the pack) when `returnPack: true`.
+ * @throws {RequestValidationFailedError} Client-side, before any RPC, if the
+ *   prompt is empty or the dimensions are not positive multiples of 32 within
+ *   the per-axis and total-pixel ceilings.
+ * @throws {ModelOperationNotSupportedError} If the model was not loaded with
+ *   `mode: "world"`.
+ * @throws {RequestRejectedByPolicyError} If a world job is already running on
+ *   this model — world refuses rather than queues.
+ * @throws {InferenceCancelledError} If `cancel({ requestId })` is accepted.
+ *   Scene creation is uninterruptible, so this stops delivery while the encode
+ *   runs to completion.
+ * @throws {StreamEndedError} If the RPC stream closes without a terminal
+ *   `done` chunk.
  *
  * @example
  * ```typescript
@@ -96,6 +108,17 @@ export function worldCreateScene(
  *
  * @param params - Loaded world model ID and the keys held for this block.
  * @returns `requestId`, `frameStream`, `frames` (the whole block), and `stats`.
+ * @throws {RequestValidationFailedError} Client-side, before any RPC, on an
+ *   unknown walk key.
+ * @throws {ModelOperationNotSupportedError} If the model was not loaded with
+ *   `mode: "world"`.
+ * @throws {RequestRejectedByPolicyError} If a block is already in flight on
+ *   this model.
+ * @throws {InferenceCancelledError} If `cancel({ requestId })` is accepted. The
+ *   step rejects rather than resolving with a truncated block, and the session
+ *   is rebuilt on the next call.
+ * @throws {StreamEndedError} If the RPC stream closes without a terminal
+ *   `done` chunk.
  *
  * @example Walk forward, displaying frames as they arrive
  * ```typescript
