@@ -84,9 +84,15 @@ or deleted.
 
 Creating a world on a session that already has one **replaces** it and restarts
 the walk from the beginning. The replacement is staged: generation writes to a
-staging file and is promoted atomically only on success, so a failed or
-cancelled generation leaves the previous world intact and walkable rather than
-leaving the model with none.
+staging file and is promoted atomically only on success, so a generation that
+fails **before promotion** leaves the previous world intact and walkable rather
+than leaving the model with none.
+
+Once the promotion rename lands, the previous world is gone — that is what
+replacement means. A cancel accepted after that point still stops delivery and
+rejects the request, but it does not roll the new world back: the contract is
+that delivery stops, not that the encode is undone. The next `worldStep`
+activates the world that was promoted.
 
 ## Concurrency
 

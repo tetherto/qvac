@@ -147,8 +147,14 @@ export const diffusionPlugin = definePlugin({
     } else {
       // The mirror of the rule above, as an ALLOW-list rather than a deny-list.
       // Only `config.world` and the four world artifact sources reach the walk
-      // session; every other top-level field is accepted by the schema and then
-      // silently dropped. That splits into two kinds of harm, and a deny-list
+      // session; every other field the SCHEMA KNOWS is accepted by it and then
+      // silently dropped.
+      //
+      // Scope worth being exact about: `sdcppConfigSchema` is not `.strict()`,
+      // so a field it does not know — a typo'd `taehvModelSrcc`, say — is
+      // stripped by Zod before this ever runs, and this list cannot see it.
+      // That is whole-schema behaviour shared with every other mode, not
+      // something world can change here. That splits into two kinds of harm, and a deny-list
       // would have to be extended by hand every time a diffusion or video field
       // is added:
       //   - compute keys such as `device: 'cpu'` — the escape hatch every other

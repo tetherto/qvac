@@ -108,9 +108,10 @@ export function worldCreateScene(
  * `keys` accepts an array, a key-state object, or a raw 8-bit mask. WASD move,
  * IJKL steer the camera; omit for an idle block.
  *
- * Every frame of a block arrives at its END, so `progressStream` is what tells a
- * caller the block is alive in the meantime — `{ step, totalSteps, elapsedMs }`
- * ticks, the same shape `video` and `diffusion` emit.
+ * `progressStream` forwards the engine's own `{ step, totalSteps, elapsedMs }`
+ * ticks, the same shape `video` and `diffusion` emit. Their cadence is the
+ * engine's and has not been measured on hardware, so treat a tick as "progress
+ * happened" rather than as a heartbeat with a deadline.
  *
  * @param params - Loaded world model ID and the keys held for this block.
  * @returns `requestId`, `frameStream`, `progressStream`, `frames` (the whole block), and `stats`.
@@ -134,11 +135,11 @@ export function worldCreateScene(
  * }
  * ```
  *
- * @example Keep a UI responsive across the block
+ * @example Report engine progress alongside the block
  * ```typescript
  * const { progressStream, frames } = worldStep({ modelId, keys: ["W"] });
  * for await (const { totalSteps, elapsedMs } of progressStream) {
- *   showSpinner(`${totalSteps} frames, ${elapsedMs}ms`);
+ *   report(`${totalSteps} frames, ${elapsedMs}ms`);
  * }
  * for (const frame of await frames) display(frame);
  * ```

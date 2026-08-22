@@ -35,13 +35,17 @@ export interface WorldStepProgressTick {
 
 export interface WorldStepResult {
   requestId: string
-  /** Frames of this block, yielded as they arrive rather than at the end. */
+  /** Frames of this block, yielded as the transport delivers them. */
   frameStream: AsyncGenerator<Uint8Array>
   /**
-   * Liveness while the block computes. Every frame of a block arrives at its
-   * END — 1.8s with the KV cache, ~7.5s without — so without this the stream is
-   * silent for the whole block and a UI cannot tell "generating" from "hung".
-   * Same shape and same guarantees as `video`'s and `diffusion`'s.
+   * The engine's own progress ticks for this block, forwarded verbatim — the
+   * same field shape `video` and `diffusion` expose.
+   *
+   * NOT a guaranteed liveness signal. The cadence is the engine's, and it has
+   * not been measured on hardware: if the native side emits its tick only
+   * alongside the finished block, this stream yields once at the end rather
+   * than during. Treat a tick as "progress happened", never as "a tick is due
+   * within N ms", and do not build a hang detector on it.
    */
   progressStream: AsyncGenerator<WorldStepProgressTick>
   /** Every frame of the block, once it completes. */

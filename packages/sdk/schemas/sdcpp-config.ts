@@ -1313,10 +1313,10 @@ export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema
 
 export const worldStepStreamResponseSchema = z.object({
   type: z.literal('worldStepStream'),
-  // Same three fields, same names, as diffusionStream and videoStream. A block
-  // is 1.8s with the KV cache and ~7.5s without, and every frame arrives at the
-  // end of it — so without these the stream is silent for the whole block and a
-  // UI cannot tell "generating" from "hung".
+  // Same three fields, same names, as diffusionStream and videoStream: the
+  // engine's own progress tick, forwarded rather than dropped. Its cadence is
+  // the engine's — not measured on hardware here — so this is progress
+  // reporting, not a heartbeat callers can time out against.
   step: z
     .number()
     .int()
