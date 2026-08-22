@@ -1,4 +1,5 @@
 import {
+  MAX_SCENE_IMAGE_BYTES,
   walkKeySchema,
   worldSceneStreamRequestSchema,
   worldSceneStreamResponseSchema,
@@ -266,6 +267,22 @@ export function createWorldSceneResult(
 ): WorldSceneResult | WorldSceneResultWithPack {
   const requestId = generateClientRequestId()
   const { image, ...rest } = params
+
+  // Checked on the RAW bytes, before base64. The schema has a `.max()` on the
+  // encoded string, but it cannot be relied on to produce the error: Zod runs
+  // every check on a string regardless of order, so the base64 pattern runs too,
+  // and on V8 that pattern THROWS `RangeError: Maximum call stack size exceeded`
+  // rather than returning false once the input passes roughly 4.5M characters.
+  // `parseClientInput` only converts `ZodError`, so the caller would get a raw
+  // RangeError instead of the typed validation error this API promises.
+  if (image.byteLength > MAX_SCENE_IMAGE_BYTES) {
+    throw new RequestValidationFailedError(
+      `The first-frame image is ${image.byteLength} bytes, over the ` +
+        `${MAX_SCENE_IMAGE_BYTES}-byte ceiling. It is cover-scaled and cropped to ` +
+        'width x height, so send a smaller one.'
+    )
+  }
+
   // Empty prompts and dimensions that are not multiples of 32 are rejected
   // locally rather than after a round-trip carrying ~10 MB of image bytes.
   const request = parseClientInput(worldSceneStreamRequestSchema, {

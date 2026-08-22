@@ -181,8 +181,8 @@ export const diffusionPlugin = definePlugin({
             (pointer
               ? `Use modelConfig.${pointer} instead, which is forwarded to it.`
               : 'World mode accepts only taehvModelSrc, sceneSrc, t5XxlModelSrc, ' +
-                'vaeModelSrc and the world block; everything else describes a ' +
-                'sampler pipeline the walk session does not have.') +
+                'vaeModelSrc and the world block; nothing else reaches the walk ' +
+                'session.') +
             (unsupported.length > 1 ? ` Also unsupported: ${unsupported.slice(1).join(', ')}.` : '')
         )
       }

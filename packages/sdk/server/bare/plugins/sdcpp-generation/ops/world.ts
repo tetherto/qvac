@@ -15,7 +15,6 @@ import {
   PluginRequestValidationFailedError
 } from '@/utils/errors-server'
 import { ModelType } from '@/schemas'
-import { MAX_SCENE_PIXELS } from '@/schemas/sdcpp-config'
 import type {
   WorldSceneRequest,
   WorldSceneStats,
@@ -37,11 +36,15 @@ const MAX_SCENE_PACK_BYTES = 128 * 1024 * 1024
 
 /**
  * Ceiling on the first frame's DECLARED pixel count, read from its header before
- * anything decodes it. Four times the largest world we will generate, so a 4K
- * source for a 1080p world is still comfortable, while a decompression bomb is
- * refused before it can allocate.
+ * anything decodes it.
+ *
+ * 8192x8192. Sized off what people actually send, not off the output: the frame
+ * is cover-scaled and cropped, so a phone photo is a perfectly reasonable source
+ * for an 832x480 world, and a 12 MP camera image (4000x3000) must not be
+ * refused. This bounds the decode at roughly 200 MB while still refusing a
+ * gigapixel bomb by more than an order of magnitude.
  */
-const MAX_SCENE_IMAGE_PIXELS = MAX_SCENE_PIXELS * 4
+const MAX_SCENE_IMAGE_PIXELS = 8192 * 8192
 
 interface WorldSessionArgs {
   modelId: string
@@ -390,7 +393,7 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
           modelId,
           ModelType.sdcppGeneration,
           'diffusion',
-          ['diffusion'],
+          ['worldStep', 'worldCreateScene'],
           []
         )
       }
@@ -635,6 +638,35 @@ export async function* worldCreateScene(
     )
   }
 
+  // Sits HERE, with the other pure preconditions, and not further down: every
+  // statement below `deactivate()` costs the caller their live session, and a
+  // request rejected on its own input must not be what takes it. Nothing in this
+  // check needs the session.
+  //
+  // The base64 ceiling on `image` bounds what crosses the WIRE, not what the
+  // decoder allocates — wildly different numbers for a compressed format. A
+  // 1.5 MB PNG of uniform scanlines can declare 40000x40000: 1.6 gigapixels, and
+  // roughly 4.8 GB in a single native allocation, all of it before the
+  // cover-scale and crop that would have brought it down to width x height.
+  // `readImageDimensions` is a header read — big-endian IHDR for PNG, the first
+  // SOFx segment for JPEG — so this costs microseconds and happens before any of
+  // it.
+  //
+  // Only enforced when the header is actually readable. The addon documents
+  // PNG/JPEG, which is exactly what this reads, and refusing everything else here
+  // would reject formats the native decoder may accept today.
+  const image = Buffer.from(request.image, 'base64')
+  const declared = readImageDimensions(image)
+  if (declared && declared.width * declared.height > MAX_SCENE_IMAGE_PIXELS) {
+    throw new PluginRequestValidationFailedError(
+      'worldSceneStream',
+      `The first-frame image declares ${declared.width}x${declared.height} ` +
+        `(${declared.width * declared.height} pixels), over the ` +
+        `${MAX_SCENE_IMAGE_PIXELS}-pixel ceiling. It is cover-scaled and cropped to ` +
+        'width x height anyway, so send one closer to the target resolution.'
+    )
+  }
+
   // A cancel that lands BEFORE `begin(...)` resolves is not merely early: the
   // registry consumes the marker and SKIPS admission entirely (see the
   // `preCancel` branch in request-registry.ts), so this context holds NO world
@@ -674,30 +706,6 @@ export async function* worldCreateScene(
   // from failure. Hence the flag. The native side can leave a partial file
   // behind on a dispatch rejection too, so the dispatch sits inside the guard
   // rather than in front of it.
-  // The base64 ceiling on `image` bounds what crosses the WIRE, not what the
-  // decoder allocates — those are wildly different numbers for a compressed
-  // format. A 1.5 MB PNG of uniform scanlines can declare 40000x40000, which is
-  // 1.6 gigapixels and roughly 4.8 GB in a single native allocation, all of it
-  // before the cover-scale and crop that would have brought it down to
-  // width x height. `readImageDimensions` is a header read — big-endian IHDR for
-  // PNG, the first SOFx segment for JPEG — so this costs nothing and happens
-  // before any of it.
-  //
-  // Only enforced when the header is actually readable. The addon documents
-  // PNG/JPEG, which is exactly what this reads, and refusing everything else
-  // here would reject formats the native decoder may accept today.
-  const image = Buffer.from(request.image, 'base64')
-  const declared = readImageDimensions(image)
-  if (declared && declared.width * declared.height > MAX_SCENE_IMAGE_PIXELS) {
-    throw new PluginRequestValidationFailedError(
-      'worldSceneStream',
-      `The first-frame image declares ${declared.width}x${declared.height} ` +
-        `(${declared.width * declared.height} pixels), over the ` +
-        `${MAX_SCENE_IMAGE_PIXELS}-pixel ceiling. It is cover-scaled and cropped to ` +
-        'width x height anyway, so send one closer to the target resolution.'
-    )
-  }
-
   let promoted = false
   let response: SceneResponseWithStats & { iterate(): AsyncIterable<unknown> }
   let scene: Buffer | undefined

@@ -29,8 +29,10 @@ import {
  * @param params - Loaded world model ID, scene prompt, first-frame image bytes, optional dimensions, and `returnPack`.
  * @returns `requestId` and `stats`; plus `scene` (promise of the pack) when `returnPack: true`.
  * @throws {RequestValidationFailedError} Client-side, before any RPC, if the
- *   prompt is empty or the dimensions are not positive multiples of 32 within
- *   the per-axis and total-pixel ceilings.
+ *   prompt is empty, the dimensions are not positive multiples of 32 within the
+ *   per-axis and total-pixel ceilings, or the first frame exceeds 3 MB.
+ * @throws {PluginRequestValidationFailedError} Server-side, before the session
+ *   is touched, if the first frame's header declares more than 8192x8192 pixels.
  * @throws {ModelOperationNotSupportedError} If the model was not loaded with
  *   `mode: "world"`.
  * @throws {RequestRejectedByPolicyError} If a world job is already running on

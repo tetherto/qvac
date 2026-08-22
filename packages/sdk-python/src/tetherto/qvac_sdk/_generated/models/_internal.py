@@ -13904,7 +13904,7 @@ class WorldSceneStreamRequest(GeneratedBaseModel):
     image: Annotated[
         str,
         Field(
-            description="Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded. It is cover-scaled and center-cropped to width x height, so a frame larger than the target resolution buys nothing.",
+            description="Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded and 8192x8192 pixels. It is cover-scaled and center-cropped to width x height, so a frame larger than the target resolution buys nothing. The pixel ceiling is read from the image header and enforced by the worker before anything decodes it, so a compressed image that expands to gigabytes is refused rather than allocated.",
             max_length=4194304,
             min_length=1,
             pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",

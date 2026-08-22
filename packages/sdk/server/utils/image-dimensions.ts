@@ -10,6 +10,12 @@
  * Returns `null` when the header is not a recognised PNG or JPEG, which callers
  * should treat as "unknown", not as "empty" — refusing on `null` would reject
  * any other format the native decoder happens to accept.
+ *
+ * `@qvac/diffusion-cpp` ships its own copy of this, and so does the world e2e
+ * suite. Deliberately independent of both: the addon's is exported only from
+ * `./addon.js`, which is absent from its `exports` map and carries no types, so
+ * depending on it would bind the SDK to an addon internal that can change
+ * without a semver signal. Keep them in sync only in behaviour, not by import.
  */
 export interface ImageDimensions {
   width: number

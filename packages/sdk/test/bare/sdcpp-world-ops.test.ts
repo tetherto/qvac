@@ -822,7 +822,7 @@ test('world scene op: a decompression bomb is refused before native dispatch', a
   } as unknown as NativeWorldSession
 
   // A minimal PNG header declaring 40000x40000 — 1.6 gigapixels, roughly 4.8 GB
-  // once stb_image expands it, from a payload of a few dozen bytes.
+  // once the native decoder expands it, from a payload of a few dozen bytes.
   const bomb = Buffer.alloc(24)
   bomb[0] = 0x89
   bomb[1] = 0x50
@@ -844,6 +844,49 @@ test('world scene op: a decompression bomb is refused before native dispatch', a
   })
 })
 
+// The check is a pure input precondition, so it has to run BEFORE the
+// deactivate() that replaces the caller's world. Rejecting a request after
+// tearing down the session it never touched costs a live walker its session and
+// a full multi-second re-activation on the next step.
+test('world scene op: a rejected first frame does not cost the caller their session', async function (t) {
+  const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+  const driver = makeResponse([])
+
+  let unloads = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {
+      unloads++
+    },
+    step: async () => driver.response,
+    createScene: async () => driver.response,
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  const bomb = Buffer.alloc(24)
+  bomb[0] = 0x89
+  bomb[1] = 0x50
+  bomb[2] = 0x4e
+  bomb[3] = 0x47
+  bomb.writeUInt32BE(40000, 16)
+  bomb.writeUInt32BE(40000, 20)
+
+  await withWorldSession(counting, async ({ modelId, session }) => {
+    await session.ensureActivated()
+    t.is(unloads, 0, 'the session is live before the rejected request')
+
+    const stream = worldCreateScene({
+      modelId,
+      requestId: makeId('scene'),
+      prompt: 'a forest path',
+      image: bomb.toString('base64')
+    })
+    await t.exception(stream.next(), /over the .*-pixel ceiling/, 'the request is refused')
+
+    t.is(unloads, 0, 'a pure validation failure did not tear the live session down')
+  })
+})
+
 test('world scene op: a normal first frame is unaffected by the pixel guard', async function (t) {
   const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
   const driver = makeResponse([])
@@ -860,16 +903,15 @@ test('world scene op: a normal first frame is unaffected by the pixel guard', as
     cancel: async () => {}
   } as unknown as NativeWorldSession
 
-  // 1920x1088 declared — the largest world we generate, so a source at that size
-  // must pass. Also covers the header-unreadable case, which stays permitted so
-  // formats the native decoder accepts are not refused here.
+  // A 12 MP camera photo — 4000x3000, the realistic worst case a caller sends
+  // for an 832x480 world. It is cover-scaled and cropped, so it must pass.
   const ok = Buffer.alloc(24)
   ok[0] = 0x89
   ok[1] = 0x50
   ok[2] = 0x4e
   ok[3] = 0x47
-  ok.writeUInt32BE(1920, 16)
-  ok.writeUInt32BE(1088, 20)
+  ok.writeUInt32BE(4000, 16)
+  ok.writeUInt32BE(3000, 20)
 
   await withWorldSession(counting, async ({ modelId, session }) => {
     const stream = worldCreateScene({
@@ -885,9 +927,20 @@ test('world scene op: a normal first frame is unaffected by the pixel guard', as
     await pending.catch(() => {})
     await stream.return(undefined).catch(() => {})
 
-    t.is(scenes, 1, 'a full-size source frame still reaches the native decoder')
+    t.is(scenes, 1, 'a 12 MP camera photo still reaches the native decoder')
     await session.discardStagedScene()
   })
+})
+
+// Unreadable headers stay permitted on purpose: the guard cannot size what it
+// cannot parse, and refusing here would reject any format the native decoder
+// accepts beyond PNG and JPEG.
+test('world scene op: an unrecognised image header is not refused by the pixel guard', async function (t) {
+  const { readImageDimensions } = await import('@/server/utils')
+
+  t.is(readImageDimensions(Buffer.from('BM' + 'x'.repeat(40))), null, 'a BMP magic reads as null')
+  t.is(readImageDimensions(Buffer.alloc(2)), null, 'a runt buffer reads as null')
+  t.is(readImageDimensions(Buffer.from([0x89, 0x50, 0x4e, 0x47])), null, 'a truncated PNG header')
 })
 
 test('world scene op: a dispatch that never starts leaves no staged file behind', async function (t) {

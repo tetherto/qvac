@@ -1352,12 +1352,17 @@ export const MAX_SCENE_PIXELS = 1920 * 1088
  *
  * 3 MB is generous for a frame that ends up at most 1920x1088 — and it is also
  * the largest value this can be *enforced* at today. `BASE64_PATTERN` is a
- * starred quad group, and V8/JSC stop matching it somewhere between 4.2M and
- * 5.6M characters: a perfectly valid base64 string above that returns `false`
- * and is rejected as malformed rather than oversized. 3 MB decodes to 4194304
- * characters, inside the range that still matches. See the note in
- * `refineWorldSceneBudget` — the pattern is shared with the diffusion, upscale
- * and VLA image fields, so fixing it belongs in its own change.
+ * starred quad group that both engines give up on a little above this ceiling,
+ * but differently, and the difference matters: measured at 4.8M characters, JSC
+ * (Bun) returns `false`, while **V8 — which is what Bare runs — THROWS
+ * `RangeError: Maximum call stack size exceeded`**. Since Zod runs every string
+ * check regardless of order, a larger image reaches the pattern even after
+ * `.max()` fails, so `safeParse` throws instead of reporting `too_big`.
+ * 3 MB decodes to 4194304 characters, inside the range that still matches on
+ * both. The client guards the raw byte length before encoding for the same
+ * reason (see `createWorldSceneResult`). The pattern is shared with the
+ * diffusion, upscale and VLA image fields, so fixing it belongs in its own
+ * change.
  */
 export const MAX_SCENE_IMAGE_BYTES = 3 * 1024 * 1024
 
@@ -1424,9 +1429,12 @@ const worldSceneRequestShape = {
     .max(MAX_SCENE_IMAGE_BASE64_CHARS)
     .regex(BASE64_PATTERN)
     .describe(
-      'Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded. It is ' +
-        'cover-scaled and center-cropped to width x height, so a frame larger than ' +
-        'the target resolution buys nothing.'
+      'Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded and 8192x8192 ' +
+        'pixels. It is cover-scaled and center-cropped to width x height, so a ' +
+        'frame larger than the target resolution buys nothing. The pixel ceiling ' +
+        'is read from the image header and enforced by the worker before anything ' +
+        'decodes it, so a compressed image that expands to gigabytes is refused ' +
+        'rather than allocated.'
     ),
   width: z
     .number()
