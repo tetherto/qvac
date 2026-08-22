@@ -7,7 +7,7 @@ import { getServerLogger } from '@/logging'
 import { getModel, getModelEntry } from '@/server/bare/registry/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/server/bare/runtime'
 import { generateServerRequestId } from '@/server/bare/runtime/request-id'
-import { getCacheDir, generateShortHash } from '@/server/utils'
+import { getCacheDir, generateShortHash, readImageDimensions } from '@/server/utils'
 import {
   InferenceCancelledError,
   ModelNotLoadedError,
@@ -15,6 +15,7 @@ import {
   PluginRequestValidationFailedError
 } from '@/utils/errors-server'
 import { ModelType } from '@/schemas'
+import { MAX_SCENE_PIXELS } from '@/schemas/sdcpp-config'
 import type {
   WorldSceneRequest,
   WorldSceneStats,
@@ -33,6 +34,14 @@ const INFLIGHT_WARN_MS = 120_000
 // included. A pack past it means something went wrong natively, not a bigger
 // world.
 const MAX_SCENE_PACK_BYTES = 128 * 1024 * 1024
+
+/**
+ * Ceiling on the first frame's DECLARED pixel count, read from its header before
+ * anything decodes it. Four times the largest world we will generate, so a 4K
+ * source for a 1080p world is still comfortable, while a decompression bomb is
+ * refused before it can allocate.
+ */
+const MAX_SCENE_IMAGE_PIXELS = MAX_SCENE_PIXELS * 4
 
 interface WorldSessionArgs {
   modelId: string
@@ -366,6 +375,25 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     // already accepted.
     async run(start) {
       assertLive()
+      // `start` is typed as a thunk, but this method is only reachable through
+      // `getModel(modelId)`, which is untyped — and `ops/diffusion.ts` calls
+      // `model.run({ prompt, ... })` with NO model-type guard (unlike
+      // `asVideoModel` / `asUpscalerModel` in its sibling ops). A diffusion
+      // request aimed at a world model therefore lands here with an options
+      // object. Refuse it BEFORE `inFlight` is touched: assigning the guard
+      // first and failing afterwards would leave an already-settled promise in
+      // it, making `settleInFlight()` a no-op while a native block is still
+      // running — and teardown would then enter the addon's synchronous unload
+      // mid-job and freeze the worker's event loop for every model on it.
+      if (typeof start !== 'function') {
+        throw new ModelOperationNotSupportedError(
+          modelId,
+          ModelType.sdcppGeneration,
+          'diffusion',
+          ['diffusion'],
+          []
+        )
+      }
       const dispatch = (async () => start())()
       // A dispatch that rejects is a finished job as far as teardown cares, so
       // both arms settle the guard. Failures still reach the caller — from the
@@ -396,14 +424,20 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
       torn = true
       await withSessionLock(async () => {
         await settleInFlight()
-        await world.unload()
-        activated = false
-        // The managed pack lives for exactly one loaded session. Callers who
-        // want to revisit a world keep the bytes `worldCreateScene` returned and
-        // pass them back as `modelConfig.sceneSrc`; without this every world
-        // would leave ~10 MB behind under ~/.qvac/world-scenes for good.
-        await removeIfPresent(files.scene)
-        await removeIfPresent(stagingScenePath)
+        try {
+          await world.unload()
+        } finally {
+          // In a `finally` because this is the ONLY chance to remove the pack. A
+          // rejecting native unload used to skip both removals, and nothing ever
+          // comes back: `unload-model.ts` unregisters the entry before calling
+          // this, and `unloadAllModels` swallows the error and drops the entry
+          // too. With per-session names and no GC by design, that orphan is
+          // never adopted and never swept — so repeated load/unload cycles would
+          // accumulate ~10 MB each, unbounded.
+          activated = false
+          await removeIfPresent(files.scene)
+          await removeIfPresent(stagingScenePath)
+        }
       })
     }
   }
@@ -640,6 +674,30 @@ export async function* worldCreateScene(
   // from failure. Hence the flag. The native side can leave a partial file
   // behind on a dispatch rejection too, so the dispatch sits inside the guard
   // rather than in front of it.
+  // The base64 ceiling on `image` bounds what crosses the WIRE, not what the
+  // decoder allocates — those are wildly different numbers for a compressed
+  // format. A 1.5 MB PNG of uniform scanlines can declare 40000x40000, which is
+  // 1.6 gigapixels and roughly 4.8 GB in a single native allocation, all of it
+  // before the cover-scale and crop that would have brought it down to
+  // width x height. `readImageDimensions` is a header read — big-endian IHDR for
+  // PNG, the first SOFx segment for JPEG — so this costs nothing and happens
+  // before any of it.
+  //
+  // Only enforced when the header is actually readable. The addon documents
+  // PNG/JPEG, which is exactly what this reads, and refusing everything else
+  // here would reject formats the native decoder may accept today.
+  const image = Buffer.from(request.image, 'base64')
+  const declared = readImageDimensions(image)
+  if (declared && declared.width * declared.height > MAX_SCENE_IMAGE_PIXELS) {
+    throw new PluginRequestValidationFailedError(
+      'worldSceneStream',
+      `The first-frame image declares ${declared.width}x${declared.height} ` +
+        `(${declared.width * declared.height} pixels), over the ` +
+        `${MAX_SCENE_IMAGE_PIXELS}-pixel ceiling. It is cover-scaled and cropped to ` +
+        'width x height anyway, so send one closer to the target resolution.'
+    )
+  }
+
   let promoted = false
   let response: SceneResponseWithStats & { iterate(): AsyncIterable<unknown> }
   let scene: Buffer | undefined
@@ -648,7 +706,7 @@ export async function* worldCreateScene(
     response = (await session.run(() =>
       session.createScene({
         prompt: request.prompt,
-        image: Buffer.from(request.image, 'base64'),
+        image,
         t5,
         vae,
         output: session.stagingScenePath,

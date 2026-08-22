@@ -519,6 +519,79 @@ test('world step op: abandoning the frame stream drops the advanced session', as
   })
 })
 
+// `ops/diffusion.ts` has no model-type guard (unlike its `asVideoModel` /
+// `asUpscalerModel` siblings), so a diffusion request aimed at a world model
+// reaches WorldSession.run with an options object rather than a thunk. Assigning
+// the in-flight guard before noticing would leave an already-settled promise in
+// it, making settle() a no-op while a native block is still running — and
+// teardown would then enter the addon's synchronous unload mid-job.
+test('world session: a non-thunk run() is refused without clearing the guard', async function (t) {
+  const { ModelOperationNotSupportedError } = await import('@/utils/errors-server')
+  const driver = makeResponse([new Uint8Array([1])])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ session }) => {
+    await session.run(async () => driver.response)
+
+    // What ops/diffusion.ts would hand us: a request object, not a function.
+    // brittle's exception matcher takes a RegExp or a zero-arg Error class, and
+    // this one needs five constructor args, so the class check is done by hand.
+    let refused: unknown
+    try {
+      await session.run({ prompt: 'not a thunk' } as never)
+    } catch (error) {
+      refused = error
+    }
+    t.ok(
+      refused instanceof ModelOperationNotSupportedError,
+      'the mistyped call is refused with a structured error'
+    )
+
+    // The guard must still be armed: settle() has to keep waiting for the real
+    // job, not return immediately.
+    let settled = false
+    const settling = session.settle().then(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    t.absent(settled, 'the in-flight guard survived the mistyped call')
+
+    driver.settleJob()
+    await settling
+    t.ok(settled, 'and still resolves once the real job finishes')
+  })
+})
+
+test('world session: unload removes the pack even when native teardown fails', async function (t) {
+  const fs = await import('bare-fs')
+  const driver = makeResponse([])
+
+  const failing = {
+    load: async () => {},
+    unload: async () => {
+      throw new Error('native teardown failed')
+    },
+    step: async () => driver.response,
+    createScene: async () => driver.response,
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  await withWorldSession(failing, async ({ session }) => {
+    fs.writeFileSync(session.stagingScenePath, 'staged')
+    t.ok(fs.existsSync(session.scenePath), 'the pack exists before teardown')
+
+    await t.exception(
+      session.unload(),
+      /native teardown failed/,
+      'the failure still reaches the caller'
+    )
+
+    // Nothing ever comes back for this session: unload-model.ts unregisters the
+    // entry before teardown, so a skipped removal leaks ~10 MB for good.
+    t.absent(fs.existsSync(session.scenePath), 'the pack is removed anyway')
+    t.absent(fs.existsSync(session.stagingScenePath), 'and so is the staging file')
+  })
+})
+
 // The same slotless race as the scene op, but worse: `onAbort` fires
 // `session.cancel()`, which is a MODEL-WIDE native cancel. A pre-cancelled step
 // holding no slot would reach across and kill the block belonging to whichever
@@ -726,6 +799,94 @@ test('world scene op: a cancel during promotion rejects instead of reporting don
     // valid world; the contract is that DELIVERY stops, not that the encode is
     // rolled back.
     t.ok(fs.existsSync(session.scenePath), 'the promoted world is left in place')
+  })
+})
+
+// A compressed image's transfer size says nothing about its decoded size. The
+// base64 ceiling bounds the wire; only the declared dimensions bound the
+// allocation, and the native decoder reads them before any cover-scale or crop.
+test('world scene op: a decompression bomb is refused before native dispatch', async function (t) {
+  const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+  const driver = makeResponse([])
+
+  let scenes = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => driver.response,
+    createScene: async () => {
+      scenes++
+      return driver.response
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  // A minimal PNG header declaring 40000x40000 — 1.6 gigapixels, roughly 4.8 GB
+  // once stb_image expands it, from a payload of a few dozen bytes.
+  const bomb = Buffer.alloc(24)
+  bomb[0] = 0x89
+  bomb[1] = 0x50
+  bomb[2] = 0x4e
+  bomb[3] = 0x47
+  bomb.writeUInt32BE(40000, 16)
+  bomb.writeUInt32BE(40000, 20)
+
+  await withWorldSession(counting, async ({ modelId }) => {
+    const stream = worldCreateScene({
+      modelId,
+      requestId: makeId('scene'),
+      prompt: 'a forest path',
+      image: bomb.toString('base64')
+    })
+
+    await t.exception(stream.next(), /over the .*-pixel ceiling/, 'the bomb is refused')
+    t.is(scenes, 0, 'nothing reached the native decoder')
+  })
+})
+
+test('world scene op: a normal first frame is unaffected by the pixel guard', async function (t) {
+  const { worldCreateScene } = await import('@/server/bare/plugins/sdcpp-generation/ops/world')
+  const driver = makeResponse([])
+
+  let scenes = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => driver.response,
+    createScene: async () => {
+      scenes++
+      return driver.response
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  // 1920x1088 declared — the largest world we generate, so a source at that size
+  // must pass. Also covers the header-unreadable case, which stays permitted so
+  // formats the native decoder accepts are not refused here.
+  const ok = Buffer.alloc(24)
+  ok[0] = 0x89
+  ok[1] = 0x50
+  ok[2] = 0x4e
+  ok[3] = 0x47
+  ok.writeUInt32BE(1920, 16)
+  ok.writeUInt32BE(1088, 20)
+
+  await withWorldSession(counting, async ({ modelId, session }) => {
+    const stream = worldCreateScene({
+      modelId,
+      requestId: makeId('scene'),
+      prompt: 'a forest path',
+      image: ok.toString('base64')
+    })
+    const pending = stream.next()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    driver.releaseStream()
+    driver.settleJob()
+    await pending.catch(() => {})
+    await stream.return(undefined).catch(() => {})
+
+    t.is(scenes, 1, 'a full-size source frame still reaches the native decoder')
+    await session.discardStagedScene()
   })
 })
 
