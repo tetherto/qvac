@@ -16,6 +16,12 @@ find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
 
+# TEMPORARY — remove together with vcpkg-overlay-ports/ once feat/minimax-metal
+# is merged and the registry's speech-cpp pin advances. The overlay replaces the
+# registry's speech-cpp port with one pinned to that branch, so this package
+# builds against it. See vcpkg-overlay-ports/speech-cpp/portfile.cmake.
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports;${VCPKG_OVERLAY_PORTS}")
+
 project(audiogen-ggml CXX C)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
