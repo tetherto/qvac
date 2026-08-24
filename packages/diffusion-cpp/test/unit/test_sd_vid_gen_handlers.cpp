@@ -179,7 +179,9 @@ TEST(SdVidGenHandlers_IntCoercion, AcceptsIntegerDoubles) {
 // 4. video_frames (model-specific temporal packing is validated later)
 // -----------------------------------------------------------------------------
 
-TEST(SdVidGenHandlers_VideoFrames, AcceptsPositiveCountsForModelAwareValidation) {
+TEST(
+    SdVidGenHandlers_VideoFrames,
+    AcceptsPositiveCountsForModelAwareValidation) {
   EXPECT_EQ(applyOne("video_frames", num(5)).videoFrames, 5);
   EXPECT_EQ(applyOne("video_frames", num(6)).videoFrames, 6);
   EXPECT_EQ(applyOne("video_frames", num(9)).videoFrames, 9);

@@ -342,10 +342,11 @@ void SdModel::load() {
       appendParamsAssignment("te=cpu");
     if (config_.keepVaeOnCpu)
       appendParamsAssignment("vae=cpu");
-  } else if (config_.offloadToCpu || config_.keepClipOnCpu ||
-             config_.keepVaeOnCpu) {
-    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "params_backend overrides legacy CPU placement flags");
+  } else if (
+      config_.offloadToCpu || config_.keepClipOnCpu || config_.keepVaeOnCpu) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "params_backend overrides legacy CPU placement flags");
   }
   params.params_backend =
       paramsBackend.empty() ? nullptr : paramsBackend.c_str();
@@ -354,11 +355,13 @@ void SdModel::load() {
   // keeps model-manager residency across jobs. These legacy controls therefore
   // have no direct C API equivalent.
   if (config_.vaeDecodeOnly)
-    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "vae_decode_only is ignored by the 2026-08-11 engine");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "vae_decode_only is ignored by the 2026-08-11 engine");
   if (config_.freeParamsImmediately)
-    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "free_params_immediately is ignored by the 2026-08-11 engine");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "free_params_immediately is ignored by the 2026-08-11 engine");
 
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
@@ -366,12 +369,14 @@ void SdModel::load() {
   std::string mainGpuBackend;
   if (!config_.backendSpec.empty()) {
     params.backend = config_.backendSpec.c_str();
-    QLOG_IF(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            "Explicit stable-diffusion backend assignment '" +
-                config_.backendSpec + "'");
-  } else if (!config_.mainGpu.empty() &&
-             sd_backend_selection::parseConfigDeviceString(config_.device) ==
-                 sd_backend_selection::ConfigDevice::Gpu) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Explicit stable-diffusion backend assignment '" + config_.backendSpec +
+            "'");
+  } else if (
+      !config_.mainGpu.empty() &&
+      sd_backend_selection::parseConfigDeviceString(config_.device) ==
+          sd_backend_selection::ConfigDevice::Gpu) {
     auto mainGpuSpec = sd_backend_selection::parseMainGpu(config_.mainGpu);
     if (auto resolved =
             sd_backend_selection::resolveMainGpuBackendName(*mainGpuSpec);
@@ -875,14 +880,12 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   }
 
   if (!generated) {
-    throw StatusError(
-        general_error::InternalError, "generate_image() failed");
+    throw StatusError(general_error::InternalError, "generate_image() failed");
   }
 
   if (rawImages == nullptr || generatedImageCount == 0) {
     throw StatusError(
-        general_error::InternalError,
-        "generate_image() returned no images");
+        general_error::InternalError, "generate_image() returned no images");
   }
 
   int outputCount = 0;
@@ -1040,8 +1043,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
       throw StatusError(
           general_error::InvalidArgument,
           "MiniMax-H3 does not support a Wan 2.2 high-noise diffusion model");
-    if (!job.controlFramesBytes.empty() || paramsObject.find("vace_strength") !=
-                                             paramsObject.end())
+    if (!job.controlFramesBytes.empty() ||
+        paramsObject.find("vace_strength") != paramsObject.end())
       throw StatusError(
           general_error::InvalidArgument,
           "MiniMax-H3 does not support control_frames or vace_strength");
@@ -1052,8 +1055,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
           "MiniMax-H3 does not support image-conditioning strength or "
           "img_cfg_scale");
     if (!job.referenceImagesBytes.empty() || hasReferenceOptions ||
-        !vid.loraPath.empty() || paramsObject.find("lora_strength") !=
-                                    paramsObject.end() ||
+        !vid.loraPath.empty() ||
+        paramsObject.find("lora_strength") != paramsObject.end() ||
         paramsObject.find("stg_scale") != paramsObject.end() ||
         paramsObject.find("stg_block") != paramsObject.end())
       throw StatusError(
@@ -1205,10 +1208,11 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
           "LTX-2 video_frames must be of the form (8*k + 1) in [9, 257] "
           "(9, 17, 25, 33, ..., 257). Got: " +
               std::to_string(vid.videoFrames));
-  } else if (vid.videoFrames < videoModelCapabilities_.minimumVideoFrames ||
-             (vid.videoFrames - videoModelCapabilities_.frameCountOffset) %
-                     videoModelCapabilities_.frameCountStride !=
-                 0) {
+  } else if (
+      vid.videoFrames < videoModelCapabilities_.minimumVideoFrames ||
+      (vid.videoFrames - videoModelCapabilities_.frameCountOffset) %
+              videoModelCapabilities_.frameCountStride !=
+          0) {
     throw StatusError(
         general_error::InvalidArgument,
         "video_frames must be an integer >= 5 of the form (4*k + 1). Got: " +
@@ -1404,8 +1408,8 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   if (vid.cacheThreshold > 0.0f)
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
-  const int effectiveVideoFps = sd_get_effective_video_fps(
-      sdCtx_.get(), &vidParams);
+  const int effectiveVideoFps =
+      sd_get_effective_video_fps(sdCtx_.get(), &vidParams);
   if (effectiveVideoFps <= 0)
     throw StatusError(
         general_error::InternalError,
@@ -1476,7 +1480,10 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // -- Encode AVI and deliver ----------------------------------------------
   // audio.get() is null for Wan / silent runs, yielding a video-only AVI.
   auto avi = qvac_lib_inference_addon_sd::encodeFramesToAvi(
-      frames.data(), frames.count(), effectiveVideoFps, /*jpegQuality=*/90,
+      frames.data(),
+      frames.count(),
+      effectiveVideoFps,
+      /*jpegQuality=*/90,
       audio.get());
 
   if (!avi.empty() && job.outputCallback) {

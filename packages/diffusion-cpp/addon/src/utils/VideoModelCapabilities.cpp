@@ -195,8 +195,7 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
   // MiniMax-H3 checkpoints expose separate audio/video patch projectors. The
   // tensor names are model metadata, so this remains reliable after a GGUF is
   // renamed. H3 uses a 32-pixel spatial grid and 17*k+5 frame packing.
-  if (hasMiniMaxH3AudioPatchProjection &&
-      hasMiniMaxH3VideoPatchProjection) {
+  if (hasMiniMaxH3AudioPatchProjection && hasMiniMaxH3VideoPatchProjection) {
     capabilities.isMiniMaxH3 = true;
     capabilities.spatialAlignment = 32;
     capabilities.frameCountStride = 17;

@@ -119,9 +119,7 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     {"backend",
      [](SdCtxConfig& c, const std::string& v) { c.backendSpec = v; }},
     {"params_backend",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.paramsBackendSpec = v;
-     }},
+     [](SdCtxConfig& c, const std::string& v) { c.paramsBackendSpec = v; }},
     {"max_vram",
      [](SdCtxConfig& c, const std::string& v) { c.maxVramSpec = v; }},
     {"stream_layers",
@@ -259,8 +257,7 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
          // user-level distinction for multi-reference validation only.
          c.prediction = FLUX_FLOW_PRED;
          c.usesFlux2Flow = true;
-       }
-       else
+       } else
          throw StatusError(
              general_error::InvalidArgument,
              "prediction must be one of: eps, v, edm_v, flow, flux_flow, "

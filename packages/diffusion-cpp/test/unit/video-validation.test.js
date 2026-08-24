@@ -367,10 +367,7 @@ test('run | MiniMax-H3 accepts the 17*k+5 frame grid', async (t) => {
     m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: 124 }),
     /Addon not initialized/
   )
-  await t.exception.all(
-    m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: 123 }),
-    /17\*k \+ 5/
-  )
+  await t.exception.all(m.run({ mode: 'txt2vid', prompt: 'hi', video_frames: 123 }), /17\*k \+ 5/)
 })
 
 test('run | accepts validated LTX IC-LoRA inputs before dispatch', async (t) => {
