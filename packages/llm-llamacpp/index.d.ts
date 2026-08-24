@@ -124,7 +124,7 @@ declare namespace LlmLlamacpp {
         top_k?: NumericLike;
         predict?: NumericLike;
         seed?: NumericLike;
-        no_mmap?: "" | "true" | "false";
+        load_mode?: "none" | "mmap" | "mlock" | "mmap+mlock" | "dio";
         reverse_prompt?: string;
         repeat_penalty?: NumericLike;
         presence_penalty?: NumericLike;

@@ -96,12 +96,19 @@ const scenarios = [
     expectSuccess: true
   },
   {
-    name: 'no_mmap disables memory-mapped model loading',
+    name: 'load_mode none disables memory-mapped model loading',
     overrides: {
-      no_mmap: 'true',
+      load_mode: 'none',
       n_predict: '16'
     },
     expectSuccess: true
+  },
+  {
+    name: 'load-mode rejects unknown values with a clear error',
+    overrides: {
+      'load-mode': 'bogus'
+    },
+    expectLoadFailure: /load-mode must be one of/
   },
   {
     name: 'Zero temperature produces deterministic output',
@@ -222,20 +229,26 @@ const scenarios = [
     expectSuccess: true
   },
   {
-    name: 'Negative numeric parameters handled without crash',
+    name: 'Tolerated negative numeric parameters load without crash',
     overrides: {
       ctx_size: '-1',
       n_predict: '-5',
       temp: '-0.2',
       top_p: '-0.3',
       top_k: '-7',
-      repeat_penalty: '-1.1',
       presence_penalty: '-0.5',
       frequency_penalty: '-0.6',
       gpu_layers: '-3',
       'main-gpu': '-1'
     },
     skipInferenceAfterLoad: true
+  },
+  {
+    name: 'Negative repeat penalty surfaces argument error',
+    overrides: {
+      repeat_penalty: '-1.1'
+    },
+    expectLoadFailure: /error while handling argument "--repeat-penalty"/
   },
   {
     name: 'main_gpu underscore variant must load identically to main-gpu hyphen',

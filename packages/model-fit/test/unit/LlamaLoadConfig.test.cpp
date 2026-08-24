@@ -139,7 +139,9 @@ int main() {
         normalized.params.n_parallel == 2,
         "parallel must be parsed by qvac-fabric");
     expect(normalized.params.swa_full, "full SWA must be retained");
-    expect(!normalized.params.use_mmap, "no-mmap must disable mmap");
+    expect(
+        normalized.params.load_mode == LLAMA_LOAD_MODE_NONE,
+        "no-mmap must disable mmap");
 
     common_params convertedParams = normalized.params;
     const llama_model_params modelParams =
@@ -156,6 +158,19 @@ int main() {
         contextParams.n_seq_max == 2,
         "context conversion must preserve parallel slots");
     expect(contextParams.swa_full, "context conversion must preserve full SWA");
+  }
+
+  {
+    const auto normalized = model_fit::normalizeLlamaLoadConfig(
+        "/model.gguf",
+        LlamaConfigMap{{"device", "cpu"}, {"load-mode", "dio"}},
+        ModelTraits{},
+        {cpu()});
+
+    expect(normalized.supported, "load-mode config must be supported");
+    expect(
+        normalized.params.load_mode == LLAMA_LOAD_MODE_DIRECT_IO,
+        "load-mode must select direct I/O");
   }
 
   {
@@ -454,12 +469,13 @@ int main() {
   }
 
   {
-    // Two allowlisted spellings of one field would otherwise be applied in
+    // Two allowlisted keys for one field would otherwise be applied in
     // unordered_map order, making the verdict depend on hash buckets.
-    const std::array<std::pair<const char*, const char*>, 3> conflicts = {
+    const std::array<std::pair<const char*, const char*>, 4> conflicts = {
         {{"gpu-layers", "n-gpu-layers"},
          {"kv-offload", "no-kv-offload"},
-         {"op-offload", "no-op-offload"}}};
+         {"op-offload", "no-op-offload"},
+         {"load-mode", "no-mmap"}}};
     for (const auto& [first, second] : conflicts) {
       bool rejected = false;
       try {

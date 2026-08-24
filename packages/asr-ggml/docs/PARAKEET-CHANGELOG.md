@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added Indic Conformer GPU smoke coverage to `test/integration/parakeet-gpu-smoke.test.js` so the `useGPU=true` path is validated on Adreno-700+ OpenCL and desktop Vulkan alongside the existing CTC/TDT/EOU/Sortformer entries. Uses the `sample_hi.raw` fixture and passes `language: 'hi'` via a new optional `parakeetConfig` argument on `runGpuModelTest`.
 - `getBackendInfo()` now reports which compute backend ran the FastConformer encoder: `encoderBackend` (`'coreml'` when the Apple Neural Engine Core ML sidecar drives the encoder, else mirrors `backendName`) and `encoderOnCoreml` (boolean). `RuntimeStats` gains `encoderOnCoreml` (0/1). Off Apple, or whenever the Core ML sidecar is absent, both report the ggml backend; the TDT/CTC decoder always runs on ggml.
 
 ### Fixed
