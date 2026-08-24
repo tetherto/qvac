@@ -183,13 +183,25 @@ sd_image_t EsrganUpscaler::upscaleImage(
       throw errors::makeCancelledError();
     }
 
-    sd_image_t next = upscale(ctx, current, factor);
-    if (next.data == nullptr) {
+    sd_image_t* outImages = nullptr;
+    int outCount = 0;
+    const bool ok = upscale(ctx, current, factor, &outImages, &outCount);
+    if (!ok || outCount < 1 || outImages == nullptr ||
+        outImages[0].data == nullptr) {
+      if (outImages != nullptr) {
+        free_sd_images(outImages, outCount);
+      }
       if (currentOwned) {
         freeSdImageData(current);
       }
       throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
     }
+    // Keep the first image's pixels; free any extras and the array container.
+    sd_image_t next = outImages[0];
+    for (int j = 1; j < outCount; ++j) {
+      freeSdImageData(outImages[j]);
+    }
+    free(outImages);
 
     if (currentOwned) {
       freeSdImageData(current);

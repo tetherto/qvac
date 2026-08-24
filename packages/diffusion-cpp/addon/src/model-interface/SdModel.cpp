@@ -318,22 +318,29 @@ void SdModel::load() {
 
   // -- Memory management -----------------------------------------------------
   params.enable_mmap = config_.mmap;
-  params.vae_decode_only = config_.vaeDecodeOnly;
-
-  // Keep reusable ctx semantics explicit. sd.cpp defaults may free parameter
-  // buffers after a generation, but this addon runs many jobs through one
-  // sd_ctx_t.
-  params.free_params_immediately = config_.freeParamsImmediately;
-  params.offload_params_to_cpu = config_.offloadToCpu;
-  params.keep_clip_on_cpu = config_.keepClipOnCpu;
-  params.keep_vae_on_cpu = config_.keepVaeOnCpu;
   params.vae_auto_cpu_fallback = config_.vaeAutoCpuFallback;
   params.vae_auto_cpu_fallback_memory_ratio =
       config_.vaeAutoCpuFallbackMemoryRatio;
 
-  // Also set the newer backend spec so offload intent survives sd.cpp builds
-  // that route parameter placement through params_backend.
-  params.params_backend = config_.offloadToCpu ? "cpu" : nullptr;
+  // Parameter residency goes through the engine's params_backend assignment
+  // spec (comma-separated `module=backend` pairs, bare value = default for
+  // every module): offload_to_cpu pins all params to CPU RAM; clip_on_cpu /
+  // vae_on_cpu pin just those modules. vae_decode_only and
+  // free_params_immediately have no engine equivalent any more (the encoder
+  // stays loaded and params stay resident for the ctx lifetime); they remain
+  // addon-level config for validation/compatibility.
+  std::string paramsBackendSpec;
+  if (config_.offloadToCpu) {
+    paramsBackendSpec = "cpu";
+  } else {
+    if (config_.keepClipOnCpu)
+      paramsBackendSpec = "clip=cpu";
+    if (config_.keepVaeOnCpu)
+      paramsBackendSpec += paramsBackendSpec.empty() ? "vae=cpu" : ",vae=cpu";
+  }
+  if (!paramsBackendSpec.empty()) {
+    params.params_backend = paramsBackendSpec.c_str();
+  }
 
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
@@ -568,7 +575,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //
   // Three code paths depending on model architecture and input shape:
   //
-  //   FLUX2 (FLUX2_FLOW_PRED) with N reference images (N>=1):
+  //   FLUX2 (prediction='flux2_flow', engine-side auto-detected) with N
+  //   reference images (N>=1):
   //     Uses ref_images -- in-context conditioning. Each reference image is
   //     VAE-encoded into separate latent tokens that the FLUX transformer
   //     attends to via joint attention with distinct RoPE positions. The
@@ -589,6 +597,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //
   sd_image_t initImg{}; // single-image (SDEdit or 1x FLUX)
   std::vector<uint8_t> initPng;
+  // Owned storage for genParams.ref_image_args; must outlive
+  // generate_image(). Replaces the removed auto_resize_ref_image /
+  // increase_ref_index fields with the engine's key=value spec.
+  std::string refImageArgs;
 
   // RAII wrapper for multi-image FLUX fusion reference images. Automatically
   // frees pixel buffers on scope exit (normal or exceptional) using a custom
@@ -608,9 +620,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily = config_.prediction == FLUX2_FLOW_PRED ||
-                              config_.prediction == FLUX_FLOW_PRED;
-    const bool isFlux2 = config_.prediction == FLUX2_FLOW_PRED;
+    const bool isFluxFamily =
+        config_.flux2Requested || config_.prediction == FLUX_FLOW_PRED;
+    const bool isFlux2 = config_.flux2Requested;
     const size_t nMulti = job.initImagesBytes.size();
 
     // -- Input validation: mutual exclusion + FLUX-only for multi -----------
@@ -656,8 +668,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       // Output dimensions come from the JS shim (addon.js::_fillDimsFromImage,
       // which falls back to the first reference's size when the caller omits
       // width/height). C++ callers using the binding directly must supply
-      // both dimensions explicitly. auto_resize_ref_image handles the
-      // remaining refs.
+      // both dimensions explicitly. ref_image_args' resize_before_vae
+      // handles the remaining refs.
 
       // clang-format off
       // NOTE: Homebrew and apt.llvm.org builds of clang-format-19 disagree on
@@ -679,12 +691,15 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
       genParams.ref_images = refImgs->data();
       genParams.ref_images_count = static_cast<int>(nMulti);
-      genParams.auto_resize_ref_image = gen.autoResizeRefImage;
       // See SdGenConfig::increaseRefIndex for semantics. For FLUX2-klein the
-      // CLI default (false) is what produces visible fusion: both refs share
-      // a RoPE slot and their features blend in attention. Setting true
-      // tends to make one ref dominate.
-      genParams.increase_ref_index = gen.increaseRefIndex;
+      // CLI default (false -> ref_index_mode=fixed) is what produces visible
+      // fusion: both refs share a RoPE slot and their features blend in
+      // attention. Setting true tends to make one ref dominate.
+      refImageArgs = std::string("ref_index_mode=") +
+          (gen.increaseRefIndex ? "increase" : "fixed") +
+          ",resize_before_vae=" +
+          (gen.autoResizeRefImage ? "true" : "false");
+      genParams.ref_image_args = refImageArgs.c_str();
       // Fall through to the generate_image() call below.
     } else {
       // -- Single-image path (existing behaviour) --------------------------
@@ -718,8 +733,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
       if (isFluxFamily) {
         // FLUX in-context conditioning: ref_images handles its own resizing
-        // via auto_resize_ref_image, so only override genParams dimensions
-        // when they are still at the 512x512 default.
+        // via ref_image_args' resize_before_vae, so only override genParams
+        // dimensions when they are still at the 512x512 default.
         if (gen.width == 512 && gen.height == 512) {
           genParams.width = imgW;
           genParams.height = imgH;
@@ -734,7 +749,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
-        genParams.auto_resize_ref_image = gen.autoResizeRefImage;
+        refImageArgs = std::string("ref_index_mode=") +
+            (gen.increaseRefIndex ? "increase" : "fixed") +
+            ",resize_before_vae=" +
+            (gen.autoResizeRefImage ? "true" : "false");
+        genParams.ref_image_args = refImageArgs.c_str();
       } else {
         // SDEdit path -- the vcpkg version of generate_image() rounds
         // width/height UP to a spatial multiple (typically 8) before
@@ -809,8 +828,11 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   g_progressCtx.expectedDenoiseSequences = gen.batchCount;
   const auto t0 = std::chrono::steady_clock::now();
 
-  SdImageBatch results(
-      generate_image(sdCtx_.get(), &genParams), gen.batchCount);
+  sd_image_t* genImages = nullptr;
+  int genImageCount = 0;
+  const bool genOk =
+      generate_image(sdCtx_.get(), &genParams, &genImages, &genImageCount);
+  SdImageBatch results(genImages, genImageCount);
 
   // VAE-decode boundary: captured before PNG encode / upscale / output so
   // vaeMs reflects only the in-library decode, not post-processing.
@@ -821,6 +843,14 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   }
   if (genParams.mask_image.data) {
     free(genParams.mask_image.data);
+  }
+
+  if (!genOk) {
+    if (cancelRequested_.load()) {
+      throw sd_errors::makeCancelledError();
+    }
+    throw StatusError(
+        general_error::InternalError, "generate_image() failed");
   }
 
   int outputCount = 0;
