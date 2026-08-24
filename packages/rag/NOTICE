@@ -15,6 +15,7 @@ JavaScript Dependencies
   @hyperswarm/secret-stream@6.9.1
     https://github.com/holepunchto/hyperswarm-secret-stream
   @qvac/error@0.1.1
+  @qvac/logging@0.1.1
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
   b4a@1.8.1
