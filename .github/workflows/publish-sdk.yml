@@ -189,6 +189,16 @@ jobs:
         run: bun install
         working-directory: ${{ env.WORKDIR }}
 
+      # Compile the SDK against the in-repo @qvac/inference at this commit, not
+      # the previously-published npm release (which lags behind engine API the
+      # SDK already consumes). This only affects the dist built here; the
+      # published dependency is set per channel below — GPR is pinned to the
+      # co-published @tetherto/inference-mono (see publish-gpr), npm keeps its
+      # committed range (resolved to the inference released in the same run).
+      - name: Build against workspace @qvac/inference
+        run: bun run sdk-source:workspace
+        working-directory: ${{ env.WORKDIR }}
+
       - name: Modify package name for branch-based builds
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -517,7 +527,7 @@ jobs:
 
   publish-gpr:
     name: Publish to GitHub Packages (GPR)
-    needs: [build, publish-logic]
+    needs: [build, publish-logic, publish-gpr-inference]
     if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -572,6 +582,28 @@ jobs:
 
           MODIFIED_NAME=$(node -p "require('./package.json').name")
           echo "Package name: $ORIGINAL_NAME → $MODIFIED_NAME"
+
+      # The dist was compiled against the in-repo engine, so the published mono
+      # build must depend on the inference published in THIS run, not the stale
+      # public @qvac/inference. GPR uses ${version}-tmp.runid-${run_id}, and
+      # run_id is shared across jobs, so this pin matches the co-published
+      # @tetherto/inference-mono exactly. An npm alias keeps the SDK's own
+      # `import '@qvac/inference'` resolving to that package.
+      - name: Pin @qvac/inference to the co-published inference-mono
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          INFERENCE_MONO_VERSION: ${{ needs.publish-gpr-inference.outputs.published_version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INFERENCE_MONO_VERSION}" ]; then
+            echo "::warning::inference-mono version unavailable; leaving @qvac/inference unchanged"
+            exit 0
+          fi
+          SPEC="npm:@tetherto/inference-mono@${INFERENCE_MONO_VERSION}"
+          echo "Pinning @qvac/inference -> ${SPEC}"
+          jq --arg spec "$SPEC" '.dependencies["@qvac/inference"] = $spec' package.json > package.json.tmp
+          mv package.json.tmp package.json
+          node -p "'@qvac/inference -> ' + require('./package.json').dependencies['@qvac/inference']"
 
       - name: Publish to GitHub Package Registry
         id: publish
@@ -647,6 +679,8 @@ jobs:
     if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    outputs:
+      published_version: ${{ steps.publish.outputs.gpr_published_version }}
     permissions:
       contents: read
       packages: write
