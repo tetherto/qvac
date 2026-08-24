@@ -1,6 +1,7 @@
 #pragma once
 
 #include <any>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -62,30 +63,135 @@ copyFloat32Pcm(js_env_t* env, js::TypedArray<float> array, const char* name) {
   return {data, data + len};
 }
 
+inline std::string
+requiredEditString(js_env_t* env, js::Object& operation, const char* key) {
+  auto value =
+      operation.getOptionalPropertyAs<js::String, std::string>(env, key);
+  if (!value || value->empty()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Edit operation '") + key + "' must be a non-empty string");
+  }
+  return *value;
+}
+
+inline std::string optionalEditString(
+    js_env_t* env, js::Object& operation, const char* key,
+    const char* fallback) {
+  return operation.getOptionalPropertyAs<js::String, std::string>(env, key)
+      .value_or(fallback);
+}
+
+inline double optionalEditNumber(
+    js_env_t* env, js::Object& operation, const char* key, double fallback) {
+  js_value_t* raw = operation.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return fallback;
+  }
+  if (!js::is<js::Number>(env, raw)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Edit operation '") + key + "' must be a number");
+  }
+  const double value = js::Number::fromValue(raw).as<double>(env);
+  if (!std::isfinite(value)) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string("Edit operation '") + key + "' must be finite");
+  }
+  return value;
+}
+
+inline AcestepModel::RepaintMode parseRepaintMode(const std::string& mode) {
+  if (mode == "conservative") {
+    return AcestepModel::RepaintMode::Conservative;
+  }
+  if (mode == "balanced") {
+    return AcestepModel::RepaintMode::Balanced;
+  }
+  if (mode == "aggressive") {
+    return AcestepModel::RepaintMode::Aggressive;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "Unknown repaint mode: " + mode);
+}
+
+inline AcestepModel::AudioEditOperationInput
+parseEditOperation(js_env_t* env, js::Object operation) {
+  const std::string operationType = requiredEditString(env, operation, "type");
+  if (operationType == "flow-edit") {
+    AcestepModel::FlowEditInput flow;
+    flow.sourceCaption = requiredEditString(env, operation, "sourceCaption");
+    flow.sourceLyrics =
+        optionalEditString(env, operation, "sourceLyrics", "[Instrumental]");
+    flow.targetCaption = requiredEditString(env, operation, "targetCaption");
+    flow.targetLyrics =
+        optionalEditString(env, operation, "targetLyrics", "[Instrumental]");
+    flow.nMin =
+        static_cast<float>(optionalEditNumber(env, operation, "nMin", 0.0));
+    flow.nMax =
+        static_cast<float>(optionalEditNumber(env, operation, "nMax", 1.0));
+    flow.nAvg =
+        static_cast<int>(optionalEditNumber(env, operation, "nAvg", 1.0));
+    return flow;
+  }
+  if (operationType == "repaint") {
+    AcestepModel::RepaintInput repaint;
+    repaint.caption = requiredEditString(env, operation, "caption");
+    repaint.lyrics =
+        optionalEditString(env, operation, "lyrics", "[Instrumental]");
+    repaint.start =
+        static_cast<float>(optionalEditNumber(env, operation, "start", 0.0));
+    repaint.end =
+        static_cast<float>(optionalEditNumber(env, operation, "end", -1.0));
+    repaint.strength =
+        static_cast<float>(optionalEditNumber(env, operation, "strength", 0.5));
+    repaint.mode = parseRepaintMode(
+        optionalEditString(env, operation, "mode", "balanced"));
+    return repaint;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "Unknown audio edit operation type: " + operationType);
+}
+
+inline std::vector<AcestepModel::AudioEditOperationInput>
+parseEditOperations(js_env_t* env, js::Array& operations) {
+  std::vector<AcestepModel::AudioEditOperationInput> result;
+  result.reserve(operations.size(env));
+  for (uint32_t i = 0; i < operations.size(env); ++i) {
+    result.push_back(
+        parseEditOperation(env, operations.get<js::Object>(env, i)));
+  }
+  return result;
+}
+
 // Emits the generated track as interleaved stereo Int16 + sample rate, mirror
-// of ttsggml::JsAudioOutputHandler. The rate/channels are sourced from the model
-// (which reads them from the engine's decode result) rather than hardcoded, so
-// the values reported alongside the PCM always match the runtime stats. PCM is
-// emitted once, after generate() completes, so the model already holds the real
-// engine values by the time this runs.
+// of ttsggml::JsAudioOutputHandler. The rate/channels are sourced from the
+// model (which reads them from the engine's decode result) rather than
+// hardcoded, so the values reported alongside the PCM always match the runtime
+// stats. PCM is emitted once, after generate() completes, so the model already
+// holds the real engine values by the time this runs.
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
   explicit JsAudioOutputHandler(const AcestepModel* model)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
-            [this, model](
-                const std::vector<int16_t>& data) -> js_value_t* {
+            [this, model](const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
               auto typedArray =
                   js::TypedArray<int16_t>::create(this->env_, outputSpan);
               result.setProperty(this->env_, "outputArray", typedArray);
               result.setProperty(
-                  this->env_, "sampleRate",
+                  this->env_,
+                  "sampleRate",
                   js::Number::create(this->env_, model->sampleRate()));
               result.setProperty(
-                  this->env_, "channels",
+                  this->env_,
+                  "channels",
                   js::Number::create(this->env_, model->channels()));
               return result;
             }) {}
@@ -103,13 +209,16 @@ struct JsProgressOutputHandler
             [this](const acestep::AcestepProgress& p) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               result.setProperty(
-                  this->env_, "progressStage",
+                  this->env_,
+                  "progressStage",
                   js::String::create(this->env_, p.stage));
               result.setProperty(
-                  this->env_, "progressStep",
+                  this->env_,
+                  "progressStep",
                   js::Number::create(this->env_, p.step));
               result.setProperty(
-                  this->env_, "progressTotal",
+                  this->env_,
+                  "progressTotal",
                   js::Number::create(this->env_, p.total));
               return result;
             }) {}
@@ -132,7 +241,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   outHandlers.add(make_shared<JsAudioOutputHandler>(modelPtr));
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
-      env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
@@ -156,7 +267,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   AddonJs& instance = JsInterface::getInstance(env, args.get(0, "instance"));
   auto [type, jsInput] = JsInterface::getInput(args);
 
-  if (type != "text") {
+  if (type != "text" && type != "edit") {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Unknown input type: " + type);
@@ -191,14 +302,25 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   AcestepModel::AnyInput modelInput;
-  modelInput.caption = js::String(env, jsInput).as<std::string>(env);
-  if (auto v = optStr("lyrics")) modelInput.lyrics = *v;
-  if (auto v = optStr("vocalLanguage")) modelInput.vocalLanguage = *v;
-  if (auto v = optStr("keyscale")) modelInput.keyscale = *v;
-  if (auto v = optStr("timesignature")) modelInput.timesignature = *v;
-  if (auto v = optNum("seed")) modelInput.seed = static_cast<long long>(*v);
-  if (auto v = optNum("bpm")) modelInput.bpm = static_cast<int>(*v);
-  if (auto v = optNum("duration")) modelInput.duration = static_cast<float>(*v);
+  if (type == "text") {
+    modelInput.caption = js::String(env, jsInput).as<std::string>(env);
+  }
+  if (auto v = optStr("lyrics"))
+    modelInput.lyrics = *v;
+  if (auto v = optStr("vocalLanguage"))
+    modelInput.vocalLanguage = *v;
+  if (auto v = optStr("keyscale"))
+    modelInput.keyscale = *v;
+  if (auto v = optStr("timesignature"))
+    modelInput.timesignature = *v;
+  if (auto v = optNum("seed"))
+    modelInput.seed = static_cast<long long>(*v);
+  if (auto v = optNum("bpm"))
+    modelInput.bpm = static_cast<int>(*v);
+  if (auto v = optBool("augmentCaptionWithMetadata"))
+    modelInput.augmentCaptionWithMetadata = *v;
+  if (auto v = optNum("duration"))
+    modelInput.duration = static_cast<float>(*v);
   if (auto v = optNum("lmTemperature"))
     modelInput.lmTemperature = static_cast<float>(*v);
   if (auto v = optNum("lmTopP"))
@@ -233,6 +355,22 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     modelInput.audioCoverStrength = static_cast<float>(*v);
   if (auto v = optNum("coverNoiseStrength"))
     modelInput.coverNoiseStrength = static_cast<float>(*v);
+
+  if (type == "edit") {
+    if (modelInput.sourceAudio.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio edit requires non-empty sourceAudio");
+    }
+    auto operations =
+        jobObj.getOptionalProperty<js::Array>(env, "editOperations");
+    if (!operations || operations->size(env) == 0) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Audio edit requires at least one edit operation");
+    }
+    modelInput.editOperations = parseEditOperations(env, *operations);
+  }
   return instance.runJob(std::any(std::move(modelInput)));
 }
 JSCATCH
@@ -273,4 +411,4 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-}  // namespace qvac::audiogenggml::addon_js
+} // namespace qvac::audiogenggml::addon_js

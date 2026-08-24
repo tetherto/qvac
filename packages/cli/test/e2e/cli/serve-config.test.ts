@@ -120,6 +120,44 @@ describe('serve startup network exposure', () => {
   })
 })
 
+describe('serve flags: load management', () => {
+  const LAZY_CONFIG = {
+    serve: { models: { 'cfg-llm': { model: 'QWEN3_600M_INST_Q4', preload: false } } }
+  }
+
+  it('--no-lazy-load returns 503 model_not_loaded instead of loading on request', async (t) => {
+    const srv = await configuredServer(t, LAZY_CONFIG, ['--no-lazy-load'])
+    const res = await fetch(`${srv.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'cfg-llm', messages: [{ role: 'user', content: 'hi' }] })
+    })
+    assert.equal(res.status, 503)
+    assert.equal(
+      ((await res.json()) as { error?: { code?: string } }).error?.code,
+      'model_not_loaded'
+    )
+  })
+
+  it('accepts --load-concurrency and --load-timeout', async (t) => {
+    const srv = await configuredServer(t, LAZY_CONFIG, [
+      '--load-concurrency',
+      '2',
+      '--load-timeout',
+      '600000'
+    ])
+    assert.equal((await fetch(`${srv.baseUrl}/v1/models`)).status, 200)
+  })
+
+  it('rejects a non-numeric --load-concurrency', async () => {
+    const result = await runCli(['serve', 'openai', '--load-concurrency', 'abc'], {
+      timeoutMs: 5_000
+    })
+    assert.equal(result.code, 1)
+    assert.match(result.output, /--load-concurrency/)
+  })
+})
+
 describe('serve flags: --api-key-file', () => {
   it('authenticates with a key read from a file instead of argv', async (t) => {
     const dir = await mkdtemp(join(tmpdir(), 'qvac-cli-key-'))

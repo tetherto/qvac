@@ -1,4 +1,5 @@
 import type { ModelRegistry, ServeConfig, ModelEntry } from '../core/model-registry.js'
+import type { LoadManager, LoadModelFn } from '../core/load-manager.js'
 import type { Logger } from '../../logger.js'
 import type { VectorStoresStore } from '../adapters/openai/vector-stores-store.js'
 import type { EphemeralFilesStore } from '../adapters/openai/ephemeral-files-store.js'
@@ -11,6 +12,7 @@ import type { ParsedFile } from './multipart.js'
 export interface QvacContext {
   registry: ModelRegistry
   serveConfig: ServeConfig
+  loadManager: LoadManager
   logger: Logger
   vectorStores: VectorStoresStore
   ephemeralFiles: EphemeralFilesStore
@@ -27,6 +29,10 @@ export interface QvacContext {
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
   cancelOverride?: typeof sdk.cancel
+  /** Test seam — overrides the SDK model load when set, so lazy-load and preload
+   * can be exercised without a real (expensive) model load. Backed by an
+   * accessor in `buildServer`, hence the explicit `| undefined`. */
+  loadModelOverride?: LoadModelFn | undefined
 }
 
 export interface QvacRequestModel {

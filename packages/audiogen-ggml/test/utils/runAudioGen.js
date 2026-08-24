@@ -41,7 +41,10 @@ async function loadAudioGen({
 // stage names seen (lm/dit/vae); `stats` is the terminal run stats.
 async function runAudioGen(gen, { caption, opts = {} } = {}) {
   const response = await gen.run(caption, opts)
+  return collectAudioGenResponse(response)
+}
 
+async function collectAudioGenResponse(response) {
   const chunks = []
   const stages = new Set()
   let sampleRate = 0
@@ -92,6 +95,7 @@ async function runAudioGen(gen, { caption, opts = {} } = {}) {
       stages: [...stages],
       peak: peakAbs,
       rms,
+      chunks,
       stats
     }
   }
@@ -120,5 +124,6 @@ module.exports = {
   INTEGRATION_TIMEOUT_MS,
   loadAudioGen,
   runAudioGen,
+  collectAudioGenResponse,
   backendIdToName
 }

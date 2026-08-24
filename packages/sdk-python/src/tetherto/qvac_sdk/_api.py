@@ -208,17 +208,21 @@ class TranslateRun:
     `token_stream` (live tokens; empty in non-stream mode), `text` (awaitable
     full text; resolves to "" in stream mode), and `stats` (awaitable,
     resolved when the terminal done chunk arrives -- in stream mode that
-    means once `token_stream` has been consumed to the end)."""
+    means once `token_stream` has been consumed to the end). `request_id` is the
+    client-generated id threaded on the wire, exposed for `cancel(request_id=...)`,
+    mirroring JS."""
 
     def __init__(
         self,
         token_stream: AsyncIterator[str],
         text: asyncio.Future[str],
         stats: asyncio.Future[Any],
+        request_id: str,
     ) -> None:
         self.token_stream = token_stream
         self.text = text
         self.stats = stats
+        self.request_id = request_id
 
 
 def translate(
@@ -258,8 +262,12 @@ def translate(
         payload["to"] = to
     if context is not None:
         payload["context"] = context
-    if request_id is not None:
-        payload["requestId"] = request_id
+    # Generate a client request id when the caller omits one, thread it on the
+    # wire, and expose it on the handle for `cancel(request_id=...)`, mirroring JS.
+    resolved_request_id = (
+        request_id if request_id is not None else generate_client_request_id()
+    )
+    payload["requestId"] = resolved_request_id
 
     request = TranslateRequest.model_validate(payload)
     wire = _dump(request)
@@ -285,7 +293,9 @@ def translate(
 
         text_future: asyncio.Future[str] = loop.create_future()
         text_future.set_result("")
-        return TranslateRun(token_stream(), text_future, stats_future)
+        return TranslateRun(
+            token_stream(), text_future, stats_future, resolved_request_id
+        )
 
     async def empty_stream() -> AsyncIterator[str]:
         return
@@ -304,7 +314,12 @@ def translate(
 
     # Eager task, matching the JS promise: the wire call starts now, not
     # when `text` is first awaited.
-    return TranslateRun(empty_stream(), loop.create_task(collect_text()), stats_future)
+    return TranslateRun(
+        empty_stream(),
+        loop.create_task(collect_text()),
+        stats_future,
+        resolved_request_id,
+    )
 
 
 async def cancel(

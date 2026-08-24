@@ -6,7 +6,7 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
-# llm-llamacpp, nmtcpp, onnx, parakeet, tts-ggml,
+# llm-llamacpp, nmtcpp, parakeet, tts-ggml,
 # whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
@@ -29,7 +29,7 @@ on:
         default: "tetherto/qvac"
       artifact-name-prefix:
         description: >-
-          Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer.
+          Optional prefix for the per-matrix prebuild artifact name. The merged artifact is always uploaded under the well-known name `prebuilds`, but downstream mobile-integration test workflows download per-matrix artifacts via glob patterns built from this prefix (see PREBUILD_ARTIFACT_PREFIX in integration-mobile-test-*.yml), so it must match the convention expected by the consumer. It also scopes the merge job's download: a caller that publishes any other artifact in the same run (`fabric-overlay-artifact`) must set it, or that artifact is merged into the bundle.
         type: string
         required: false
         default: ""
@@ -92,6 +92,14 @@ on:
         type: boolean
         required: false
         default: false
+      fabric-overlay-artifact:
+        description: >-
+          When set, download this workflow-run artifact after npm install and overlay
+          its contents into node_modules/@qvac/fabric before bare-make generate.
+          Used by npm-runtime consumers on fabric-stack PRs.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -272,6 +280,23 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm install
+
+      - if: ${{ inputs.fabric-overlay-artifact != '' }}
+        name: Download fabric-prebuilds for overlay
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - if: ${{ inputs.fabric-overlay-artifact != '' }}
+        name: Overlay PR @qvac/fabric prebuilds
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+          tags: ${{ matrix.tags || '' }}
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
@@ -490,9 +515,28 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download all build artifacts
+      # The scoping below is only real when the prefix is set. A caller that
+      # overlays PR fabric without one would silently ship the fabric tree
+      # inside its own bundle, so fail instead.
+      - name: Verify the merge scope is bounded
+        if: ${{ inputs.fabric-overlay-artifact != '' && inputs.artifact-name-prefix == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::error::fabric-overlay-artifact is set but artifact-name-prefix is empty — the merge would absorb the fabric tree into the prebuilds bundle"
+          exit 1
+
+      - name: Download this workflow's build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
+          # Scoped to the matrix uploads above. Unscoped, this takes every
+          # artifact in the run and flattens it into the shipped bundle —
+          # including the PR fabric tree a caller publishes for
+          # fabric-overlay-artifact, which lands in the addon's own prebuilds
+          # directory and hides whether the addon resolves @qvac/fabric from
+          # node_modules. Callers that leave artifact-name-prefix empty keep the
+          # previous unscoped behaviour.
+          pattern: ${{ inputs.artifact-name-prefix }}*
           path: prebuilds
           merge-multiple: true
 

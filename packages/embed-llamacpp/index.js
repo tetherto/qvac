@@ -12,6 +12,10 @@ const addon_1 = require("./addon");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
+function loadIdMapIndex() {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
+    return require("./idMapIndex");
+}
 /**
  * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
  * entry for single-file models. Matches the C++ shard-expansion contract
@@ -137,7 +141,10 @@ class GGMLBert {
             this._hasActiveResponse = false;
         });
         finalized.catch((err) => {
-            const detail = (err && typeof err === "object" && "message" in err && err.message) ||
+            const detail = (err &&
+                typeof err === "object" &&
+                "message" in err &&
+                err.message) ||
                 err;
             this.logger?.warn?.("Inference response rejected:", detail);
         });
@@ -203,7 +210,18 @@ class GGMLBert {
 exports.GGMLBert = GGMLBert;
 exports.default = GGMLBert;
 const cjsExports = GGMLBert;
+cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
+Object.defineProperties(cjsExports, {
+    IdMapIndex: {
+        enumerable: true,
+        get: loadIdMapIndex,
+    },
+    IdMapIndexFilter: {
+        enumerable: true,
+        get: () => loadIdMapIndex().IdMapIndexFilter,
+    },
+});
 module.exports = cjsExports;

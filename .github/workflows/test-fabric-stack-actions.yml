@@ -119,28 +119,30 @@ jobs:
             packages/sdk/index.ts
             packages/fabric/addon/fabric.cpp
 
-      - name: Run detection with a qvac-fabric overlay port change
-        id: overlay-port
+      # qvac-fabric resolves from the git registry, so a new port revision only
+      # reaches the build through a baseline bump in this manifest.
+      - name: Run detection with a qvac-fabric registry baseline bump
+        id: registry-baseline
         if: github.event_name == 'pull_request'
         uses: ./.github/actions/detect-fabric-stack
         env:
           MOCK_COMPARE_MERGE_BASE: ${{ env.MOCK_MERGE_BASE }}
-          MOCK_GIT_DIFF_FILES: vcpkg-overlays/ports/qvac-fabric/portfile.cmake
+          MOCK_GIT_DIFF_FILES: packages/fabric/vcpkg-configuration.json
 
       - name: Verify both build-affecting diffs are fabric-stack PRs
         if: github.event_name == 'pull_request'
         shell: bash
         env:
           FABRIC_LAST: ${{ steps.fabric-last.outputs.fabric_stack }}
-          OVERLAY_PORT: ${{ steps.overlay-port.outputs.fabric_stack }}
+          REGISTRY_BASELINE: ${{ steps.registry-baseline.outputs.fabric_stack }}
         run: |
           set -euo pipefail
           if [ "$FABRIC_LAST" != "true" ]; then
             echo "::error::Expected a Fabric source change behind unrelated files to report true, got $FABRIC_LAST"
             exit 1
           fi
-          if [ "$OVERLAY_PORT" != "true" ]; then
-            echo "::error::Expected a qvac-fabric overlay port change to report true, got $OVERLAY_PORT"
+          if [ "$REGISTRY_BASELINE" != "true" ]; then
+            echo "::error::Expected a qvac-fabric registry baseline bump to report true, got $REGISTRY_BASELINE"
             exit 1
           fi
 
@@ -449,6 +451,42 @@ jobs:
           fi
           if [ ! -f "$DOWNLOAD_DIR/mock-download-complete" ]; then
             echo "::error::Mock artifact was not downloaded"
+            exit 1
+          fi
+
+      # fabric-prebuilds-publish only runs behind a successful prebuild, so a
+      # producer that went red afterwards — its consumer smoke or lint, both
+      # downstream of the publish — still holds a good bundle. Filtering it out
+      # would strand every consumer re-run after such a failure.
+      - name: Accept a producer that concluded red after publishing
+        id: red-producer
+        uses: ./.github/actions/wait-and-download-fabric-prebuilds
+        env:
+          MOCK_EXPECTED_HEAD_SHA: 0123456789abcdef0123456789abcdef01234567
+          MOCK_EXPECTED_ARTIFACT: fabric-prebuilds
+          MOCK_RUN_STATUS: completed
+          MOCK_RUN_CONCLUSION: failure
+        with:
+          github-token: test-token
+          head-sha: 0123456789abcdef0123456789abcdef01234567
+          head-repo: ${{ github.repository }}
+          download-dir: ${{ runner.temp }}/fabric-red-producer-test
+          timeout-minutes: 1
+          poll-seconds: 1
+
+      - name: Verify the red producer's artifact was downloaded
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ steps.red-producer.outputs['source-run-id'] }}
+          DOWNLOAD_DIR: ${{ runner.temp }}/fabric-red-producer-test
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_RUN_ID" != "4242" ]; then
+            echo "::error::Expected source run 4242 from a red producer, got $SOURCE_RUN_ID"
+            exit 1
+          fi
+          if [ ! -f "$DOWNLOAD_DIR/mock-download-complete" ]; then
+            echo "::error::A red producer's published artifact was not downloaded"
             exit 1
           fi
 

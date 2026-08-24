@@ -10,6 +10,8 @@ import {
   ttsSupertonicRuntimeConfigSchema,
   TTS_CHATTERBOX_LANGUAGES,
   TTS_PARLER_EMOTIONS,
+  TTS_COSYVOICE3_EMOTIONS,
+  TTS_PACES,
   TTS_SUPERTONIC_LANGUAGES,
   LEGACY_TTS_ONNX_MODEL_CONFIG_FIELDS
 } from '@/schemas/text-to-speech'
@@ -614,4 +616,284 @@ test('textToSpeechStreamResponseSchema: rejects missing buffer', (t) => {
     type: 'textToSpeechStream'
   })
   t.is(r.success, false, 'missing buffer is rejected')
+})
+
+// === CosyVoice3 ===
+
+test('ttsConfigSchema: accepts the full CosyVoice3 load surface', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    emotion: 'happy',
+    useGPU: true,
+    outputSampleRate: 24000,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    threads: 4,
+    nGpuLayers: 99,
+    seed: 42,
+    lavasrEnhancerModelSrc: 's3:///example/lavasr-enhancer.gguf',
+    lavasrDenoiserModelSrc: 's3:///example/lavasr-denoiser.gguf'
+  })
+  t.is(r.success, false, 'denoiser is batch-only, native streaming conflicts')
+
+  const withoutDenoiser = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    emotion: 'happy',
+    useGPU: true,
+    outputSampleRate: 24000,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10,
+    threads: 4,
+    nGpuLayers: 99,
+    seed: 42,
+    lavasrEnhancerModelSrc: 's3:///example/lavasr-enhancer.gguf'
+  })
+  t.is(withoutDenoiser.success, true)
+})
+
+test('ttsConfigSchema: accepts CosyVoice3 structured and raw-string instruct', (t) => {
+  const structured = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    instruct: { dialect: 'cantonese' }
+  })
+  t.is(structured.success, true)
+
+  const raw = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    instruct: '请用广东话表达。'
+  })
+  t.is(raw.success, true)
+})
+
+test('ttsConfigSchema: rejects empty or unknown CosyVoice3 instruct controls', (t) => {
+  const empty = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    instruct: {}
+  })
+  t.is(empty.success, false, 'instruct object requires at least one control')
+
+  // The addon trims raw-string instructions, so a whitespace-only string would
+  // silently disengage conditioning (zero-shot) instead of erroring.
+  const whitespace = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    instruct: '   '
+  })
+  t.is(whitespace.success, false, 'whitespace-only instruct strings are rejected')
+
+  const unknown = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    instruct: { emotion: 'happy' }
+  })
+  t.is(unknown.success, false, 'emotion is a top-level option, not an instruct key')
+})
+
+test('ttsConfigSchema: enforces the CosyVoice3 one-instruction rule', (t) => {
+  const emotionAndInstruct = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    emotion: 'happy',
+    instruct: { volume: 'loud' }
+  })
+  t.is(emotionAndInstruct.success, false)
+  if (!emotionAndInstruct.success) {
+    t.ok(emotionAndInstruct.error.issues[0]?.message.includes('one conditioning control'))
+  }
+
+  const emotionAndPace = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    emotion: 'sad',
+    pace: 'slow'
+  })
+  t.is(emotionAndPace.success, false)
+
+  const moderatePaceDisengages = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    emotion: 'sad',
+    pace: 'moderate'
+  })
+  t.is(moderatePaceDisengages.success, true, 'pace "moderate" disengages the pace channel')
+})
+
+test('ttsConfigSchema: restricts CosyVoice3 emotions to the supported subset', (t) => {
+  for (const emotion of TTS_COSYVOICE3_EMOTIONS) {
+    const r = ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', emotion })
+    t.is(r.success, true, `emotion "${emotion}" is accepted`)
+  }
+
+  const unsupported = ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', emotion: 'fear' })
+  t.is(unsupported.success, false, 'cross-engine emotion outside the CosyVoice3 subset is rejected')
+})
+
+test('ttsConfigSchema: pins CosyVoice3 native streaming to 24 kHz without the enhancer', (t) => {
+  const mismatch = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    streamChunkTokens: 25,
+    outputSampleRate: 48000
+  })
+  t.is(mismatch.success, false)
+  if (!mismatch.success) {
+    t.is(mismatch.error.issues[0]?.path.join('.'), 'outputSampleRate')
+  }
+
+  const withEnhancer = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    streamChunkTokens: 25,
+    outputSampleRate: 48000,
+    lavasrEnhancerModelSrc: 's3:///example/lavasr-enhancer.gguf'
+  })
+  t.is(withEnhancer.success, true, 'the enhancer resamples seam-free')
+
+  const batchResample = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    outputSampleRate: 16000
+  })
+  t.is(batchResample.success, true, 'batch synthesis resamples freely')
+})
+
+test('ttsConfigSchema: rejects sampling options on CosyVoice3', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'cosyvoice3',
+    temperature: 0.7
+  })
+  t.is(r.success, false, 'temperature is a Parler/Audio8 option')
+})
+
+test('TTS_COSYVOICE3_EMOTIONS and TTS_PACES expose the canonical vocabularies', (t) => {
+  t.alike([...TTS_COSYVOICE3_EMOTIONS], ['anger', 'happy', 'neutral', 'sad'])
+  t.alike([...TTS_PACES], ['slow', 'moderate', 'fast'])
+  for (const emotion of TTS_COSYVOICE3_EMOTIONS) {
+    t.ok(
+      (TTS_PARLER_EMOTIONS as readonly string[]).includes(emotion),
+      `"${emotion}" is part of the cross-engine vocabulary`
+    )
+  }
+})
+
+test('ttsRequestSchema: rejects free-form pace strings', (t) => {
+  const r = ttsRequestSchema.safeParse({
+    type: 'textToSpeech',
+    modelId: 'parler',
+    text: 'Hello.',
+    pace: 'very fast'
+  })
+  t.is(r.success, false, 'pace uses the canonical vocabulary since tts-ggml 0.7')
+
+  const ok = ttsRequestSchema.safeParse({
+    type: 'textToSpeech',
+    modelId: 'parler',
+    text: 'Hello.',
+    pace: 'fast'
+  })
+  t.is(ok.success, true)
+})
+
+// === Audio8 ===
+
+test('ttsConfigSchema: accepts the full Audio8 load surface', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/audio8-codec-decoder-q8_0.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/audio8-codec-encoder-q8_0.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: 'Exactly what the recording says.',
+    greedy: true,
+    temperature: 0.7,
+    topK: 50,
+    topP: 0.9,
+    maxFrames: 430,
+    useGPU: true,
+    outputSampleRate: 44100,
+    threads: 4,
+    nGpuLayers: 99,
+    seed: 42
+  })
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: requires the Audio8 codec decoder source', (t) => {
+  const r = ttsConfigSchema.safeParse({ ttsEngine: 'audio8' })
+  t.is(r.success, false, 'audio8CodecDecoderModelSrc is required')
+})
+
+test('ttsConfigSchema: rejects a whitespace-only Audio8 referenceText', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/encoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: '   '
+  })
+  t.is(r.success, false, 'a whitespace-only transcript must not reach the engine')
+})
+
+test('ttsConfigSchema: enforces the Audio8 voice-cloning pairing rules', (t) => {
+  const missingTranscript = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    audio8CodecEncoderModelSrc: 's3:///example/encoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav'
+  })
+  t.is(missingTranscript.success, false)
+  if (!missingTranscript.success) {
+    t.is(missingTranscript.error.issues[0]?.path.join('.'), 'referenceText')
+  }
+
+  const missingRecording = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    referenceText: 'A transcript without a recording.'
+  })
+  t.is(missingRecording.success, false)
+  if (!missingRecording.success) {
+    t.is(missingRecording.error.issues[0]?.path.join('.'), 'referenceAudioSrc')
+  }
+
+  const missingEncoder = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    referenceAudioSrc: 's3:///example/voice.wav',
+    referenceText: 'Exactly what the recording says.'
+  })
+  t.is(missingEncoder.success, false)
+  if (!missingEncoder.success) {
+    t.is(missingEncoder.error.issues[0]?.path.join('.'), 'audio8CodecEncoderModelSrc')
+  }
+})
+
+test('ttsConfigSchema: rejects conditioning and LavaSR options on Audio8', (t) => {
+  const emotion = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    emotion: 'happy'
+  })
+  t.is(emotion.success, false, 'Audio8 has no emotion vocabulary')
+
+  const lavasr = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    lavasrEnhancerModelSrc: 's3:///example/lavasr-enhancer.gguf'
+  })
+  t.is(lavasr.success, false, 'Audio8 emits native 44.1 kHz, LavaSR is rejected')
+
+  const streaming = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    streamChunkTokens: 25
+  })
+  t.is(streaming.success, false, 'Audio8 has no native chunk streaming')
+})
+
+test('ttsConfigSchema: validates Audio8 sampling ranges', (t) => {
+  const badTopP = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    topP: 1.5
+  })
+  t.is(badTopP.success, false)
+
+  const negativeTemperature = ttsConfigSchema.safeParse({
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: 's3:///example/decoder.gguf',
+    temperature: -1
+  })
+  t.is(negativeTemperature.success, false)
 })

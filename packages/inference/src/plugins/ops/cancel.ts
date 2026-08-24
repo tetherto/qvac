@@ -12,7 +12,7 @@ const logger = getEngineLogger()
  * optionally a `kind`). Maps onto `RequestRegistry.cancel({ modelId })`
  * — the registry walks active contexts and aborts each one's signal,
  * which each handler has wired to its own addon-level / async unwind
- * via the registry's `await using ctx = registry.begin(...)` block.
+ * via the registry's `await using ctx = await registry.begin(...)` block.
  *
  * Kept as a stable surface alongside the new `cancel({ requestId })`
  * path: the caller may not have a `requestId` to hand (model unload,

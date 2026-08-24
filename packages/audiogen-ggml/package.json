@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Audio generation (music) addon for qvac",
   "addon": true,
   "engines": {
@@ -106,14 +106,6 @@
     "bare-os": "^3.8.0",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2"
-  },
-  "peerDependencies": {
-    "@qvac/registry-client": "^0.6.1"
-  },
-  "peerDependenciesMeta": {
-    "@qvac/registry-client": {
-      "optional": true
-    }
   },
   "types": "index.d.ts"
 }

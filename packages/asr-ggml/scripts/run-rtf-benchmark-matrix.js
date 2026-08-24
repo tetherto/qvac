@@ -24,7 +24,6 @@
 const fs = require('fs')
 const path = require('path')
 const { spawnSync } = require('child_process')
-const { isDeepStrictEqual } = require('util')
 
 const RESULTS_DIR = path.resolve(__dirname, '..', 'benchmarks', 'results')
 
@@ -37,7 +36,6 @@ const ENGINES = {
     npmScript: 'test:benchmark:rtf:parakeet',
     defaultEntries: [
       { engine: 'parakeet', modelType: 'tdt', useGPU: false },
-      { engine: 'parakeet', modelType: 'unified', useGPU: false },
       { engine: 'parakeet', modelType: 'ctc', useGPU: false },
       { engine: 'parakeet', modelType: 'eou', useGPU: false },
       { engine: 'parakeet', modelType: 'sortformer', useGPU: false },
@@ -72,39 +70,10 @@ function parseJsonArray(raw, envName) {
   return parsed
 }
 
-function buildUnifiedEntry(tdtEntry) {
-  return { ...tdtEntry, modelType: 'unified' }
-}
-
-function hasMatchingUnifiedEntry(entries, tdtEntry) {
-  const expected = buildUnifiedEntry(tdtEntry)
-  return entries.some((entry) => isDeepStrictEqual(entry, expected))
-}
-
-function addUnifiedCoverage(entries) {
-  const expanded = [...entries]
-  for (const entry of entries) {
-    if (
-      entry.engine === 'parakeet' &&
-      entry.modelType === 'tdt' &&
-      !hasMatchingUnifiedEntry(expanded, entry)
-    ) {
-      expanded.push(buildUnifiedEntry(entry))
-    }
-  }
-  return expanded
-}
-
-function extendConfiguredMatrix(entries) {
-  return normalizeBoolean(process.env.QVAC_PARAKEET_ADD_UNIFIED_COVERAGE)
-    ? addUnifiedCoverage(entries)
-    : entries
-}
-
 function parseMatrixConfig() {
   const unified = process.env.QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON
   if (unified) {
-    return extendConfiguredMatrix(parseJsonArray(unified, 'QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON'))
+    return parseJsonArray(unified, 'QVAC_ASR_GGML_BENCHMARK_MATRIX_JSON')
   }
 
   // Legacy per-engine env vars (engine implied).
@@ -122,7 +91,7 @@ function parseMatrixConfig() {
         entries.push({ engine: 'parakeet', ...e })
       }
     }
-    return extendConfiguredMatrix(entries)
+    return entries
   }
 
   // No matrix requested: one CPU smoke entry per engine family.
@@ -319,4 +288,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { addUnifiedCoverage, parseMatrixConfig }
+module.exports = { parseMatrixConfig }

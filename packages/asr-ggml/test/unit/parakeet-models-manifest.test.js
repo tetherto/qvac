@@ -21,14 +21,11 @@ const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'parakeet-models
 const HELPERS_PATH = path.join(__dirname, '..', 'integration', 'parakeet-helpers.js')
 
 // The desktop quant sweep staged by integration-test-asr-ggml.yml
-// (f16 + q8_0 + q4_0 for Unified and the existing core model types), plus
+// (f16 + q8_0 + q4_0 for the available core model types), plus
 // the Sortformer-Streaming v2.1 q8_0 GGUF that parakeet-sortformer-aosc-streaming.test.js
 // loads via MODEL_CONFIGS.sortformerStreaming, plus Indic Conformer CTC q8_0
 // (desktop default; mobile uses q4_0 via the Device Farm manifest).
 const EXPECTED_FILES = [
-  'parakeet-unified-en-0.6b.f16.gguf',
-  'parakeet-unified-en-0.6b.q8_0.gguf',
-  'parakeet-unified-en-0.6b.q4_0.gguf',
   'parakeet-tdt-0.6b-v3.f16.gguf',
   'parakeet-ctc-0.6b.f16.gguf',
   'parakeet-eou-120m-v1.f16.gguf',
@@ -45,14 +42,7 @@ const EXPECTED_FILES = [
   'indic-conformer-ctc.q8_0.gguf'
 ]
 
-const KNOWN_DATE_PREFIXES = [
-  '2026-08-13',
-  '2026-07-01',
-  '2026-05-11',
-  '2026-05-27',
-  '2026-05-20',
-  '2026-08-07'
-]
+const KNOWN_DATE_PREFIXES = ['2026-07-01', '2026-05-11', '2026-05-27', '2026-05-20', '2026-08-07']
 const KNOWN_MODEL_FAMILIES = ['parakeet', 'indic_conformer']
 
 function loadManifest() {

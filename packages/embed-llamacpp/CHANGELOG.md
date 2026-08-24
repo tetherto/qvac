@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.36.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime and vector-index support; no API change for this package).
+
+## [0.35.0] - 2026-08-21
+
+This release first updates `@qvac/embed-llamacpp` to the `qvac-fabric` runtime
+with TurboVec CPU support. It then exposes that capability through the new
+`IdMapIndex` API, giving consumers a native path for local vector search with
+TurboVec-backed storage modes while keeping CommonJS and ESM entrypoints aligned.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+- Fabric vector-index support is enabled for embed builds, with lifecycle and
+  filter invalidation behavior aligned to the current TurboVec CPU contract.
+
+### Added
+
+- `IdMapIndex` and `IdMapIndexFilter` exports for building and querying native
+  vector indexes from JavaScript and TypeScript.
+- Native f32, q4, q8, `turbovec-q2`, and `turbovec-q4` index storage modes with
+  exact search, filtered search, IVF support, snapshots, mmap loading, and delta
+  log persistence where supported.
+- Integration, mobile registration, type-consumer coverage, and a TurboVec CPU
+  benchmark covering the new vector-index surface.
+
+### Pull Requests
+
+- [#3786](https://github.com/tetherto/qvac/pull/3786) - QVAC-20631 feat[api]:
+  add TurboVec CPU vector indexing
+
+## [0.34.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
 ## [0.33.0] - 2026-08-17
 
 ### Changed

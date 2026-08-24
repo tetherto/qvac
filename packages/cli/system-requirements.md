@@ -7,8 +7,9 @@ validate your environment against this list with:
 qvac doctor
 ```
 
-Use `--json` for machine-readable output and `--quiet` to only set the exit
-code (`0` when all required checks pass, `1` otherwise).
+Use `--deep` to start the project SDK worker and verify a heartbeat plus clean
+shutdown. Use `--json` for machine-readable output and `--quiet` to only set
+the exit code (`0` when all required checks pass, `1` otherwise).
 
 ## Scope: CLI host vs. SDK deploy targets
 
@@ -30,6 +31,10 @@ and iOS. `qvac doctor` reports both, in two distinct sections of its output:
 | Node.js `>= 18.0.0`                         | Node 18 is end-of-life; prefer `>= 20`. Matches `engines.node`.                                                                            |
 | Supported CLI host                          | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. The `qvac` CLI cannot run on mobile; those are deploy targets only. |
 | Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load.                                                                                                   |
+
+When `--deep` is requested, the project SDK must resolve and its isolated
+worker probe must import the SDK, complete `heartbeat()`, and complete
+`close()`. Failure in any phase is a required-check failure.
 
 ## Recommended
 
@@ -69,13 +74,32 @@ they are missing but does not fail.
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@qvac/sdk` resolvable from project | Resolved with `require.resolve('@qvac/sdk/package.json')` rooted at the working directory, so hoisted installs (monorepos, Yarn/Bun workspaces) are correctly detected. |
 
+## Deep SDK runtime probe
+
+`qvac doctor --deep` runs the installed project SDK in an isolated Node.js
+child process. The child reports its import, heartbeat, and cleanup result over
+a private structured channel, while stdout and stderr are captured separately
+and bounded. A valid success result and exit code `0` are both required.
+
+The outer probe timeout is 45 seconds, and SDK cleanup is bounded separately to
+two seconds. On Unix, a timeout requests graceful termination of the probe
+process tree and then forces termination after a two-second grace period. On
+Windows, the CLI requests termination of the live tree with `taskkill /T /F`
+when the probe times out. After a failed Windows probe exits, the CLI cannot
+reliably address descendants through the exited parent's PID, so the report
+warns that a Bare worker may still require manual termination. The report
+prioritizes concrete CPU, native-library, Visual C++ runtime, Vulkan, and Bare
+errors over generic lifecycle failures. These classifications are diagnostic
+guidance; native loader messages that lack structured SDK error codes are
+necessarily matched heuristically.
+
 ## Exit codes
 
 - `0` — all required checks passed. Warnings, skips, and informational
   rows may still be present.
 - `1` — one or more required checks failed (unsupported Node version,
-  unsupported CLI host, insufficient total RAM, …). See the printed hints
-  for remediation steps.
+  unsupported CLI host, insufficient total RAM, or a requested deep probe
+  could not run or complete). See the printed hints for remediation steps.
 
 ## JSON schema
 
@@ -86,13 +110,14 @@ interface DoctorReport {
   arch: string // e.g. "arm64"
   nodeVersion: string // e.g. "20.19.5"
   sections: Array<{
-    id: 'runtime' | 'hardware' | 'targets' | 'tools' | 'project'
+    id: 'runtime' | 'hardware' | 'targets' | 'tools' | 'project' | 'deep'
     title: string
     checks: Array<{
       id: string
       label: string
       status: 'pass' | 'warn' | 'fail' | 'skip' | 'info'
       severity: 'required' | 'recommended' | 'informational'
+      code?: string // stable machine-readable failure classification
       value?: string
       detail?: string
       hint?: string // typically present for any non-pass result

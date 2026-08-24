@@ -369,7 +369,7 @@ test('functional prestage mappings cover every configured mobile shard runner', 
   assert.deepEqual(Object.keys(mappings).sort(), configured.sort())
 })
 
-test('selectFunctionalEntries resolves grep mappings and deduplicates shared targets', () => {
+test('selectFunctionalEntries regex-matches runner names and deduplicates shared targets', () => {
   const mappings = functionalModelsByTest(FUNCTIONAL_MANIFEST)
   const entries = selectFunctionalEntries(mappings, 'runAddonTest|runMultipleRunsTest')
 
@@ -377,12 +377,27 @@ test('selectFunctionalEntries resolves grep mappings and deduplicates shared tar
     entries.map((entry) => entry.targetName),
     ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf', 'supertonic.gguf']
   )
-  assert.throws(() => selectFunctionalEntries(mappings, ''), /grep is required/)
+
+  // The grep is a mocha --grep regex over runner NAMES: a partial pattern
+  // stages every runner it matches, not just an exact manifest key.
+  const chatterbox = selectFunctionalEntries(mappings, 'runChatterboxSpeed')
+  assert.deepEqual(
+    chatterbox.map((entry) => entry.targetName),
+    ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf']
+  )
+
+  // An empty grep is benign (no shard resolved -> stage nothing). A model-free
+  // but KNOWN runner (runParlerTest -> []) still matches its manifest key, so it
+  // stages nothing without erroring. A zero-match typo or an invalid regex is a
+  // test-groups <-> model-map drift and fails CLOSED: the workflow_call lanes
+  // never run validate-devices, so an under-staged run must surface here.
+  assert.deepEqual(selectFunctionalEntries(mappings, ''), [])
+  assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
   assert.throws(
     () => selectFunctionalEntries(mappings, 'runMissingTest'),
-    /Missing functional mapping/
+    /matched no known runner/
   )
-  assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
+  assert.throws(() => selectFunctionalEntries(mappings, '('), /invalid tests grep/)
 })
 
 test('functional mapping fails when any required manifest target is absent', () => {
@@ -407,8 +422,8 @@ test('functional prestage script reads the explicit shard grep and deduplicates 
   assertBashSyntax(script)
   assert.match(script, /cat \/tmp\/qvacShardGrep\.txt/)
   assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
-  assert.match(script, /functional shard grep is required/)
-  assert.match(script, /missing functional mapping/)
+  assert.match(script, /no functional shard grep/)
+  assert.match(script, /matched no known runner/)
   assert.match(script, /seen\.has\(m\.targetName\)/)
   assert.match(script, /adb push/)
 })
@@ -443,6 +458,27 @@ test('functional selector executes deduplication and accepts a zero-model Parler
     ].join('\n')
   )
 
+  // A partial regex stages every matching runner's models on device too.
+  const partial = run('runChatterboxSpeed')
+  assert.equal(partial.status, 0, partial.stderr)
+  assert.equal(
+    readFileSync(listPath, 'utf8'),
+    [
+      'chatterbox-t3-turbo.gguf\thttps://s3/cb-t3.gguf',
+      'chatterbox-s3gen.gguf\thttps://s3/cb-s3.gguf',
+      ''
+    ].join('\n')
+  )
+
+  // A typo that matches no known runner is drift and fails CLOSED on device
+  // (non-zero exit) so a validate-devices-less workflow_call run cannot silently
+  // ship under-staged.
+  const typo = run('runNopeTest')
+  assert.notEqual(typo.status, 0)
+  assert.match(typo.stderr, /matched no known runner/)
+
+  // A model-free but KNOWN runner (runParlerTest -> []) matches its manifest key,
+  // so it stages nothing without erroring.
   const parler = run('runParlerTest')
   assert.equal(parler.status, 0, parler.stderr)
   assert.equal(readFileSync(listPath, 'utf8'), '')

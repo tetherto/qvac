@@ -26,13 +26,13 @@ layout under `models/`:
 | Supertonic 3            | `supertonic3.gguf`                                    | Multilingual: 31 languages plus the language-agnostic `na` code (see below) |
 | Parler-TTS Mini v1      | `parler-tts-mini-v1.gguf`                             | English; description-conditioned voices                                     |
 | CosyVoice3              | `cosyvoice3/` dir (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + tokenizer files) | Instruct-conditioned; strong on Chinese + 17 dialects; native 24 kHz        |
-| Audio8                  | LM and codec decoder GGUFs; encoder optional           | 44.1 kHz synthesis and in-process voice cloning                              |
+| Audio8                  | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Multilingual (language inferred from the text); voice cloning; native 44.1 kHz |
 
 **Chatterbox multilingual (23 languages):** Arabic (`ar`), Danish (`da`), German (`de`), Greek (`el`), English (`en`), Spanish (`es`), Finnish (`fi`), French (`fr`), Hebrew (`he`), Hindi (`hi`), Italian (`it`), Japanese (`ja`), Korean (`ko`), Malay (`ms`), Dutch (`nl`), Norwegian (`no`), Polish (`pl`), Portuguese (`pt`), Russian (`ru`), Swedish (`sv`), Swahili (`sw`), Turkish (`tr`), Chinese (`zh`).
 
 **Supertonic 3 (31 languages + `na`):** `ar`, `bg`, `hr`, `cs`, `da`, `nl`, `en`, `et`, `fi`, `fr`, `de`, `el`, `hi`, `hu`, `id`, `it`, `ja`, `ko`, `lv`, `lt`, `pl`, `pt`, `ro`, `ru`, `sk`, `sl`, `es`, `sv`, `tr`, `uk`, `vi`. Pass `language: 'na'` when the input language is unknown.
 
-Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit `files.t3Model` + `files.s3genModel` (Chatterbox), `files.supertonicModel` (Supertonic), `files.parlerModel` (Parler-TTS), or `files.cosyvoiceModelDir` (CosyVoice3). Use `npm run download-models:registry` to acquire registry-published Chatterbox, Supertonic, and Parler models. CosyVoice3 and Audio8 must currently be staged from local converted artifacts.
+Point the addon at a custom location via `files.modelDir` (engine auto-detected from the GGUF filenames present), or pass explicit `files.t3Model` + `files.s3genModel` (Chatterbox), `files.supertonicModel` (Supertonic), `files.parlerModel` (Parler-TTS), `files.cosyvoiceModelDir` (CosyVoice3), or `files.audio8Lm` + `files.audio8CodecDecoder` (+ `files.audio8CodecEncoder` for voice cloning) (Audio8). Use `npm run download-models:registry` to acquire registry-published Chatterbox, Supertonic, Parler, and Audio8 models. CosyVoice3 must currently be staged from local converted artifacts.
 
 ## Requirement
 
@@ -188,10 +188,15 @@ The most common constructor options:
 | `files.supertonicModel`              | string  | —       | Supertonic GGUF path                                                    |
 | `files.parlerModel`                  | string  | —       | Parler GGUF path (mini / large / indic variant)                         |
 | `files.cosyvoiceModelDir`            | string  | —       | CosyVoice3 model directory (`cosyvoice3-{llm,flow,hift}-*.gguf` + `voice.gguf` + tokenizer files) |
-| `referenceAudio`                     | string  | —       | Mono WAV ≥ 5 s for voice cloning                                        |
+| `files.audio8Lm` / `files.audio8CodecDecoder` | string | — | Audio8 LM / codec decoder GGUFs (override `modelDir`)             |
+| `files.audio8CodecEncoder`           | string  | —       | Audio8 codec encoder — only needed to clone a voice                     |
+| `referenceAudio`                     | string  | —       | Mono WAV for voice cloning (Chatterbox: ≥ 5 s; Audio8: also needs `referenceText`) |
+| `referenceText`                      | string  | —       | Audio8-only: what `referenceAudio` says, verbatim; required with a reference |
 | `voiceDir`                           | string  | —       | Pre-baked voice profile directory                                       |
 | `emotion` / `pace`                   | string  | —       | Cross-engine conditioning — Parler + CosyVoice3 emotions; Parler / CosyVoice3 / Supertonic pace |
 | `instruct`                           | object \| string | — | CosyVoice3-only: `dialect` / `volume` / `style` object (precedence in that order) or a raw instruction string |
+| `temperature` / `topK` / `topP`      | number  | engine defaults | Parler + Audio8 sampling knobs (Audio8: temp 0.7 / top-k 50 / top-p 0.9) |
+| `greedy`                             | boolean | `false` | Audio8-only: take the argmax; ignores `temperature` / `topK` / `topP`   |
 | `streamChunkTokens`                  | number  | 0       | `> 0` enables native chunk streaming (25 tokens ≈ 1 s of audio)         |
 | `cfmSteps`                           | number  | 2       | `1` halves CFM cost for faster synthesis                                |
 | `config.language`                    | string  | `'en'`  | Language code; multilingual models accept `es/fr/de/pt/it/zh/ja/ko/...` |
@@ -326,8 +331,12 @@ const model = new TTSGgml({
 
 Alternatively point at a pre-baked profile directory via `voiceDir`. When both are supplied, missing tensors in `voiceDir` are backfilled from `referenceAudio`.
 
-**CosyVoice3** does not take a reference — it always speaks with its baked
-default voice.
+**Audio8** clones from the recording plus **what is said in it**: supply
+`referenceAudio` and `referenceText` (the verbatim transcript) together with
+`files.audio8CodecEncoder`, which encodes the reference to codes in-process —
+no enrolment step, no voice profile. The reference can also be switched per
+call. **CosyVoice3** does not take a reference — it always speaks with its
+baked default voice.
 
 ## Speech enhancement (LavaSR)
 

@@ -35,44 +35,149 @@ on:
         type: boolean
         required: false
         default: false
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below — it never runs the full default pool. The
+  # workflow_call path (benchmarks / weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'. Valid names + how to find them: docs/ci/MOBILE-ON-DEMAND.md."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Google Pixel 9"
+          - "Google Pixel 8"
+          - "Samsung Galaxy S25 Ultra"
+          - "Apple iPhone 17"
+          - "Apple iPhone 16 Pro"
+          - "Apple iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
+        type: string
+        required: false
+        default: ""
+      device_model_operator:
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
+        type: choice
+        required: false
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
+      tests:
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runAudioGenSmoke'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
+        type: string
+        required: false
+        default: ""
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
         type: string
         required: false
-        default: main
+        default: ""
       package_spec:
-        description: "Package to test (name@version). Use @qvac/audiogen-ggml@... for npm, @tetherto/audiogen-ggml@... for GPR"
+        description: "Package to test (name@version). Leave EMPTY (default) to test this branch's native prebuild artifact; use @qvac/audiogen-ggml@... for npm or @tetherto/audiogen-ggml@... for GPR to force-install a specific build."
         type: string
         required: false
-        default: "@qvac/audiogen-ggml@latest"
+        default: ""
       workdir:
         description: "Relative path to package directory in monorepo"
         type: string
         required: false
         default: "packages/audiogen-ggml"
-      run_rtf_benchmarks:
-        description: "Run the on-device RTF benchmark (extracts metrics from Device Farm logs post-run)"
-        type: boolean
-        required: false
-        default: false
+      # NOTE: RTF benchmarks are intentionally NOT a manual-dispatch input. A
+      # manual run always sets `platform`, which takes precedence in the build
+      # matrix, so a dispatched run_rtf_benchmarks would be silently ignored.
+      # Benchmarks run via workflow_call (benchmark-performance-audiogen-ggml).
 
 permissions:
   contents: read
 
+concurrency:
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks a
+  # second Device Farm run. Different branches map to different groups, so the
+  # same addon can still be tested on 2-3 branches in parallel. workflow_call
+  # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
+  # inputs.platform is only ever set on a manual dispatch, and under workflow_call
+  # github.* resolves to the CALLER, so run_id keeps each call self-contained.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
+
 jobs:
-  # NOTE: continue-on-error: true matches the sibling mobile addons
-  # (tts-ggml / parakeet). on-pr-audiogen-ggml.yml's merge-guard treats
-  # `success || skipped` as a pass, so a hard Device Farm failure does not
-  # gate merge today. Tighten once the on-device provisioning + Device Farm
-  # pool is stable (and the ~3 GB on-device model download is proven feasible).
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE the (~120 min) build or any Device Farm
+  # run, so a typo or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # This job runs in the `release` environment with OIDC, so — like the
+      # build-and-test job below — it must source the composite action from the
+      # default branch, never from a caller-selected ref. (Consequence: the
+      # validate-devices action is only available here once this PR is merged.)
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+          path: trusted-actions
+          persist-credentials: false
+      # The composite action stays pinned to the default branch above (the
+      # release-environment supply-chain guard). test-groups.json is DATA only
+      # (runner names + shard count, never executed), so it must come from the
+      # SAME ref the build executes (inputs.ref || github.sha) — otherwise a
+      # branch that renames/adds runners or shards would pass stale default-branch
+      # validation and could run zero tests.
+      - name: Checkout validation data (matches the built ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            packages/audiogen-ggml/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: false
+          path: validation-data
+          persist-credentials: false
+      - name: Validate requested devices
+        uses: ./trusted-actions/.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: validation-data/packages/audiogen-ggml/test/mobile/test-groups.json
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
+  # A Device Farm test failure fails this run on every trigger (no
+  # continue-on-error). Mobile is on-demand for this addon (not part of
+  # on-pr-audiogen-ggml.yml's PR lane), so this does not gate PR merges — it
+  # makes manual/scheduled runs trustworthy instead of silently green.
   build-and-test:
     name: Build ${{ matrix.platform }}${{ inputs.run_rtf_benchmarks && format(' ({0} {1})', matrix.dit_variant, matrix.use_gpu && 'gpu' || 'cpu') || '' }} and Run E2E Tests
+    # validate-devices is skipped on workflow_call (its `skipped` result keeps
+    # this job running); on a manual run a bad/empty device selection blocks the
+    # build before it starts, so no long build is wasted on a typo.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true
     permissions:
       contents: read
       packages: read
@@ -84,8 +189,8 @@ jobs:
       # device. The engine loads the ACE-Step stages sequentially, so the
       # load-time peak is a single stage instead of all six at once and create()
       # does not jetsam-OOM on a non-entitled iPhone during the ~3 GB load.
-      # Non-blocking (continue-on-error) on both platforms until the Device Farm
-      # pool is stable.
+      # A Device Farm failure on either platform fails the run (see the
+      # build-and-test comment above — no continue-on-error).
       #
       # The benchmark matrix (run_rtf_benchmarks=true) sweeps the three DiT
       # variants on CPU and GPU (Vulkan on Android, Metal on iOS) — one Device
@@ -93,13 +198,20 @@ jobs:
       # ~3 GB GGUF set on-device before it can measure anything. `sft` runs the
       # ~50-step schedule instead of turbo's ~8, so its rows drop the warmup and
       # shorten the clip to have any chance of fitting a device slot.
-      matrix: ${{ fromJSON(inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
+      # On workflow_dispatch, build only the chosen platform (functional smoke).
+      # workflow_call keeps the benchmark sweep / default both-platform matrix.
+      matrix: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '{"include":[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"}]}') || inputs.run_rtf_benchmarks && '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q4","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q8","use_gpu":false,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"sft","use_gpu":false,"warmup":0,"runs":1,"duration":10},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q4","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"turbo-q8","use_gpu":true,"warmup":1,"runs":2,"duration":15},{"platform":"iOS","os":"macos-14","runner":"macos-14","dit_variant":"sft","use_gpu":true,"warmup":0,"runs":1,"duration":10}]}' || '{"include":[{"platform":"Android","os":"ubuntu-24.04","runner":"qvac-ubuntu2404-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]}') }}
 
     steps:
       - name: Checkout composite action source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ github.repository }}
+          # Always pull the trusted composite actions from the default branch —
+          # this is the supply-chain guard for the release-environment job, for
+          # both workflow_call and workflow_dispatch. Note: manual-devices
+          # scheduling is only available once this PR is merged to the default
+          # branch, so it cannot be validated pre-merge on this addon by design.
           ref: ${{ github.event.repository.default_branch }}
           path: trusted-actions
           sparse-checkout: |
@@ -111,7 +223,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
@@ -140,6 +252,25 @@ jobs:
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
           ios-provisioning-profile-base64: ${{ secrets.TEST_APP_APPLE_PROVISIONING_PROFILE }}
           apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+      # On a manual run with a test filter, run only the matching tests (single
+      # grepped spec). Empty filter / workflow_call keeps the default behaviour.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          # Reject anything but mocha-safe grep characters so a manual `tests`
+          # value cannot break out of the generated WDIO config on the Device
+          # Farm host (defense-in-depth; the sink is also JSON-encoded).
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials for Android model pre-stage
         if: matrix.platform == 'Android'
@@ -198,9 +329,9 @@ jobs:
           app-name: ${{ steps.build.outputs.app-name }}
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           device-farm-project-arn: ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN_AUDIOGEN_GGML || secrets.AWS_DEVICE_FARM_PROJECT_ARN_ONNX_TTS }}
-          # Empty on a normal run => the action auto-detects test-groups.json
-          # (functional tests). Set on a benchmark run => only the benchmark.
-          test-groups: ${{ steps.perf_groups.outputs.groups }}
+          # A manual test filter wins; else empty on a normal run => auto-detect
+          # test-groups.json (functional); set on a benchmark run => only the benchmark.
+          test-groups: ${{ steps.manual_tests.outputs.groups != '' && steps.manual_tests.outputs.groups || steps.perf_groups.outputs.groups }}
           enables-perf: ${{ inputs.run_rtf_benchmarks && 'true' || 'false' }}
           # The device has no workflow env, so the benchmark's configuration
           # travels in the config file the runner pushes and os.setEnv()s before
@@ -223,6 +354,11 @@ jobs:
           app-upload-arn: ${{ steps.upload.outputs.app-upload-arn }}
           test-package-upload-arn: ${{ steps.upload.outputs.test-package-upload-arn }}
           test-specs: ${{ steps.upload.outputs.test-specs }}
+          # On workflow_dispatch, pin the run to the chosen device(s); otherwise
+          # keep the composite's default dual-flagship scheduling for workflow_call.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || 'dual-flagship' }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
+          device-model-operator: ${{ inputs.platform != '' && inputs.device_model_operator || '' }}
 
       - name: Monitor Device Farm test runs
         id: monitor

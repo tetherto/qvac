@@ -3,7 +3,19 @@
 // tts-ggml/src/tts.ts. `AudioGenInterface` owns the native handle and forwards
 // createInstance / activate / runJob / cancel / destroyInstance to the binding.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AudioGenInterface = void 0;
+exports.AudioGenInterface = exports.RepaintMode = exports.AudioEditOperationType = void 0;
+/** Stable string values serialized across the JS -> native addon boundary. */
+var AudioEditOperationType;
+(function (AudioEditOperationType) {
+    AudioEditOperationType["FlowEdit"] = "flow-edit";
+    AudioEditOperationType["Repaint"] = "repaint";
+})(AudioEditOperationType || (exports.AudioEditOperationType = AudioEditOperationType = {}));
+var RepaintMode;
+(function (RepaintMode) {
+    RepaintMode["Conservative"] = "conservative";
+    RepaintMode["Balanced"] = "balanced";
+    RepaintMode["Aggressive"] = "aggressive";
+})(RepaintMode || (exports.RepaintMode = RepaintMode = {}));
 /** An interface between the Bare addon in C++ and the JS runtime. */
 class AudioGenInterface {
     _binding;

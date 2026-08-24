@@ -126,14 +126,6 @@ async function runParakeetMobilePerfTdtGpuTest (options = {}) { // eslint-disabl
   return runIntegrationModule('../integration/parakeet-mobile-perf-tdt-gpu.test.js', options)
 }
 
-async function runParakeetMobilePerfUnifiedCpuTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/parakeet-mobile-perf-unified-cpu.test.js', options)
-}
-
-async function runParakeetMobilePerfUnifiedGpuTest (options = {}) { // eslint-disable-line no-unused-vars
-  return runIntegrationModule('../integration/parakeet-mobile-perf-unified-gpu.test.js', options)
-}
-
 async function runParakeetModelFileValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/parakeet-model-file-validation.test.js', options)
 }
@@ -189,8 +181,6 @@ module.exports = {
   runParakeetMobilePerfSortformerStreamingGpuTest,
   runParakeetMobilePerfTdtCpuTest,
   runParakeetMobilePerfTdtGpuTest,
-  runParakeetMobilePerfUnifiedCpuTest,
-  runParakeetMobilePerfUnifiedGpuTest,
   runParakeetModelFileValidationTest,
   runParakeetMultipleTranscriptionsTest,
   runParakeetSortformerAoscStreamingTest,

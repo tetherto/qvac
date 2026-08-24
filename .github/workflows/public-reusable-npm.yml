@@ -112,7 +112,7 @@ jobs:
           exit 1
 
       - name: Call Publish NPM Action
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           tag: "dev"
           workdir: ${{ inputs.workdir }}
@@ -134,7 +134,7 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ inputs.workdir }}
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Publish to npm
         id: publish-npm
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ inputs.workdir }}
           tag: ${{ steps.dist-tag.outputs.tag }}

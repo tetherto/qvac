@@ -1,3 +1,4 @@
+import type { FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import {
   ragListWorkspaces,
@@ -30,6 +31,7 @@ import {
 } from '../adapters/openai/vector-stores-store.js'
 import type { ResolvedModelEntry, ServeConfig } from '../core/model-registry.js'
 import type { QvacContext } from '../lib/types.js'
+import { ensureReady } from '../plugins/require-model.js'
 
 const SYNTHETIC_TIMESTAMP = 0
 
@@ -305,7 +307,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throw new HttpError(404, 'vector_store_not_found', `Vector store "${id}" not found.`)
       }
 
-      const embedding = resolveEmbeddingModel(ctx)
+      const embedding = await resolveEmbeddingModel(ctx, req)
       if (!embedding.ok) throw new HttpError(embedding.status, embedding.code, embedding.message)
       if (meta.embeddingAlias !== null && meta.embeddingAlias !== embedding.entry.alias) {
         throw new HttpError(
@@ -384,7 +386,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      const embedding = resolveEmbeddingModel(ctx)
+      const embedding = await resolveEmbeddingModel(ctx, req)
       if (!embedding.ok) throw new HttpError(embedding.status, embedding.code, embedding.message)
       if (meta.embeddingAlias !== null && meta.embeddingAlias !== embedding.entry.alias) {
         throw new HttpError(
@@ -627,7 +629,10 @@ interface EmbeddingResolutionErr {
   message: string
 }
 
-function resolveEmbeddingModel(ctx: QvacContext): EmbeddingResolutionOk | EmbeddingResolutionErr {
+async function resolveEmbeddingModel(
+  ctx: QvacContext,
+  req: FastifyRequest
+): Promise<EmbeddingResolutionOk | EmbeddingResolutionErr> {
   const picked = pickDefaultEmbedding(ctx.serveConfig)
   if (picked.kind === 'none') {
     return {
@@ -647,14 +652,14 @@ function resolveEmbeddingModel(ctx: QvacContext): EmbeddingResolutionOk | Embedd
     }
   }
   const entry = picked.entry
-  const registryEntry = ctx.registry.getEntry(entry.alias)
-  if (!registryEntry || registryEntry.state !== ctx.registry.STATES.READY) {
-    return {
-      ok: false,
-      status: 503,
-      code: 'model_not_ready',
-      message: `Embedding model "${entry.alias}" is not loaded yet.`
+  let registryEntry
+  try {
+    registryEntry = await ensureReady(ctx, entry.alias, entry, entry.alias, req)
+  } catch (err) {
+    if (err instanceof HttpError) {
+      return { ok: false, status: err.status, code: err.code, message: err.message }
     }
+    throw err
   }
   const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
   return { ok: true, entry, sdkModelId }

@@ -1,5 +1,5 @@
 import type { ModelConstant } from '@qvac/sdk'
-import type { ServeConfig, ResolvedModelEntry } from './core/model-registry.js'
+import type { ServeConfig, ResolvedModelEntry, LoadConfig } from './core/model-registry.js'
 import { SDCPP_VIDEO_TYPE, resolveSdcppVideoAlias } from './aliases/sdcpp-video.js'
 import { normalizeCorsOrigin } from './cors.js'
 import { resolveNestedModelSrcConstants } from './resolve-nested-model-src.js'
@@ -37,8 +37,16 @@ interface RawServeConfig {
     cors?: {
       origins?: unknown
     }
+    load?: RawLoadConfig
     openai?: RawOpenAIOptions
   }
+}
+
+interface RawLoadConfig {
+  lazy?: unknown
+  concurrency?: unknown
+  timeoutMs?: unknown
+  cancelOnDisconnect?: unknown
 }
 
 interface RawOpenAIOptions {
@@ -73,6 +81,10 @@ interface CLIServeOptions {
   model?: string | string[] | undefined
   publicBaseUrl?: string | undefined
   corsOrigins?: string[] | undefined
+  lazyLoad?: boolean | undefined
+  loadConcurrency?: number | undefined
+  loadTimeoutMs?: number | null | undefined
+  cancelLoadOnDisconnect?: boolean | undefined
 }
 
 export function parseServeConfig(
@@ -113,10 +125,52 @@ export function parseServeConfig(
   return {
     models,
     defaults: resolveDefaults(models),
+    load: parseLoadConfig(serve.load, cliOptions),
     publicBaseUrl,
     cors: { origins: corsOrigins },
     openai: parseOpenAIOptions(serve.openai)
   }
+}
+
+const DEFAULT_LOAD_CONCURRENCY = 1
+
+function parseLoadConfig(raw: RawLoadConfig | undefined, cli: CLIServeOptions): LoadConfig {
+  const lazy = cli.lazyLoad ?? asBoolean(raw?.lazy, 'serve.load.lazy') ?? true
+  const cancelOnDisconnect =
+    cli.cancelLoadOnDisconnect ??
+    asBoolean(raw?.cancelOnDisconnect, 'serve.load.cancelOnDisconnect') ??
+    true
+
+  const concurrency =
+    asPositiveInt(cli.loadConcurrency, '--load-concurrency') ??
+    asPositiveInt(raw?.concurrency, 'serve.load.concurrency') ??
+    DEFAULT_LOAD_CONCURRENCY
+
+  let timeoutMs: number | null
+  if (cli.loadTimeoutMs !== undefined) {
+    timeoutMs =
+      cli.loadTimeoutMs === null
+        ? null
+        : (asPositiveInt(cli.loadTimeoutMs, '--load-timeout') ?? null)
+  } else {
+    timeoutMs = asPositiveInt(raw?.timeoutMs, 'serve.load.timeoutMs') ?? null
+  }
+
+  return { lazy, concurrency, timeoutMs, cancelOnDisconnect }
+}
+
+function asBoolean(value: unknown, path: string): boolean | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'boolean') throw new Error(`${path} must be a boolean`)
+  return value
+}
+
+function asPositiveInt(value: unknown, path: string): number | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`${path} must be a positive integer`)
+  }
+  return value
 }
 
 function parseCorsOrigins(configured: unknown, cliOrigins: string[] | undefined): string[] {

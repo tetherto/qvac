@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.7.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Load-fit config normalization now uses the b10297 `load_mode` field, accepts
+  `load-mode` directly, and preserves legacy `no-mmap` behavior without relying
+  on the removed `common_params::use_mmap` member.
+
+## [0.5.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.4.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+### Pull Requests
+
+- [#3929](https://github.com/tetherto/qvac/pull/3929) - QVAC-23195 fix: bump
+  qvac-fabric to 10069.1.1 across consumers
+
 ## [0.3.0] - 2026-08-18
 
 ### Changed

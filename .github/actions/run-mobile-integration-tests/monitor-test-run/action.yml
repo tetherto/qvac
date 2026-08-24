@@ -101,10 +101,19 @@ runs:
         if [ -n "$TEST_SPECS_JSON" ] && [ "$TEST_SPECS_JSON" != "[]" ]; then
           SPEC_COUNT=$(echo "$TEST_SPECS_JSON" | jq 'length')
         fi
+        # Map a run slot back to its spec. The scheduler fans out spec-major with
+        # a FIXED number of runs per spec: dual-flagship = 2 (Samsung + Pixel),
+        # single-pool/sharded = 1, manual multi-device = the device count. So
+        # runs_per_spec = RUN_COUNT / SPEC_COUNT whenever that divides evenly,
+        # which covers all three (2, 1, and N>2 manual fan-outs). The old code
+        # only special-cased the *2 dual-flagship shape and mislabelled manual
+        # runs with >2 devices; this generalises it. Falls back to a 1:1 mapping
+        # if the counts don't divide (defensive; shouldn't happen).
         spec_index_for_run() {
           local run_index="$1"
-          if [ "$RUN_COUNT" -eq $((SPEC_COUNT * 2)) ]; then
-            echo $((run_index / 2))
+          if [ "$SPEC_COUNT" -gt 0 ] && [ $((RUN_COUNT % SPEC_COUNT)) -eq 0 ]; then
+            local per_spec=$((RUN_COUNT / SPEC_COUNT))
+            echo $((run_index / per_spec))
           else
             echo "$run_index"
           fi

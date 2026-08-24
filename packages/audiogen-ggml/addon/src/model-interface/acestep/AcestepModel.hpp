@@ -7,11 +7,11 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
-
 #include "model-interface/acestep/AcestepConfig.hpp"
 
 namespace tts_cpp::acestep {
@@ -42,6 +42,42 @@ public:
   // Interleaved stereo 48 kHz PCM.
   using Output = std::vector<int16_t>;
 
+  enum class AudioEditOperationType {
+    FlowEdit,
+    Repaint,
+  };
+
+  enum class RepaintMode {
+    Conservative,
+    Balanced,
+    Aggressive,
+  };
+
+  struct FlowEditInput {
+    static constexpr AudioEditOperationType TYPE =
+        AudioEditOperationType::FlowEdit;
+    std::string sourceCaption;
+    std::string sourceLyrics = "[Instrumental]";
+    std::string targetCaption;
+    std::string targetLyrics = "[Instrumental]";
+    float nMin = 0.0F;
+    float nMax = 1.0F;
+    int nAvg = 1;
+  };
+
+  struct RepaintInput {
+    static constexpr AudioEditOperationType TYPE =
+        AudioEditOperationType::Repaint;
+    std::string caption;
+    std::string lyrics = "[Instrumental]";
+    float start = 0.0F;
+    float end = -1.0F;
+    RepaintMode mode = RepaintMode::Balanced;
+    float strength = 0.5F;
+  };
+
+  using AudioEditOperationInput = std::variant<FlowEditInput, RepaintInput>;
+
   struct AnyInput {
     std::string caption;
     std::string lyrics = "[Instrumental]";
@@ -50,6 +86,7 @@ public:
     int         bpm = 0;        // 0 => let the LM infer
     std::string keyscale;       // optional, e.g. "C minor"
     std::string timesignature;  // optional, e.g. "4/4"
+    bool augmentCaptionWithMetadata = false;
     float       duration = 0.0F;  // 0 => keep engine default / let LM decide
     float lmTemperature = 0.85F;
     float lmTopP = 0.9F;
@@ -66,6 +103,7 @@ public:
     std::string taskType = "text2music";
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
+    std::vector<AudioEditOperationInput> editOperations;
   };
 
   explicit AcestepModel(AcestepConfig config);

@@ -80,6 +80,14 @@ describe('resolveModelConstant', () => {
     )
   })
 
+  it('defaults constant entries to preload:true unless explicitly disabled', () => {
+    assert.equal(resolveModelConstant('a', { model: 'WHISPER_EN_TINY_Q8_0' }).preload, true)
+    assert.equal(
+      resolveModelConstant('a', { model: 'WHISPER_EN_TINY_Q8_0', preload: false }).preload,
+      false
+    )
+  })
+
   it('resolves nested companion *ModelSrc constant names in config', () => {
     const r = resolveModelConstant('chatterbox', {
       model: 'WHISPER_EN_TINY_Q8_0',
@@ -171,6 +179,22 @@ describe('parseServeConfig nested companions', () => {
     assert.equal(wan.endpointCategory, 'video')
     assert.equal(wan.config['mode'], 'video')
     assert.equal(wan.config['t5XxlModelSrc'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
+  it('defaults explicit {src,type} entries to preload:false unless opted in', () => {
+    const cfg = parseServeConfig(
+      {
+        serve: {
+          models: {
+            lazy: { src: 'placeholder', type: 'sdcpp-video' },
+            eager: { src: 'placeholder', type: 'sdcpp-video', preload: true }
+          }
+        }
+      },
+      {}
+    )
+    assert.equal(cfg.models.get('lazy')!.preload, false)
+    assert.equal(cfg.models.get('eager')!.preload, true)
   })
 
   it('leaves the ignored upscaler block unchanged for video entries', () => {

@@ -38,6 +38,8 @@ const scheduleTypeSchema = z.enum([
   'bong_tangent'
 ])
 
+const videoScheduleTypeSchema = z.enum([...scheduleTypeSchema.options, 'ltx2'])
+
 const cacheModeSchema = z.enum([
   'disabled',
   'easycache',
@@ -113,6 +115,16 @@ export const sdcppConfigSchema = z.object({
   sampler_rng: z.enum(['cpu', 'cuda', 'std_default']).optional(),
   clip_on_cpu: z.boolean().optional().describe('Force CLIP text encoder to run on CPU'),
   vae_on_cpu: z.boolean().optional().describe('Force VAE decoder to run on CPU'),
+  vae_auto_cpu_fallback: z
+    .boolean()
+    .optional()
+    .describe('Automatically move the VAE to CPU when GPU memory is insufficient'),
+  vae_auto_cpu_fallback_memory_ratio: z
+    .number()
+    .gt(0)
+    .max(1)
+    .optional()
+    .describe('GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]'),
   vae_tiling: z.boolean().optional().describe('Enable VAE tiling for large images on limited VRAM'),
   offload_to_cpu: z
     .boolean()
@@ -127,13 +139,14 @@ export const sdcppConfigSchema = z.object({
     .enum(['auto', 'immediately', 'at_runtime'])
     .optional()
     .describe(
-      'How LoRA adapters passed via diffusion({ lora }) are applied. ' +
+      'How LoRA adapters passed via diffusion({ lora }) or video({ lora }) are applied. ' +
         "'auto' (default): picked based on weight type — 'at_runtime' for " +
         "quantized weights, 'immediately' for full-precision. " +
         "'immediately': adapter is fused into the model on first use and " +
-        'persists across subsequent diffusion() calls until the model is ' +
+        'persists across subsequent generation calls until the model is ' +
         'unloaded. ' +
-        "'at_runtime': adapter is applied per-call and not persisted."
+        "'at_runtime': adapter is applied per-call and not persisted; use this mode " +
+        'for the LTX Ingredients workflow.'
     ),
   verbosity: z.number().optional(),
   clipLModelSrc: modelSrcInputSchema
@@ -556,6 +569,35 @@ const videoGenerationBaseSchema = z.object({
     .string()
     .optional()
     .describe('Optional negative prompt describing what to avoid.'),
+  lora: z
+    .string()
+    .min(1)
+    .regex(ABSOLUTE_PATH_PATTERN, {
+      message: 'lora must be an absolute path'
+    })
+    .optional()
+    .describe(
+      'LTX video only. Worker-local absolute path to a LoRA adapter. ' +
+        'Under delegated inference the file must already exist on the provider.'
+    ),
+  lora_strength: z
+    .number()
+    .min(0)
+    .max(10)
+    .optional()
+    .describe('LTX video only. Runtime LoRA multiplier in [0, 10]; requires lora.'),
+  stg_scale: z
+    .number()
+    .min(0)
+    .max(10)
+    .optional()
+    .describe('LTX video only. Spatiotemporal guidance scale in [0, 10].'),
+  stg_block: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('LTX video only. Transformer block skipped for spatiotemporal guidance.'),
   width: z
     .number()
     .int()
@@ -612,7 +654,7 @@ const videoGenerationBaseSchema = z.object({
   sampling_method: samplingMethodSchema
     .optional()
     .describe('Sampling algorithm used by the low-noise diffusion scheduler.'),
-  scheduler: scheduleTypeSchema
+  scheduler: videoScheduleTypeSchema
     .optional()
     .describe('Noise schedule to apply for the low-noise diffusion path.'),
   cfg_scale: z.number().optional().describe('Classifier-free guidance scale.'),
@@ -712,7 +754,26 @@ const videoRequestObjectSchema = videoGenerationBaseSchema.extend({
     .min(0)
     .max(1)
     .optional()
-    .describe('img2vid denoise strength in [0, 1]; rejected for txt2vid.')
+    .describe('img2vid denoise strength in [0, 1]; rejected for txt2vid.'),
+  reference_images: z
+    .array(base64StringSchema)
+    .length(1)
+    .optional()
+    .describe(
+      'LTX txt2vid only. Exactly one base64-encoded composite reference sheet; requires lora.'
+    ),
+  reference_attention_strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      'LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires reference_images.'
+    ),
+  reference_downscale_factor: z
+    .literal(1)
+    .optional()
+    .describe('LTX txt2vid only. Reference-image spatial factor; currently exactly 1.')
 })
 
 function refineVideoMode(data: z.infer<typeof videoRequestObjectSchema>, ctx: z.RefinementCtx) {
@@ -736,6 +797,21 @@ function refineVideoMode(data: z.infer<typeof videoRequestObjectSchema>, ctx: z.
         code: 'custom',
         path: ['strength'],
         message: 'strength is only valid for img2vid.'
+      })
+    }
+  }
+  if (data.mode === 'img2vid') {
+    const referenceFields = [
+      'reference_images',
+      'reference_attention_strength',
+      'reference_downscale_factor'
+    ] as const
+    for (const field of referenceFields) {
+      if (data[field] === undefined) continue
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${field} is only valid for txt2vid.`
       })
     }
   }
@@ -771,9 +847,83 @@ function refineLtxVideoRequest(
       message: 'LTX-2 video_frames must be at most 257 and satisfy (8*k + 1), where k>=1.'
     })
   }
+  if (data.lora_strength !== undefined && data.lora === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['lora_strength'],
+      message: 'lora_strength requires lora.'
+    })
+  }
+  if (data.reference_images !== undefined) {
+    if (data.lora === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['reference_images'],
+        message: 'reference_images requires lora.'
+      })
+    }
+    if (data.video_frames === undefined || data.video_frames < 121) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['video_frames'],
+        message:
+          'LTX reference conditioning requires video_frames to be explicitly set to at least 121.'
+      })
+    }
+  } else {
+    for (const field of ['reference_attention_strength', 'reference_downscale_factor'] as const) {
+      if (data[field] === undefined) continue
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `${field} requires reference_images.`
+      })
+    }
+  }
 }
 
 export const ltxVideoRequestSchema = videoRequestSchema.superRefine(refineLtxVideoRequest)
+
+const nonLtxVideoMask = {
+  lora: true,
+  lora_strength: true,
+  stg_scale: true,
+  stg_block: true,
+  reference_images: true,
+  reference_attention_strength: true,
+  reference_downscale_factor: true,
+  scheduler: true
+} as const
+const nonLtxVideoSchema = videoRequestObjectSchema.pick(nonLtxVideoMask)
+const nonLtxVideoFields = [
+  'lora',
+  'lora_strength',
+  'stg_scale',
+  'stg_block',
+  'reference_images',
+  'reference_attention_strength',
+  'reference_downscale_factor'
+] as const
+
+function refineNonLtxVideoRequest(data: z.infer<typeof nonLtxVideoSchema>, ctx: z.RefinementCtx) {
+  for (const field of nonLtxVideoFields) {
+    if (data[field] === undefined) continue
+    ctx.addIssue({
+      code: 'custom',
+      path: [field],
+      message: `${field} is only supported by LTX video models.`
+    })
+  }
+  if (data.scheduler === 'ltx2') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['scheduler'],
+      message: "scheduler 'ltx2' is only supported by LTX video models."
+    })
+  }
+}
+
+export const nonLtxVideoRequestSchema = nonLtxVideoSchema.superRefine(refineNonLtxVideoRequest)
 
 const wan22MoeMask = {
   high_noise_steps: true,
@@ -818,22 +968,54 @@ export type VideoStreamRequest = z.input<typeof videoStreamRequestSchema>
 
 type VideoClientParamsCommon = Omit<
   VideoRequest,
-  'requestId' | 'mode' | 'init_image' | 'strength' | 'control_frames'
+  | 'requestId'
+  | 'mode'
+  | 'init_image'
+  | 'strength'
+  | 'control_frames'
+  | 'lora'
+  | 'lora_strength'
+  | 'reference_images'
+  | 'reference_attention_strength'
+  | 'reference_downscale_factor'
 > & {
   control_frames?: Uint8Array[]
 }
 
-export type VideoTxt2vidClientParams = VideoClientParamsCommon & {
-  mode: 'txt2vid'
-  init_image?: never
-  strength?: never
-}
+type VideoClientLoraParams =
+  { lora?: never; lora_strength?: never } | { lora: string; lora_strength?: number }
 
-export type VideoImg2vidClientParams = VideoClientParamsCommon & {
-  mode: 'img2vid'
-  init_image: Uint8Array
-  strength?: number
-}
+export type VideoTxt2vidClientParams =
+  | (VideoClientParamsCommon &
+      VideoClientLoraParams & {
+        mode: 'txt2vid'
+        init_image?: never
+        strength?: never
+        reference_images?: never
+        reference_attention_strength?: never
+        reference_downscale_factor?: never
+      })
+  | (VideoClientParamsCommon & {
+      mode: 'txt2vid'
+      init_image?: never
+      strength?: never
+      lora: string
+      lora_strength?: number
+      reference_images: readonly [Uint8Array]
+      video_frames: number
+      reference_attention_strength?: number
+      reference_downscale_factor?: 1
+    })
+
+export type VideoImg2vidClientParams = VideoClientParamsCommon &
+  VideoClientLoraParams & {
+    mode: 'img2vid'
+    init_image: Uint8Array
+    strength?: number
+    reference_images?: never
+    reference_attention_strength?: never
+    reference_downscale_factor?: never
+  }
 
 export type VideoClientParams = VideoTxt2vidClientParams | VideoImg2vidClientParams
 

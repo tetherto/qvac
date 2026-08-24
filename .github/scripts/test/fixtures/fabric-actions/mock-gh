@@ -13,6 +13,23 @@ RUN_PATH="${MOCK_RUN_PATH:-.github/workflows/on-pr-fabric.yml}"
 RUN_EVENT="${MOCK_RUN_EVENT:-pull_request_target}"
 RUN_HEAD_REPO="${MOCK_RUN_HEAD_REPO:-$GITHUB_REPOSITORY}"
 RUN_PULL_REQUESTS="${MOCK_RUN_PULL_REQUESTS:-[]}"
+RUN_STATUS="${MOCK_RUN_STATUS:-completed}"
+RUN_CONCLUSION="${MOCK_RUN_CONCLUSION:-success}"
+
+# The run listing is served as real JSON through the caller's own --jq, so a
+# selector that filters the producing run out is observable here rather than
+# only in production. Everything else answers with the value gh would print.
+extract_jq_expr() {
+  local i j
+  for ((i = 1; i <= $#; i++)); do
+    if [ "${!i}" = "--jq" ]; then
+      j=$((i + 1))
+      printf '%s' "${!j:-}"
+      return 0
+    fi
+  done
+  printf ''
+}
 
 if [ "${1:-}" = "api" ]; then
   # detect-fabric-stack resolves the merge base here. The mock answers with a
@@ -28,7 +45,19 @@ if [ "${1:-}" = "api" ]; then
   esac
 
   if [ "$2" = "$EXPECTED_RUNS_URL" ]; then
-    printf '%s\n' '4242'
+    if [ "$RUN_CONCLUSION" = "null" ] || [ -z "$RUN_CONCLUSION" ]; then
+      conclusion_json='null'
+    else
+      conclusion_json="\"$RUN_CONCLUSION\""
+    fi
+    runs_json=$(printf '{"workflow_runs":[{"id":4242,"status":"%s","conclusion":%s}]}' \
+      "$RUN_STATUS" "$conclusion_json")
+    jq_expr=$(extract_jq_expr "$@")
+    if [ -n "$jq_expr" ]; then
+      printf '%s' "$runs_json" | jq -r "$jq_expr"
+    else
+      printf '%s\n' "$runs_json"
+    fi
   elif [ "$2" = "$EXPECTED_RUN_URL" ]; then
     printf '{"id":4242,"head_sha":"%s","path":"%s","event":"%s","head_repository":{"full_name":"%s"},"pull_requests":%s}\n' \
       "$RUN_HEAD_SHA" "$RUN_PATH" "$RUN_EVENT" "$RUN_HEAD_REPO" "$RUN_PULL_REQUESTS"

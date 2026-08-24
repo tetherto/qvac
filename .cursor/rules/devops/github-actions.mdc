@@ -1,5 +1,5 @@
 ---
-description: GitHub Actions conventions — pinned actions, least-privilege permissions, OIDC, hardened runners, caching, concurrency, environments, reusable workflows
+description: GitHub Actions conventions — pinned actions, least-privilege permissions, OIDC, caching, concurrency, environments, reusable workflows
 globs:
   - .github/workflows/**
   - .github/actions/**
@@ -70,12 +70,6 @@ Getting fork authorization wrong is high-impact and easy to do — the failure m
   - Azure: `azure/login` with `client-id` + `tenant-id` + `subscription-id`
 - **OIDC role/policy must be scoped per-workflow or per-environment**, never repo-wide read-write.
 - **Document the trust relationship** in a comment near the auth step (which IdP, which role, which environment).
-
-## Hardened runners
-
-- **Sensitive workflows run `step-security/harden-runner`** as the first step, in `audit` mode initially and `block` mode once egress is characterized.
-  - Examples of sensitive: any workflow handling secrets, publishing artifacts, deploying to prod, or with `id-token: write`.
-- **Document allowed egress** in the `harden-runner` config; do not silently expand it.
 
 ## Caching
 

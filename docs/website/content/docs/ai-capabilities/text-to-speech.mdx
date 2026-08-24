@@ -32,6 +32,7 @@ The response does not include a sample rate. Use the rate implied by the loaded 
 | Supertonic              | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | Parler                  | 44,100 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 44,100 Hz |
 | CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
+| Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
 
 ## Models
@@ -219,6 +220,60 @@ the other engines. CosyVoice3 also supports [LavaSR](#lavasr)
 post-processing via `lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
 `lavasrDenoiserModelSrc` (batch-only; runs before the enhancer).
 
+### Audio8
+
+Audio8 uses the **DualAR LM GGUF** as the top-level `modelSrc`
+(`TTS_LM_MULTILINGUAL_AUDIO8_Q8_0` or `TTS_LM_MULTILINGUAL_AUDIO8_FP16`) and
+a required **codec decoder** via `modelConfig.audio8CodecDecoderModelSrc`.
+The model is multilingual — the language is inferred from the text itself —
+and emits native 44.1 kHz audio.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "audio8",
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    temperature: 0.7,
+    topP: 0.9,
+    seed: 42,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text: "Hey, how are you doing today?",
+  inputType: "text",
+  stream: false,
+});
+
+const pcm = await result.buffer;
+```
+
+For zero-shot voice cloning, add the optional **codec encoder**
+(`audio8CodecEncoderModelSrc`, e.g. `TTS_CODEC_ENCODER_AUDIO8_Q8_0`) and
+supply `referenceAudioSrc` (a reference recording) together with
+`referenceText` (its exact transcript). The three fields are validated
+together — a reference without its transcript or without the encoder is
+rejected at load.
+
+Generation is sampled by default: `temperature` (default `0.7`), `topK`
+(`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
+and ignores all three, and `maxFrames` caps generation in codec frames
+(~21.5 frames per second of audio). `seed`, `threads`, `nGpuLayers`, and
+`outputSampleRate` work as on the other engines; `useGPU` offloads to Metal
+on macOS/iOS, Vulkan on desktop Linux/Windows, and OpenCL on Android/Adreno —
+elsewhere it falls back to CPU and sets `stats.gpuUnsupported` in the
+response.
+
+<Callout type="warn">
+  Audio8 has no `emotion`, `pace`, or description fields (at load or per
+  request), no LavaSR post-processing, and no native chunk streaming.
+  Sentence streaming (`sentenceStream: true`) and duplex
+  `textToSpeechStream()` work as with every engine.
+</Callout>
+
 For model constants, see [SDK — Models](/introduction#models).
 
 ### LavaSR
@@ -355,6 +410,34 @@ applies per-request emotion conditioning, saves the PCM output, and plays it:
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/cosyvoice3.ts title="tts-cosyvoice3.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Audio8
+
+The following script loads the registry-hosted Audio8 LM together with its
+codec decoder, synthesizes 44.1 kHz audio with the default sampling settings,
+saves the PCM output, and plays it:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/audio8.js title="tts-audio8.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/audio8.ts title="tts-audio8.ts" lineNumbers
 
 ```
 

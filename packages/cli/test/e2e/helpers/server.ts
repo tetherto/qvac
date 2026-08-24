@@ -18,6 +18,7 @@ export interface CreateServerOptions {
   docs?: boolean
   model?: string[]
   transcribeOverride?: StartServerOptions['transcribeOverride']
+  loadModelOverride?: StartServerOptions['loadModelOverride']
 }
 
 function serverOptions(projectRoot: string, opts: CreateServerOptions): StartServerOptions {
@@ -34,7 +35,8 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.transcribeOverride !== undefined
       ? { transcribeOverride: opts.transcribeOverride }
-      : {})
+      : {}),
+    ...(opts.loadModelOverride !== undefined ? { loadModelOverride: opts.loadModelOverride } : {})
   }
 }
 
@@ -86,7 +88,12 @@ export function useModelServer(config: unknown): () => FastifyInstance {
     await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
     app = await buildServer(serverOptions(dir, {}))
     await app.ready()
-    await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
+    await preloadModels(
+      app.qvac.serveConfig,
+      app.qvac.registry,
+      app.qvac.logger,
+      app.qvac.loadManager
+    )
     // preloadModels swallows per-model errors; fail loudly if a preload model
     // didn't reach READY so a load failure isn't seen as confusing 404s.
     for (const [alias, entry] of app.qvac.serveConfig.models) {

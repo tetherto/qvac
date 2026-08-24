@@ -25,7 +25,6 @@ const runtimeProbes = [
   '@qvac/tts-ggml/text-chunker',
   '@qvac/tts-ggml/text-stream-accumulator',
   '@qvac/langdetect-text',
-  '@qvac/transcription-whispercpp',
   'bare-https',
   'bare-process',
   'bare-stream',
@@ -76,20 +75,29 @@ function externalSpecifiers(source) {
   return specifiers
 }
 
+function declaredPackagesFor(filePath) {
+  const runtime = declaredRuntimePackages()
+  if (filePath.startsWith('test/')) {
+    return new Set([...runtime, ...Object.keys(packageJson.devDependencies || {})])
+  }
+  return runtime
+}
+
 function undeclaredImports(filePath, declaredPackages) {
   if (!runtimeExtensions.has(path.extname(filePath))) return []
   const source = fs.readFileSync(path.join(packageRoot, filePath), 'utf8')
+  // Packed download helpers lazy-require this; it is a devDependency only.
   return externalSpecifiers(source)
     .map(packageName)
     .filter((name) => name !== packageJson.name && !declaredPackages.has(name))
+    .filter((name) => name !== '@qvac/registry-client')
     .map((name) => `${filePath}: ${name}`)
 }
 
 function undeclaredPublishedImports(files) {
-  const declaredPackages = declaredRuntimePackages()
   const undeclared = []
   for (const filePath of files) {
-    undeclared.push(...undeclaredImports(filePath, declaredPackages))
+    undeclared.push(...undeclaredImports(filePath, declaredPackagesFor(filePath)))
   }
   return [...new Set(undeclared)].sort()
 }
@@ -140,11 +148,22 @@ test('enhanced examples have package scripts', () => {
   )
 })
 
+test('WER helper uses asr-ggml as a development dependency', () => {
+  assert.equal(packageJson.dependencies['@qvac/transcription-whispercpp'], undefined)
+  assert.equal(packageJson.dependencies['@qvac/asr-ggml'], undefined)
+  assert.equal(packageJson.devDependencies['@qvac/asr-ggml'], '^0.3.2')
+  const source = fs.readFileSync(path.join(packageRoot, 'test/utils/runWhisper.js'), 'utf8')
+  assert.match(source, /@qvac\/asr-ggml/)
+  assert.doesNotMatch(source, /transcription-whispercpp/)
+  assert.match(source, /function loadAsrGgml/)
+})
+
 test('published commands include their runtime files', () => {
-  // ^0.6.1 keeps the transitive hyperdb on the v6 line shared by the rest of
-  // the @qvac ecosystem; 0.4.x pinned hyperdb@4 and broke the SDK consumer
-  // install check's single-copy invariant.
-  assert.equal(packageJson.dependencies['@qvac/registry-client'], '^0.6.1')
+  // Download tooling only: keep `@qvac/registry-client` off the published
+  // runtime graph so consumer installs do not pull a second hyperdb copy.
+  // ^0.6.1 keeps the transitive hyperdb on the v6 line used in-repo.
+  assert.equal(packageJson.devDependencies['@qvac/registry-client'], '^0.6.1')
+  assert.equal(packageJson.dependencies['@qvac/registry-client'], undefined)
   const files = packedFileNames()
   assert.ok(files.has(registryScript))
   assert.ok(files.has('examples/chatterbox-enhanced.js'))
@@ -166,6 +185,11 @@ test('production tarball install includes promoted runtime modules', () => {
     writeConsumerPackage(consumerRoot)
     installTarball(consumerRoot, path.join(temporaryRoot, packed.filename))
     assertRuntimeProbesResolve(consumerRoot)
+    const asrProbe = spawnSync(process.execPath, ['-e', "require.resolve('@qvac/asr-ggml')"], {
+      cwd: consumerRoot,
+      encoding: 'utf8'
+    })
+    assert.notEqual(asrProbe.status, 0, 'production install must not include @qvac/asr-ggml')
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }
