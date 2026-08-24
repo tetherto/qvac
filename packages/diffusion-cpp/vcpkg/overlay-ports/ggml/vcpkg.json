@@ -1,8 +1,7 @@
 {
   "name": "ggml",
-  "version-date": "2026-07-03",
-  "port-version": 5,
-  "description": "Tensor library for machine learning (tetherto fork with fabric Adreno OpenCL fixes incl. leaf-to-root buffer teardown, and QVAC sd.cpp kernels)",
+  "version-date": "2026-08-11",
+  "description": "Tensor library for machine learning (tetherto fork for the QVAC diffusion stack: sd.cpp kernels, hybrid GGML_BACKEND_DL GPU modules on Android and desktop Linux)",
   "homepage": "https://github.com/tetherto/qvac-ext-ggml",
   "license": "MIT",
   "dependencies": [
