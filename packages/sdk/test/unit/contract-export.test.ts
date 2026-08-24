@@ -114,6 +114,42 @@ test('schema document has request and response defs for every method', (t) => {
   )
 })
 
+test('videoStream contract exports LTX IC-LoRA field constraints and one scheduler enum', (t) => {
+  const { schemaDocument } = buildContract()
+  const def = (schemaDocument.$defs as Record<string, JsonSchema>)[
+    'videoStream.request'
+  ] as JsonSchema
+  const properties = def['properties'] as Record<string, JsonSchema>
+
+  t.ok(properties['lora']?.['pattern'], 'lora retains the absolute-path pattern')
+  t.is(properties['lora_strength']?.['minimum'], 0)
+  t.is(properties['lora_strength']?.['maximum'], 10)
+  t.is(properties['stg_scale']?.['minimum'], 0)
+  t.is(properties['stg_scale']?.['maximum'], 10)
+  t.is(properties['stg_block']?.['type'], 'integer')
+  t.is(properties['stg_block']?.['minimum'], 0)
+  t.is(properties['reference_images']?.['minItems'], 1)
+  t.is(properties['reference_images']?.['maxItems'], 1)
+  t.is(properties['reference_attention_strength']?.['minimum'], 0)
+  t.is(properties['reference_attention_strength']?.['maximum'], 1)
+  t.is(properties['reference_downscale_factor']?.['const'], 1)
+
+  const scheduler = properties['scheduler'] as JsonSchema
+  t.absent(scheduler['anyOf'], 'video scheduler is one enum, not an anyOf union')
+  t.ok((scheduler['enum'] as unknown[]).includes('ltx2'))
+
+  const diffusionDef = (schemaDocument.$defs as Record<string, JsonSchema>)[
+    'diffusionStream.request'
+  ] as JsonSchema
+  const diffusionProperties = diffusionDef['properties'] as Record<string, JsonSchema>
+  const imageScheduler = diffusionProperties['scheduler'] as JsonSchema
+  t.is(
+    (imageScheduler['enum'] as unknown[]).includes('ltx2'),
+    false,
+    "image diffusion scheduler does not include 'ltx2'"
+  )
+})
+
 test('schema defs carry unique titles for codegen class names', (t) => {
   // Without a `title`, JSON Schema -> codegen (e.g. datamodel-code-generator)
   // falls back to positional names like `Request1Model11` for nested unions

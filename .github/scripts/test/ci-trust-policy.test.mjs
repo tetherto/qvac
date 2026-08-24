@@ -1934,7 +1934,7 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
   const benchmarkMatrix = JSON.parse(matrices[1])
   const functionalMatrix = JSON.parse(matrices[2])
-  assert.equal(benchmarkMatrix.include.length, 20)
+  assert.equal(benchmarkMatrix.include.length, 16)
   assert.deepEqual(
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],

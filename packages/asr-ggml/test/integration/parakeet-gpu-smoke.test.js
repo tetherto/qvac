@@ -100,8 +100,8 @@ function expectsGpu() {
   )
 }
 
-function loadAudioSample() {
-  const samplePath = path.join(samplesDir, 'sample.raw')
+function loadAudioSample(filename = 'sample.raw') {
+  const samplePath = path.join(samplesDir, filename)
   if (!fs.existsSync(samplePath)) return null
   const rawBuffer = fs.readFileSync(samplePath)
   const pcm = new Int16Array(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.length / 2)
@@ -189,10 +189,13 @@ function assertGpuBackend(t, modelType, stats) {
   }
 }
 
-async function runGpuModelTest(t, modelType, modelPath, audio, expectations) {
+async function runGpuModelTest(t, modelType, modelPath, audio, expectations, parakeetConfig) {
   const model = new ASRGgml({
     files: { model: modelPath },
-    config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: true } }
+    config: {
+      engine: 'parakeet',
+      parakeetConfig: { maxThreads: 4, useGPU: true, ...(parakeetConfig || {}) }
+    }
   })
   try {
     await model.load()
@@ -275,30 +278,6 @@ test(
   }
 )
 
-test(
-  'Unified GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
-  { timeout: 600000, skip: NO_GPU },
-  async (t) => {
-    const loggerBinding = setupJsLogger(binding)
-    try {
-      const modelPath = await loadGgufOrSkip(t, 'unified')
-      if (!modelPath) return
-      const audio = loadAudioSample()
-      if (!audio) {
-        t.pass('sample.raw not found — skipping')
-        return
-      }
-      await runGpuModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
-    } finally {
-      try {
-        loggerBinding.releaseLogger()
-      } catch (e) {
-        /* ignore */
-      }
-    }
-  }
-)
-
 // EOU on offline mode runs the joint-network ASR path; on a clip with
 // real speech that must produce non-empty text. minTextLength=1 catches
 // the zero-token regression triggered by ggml-metal's Q-variant
@@ -341,6 +320,37 @@ test(
         return
       }
       await runGpuModelTest(t, 'sortformer', modelPath, audio, { containsSpeaker: true })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
+test(
+  'Indic Conformer GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'indicConformer')
+      if (!modelPath) return
+      const audio = loadAudioSample('sample_hi.raw')
+      if (!audio) {
+        t.pass('sample_hi.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(
+        t,
+        'indicConformer',
+        modelPath,
+        audio,
+        { minTextLength: 10 },
+        { language: 'hi' }
+      )
     } finally {
       try {
         loggerBinding.releaseLogger()
