@@ -102,7 +102,8 @@ on:
         required: false
         default: ""
     # Additive outputs (QVAC weekend job): surface the monitor verdict so a
-    # caller can read real pass/fail past the job's `continue-on-error: true`.
+    # caller can aggregate per-platform pass/fail for reporting. The job itself
+    # also fails the run directly on any test failure (no continue-on-error).
     # When a caller runs both platforms in one call the matrix overwrites these
     # nondeterministically — single-platform callers (the weekend workflow uses
     # `platforms:` to run one platform per call) get a well-defined value.
@@ -119,18 +120,58 @@ on:
       test-failed:
         description: "Test cases failed."
         value: ${{ jobs.build-and-test.outputs.test-failed }}
+  # Manual on-demand path. A dispatched run targets ONE platform and the
+  # device(s) chosen below. LLM is sharded, so leaving 'tests' empty runs the
+  # FULL shard set pinned to the chosen device(s) (many runs) — set a 'tests'
+  # filter to run only what you need. The workflow_call path (benchmarks /
+  # weekend / on-merge) is unchanged.
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Git ref (branch/tag/SHA) to test"
+      platform:
+        description: "Platform to run on (a manual run targets one platform)."
+        type: choice
+        required: true
+        options: [Android, iOS]
+        default: Android
+      device:
+        description: "Device from the common pool. Pick '(custom)' to type your own in 'devices_custom'. Valid names + how to find them: docs/ci/MOBILE-ON-DEMAND.md."
+        type: choice
+        required: false
+        options:
+          - "(custom)"
+          - "Google Pixel 9"
+          - "Google Pixel 8"
+          - "Samsung Galaxy S25 Ultra"
+          - "Apple iPhone 17"
+          - "Apple iPhone 16 Pro"
+          - "Apple iPhone 15"
+        default: "(custom)"
+      devices_custom:
+        description: "Comma-separated device model(s), e.g. 'Pixel 9, Pixel 8'. Overrides the dropdown; use for new/uncommon devices or several at once. Must match a Device Farm model (list + how to check: docs/ci/MOBILE-ON-DEMAND.md)."
         type: string
         required: false
-        default: main
-      package:
-        description: "Full NPM package spec to test"
+        default: ""
+      device_model_operator:
+        description: "Model match: EQUALS (exact fleet model only — default; dropdown values are exact fleet names) or CONTAINS (any model containing the value; use for shorthand like 'Pixel 9'). EQUALS avoids billing a different/slower variant."
+        type: choice
+        required: false
+        options: [EQUALS, CONTAINS]
+        default: EQUALS
+      tests:
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runLlmSpeedTest'; combine several with '|'). Empty = full sharded suite (many runs). Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
-        required: true
-        default: "@qvac/llm-llamacpp@latest"
+        required: false
+        default: ""
+      ref:
+        description: "Git ref (branch/tag/SHA) to test. Leave blank to use the branch you dispatch from."
+        type: string
+        required: false
+        default: ""
+      package:
+        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/llm-llamacpp@<ver> (published) or @tetherto/llm-llamacpp@<dev> (GPR) to force-install a specific build."
+        type: string
+        required: false
+        default: ""
       qvac_perf_runs:
         description: "Override QVAC_PERF_RUNS pushed to the device"
         type: string
@@ -147,12 +188,77 @@ on:
         required: false
         default: false
 
+concurrency:
+  # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
+  # time — a fresh dispatch cancels the in-flight one so a re-run never stacks a
+  # second Device Farm run. Different branches map to different groups, so the
+  # same addon can still be tested on 2-3 branches in parallel.
+  #
+  # workflow_call NEVER cancels. It is keyed per run AND per artifact_suffix
+  # because benchmark-vlm-model-comparison fans several parallel legs from ONE
+  # run (all sharing run_id, since github.* resolves to the CALLER under
+  # workflow_call); each leg passes a distinct artifact_suffix, so this keeps the
+  # legs in separate groups instead of serialising or cancelling them.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-{1}', github.run_id, inputs.artifact_suffix) }}
+  cancel-in-progress: ${{ inputs.platform != '' }}
+
 jobs:
+  # Manual (workflow_dispatch) runs must name a device that exists on Device
+  # Farm. This gate fails fast BEFORE seed-models/build or any Device Farm run,
+  # so a typo or an empty selection costs nothing. Skipped for workflow_call.
+  validate-devices:
+    name: Validate device selection
+    if: inputs.platform != ''
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout composite action source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
+          sparse-checkout-cone-mode: false
+      # Validate the tests filter + shard fan-out against test-groups.json from
+      # the SAME ref the build executes (inputs.ref || github.sha), not the
+      # workflow ref, so a branch that renames/adds runners or shards can't pass
+      # stale validation. Data only — nothing here is executed; the composite
+      # action stays on the trusted workflow ref checked out above.
+      - name: Checkout validation data (matches the built ref)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sparse-checkout: |
+            packages/llm-llamacpp/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: false
+          path: validation-data
+          persist-credentials: false
+      - name: Validate requested devices
+        uses: ./.github/actions/run-mobile-integration-tests/validate-devices
+        with:
+          platform: ${{ inputs.platform }}
+          devices: ${{ inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
+          device-model-operator: ${{ inputs.device_model_operator }}
+          tests: ${{ inputs.tests }}
+          test-groups-path: validation-data/packages/llm-llamacpp/test/mobile/test-groups.json
+          aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+
   # One non-matrixed writer mirrors the mobile model set into the US bucket, so
   # the two platform legs below never download/upload the same multi-GB objects
   # concurrently. Each leg then only presigns (fast, no S3 write) for itself.
   seed-models:
     name: Seed LLM models (US bucket)
+    # Gated on validate-devices so a bad/empty manual device selection fails
+    # fast BEFORE this up-to-120-min seed runs (the ticket's whole point is not
+    # to spend on a doomed run). Skipped on workflow_call — validate-devices is
+    # itself skipped there, and the `skipped` branch keeps this job running.
+    needs: [validate-devices]
+    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: qvac-ubuntu2204-x64
     environment: release
     timeout-minutes: 120
@@ -171,7 +277,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.PAT_TOKEN }}
           path: addon
           fetch-depth: 0
@@ -201,13 +307,17 @@ jobs:
 
   build-and-test:
     name: Build ${{ matrix.platform }} and Run E2E Tests
-    needs: seed-models
+    # validate-devices is skipped on workflow_call (its `skipped` result keeps
+    # this job running once seed-models succeeds); on a manual run a bad/empty
+    # device selection blocks the build before it starts.
+    needs: [seed-models, validate-devices]
+    if: ${{ !cancelled() && needs.seed-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: ${{ inputs.job_timeout_minutes || 150 }}
-    continue-on-error: true
-    # Surfaced as workflow_call outputs above so schedule-driven callers can
-    # report a verdict (the job itself never fails — continue-on-error).
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger. The test-result outputs below remain for callers that
+    # aggregate per-platform verdicts (weekend report, benchmarks).
     outputs:
       test-result: ${{ steps.monitor.outputs.test-result }}
       test-total: ${{ steps.monitor.outputs.test-total }}
@@ -221,16 +331,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Default (platforms='') runs both, preserving behaviour for every existing
-        # caller; a caller may pass platforms='Android' or 'iOS' to run a single one.
-        include: ${{ fromJSON(inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
+        # workflow_dispatch (inputs.platform set) runs the ONE chosen platform.
+        # workflow_call is unchanged: platforms='' runs both, platforms='Android'
+        # or 'iOS' runs a single one.
+        include: ${{ fromJSON(inputs.platform != '' && (inputs.platform == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]') || inputs.platforms == 'Android' && '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"}]' || inputs.platforms == 'iOS' && '[{"platform":"iOS","os":"macos-14","runner":"macos-14"}]' || '[{"platform":"Android","os":"ubuntu-22.04","runner":"qvac-ubuntu2204-x64"},{"platform":"iOS","os":"macos-14","runner":"macos-14"}]') }}
 
     steps:
       - name: Validate Dispatch Inputs
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.package
+        env:
+          PKG: ${{ github.event.inputs.package }}
         run: |
-          if [[ ! "${{ github.event.inputs.package }}" =~ ^@qvac/ ]]; then
-            echo "::error::Invalid package scope. Only @qvac/* is allowed."
+          if [[ ! "$PKG" =~ ^@qvac/|^@tetherto/ ]]; then
+            echo "::error::Invalid package scope. Only @qvac/* or @tetherto/* is allowed."
             exit 1
           fi
 
@@ -245,7 +358,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           repository: ${{ inputs.repository || github.repository }}
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
@@ -283,8 +396,11 @@ jobs:
           # the candidate in this same run) is pulled in when the per-matrix
           # artifact is absent, so the baseline session would silently run the
           # candidate binary. See run-mobile-integration-tests/setup.
-          force-npm-prebuild: ${{ inputs.addon_npm_version != '' && 'true' || 'false' }}
-          package-version: ${{ inputs.addon_npm_version }}
+          # Manual dispatch (inputs.platform set): default (empty `package`) tests
+          # this branch's native prebuild; @qvac/llm-llamacpp@<ver> = published, @tetherto/llm-llamacpp@<dev>
+          # = this branch's GPR build). workflow_call keeps addon_npm_version/artifact-first.
+          force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.addon_npm_version != '') && 'true' || 'false' }}
+          package-version: ${{ inputs.platform != '' && inputs.package || inputs.addon_npm_version }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The mobile perf benchmark shards (benchmark-perf-*.test.js) are not
@@ -413,6 +529,26 @@ jobs:
             echo "PRESTAGE_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # On a manual run with a test filter, collapse the sharded suite to a single
+      # grepped spec so only the matching tests run. Empty filter / workflow_call
+      # keeps the auto-detected shards.
+      - name: Resolve manual test filter
+        id: manual_tests
+        if: inputs.platform != '' && inputs.tests != ''
+        shell: bash
+        env:
+          TESTS: ${{ inputs.tests }}
+        run: |
+          # Reject anything but mocha-safe grep characters so a manual `tests`
+          # value cannot break out of the generated WDIO config on the Device
+          # Farm host (defense-in-depth; the sink is also JSON-encoded).
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
+          MANUAL_GROUPS=$(jq -nc --arg g "$TESTS" '[{name:"manual", grep:$g}]')
+          echo "groups=$MANUAL_GROUPS" >> "$GITHUB_OUTPUT"
+
       # LLM ships with its own dedicated Device Farm project + iOS pool
       # (the LLM_* secrets), historically because LLM runs more often
       # than the others. Sharded mode is wired automatically: the composite
@@ -436,7 +572,9 @@ jobs:
           qvac-perf-runs: ${{ inputs.qvac_perf_runs }}
           qvac-perf-warmup-runs: ${{ inputs.qvac_perf_warmup_runs }}
           qvac-perf-only: ${{ inputs.qvac_perf_only }}
-          test-groups: ${{ inputs.test_groups }}
+          # A manual test filter wins; else the caller's test_groups override
+          # (empty => auto-detect the sharded test-groups.json).
+          test-groups: ${{ steps.manual_tests.outputs.groups != '' && steps.manual_tests.outputs.groups || inputs.test_groups }}
           extra-device-env: ${{ inputs.device_env }}
           # Host pre-stages this shard's models so the phone never downloads
           # from huggingface.co. iOS uses pymobiledevice3 into Documents/;
@@ -451,7 +589,11 @@ jobs:
           device-farm-project-arn: ${{ secrets.LLM_AWS_DEVICE_FARM_PROJECT_ARN }}
           android-device-pool-arn: ${{ secrets.LLM_ANDROID_DEVICE_POOL_ARN }}
           ios-device-pool-arn: ${{ secrets.LLM_IOS_DEVICE_POOL_ARN }}
-          scheduling-mode: ${{ inputs.device_model != '' && 'single-device' || 'dual-flagship' }}
+          # workflow_dispatch pins the run to the chosen device(s) (manual-devices).
+          # workflow_call is unchanged: single-device when device_model is set,
+          # else the sharded/dual-flagship default.
+          scheduling-mode: ${{ inputs.platform != '' && 'manual-devices' || (inputs.device_model != '' && 'single-device' || 'dual-flagship') }}
+          device-models: ${{ inputs.platform != '' && (inputs.devices_custom != '' && inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '')) || '' }}
           device-model: ${{ inputs.device_model }}
           device-model-operator: ${{ inputs.device_model_operator }}
           device-manufacturer: ${{ inputs.device_manufacturer }}

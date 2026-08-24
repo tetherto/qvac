@@ -27,6 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (qvac-ext-lib-whisper.cpp PR #158); the native replay of the official
   Diffusers prompt/codes/noise now reproduces the official mix at 0.9993
   audio correlation.
+
+## [0.2.4] - 2026-08-20
+
+### Changed
+
+- Keep `@qvac/registry-client` as a `^0.6.1` development dependency for registry
+  downloads. It is no longer an optional peer, so consumer installs are not
+  asked to satisfy a registry-client peer range.
+
+### Added
+
+- Optional `augmentCaptionWithMetadata` generation control. When enabled,
+  ACE-Step enriches its internal conditioning caption with BPM/tempo guidance,
+  time signature, and key while preserving the original user caption in result
+  metadata. The option defaults to `false`.
 - Ordered ACE-Step audio editing through `gen.edit(source)`. Operations run in
   chain order and can be mixed or repeated. The source is interleaved stereo PCM
   at 48 kHz (`Float32Array` samples in `[-1, 1]`, or addon-output `Int16Array`).

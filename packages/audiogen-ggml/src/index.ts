@@ -121,6 +121,8 @@ export interface GenerateOptions {
   keyscale?: string
   /** Time signature, e.g. "4/4". */
   timesignature?: string
+  /** Append BPM/tempo, time signature and key to the internal conditioning caption. */
+  augmentCaptionWithMetadata?: boolean
   /** Target length in seconds; MiniMax converts it to 25 semantic frames per second. */
   duration?: number
   /** MiniMax semantic-frame cap. Cannot be combined with `duration`. */
@@ -985,6 +987,12 @@ export class AudioGen {
     if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
       throw invalidInput('lmPhase1 must be a boolean')
     }
+    if (
+      opts.augmentCaptionWithMetadata !== undefined &&
+      typeof opts.augmentCaptionWithMetadata !== 'boolean'
+    ) {
+      throw invalidInput('augmentCaptionWithMetadata must be a boolean')
+    }
     if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
       throw invalidInput('dcwEnabled must be a boolean')
     }
@@ -1006,6 +1014,7 @@ export class AudioGen {
       bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
       keyscale: opts.keyscale,
       timesignature: opts.timesignature,
+      augmentCaptionWithMetadata: opts.augmentCaptionWithMetadata,
       duration: optionalFiniteNumber(opts.duration, 'duration'),
       lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
       lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),

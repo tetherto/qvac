@@ -633,6 +633,10 @@ class AudioGen {
         if (opts.lmPhase1 !== undefined && typeof opts.lmPhase1 !== 'boolean') {
             throw invalidInput('lmPhase1 must be a boolean');
         }
+        if (opts.augmentCaptionWithMetadata !== undefined &&
+            typeof opts.augmentCaptionWithMetadata !== 'boolean') {
+            throw invalidInput('augmentCaptionWithMetadata must be a boolean');
+        }
         if (opts.dcwEnabled !== undefined && typeof opts.dcwEnabled !== 'boolean') {
             throw invalidInput('dcwEnabled must be a boolean');
         }
@@ -654,6 +658,7 @@ class AudioGen {
             bpm: optionalFiniteNumber(opts.bpm, 'bpm', true),
             keyscale: opts.keyscale,
             timesignature: opts.timesignature,
+            augmentCaptionWithMetadata: opts.augmentCaptionWithMetadata,
             duration: optionalFiniteNumber(opts.duration, 'duration'),
             lmTemperature: optionalFiniteNumber(opts.lmTemperature, 'lmTemperature'),
             lmTopP: optionalFiniteNumber(opts.lmTopP, 'lmTopP'),

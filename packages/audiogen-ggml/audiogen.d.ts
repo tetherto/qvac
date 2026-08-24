@@ -54,6 +54,7 @@ export interface AudioGenJobData {
     bpm?: number;
     keyscale?: string;
     timesignature?: string;
+    augmentCaptionWithMetadata?: boolean;
     duration?: number;
     lmTemperature?: number;
     lmTopP?: number;
