@@ -35,7 +35,8 @@ const plan = fitParams({
 // plan = {
 //   status,       // 0 SUCCESS | 1 FAILURE (won't fit) | 2 ERROR (unknown)
 //   fits,         // status === SUCCESS
-//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' | 'no-backend-device'
+//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' |
+//                 // 'no-backend-device' | 'unsupported-config'
 //   buftOverrides,// placement the projection depended on, [] when none
 //   nGpuLayers,   // fitted offload layer count
 //   nCtx,         // fitted context size
@@ -220,6 +221,26 @@ includes compiling the embedded Metal library, which is slow enough on a cold
 runner to dwarf the fit itself. Size the deadline for that, not for the
 projection.
 
+Protocol v1 remains the low-level `{ version: 1, config: FitConfig }` envelope.
+Protocol v2 carries the process-only raw load shape. The explicit load kind
+selects completion or embedding normalization; it is never inferred from a
+parameter key:
+
+```js
+const { encodeFitLlamaProcessRequest } = require('@qvac/model-fit/process')
+
+const line = encodeFitLlamaProcessRequest('embedding', {
+  modelPath: '/abs/path/model.gguf',
+  params: { device: 'cpu', 'ctx-size': '4096' }
+})
+// {"version":2,"loadKind":"embedding","config":{...}}\n
+```
+
+Raw-load normalization remains private to the disposable runner and native
+addon. The supported scope is desktop, local, single-file GGUF completion or
+embedding inference. Unsupported layouts and features return `ERROR` with
+`reason: 'unsupported-config'`.
+
 ### Spawning on Windows
 
 The child's stdio must be created as **overlapped** pipes:
@@ -236,16 +257,11 @@ thread and never observes the request: the child hangs with no output and no
 diagnostic until the supervisor's deadline fires. The flag is a no-op on other
 platforms, so it can be set unconditionally.
 
-## SDK usage (intended)
+## SDK integration
 
-The SDK runs this preflight before handing a model to `@qvac/llm-llamacpp`:
-
-1. sample device resources,
-2. run `fitParams(...)` in a disposable Bare subprocess → load plan + fit
-   projection,
-3. **admit/deny** — only deny when it can *prove* the model won't fit; on
-   `ERROR`/unknown, proceed as today (advisory-only until the projection and
-   device identity are proven reliable).
+SDK wiring is outside this package change. A later SDK change may invoke the
+v2 process request as an advisory signal; this package does not make admission
+decisions.
 
 ## Build
 
