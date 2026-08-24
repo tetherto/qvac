@@ -17,11 +17,16 @@
  *     wrapper's `onUpdate(...)` channel (incremental, not batched);
  *   - `appendStreamingAudio` resolves the boolean back-pressure signal
  *     the merged binding returns (false iff zero samples decoded);
- *   - `endStreaming` returns the { cleaned, audioDurationMs, totalSamples }
- *     teardown object and the JS layer synthesises a JobEnded from it so
- *     the wrapper's response chain (`response.onUpdate(...).await()`)
- *     resolves cleanly, which is the contract the live-mic example
- *     depends on;
+ *   - `endStreaming` waits for the binding's queue-delivered terminal
+ *     RuntimeStats (surfaced as JobEnded) so every drained Output event
+ *     is delivered BEFORE the job is marked finished and the wrapper's
+ *     response chain (`response.onUpdate(...).await()`) resolves — the
+ *     tail-cut regression was the JS wrapper clearing the active job
+ *     before undelivered outputs arrived, dropping them; the synthetic
+ *     JobEnded built from the teardown object survives only as a
+ *     fallback when no native session existed (`cleaned: false`), and
+ *     concurrent `endStreaming()` calls join the in-flight teardown
+ *     instead of taking that fallback;
  *   - a concurrent run()/runStreaming() during an open session rejects
  *     with the structured STREAMING_SESSION_ACTIVE error;
  *   - cancellation tears the session down via the existing
@@ -140,6 +145,110 @@ test('runStreaming surfaces one Output per pushed chunk and one JobEnded on clos
   t.is(log.appends, 3, 'appendStreamingAudio called once per pushed chunk')
   t.is(log.ends, 1, 'endStreaming called once on stream close')
   t.is(log.cancels, 0, 'No cancellations on the happy path')
+
+  await model.unload()
+})
+
+test('endStreaming delivers undelivered Output backlog before JobEnded (tail-cut regression)', async (t) => {
+  // Drive the wrapper directly: append several chunks and call
+  // endStreaming() IMMEDIATELY, while the per-chunk Output events are
+  // still queued for asynchronous delivery (process.nextTick in the
+  // mock, uv_async in the real binding). Before the fix the wrapper
+  // cleared _activeJobId synchronously inside endStreaming, so every
+  // not-yet-delivered Output was dropped in _addonOutputCallback
+  // (jobId === null) — cutting the tail off streamed transcripts.
+  const events = []
+  const model = createMockedModel({
+    onOutput: (addon, event, jobId, output, error) => {
+      events.push({ event, jobId, output, error })
+    }
+  })
+  await model.load()
+  const addon = getAddon(model)
+
+  await addon.startStreaming({ chunkMs: 2000 })
+  // Fire the appends and the endStreaming in ONE synchronous turn (no
+  // awaits in between): the async wrappers hit the binding synchronously,
+  // so all three Output events are still queued (undelivered) when
+  // endStreaming tears the session down — exactly the fast-feed +
+  // immediate-end() shape the SDK repro used.
+  await Promise.all([
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.endStreaming()
+  ])
+
+  const outputEvents = events.filter((e) => e.event === 'Output')
+  t.is(outputEvents.length, 3, 'All three backlog Output events were delivered, none dropped')
+
+  const jobEndedEvents = events.filter((e) => e.event === 'JobEnded')
+  t.is(jobEndedEvents.length, 1, 'Exactly one terminal JobEnded')
+  t.is(
+    events
+      .filter((e) => e.event === 'Output' || e.event === 'JobEnded')
+      .findIndex((e) => e.event === 'JobEnded'),
+    3,
+    'JobEnded arrives strictly AFTER every drained Output event'
+  )
+  t.ok(
+    jobEndedEvents[0].jobId !== null && jobEndedEvents[0].jobId !== undefined,
+    'Terminal event still carries the streaming jobId'
+  )
+  t.is(jobEndedEvents[0].output.totalSamples, 3072, 'Terminal stats reflect the audio actually fed')
+
+  t.is(
+    await addon.status(),
+    'listening',
+    'Wrapper state machine returned to listening after the drain'
+  )
+
+  await model.unload()
+})
+
+test('concurrent endStreaming calls join the in-flight teardown without dropping outputs', async (t) => {
+  // The first endStreaming removes the native session and waits for its
+  // queued terminal event. A second concurrent call used to see
+  // cleaned:false, clear the active job, and emit a synthetic JobEnded
+  // before the queued outputs arrived — discarding them. It must join
+  // the in-flight teardown instead.
+  const events = []
+  const model = createMockedModel({
+    onOutput: (addon, event, jobId, output, error) => {
+      events.push({ event, jobId, output, error })
+    }
+  })
+  await model.load()
+  const addon = getAddon(model)
+
+  await addon.startStreaming({ chunkMs: 2000 })
+  // Appends and BOTH endStreaming calls fire in one synchronous turn, so
+  // the duplicate end runs while the first one's backlog is still queued
+  // for delivery.
+  await Promise.all([
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.appendStreamingAudio(new Float32Array(1024)),
+    addon.endStreaming(),
+    addon.endStreaming()
+  ])
+
+  const outputEvents = events.filter((e) => e.event === 'Output')
+  t.is(outputEvents.length, 3, 'All backlog Output events delivered despite the duplicate end')
+
+  const jobEndedEvents = events.filter((e) => e.event === 'JobEnded')
+  t.is(jobEndedEvents.length, 1, 'Exactly one terminal JobEnded (no synthetic duplicate)')
+  t.is(
+    events
+      .filter((e) => e.event === 'Output' || e.event === 'JobEnded')
+      .findIndex((e) => e.event === 'JobEnded'),
+    3,
+    'JobEnded still arrives after every drained Output event'
+  )
+  t.is(model._mockedBinding._streamingLog.ends, 1, 'Binding endStreaming invoked once')
+
+  const idempotent = await addon.endStreaming()
+  t.is(idempotent, undefined, 'endStreaming after teardown resolves as a no-op')
 
   await model.unload()
 })
@@ -310,7 +419,7 @@ test('endStreaming on a binding with no active session is a no-op', async (t) =>
   await addon.destroyInstance()
 })
 
-test('endStreaming teardown object feeds the synthetic JobEnded payload', async (t) => {
+test('endStreaming terminal JobEnded carries the streamed audio stats', async (t) => {
   const events = []
   const model = createMockedModel({
     onOutput: (addon, event, jobId, output, error) => {
@@ -329,14 +438,14 @@ test('endStreaming teardown object feeds the synthetic JobEnded payload', async 
   await wait()
 
   const jobEnded = events.find((e) => e.event === 'JobEnded')
-  t.ok(jobEnded, 'JobEnded synthesised on endStreaming')
+  t.ok(jobEnded, 'Terminal JobEnded delivered on endStreaming')
   t.ok(
     typeof jobEnded.output.audioDurationMs === 'number' && jobEnded.output.audioDurationMs > 0,
-    'Synthetic JobEnded carries the teardown audio duration'
+    'Terminal JobEnded carries the streamed audio duration'
   )
   t.ok(
     typeof jobEnded.output.totalSamples === 'number' && jobEnded.output.totalSamples > 0,
-    'Synthetic JobEnded carries the teardown sample count'
+    'Terminal JobEnded carries the streamed sample count'
   )
 
   await model.unload()
