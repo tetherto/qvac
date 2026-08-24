@@ -84,7 +84,7 @@ qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 # addon-test dynamically links the shared @qvac/fabric runtime
 # (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
 # -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
-# for the full rationale. CI sets ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0.
+# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI runs.
 if(NOT WIN32)
   target_link_libraries(addon-test PRIVATE -fsanitize=address)
 endif()

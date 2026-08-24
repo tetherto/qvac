@@ -308,10 +308,6 @@ jobs:
           # GrootEmbodimentSweep skips cleanly when unset.
           GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
-          # addon-test links AddressSanitizer but dynamically loads the non-ASan,
-          # -static-libstdc++ @qvac/fabric prebuild. See
-          # packages/vla-ggml/test/unit/CMakeLists.txt for the full rationale.
-          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: |
           set -euo pipefail
 
@@ -320,12 +316,12 @@ jobs:
             exit 1
           fi
 
-          cd build/test/unit/
-          # Capture test output to a file for later parsing (embodiment sweep results)
-          ./addon-test --gtest_output=xml:cpp-test-results.xml 2>&1 | tee test-output.log
+          # test:cpp:run applies fabric-boundary ASAN_OPTIONS via scripts/run-cpp-tests.js.
+          # pipefail: a failing addon-test exit code propagates through tee.
+          npm run test:cpp:run 2>&1 | tee build/test/unit/test-output.log
 
-          if [ -f cpp-test-results.xml ]; then
-            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+          if [ -f build/test/unit/cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")
             if [ "$test_count" -eq 0 ]; then
               echo "ERROR: No tests were executed! Test count: $test_count"
               exit 1
@@ -341,15 +337,15 @@ jobs:
           # into a no-op behind a green check. When the artefacts ARE staged,
           # every Groot* test must actually run.
           if [ -n "${GROOT_TEST_GGUF:-}" ]; then
-            if grep -q '^\[  SKIPPED \] Groot' test-output.log; then
+            if grep -q '^\[  SKIPPED \] Groot' build/test/unit/test-output.log; then
               echo "ERROR: GR00T artefacts are staged but Groot tests were skipped:"
-              grep '^\[  SKIPPED \] Groot' test-output.log
+              grep '^\[  SKIPPED \] Groot' build/test/unit/test-output.log
               exit 1
             fi
           fi
 
           if [ -n "${GROOT_TEST_SWEEP_GGUF:-}" ]; then
-            sweep_rows=$(grep -c '\[GrootEmbodimentSweep\]' test-output.log || true)
+            sweep_rows=$(grep -c '\[GrootEmbodimentSweep\]' build/test/unit/test-output.log || true)
             if [ "${sweep_rows:-0}" -eq 0 ]; then
               echo "ERROR: GROOT_TEST_SWEEP_GGUF is set but the multi-embodiment sweep produced no rows"
               exit 1
