@@ -1,6 +1,6 @@
 {
   "name": "@qvac/model-fit",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
   "scripts": {
