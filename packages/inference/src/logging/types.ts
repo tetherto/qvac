@@ -12,7 +12,11 @@ export type LogTransport = (
 ) => void | Promise<void>
 
 export interface LoggerOptions {
-  /** Minimum log level that will be emitted. */
+  /**
+   * Minimum log level that will be emitted. Takes precedence over a level
+   * already installed by {@link setGlobalLogLevel}; a later call to it still
+   * overrides this one.
+   */
   level?: LogLevel
   /** Namespace prefix applied to every message emitted by this logger. */
   namespace?: string
