@@ -100,6 +100,11 @@ test('AudioGen.run rejects invalid sampler and DCW controls before native dispat
   }
 })
 
+test('AudioGen.run rejects MiniMax-only controls for ACE-Step', async (t) => {
+  const { gen } = createHarness()
+  await t.exception(() => gen.run('test', { maxFrames: 10 }), /ACE-Step does not accept maxFrames/)
+})
+
 test('AudioGen.run forwards reference/source audio, taskType and cover strengths', async (t) => {
   const { gen, received } = createHarness()
   const referenceAudio = new Float32Array([0.1, -0.1, 0.2, -0.2])
