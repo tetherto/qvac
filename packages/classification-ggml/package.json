@@ -1,6 +1,6 @@
 {
   "name": "@qvac/classification-ggml",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "GGML image classification addon for QVAC (MobileNetV3-Small CPU inference)",
   "addon": true,
   "scripts": {
@@ -84,7 +84,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.6.0",
+    "@qvac/fabric": "^0.7.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-env": "^3.0.0",

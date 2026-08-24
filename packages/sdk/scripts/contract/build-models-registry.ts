@@ -1,5 +1,5 @@
-import type { ModelConstant } from '@/models/registry'
-import * as registry from '@/models/registry'
+import type { ModelConstant } from '@qvac/inference/models'
+import * as registry from '@qvac/inference/models'
 
 function isModelConstant(value: unknown): value is ModelConstant {
   return (
@@ -11,7 +11,7 @@ function isModelConstant(value: unknown): value is ModelConstant {
 }
 
 /**
- * JSON export of every named model constant in `@/models/registry`
+ * JSON export of every named model constant in `@qvac/inference/models`
  * (`QWEN3_600M_INST_Q4`, `BCI_EMBEDDER`, ...) — the same constants JS
  * consumers import directly and pass as `modelSrc`
  * (`loadModel({ modelSrc: QWEN3_600M_INST_Q4, ... })`). Only the ~440

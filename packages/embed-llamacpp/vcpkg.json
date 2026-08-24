@@ -1,4 +1,6 @@
 {
+  "name": "embed-llamacpp",
+  "version-string": "0.32.0",
   "dependencies": [
     {
       "name": "opencl",
@@ -6,7 +8,10 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10069.1.1"
+      "version>=": "10297.0.0",
+      "features": [
+        "vector-index"
+      ]
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
