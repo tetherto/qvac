@@ -337,6 +337,34 @@ struct CompactorFixture {
 
 } // namespace
 
+// The primitive-to-outcome mapping on the pure-attention path, pinned
+// directly. `compact()`'s guards clamp every span before it calls in, so a
+// primitive `NoOp` cannot be produced through `compact()` itself: `setOpenSpan`
+// refuses `start < 0`, the degenerate check catches `end <= start`, and
+// `end = std::min(recordedEnd, pos)` caps the rest. That is exactly why the
+// mapping is a pure function, so the branch a future caller could reach is
+// still covered.
+TEST(ReasoningBlockCompactorOutcomeMapping, NoOpDoesNotBecomeTheWipePath) {
+  EXPECT_EQ(
+      ReasoningBlockCompactor::attentionOutcomeFor(
+          CompactRangeOutcome::Kind::NoOp),
+      ReasoningBlockCompactor::Outcome::Kind::NoOp)
+      << "a primitive NoOp left the cache untouched; mapping it to "
+         "FailedKvIntact would make the driver roll the whole request back, "
+         "answer included, for a range it never modified";
+}
+
+TEST(ReasoningBlockCompactorOutcomeMapping, FailuresKeepTheKvIntactContract) {
+  EXPECT_EQ(
+      ReasoningBlockCompactor::attentionOutcomeFor(
+          CompactRangeOutcome::Kind::MemoryOperationFailed),
+      ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
+  EXPECT_EQ(
+      ReasoningBlockCompactor::attentionOutcomeFor(
+          CompactRangeOutcome::Kind::Compacted),
+      ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
+}
+
 TEST(ReasoningBlockCompactor, DefaultsRemoveThinkingOff) {
   CompactorFixture fx;
   EXPECT_FALSE(fx.compactor.removeThinkingFromContext());
@@ -850,6 +878,7 @@ TEST(
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
   FakeKvCacheOps accepting;
+  accepting.withResidentTokens(/*pos=*/20);
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
@@ -1068,6 +1097,7 @@ TEST(
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
   FakeKvCacheOps accepting;
+  accepting.withResidentTokens(/*pos=*/20);
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   // `pos = 20`, recordedEnd = 25 → effectiveEnd clamped to 20, so the
   // compactor drops `[15, 20)` — 5 tokens.

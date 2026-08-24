@@ -24,6 +24,11 @@ public:
       llama_pos endPos, llama_pos delta) const override {
     llama_memory_seq_add(mem, seqId, startPos, endPos, delta);
   }
+
+  llama_pos
+  seqPosMax(KvCacheMemoryHandle mem, llama_seq_id seqId) const override {
+    return llama_memory_seq_pos_max(mem, seqId);
+  }
 };
 } // namespace
 
@@ -61,5 +66,20 @@ CompactRangeOutcome compactKvRange(
   // callers. Passing `nPast` instead would strand any cell that sits past the
   // cursor, leaving it at a position the shifted tail now also occupies.
   ops.seqAdd(mem, seqId, endPos, /*p1=*/-1, -discarded);
-  return {CompactRangeOutcome::Kind::Compacted, nPast - discarded, discarded};
+
+  // Take the new cursor from memory rather than from arithmetic on the one we
+  // were handed. `seq_add` is void, and there are ways for it to leave the
+  // cells where they were while `seq_rm` still reported success: a memory
+  // module sharing cells with another (`TAG_KV_CACHE_SHARE_CELLS`) no-ops both
+  // halves, and a caller whose software cursor has drifted from live memory
+  // gets a shift that lands somewhere else. Either way the arithmetic answer
+  // would be a cursor no live cell backs, and the driver would save a cache
+  // header describing memory that does not exist. `seq_pos_max` returns -1 on
+  // an empty sequence, which is the correct readback when the whole span went.
+  const llama_pos expectedNPast = nPast - discarded;
+  const llama_pos observedNPast = ops.seqPosMax(mem, seqId) + 1;
+  if (observedNPast != expectedNPast) {
+    return {CompactRangeOutcome::Kind::MemoryOperationFailed, nPast, 0};
+  }
+  return {CompactRangeOutcome::Kind::Compacted, expectedNPast, discarded};
 }

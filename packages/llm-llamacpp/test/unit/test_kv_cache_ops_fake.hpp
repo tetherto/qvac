@@ -19,6 +19,21 @@
 //                                  `llama_get_memory` instead of a sentinel,
 //                                  for tests that also exercise the
 //                                  compactor's own `clearSeqOnFailure`.
+//   * `withResidentTokens(n)`    — model a sequence holding positions
+//                                  `[0, n)`, so `seqPosMax` answers from that
+//                                  model and the primitive's post-shift
+//                                  readback is really exercised. An accepted
+//                                  `seqRm` shrinks it by the range width.
+//   * `ignoreSeqRmEffect()`      — `seqRm` reports success but the modelled
+//                                  cells do not move, which is what a
+//                                  shared-cells memory module and a drifted
+//                                  software cursor both look like from here.
+//                                  The readback must catch it.
+//
+// `withResidentTokens` has no default on purpose. Any test that reaches the
+// readback must model the sequence, otherwise `seqPosMax` fails the test
+// rather than rubber-stamping the primitive's own arithmetic. Tests that stop
+// before the readback, on a rejection or a refusal, never need it.
 
 #include <cstdint>
 #include <optional>
@@ -76,7 +91,15 @@ public:
       return false;
     }
     const SeqRmCall call{seqId, startPos, endPos};
-    return !(seqRmFailure_ && *seqRmFailure_ == call);
+    if (seqRmFailure_ && *seqRmFailure_ == call) {
+      return false;
+    }
+    if (residentTokens_ && !ignoreSeqRmEffect_) {
+      const llama_pos width = endPos - startPos;
+      *residentTokens_ =
+          width < *residentTokens_ ? *residentTokens_ - width : 0;
+    }
+    return true;
   }
 
   void seqAdd(
@@ -84,6 +107,19 @@ public:
       llama_pos endPos, llama_pos delta) const override {
     expectMemory(mem);
     seqAddCalls_.push_back({seqId, startPos, endPos, delta});
+  }
+
+  llama_pos seqPosMax(KvCacheMemoryHandle mem, llama_seq_id) const override {
+    expectMemory(mem);
+    ++seqPosMaxCalls_;
+    if (!residentTokens_) {
+      ADD_FAILURE() << "compactKvRange read back seq_pos_max but this fake has "
+                       "no modelled sequence; call withResidentTokens(nPast) "
+                       "so the readback is a real check";
+      return -1;
+    }
+    // llama reports -1 for an empty sequence, and so must this.
+    return *residentTokens_ - 1;
   }
 
   // ---- Configuration ----
@@ -103,10 +139,22 @@ public:
     forwardRealMemory_ = true;
     return *this;
   }
+  /// Model a sequence holding positions `[0, tokens)`.
+  FakeKvCacheOps& withResidentTokens(llama_pos tokens) {
+    residentTokens_ = tokens;
+    return *this;
+  }
+  /// `seqRm` succeeds but the modelled cells stay put, which is how a
+  /// shared-cells module and a drifted cursor both look from here.
+  FakeKvCacheOps& ignoreSeqRmEffect() {
+    ignoreSeqRmEffect_ = true;
+    return *this;
+  }
 
   // ---- Observation ----
   int memoryCalls() const { return memoryCalls_; }
   int canShiftCalls() const { return canShiftCalls_; }
+  int seqPosMaxCalls() const { return seqPosMaxCalls_; }
   int seqRmCalls() const { return static_cast<int>(seqRmCalls_.size()); }
   int seqAddCalls() const { return static_cast<int>(seqAddCalls_.size()); }
   const std::vector<SeqRmCall>& seqRmCallLog() const { return seqRmCalls_; }
@@ -124,9 +172,12 @@ private:
   bool canShift_ = true;
   bool rejectAllSeqRm_ = false;
   bool forwardRealMemory_ = false;
+  bool ignoreSeqRmEffect_ = false;
   std::optional<SeqRmCall> seqRmFailure_;
+  mutable std::optional<llama_pos> residentTokens_;
   mutable int memoryCalls_ = 0;
   mutable int canShiftCalls_ = 0;
+  mutable int seqPosMaxCalls_ = 0;
   mutable std::vector<SeqRmCall> seqRmCalls_;
   mutable std::vector<SeqAddCall> seqAddCalls_;
 };

@@ -250,6 +250,31 @@ public:
     // context (span, seqId, snapshot state) the compactor logged.
     std::string failureMessage;
   };
+
+  // How a `compactKvRange` result becomes a compactor outcome on the
+  // pure-attention path.
+  //
+  // `NoOp` MUST NOT become `FailedKvIntact`. The two are not the same event:
+  // a rejection means the cleanup the strict contract demands did not happen,
+  // so the driver hard-fails and rolls `[preRequestCursor, pos)` back, taking
+  // the answer with it. A `NoOp` means the primitive declined a range and left
+  // the cache exactly as it found it, which is nothing to recover from.
+  // `compact()`'s own guards clamp every span before it calls in, so the
+  // primitive cannot return `NoOp` today, and this stays a pure function so
+  // the mapping is pinned by tests regardless.
+  [[nodiscard]] static constexpr Outcome::Kind
+  attentionOutcomeFor(CompactRangeOutcome::Kind rangeKind) {
+    switch (rangeKind) {
+    case CompactRangeOutcome::Kind::Compacted:
+      return Outcome::Kind::CompactedAttention;
+    case CompactRangeOutcome::Kind::NoOp:
+      return Outcome::Kind::NoOp;
+    case CompactRangeOutcome::Kind::MemoryOperationFailed:
+      return Outcome::Kind::FailedKvIntact;
+    }
+    return Outcome::Kind::FailedKvIntact;
+  }
+
   [[nodiscard]] Outcome compact(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);

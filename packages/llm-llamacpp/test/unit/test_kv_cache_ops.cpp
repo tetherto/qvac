@@ -15,6 +15,7 @@ class KvCacheOpsTest : public ::testing::Test {};
 
 TEST_F(KvCacheOpsTest, CompactKvRange_HappyPath_RemovesRangeAndShiftsTail) {
   FakeKvCacheOps ops;
+  ops.withResidentTokens(180);
 
   // Cache layout:  [user prompt 100][reasoning 50][answer 30]
   // We want to drop the reasoning block at [100, 150).
@@ -44,6 +45,8 @@ TEST_F(KvCacheOpsTest, CompactKvRange_HappyPath_RemovesRangeAndShiftsTail) {
   EXPECT_EQ(ops.seqAddCallLog()[0].startPos, 150);
   EXPECT_EQ(ops.seqAddCallLog()[0].endPos, -1);
   EXPECT_EQ(ops.seqAddCallLog()[0].delta, -50);
+  EXPECT_EQ(ops.seqPosMaxCalls(), 1)
+      << "the reported cursor must come from memory, not from arithmetic";
 }
 
 TEST_F(KvCacheOpsTest, CompactKvRange_EmptyRange_IsNoOp) {
@@ -193,6 +196,7 @@ TEST_F(KvCacheOpsTest, CompactKvRange_TailExactlyAtEnd_NoShiftNeeded) {
   // is cheap, and keeping the call unconditional keeps the primitive's two
   // halves paired.
   FakeKvCacheOps ops;
+  ops.withResidentTokens(180);
 
   const auto outcome = compactKvRange(
       /*lctx=*/nullptr,
@@ -210,4 +214,30 @@ TEST_F(KvCacheOpsTest, CompactKvRange_TailExactlyAtEnd_NoShiftNeeded) {
   EXPECT_EQ(ops.seqAddCallLog()[0].startPos, 180);
   EXPECT_EQ(ops.seqAddCallLog()[0].endPos, -1);
   EXPECT_EQ(ops.seqAddCallLog()[0].delta, -80);
+}
+
+TEST_F(KvCacheOpsTest, CompactKvRange_ShiftDidNotLand_ReportsMemoryFailure) {
+  // `seq_add` is void, and there are ways for the cells not to move while
+  // `seq_rm` still reports success: a memory module sharing cells with another
+  // no-ops both halves, and a software cursor that has drifted from live
+  // memory gets a shift that lands somewhere else. Returning `Compacted` there
+  // hands the driver a cursor no live cell backs, and the driver then writes a
+  // cache header describing memory that does not exist. The readback is what
+  // separates the two, so it must reject rather than trust the arithmetic.
+  FakeKvCacheOps ops;
+  ops.withResidentTokens(180).ignoreSeqRmEffect();
+
+  const auto outcome = compactKvRange(
+      /*lctx=*/nullptr,
+      kSeqId,
+      /*startPos=*/100,
+      /*endPos=*/150,
+      /*nPast=*/180,
+      ops);
+
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::MemoryOperationFailed);
+  EXPECT_EQ(outcome.newNPast, 180)
+      << "a failed compaction must leave the caller's cursor alone";
+  EXPECT_EQ(outcome.discarded, 0);
+  EXPECT_EQ(ops.seqPosMaxCalls(), 1);
 }
