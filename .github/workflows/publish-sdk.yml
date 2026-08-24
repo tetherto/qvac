@@ -73,6 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
         with:
@@ -105,6 +106,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Verify inference / sdk / bare-sdk / python version lockstep
@@ -301,6 +303,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -345,6 +348,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -407,6 +411,7 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
@@ -515,6 +520,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download build artifacts
         uses: ./.github/actions/download-release-artifact
@@ -613,6 +620,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download bare-sdk dist artifact
         uses: ./.github/actions/download-release-artifact
@@ -676,6 +685,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download inference dist artifact
         uses: ./.github/actions/download-release-artifact
@@ -753,6 +764,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download build artifacts
         uses: ./.github/actions/download-release-artifact
@@ -816,6 +829,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download bare-sdk dist artifact
         uses: ./.github/actions/download-release-artifact
@@ -873,6 +888,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Download inference dist artifact
         uses: ./.github/actions/download-release-artifact
