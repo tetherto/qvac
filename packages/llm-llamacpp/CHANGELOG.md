@@ -11,6 +11,12 @@
 - `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with chat-template, sampling and load-mode API changes).
 - Load-fit normalization now validates load modes locally so fabric-thrown exceptions do not cross the native boundary on Windows.
 
+### Fixed
+
+- Reasoning-budget stop detection now preserves every template-provided thinking
+  end tag, so Qwen3-Coder and DeepSeek tool-call openers can end reasoning
+  without forced-close text corrupting the tool call.
+
 ## [0.46.0] - 2026-08-20
 
 ### Changed
