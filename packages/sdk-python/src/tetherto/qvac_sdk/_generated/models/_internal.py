@@ -10352,9 +10352,9 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         int | None,
         Field(
             alias="numFramePerBlock",
-            description="Latent frames denoised per step. 0 = model default (3).",
+            description="Latent frames denoised per step. 0 = model default (3), and 64 is the ceiling. The native parser accepts up to 1024, but that is a range check rather than a memory budget: a block delivers roughly 4x this many decoded frames, so 1024 is ~4096 frames and several GB of raw pixels at 832x480 before any of it is encoded. 64 is ~20x the default and bounds a block at a few hundred MB.",
             ge=0,
-            le=1024,
+            le=64,
         ),
     ] = None
     local_attn_size: Annotated[
@@ -14107,7 +14107,7 @@ class WorldStepStreamResponse(GeneratedBaseModel):
     step: Annotated[
         int | None,
         Field(
-            description="Denoise step reached within this block, as the engine reports it.",
+            description="The engine's own `step` counter, forwarded verbatim: blocks completed on this session. One tick is emitted per block, after its frames, so this is not progress within a block.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
@@ -14116,7 +14116,7 @@ class WorldStepStreamResponse(GeneratedBaseModel):
         int | None,
         Field(
             alias="totalSteps",
-            description="Frames decoded so far in this block — the engine reports progress in frames.",
+            description="Frames DELIVERED by the block that just finished — a final count, not a running one, because the engine emits this after the frames rather than during. Named `totalSteps` only so the wire shape matches videoStream and diffusionStream, where that slot holds a sampler-step total.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
