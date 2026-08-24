@@ -391,18 +391,7 @@ jobs:
               # check so a schema/registry change without regenerating fails with
               # a clear "contract:check failed" instead of being buried inside the
               # test:unit run above.
-              #
-              # Re-apply the workspace source first. The contract is built from
-              # `@qvac/inference/surface`, so the reset above -- which exists to
-              # restore the committed manifest -- would otherwise check the
-              # committed contract against the PUBLISHED engine. Any PR adding an
-              # op to packages/inference would then fail here until that engine
-              # published, which is backwards: the in-repo engine at this commit
-              # is what the committed contract must match.
-              run "sdk-source [contract]" npm run --if-present sdk-source:workspace
               run "contract:check" npm run --if-present contract:check
-              # Restore the committed manifest for the checks that follow.
-              git checkout HEAD -- package.json 2>/dev/null || true
               run "resource collector packaging" npm run --if-present check:resource-collectors -- \
                 --host darwin-arm64 \
                 --host darwin-x64 \

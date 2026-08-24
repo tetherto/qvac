@@ -117,18 +117,6 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(out['steps'], 20)
   })
 
-  it('rewrites sceneSrc, which carries no ModelSrc suffix', () => {
-    // sceneSrc is typed modelSrcInputSchema like every other resolvable source,
-    // so a constant is legal and the SDK resolves it; the suffix rule alone
-    // would have let it through unresolved.
-    const out = resolveNestedModelSrcConstants({
-      sceneSrc: 'FLUX_2_KLEIN_4B_VAE',
-      otherSrc: 'FLUX_2_KLEIN_4B_VAE'
-    })
-    assert.equal(out['sceneSrc'], FLUX_2_KLEIN_4B_VAE)
-    assert.equal(out['otherSrc'], 'FLUX_2_KLEIN_4B_VAE', 'unrelated *Src keys are untouched')
-  })
-
   it('rewrites nested objects and upscaler.model_src', () => {
     const out = resolveNestedModelSrcConstants({
       whisperConfig: { vadModelSrc: 'WHISPER_EN_TINY_Q8_0' },

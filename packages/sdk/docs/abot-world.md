@@ -38,17 +38,11 @@ the first block even though loading succeeded. A **448x256** tier runs on ~6 GB
 cards; it is far below interactive frame rates but is what the E2E lane uses.
 
 A world session is bound to the worker holding that GPU, and the world
-operations have **no delegated route**. So `loadModel` with a `delegate` and
-`mode: 'world'` is settled at load time rather than failing later on the first
-step, in one of two ways:
-
-- **`delegate.fallbackToLocal: true`** — the load goes straight to the local
-  path, without a round trip to a provider that cannot serve it. This is the
-  point of the flag, and local is exactly where a world session works.
-- **otherwise** — the load is rejected with an error naming the reason.
-
-Either way, the session ends up on the host holding the GPU. Omitting
-`delegate` entirely is the direct way to say that.
+operations have **no delegated route** — the same as `video`, `diffusion`,
+`upscale` and OCR, none of which declare a `delegatedHandler` today. So a
+`loadModel` carrying a `delegate` proxies to the provider and succeeds, and the
+first `worldStep` then fails with `ModelIsDelegatedError`. **Omit `delegate`**
+and load on the host holding the GPU.
 
 ## Activation is deferred when there is no world yet
 

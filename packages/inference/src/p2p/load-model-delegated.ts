@@ -2,9 +2,7 @@ import type { LoadModelSrcRequest, LoadModelResponse, ModelProgressUpdate } from
 import {
   DELEGATION_BREAKDOWN_KEY,
   OPERATION_EVENT_KEY,
-  ModelType,
-  modelInputToSrcSchema,
-  normalizeModelType
+  modelInputToSrcSchema
 } from '@/schemas/index'
 import type { DelegatedHandlerOptions } from '@/profiling/index'
 import type { ResponseWithDelegation } from '@/p2p/delegate-transport'
@@ -21,33 +19,6 @@ export interface HandleLoadModelDelegatedOptions extends DelegatedHandlerOptions
   progressCallback?: (update: ModelProgressUpdate) => void
 }
 
-/**
- * Refuses a delegated load whose operations have no delegated route.
- *
- * `loadModel` proxies happily to the provider and registers a delegated entry,
- * but an op only reaches that provider if its handler-registry entry declares a
- * `delegatedHandler`. `worldStepStream` / `worldSceneStream` do not, so without
- * this the load would report success and every subsequent step would fail with
- * `ModelIsDelegatedError` — the failure arriving far from its cause.
- *
- * Deliberately narrow. The same gap applies to video, diffusion, upscale, OCR
- * and the rest (only `completionStream` is delegated today), but those are
- * shipped behaviour and changing them belongs in their own change.
- */
-function isUndelegatableModel(request: LoadModelSrcRequest): boolean {
-  if (normalizeModelType(request.modelType ?? '') !== ModelType.sdcppGeneration) return false
-  return (request.modelConfig as { mode?: unknown } | undefined)?.mode === 'world'
-}
-
-function undelegatableModelError(): ModelLoadFailedError {
-  return new ModelLoadFailedError(
-    "modelConfig.mode: 'world' cannot be delegated. An ABot-World session is bound " +
-      'to the worker holding the GPU, and the world operations have no delegated ' +
-      'route, so the walk would fail on the first step. Load it on a host with a ' +
-      'dedicated GPU (at least 20 GB free VRAM) and omit `delegate`.'
-  )
-}
-
 export async function handleLoadModelDelegated(
   request: LoadModelSrcRequest,
   options?: HandleLoadModelDelegatedOptions
@@ -56,24 +27,10 @@ export async function handleLoadModelDelegated(
   if (!request.delegate) {
     throw new ModelLoadFailedError('Delegate information is required for delegated load model')
   }
+
   const { delegate } = request
   const { providerPublicKey, timeout, healthCheckTimeout, fallbackToLocal, forceNewConnection } =
     delegate
-
-  // World has no delegated route, but `fallbackToLocal` is a promise that a load
-  // the provider cannot serve still lands locally — and locally is exactly where
-  // a world session works. Rejecting in front of the try broke that promise: the
-  // caller opted into the fallback and got a throw instead. Go straight to the
-  // local load rather than round-tripping to a provider we know will not do.
-  if (isUndelegatableModel(request)) {
-    if (!fallbackToLocal) throw undelegatableModelError()
-    logger.info(
-      "⤵️  modelConfig.mode: 'world' has no delegated route; delegate.fallbackToLocal is set, loading locally"
-    )
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { delegate: _, ...localRequest } = request
-    return await handleLoadModel(localRequest, progressCallback)
-  }
 
   try {
     logger.info(
