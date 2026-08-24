@@ -831,6 +831,69 @@ test('world session: an oversized sceneSrc is refused like an oversized generate
   }
 })
 
+// A torn session refuses work by design, so the question is whether the ORDINARY
+// recovery still works: unloadModel then loadModel. unloadModel unregisters the
+// entry before teardown, so a native unload that throws again cannot strand it.
+test('world session: a torn session is still recoverable by unload + load', async function (t) {
+  const fs = await import('bare-fs')
+  const [{ unloadModel }, { isModelLoaded, registerModel, unregisterModel }] = await Promise.all([
+    import('@/plugins/ops/unload-model'),
+    import('@/runtime/model-registry')
+  ])
+  const { ModelType } = await import('@/schemas/index')
+  const { getEngineLogger } = await import('@/logging/index')
+  const worldOps = await import('@/plugins/builtin/sdcpp-generation/ops/world')
+  const driver = makeResponse([])
+
+  const failing = {
+    load: async () => {},
+    unload: async () => {
+      throw new Error('native teardown failed')
+    },
+    step: async () => driver.response,
+    createScene: async () => driver.response,
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  const modelId = makeId('test-world-torn')
+  const session = worldOps.createWorldSession({
+    modelId,
+    files: {
+      model: '/tmp/dit.gguf',
+      taehv: '/tmp/taehv.gguf',
+      scene: worldOps.worldScenePath(modelId)
+    },
+    config: {},
+    encoders: { t5: '/tmp/t5.gguf', vae: '/tmp/vae.gguf' },
+    logger: getEngineLogger(),
+    world: failing
+  })
+  fs.writeFileSync(session.scenePath, 'scene')
+  registerModel(modelId, {
+    model: session as never,
+    path: '/tmp/dit.gguf',
+    config: {},
+    modelType: ModelType.sdcppGeneration
+  } as never)
+
+  try {
+    await session.ensureActivated()
+    await t.exception(session.deactivate(), /native teardown failed/, 'deactivate fails')
+    t.ok(isModelLoaded(modelId), 'the model is still registered while torn')
+
+    // The recovery path. The native unload throws again, so unloadModel
+    // surfaces that — but the entry must already be gone.
+    await t.exception(unloadModel({ modelId }), /native teardown failed/, 'unload surfaces it')
+    t.absent(isModelLoaded(modelId), 'the entry is unregistered despite the throw')
+    t.absent(fs.existsSync(session.scenePath), 'and the managed pack is gone')
+  } finally {
+    unregisterModel(modelId)
+    try {
+      fs.unlinkSync(session.scenePath)
+    } catch {}
+  }
+})
+
 test('world session: unload removes the pack even when native teardown fails', async function (t) {
   const fs = await import('bare-fs')
   const driver = makeResponse([])

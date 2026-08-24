@@ -1321,27 +1321,32 @@ export type WorldStepStreamRequest = z.input<typeof worldStepStreamRequestSchema
 export const worldStepStreamResponseSchema = z.object({
   type: z.literal('worldStepStream'),
   // Same three fields, same names, as diffusionStream and videoStream: the
-  // engine's own progress tick, forwarded rather than dropped. Its cadence is
-  // the engine's — not measured on hardware here — so this is progress
-  // reporting, not a heartbeat callers can time out against.
+  // engine's own tick, forwarded rather than dropped.
+  //
+  // It is NOT mid-block liveness, and cannot be. WorldSessionModel.cpp runs
+  // sd_abot_session_step() to completion, delivers every frame, and only then
+  // fires its progress callback — exactly once per block, after the frames.
+  // So this arrives as an end-of-block summary. A caller wanting a "still
+  // working" signal during the 1.8-7.5s a block takes needs an addon change;
+  // do not build a hang detector on this.
   step: z
     .number()
     .int()
     .optional()
     .describe(
-      "The engine's own `step` counter, forwarded verbatim. It counts blocks " +
-        'completed on this session, NOT progress within the current block, so it ' +
-        'is the same value for every tick of a given block.'
+      "The engine's own `step` counter, forwarded verbatim: blocks completed on " +
+        'this session. One tick is emitted per block, after its frames, so this ' +
+        'is not progress within a block.'
     ),
   totalSteps: z
     .number()
     .int()
     .optional()
     .describe(
-      'Frames decoded so far in the CURRENT block. Named `totalSteps` only so the ' +
-        'wire shape matches videoStream and diffusionStream, where the same slot ' +
-        'holds a sampler-step total; a world block counts progress in frames. It ' +
-        'is not a total and not a denominator for `step`.'
+      'Frames DELIVERED by the block that just finished — a final count, not a ' +
+        'running one, because the engine emits this after the frames rather than ' +
+        'during. Named `totalSteps` only so the wire shape matches videoStream ' +
+        'and diffusionStream, where that slot holds a sampler-step total.'
     ),
   elapsedMs: z.number().optional().describe('Milliseconds elapsed within this block so far.'),
   data: z

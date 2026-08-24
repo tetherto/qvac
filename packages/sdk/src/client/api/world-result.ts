@@ -31,15 +31,12 @@ export type WorldSceneStreamFactory = (request: WorldSceneStreamRequest) => Asyn
 
 /** Mirrors `VideoProgressTick` / `DiffusionProgressTick`. */
 export interface WorldStepProgressTick {
-  /**
-   * The engine's `step` counter: blocks completed on this session, not progress
-   * within the current block. Identical across every tick of one block.
-   */
+  /** Blocks completed on this session, as the engine counts them. */
   step: number
   /**
-   * Frames decoded so far in the CURRENT block. Named `totalSteps` only to keep
-   * the wire shape identical to `video` and `diffusion`, where that slot holds a
-   * sampler-step total. It is neither a total nor a denominator for `step`.
+   * Frames DELIVERED by the block that just finished — a final count, since the
+   * engine emits this after the frames rather than during. Named `totalSteps`
+   * only to keep the wire shape identical to `video` and `diffusion`.
    */
   totalSteps: number
   elapsedMs: number
@@ -50,14 +47,14 @@ export interface WorldStepResult {
   /** Frames of this block, yielded as the transport delivers them. */
   frameStream: AsyncGenerator<Uint8Array>
   /**
-   * The engine's own progress ticks for this block, forwarded verbatim — the
+   * The engine's own tick for each completed block, forwarded verbatim — the
    * same field shape `video` and `diffusion` expose.
    *
-   * NOT a guaranteed liveness signal. The cadence is the engine's, and it has
-   * not been measured on hardware: if the native side emits its tick only
-   * alongside the finished block, this stream yields once at the end rather
-   * than during. Treat a tick as "progress happened", never as "a tick is due
-   * within N ms", and do not build a hang detector on it.
+   * NOT mid-block liveness, and it cannot be. `WorldSessionModel.cpp` runs the
+   * block to completion, delivers every frame, and only then fires its progress
+   * callback: exactly one tick per block, after the frames. So this yields once
+   * per `worldStep`, at the end. Use it to report what a block did; a "still
+   * working" signal during the 1.8-7.5s a block takes needs an addon change.
    */
   progressStream: AsyncGenerator<WorldStepProgressTick>
   /** Every frame of the block, once it completes. */

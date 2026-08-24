@@ -642,11 +642,14 @@ export async function* worldStep(
           frameIndex: frameIndex++
         }
       } else if (typeof chunk === 'string') {
-        // The addon emits `{"step":N,"frames":M,"elapsed_ms":T}` while the block
-        // is still computing. Forwarded for the same reason ops/video.ts:213 and
-        // ops/diffusion.ts forward theirs: the payload duplicates the terminal
-        // stats, but its TIMING is the only liveness a caller gets across a
-        // 1.8-7.5s block that delivers every frame at the end.
+        // The addon emits `{"step":N,"frames":M,"elapsed_ms":T}` ONCE per block,
+        // after every frame has been delivered — WorldSessionModel.cpp runs the
+        // step to completion, loops the frames out, then fires the callback. So
+        // this is an end-of-block summary, not the mid-block liveness it would
+        // be if the engine ticked per denoise step. Forwarded anyway, for the
+        // same reason ops/video.ts and ops/diffusion.ts forward theirs: the wire
+        // shape stays identical across the three, and if the engine ever ticks
+        // during a block this needs no change to carry it.
         //
         // `frames` maps onto `totalSteps` rather than a field of its own so the
         // wire shape stays identical to its two siblings — the engine counts a
