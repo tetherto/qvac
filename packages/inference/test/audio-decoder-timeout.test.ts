@@ -117,7 +117,6 @@ test('a long WAV decodes fully with an inactivity window far below its total dec
   const wavPath = path.join(dir, 'long.wav')
   writeWav(wavPath, inputRate, 1, frames)
 
-  // 100ms was too tight for the initial buffering read on a loaded CI runner and flaked.
   const stream = await decodeAudioToStream(wavPath, 'f32le', {
     sampleRate: 48000,
     inactivityTimeoutMs: 5000
