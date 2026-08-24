@@ -98,4 +98,4 @@ const definitions: ErrorCodesMap = {
   }
 }
 
-addCodes(definitions, { name: '@qvac/rag', version: '0.6.4' })
+addCodes(definitions, { name: '@qvac/rag', version: '0.7.0' })
