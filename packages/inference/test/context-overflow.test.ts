@@ -74,6 +74,17 @@ test('isAddonContextOverflowError: message fallback is anchored to known C++ for
     isAddonContextOverflowError(new Error('context overflow at prefill step (5 tokens, max 4)')),
     true
   )
+  // The batch guards say "at batch prefill step". Without the optional
+  // "batch " these reached the client raw and `instanceof
+  // ContextOverflowError` failed on the message-only path.
+  t.is(
+    isAddonContextOverflowError(
+      new Error(
+        '[TextLlm] context overflow at batch prefill step: prompt tokens 9, max context tokens 4'
+      )
+    ),
+    true
+  )
   t.is(isAddonContextOverflowError(new Error('processPromptImpl: context overflow\n')), true)
 })
 
@@ -105,6 +116,70 @@ test('parseContextOverflowMessage: extracts from short-form bracketed message', 
     promptTokens: 1024,
     ctxSize: 512
   })
+})
+
+// One case per guard that formats numbers, using the strings the addon
+// actually emits at this commit.
+test('parseContextOverflowMessage: covers every current addon guard', (t) => {
+  // TextLlmContext.cpp, first batch-prefill guard.
+  t.alike(
+    parseContextOverflowMessage(
+      '[TextLlm] context overflow at batch prefill step: prompt tokens 4013, max context tokens 512\n'
+    ),
+    { promptTokens: 4013, ctxSize: 512 }
+  )
+  // TextLlmContext.cpp, cached-plus-prompt guard. The "exceed the" wording
+  // is what broke the original single pattern. The reported figure is the
+  // sum, because that is what did not fit: reporting the appended 31 alone
+  // renders as "31 prompt tokens exceeds the 8192-token context window".
+  t.alike(
+    parseContextOverflowMessage(
+      '[TextLlm] context overflow at batch prefill step: cached tokens 8170 plus prompt tokens 31 exceed the max context tokens 8192\n'
+    ),
+    { promptTokens: 8201, ctxSize: 8192 }
+  )
+  // MtmdLlmContext.cpp, single-prompt guard.
+  t.alike(
+    parseContextOverflowMessage(
+      '[MtmdLlm] context overflow at prefill step (31 tokens, 24 positions, max 8192)\n'
+    ),
+    { promptTokens: 31, ctxSize: 8192 }
+  )
+  // MtmdLlmContext.cpp, cached-plus-prompt guard. KV cells are the binding
+  // measure, and again it is the sum that overflowed. These are the real
+  // numbers from the linux-x64 run that first hit this path.
+  t.alike(
+    parseContextOverflowMessage(
+      '[MtmdLlm] context overflow at prefill step: cached 5364 positions / 8172 KV cells plus 24 positions / 31 KV cells of prompt exceed the max context tokens 8192\n'
+    ),
+    { promptTokens: 8203, ctxSize: 8192 }
+  )
+  // MtmdLlmContext.cpp, batch guard.
+  t.alike(
+    parseContextOverflowMessage(
+      '[MtmdLlm] context overflow at batch prefill step: prompt spans 24 positions / 31 KV cells, max context tokens 8192\n'
+    ),
+    { promptTokens: 31, ctxSize: 8192 }
+  )
+})
+
+// The figure handed to `ContextOverflowError` is formatted as
+// "<promptTokens> prompt tokens exceeds the <ctxSize>-token context window",
+// so it has to be larger than the window or the message is nonsense and any
+// truncation logic reading it gets the wrong quantity.
+test('parseContextOverflowMessage: cached overflow reports more than the window', (t) => {
+  const cases = [
+    '[TextLlm] context overflow at batch prefill step: cached tokens 8170 plus prompt tokens 31 exceed the max context tokens 8192\n',
+    '[MtmdLlm] context overflow at prefill step: cached 5364 positions / 8172 KV cells plus 24 positions / 31 KV cells of prompt exceed the max context tokens 8192\n'
+  ]
+  for (const message of cases) {
+    const { promptTokens, ctxSize } = parseContextOverflowMessage(message)
+    t.ok(promptTokens !== undefined && ctxSize !== undefined, `both fields parsed: ${message}`)
+    t.ok(
+      promptTokens !== undefined && ctxSize !== undefined && promptTokens > ctxSize,
+      `${promptTokens} must exceed ${ctxSize}`
+    )
+  }
 })
 
 test('parseContextOverflowMessage: empty result when numbers are absent', (t) => {

@@ -328,19 +328,17 @@ test('completion: kv-cache resends the tool block after a turn that could not re
   clearRegistry()
 })
 
-// With `n_discarded > 0` the addon may slide its context window, and the
-// discard region opens exactly where a static tool block sits — the protected
-// prefix ends at the primed system prompt. While the block can be evicted it
-// has to travel with every turn.
-test('completion: kv-cache resends the tool block when the context window can slide', async (t) => {
+// `n_discarded` is retired, so a config that still carries it must not change
+// caching: the warm turn skips the tool block like any other.
+test('completion: kv-cache still skips the tool block when a retired slide key is present', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
-  const modelId = `kvcache-tools-sliding-${Date.now()}`
+  const modelId = `kvcache-tools-retired-slide-key-${Date.now()}`
   const calls: RecordedCall[] = []
   registerRecordingModel(modelId, calls, { tools: true, n_discarded: 64 })
 
-  const complete = completer(modelId, 'tools-sliding-key')
+  const complete = completer(modelId, 'tools-retired-slide-key')
   const first = user('Area of a triangle, base 10 height 5?')
   await complete([first], [areaTool])
   await complete([first, assistant('25.'), user('And base 4 height 3?')], [areaTool])
@@ -355,8 +353,8 @@ test('completion: kv-cache resends the tool block when the context window can sl
   )
   t.alike(
     toolNames(turnCalls[1]!),
-    ['calculate_triangle_area'],
-    'the warm turn carries it again because a slide may have evicted it'
+    [],
+    'the warm turn does not resend it, the retired key no longer forces a resend'
   )
 
   unregisterModel(modelId)
