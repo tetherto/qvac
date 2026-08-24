@@ -273,34 +273,9 @@ To run an example on Bare:
    ```
 2. Register the plugins the example uses — Bare runs in-process and nothing auto-registers. See [Runtime registration on Bare](/configuration/plugins#runtime-registration-on-bare).
 
-Here is the quickstart adapted for Bare:
+Here is the SDK quickstart adapted for Bare with `@qvac/inference`:
 
-```ts title="quickstart.bare.ts" lineNumbers
-// The Bare quickstart. Bare has no `process` global and does not spawn a worker,
-// so two setup steps come first: install bare-process as the `process` global,
-// then register the plugins this example uses via `plugins([...])`.
-
-import bareProcess from "bare-process";
-import { plugins, LLAMA_3_2_1B_INST_Q4_0 } from "@qvac/sdk";
-import { llmPlugin } from "@qvac/sdk/llamacpp-completion/plugin";
-
-(globalThis as unknown as { process: typeof bareProcess }).process =
-  bareProcess;
-
-const { loadModel, completion, unloadModel } = plugins([llmPlugin]);
-
-// From here it is the same as the Node quickstart.
-const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 });
-
-const history = [
-  { role: "user", content: "Explain quantum computing in one sentence" },
-];
-const result = completion({ modelId, history, stream: true });
-for await (const token of result.tokenStream) {
-  process.stdout.write(token);
-}
-
-await unloadModel({ modelId, autoClose: true });
+```ts file=<rootDir>/packages/inference/examples/quickstart-adapted.ts title="quickstart-adapted.ts" lineNumbers
 ```
 
 For running QVAC on Bare in production, use **[@qvac/inference](https://github.com/tetherto/qvac/tree/main/packages/inference)** — the Bare-only in-process engine. Select addons and register plugins explicitly. `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
