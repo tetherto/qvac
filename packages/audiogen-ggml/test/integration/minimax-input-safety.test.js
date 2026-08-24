@@ -14,7 +14,8 @@ function createMinimaxAddon(threads) {
     {
       engineType: 'minimax',
       modelDir: '/models/not-loaded',
-      threads
+      threads,
+      useGPU: false
     },
     () => {}
   )

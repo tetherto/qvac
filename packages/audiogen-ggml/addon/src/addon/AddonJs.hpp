@@ -192,7 +192,8 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.seed = static_cast<long long>(*value);
   if (auto value = readOptionalAcestepNumber(jobObject, env, "bpm"))
     modelInput.bpm = static_cast<int>(*value);
-  if (auto value = readOptionalBoolean(jobObject, env, "augmentCaptionWithMetadata"))
+  if (auto value =
+          readOptionalBoolean(jobObject, env, "augmentCaptionWithMetadata"))
     modelInput.augmentCaptionWithMetadata = *value;
   if (auto value = readOptionalAcestepNumber(jobObject, env, "duration"))
     modelInput.duration = static_cast<float>(*value);
