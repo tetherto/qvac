@@ -20,7 +20,12 @@ set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/tri
 # is merged and the registry's speech-cpp pin advances. The overlay replaces the
 # registry's speech-cpp port with one pinned to that branch, so this package
 # builds against it. See vcpkg-overlay-ports/speech-cpp/portfile.cmake.
-set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports;${VCPKG_OVERLAY_PORTS}")
+# NB: list-argument form, not "a;${VAR}" string interpolation. When
+# VCPKG_OVERLAY_PORTS is unset, the string form yields a trailing empty list
+# element, vcpkg.cmake emits a bare `--overlay-ports=`, and vcpkg resolves that
+# empty path to the invocation directory — this package dir — then parses its
+# manifest vcpkg.json as a port and dies on "missing required field 'name'".
+set(VCPKG_OVERLAY_PORTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg-overlay-ports" ${VCPKG_OVERLAY_PORTS})
 
 project(audiogen-ggml CXX C)
 
