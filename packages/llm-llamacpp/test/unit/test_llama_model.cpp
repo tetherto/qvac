@@ -881,34 +881,64 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
       qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringTrue) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeNone) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["no_mmap"] = "true";
+  config["load_mode"] = "none";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_FALSE(model.getCommonParams().use_mmap);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeDefaultsToMmap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["no_mmap"] = "false";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_TRUE(model.getCommonParams().use_mmap);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeHyphenVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["load-mode"] = "mmap";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["load_mode"] = "invalid_value";
+
+  EXPECT_THROW(
+      {
+        LlamaModel model = createModelWithConfig(std::move(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
