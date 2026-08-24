@@ -6546,7 +6546,14 @@ class LoadModelSrcRequestLlamacppCompletionDelegate(GeneratedBaseModel):
 
 
 class Predict(RootModel[int]):
-    root: Annotated[int, Field(ge=1, le=9007199254740991)]
+    root: Annotated[
+        int,
+        Field(
+            description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
@@ -6557,7 +6564,14 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
 
 
 class MainGpu(RootModel[int]):
-    root: Annotated[int, Field(ge=0, le=9007199254740991)]
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu(Enum):
@@ -6631,57 +6645,200 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale(Enum):
 
 
 class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
-    ctx_size: float | None = None
-    temp: Annotated[float | None, Field(ge=0.0, le=2.0)] = None
-    top_p: Annotated[float | None, Field(ge=0.0, le=1.0)] = None
-    top_k: Annotated[int | None, Field(ge=0, le=128)] = None
-    seed: float | None = None
-    gpu_layers: float | None = None
-    lora: str | None = None
-    device: str | None = None
-    predict: Literal[-1] | Literal[-2] | Predict | None = None
-    system_prompt: str | None = None
-    no_mmap: bool | None = None
+    ctx_size: Annotated[
+        float | None,
+        Field(
+            description="Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+        ),
+    ] = None
+    temp: Annotated[
+        float | None,
+        Field(description="Sampling temperature (0–2). Default 0.8.", ge=0.0, le=2.0),
+    ] = None
+    top_p: Annotated[
+        float | None,
+        Field(
+            description="Top-p (nucleus) sampling cutoff (0–1). Default 0.9.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    top_k: Annotated[
+        int | None,
+        Field(
+            description="Top-k sampling — keep only the top K tokens (0–128). Default 40.",
+            ge=0,
+            le=128,
+        ),
+    ] = None
+    seed: Annotated[
+        float | None,
+        Field(description="Sampling RNG seed; `-1` (default) picks a random seed."),
+    ] = None
+    gpu_layers: Annotated[
+        float | None,
+        Field(
+            description="Number of model layers to offload to the GPU. Default 99 (offload all)."
+        ),
+    ] = None
+    lora: Annotated[
+        str | None,
+        Field(
+            description="Path to a LoRA adapter file to apply on top of the base model."
+        ),
+    ] = None
+    device: Annotated[
+        str | None,
+        Field(
+            description="Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`."
+        ),
+    ] = None
+    predict: Annotated[
+        Literal[-1] | Literal[-2] | Predict | None,
+        Field(
+            description="Max tokens to predict. `-1` = until stop token, `-2` = until context filled."
+        ),
+    ] = None
+    system_prompt: Annotated[
+        str | None,
+        Field(
+            description="Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
+        ),
+    ] = None
+    no_mmap: Annotated[
+        bool | None,
+        Field(description="Disable memory-mapped model loading. Default false."),
+    ] = None
     verbosity: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity | None,
-        Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"),
+        Field(
+            description="Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity",
+        ),
     ] = None
-    presence_penalty: float | None = None
-    frequency_penalty: float | None = None
-    repeat_penalty: float | None = None
-    stop_sequences: list[str] | None = None
-    n_discarded: float | None = None
-    parallel: Annotated[int | None, Field(ge=1, le=9007199254740991)] = None
-    tools: bool | None = None
-    cache_type_k: Annotated[str | None, Field(alias="cache-type-k")] = None
-    cache_type_v: Annotated[str | None, Field(alias="cache-type-v")] = None
+    presence_penalty: Annotated[
+        float | None,
+        Field(
+            description="Presence penalty applied to tokens that have already appeared. Default 0."
+        ),
+    ] = None
+    frequency_penalty: Annotated[
+        float | None,
+        Field(
+            description="Frequency penalty applied to tokens by their frequency so far. Default 0."
+        ),
+    ] = None
+    repeat_penalty: Annotated[
+        float | None,
+        Field(
+            description="Repetition penalty applied to repeated tokens. Default 1.1."
+        ),
+    ] = None
+    stop_sequences: Annotated[
+        list[str] | None,
+        Field(
+            description="Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`)."
+        ),
+    ] = None
+    n_discarded: Annotated[
+        float | None,
+        Field(
+            description="Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`)."
+        ),
+    ] = None
+    parallel: Annotated[
+        int | None,
+        Field(
+            description="Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    tools: Annotated[
+        bool | None,
+        Field(
+            description="Enable tool calling via the model's jinja chat template. Default false."
+        ),
+    ] = None
+    cache_type_k: Annotated[
+        str | None,
+        Field(
+            alias="cache-type-k",
+            description="KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
+        ),
+    ] = None
+    cache_type_v: Annotated[
+        str | None,
+        Field(
+            alias="cache-type-v",
+            description="KV-cache value quantization type; quantizing the value cache requires flash attention. Unset selects a backend-safe default.",
+        ),
+    ] = None
     main_gpu: Annotated[
         MainGpu | LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu | None,
-        Field(alias="main-gpu"),
+        Field(
+            alias="main-gpu",
+            description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
+        ),
     ] = None
     split_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
-    tensor_split: Annotated[str | None, Field(alias="tensor-split")] = None
-    opencl_cache_dir: Annotated[str | None, Field(alias="openclCacheDir")] = None
-    reasoning_budget: Annotated[int | None, Field(ge=-1, le=2147483647)] = None
+    tensor_split: Annotated[
+        str | None,
+        Field(
+            alias="tensor-split",
+            description="Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
+        ),
+    ] = None
+    opencl_cache_dir: Annotated[
+        str | None,
+        Field(
+            alias="openclCacheDir",
+            description="Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
+        ),
+    ] = None
+    reasoning_budget: Annotated[
+        int | None,
+        Field(
+            description="Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).",
+            ge=-1,
+            le=2147483647,
+        ),
+    ] = None
     projection_model_src: Annotated[
         str | LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc | None,
-        Field(alias="projectionModelSrc"),
+        Field(
+            alias="projectionModelSrc",
+            description="Multimodal projection (mmproj / vision encoder) model source; multimodal models only.",
+        ),
     ] = None
     image_tile_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode | None,
-        Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"),
+        Field(
+            description="Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode",
+        ),
     ] = None
     image_no_upscale: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale | None,
-        Field(title="LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"),
+        Field(
+            description="idefics3-style image preprocessing rule (multimodal models only): `'on'` rounds the image's long side up to a whole number of slices and caps it, so an image smaller than the cap keeps its own resolution and becomes far fewer slices; `'off'` always stretches the long side to the cap. When unset, the model's own GGUF value is used; ignored with a warning by models that do not use idefics3-style preprocessing. Changes the number of image tokens (and therefore both accuracy and encode time), so a checkpoint whose GGUF omits the key needs this set to preprocess correctly.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale",
+        ),
     ] = None
-    mmproj_use_gpu: Annotated[bool | None, Field(alias="mmproj-use-gpu")] = None
+    mmproj_use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="mmproj-use-gpu",
+            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
@@ -7440,51 +7597,97 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
-        int | None, Field(alias="gpuLayers", ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            alias="gpuLayers",
+            description="Number of model layers to offload to the GPU. Default 99 (offload all).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     device: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice | None,
-        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice"),
+        Field(
+            description="Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`.",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice",
+        ),
     ] = None
     batch_size: Annotated[
-        int | None, Field(alias="batchSize", ge=1, le=9007199254740991)
+        int | None,
+        Field(
+            alias="batchSize",
+            description="Tokens processed per batch (input throughput). Default 1024.",
+            ge=1,
+            le=9007199254740991,
+        ),
     ] = None
     pooling: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling | None,
-        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"),
+        Field(
+            description="Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, `'last'`, or `'rank'`. Unset uses the model default.",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling",
+        ),
     ] = None
     attention: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention | None,
-        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention"),
+        Field(
+            description="Attention type: `'causal'` or `'non-causal'`. Unset uses the model default.",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention",
+        ),
     ] = None
     embd_normalize: Annotated[
         int | None,
-        Field(alias="embdNormalize", ge=-9007199254740991, le=9007199254740991),
+        Field(
+            alias="embdNormalize",
+            description="Embedding normalization: `-1` none, `0` max-abs int16, `1` taxicab, `2` euclidean, `>2` p-norm. Default 2 (euclidean).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     flash_attention: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention | None,
         Field(
             alias="flashAttention",
+            description="Flash attention: `'on'`, `'off'`, or `'auto'`. Default `'auto'`.",
             title="LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention",
         ),
     ] = None
     main_gpu: Annotated[
         MainGpu | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu | None,
-        Field(alias="mainGpu"),
+        Field(
+            alias="mainGpu",
+            description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
+        ),
     ] = None
     split_mode: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode | None,
         Field(
             alias="splitMode",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
             title="LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode",
         ),
     ] = None
-    tensor_split: Annotated[str | None, Field(alias="tensorSplit")] = None
+    tensor_split: Annotated[
+        str | None,
+        Field(
+            alias="tensorSplit",
+            description="Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
+        ),
+    ] = None
     verbosity: Annotated[
         LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity | None,
-        Field(title="LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"),
+        Field(
+            description="Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
+            title="LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity",
+        ),
     ] = None
-    opencl_cache_dir: Annotated[str | None, Field(alias="openclCacheDir")] = None
+    opencl_cache_dir: Annotated[
+        str | None,
+        Field(
+            alias="openclCacheDir",
+            description="Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
