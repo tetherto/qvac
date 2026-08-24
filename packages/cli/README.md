@@ -71,11 +71,12 @@ qvac doctor [options]
 
 **Options:**
 
-| Flag            | Description                               |
-| --------------- | ----------------------------------------- |
-| `--json`        | Output the report as JSON.                |
-| `-q, --quiet`   | Suppress stdout — only set the exit code. |
-| `-v, --verbose` | Detailed output.                          |
+| Flag            | Description                                                   |
+| --------------- | ------------------------------------------------------------- |
+| `--deep`        | Start the installed SDK worker and verify its heartbeat.      |
+| `--json`        | Output the report as JSON.                                    |
+| `-q, --quiet`   | Suppress stdout — only set the exit code.                     |
+| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails. |
 
 **What it checks:**
 
@@ -92,6 +93,11 @@ qvac doctor [options]
   Bun.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
   working directory (works for hoisted monorepo installs too).
+- **SDK runtime (`--deep`)** — starts the installed SDK in an isolated Node.js
+  process, performs a worker heartbeat, and closes it. The probe is bounded to
+  45 seconds and classifies common Bare, native library, CPU instruction,
+  Vulkan, and worker-handshake failures. When `--deep` is requested, a missing
+  SDK, failed heartbeat, or failed cleanup causes exit code `1`.
 
 See [`system-requirements.md`](./system-requirements.md) for the full list of
 thresholds and rationale.
@@ -101,6 +107,9 @@ thresholds and rationale.
 ```bash
 # Human-readable report
 qvac doctor
+
+# Exercise SDK worker startup without loading a model
+qvac doctor --deep
 
 # JSON for CI / scripts
 qvac doctor --json
