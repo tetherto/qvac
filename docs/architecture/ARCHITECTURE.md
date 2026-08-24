@@ -2,7 +2,7 @@
 
 Author(s): [Yuri Samarin](https://github.com/yuranich) - QVAC Team
 
-Last Update: Aug 14, 2026
+Last Update: Aug 24, 2026
 
 Related Documents & Links
 
@@ -17,7 +17,7 @@ QVAC SDK is a local-first, peer-to-peer AI platform for JavaScript, Bare, and Py
 
 - **`@qvac/inference`** is the SDK core: a Bare-only in-process engine with plugin assembly, model loading, request lifecycle, P2P/delegation, registry access, RAG, logging, and profiling.
 - **`@qvac/sdk`** is the TypeScript convenience layer for Node.js, Bun, Electron, Expo/React Native, Pear, and direct Bare. It owns runtime integration, worker RPC, bundling, platform packaging, and the default all-plugin distribution.
-- **`@qvac/bare-sdk`** is a slim Bare distribution generated from the SDK build output. It keeps the SDK API shape but removes the default worker and built-in addon dependencies.
+- **`@qvac/bare-sdk`** is deprecated (last release 0.18.1). In-process Bare consumers should use `@qvac/inference`.
 - **`tetherto-qvac-sdk`** is the generated Python client. It is built from the SDK wire contract and runs against the same Bare worker as TypeScript hosts.
 
 The core execution model is the same across packages:
@@ -99,7 +99,7 @@ Model types follow an `engine-usecase` naming convention. Backward-compatible al
 
 Plugin registration is determined by the package and runtime path:
 
-- `@qvac/inference` and `@qvac/bare-sdk` register no plugins by default. Consumers assemble the engine explicitly with `plugins([...])` or `registerPlugin(...)`.
+- `@qvac/inference` registers no plugins by default. Consumers assemble the engine explicitly with `plugins([...])` or `registerPlugin(...)`.
 - `@qvac/sdk` ships a default worker (`dist/server/worker.js`) that registers every built-in plugin.
 - `qvac bundle sdk` generates an optimized worker entry for the plugin list in `qvac.config.{json,js,ts}`.
 
@@ -133,7 +133,7 @@ Deployment paths:
 - Node.js, Bun, and Electron run `@qvac/sdk` in the host process and spawn a Bare subprocess.
 - Expo/React Native starts the worker bundle inside a BareKit `Worklet`.
 - Pear uses a generated `qvac/worker.pear.entry.mjs` staged into the app.
-- Direct Bare runs in one process through `@qvac/inference`, or through the compatibility path exposed by `@qvac/sdk` / `@qvac/bare-sdk`.
+- Direct Bare runs in one process through `@qvac/inference`, or through the compatibility path exposed by `@qvac/sdk`.
 - Python runs `tetherto-qvac-sdk` in the Python process and starts a Bare worker subprocess.
 
 Native addon packaging follows the deployment target: Node/Bun use installed prebuilds, Electron and Expo/RN package native addons with the app, and Bare/Pear builds include the addons selected by the authored or generated worker entry.
@@ -160,7 +160,7 @@ Worker-backed clients use the same JSON request/response envelopes over differen
 - Expo clients use `bare-rpc` over the BareKit worklet IPC bridge.
 - Python clients use `bare-rpc-python` over loopback TCP (`127.0.0.1:0`) because asyncio has no cross-platform Unix-socket/named-pipe server.
 
-In-process paths (`@qvac/inference`, direct Bare, and `@qvac/bare-sdk`) bypass sockets and call the dispatch layer directly.
+In-process paths (`@qvac/inference` and direct Bare) bypass sockets and call the dispatch layer directly.
 
 ---
 
@@ -256,7 +256,7 @@ The Python package provides:
 | Server process OOM | OS kills subprocess; client receives RPC connection error and must restart SDK |
 | Worker crash during an in-flight request | Client life-signal race rejects pending calls instead of hanging |
 | Plugin not enabled | Fast-fail with a plugin registration / no-handler error and guidance to configure or register the plugin |
-| `@qvac/bare-sdk` call before plugin assembly | Fast-fail with guidance to call `plugins([...])` or `registerPlugin(...)` |
+| `@qvac/inference` call before plugin assembly | Fast-fail with guidance to call `plugins([...])` or `registerPlugin(...)` |
 
 **Cancellation:** `cancel({ requestId })` is the preferred targeted path for migrated long-running operations, including completion/batch completion, embeddings, transcription, translation, fine-tuning, model loading, asset downloads, RAG, and audio generation. Broad cancellation by `modelId` remains available for shutdown, unload, and admin sweeps.
 
@@ -295,7 +295,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `sdk` | `@qvac/sdk` | TypeScript SDK: public API, worker core, RPC transports, plugins, model registry client, bundling commands |
-| `bare-sdk` | `@qvac/bare-sdk` | Slim Bare distribution copied from SDK build output, no built-in addon dependencies, explicit plugin assembly |
+| `bare-sdk` | `@qvac/bare-sdk` | Deprecated (last release 0.18.1). Use `@qvac/inference` for in-process Bare |
 | `inference` | `@qvac/inference` | Implemented SDK core: Bare-only in-process engine, explicit plugin assembly, no worker/RPC/subprocess layer |
 | `sdk-python` | `tetherto-qvac-sdk` | Generated Python client for the SDK worker contract |
 | `cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`, verification, release helpers) |

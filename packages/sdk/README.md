@@ -16,7 +16,7 @@ See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.i
 
 For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
 
-> **Running on Bare directly?** `@qvac/sdk` runs on Bare, but you must register the plugins you use explicitly before the first SDK call (Node and Expo do this automatically). For direct Bare usage we recommend [`@qvac/bare-sdk`](../bare-sdk/README.md) — the same SDK surface with no built-in plugin addons, designed for consumers wiring their own worker entry (Pear apps, bare-expo apps, direct Bare scripts).
+> **Running on Bare directly?** `@qvac/sdk` runs on Bare, but you must register the plugins you use explicitly before the first SDK call (Node and Expo do this automatically). For in-process Bare (Pear apps, bare-expo, direct Bare scripts) use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
 
 ## Supported environments and installation
 

@@ -303,7 +303,7 @@ for await (const token of result.tokenStream) {
 await unloadModel({ modelId, autoClose: true });
 ```
 
-For running QVAC on Bare in production, we recommend **[@qvac/bare-sdk](https://github.com/tetherto/qvac/tree/main/packages/bare-sdk)** — a slim, Bare-only assembly where you select addons and register plugins explicitly. It also sets up the bare module shims that examples using `fs` and similar modules rely on.
+For running QVAC on Bare in production, use **[@qvac/inference](https://github.com/tetherto/qvac/tree/main/packages/inference)** — the Bare-only in-process engine. Select addons and register plugins explicitly. `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
 
 ## API reference
 
