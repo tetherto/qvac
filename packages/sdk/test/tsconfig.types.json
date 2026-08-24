@@ -1,6 +1,6 @@
 {
   "extends": "../tsconfig.json",
-  "include": ["./**/*.types.ts", "../types/**/*.d.ts"],
+  "include": ["./**/*.types.ts", "../src/types/**/*.d.ts"],
   "exclude": [],
   "compilerOptions": {
     "noEmit": true,

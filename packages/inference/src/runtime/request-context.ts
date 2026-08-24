@@ -23,6 +23,7 @@ export type RequestKind =
   | 'transcribe'
   | 'translate'
   | 'diffusion'
+  | 'world'
   | 'audiogen'
   | 'tts'
   | 'ocr'
@@ -137,6 +138,18 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
+  })
+  // An ABot-World session runs one job at a time: the addon rejects a second
+  // step while a block is still streaming, and scene creation shares the same
+  // lane. Reject rather than queue, unlike every other policy here, because a
+  // walk is driven by live key input and a backlog of stale keypresses is worse
+  // for the caller than a prompt refusal it can drop. Making the registry
+  // authoritative also means the refusal arrives as a typed SDK error rather
+  // than the addon's opaque busy string.
+  r.policy({
+    kind: 'world',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
   })
 }
 

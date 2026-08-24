@@ -182,7 +182,13 @@ test('builtin plugins: every handler declares cancel matching the truth table', 
     [diffusionPlugin.modelType]: {
       diffusionStream: { scope: 'model', hard: true },
       videoStream: { scope: 'model', hard: true },
-      upscaleStream: { scope: 'none' }
+      upscaleStream: { scope: 'none' },
+      // Not `hard`: cancelling a walk cannot interrupt the DiT block, which
+      // runs to completion internally. It stops frame delivery and makes the
+      // step reject, so it is a real cancel — it just does not save the compute.
+      worldStepStream: { scope: 'model', hard: false },
+      // Scene creation takes no abort predicate at all.
+      worldSceneStream: { scope: 'none' }
     },
     [vlaPlugin.modelType]: {
       vlaRun: { scope: 'model', hard: true },

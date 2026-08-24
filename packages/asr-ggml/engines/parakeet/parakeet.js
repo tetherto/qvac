@@ -48,6 +48,8 @@ class ParakeetInterface {
     _nextJobId;
     _activeJobId;
     _onCancelComplete;
+    _onStreamEndComplete;
+    _endStreamingInFlight;
     _bufferedAudio;
     _bufferedBytes;
     _config;
@@ -60,6 +62,8 @@ class ParakeetInterface {
         this._nextJobId = 1;
         this._activeJobId = null;
         this._onCancelComplete = null;
+        this._onStreamEndComplete = null;
+        this._endStreamingInFlight = null;
         this._bufferedAudio = [];
         this._bufferedBytes = 0;
         this._config = this._applyDefaults(configurationParams);
@@ -84,6 +88,7 @@ class ParakeetInterface {
         this._config = configurationParams;
         this._activeJobId = null;
         this._onCancelComplete = null;
+        this._resolveStreamEndWaiter();
         this._bufferedAudio = [];
         this._bufferedBytes = 0;
         this._handle = this._binding.createInstance(this, this._config, this._addonOutputCallback.bind(this), this._stateCallback);
@@ -129,24 +134,37 @@ class ParakeetInterface {
         resolve();
         return true;
     }
+    _resolveStreamEndWaiter() {
+        this._endStreamingInFlight = null;
+        if (!this._onStreamEndComplete)
+            return;
+        const resolve = this._onStreamEndComplete;
+        this._onStreamEndComplete = null;
+        resolve();
+    }
     _addonOutputCallback(addon, event, data, error) {
         const isError = typeof error === "string" && error.length > 0;
         const mappedEvent = this._mapAddonEvent(event, data, isError);
         const isTerminal = mappedEvent === "Error" || mappedEvent === "JobEnded";
         const jobId = this._activeJobId;
         if (jobId === null) {
-            if (isTerminal)
+            if (isTerminal) {
                 this._resolvePendingCancel();
+                this._resolveStreamEndWaiter();
+            }
             return;
         }
-        if (isTerminal && this._resolvePendingCancel())
+        if (isTerminal && this._resolvePendingCancel()) {
+            this._resolveStreamEndWaiter();
             return;
+        }
         if (mappedEvent === "Output")
             this._setState(state.PROCESSING);
         this._outputCallback(addon, mappedEvent, jobId, data, isError ? error : null);
         if (isTerminal) {
             this._activeJobId = null;
             this._setState(state.LISTENING);
+            this._resolveStreamEndWaiter();
         }
     }
     _emitSyntheticError(jobId, error) {
@@ -339,6 +357,7 @@ class ParakeetInterface {
             this._binding.destroyInstance(this._handle);
             this._handle = null;
             this._activeJobId = null;
+            this._resolveStreamEndWaiter();
             this._bufferedAudio = [];
             this._bufferedBytes = 0;
             this._setState(state.IDLE);
@@ -412,10 +431,27 @@ class ParakeetInterface {
     }
     endStreaming() {
         try {
+            // A second endStreaming() while the first is still waiting for the
+            // queued terminal event must join it, not fall through to the
+            // synthetic path — that would clear the job before the drained
+            // outputs are delivered and discard them.
+            if (this._endStreamingInFlight)
+                return this._endStreamingInFlight;
             if (this._activeJobId === null)
                 return Promise.resolve();
             const jobId = this._activeJobId;
+            // The native endStreaming drains the backlog and queues a terminal
+            // RuntimeStats behind it; delivery is asynchronous, so the job must
+            // stay active until that terminal event arrives.
             const teardown = this._binding.endStreaming(this._handle) || {};
+            if (teardown.cleaned) {
+                this._endStreamingInFlight = new Promise((resolve) => {
+                    this._onStreamEndComplete = resolve;
+                });
+                return this._endStreamingInFlight;
+            }
+            // No native session existed: the queue carries no terminal event,
+            // so synthesise the JobEnded to resolve the response chain.
             this._activeJobId = null;
             this._setState(state.LISTENING);
             this._outputCallback(this, "JobEnded", jobId, {
@@ -430,6 +466,8 @@ class ParakeetInterface {
             return Promise.resolve();
         }
         catch (error) {
+            this._onStreamEndComplete = null;
+            this._endStreamingInFlight = null;
             const normalized = normalizeError(error);
             return Promise.reject(createParakeetError(error_1.ERR_CODES_PARAKEET.FAILED_TO_RESET, normalized.message, error));
         }
