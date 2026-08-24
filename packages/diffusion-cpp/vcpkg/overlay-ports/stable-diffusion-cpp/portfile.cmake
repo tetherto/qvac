@@ -34,6 +34,23 @@ vcpkg_from_github(
     SHA512 bf84a385634cc816d8f4396ce1911f7696ebe59e87b23d3d4e1aeb9a6a409f6a1bc11e9335d68bd2538251086f346df3daafcd21a93f022c86a1ad406d997f7c
 )
 
+# Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*
+# header (src/core/ggml_extend_backend.cpp includes "ggml/src/ggml-impl.h");
+# developers get it from the ggml git submodule, which REF tarballs do not
+# contain. Fetch the same qvac-ext-ggml commit the ggml port builds and place
+# it at the submodule path so the internal header matches the linked ggml
+# exactly. KEEP THIS REF IN LOCKSTEP with ports/ggml/portfile.cmake.
+vcpkg_from_github(
+    OUT_SOURCE_PATH GGML_SOURCE_PATH
+    REPO tetherto/qvac-ext-ggml
+    REF 0de1c777cb20b167afd80677e4213f96f500f8d4
+    SHA512 91c39b0f072e9b087da4d297e5aeae809e2684f021287fa8c9ced8cb739ff3eee4feefb91d72d5fe2fcff69f418d079236e5096b1cc742fcc83a6d4cde54427b
+)
+file(REMOVE_RECURSE "${SOURCE_PATH}/ggml")
+file(MAKE_DIRECTORY "${SOURCE_PATH}/ggml")
+file(GLOB _ggml_tree LIST_DIRECTORIES true "${GGML_SOURCE_PATH}/*")
+file(COPY ${_ggml_tree} DESTINATION "${SOURCE_PATH}/ggml")
+
 # Only build Release — debug builds are not needed for the prebuild and can
 # fail with MSVC iterator-debug-level mismatches.
 set(VCPKG_BUILD_TYPE release)
