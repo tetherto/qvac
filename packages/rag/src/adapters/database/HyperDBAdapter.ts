@@ -34,8 +34,11 @@ import type {
 } from '../../types.js'
 import qvacCrypto from '#crypto'
 
-interface HyperDBAdapterInput {
-  store?: Corestore
+export interface HyperDBAdapterInput {
+  // `corestore` does not publish one stable TypeScript shape across its
+  // supported versions. Keep the public input structural and narrow it at the
+  // untyped adapter boundary.
+  store?: object
   db?: HyperDBInstance
   dbName?: string
   NUM_CENTROIDS?: number
@@ -78,7 +81,7 @@ interface BucketRecord {
 }
 
 // A document prepared for insertion within a batch.
-interface PreparedDoc {
+export interface PreparedDoc {
   id: string
   index: number
   vector: number[]
@@ -139,7 +142,7 @@ export class HyperDBAdapter extends BaseDBAdapter {
     // BaseDBAdapter ignores the config value; the cast bridges the concrete
     // input interface to its permissive index-signature parameter type.
     super(config as Record<string, unknown>)
-    this.store = config.store || null
+    this.store = (config.store as Corestore | undefined) || null
     this.db = config.db || null
     this.dbName = config.dbName || 'rag-vector-store'
     this.NUM_CENTROIDS = config.NUM_CENTROIDS || 16
@@ -159,6 +162,38 @@ export class HyperDBAdapter extends BaseDBAdapter {
     this.vectorCache = createLRUCache(this.CACHE_SIZE)
     this.centroids = []
     this.logger = config.logger || new QvacLogger()
+  }
+
+  // Extension hooks for adapters that maintain a derived index. The before
+  // hooks participate in the canonical HyperDB transaction; after hooks run
+  // only after that transaction has been flushed.
+  // lunte-disable-next-line no-unused-vars,require-await
+  protected async _beforeSaveFlush(
+    tx: HyperDBTransaction,
+    docs: PreparedDoc[],
+    now: Date
+  ): Promise<void> {}
+
+  // lunte-disable-next-line no-unused-vars,require-await
+  protected async _afterSaveFlush(docs: PreparedDoc[]): Promise<void> {}
+
+  // lunte-disable-next-line no-unused-vars,require-await
+  protected async _beforeDeleteFlush(
+    tx: HyperDBTransaction,
+    ids: string[],
+    now: Date
+  ): Promise<void> {}
+
+  // lunte-disable-next-line no-unused-vars,require-await
+  protected async _afterDeleteFlush(ids: string[]): Promise<void> {}
+
+  protected async _withSnapshot<T>(operation: (snapshot: HyperDBReader) => Promise<T>): Promise<T> {
+    const snapshot = this.db!.snapshot()
+    try {
+      return await operation(snapshot)
+    } finally {
+      await snapshot.close()
+    }
   }
 
   // Get the hypercore instance.
@@ -275,8 +310,6 @@ export class HyperDBAdapter extends BaseDBAdapter {
       for (const id of ids) {
         ops.push(tx.delete(this.documentsTable, { id }))
         ops.push(tx.delete(this.vectorsTable, { docId: id }))
-        this.documentCache.delete(id)
-        this.vectorCache.delete(id)
       }
 
       for (let i = 0; i < this.NUM_CENTROIDS; i++) {
@@ -296,7 +329,15 @@ export class HyperDBAdapter extends BaseDBAdapter {
         }
       }
       await Promise.all(ops)
+      const now = new Date()
+      await this._beforeDeleteFlush(tx, ids, now)
       await tx.flush()
+
+      for (const id of ids) {
+        this.documentCache.delete(id)
+        this.vectorCache.delete(id)
+      }
+      await this._afterDeleteFlush(ids)
 
       this.logger.info(`Deleted ${ids.length} document(s) from HyperDB`)
 
@@ -315,7 +356,7 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
   // Search for documents given a text query.
   // Uses IVF buckets and ranking based on cosine similarity and text score.
-  override async search(
+  override search(
     query: string,
     queryVector: number[],
     params: SearchParams = {}
@@ -329,59 +370,60 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
     this.logger.debug(`HyperDB search: topK=${topK}, n=${n}, centroids=${this.centroids.length}`)
 
-    let candidateIds = new Set<string>()
-    const topCentroids = this._findTopNCentroids(queryVector, n)
-    const dbSnapshot = this.db!.snapshot()
+    return this._withSnapshot(async (dbSnapshot) => {
+      let candidateIds = new Set<string>()
+      const topCentroids = this._findTopNCentroids(queryVector, n)
 
-    const bucketPromises = topCentroids.map(({ index }) => {
-      const centroidId = `centroid-${index}`
-      return this._getBucket(dbSnapshot, centroidId)
+      const bucketPromises = topCentroids.map(({ index }) => {
+        const centroidId = `centroid-${index}`
+        return this._getBucket(dbSnapshot, centroidId)
+      })
+      const buckets = await Promise.all(bucketPromises)
+
+      if (signal?.aborted) {
+        throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
+      }
+
+      buckets.forEach((bucket) => {
+        bucket.forEach((id) => candidateIds.add(id))
+      })
+
+      if (!candidateIds.size) {
+        this.logger.debug('No candidates in top centroids, expanding search')
+        candidateIds = await this._progressiveCentroidExpansion(dbSnapshot, queryVector, n)
+      }
+
+      if (signal?.aborted) {
+        throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
+      }
+
+      const candidateIdsArray = Array.from(candidateIds)
+      this.logger.debug(`Scoring ${candidateIdsArray.length} candidate(s)`)
+
+      const [vectorMap, contentMap] = await Promise.all([
+        this._getVectors(dbSnapshot, candidateIdsArray),
+        this._getDocumentContents(dbSnapshot, candidateIdsArray)
+      ])
+
+      if (signal?.aborted) {
+        throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
+      }
+
+      const results: SearchResult[] = []
+      for (const id of candidateIdsArray) {
+        const vector = vectorMap.get(id)
+        const content = contentMap.get(id)
+        if (!vector || !content) continue
+
+        const vectorScore = cosineSimilarity(queryVector, vector)
+        const textScore = calculateTextScore(query, content)
+        const finalScore = vectorScore * 0.7 + textScore * 0.3 // todo: would weight be configurable?
+
+        results.push({ id, content, score: finalScore })
+      }
+
+      return results.sort((a, b) => b.score - a.score).slice(0, topK)
     })
-    const buckets = await Promise.all(bucketPromises)
-
-    if (signal?.aborted) {
-      throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
-    }
-
-    buckets.forEach((bucket) => {
-      bucket.forEach((id) => candidateIds.add(id))
-    })
-
-    if (!candidateIds.size) {
-      this.logger.debug('No candidates in top centroids, expanding search')
-      candidateIds = await this._progressiveCentroidExpansion(dbSnapshot, queryVector, n)
-    }
-
-    if (signal?.aborted) {
-      throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
-    }
-
-    const candidateIdsArray = Array.from(candidateIds)
-    this.logger.debug(`Scoring ${candidateIdsArray.length} candidate(s)`)
-
-    const [vectorMap, contentMap] = await Promise.all([
-      this._getVectors(dbSnapshot, candidateIdsArray),
-      this._getDocumentContents(dbSnapshot, candidateIdsArray)
-    ])
-
-    if (signal?.aborted) {
-      throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
-    }
-
-    const results: SearchResult[] = []
-    for (const id of candidateIdsArray) {
-      const vector = vectorMap.get(id)
-      const content = contentMap.get(id)
-      if (!vector || !content) continue
-
-      const vectorScore = cosineSimilarity(queryVector, vector)
-      const textScore = calculateTextScore(query, content)
-      const finalScore = vectorScore * 0.7 + textScore * 0.3 // todo: would weight be configurable?
-
-      results.push({ id, content, score: finalScore })
-    }
-
-    return results.sort((a, b) => b.score - a.score).slice(0, topK)
   }
 
   // Reindex the database by rebalancing centroids using k-means clustering.
@@ -399,11 +441,11 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
     this.logger.info('Starting reindex...')
 
-    const snapshot = this.db!.snapshot()
-
     // Stage 1: Collect all vectors
     onProgress?.('collecting', 0, 1)
-    const allVectors = await this._getAllEntries<VectorRecord>(snapshot, this.vectorsTable)
+    const allVectors = await this._withSnapshot((snapshot) =>
+      this._getAllEntries<VectorRecord>(snapshot, this.vectorsTable)
+    )
 
     if (allVectors.length < this.NUM_CENTROIDS) {
       this.logger.warn(
@@ -845,10 +887,13 @@ export class HyperDBAdapter extends BaseDBAdapter {
     if (!this.db) {
       throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
     }
-    const snapshot = this.db.snapshot()
     try {
-      const result = await snapshot.get<HyperDBAdapterConfig>(this.configTable, { key: 'adapter' })
-      return result || null
+      return await this._withSnapshot(async (snapshot) => {
+        const result = await snapshot.get<HyperDBAdapterConfig>(this.configTable, {
+          key: 'adapter'
+        })
+        return result || null
+      })
     } catch {
       // If config table doesn't exist yet or other DB errors, return null
       return null
@@ -932,8 +977,6 @@ export class HyperDBAdapter extends BaseDBAdapter {
               })
           })
 
-          this._updateCaches({ id: doc.id, content: doc.content }, doc.vector)
-
           // Prepare bucket updates
           if (doc.centroidId) {
             if (!bucketUpdates.has(doc.centroidId)) {
@@ -968,29 +1011,26 @@ export class HyperDBAdapter extends BaseDBAdapter {
             )
         })
         const operationResults = await Promise.all(operationPromises)
-
-        // Process results
-        const docResults = new Map<number, SaveEmbeddingsResult>()
-        operationResults.forEach((result, index) => {
-          const op = operations[index]
-          if (op && (op.type === 'document' || op.type === 'vector')) {
-            const docIndex = op.index
-            if (!docResults.has(docIndex)) {
-              docResults.set(docIndex, {
-                id: preparedDocs[docIndex].id,
-                status: result.status,
-                error: result.status === 'rejected' ? result.error : undefined
-              })
-            }
-          }
-        })
+        const failedOperation = operationResults.find((result) => result.status === 'rejected')
+        if (failedOperation) {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.DB_OPERATION_FAILED,
+            adds: failedOperation.error || 'Batch insertion failed'
+          })
+        }
 
         if (bucketUpdates.size > 0) {
           await this._updateBuckets(tx, bucketUpdates, now)
         }
 
+        await this._beforeSaveFlush(tx, preparedDocs, now)
         await tx.flush()
-        results.push(...Array.from(docResults.values()))
+
+        for (const doc of preparedDocs) {
+          this._updateCaches({ id: doc.id, content: doc.content }, doc.vector)
+          results.push({ id: doc.id, status: 'fulfilled' })
+        }
+        await this._afterSaveFlush(preparedDocs)
       } catch (error) {
         const message =
           error instanceof Error && error.message ? error.message : 'Batch insertion failed'
@@ -1083,12 +1123,12 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
   // Retrieves all entries from a table.
   // lunte-disable-next-line require-await
-  private async _getAllEntries<T>(snapshot: HyperDBReader, table: string): Promise<T[]> {
+  protected async _getAllEntries<T>(snapshot: HyperDBReader, table: string): Promise<T[]> {
     return snapshot.find<T>(table).toArray()
   }
 
   // Batch retrieve multiple vectors by docIds.
-  private async _getVectors(
+  protected async _getVectors(
     snapshot: HyperDBReader,
     docIds: string[]
   ): Promise<Map<string, number[]>> {
@@ -1117,7 +1157,7 @@ export class HyperDBAdapter extends BaseDBAdapter {
   }
 
   // Batch retrieve multiple document contents by IDs.
-  private async _getDocumentContents(
+  protected async _getDocumentContents(
     snapshot: HyperDBReader,
     ids: string[]
   ): Promise<Map<string, string>> {
@@ -1195,10 +1235,16 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
   // Filter out duplicate documents that already exist in the database.
   // Uses the contentHash field on the documents table for efficient detection.
-  private async _filterDuplicates(
+  private _filterDuplicates(
     docs: EmbeddedDoc[]
   ): Promise<{ unique: EmbeddedDoc[]; duplicates: Array<{ id: string; error: string }> }> {
-    const dbSnapshot = this.db!.snapshot()
+    return this._withSnapshot((snapshot) => this._filterDuplicatesFromSnapshot(snapshot, docs))
+  }
+
+  private async _filterDuplicatesFromSnapshot(
+    dbSnapshot: HyperDBReader,
+    docs: EmbeddedDoc[]
+  ): Promise<{ unique: EmbeddedDoc[]; duplicates: Array<{ id: string; error: string }> }> {
     const unique: EmbeddedDoc[] = []
     const duplicates: Array<{ id: string; error: string }> = []
     const seenInBatch = new Map<string, string>()

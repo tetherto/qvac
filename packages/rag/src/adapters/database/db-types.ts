@@ -23,6 +23,7 @@ export interface HyperDBReader {
   get<T = unknown>(collection: string, query: object): Promise<T | null>
   find<T = unknown>(collection: string, query?: object): { toArray(): Promise<T[]> }
   findOne<T = unknown>(index: string, query: object): Promise<T | null>
+  close(): Promise<void>
 }
 
 export interface HyperDBTransaction extends HyperDBReader {

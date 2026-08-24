@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
+import type { TurboVecIndexProvider } from '@qvac/rag'
 import type { ModelSrcInput } from '@/schemas/model-src-utils'
 
 /**
@@ -110,6 +111,10 @@ export interface PluginLogging {
   namespace: string
 }
 
+export interface QvacPluginCapabilities {
+  turbovecIndexProvider?: TurboVecIndexProvider
+}
+
 /**
  * Function to resolve a model source (URL or path) to a local file path.
  * Passed to resolveConfig hook to allow plugins to resolve their artifacts.
@@ -147,6 +152,7 @@ export interface QvacPlugin<
   createModel: (params: CreateModelParams) => PluginModelResult
   handlers: Record<string, PluginHandlerDefinition>
   logging?: PluginLogging | undefined
+  capabilities?: QvacPluginCapabilities | undefined
   /** When true, skips file-existence validation for modelPath. Use for plugins that derive paths from config. */
   skipPrimaryModelPathValidation?: boolean
   /**
@@ -299,6 +305,17 @@ export const pluginDefinitionRuntimeSchema = z
       .object({
         module: z.unknown().optional(),
         namespace: z.string().optional()
+      })
+      .catchall(z.unknown())
+      .optional(),
+    capabilities: z
+      .object({
+        turbovecIndexProvider: z
+          .object({
+            create: functionRuntimeSchema,
+            load: functionRuntimeSchema
+          })
+          .optional()
       })
       .catchall(z.unknown())
       .optional(),

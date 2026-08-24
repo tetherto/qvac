@@ -1,5 +1,13 @@
-import { RAG, HyperDBAdapter, type EmbeddingFunction } from '@qvac/rag'
+import {
+  RAG,
+  ERR_CODES,
+  HyperDBAdapter,
+  QvacErrorRAG,
+  TurboVecAdapter,
+  type EmbeddingFunction
+} from '@qvac/rag'
 import Corestore from 'corestore'
+import env from 'bare-env'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { getConfiguredCacheDir } from '@/runtime/state'
@@ -8,8 +16,10 @@ import { validateAndJoinPath } from '@/utils/path-security'
 import { createStreamLogger, getEngineLogger, RAG_NAMESPACE } from '@/logging/index'
 import { cancelAllRagOperations } from '@/rag/rag-operation-manager'
 import { registerCorestore, unregisterCorestore } from '@/runtime/runtime-lifecycle'
+import { getTurboVecIndexProvider } from '@/plugins/registry'
 
 const logger = getEngineLogger()
+const TURBOVEC_ROLLOUT_ENV = 'QVAC_RAG_TURBOVEC'
 
 // Workspace-based RAG storage
 interface RagWorkspaceEntry {
@@ -32,8 +42,39 @@ function getRagBaseDir() {
   return path.join(path.dirname(cacheDir), 'rag-hyperdb')
 }
 
+function getRagIndexBaseDir() {
+  const cacheDir = getConfiguredCacheDir()
+  return path.join(path.dirname(cacheDir), 'rag-turbovec')
+}
+
 function getStorePath(workspace: string) {
   return validateAndJoinPath(getRagBaseDir(), workspace)
+}
+
+function getIndexPath(workspace: string) {
+  return validateAndJoinPath(getRagIndexBaseDir(), workspace)
+}
+
+function createRagDbAdapter(corestore: Corestore, workspace: string) {
+  if (env[TURBOVEC_ROLLOUT_ENV] !== '1') {
+    return new HyperDBAdapter({
+      store: corestore,
+      dbName: workspace
+    })
+  }
+  const indexProvider = getTurboVecIndexProvider()
+  if (!indexProvider) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.DEPENDENCY_REQUIRED,
+      adds: 'TurboVec requires a registered vector index provider'
+    })
+  }
+  return new TurboVecAdapter({
+    store: corestore,
+    dbName: workspace,
+    indexProvider,
+    checkpointDir: getIndexPath(workspace)
+  })
 }
 
 export function hasRagWorkspaceStorage(workspace?: string) {
@@ -52,12 +93,18 @@ async function getOrCreateWorkspaceEntry(workspace?: string) {
   const storePath = getStorePath(key)
   const corestore = new Corestore(storePath)
 
-  const dbAdapter = new HyperDBAdapter({
-    store: corestore,
-    dbName: key
-  })
-
-  await dbAdapter.ready()
+  let dbAdapter: HyperDBAdapter
+  try {
+    dbAdapter = createRagDbAdapter(corestore, key)
+    await dbAdapter.ready()
+  } catch (error) {
+    try {
+      await corestore.close()
+    } catch {
+      // Keep the adapter initialization error as the primary failure.
+    }
+    throw error
+  }
 
   registerCorestore(corestore, {
     label: `rag-workspace:${key}`,
@@ -189,12 +236,14 @@ export function isWorkspaceLoaded(workspace: string) {
 export async function deleteWorkspace(workspace: string) {
   const key = getWorkspaceKey(workspace)
   const storePath = getStorePath(key)
+  const indexPath = getIndexPath(key)
 
-  if (!fs.existsSync(storePath)) {
+  if (!fs.existsSync(storePath) && !fs.existsSync(indexPath)) {
     return false
   }
 
   await fsPromises.rm(storePath, { recursive: true, force: true })
+  await fsPromises.rm(indexPath, { recursive: true, force: true })
 
   return true
 }

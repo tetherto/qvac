@@ -1,5 +1,13 @@
 export { RAG } from './RAG.js'
 export { HyperDBAdapter } from './adapters/database/HyperDBAdapter.js'
+export {
+  TurboVecAdapter,
+  type TurboVecAdapterInput,
+  type TurboVecIndex,
+  type TurboVecIndexProvider,
+  type TurboVecIndexSearchResult,
+  type TurboVecIndexStorage
+} from './adapters/database/TurboVecAdapter.js'
 export { BaseDBAdapter } from './adapters/database/BaseDBAdapter.js'
 export { LLMChunkAdapter } from './adapters/chunker/LLMChunkAdapter.js'
 export { BaseChunkAdapter } from './adapters/chunker/BaseChunkAdapter.js'
