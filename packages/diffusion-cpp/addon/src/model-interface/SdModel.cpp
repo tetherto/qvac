@@ -839,6 +839,16 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // decoding all final latents; each sampler sequence reports total ==
   // gen.steps, which encoder/VAE sequences never do.
   g_progressCtx.denoiseTotals = {gen.steps};
+  // img2img (SDEdit) slices the sigma schedule by strength, so its sampler
+  // sequence reports t_enc + 1 steps (t_enc = steps * strength, clamped to
+  // steps - 1 — mirrors the engine). Match that total too; the FLUX
+  // ref-image path keeps the full count.
+  if (gen.mode == "img2img") {
+    int tEnc = static_cast<int>(static_cast<float>(gen.steps) * gen.strength);
+    if (tEnc >= gen.steps)
+      tEnc = gen.steps - 1;
+    g_progressCtx.denoiseTotals.push_back(tEnc + 1);
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
   sd_image_t* genImages = nullptr;

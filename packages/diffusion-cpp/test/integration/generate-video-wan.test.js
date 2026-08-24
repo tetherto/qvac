@@ -295,17 +295,13 @@ test(
         ),
         'every progress tick carries finite step + total >= 1'
       )
-      // The pinned stable-diffusion.cpp fork emits progress only from sampler
-      // and tiling code. On the supported single-expert Wan path, the first
-      // sequence is therefore the sampler, not text encoding.
-      if (progressTicks.length > 0) {
-        t.is(progressTicks[0].step, 0, 'first progress tick starts the sampler sequence')
-        t.is(
-          progressTicks[0].total,
-          SMOKE_STEPS,
-          `first progress sequence reports the configured ${SMOKE_STEPS} sampler step(s)`
-        )
-      }
+      // The 2026-08-11 engine emits progress for every phase (text encoders,
+      // sampler, VAE), so the first tick belongs to the text encoder. Assert
+      // the sampler sequence ran to completion instead.
+      t.ok(
+        progressTicks.some((p) => p.step === SMOKE_STEPS && p.total === SMOKE_STEPS),
+        `sampler sequence completed (step=${SMOKE_STEPS}/total=${SMOKE_STEPS})`
+      )
       const phaseTotals = new Set(progressTicks.map((p) => p.total))
       t.ok(phaseTotals.size >= 1, `progress ticks span ${phaseTotals.size} distinct phase total(s)`)
       console.log(
