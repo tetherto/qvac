@@ -151,11 +151,10 @@ jobs:
           test-groups-path: validation-data/packages/tts-ggml/test/mobile/test-groups.json
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-  # NOTE: continue-on-error: true matches the previous monolithic
-  # workflow.  on-pr-tts-ggml.yml's merge-guard treats `success ||
-  # skipped` as a pass, so a hard Device Farm failure does not gate
-  # merge today.  Tighten once the Device Farm provisioning + signing
-  # + runner pool is stable.
+  # A Device Farm test failure fails this run on every trigger (no
+  # continue-on-error). Mobile is on-demand for this addon (not part of
+  # on-pr-tts-ggml.yml's PR lane), so this does not gate PR merges — it makes
+  # manual/scheduled runs trustworthy instead of silently green.
   build-and-test:
     name: Build ${{ matrix.platform }} (${{ matrix.engine || 'chatterbox' }} ${{ matrix.variant }} ${{ matrix.use_gpu && 'gpu' || 'cpu' }}${{ matrix.enhancer == 'lavasr' && ' enh' || '' }}${{ matrix.denoiser == 'lavasr' && ' den' || '' }}) and Run E2E Tests
     # workflow_call: validate-devices is skipped; the `skipped` branch of the
@@ -169,7 +168,6 @@ jobs:
     # Functional shards can spend up to 120 minutes in Device Farm plus queue
     # time; retain enough budget for build, scheduling, and log collection.
     timeout-minutes: ${{ !inputs.run_rtf_benchmarks && 180 || 150 }}
-    continue-on-error: true
     permissions:
       contents: read
       packages: read
