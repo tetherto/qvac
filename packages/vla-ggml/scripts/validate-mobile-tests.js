@@ -4,9 +4,12 @@
 const fs = require('fs')
 const path = require('path')
 
+const { validateTestGroups } = require('./lib/validate-test-groups.js')
+
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
+const groupsFile = path.join(repoRoot, 'test', 'mobile', 'test-groups.json')
 
 function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -30,6 +33,14 @@ function getGeneratedIntegrationRefs(content) {
   }
 
   return references
+}
+
+// integration.auto.cjs declares one `async function run<Name>` per on-device
+// test. Once it is confirmed in sync with test/integration (above), it is the
+// authoritative runner-name list — the same source .github/actions/
+// run-mobile-integration-tests/validate-devices uses.
+function getGeneratedRunnerNames(content) {
+  return Array.from(content.matchAll(/^async function (run[A-Za-z0-9_]+)\s*\(/gm), (m) => m[1])
 }
 
 function setDiff(left, right) {
@@ -74,19 +85,44 @@ try {
   }
 
   // Keep timestamp validation as a fast stale-content signal for edited tests.
-  const latestIntegrationTime = Math.max(
-    ...integrationFiles.map((f) => fs.statSync(path.join(integrationDir, f)).mtimeMs)
-  )
-  const mobileAutoTime = fs.statSync(mobileAutoFile).mtimeMs
+  // Skipped in CI: a fresh clone stamps every working-tree file at checkout
+  // time, so the ordering this compares is meaningless there and would fail at
+  // random. The reference checks above are content-based and cover CI.
+  if (!process.env.CI) {
+    const latestIntegrationTime = Math.max(
+      ...integrationFiles.map((f) => fs.statSync(path.join(integrationDir, f)).mtimeMs)
+    )
+    const mobileAutoTime = fs.statSync(mobileAutoFile).mtimeMs
 
-  if (latestIntegrationTime > mobileAutoTime) {
-    console.error('❌ Mobile integration tests are out of date!')
-    console.error('   Integration tests modified after mobile tests were generated.')
-    console.error('   Run: npm run test:mobile:generate')
+    if (latestIntegrationTime > mobileAutoTime) {
+      console.error('❌ Mobile integration tests are out of date!')
+      console.error('   Integration tests modified after mobile tests were generated.')
+      console.error('   Run: npm run test:mobile:generate')
+      process.exit(1)
+    }
+  }
+
+  // Device Farm shard coverage. This lives here rather than in the generator so
+  // that a mobile scheduling mistake can never abort `npm run test:integration`
+  // and take desktop CI down with it.
+  if (!fs.existsSync(groupsFile)) {
+    console.log('✅ Mobile integration tests are up to date (no test-groups.json — single-spec)')
+    process.exit(0)
+  }
+
+  const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf8'))
+  const runners = getGeneratedRunnerNames(mobileAutoContent)
+  const problems = validateTestGroups(groups, runners)
+
+  if (problems.length > 0) {
+    console.error('❌ test-groups.json does not cover every mobile runner\n')
+    problems.forEach((problem) => console.error(`   ${problem}\n`))
     process.exit(1)
   }
 
-  console.log('✅ Mobile integration tests are up to date')
+  console.log(
+    `✅ Mobile integration tests are up to date (${runners.length} runner(s), group coverage OK)`
+  )
   process.exit(0)
 } catch (error) {
   console.error('Error validating mobile tests:', error.message)
