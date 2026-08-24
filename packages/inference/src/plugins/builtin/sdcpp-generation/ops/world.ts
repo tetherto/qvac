@@ -309,10 +309,17 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
               'The previous world was left in place; lower worldCreateScene width/height and create it again.'
           )
         }
-        await fsPromises.rename(stagingScenePath, files.scene)
+        // Read BEFORE the rename, so the rename is the last thing that can fail
+        // and the only thing that commits. Reading after it meant a failed read
+        // — ENOENT, EIO, or simply not enough memory for a large pack — handed
+        // the caller an error against a world that had already been replaced,
+        // with the previous one gone and no way back.
+        //
         // 'buffer' picks the Buffer overload; the bare-arg form is typed
         // `string | Buffer`, which the pack is never read as text.
-        return readBytes ? fsPromises.readFile(files.scene, 'buffer') : undefined
+        const bytes = readBytes ? await fsPromises.readFile(stagingScenePath, 'buffer') : undefined
+        await fsPromises.rename(stagingScenePath, files.scene)
+        return bytes
       })
     },
 
@@ -340,20 +347,41 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
         // session, so capping only the generated one just means an oversized
         // pack has to arrive via `sceneSrc` instead. Checked before the copy, so
         // an implausible file is refused rather than duplicated onto disk first.
-        const { size } = await fsPromises.stat(seedScenePath)
-        if (size > maxScenePackBytes) {
+        const seedStat = await fsPromises.stat(seedScenePath)
+        // A directory or device node stats fine and would fail later inside
+        // copyFile with a bare errno. Say what is wrong while we still know.
+        if (!seedStat.isFile()) {
           throw new ModelLoadFailedError(
-            `modelConfig.sceneSrc is ${size} bytes, over the ${maxScenePackBytes}-byte ` +
-              'scene-pack ceiling. Scene packs are produced by worldCreateScene; a file ' +
-              'this large is not one.'
+            'modelConfig.sceneSrc must be a file. Scene packs are the .safetensors ' +
+              'files worldCreateScene produces.'
+          )
+        }
+        if (seedStat.size > maxScenePackBytes) {
+          throw new ModelLoadFailedError(
+            `modelConfig.sceneSrc is ${seedStat.size} bytes, over the ` +
+              `${maxScenePackBytes}-byte scene-pack ceiling. Scene packs are produced ` +
+              'by worldCreateScene; a file this large is not one.'
           )
         }
         try {
           await fsPromises.copyFile(seedScenePath, files.scene)
+          // Re-check what actually landed rather than trusting the pre-copy
+          // stat: the two are separate syscalls, so the source can change in
+          // between and the ceiling would have been measured on a file we did
+          // not copy. This is the size that matters — it is the one the native
+          // session will load.
+          const { size: copiedSize } = await fsPromises.stat(files.scene)
+          if (copiedSize > maxScenePackBytes) {
+            throw new ModelLoadFailedError(
+              `modelConfig.sceneSrc copied as ${copiedSize} bytes, over the ` +
+                `${maxScenePackBytes}-byte scene-pack ceiling.`
+            )
+          }
         } catch (error) {
           // A copy that died partway leaves a truncated pack that `hasScene()`
-          // would happily treat as a world. Drop it so the failure is the load
-          // error, not a corrupt world discovered on the first step.
+          // would happily treat as a world — and so does an oversized one we
+          // just rejected. Drop it so the failure is the load error, not a
+          // corrupt or outsized world discovered on the first step.
           await removeIfPresent(files.scene)
           throw error
         }

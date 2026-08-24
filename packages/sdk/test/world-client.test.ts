@@ -65,6 +65,30 @@ test('worldStep result: frames stream as they arrive and collect into the block'
   t.ok(result.requestId.length > 0, 'exposes a requestId for cancel()')
 })
 
+test('worldStep result: done is terminal, so the stream and the promise agree', async (t) => {
+  // A frame after `done` is not part of the block the caller was handed.
+  // Accepting it would let frameStream yield what `frames` never contains.
+  async function* trailingStream() {
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+    yield {
+      type: 'worldStepStream',
+      done: true,
+      stats: { stepMs: 10, totalSteps: 1, frames: 1, width: 448, height: 256 }
+    }
+    yield { type: 'worldStepStream', data: frame(2), frameIndex: 1 }
+  }
+
+  const result = createWorldStepResult({ modelId: 'm', keys: ['W'] }, trailingStream)
+
+  const streamed: number[] = []
+  for await (const f of result.frameStream) streamed.push(f[0]!)
+  const block = await result.frames
+
+  t.alike(streamed, [1], 'the stream stops at the terminal frame')
+  t.is(block.length, 1, 'and the promise holds the same block')
+  t.is((await result.stats)?.frames, 1, 'stats come from the terminal chunk')
+})
+
 test('worldStep result: progress ticks stream separately from frames', async (t) => {
   // Interleaved the way the server yields them: ticks while the block computes,
   // then the frames at the end.

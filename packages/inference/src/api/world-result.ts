@@ -206,6 +206,9 @@ export function createWorldStepResult(
   // alone.
   const progressPending: WorldStepProgressTick[] = []
   let done = false
+  // Set by the terminal `done` frame; later chunks for the same request are
+  // ignored rather than appended to a block that has already been delivered.
+  let terminated = false
   let streamError: Error | null = null
   let wake: (() => void) | null = null
   let progressWake: (() => void) | null = null
@@ -237,6 +240,13 @@ export function createWorldStepResult(
           progressWake = null
         }
 
+        // `done` is terminal for this block. Anything after it is not part of
+        // the block the caller was handed, and accepting it would let
+        // `frameStream` and the `frames` promise disagree about the same block:
+        // `frames` is already resolved with what `collected` held at `done`,
+        // while the generator would keep yielding.
+        if (terminated) continue
+
         if (parsed.data) {
           const frame = decodeBase64(parsed.data)
           collected.push(frame)
@@ -246,6 +256,7 @@ export function createWorldStepResult(
         }
 
         if (parsed.done) {
+          terminated = true
           statsOut.resolve(parsed.stats)
           framesOut.resolve(collected)
         }

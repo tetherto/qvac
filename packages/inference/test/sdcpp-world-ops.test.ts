@@ -758,6 +758,32 @@ test('world scene op: count x resolution is bounded, not just each on its own', 
   }
 })
 
+// The rename is what replaces the caller's world, so it must be the LAST thing
+// that can fail. Reading after it meant a failed read handed back an error
+// against a world that had already been replaced, with no way back.
+test('world session: a failed pack read leaves the previous world in place', async function (t) {
+  const fs = await import('bare-fs')
+  const driver = makeResponse([])
+
+  await withWorldSession(fakeNativeSession(driver.response), async ({ session }) => {
+    fs.writeFileSync(session.scenePath, 'the world the caller already had')
+    // No staging file at all, so the read inside promotion fails.
+    let failed: unknown
+    try {
+      await session.promoteStagedScene(true)
+    } catch (error) {
+      failed = error
+    }
+
+    t.ok(failed, 'promotion reports the failure')
+    t.is(
+      fs.readFileSync(session.scenePath, 'utf8'),
+      'the world the caller already had',
+      'and the previous world is untouched — nothing was committed'
+    )
+  })
+})
+
 test('world session: an oversized sceneSrc is refused like an oversized generated pack', async function (t) {
   const fs = await import('bare-fs')
   const bareOs = await import('bare-os')
