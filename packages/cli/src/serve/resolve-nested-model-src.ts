@@ -7,7 +7,10 @@ import { loadModelConstants } from './sdk-constants.js'
  * top-level `serve.models[*].model` / `.src`).
  *
  * Matches keys ending in `ModelSrc` (e.g. `s3genModelSrc`, `llmModelSrc`,
- * `vaeModelSrc`) and the ESRGAN `upscaler.model_src` snake_case field.
+ * `vaeModelSrc`), the ESRGAN `upscaler.model_src` snake_case field, and
+ * `sceneSrc` — the ABot-World scene pack, which is typed like every other
+ * resolvable source but carries no `ModelSrc` suffix, so the suffix rule alone
+ * would leave a constant name unresolved.
  * Recurses into plain nested objects so whisper/nmt nested configs are covered.
  *
  * Bare identifiers are looked up as constants; values with `/` or a leading
@@ -45,7 +48,11 @@ function walk(
 }
 
 function isModelSrcKey(key: string): boolean {
-  return key.endsWith('ModelSrc') || key === 'model_src'
+  // `sceneSrc` does not carry the `ModelSrc` suffix but is typed
+  // `modelSrcInputSchema` like every other resolvable source, so an SDK model
+  // constant is a legal value and the SDK resolves it. Without it here, a
+  // `serve` config naming a constant would pass through unresolved.
+  return key.endsWith('ModelSrc') || key === 'model_src' || key === 'sceneSrc'
 }
 
 function resolveModelSrcString(
