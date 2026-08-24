@@ -4,13 +4,18 @@ import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const testDir = join(__dirname, '..', 'test', 'unit')
+const testDir = join(__dirname, '..', 'test')
+
+// The Bare suite (test/bare) and its build output (test/dist) run via
+// `test:bare`, so the Bun/Node unit runner skips them.
+const SKIP_DIRS = new Set(['bare', 'dist'])
 
 function collectTestFiles(dir: string): string[] {
   const files: string[] = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name)
     if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue
       files.push(...collectTestFiles(fullPath))
     } else if (entry.isFile() && entry.name.endsWith('.test.ts')) {
       files.push(fullPath)
