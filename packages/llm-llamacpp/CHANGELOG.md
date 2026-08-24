@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.47.0] - 2026-08-24
+
+### Added
+
+- Load configuration now accepts `load_mode` (`none`, `mmap`, `mlock`, `mmap+mlock`, `dio`) so callers can select the qvac-fabric model loading path explicitly.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with chat-template, sampling and load-mode API changes).
+- Load-fit normalization now validates load modes locally so fabric-thrown exceptions do not cross the native boundary on Windows.
+
 ## [0.46.0] - 2026-08-20
 
 ### Changed

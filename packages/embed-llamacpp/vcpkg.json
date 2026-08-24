@@ -8,8 +8,10 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10069.2.0",
-      "features": ["vector-index"]
+      "version>=": "10297.0.0",
+      "features": [
+        "vector-index"
+      ]
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
