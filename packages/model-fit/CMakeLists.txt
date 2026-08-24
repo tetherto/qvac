@@ -58,7 +58,9 @@ endif()
 set(ADDON_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/fit/FitParams.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/fit/FitParamsApplication.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/fit/FitResultContext.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/fit/LlamaLoadConfig.cpp
 )
 
 target_sources(${model-fit} PRIVATE ${ADDON_SOURCES})
@@ -93,7 +95,46 @@ if(BUILD_TESTING)
     addon/src/fit/FitResultContext.cpp
   )
   target_include_directories(model-fit-context-test PRIVATE ${PROJECT_SOURCE_DIR}/addon/src)
+  target_compile_features(model-fit-context-test PRIVATE cxx_std_17)
+  target_link_libraries(model-fit-context-test PRIVATE llama::llama)
   add_test(NAME ModelFitContextUnit COMMAND model-fit-context-test)
+
+  add_executable(
+    model-fit-params-application-test
+    test/unit/FitParamsApplication.test.cpp
+    addon/src/fit/FitParamsApplication.cpp
+  )
+  target_include_directories(
+    model-fit-params-application-test
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/src
+  )
+  target_compile_features(model-fit-params-application-test PRIVATE cxx_std_17)
+  target_link_libraries(model-fit-params-application-test PRIVATE llama::llama)
+  add_test(NAME ModelFitParamsApplicationUnit COMMAND model-fit-params-application-test)
+
+  add_executable(
+    model-fit-llama-load-config-test
+    test/unit/LlamaLoadConfig.test.cpp
+    addon/src/fit/LlamaLoadConfig.cpp
+  )
+  target_include_directories(
+    model-fit-llama-load-config-test
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/src
+  )
+  target_compile_features(model-fit-llama-load-config-test PRIVATE cxx_std_20)
+  target_link_libraries(
+    model-fit-llama-load-config-test
+    PRIVATE
+      llama::llama
+      llama::llama-common
+  )
+  if(APPLE)
+    target_link_libraries(model-fit-llama-load-config-test PRIVATE objc)
+    target_link_options(model-fit-llama-load-config-test PRIVATE -fuse-ld=/usr/bin/ld)
+  endif()
+  add_test(NAME ModelFitLlamaLoadConfigUnit COMMAND model-fit-llama-load-config-test)
 endif()
 
 # NOTE: do not link msvcrt.lib here. It is the *dynamic* CRT import library, and
