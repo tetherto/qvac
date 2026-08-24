@@ -80,9 +80,8 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
       continue()
     endif()
     # qvac ggml ports prefix backend module filenames (e.g.
-    # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so). The ggml
-    # portfile installs these modules under vcpkg's lib/ directory (bin/ is
-    # searched too for older layouts).
+    # libqvac-ggml-vulkan.so / libqvac-diffusion-ggml-vulkan.so); the ggml
+    # portfile installs them under vcpkg's lib/ or bin/.
     find_library(_${_backend}_LIB NAMES
       "qvac-diffusion-${_backend}"
       "${_backend}"
