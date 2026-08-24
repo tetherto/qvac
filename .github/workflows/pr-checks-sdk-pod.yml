@@ -434,14 +434,7 @@ jobs:
                 --host linux-x64 \
                 --host win32-arm64 \
                 --host win32-x64
-              consumer_install_check
-              consumer_status=$?
-              if [ "$consumer_status" -eq 0 ]; then
-                echo "  ok  [$PKG] consumer install"
-              else
-                echo "::error::[$PKG] consumer install check failed"
-                fail=$((fail + 1))
-              fi
+              run "consumer install" consumer_install_check
             fi
 
             cd "$WS"
