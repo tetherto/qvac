@@ -55,7 +55,7 @@ const NUMERIC_FIELDS = Object.freeze({
     // so the shape check lives here and the exact bound stays in the binding,
     // which is compiled against the same ggml.h.
     splitMode: { min: 0, max: 3 },
-    mainGpu: { min: 0, max: INT32_MAX },
+    mainGpu: { min: -1, max: INT32_MAX },
     typeK: { min: 0, max: INT32_MAX },
     typeV: { min: 0, max: INT32_MAX },
     flashAttnType: { min: -1, max: 1 }
@@ -83,6 +83,10 @@ function validateRelationships(config) {
     }
     if (nCtx > 0 && nCtxMin > 0 && nCtxMin > nCtx) {
         throw new RangeError('model-fit: config.nCtxMin must not exceed config.nCtx');
+    }
+    if (config.mainGpu === -1 &&
+        (config.nGpuLayers !== 0 || config.splitMode !== 0)) {
+        throw new RangeError('model-fit: config.mainGpu -1 requires config.nGpuLayers 0 and config.splitMode NONE');
     }
 }
 /**
@@ -122,6 +126,9 @@ function fitParams(config) {
     for (const key of Object.keys(NUMERIC_FIELDS)) {
         const { min, max } = NUMERIC_FIELDS[key];
         validateNumber(config, key, min, max);
+    }
+    if (config.swaFull !== undefined && typeof config.swaFull !== 'boolean') {
+        throw new TypeError('model-fit: config.swaFull must be a boolean when provided');
     }
     validateRelationships(config);
     // An explicit backendsDir always wins, including a bad one — it is the
