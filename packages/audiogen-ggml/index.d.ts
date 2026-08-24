@@ -4,7 +4,11 @@ import { AudioEditOperationType, AudioGenInterface, RepaintMode } from './audiog
 import { type DitVariant } from './models';
 import { type EncodeOptions, type EncodedAudio, type OutputFormat } from './lib/audio-format';
 export declare const ENGINE_ACESTEP = "acestep";
-/** Model file paths for the four ACE-Step stages. */
+export declare const ENGINE_MINIMAX = "minimax";
+export declare const MINIMAX_FRAMES_PER_SECOND = 25;
+export declare const MINIMAX_DEFAULT_MAX_FRAMES = 300;
+export type AudioGenEngine = typeof ENGINE_ACESTEP | typeof ENGINE_MINIMAX;
+/** Model file paths for ACE-Step or MiniMax-Music3. */
 export interface AudioGenFiles {
     /** Directory holding the four ACE-Step GGUFs (engine auto-classifies them). */
     modelDir?: string;
@@ -12,6 +16,8 @@ export interface AudioGenFiles {
     textEncModel?: string;
     /** Explicit LM GGUF path. */
     lmModel?: string;
+    /** Explicit MiniMax synthesis GGUF path. */
+    synthModel?: string;
     /** Explicit DiT GGUF path (wins over `ditVariant`). */
     ditModel?: string;
     /** Selects the DiT GGUF from `modelDir` when `ditModel` is not given. */
@@ -23,10 +29,17 @@ export interface AudioGenFiles {
 export interface AudioGenRuntimeConfig {
     /** 0 = engine auto-picks per DiT architecture (turbo 8 / sft 50). */
     inferenceSteps?: number;
+    /** MiniMax flow classifier-free guidance scale; 0 uses the model default. */
+    cfgScale?: number;
     /** 0 = engine auto-picks per DiT architecture (turbo 3.0 / sft 1.0). */
     shift?: number;
+    /**
+     * Run on a GPU backend (CUDA, Vulkan, Metal, ...) when one is usable; falls
+     * back to CPU otherwise — `stats.backendDevice` reports the backend actually
+     * in use. MiniMax puts the whole model pair on the device (~22 GB for f16).
+     */
     useGPU?: boolean;
-    /** GPU layers to offload when `useGPU` is set (99 = all). Ignored when off. */
+    /** ACE-Step only: GPU layers to offload when `useGPU` is set (99 = all). */
     nGpuLayers?: number;
     /** 0 = engine auto-picks. */
     threads?: number;
@@ -39,7 +52,9 @@ export interface AudioGenRuntimeConfig {
     backendsDir?: string;
 }
 export interface AudioGenOptions {
-    /** Model file paths for the four stages. */
+    /** Music engine. Inferred as MiniMax when `synthModel` is present. */
+    engine?: AudioGenEngine;
+    /** Local GGUF paths for the selected engine. */
     files?: AudioGenFiles;
     /** Runtime knobs (steps, shift, GPU, threads). */
     config?: AudioGenRuntimeConfig;
@@ -58,8 +73,14 @@ export interface GenerateOptions {
     timesignature?: string;
     /** Append BPM/tempo, time signature and key to the internal conditioning caption. */
     augmentCaptionWithMetadata?: boolean;
-    /** Target length in seconds; undefined lets the LM decide the full length. */
+    /** Target length in seconds; MiniMax converts it to 25 semantic frames per second. */
     duration?: number;
+    /** MiniMax semantic-frame cap. Cannot be combined with `duration`. */
+    maxFrames?: number;
+    /** MiniMax flow steps for this generation; 0 uses the model default. */
+    inferenceSteps?: number;
+    /** MiniMax flow classifier-free guidance scale for this generation. */
+    cfgScale?: number;
     /** LM sampling temperature (ACE-Step default: 0.85). */
     lmTemperature?: number;
     /** LM nucleus-sampling probability (ACE-Step default: 0.9). */
@@ -171,7 +192,7 @@ interface NativeRepaintOperation {
     strength: number;
 }
 export type AudioEditOperationData = NativeFlowEditOperation | NativeRepaintOperation;
-/** A per-step progress tick from the engine (stage = "lm" | "dit" | "vae"). */
+/** A per-step progress tick from the selected engine. */
 export interface AudiogenProgress {
     stage: string;
     step: number;
@@ -191,7 +212,7 @@ export interface AudiogenProgressChunk {
 export type AudiogenOutputChunk = AudiogenPcmChunk | AudiogenProgressChunk;
 /**
  * Terminal run stats, resolved by `QvacResponse.await()`. These mirror exactly
- * what the native `AcestepModel::runtimeStats()` emits — `totalTimeMs`,
+ * what the native model emits — `totalTimeMs`,
  * `realTimeFactor`, `audioDurationMs` and the resolved backend. Sample rate and
  * channel count are NOT here: they ride on each PCM chunk instead (see
  * `AudiogenPcmChunk`).
@@ -209,6 +230,7 @@ export interface AudiogenStats {
     /** 0 = CPU, 1 = Metal, 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other. */
     backendId?: number;
 }
+export declare function detectEngineType(files?: AudioGenFiles, explicitEngine?: AudioGenEngine): AudioGenEngine;
 type EditRunner = (source: AudioEditSource, operations: readonly AudioEditOperationData[], options: AudioEditRunOptions) => Promise<QvacResponse<AudiogenOutputChunk>>;
 /**
  * Fluent, ordered edit pipeline. Every call appends one operation; operations
@@ -239,18 +261,23 @@ export declare class AudioGen {
         noAdditionalDownload: boolean;
     };
     static readonly ENGINE_ACESTEP = "acestep";
+    static readonly ENGINE_MINIMAX = "minimax";
     addon: AudioGenInterface | null;
     private readonly _job;
     private readonly _runExclusive;
     private readonly _configuration;
     private readonly _logger;
+    private readonly _engineType;
+    private readonly _defaultInferenceSteps;
+    private readonly _defaultCfgScale;
     private readonly _ditVariant;
     private _lifecycleRevision;
     private _destroyed;
     private _cancelPromise;
     private _cancellingResponse;
+    private _cancelTerminalResolve;
     constructor(options?: AudioGenOptions);
-    /** Create the native engine and load every stage GGUF. Idempotent. */
+    /** Create the native engine and load its GGUF files. Idempotent. */
     load(): Promise<void>;
     private _load;
     /**
@@ -267,6 +294,8 @@ export declare class AudioGen {
     private _runEdit;
     private _admitAndWait;
     private _createJobData;
+    private _createMinimaxJobData;
+    private _createAcestepJobData;
     cancel(): Promise<void>;
     private _cancelActiveResponse;
     unload(): Promise<void>;
