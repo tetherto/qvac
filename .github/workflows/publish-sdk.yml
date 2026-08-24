@@ -12,23 +12,6 @@ on:
       - "packages/sdk/**"
       - "packages/bare-sdk/**"
       - "packages/sdk-python/**"
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - edited
-      - labeled
-    branches:
-      - release-*
-      - feature-*
-      - tmp-*
-      - main
-    paths:
-      - "packages/inference/**"
-      - "packages/sdk/**"
-      - "packages/bare-sdk/**"
-      - "packages/sdk-python/**"
 
   workflow_dispatch:
     inputs:
