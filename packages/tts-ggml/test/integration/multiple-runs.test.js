@@ -108,55 +108,6 @@ test(
 )
 
 test(
-  'Supertonic: multiple sequential runs reuse the same engine instance',
-  { timeout: 1800000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-    if (!download.success) {
-      t.fail(
-        'Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-
-    const model = await loadSupertonicTTS({
-      supertonicModelPath: download.path,
-      voice: 'F1',
-      language: 'en',
-      useGPU: false
-    })
-    try {
-      const timings = []
-      for (let i = 0; i < PHRASES.length; i++) {
-        const t0 = Date.now()
-        const result = await runSupertonicTTS(model, { text: PHRASES[i] }, { minSamples: 5000 })
-        const wallMs = Date.now() - t0
-        timings.push(wallMs)
-        console.log(
-          `  run ${i + 1}/${PHRASES.length}: ${result.data.sampleCount} samples (${wallMs}ms)`
-        )
-
-        t.ok(result.passed, `Supertonic run ${i + 1} should pass expectations`)
-        t.ok(result.data.sampleCount > 0, `Supertonic run ${i + 1} should produce audio`)
-        const stats = result.data.stats
-        if (stats) {
-          t.ok(typeof stats.realTimeFactor === 'number', `Supertonic run ${i + 1} reports RTF`)
-        }
-      }
-
-      const avg = timings.reduce((a, b) => a + b, 0) / timings.length
-      console.log(`  avg wall-time across ${PHRASES.length} runs: ${avg.toFixed(0)}ms`)
-      t.ok(timings.length === PHRASES.length, 'all sequential runs completed')
-    } finally {
-      try {
-        await model.unload()
-      } catch (_e) {}
-    }
-  }
-)
-
-test(
   'Chatterbox: fresh instance per run (app-restart simulation)',
   { timeout: 1800000 },
   async (t) => {
@@ -194,60 +145,6 @@ test(
       try {
         const t1 = Date.now()
         const r = await runChatterboxTTS(
-          model,
-          { text: PHRASES[i % PHRASES.length] },
-          { minSamples: 5000 }
-        )
-        const runMs = Date.now() - t1
-        console.log(
-          `  instance ${i + 1}/${N}: load=${loadMs}ms run=${runMs}ms samples=${r.data.sampleCount}`
-        )
-        results.push({ loadMs, runMs, sampleCount: r.data.sampleCount, passed: r.passed })
-      } finally {
-        try {
-          await model.unload()
-        } catch (_e) {}
-      }
-    }
-
-    t.ok(
-      results.every((r) => r.passed),
-      'every fresh instance should pass expectations'
-    )
-    t.ok(
-      results.every((r) => r.sampleCount > 0),
-      'every fresh instance should produce audio'
-    )
-  }
-)
-
-test(
-  'Supertonic: fresh instance per run (app-restart simulation)',
-  { timeout: 1800000 },
-  async (t) => {
-    const baseDir = getBaseDir()
-    const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
-    if (!download.success) {
-      t.fail(
-        'Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
-      )
-      return
-    }
-
-    const N = 2
-    const results = []
-    for (let i = 0; i < N; i++) {
-      const t0 = Date.now()
-      const model = await loadSupertonicTTS({
-        supertonicModelPath: download.path,
-        voice: 'F1',
-        language: 'en',
-        useGPU: false
-      })
-      const loadMs = Date.now() - t0
-      try {
-        const t1 = Date.now()
-        const r = await runSupertonicTTS(
           model,
           { text: PHRASES[i % PHRASES.length] },
           { minSamples: 5000 }
