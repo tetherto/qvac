@@ -43,8 +43,9 @@ libFuzzer).
 ## Scope
 
 Scope is **every QVAC native addon** — all packages whose `package.json`
-declares `"addon": true` — **except the ONNX Runtime addons** (`onnx`,
-`ocr-onnx`), which are out of scope for this effort. The in-scope addons are
+declares `"addon": true`. The ONNX Runtime addons that were originally carved
+out of this effort (`onnx`, `ocr-onnx`) have since been removed from the
+monorepo, so no exception remains. The in-scope addons are
 C++20 Bare addons built with CMake + vcpkg on the centrally-pinned
 **clang-22 / libc++** toolchain, linked against `ggml` / `llama.cpp` /
 `whisper.cpp` / `stable-diffusion.cpp`.
@@ -66,9 +67,6 @@ C++20 Bare addons built with CMake + vcpkg on the centrally-pinned
 | `transcription-parakeet` | parakeet | speech-to-text | ✅ |
 | `diffusion-cpp` | stable-diffusion.cpp | image / video generation | ✅ |
 | `fabric` | shared ggml + llama.cpp runtime host | infra (no direct input parsing) | ❌ |
-
-The ONNX Runtime addons (`onnx`, `ocr-onnx`) are intentionally excluded from
-this effort and are not listed above.
 
 Fuzzing targets **pure parse/transform functions** that consume
 attacker-influenceable bytes. It deliberately does **not** target full
@@ -429,9 +427,9 @@ headers carry no stability promise. A FuzzTest bump should re-check the closure
 above (`rg '#include "(re2|util)/' fuzztest-src/fuzztest/`) before bumping the
 port.
 
-Nothing else resolves `re2` from this registry: `packages/onnx` and
-`packages/translation-nmtcpp` both route it to the Microsoft registry through
-their `vcpkg-configuration.json` allowlists.
+Nothing else resolves `re2` from this registry: `packages/translation-nmtcpp`
+routes it to the Microsoft registry through its `vcpkg-configuration.json`
+allowlist.
 
 ### The `fuzztest` registry port
 
