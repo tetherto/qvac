@@ -19,20 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- MiniMax-Music3 produced tonal noise instead of music: the pinned
-  `speech-cpp` engine negated the flow DiT velocity (vestigial
-  `mm3.dit.output_negated` GGUF metadata) and reused a condition upload the
-  graph allocator had recycled, so every flow step after the first ran on
-  garbage conditioning. Both are fixed in `speech-cpp` `2026-08-24`
-  (qvac-ext-lib-whisper.cpp PR #158); the native replay of the official
-  Diffusers prompt/codes/noise now reproduces the official mix at 0.9993
-  audio correlation.
-- A MiniMax cancellation arriving between the addon's precheck and the
-  engine's generation start was erased by the engine's flag reset and only
-  re-armed at the first progress callback, so `cancel()` could stall through
-  LM prefill. `speech-cpp` `2026-08-24#2` (qvac-ext-lib-whisper.cpp PR #169)
-  preserves a pre-armed cancellation and returns the cancelled result before
-  any model work, so the terminal rejection is delivered immediately.
+- MiniMax-Music3 produced tonal noise instead of music, and a cancellation
+  issued right at generation start could stall until the first progress
+  event. Both are fixed by requiring `speech-cpp` `2026-08-24#2`.
+- `cancel()` no longer hangs forever when the job it targets fails before
+  the native engine starts; it now settles as soon as the run settles.
 
 ## [0.2.4] - 2026-08-20
 

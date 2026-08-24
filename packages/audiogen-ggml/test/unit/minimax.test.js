@@ -189,6 +189,10 @@ test('AudioGen rejects unsupported MiniMax generation options', async (t) => {
   const { gen } = createHarness()
   await t.exception(() => gen.run('test', { bpm: 120 }), /MiniMax does not accept bpm/)
   await t.exception(
+    () => gen.run('test', { augmentCaptionWithMetadata: true }),
+    /MiniMax does not accept augmentCaptionWithMetadata/
+  )
+  await t.exception(
     () => gen.run('test', { duration: 2, maxFrames: 50 }),
     /either maxFrames or duration/
   )

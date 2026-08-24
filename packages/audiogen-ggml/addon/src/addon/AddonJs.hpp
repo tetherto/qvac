@@ -70,7 +70,7 @@ inline int64_t checkedPositiveSafeInteger(double value, const char* name) {
   if (integer <= 0) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
-        std::string(name) + " must be greater than zero");
+        std::string(name) + " must be at least 1");
   }
   return integer;
 }

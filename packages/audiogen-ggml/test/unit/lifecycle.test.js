@@ -126,6 +126,41 @@ test('cancel consumes the native cancellation error before settling', async (t) 
   t.is(await errorCode(response.await()), ERR_CODES.CANCELLED)
 })
 
+test('cancel does not wedge when the pending job fails to start', async (t) => {
+  const admission = deferred()
+  const { gen, cancelCalls } = createHarness(() => admission.promise)
+
+  const run = gen.run('cancel during admission')
+  for (let tick = 0; tick < 100 && !gen._job.active; tick++) await Promise.resolve()
+  t.ok(gen._job.active, 'job is admitted and awaiting runJob')
+
+  const cancellation = gen.cancel()
+  admission.reject(new Error('native admission failed'))
+
+  t.is(await errorCode(run), ERR_CODES.FAILED_TO_START_JOB)
+  await cancellation
+  t.is(cancelCalls(), 1)
+
+  await gen.cancel()
+  t.is(cancelCalls(), 1, 'a later cancel is not stuck on a cached promise')
+})
+
+test('cancel does not wedge when the pending job is refused', async (t) => {
+  const admission = deferred()
+  const { gen } = createHarness(() => admission.promise)
+
+  const run = gen.run('cancel during refused admission')
+  for (let tick = 0; tick < 100 && !gen._job.active; tick++) await Promise.resolve()
+  t.ok(gen._job.active, 'job is admitted and awaiting runJob')
+
+  const cancellation = gen.cancel()
+  admission.resolve(false)
+
+  t.is(await errorCode(run), ERR_CODES.JOB_ALREADY_RUNNING)
+  await cancellation
+  t.pass('cancel settled without a native terminal event')
+})
+
 test('cancel on an idle instance does not invoke native cancellation', async (t) => {
   const { gen, cancelCalls } = createHarness(() => Promise.resolve(true))
 

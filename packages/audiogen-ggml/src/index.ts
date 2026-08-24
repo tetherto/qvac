@@ -513,6 +513,7 @@ const ACESTEP_GENERATE_KEYS: Array<keyof GenerateOptions> = [
   'bpm',
   'keyscale',
   'timesignature',
+  'augmentCaptionWithMetadata',
   'lmTemperature',
   'lmTopP',
   'lmTopK',
@@ -1055,9 +1056,17 @@ export class AudioGen {
     const terminal = new Promise<void>((resolve) => {
       this._cancelTerminalResolve = resolve
     })
+    // A job that never reached the native engine emits no terminal event —
+    // runJob can reject or be refused, and unload/destroy settles the active
+    // response directly. Racing the response's own settlement keeps cancel()
+    // from waiting forever on a terminal event that cannot arrive.
+    const settled = response.await().then(
+      () => undefined,
+      () => undefined
+    )
     try {
       await (this.addon?.cancel() ?? Promise.resolve())
-      await terminal
+      await Promise.race([terminal, settled])
     } catch (error) {
       const failedError = this._failedCancelError(error)
       response.failed(failedError)
