@@ -28,7 +28,8 @@ namespace qvac_lib_inference_addon_llama {
 // failure. `snapshotAtPrefillBoundary` throws on capture underflow;
 // `compact()` returns `Outcome::Kind::FailedKvIntact` on pure-
 // attention `seq_rm + seq_add` rejection (live KV was left untouched)
-// and `Outcome::Kind::FailedKvWiped` on hybrid restore underflow,
+// and `Outcome::Kind::FailedKvWiped` on a pure-attention shift that did
+// not land after the removal already ran, hybrid restore underflow,
 // hybrid replay rejection, recurrent partial-resident spans, recurrent
 // open spans without a captured close marker, or the defensive
 // no-boundary branch (sequence memory was best-effort cleared).
@@ -191,13 +192,18 @@ public:
   //
   // Failure contract:
   //   * Pure-attention `seq_rm + seq_add` rejection: `compact()`
-  //     returns `Outcome::Kind::FailedKvIntact`. The primitive is
-  //     documented all-or-nothing on rejection, so live KV still
-  //     matches the caller's cursor; no seq wipe is performed. The
-  //     caller MUST roll back the live cache to its pre-request
-  //     cursor (e.g. via `removeLastNTokens(nPast - preRequestNPast)`)
-  //     before rethrowing so both driver metadata and live KV stay
-  //     coherent for the next request on the same driver.
+  //     returns `Outcome::Kind::FailedKvIntact`. The primitive refuses
+  //     before it writes anything, so live KV still matches the
+  //     caller's cursor; no seq wipe is performed. The caller MUST roll
+  //     back the live cache to its pre-request cursor (e.g. via
+  //     `removeLastNTokens(nPast - preRequestNPast)`) before rethrowing
+  //     so both driver metadata and live KV stay coherent for the next
+  //     request on the same driver.
+  //   * Pure-attention shift that did not land, caught by the
+  //     `seq_pos_max` readback in `compactKvRange`: live KV has a hole
+  //     in the middle by then, so the tail trim above cannot repair it.
+  //     `compact()` wipes the sequence and returns
+  //     `Outcome::Kind::FailedKvWiped` instead.
   //   * Hybrid `restoreReasoningBoundary` / `replayPostReasoning`
   //     failure, a defensive missing-boundary hit, a recurrent
   //     partial-resident reasoning span left after a tail trim, or a
@@ -254,14 +260,18 @@ public:
   // How a `compactKvRange` result becomes a compactor outcome on the
   // pure-attention path.
   //
-  // `NoOp` MUST NOT become `FailedKvIntact`. The two are not the same event:
-  // a rejection means the cleanup the strict contract demands did not happen,
-  // so the driver hard-fails and rolls `[preRequestCursor, pos)` back, taking
-  // the answer with it. A `NoOp` means the primitive declined a range and left
-  // the cache exactly as it found it, which is nothing to recover from.
-  // `compact()`'s own guards clamp every span before it calls in, so the
-  // primitive cannot return `NoOp` today, and this stays a pure function so
-  // the mapping is pinned by tests regardless.
+  // Each kind maps to the recovery its damage needs, and the three non-success
+  // kinds need three different ones.
+  //
+  // `NoOp` must not become `FailedKvIntact`: the cache was never touched, so
+  // the whole-request rollback that outcome triggers would drop the answer for
+  // nothing. `MemoryInconsistent` must not either, for the opposite reason:
+  // `seq_rm` has already run, so the "live KV matches the caller's cursor"
+  // premise is false and a tail trim cannot reach a hole in the middle.
+  //
+  // Kept a pure function because `compact()`'s guards clamp every span before
+  // it calls in, so the `NoOp` branch is unreachable through `compact()` and
+  // only a direct test can pin it.
   [[nodiscard]] static constexpr Outcome::Kind
   attentionOutcomeFor(CompactRangeOutcome::Kind rangeKind) {
     switch (rangeKind) {
@@ -271,8 +281,10 @@ public:
       return Outcome::Kind::NoOp;
     case CompactRangeOutcome::Kind::MemoryOperationFailed:
       return Outcome::Kind::FailedKvIntact;
+    case CompactRangeOutcome::Kind::MemoryInconsistent:
+      return Outcome::Kind::FailedKvWiped;
     }
-    return Outcome::Kind::FailedKvIntact;
+    return Outcome::Kind::FailedKvWiped;
   }
 
   [[nodiscard]] Outcome compact(

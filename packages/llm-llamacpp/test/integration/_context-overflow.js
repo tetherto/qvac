@@ -1,38 +1,34 @@
 'use strict'
 
-// One home for the context-overflow recipe that `api-behavior.test.js` and
-// `reasoning.test.js` both drive.
+// The context-overflow recipe shared by `api-behavior.test.js` and
+// `reasoning.test.js`.
 //
-// The sizing is tokenizer-sensitive. FILLER_WORDS must tokenize to just under
-// CTX_SIZE so the prompt is accepted at prefill and generation is what fills
-// the window. A chat-template change or a model pin bump can push it over,
-// which would silently turn the generation case into a second prefill
-// rejection and leave the stop-reason contract untested. Calibrating it once
-// here means that recalibration happens in one place instead of two.
+// FILLER_WORDS must tokenize to just under CTX_SIZE so the prompt is accepted
+// at prefill and generation is what fills the window. A chat-template change
+// or a model pin bump can push it over, which silently turns the generation
+// case into a second prefill rejection and leaves the stop-reason contract
+// untested. It lives here so that recalibration happens once, not twice.
 //
-// The two prefill guards in `TextLlmContext::preparePrefill` report different
-// quantities and the SDK's overflow parser matches each wording separately, so
-// the assertions below pin the wording rather than a generic /context
-// overflow/ that both guards satisfy.
+// The two prefill guards report different quantities and the SDK's overflow
+// parser matches each wording separately, so the assertions pin the wording
+// rather than a generic /context overflow/ that both guards satisfy.
 
 const CTX_SIZE = 512
 
 // Sized to land just inside CTX_SIZE once the chat template wraps it.
 const FILLER_WORDS = 430
 
-// Sized just past CTX_SIZE rather than many times over it: the guard compares
-// against the window, so 600 tokens is as deterministic as 4000, and the
-// darwin-x64 Metal backend fails its NEXT decode after tokenizing a prompt
-// eight times the context. That failure lands on the recovery turn with
-// `command buffer 0 failed with status 5`, pointing away from what caused it.
+// Just past CTX_SIZE, not many times over: the guard compares against the
+// window either way, and darwin-x64 Metal fails its NEXT decode after
+// tokenizing a prompt eight times the context. That lands on the recovery turn
+// as `command buffer 0 failed with status 5`, pointing away from the cause.
 const OVERSIZED_WORDS = 600
 
 // Far larger than the room the filler leaves, so the stop is always the
 // context and never the prediction cap.
 const PREDICT = 512
 
-// The window is already full of cached conversation, so the follow-up only has
-// to be small and non-empty to tip it over.
+// The window is already full, so the follow-up only has to be non-empty.
 const CACHED_FOLLOW_UP = 'And then what happened?'
 
 function fillerPrompt() {
@@ -43,9 +39,8 @@ function oversizedPrompt() {
   return 'word '.repeat(OVERSIZED_WORDS)
 }
 
-// A generation that fills the window stops with `contextOverflow` and still
-// hands back what it produced. `generatedTokens < PREDICT` is what proves the
-// prediction cap was not the stopper.
+// `generatedTokens < PREDICT` is what proves the prediction cap was not the
+// stopper.
 function assertStoppedByFullContext(t, stats, output) {
   t.is(
     stats && stats.stopReason,
@@ -59,8 +54,8 @@ function assertStoppedByFullContext(t, stats, output) {
   )
 }
 
-// First prefill guard: the prompt does not fit on its own, so the cache is not
-// part of the arithmetic and the message reports prompt tokens alone.
+// First prefill guard: the prompt does not fit on its own, so the message
+// reports prompt tokens alone.
 function assertPromptAloneRejected(t, err) {
   const message = (err && err.message) || String(err)
   t.ok(err, 'a prompt larger than the context window is rejected')
@@ -71,9 +66,9 @@ function assertPromptAloneRejected(t, err) {
   )
 }
 
-// Second prefill guard: the prompt would fit in an empty window, but not on
-// top of what is already cached. Reached only when `nPast_` is non-zero, so a
-// turn must have been cached first.
+// Second prefill guard: the prompt would fit in an empty window but not on top
+// of the cache. Reached only when `nPast_` is non-zero, so a turn must have
+// been cached first.
 function assertCachedFollowUpRejected(t, err) {
   const message = (err && err.message) || String(err)
   t.ok(err, 'a follow-up that no longer fits beside the cache is rejected')

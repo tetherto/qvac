@@ -42,44 +42,43 @@ CompactRangeOutcome compactKvRange(
     llama_pos endPos, llama_pos nPast, const IKvCacheOps& ops) {
   // `nPast < 0` is llama's "to the end of the sequence" sentinel, not a
   // cursor: accepting it would make `endPos > nPast` true for every range and
-  // silently skip compaction. A range that runs past the cursor is a caller
-  // bug, not something to clamp here — the compactor clamps its span to the
-  // live cursor before it calls in, and a silent clamp in a primitive that
-  // owns no policy would hide the caller's inconsistency.
+  // silently skip compaction. `endPos > nPast` stays a refusal rather than a
+  // clamp, since the compactor already clamps and hiding a caller that did not
+  // would be worse.
   if (nPast < 0 || endPos <= startPos || startPos < 0 || endPos > nPast) {
     return {CompactRangeOutcome::Kind::NoOp, nPast, 0};
   }
 
   const llama_pos discarded = endPos - startPos;
   auto mem = ops.memory(lctx);
-  // `seq_add` `GGML_ASSERT`s when the memory module cannot shift (Step35,
-  // or an M-RoPE layout the K-shift graph does not cover), which would abort
-  // the process after `seq_rm` had already opened the hole. Refuse up front so
-  // the cache is never left with a hole nothing can close.
+  // `seq_add` `GGML_ASSERT`s when the module cannot shift (Step35, or an
+  // M-RoPE layout the K-shift graph does not cover). That abort would land
+  // after `seq_rm` had opened the hole, so refuse up front.
   if (!ops.canShift(mem)) {
     return {CompactRangeOutcome::Kind::MemoryOperationFailed, nPast, 0};
   }
   if (!ops.seqRm(mem, seqId, startPos, endPos)) {
     return {CompactRangeOutcome::Kind::MemoryOperationFailed, nPast, 0};
   }
-  // `p1 = -1` means "to the end of the sequence", matching llama's own slide
-  // callers. Passing `nPast` instead would strand any cell that sits past the
-  // cursor, leaving it at a position the shifted tail now also occupies.
+  // `p1 = -1` is "to the end of the sequence", matching llama's own slide
+  // callers. `nPast` would strand any cell past the cursor at a position the
+  // shifted tail now also occupies.
   ops.seqAdd(mem, seqId, endPos, /*p1=*/-1, -discarded);
 
-  // Take the new cursor from memory rather than from arithmetic on the one we
-  // were handed. `seq_add` is void, and there are ways for it to leave the
-  // cells where they were while `seq_rm` still reported success: a memory
-  // module sharing cells with another (`TAG_KV_CACHE_SHARE_CELLS`) no-ops both
-  // halves, and a caller whose software cursor has drifted from live memory
-  // gets a shift that lands somewhere else. Either way the arithmetic answer
-  // would be a cursor no live cell backs, and the driver would save a cache
-  // header describing memory that does not exist. `seq_pos_max` returns -1 on
-  // an empty sequence, which is the correct readback when the whole span went.
+  // `seq_add` is void, and it can leave the cells where they are while
+  // `seq_rm` still reported success: a module sharing cells
+  // (`TAG_KV_CACHE_SHARE_CELLS`) no-ops both halves, and a drifted software
+  // cursor gets a shift that lands elsewhere. Trusting the arithmetic there
+  // saves a cache header describing memory that does not exist, so take the
+  // cursor from memory. `seq_pos_max` is -1 on an empty sequence, which is the
+  // right answer when the whole span went.
   const llama_pos expectedNPast = nPast - discarded;
   const llama_pos observedNPast = ops.seqPosMax(mem, seqId) + 1;
   if (observedNPast != expectedNPast) {
-    return {CompactRangeOutcome::Kind::MemoryOperationFailed, nPast, 0};
+    // `seqRm` already ran, so this is not the all-or-nothing rejection above:
+    // the hole is in the middle and a tail trim cannot reach it. Report the
+    // cursor memory actually has rather than either guess.
+    return {CompactRangeOutcome::Kind::MemoryInconsistent, observedNPast, 0};
   }
   return {CompactRangeOutcome::Kind::Compacted, expectedNPast, discarded};
 }

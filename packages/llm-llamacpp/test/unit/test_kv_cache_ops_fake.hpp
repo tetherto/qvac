@@ -1,39 +1,19 @@
 #pragma once
 
 // One configurable `IKvCacheOps` fake for every unit test that drives
-// `compactKvRange` without a real llama context. It replaces the three
+// `compactKvRange` without a real llama context. Replaces the three
 // near-identical fakes that used to live in `test_kv_cache_ops.cpp`,
-// `test_cancel_rollback.cpp` and `test_reasoning_block_compactor.cpp`;
-// adding a method to the interface only has to be answered here.
+// `test_cancel_rollback.cpp` and `test_reasoning_block_compactor.cpp`.
 //
-// Defaults accept everything, which is the successful-drop case. Tests that
-// need the other half of the contract flip one knob:
+// Defaults accept everything. The knobs drive the other halves of the
+// contract: `rejectSeqRm`, `failSeqRmFor`, `denyShift`, `forwardRealMemory`
+// (hand back the live handle so `clearSeqOnFailure` works), and
+// `ignoreSeqRmEffect` (succeed but leave the modelled cells put, which is how
+// a shared-cells module and a drifted cursor both look from here).
 //
-//   * `rejectSeqRm()`            — every `seqRm` returns false. The primitive
-//                                  is all-or-nothing on rejection, so
-//                                  `seqAdd` must not fire afterwards.
-//   * `failSeqRmFor(call)`       — reject one exact range, accept the rest.
-//   * `denyShift()`              — the memory module cannot shift, so the
-//                                  primitive must refuse before `seqRm`.
-//   * `forwardRealMemory()`      — return the live handle from
-//                                  `llama_get_memory` instead of a sentinel,
-//                                  for tests that also exercise the
-//                                  compactor's own `clearSeqOnFailure`.
-//   * `withResidentTokens(n)`    — model a sequence holding positions
-//                                  `[0, n)`, so `seqPosMax` answers from that
-//                                  model and the primitive's post-shift
-//                                  readback is really exercised. An accepted
-//                                  `seqRm` shrinks it by the range width.
-//   * `ignoreSeqRmEffect()`      — `seqRm` reports success but the modelled
-//                                  cells do not move, which is what a
-//                                  shared-cells memory module and a drifted
-//                                  software cursor both look like from here.
-//                                  The readback must catch it.
-//
-// `withResidentTokens` has no default on purpose. Any test that reaches the
-// readback must model the sequence, otherwise `seqPosMax` fails the test
-// rather than rubber-stamping the primitive's own arithmetic. Tests that stop
-// before the readback, on a rejection or a refusal, never need it.
+// `withResidentTokens` models a sequence holding `[0, n)` and has no default
+// on purpose: `seqPosMax` fails the test without it, so a readback assertion
+// can never quietly become a rubber stamp on the primitive's own arithmetic.
 
 #include <cstdint>
 #include <optional>

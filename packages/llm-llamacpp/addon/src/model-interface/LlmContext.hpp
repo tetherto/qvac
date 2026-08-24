@@ -192,10 +192,9 @@ enum class SessionMetadataField : uint8_t {
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
 
 /// The wire form of the contract above. Every `saveCache` / `loadCache` goes
-/// through this so the `{nPast, 0, cacheTokens, 0}` layout is written and read
-/// in exactly one place: a writer that forgot one of the retired slots would
-/// make an older, still-sliding build evict from position 0 rather than
-/// protect the first message, and that is silent.
+/// through this so the `{nPast, 0, cacheTokens, 0}` layout has one home: a
+/// writer that forgot a retired slot makes an older, still-sliding build evict
+/// from position 0 instead of protecting the first message, and that is silent.
 struct SessionMetadata {
   std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
 
@@ -219,8 +218,7 @@ struct SessionMetadata {
   [[nodiscard]] const llama_token* data() const { return tokens.data(); }
   [[nodiscard]] size_t size() const { return tokens.size(); }
 
-  /// Whether a `llama_state_seq_load_file` token count covers every field.
-  /// A partial header would leave `cacheTokens` at zero, which diverges from
+  /// A partial header leaves `cacheTokens` at zero, which diverges from
   /// `nPast` under M-RoPE and breaks later cap checks.
   [[nodiscard]] static bool isComplete(size_t tokenCount) {
     return tokenCount >= SESSION_METADATA_FIELD_COUNT;

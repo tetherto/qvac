@@ -364,9 +364,8 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
               out.newPos));
       return out;
     }
-    // `NoOp` is not a rejection: the primitive declined a degenerate or
-    // out-of-cursor range and left the cache exactly as it was. See
-    // `attentionOutcomeFor` for why it must not become the wipe path.
+    // Not a rejection: the primitive declined the range and left the cache
+    // as it found it. See `attentionOutcomeFor`.
     if (out.kind == Outcome::Kind::NoOp) {
       QLOG_IF(
           Priority::WARNING,
@@ -381,11 +380,40 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
               seqId));
       return out;
     }
-    // `seq_rm` was rejected, the memory module cannot shift so the primitive
-    // refused before touching anything, or the post-shift readback disagreed
-    // with the arithmetic. In every case attention KV still matches `pos`, so
-    // no seq wipe is performed here. Report `FailedKvIntact` so the caller can
-    // roll back `[preRequestCursor, pos)` on its own driver before rethrowing.
+    // The removal ran and the shift did not, so the hole is in the middle and
+    // a tail trim cannot reach it. Wipe and send the caller down the
+    // reset-to-zero recovery rather than claim the cache is intact.
+    if (out.kind == Outcome::Kind::FailedKvWiped) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "%s thinking-block compaction failed: seq_rm removed span "
+              "[%d, %d) but the paired shift did not land (pos=%d, "
+              "observed nPast=%d, seqId=%d); wiping sequence and "
+              "hard-failing so no cache header describes memory that is "
+              "not there\n",
+              labelTag,
+              start,
+              end,
+              pos,
+              rangeOutcome.newNPast,
+              seqId));
+      clearSeqOnFailure(ctx, seqId);
+      out.failureMessage = string_format(
+          "%s ReasoningBlockCompactor::compact: pure-attention shift did "
+          "not land for span [%d, %d) (pos=%d, observed nPast=%d, "
+          "seqId=%d)",
+          labelTag,
+          start,
+          end,
+          pos,
+          rangeOutcome.newNPast,
+          seqId);
+      return out;
+    }
+    // Rejected before anything was written, so attention KV still matches
+    // `pos` and no wipe is needed. `FailedKvIntact` tells the caller to roll
+    // back `[preRequestCursor, pos)` on its own driver before rethrowing.
     QLOG_IF(
         Priority::WARNING,
         string_format(

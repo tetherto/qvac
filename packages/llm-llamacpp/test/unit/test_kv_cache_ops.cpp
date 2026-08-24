@@ -36,10 +36,8 @@ TEST_F(KvCacheOpsTest, CompactKvRange_HappyPath_RemovesRangeAndShiftsTail) {
   EXPECT_EQ(ops.seqRmCallLog()[0].startPos, 100);
   EXPECT_EQ(ops.seqRmCallLog()[0].endPos, 150);
 
-  // The surviving tail from 150 on shifts down by 50, so `[150, 180)` lands
-  // at `[100, 130)`. `p1 = -1` is llama's "to the end of the sequence", so a
-  // cell that somehow sits past the cursor moves with the tail instead of
-  // being stranded on top of it.
+  // `[150, 180)` shifts down by 50 to land at `[100, 130)`. `p1 = -1` so a
+  // cell past the cursor moves with the tail instead of being stranded on it.
   ASSERT_EQ(ops.seqAddCallLog().size(), 1u);
   EXPECT_EQ(ops.seqAddCallLog()[0].seqId, kSeqId);
   EXPECT_EQ(ops.seqAddCallLog()[0].startPos, 150);
@@ -85,11 +83,9 @@ TEST_F(KvCacheOpsTest, CompactKvRange_InvertedRange_IsNoOp) {
 }
 
 TEST_F(KvCacheOpsTest, CompactKvRange_EndPastNPast_IsNoOp) {
-  // Defensive: end > nPast means the recorded span is stale. Refuse to
-  // compact rather than corrupt the cache. Clamping the span to the live
-  // cursor is the caller's job (`ReasoningBlockCompactor::compact` does it
-  // with `std::min(recordedEnd, pos)`); this primitive owns no policy, so a
-  // silent clamp here would hide the caller's inconsistency.
+  // `end > nPast` means a stale span. Clamping is the caller's job,
+  // `ReasoningBlockCompactor::compact` does it with `std::min(recordedEnd,
+  // pos)`, so clamping here would hide a caller that didn't.
   FakeKvCacheOps ops;
 
   const auto outcome = compactKvRange(
@@ -123,10 +119,9 @@ TEST_F(KvCacheOpsTest, CompactKvRange_NegativeStart_IsNoOp) {
 }
 
 TEST_F(KvCacheOpsTest, CompactKvRange_NegativeNPast_IsNoOp) {
-  // llama uses `-1` for "to the end of the sequence", never as a cursor. If it
-  // ever reached this primitive as `nPast`, the `endPos > nPast` guard would
-  // be true for every range and compaction would silently stop happening.
-  // Reject it outright instead.
+  // llama's `-1` is "to the end of the sequence", never a cursor. Reaching
+  // this as `nPast` would make `endPos > nPast` true for every range and stop
+  // compaction silently.
   FakeKvCacheOps ops;
 
   const auto outcome = compactKvRange(
@@ -144,10 +139,8 @@ TEST_F(KvCacheOpsTest, CompactKvRange_NegativeNPast_IsNoOp) {
 }
 
 TEST_F(KvCacheOpsTest, CompactKvRange_MemoryCannotShift_RefusesBeforeSeqRm) {
-  // `llama_memory_seq_add` GGML_ASSERTs on a module that cannot shift, which
-  // aborts the process. Since `seq_rm` runs first, that abort would land after
-  // the hole was already punched. Refuse up front so the cache is never left
-  // with a hole nothing can close.
+  // `seq_add` GGML_ASSERTs on a module that cannot shift, and `seq_rm` runs
+  // first, so that abort would land with the hole already punched.
   FakeKvCacheOps ops;
   ops.denyShift();
 
@@ -191,10 +184,8 @@ TEST_F(KvCacheOpsTest, CompactKvRange_SeqRmFailure_ReportsAndSkipsShift) {
 }
 
 TEST_F(KvCacheOpsTest, CompactKvRange_TailExactlyAtEnd_NoShiftNeeded) {
-  // Range covers everything from `startPos` to `nPast`, so there is no tail
-  // left to move. `seqAdd` still runs: it walks an empty set of cells, which
-  // is cheap, and keeping the call unconditional keeps the primitive's two
-  // halves paired.
+  // No tail left to move. `seqAdd` still runs over an empty set of cells,
+  // which keeps the primitive's two halves paired.
   FakeKvCacheOps ops;
   ops.withResidentTokens(180);
 
@@ -217,13 +208,10 @@ TEST_F(KvCacheOpsTest, CompactKvRange_TailExactlyAtEnd_NoShiftNeeded) {
 }
 
 TEST_F(KvCacheOpsTest, CompactKvRange_ShiftDidNotLand_ReportsMemoryFailure) {
-  // `seq_add` is void, and there are ways for the cells not to move while
-  // `seq_rm` still reports success: a memory module sharing cells with another
-  // no-ops both halves, and a software cursor that has drifted from live
-  // memory gets a shift that lands somewhere else. Returning `Compacted` there
-  // hands the driver a cursor no live cell backs, and the driver then writes a
-  // cache header describing memory that does not exist. The readback is what
-  // separates the two, so it must reject rather than trust the arithmetic.
+  // The cells can fail to move while `seq_rm` still reports success: a
+  // shared-cells module no-ops both halves, and a drifted cursor shifts
+  // elsewhere. `Compacted` there would have the driver write a cache header
+  // describing memory that does not exist.
   FakeKvCacheOps ops;
   ops.withResidentTokens(180).ignoreSeqRmEffect();
 
@@ -235,9 +223,13 @@ TEST_F(KvCacheOpsTest, CompactKvRange_ShiftDidNotLand_ReportsMemoryFailure) {
       /*nPast=*/180,
       ops);
 
-  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::MemoryOperationFailed);
+  EXPECT_EQ(outcome.kind, CompactRangeOutcome::Kind::MemoryInconsistent)
+      << "the removal already ran, so this is not the all-or-nothing "
+         "rejection: reporting MemoryOperationFailed here would tell the "
+         "caller its cache is intact when a hole has been punched in it";
   EXPECT_EQ(outcome.newNPast, 180)
-      << "a failed compaction must leave the caller's cursor alone";
+      << "report the cursor memory actually has, which here is the "
+         "unshifted one the fake still models";
   EXPECT_EQ(outcome.discarded, 0);
   EXPECT_EQ(ops.seqPosMaxCalls(), 1);
 }

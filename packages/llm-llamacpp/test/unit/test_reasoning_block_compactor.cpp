@@ -337,21 +337,18 @@ struct CompactorFixture {
 
 } // namespace
 
-// The primitive-to-outcome mapping on the pure-attention path, pinned
-// directly. `compact()`'s guards clamp every span before it calls in, so a
-// primitive `NoOp` cannot be produced through `compact()` itself: `setOpenSpan`
-// refuses `start < 0`, the degenerate check catches `end <= start`, and
-// `end = std::min(recordedEnd, pos)` caps the rest. That is exactly why the
-// mapping is a pure function, so the branch a future caller could reach is
-// still covered.
+// `compact()`'s guards clamp every span before it calls in, so a primitive
+// `NoOp` is unreachable through `compact()`: `setOpenSpan` refuses
+// `start < 0`, the degenerate check catches `end <= start`, and
+// `end = std::min(recordedEnd, pos)` caps the rest. Hence the pure function,
+// so the branch a future caller could reach is still pinned.
 TEST(ReasoningBlockCompactorOutcomeMapping, NoOpDoesNotBecomeTheWipePath) {
   EXPECT_EQ(
       ReasoningBlockCompactor::attentionOutcomeFor(
           CompactRangeOutcome::Kind::NoOp),
       ReasoningBlockCompactor::Outcome::Kind::NoOp)
-      << "a primitive NoOp left the cache untouched; mapping it to "
-         "FailedKvIntact would make the driver roll the whole request back, "
-         "answer included, for a range it never modified";
+      << "the cache was untouched, so FailedKvIntact would roll the whole "
+         "request back, answer included, for a range never modified";
 }
 
 TEST(ReasoningBlockCompactorOutcomeMapping, FailuresKeepTheKvIntactContract) {
@@ -363,6 +360,16 @@ TEST(ReasoningBlockCompactorOutcomeMapping, FailuresKeepTheKvIntactContract) {
       ReasoningBlockCompactor::attentionOutcomeFor(
           CompactRangeOutcome::Kind::Compacted),
       ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
+}
+
+TEST(ReasoningBlockCompactorOutcomeMapping, MutatedCacheDoesNotClaimKvIntact) {
+  EXPECT_EQ(
+      ReasoningBlockCompactor::attentionOutcomeFor(
+          CompactRangeOutcome::Kind::MemoryInconsistent),
+      ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
+      << "the removal already ran, so FailedKvIntact would promise a cache "
+         "matching the caller's cursor and send it down a tail trim that "
+         "cannot reach a hole in the middle";
 }
 
 TEST(ReasoningBlockCompactor, DefaultsRemoveThinkingOff) {
@@ -846,18 +853,10 @@ TEST(ReasoningBlockCompactorFailureStats, NoOpOutcomesDoNotThrow) {
 namespace {
 
 // `compactKvRange` on the pure-attention path is the only production call
-// site the compactor routes through the injectable ops, so the shared
-// `FakeKvCacheOps` covers every case here. The tests below drive three
-// halves of the primitive contract, named by how each one configures it:
-//
-//   * accepting — defaults. `seqRm` returns `true`, so the compactor
-//     proceeds to `seqAdd` and reports `CompactedAttention`.
-//   * rejecting — `rejectSeqRm()`. The production contract is
-//     "all-or-nothing on rejection", so `seqAdd` MUST NOT fire afterwards;
-//     otherwise the `FailedKvIntact` outcome would imply KV was touched
-//     anyway.
-//   * cannot shift — `denyShift()`. The primitive must refuse before
-//     `seqRm`, so no hole is opened that the shift cannot close.
+// site routed through the injectable ops, so the shared `FakeKvCacheOps`
+// covers every case here. Local names below say how each one is configured:
+// `accepting` is the defaults, `rejecting` is `rejectSeqRm()`, and the
+// cannot-shift case is `denyShift()`.
 using qvac_test::FakeKvCacheOps;
 
 } // namespace
@@ -979,12 +978,44 @@ TEST(
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
-// A memory module that cannot shift must be refused BEFORE `seq_rm`.
-// `llama_memory_seq_add` GGML_ASSERTs on such a module, and since `seq_rm`
-// runs first that abort would land with the reasoning hole already punched
-// and nothing able to close it. The compactor sees the same
-// `MemoryOperationFailed` it gets from a rejected `seq_rm`, so the caller
-// still rolls back `[preRequestCursor, pos)` rather than wiping.
+// Live KV has a hole in the middle by then and how far it moved is not
+// knowable, so the compactor must wipe and send the caller down the
+// reset-to-zero recovery rather than claim KV is intact.
+TEST(
+    ReasoningBlockCompactorFailureStats,
+    PureAttentionShiftThatDidNotLandWipesInsteadOfClaimingKvIntact) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  fx.compactor.setOpenSpan(/*start=*/15);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(/*pos=*/20);
+  ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
+
+  // `seqRm` succeeds but the cells stay put, so the readback disagrees.
+  FakeKvCacheOps stuck;
+  stuck.withResidentTokens(/*pos=*/25).ignoreSeqRmEffect();
+  fx.compactor.setKvCacheOpsForTesting(&stuck);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
+      << "a mutated cache must not be reported as KV-intact";
+  EXPECT_NE(outcome.failureMessage.find("did not land"), std::string::npos);
+  EXPECT_EQ(stuck.seqRmCalls(), 1);
+  EXPECT_EQ(stuck.seqAddCalls(), 1);
+  EXPECT_EQ(stuck.seqPosMaxCalls(), 1);
+  EXPECT_EQ(fx.compactor.blockDiscards(), 0)
+      << "a failed drop must not bump the runtime discard counter";
+  EXPECT_FALSE(fx.compactor.hasOpenSpan());
+}
+
+// `seq_add` GGML_ASSERTs on a module that cannot shift, and `seq_rm` runs
+// first, so the abort would land with the hole already punched. Nothing is
+// written, so this stays `FailedKvIntact` and the caller rolls its tail back.
 TEST(
     ReasoningBlockCompactorFailureStats,
     PureAttentionUnshiftableMemoryReportsFailedKvIntactWithoutSeqRm) {
