@@ -27,7 +27,11 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "v").prediction, V_PRED);
   EXPECT_EQ(applyOne("prediction", "edm_v").prediction, EDM_V_PRED);
   EXPECT_EQ(applyOne("prediction", "flow").prediction, FLOW_PRED);
-  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, FLUX2_FLOW_PRED);
+  // flux2_flow: no engine prediction override exists; the value maps to auto
+  // and raises the addon's FLUX.2 flag instead.
+  EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, PREDICTION_COUNT);
+  EXPECT_TRUE(applyOne("prediction", "flux2_flow").flux2Requested);
+  EXPECT_FALSE(applyOne("prediction", "auto").flux2Requested);
 
   SdCtxConfig cfg;
   EXPECT_THROW(

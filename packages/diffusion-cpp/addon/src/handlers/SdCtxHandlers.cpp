@@ -223,7 +223,9 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     // SD1.x  -> "eps"         (epsilon prediction)
     // SD2.x  -> "v"           (v-prediction)
     // SD3    -> "flow"        (flow matching)
-    // FLUX.2 -> "flux2_flow"  (FLUX.2 flow matching)
+    // FLUX.2 -> "flux2_flow"  (engine auto-detects FLUX.2 from the weights;
+    //                          the value keeps the addon's FLUX.2 reference
+    //                          handling enabled)
     // Leave unset (or "auto") to use PREDICTION_COUNT sentinel for
     // auto-detection.
 
@@ -241,9 +243,10 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
          c.prediction = FLOW_PRED;
        else if (v == "flux_flow")
          c.prediction = FLUX_FLOW_PRED;
-       else if (v == "flux2_flow")
-         c.prediction = FLUX2_FLOW_PRED;
-       else
+       else if (v == "flux2_flow") {
+         c.prediction = PREDICTION_COUNT; // auto: no FLUX.2 override exists
+         c.flux2Requested = true;
+       } else
          throw StatusError(
              general_error::InvalidArgument,
              "prediction must be one of: eps, v, edm_v, flow, flux_flow, "
