@@ -1,5 +1,5 @@
-import type { QvacPlugin } from '@/schemas'
-import { toWireJsonSchema } from '@/scripts/contract/build-contract'
+import type { QvacPlugin } from '@qvac/inference/surface'
+import { toWireJsonSchema } from './build-contract'
 
 export interface PluginHandlerContract {
   name: string

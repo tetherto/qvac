@@ -10,7 +10,7 @@
     // examples keep importing the package by name and resolve through the
     // exports map.
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*"]
     }
   }
 }

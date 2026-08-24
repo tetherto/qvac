@@ -164,11 +164,10 @@ jobs:
           test-groups-path: validation-data/packages/audiogen-ggml/test/mobile/test-groups.json
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-  # NOTE: continue-on-error: true matches the sibling mobile addons
-  # (tts-ggml / parakeet). on-pr-audiogen-ggml.yml's merge-guard treats
-  # `success || skipped` as a pass, so a hard Device Farm failure does not
-  # gate merge today. Tighten once the on-device provisioning + Device Farm
-  # pool is stable (and the ~3 GB on-device model download is proven feasible).
+  # A Device Farm test failure fails this run on every trigger (no
+  # continue-on-error). Mobile is on-demand for this addon (not part of
+  # on-pr-audiogen-ggml.yml's PR lane), so this does not gate PR merges — it
+  # makes manual/scheduled runs trustworthy instead of silently green.
   build-and-test:
     name: Build ${{ matrix.platform }}${{ inputs.run_rtf_benchmarks && format(' ({0} {1})', matrix.dit_variant, matrix.use_gpu && 'gpu' || 'cpu') || '' }} and Run E2E Tests
     # validate-devices is skipped on workflow_call (its `skipped` result keeps
@@ -179,7 +178,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true
     permissions:
       contents: read
       packages: read
@@ -191,8 +189,8 @@ jobs:
       # device. The engine loads the ACE-Step stages sequentially, so the
       # load-time peak is a single stage instead of all six at once and create()
       # does not jetsam-OOM on a non-entitled iPhone during the ~3 GB load.
-      # Non-blocking (continue-on-error) on both platforms until the Device Farm
-      # pool is stable.
+      # A Device Farm failure on either platform fails the run (see the
+      # build-and-test comment above — no continue-on-error).
       #
       # The benchmark matrix (run_rtf_benchmarks=true) sweeps the three DiT
       # variants on CPU and GPU (Vulkan on Android, Metal on iOS) — one Device

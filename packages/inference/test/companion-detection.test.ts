@@ -246,3 +246,133 @@ test('groupCompanionSets: bergamot cross-source not paired', (t) => {
 
   t.absent(result[0]!.companionSet)
 })
+
+// --- CosyVoice3 companion detection ---
+
+const COSYVOICE_DIR = 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/'
+
+function makeCosyvoiceSet() {
+  return {
+    llm: makeModel({
+      registryPath: `${COSYVOICE_DIR}cosyvoice3-llm-q8_0.gguf`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    }),
+    flow: makeModel({
+      registryPath: `${COSYVOICE_DIR}cosyvoice3-flow-f32.gguf`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    }),
+    hift: makeModel({
+      registryPath: `${COSYVOICE_DIR}cosyvoice3-hift-f32.gguf`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    }),
+    vocab: makeModel({
+      registryPath: `${COSYVOICE_DIR}vocab.json`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    }),
+    merges: makeModel({
+      registryPath: `${COSYVOICE_DIR}merges.txt`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    }),
+    voiceEn: makeModel({
+      registryPath: `${COSYVOICE_DIR}voice-en.gguf`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    }),
+    voiceZh: makeModel({
+      registryPath: `${COSYVOICE_DIR}voice-zh-female.gguf`,
+      registrySource: 's3',
+      addon: 'tts',
+      engine: 'tts-ggml'
+    })
+  }
+}
+
+test('groupCompanionSets: cosyvoice llm + directory companions (6-file set)', (t) => {
+  const files = makeCosyvoiceSet()
+  const result = groupCompanionSets([
+    files.llm,
+    files.flow,
+    files.hift,
+    files.vocab,
+    files.merges,
+    files.voiceEn,
+    files.voiceZh
+  ])
+
+  t.ok(result[0]!.companionSet, 'primary has companionSet')
+  t.is(result[0]!.companionSet!.primaryKey, 'modelPath')
+  t.is(result[0]!.companionSet!.files.length, 6)
+  t.is(result[0]!.companionSet!.files[0]!.primary, true)
+  t.is(result[0]!.companionSet!.files[0]!.key, 'modelPath')
+  t.is(result[0]!.companionSet!.files[0]!.targetName, 'cosyvoice3-llm-q8_0.gguf')
+  t.absent(result[0]!.isCompanionOnly)
+
+  const keys = result[0]!.companionSet!.files.map((f) => f.key)
+  t.alike(keys, ['modelPath', 'flowPath', 'hiftPath', 'vocabPath', 'mergesPath', 'voicePath'])
+  t.is(result[0]!.companionSet!.files[5]!.targetName, 'voice.gguf')
+  t.is(result[0]!.companionSet!.files[5]!.registryPath, `${COSYVOICE_DIR}voice-en.gguf`)
+
+  t.absent(result[1]!.isCompanionOnly, 'flow stays a standalone catalog entry')
+  t.absent(result[6]!.companionSet, 'extra voices are not pulled into the set')
+  t.absent(result[6]!.isCompanionOnly)
+})
+
+test('groupCompanionSets: cosyvoice llm without companions gets no set', (t) => {
+  const llm = makeModel({
+    registryPath: `${COSYVOICE_DIR}cosyvoice3-llm-q8_0.gguf`,
+    registrySource: 's3'
+  })
+
+  const result = groupCompanionSets([llm])
+
+  t.absent(result[0]!.companionSet)
+  t.absent(result[0]!.isCompanionOnly)
+})
+
+test('groupCompanionSets: cosyvoice cross-source not paired', (t) => {
+  const files = makeCosyvoiceSet()
+  files.flow.registrySource = 'github'
+
+  const result = groupCompanionSets([
+    files.llm,
+    files.flow,
+    files.hift,
+    files.vocab,
+    files.merges,
+    files.voiceEn
+  ])
+
+  t.absent(result[0]!.companionSet)
+})
+
+test('groupCompanionSets: cosyvoice llm outside /cosy_voice/ is skipped', (t) => {
+  const files = makeCosyvoiceSet()
+  files.llm.registryPath = 'other/cosyvoice3-llm-q8_0.gguf'
+  files.flow.registryPath = 'other/cosyvoice3-flow-f32.gguf'
+  files.hift.registryPath = 'other/cosyvoice3-hift-f32.gguf'
+  files.vocab.registryPath = 'other/vocab.json'
+  files.merges.registryPath = 'other/merges.txt'
+  files.voiceEn.registryPath = 'other/voice-en.gguf'
+
+  const result = groupCompanionSets([
+    files.llm,
+    files.flow,
+    files.hift,
+    files.vocab,
+    files.merges,
+    files.voiceEn
+  ])
+
+  t.absent(result[0]!.companionSet)
+})

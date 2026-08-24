@@ -1341,6 +1341,8 @@ Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
 
 When an HTTP client disconnects before a response finishes (closes the connection or aborts the request), the server cancels the in-flight inference for that request instead of letting it run to completion — freeing the model to serve the next call. This applies to both blocking and streaming requests across the inference routes (`/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/audio/*`).
 
+Multiple HTTP requests to the same LLM alias run in parallel up to that model's `serve.models.<alias>.config.parallel` (see [`modelConfig.parallel`](/ai-capabilities/text-generation#concurrent-completions)), which defaults to `1` — set it explicitly to serve an alias concurrently. Additional requests wait in a first-come-first-serve queue. A client disconnect cancels only that one request — other requests still running on the same model keep going.
+
 Video jobs are asynchronous and are not tied to the creating connection; cancel them explicitly with `DELETE /v1/videos/{id}` (see [Videos](#videos)).
 
 ### Authentication
