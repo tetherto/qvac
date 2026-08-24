@@ -1,11 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+const fs = require("bare-fs");
+const path = require("bare-path");
 const processModule = require("bare-process");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const process_internal_1 = require("./process-internal");
 const process_1 = require("./process");
 const process = processModule;
+const PACKAGED_BACKENDS_DIR = path.join(__dirname, 'prebuilds');
 function exitAfterWriteError(error) {
     process.stderr.write(`model-fit process runner failed to write its response: ${error.message}\n`, () => {
         process.exit(2);
@@ -30,8 +33,27 @@ function fit(config) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
     return require('./index').fitParams(config);
 }
+function fitLlama(...args) {
+    const [loadKind, config] = args;
+    // `./binding-internal`, not `./binding`: the raw load-config fitter is not
+    // public API, and `./binding.js` is a public export.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is disposable here.
+    const binding = require('./binding-internal');
+    let resolved = config;
+    if (config.backendsDir === undefined) {
+        try {
+            if (fs.statSync(PACKAGED_BACKENDS_DIR).isDirectory()) {
+                resolved = { ...config, backendsDir: PACKAGED_BACKENDS_DIR };
+            }
+        }
+        catch {
+            // Statically linked builds do not need a packaged backends directory.
+        }
+    }
+    return binding.llamaConfigFit({ loadKind, ...resolved });
+}
 function finish(line) {
-    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit));
+    writeOutcome((0, process_internal_1.runFitProcessLine)(line, fit, fitLlama));
 }
 let input = '';
 let finished = false;
