@@ -16996,7 +16996,86 @@ export const models = [
     sha256Checksum: '1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e',
     engine: 'tts-ggml',
     quantization: 'q8_0',
-    params: '0.5B'
+    params: '0.5B',
+    companionSet: {
+      setKey: 'b75e001ce19bae4c',
+      primaryKey: 'modelPath',
+      files: [
+        {
+          key: 'modelPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf',
+          registrySource: 's3',
+          targetName: 'cosyvoice3-llm-q8_0.gguf',
+          expectedSize: 973496000,
+          sha256Checksum: '1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2777446,
+          blobBlockLength: 14855,
+          blobByteOffset: 182005936162,
+          primary: true
+        },
+        {
+          key: 'flowPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf',
+          registrySource: 's3',
+          targetName: 'cosyvoice3-flow-f32.gguf',
+          expectedSize: 1333857632,
+          sha256Checksum: '002fe52ee02cef4e76f8114bfd810bb64aefb44a218666b01872a46e5c0349fc',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2755824,
+          blobBlockLength: 20354,
+          blobByteOffset: 180588991010
+        },
+        {
+          key: 'hiftPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-hift-f32.gguf',
+          registrySource: 's3',
+          targetName: 'cosyvoice3-hift-f32.gguf',
+          expectedSize: 83087520,
+          sha256Checksum: '65af74b042568add308144363125120713ed94adfa8e66486194950ac6e80f85',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2776178,
+          blobBlockLength: 1268,
+          blobByteOffset: 181922848642
+        },
+        {
+          key: 'vocabPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/vocab.json',
+          registrySource: 's3',
+          targetName: 'vocab.json',
+          expectedSize: 2776833,
+          sha256Checksum: 'ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 3044647,
+          blobBlockLength: 43,
+          blobByteOffset: 199516918821
+        },
+        {
+          key: 'mergesPath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/merges.txt',
+          registrySource: 's3',
+          targetName: 'merges.txt',
+          expectedSize: 1402109,
+          sha256Checksum: 'ac8ff86a72bee70828fbc1119bc4398c6f3a9a6e490d7b0dbe917be025478bd0',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 3044625,
+          blobBlockLength: 22,
+          blobByteOffset: 199515516712
+        },
+        {
+          key: 'voicePath',
+          registryPath: 'qvac_models_compiled/ggml/cosy_voice/2026-07-23/voice-en.gguf',
+          registrySource: 's3',
+          targetName: 'voice.gguf',
+          expectedSize: 179584,
+          sha256Checksum: '69f00c782198dc911062c9d1222fe39c85a6f954211a96796050aec3f0980ed7',
+          blobCoreKey: '4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17',
+          blobBlockOffset: 2792301,
+          blobBlockLength: 3,
+          blobByteOffset: 182979432162
+        }
+      ]
+    }
   },
   {
     name: 'TTS_COSYVOICE3_TOKENIZER_COSYVOICE',

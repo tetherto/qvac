@@ -73,14 +73,18 @@ export class RetrievalService {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
 
+    if (typeof query !== 'string' || query.trim() === '') {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_INPUT,
+        adds: 'query must be a non-empty string'
+      })
+    }
+
     this.logger.debug(
       `Search started: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
     )
     const startTime = Date.now()
 
-    if (typeof query !== 'string' || query.trim() === '') {
-      throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT })
-    }
     const queryVector = await this.embeddingService.generateEmbeddings(query)
 
     if (signal?.aborted) {
