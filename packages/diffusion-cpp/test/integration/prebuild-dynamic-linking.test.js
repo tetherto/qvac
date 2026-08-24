@@ -14,10 +14,11 @@ const MODULE_NAME = 'qvac__diffusion-cpp'
 // link makes the whole worker abort at addon load (QVAC-23767 / gh#3853).
 const FORBIDDEN_NEEDED = ['libvulkan.', 'libOpenCL.', 'libcuda.', 'libcudart.']
 
-// The prebuild must also stay self-contained w.r.t. the C++ runtime: libc++
-// is not part of a stock Linux install, so a NEEDED on it breaks dlopen the
-// same way (both the addon and the backend modules link it statically).
-const FORBIDDEN_RUNTIME = ['libc++.', 'libc++abi.']
+// The prebuild must also stay self-contained w.r.t. the C++ runtime: neither
+// libc++ nor libstdc++ is guaranteed on a minimal Linux install, so a NEEDED
+// on either breaks dlopen the same way (both the addon and the backend
+// modules link the C++ runtime statically).
+const FORBIDDEN_RUNTIME = ['libc++.', 'libc++abi.', 'libstdc++.']
 
 // 32-bit-pair read of a little-endian u64: ELF file offsets/sizes here are
 // far below 2^53, and bare's Buffer does not guarantee the BigInt readers.
@@ -37,6 +38,7 @@ function elfNeeded(buffer) {
     buffer[3] === 0x46
   if (!isElf) throw new Error('not an ELF file')
   if (buffer[4] !== 2) throw new Error('only ELF64 is supported')
+  if (buffer[5] !== 1) throw new Error('only little-endian ELF is supported')
 
   const shoff = readU64(buffer, 0x28)
   const shentsize = buffer.readUInt16LE(0x3a)
@@ -57,6 +59,7 @@ function elfNeeded(buffer) {
   const dynamic = sections.find((s) => s.type === SHT_DYNAMIC)
   if (!dynamic) throw new Error('no .dynamic section')
   const strtab = sections[dynamic.link]
+  if (!strtab) throw new Error('dynamic section has no linked string table')
 
   const DT_NEEDED = 1
   const needed = []

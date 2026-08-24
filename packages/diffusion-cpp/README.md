@@ -609,6 +609,10 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 - Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
 - Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
 - LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
+- On Linux the shipped prebuild must not hard-link any GPU loader
+  (`libvulkan`/`libOpenCL`/`libcuda`) — an integration test asserts this. For
+  local custom builds that legitimately do (e.g. `SD_CUDA=ON`), skip it with
+  `QVAC_SKIP_PREBUILD_LINK_CHECK=true`.
 
 ## Credits
 
