@@ -67,7 +67,7 @@ const std::unordered_set<std::string> SUPPORTED_LOAD_KEYS = {
     "gpu-layers",   "n-gpu-layers",  "flash-attn",  "cache-type-k",
     "cache-type-v", "no-mmap",       "swa-full",    "fit-ctx",
     "n-cpu-moe",    "no-kv-offload", "kv-offload",  "no-op-offload",
-    "op-offload",   "no-host",
+    "op-offload",   "no-host",       "load-mode",
 };
 
 // Distinct allowlisted keys that write the same field. `canonicalizeConfig`
@@ -79,11 +79,12 @@ const std::unordered_set<std::string> SUPPORTED_LOAD_KEYS = {
 // and `aliasedInteger` in binding.cpp already does it for
 // ctx-size/batch-size/ubatch-size, so do the same here rather than answering a
 // request non-deterministically.
-constexpr std::array<std::pair<std::string_view, std::string_view>, 3>
+constexpr std::array<std::pair<std::string_view, std::string_view>, 4>
     EXCLUSIVE_LOAD_KEY_PAIRS = {{
         {"gpu-layers", "n-gpu-layers"},
         {"kv-offload", "no-kv-offload"},
         {"op-offload", "no-op-offload"},
+        {"load-mode", "no-mmap"},
     }};
 
 const std::array<std::string_view, 18> UNSUPPORTED_KEY_PARTS = {
@@ -134,6 +135,24 @@ bool parseBoolean(const std::string& value, const std::string& key) {
   }
   throw std::invalid_argument(
       "model-fit: config." + key + " must be a boolean string");
+}
+
+llama_load_mode parseLoadMode(const std::string& value) {
+  static const std::unordered_map<std::string, llama_load_mode> loadModes = {
+      {"none", LLAMA_LOAD_MODE_NONE},
+      {"mmap", LLAMA_LOAD_MODE_MMAP},
+      {"mlock", LLAMA_LOAD_MODE_MLOCK},
+      {"mmap+mlock", LLAMA_LOAD_MODE_MMAP_MLOCK},
+      {"dio", LLAMA_LOAD_MODE_DIRECT_IO}};
+
+  const std::string normalized = lower(value);
+  const auto mode = loadModes.find(normalized);
+  if (mode == loadModes.end()) {
+    throw std::invalid_argument(
+        "model-fit: config.load-mode must be one of 'none', 'mmap', "
+        "'mlock', 'mmap+mlock', or 'dio'");
+  }
+  return mode->second;
 }
 
 int parseInteger(const std::string& value, const std::string& key) {
@@ -577,6 +596,12 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     noMmap = parseBoolean(mmapIt->second, "no-mmap");
     config.erase(mmapIt);
   }
+  std::optional<llama_load_mode> loadMode;
+  if (const auto loadModeIt = config.find("load-mode");
+      loadModeIt != config.end()) {
+    loadMode = parseLoadMode(loadModeIt->second);
+    config.erase(loadModeIt);
+  }
 
   const bool isEmbedding = loadKind == LlamaLoadKind::Embedding;
   BackendSelection selection;
@@ -691,7 +716,12 @@ NormalizedLlamaLoad normalizeLlamaLoadConfig(
     return out;
   }
 
-  out.params.use_mmap = !noMmap;
+  if (loadMode.has_value()) {
+    out.params.load_mode = loadMode.value();
+  }
+  if (noMmap) {
+    out.params.load_mode = LLAMA_LOAD_MODE_NONE;
+  }
   out.params.split_mode = splitMode;
   if (isEmbedding) {
     if (out.params.n_parallel == 1) {
