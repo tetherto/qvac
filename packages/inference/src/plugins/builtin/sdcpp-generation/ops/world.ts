@@ -47,6 +47,23 @@ const MAX_SCENE_PACK_BYTES = 128 * 1024 * 1024
  */
 const MAX_SCENE_IMAGE_PIXELS = 8192 * 8192
 
+/**
+ * Ceiling on ONE block of decoded frames, held in memory at once.
+ *
+ * The per-axis and total-pixel limits bound a single frame; `numFramePerBlock`
+ * bounds how many. Neither alone bounds the product, and the product is what is
+ * allocated: at the 1920x1088 ceiling a frame is ~6 MiB, so the 64-frame maximum
+ * would reach ~1.49 GiB. Enforced where both numbers are known, which is scene
+ * creation — the resolution arrives per request, the block shape at load.
+ */
+const MAX_BLOCK_BYTES = 512 * 1024 * 1024
+
+/** Frames a block delivers: ~4x the configured latent frames, 12 at the default of 3. */
+function projectedFramesPerBlock(numFramePerBlock: number | undefined): number {
+  const latent = numFramePerBlock === undefined || numFramePerBlock === 0 ? 3 : numFramePerBlock
+  return latent * 4
+}
+
 interface WorldSessionArgs {
   modelId: string
   files: { model: string; taehv: string; scene: string }
@@ -95,6 +112,12 @@ export interface WorldSession {
   /** Where a replacement world is generated before it is allowed to take over. */
   readonly stagingScenePath: string
   readonly encoders: { t5?: string | undefined; vae?: string | undefined }
+  /**
+   * `world.numFramePerBlock` as configured, or undefined for the engine default.
+   * Exposed because the block's memory cost is count x resolution, and only the
+   * scene op knows the resolution.
+   */
+  readonly numFramePerBlock: number | undefined
   ensureActivated(): Promise<void>
   deactivate(): Promise<void>
   /**
@@ -260,6 +283,8 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
     scenePath: files.scene,
     stagingScenePath,
     encoders,
+    numFramePerBlock:
+      typeof config.numFramePerBlock === 'number' ? config.numFramePerBlock : undefined,
     settle: settleInFlight,
 
     // Only here does a new world replace the old one. `rename` within the same
@@ -714,6 +739,24 @@ export async function* worldCreateScene(
   // Only enforced when the header is actually readable. The addon documents
   // PNG/JPEG, which is exactly what this reads, and refusing everything else here
   // would reject formats the native decoder may accept today.
+  // Count x resolution is what actually gets allocated, and neither ceiling
+  // bounds the product on its own. Checked here because this is the only point
+  // where both are known: the block shape came from modelConfig at load, the
+  // resolution arrives with this request.
+  const blockWidth = request.width ?? 832
+  const blockHeight = request.height ?? 480
+  const blockBytes =
+    projectedFramesPerBlock(session.numFramePerBlock) * blockWidth * blockHeight * 3
+  if (blockBytes > MAX_BLOCK_BYTES) {
+    throw new PluginRequestValidationFailedError(
+      'worldSceneStream',
+      `A ${blockWidth}x${blockHeight} world at world.numFramePerBlock=` +
+        `${session.numFramePerBlock ?? 3} would hold ${blockBytes} bytes of decoded ` +
+        `frames per block, over the ${MAX_BLOCK_BYTES}-byte ceiling. Lower the ` +
+        'resolution, lower world.numFramePerBlock, or both.'
+    )
+  }
+
   const image = Buffer.from(request.image, 'base64')
   const declared = readImageDimensions(image)
   if (!declared) {

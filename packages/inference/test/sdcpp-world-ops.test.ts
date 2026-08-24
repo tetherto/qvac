@@ -675,6 +675,89 @@ test('world session: a failed deactivate makes the session unusable, not silentl
 // The generated-pack ceiling is worthless if an oversized pack can simply arrive
 // through sceneSrc instead — both land at files.scene and are loaded by the same
 // native session.
+// The per-axis and total-pixel ceilings bound ONE frame; numFramePerBlock bounds
+// how many. Neither bounds the product, and the product is what is allocated: at
+// the 1920x1088 ceiling with the 64-frame maximum that is ~1.49 GiB per block.
+test('world scene op: count x resolution is bounded, not just each on its own', async function (t) {
+  const worldOps = await import('@/plugins/builtin/sdcpp-generation/ops/world')
+  const { getEngineLogger } = await import('@/logging/index')
+  const { registerModel, unregisterModel } = await import('@/runtime/model-registry')
+  const { ModelType } = await import('@/schemas/index')
+  const fs = await import('bare-fs')
+  const driver = makeResponse([])
+
+  let scenes = 0
+  const counting = {
+    load: async () => {},
+    unload: async () => {},
+    step: async () => driver.response,
+    createScene: async () => {
+      scenes++
+      return driver.response
+    },
+    cancel: async () => {}
+  } as unknown as NativeWorldSession
+
+  const modelId = makeId('test-world-block')
+  const session = worldOps.createWorldSession({
+    modelId,
+    files: {
+      model: '/tmp/dit.gguf',
+      taehv: '/tmp/taehv.gguf',
+      scene: worldOps.worldScenePath(modelId)
+    },
+    // Both individually legal: 64 is the numFramePerBlock maximum.
+    config: { numFramePerBlock: 64 },
+    encoders: { t5: '/tmp/t5.gguf', vae: '/tmp/vae.gguf' },
+    logger: getEngineLogger(),
+    world: counting
+  })
+  fs.writeFileSync(session.scenePath, 'scene')
+  registerModel(modelId, {
+    model: session as never,
+    path: '/tmp/dit.gguf',
+    config: {},
+    modelType: ModelType.sdcppGeneration
+  } as never)
+
+  try {
+    const stream = worldOps.worldCreateScene({
+      modelId,
+      requestId: makeId('scene'),
+      prompt: 'a forest path',
+      // Also individually legal: exactly the total-pixel ceiling.
+      width: 1920,
+      height: 1088,
+      image: pngHeader()
+    })
+    await t.exception(stream.next(), /over the .*-byte ceiling/, 'the product is refused')
+    t.is(scenes, 0, 'nothing reached the native encoder')
+
+    // And the default shape at the same resolution still passes.
+    const ok = worldOps.worldCreateScene({
+      modelId,
+      requestId: makeId('scene'),
+      prompt: 'a forest path',
+      width: 832,
+      height: 480,
+      image: pngHeader()
+    })
+    const pending = ok.next()
+    await new Promise<void>((resolve) => setTimeout(() => resolve(), 20))
+    driver.releaseStream()
+    driver.settleJob()
+    await pending.catch(() => {})
+    await ok.return(undefined).catch(() => {})
+    t.is(scenes, 1, 'a sane block shape is unaffected')
+  } finally {
+    unregisterModel(modelId)
+    try {
+      fs.unlinkSync(session.scenePath)
+    } catch {}
+    await session.discardStagedScene().catch(() => {})
+  }
+})
+
 test('world session: an oversized sceneSrc is refused like an oversized generated pack', async function (t) {
   const fs = await import('bare-fs')
   const bareOs = await import('bare-os')
