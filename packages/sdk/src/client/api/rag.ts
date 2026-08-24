@@ -37,6 +37,8 @@ import { decoratePromise } from '@/utils/decorate-promise'
 // ============== Chunk ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Chunks documents into smaller pieces for embedding.
  * Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
  *
@@ -86,6 +88,8 @@ export async function ragChunk(params: RagChunkParams, options?: RPCOptions): Pr
 // ============== Ingest ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Ingests documents into the RAG vector database.
  * Full pipeline: chunk → embed → save
  *
@@ -191,6 +195,8 @@ async function runRagIngest(
 // ============== SaveEmbeddings ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Saves pre-embedded documents to the RAG vector database.
  * Part of the segregated flow: chunk() → embed() → saveEmbeddings()
  *
@@ -284,6 +290,8 @@ async function runRagSaveEmbeddings(
 // ============== Search ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Searches for similar documents in the RAG vector database.
  *
  * **Workspace lifecycle:** This operation requires an existing workspace. If the workspace
@@ -340,6 +348,8 @@ export async function ragSearch(
 // ============== Delete Embeddings ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Deletes document embeddings from the RAG vector database.
  *
  * **Workspace lifecycle:** This operation requires an existing workspace.
@@ -385,6 +395,8 @@ export async function ragDeleteEmbeddings(
 // ============== Reindex ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Reindexes the RAG database to optimize search performance.
  * For HyperDB, this rebalances centroids using k-means clustering.
  *
@@ -486,6 +498,8 @@ async function runRagReindex(
 // ============== List Workspaces ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Lists all RAG workspaces with their open status.
  *
  * Returns all workspaces that exist on disk. The `open` field indicates whether
@@ -528,6 +542,8 @@ export async function ragListWorkspaces(options?: RPCOptions): Promise<RagWorksp
 // ============== Close Workspace ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
  *
  * **Workspace lifecycle:** Workspaces are implicitly opened.
@@ -576,6 +592,8 @@ export async function ragCloseWorkspace(
 // ============== Delete Workspace ==============
 
 /**
+ * **Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+ *
  * Deletes a RAG workspace and all its data.
  * The workspace must not be currently loaded/in-use.
  *

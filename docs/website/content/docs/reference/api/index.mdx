@@ -877,6 +877,8 @@ for await (const blocks of blockStream) {
 
 ### `ragChunk`
 
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Chunks documents into smaller pieces for embedding.
 Part of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()
 
@@ -905,6 +907,8 @@ const chunks = await ragChunk({
 ---
 
 ### `ragCloseWorkspace`
+
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).
 
@@ -935,6 +939,8 @@ await ragCloseWorkspace({ workspace: "my-docs", deleteOnClose: true });
 
 ### `ragDeleteEmbeddings`
 
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Deletes document embeddings from the RAG vector database.
 
 **Workspace lifecycle:** This operation requires an existing workspace.
@@ -961,6 +967,8 @@ await ragDeleteEmbeddings({
 
 ### `ragDeleteWorkspace`
 
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Deletes a RAG workspace and all its data.
 The workspace must not be currently loaded/in-use.
 
@@ -982,6 +990,8 @@ await ragDeleteWorkspace({ workspace: "my-docs" });
 ---
 
 ### `ragIngest`
+
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Ingests documents into the RAG vector database.
 Full pipeline: chunk → embed → save
@@ -1023,6 +1033,8 @@ const result = await ragIngest({
 
 ### `ragListWorkspaces`
 
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Lists all RAG workspaces with their open status.
 
 Returns all workspaces that exist on disk. The `open` field indicates whether
@@ -1048,6 +1060,8 @@ const workspaces = await ragListWorkspaces();
 ---
 
 ### `ragReindex`
+
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Reindexes the RAG database to optimize search performance.
 For HyperDB, this rebalances centroids using k-means clustering.
@@ -1094,6 +1108,8 @@ const result = await ragReindex({
 
 ### `ragSaveEmbeddings`
 
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
+
 Saves pre-embedded documents to the RAG vector database.
 Part of the segregated flow: chunk() → embed() → saveEmbeddings()
 
@@ -1130,6 +1146,8 @@ const result = await ragSaveEmbeddings({
 ---
 
 ### `ragSearch`
+
+**Prototype only** — the built-in RAG vector store is not production grade. For production, use an external vector DB (see the RAG guide).
 
 Searches for similar documents in the RAG vector database.
 
