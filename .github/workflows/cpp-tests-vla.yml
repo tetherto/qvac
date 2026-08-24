@@ -311,12 +311,6 @@ jobs:
           # GrootEmbodimentSweep skips cleanly when unset.
           GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
-          # addon-test links AddressSanitizer but dynamically loads the
-          # non-ASan, -static-libstdc++ @qvac/fabric prebuild. Relax exactly
-          # those two checks. Harmless on current main (static fabric, no
-          # dlopen boundary) and on win32 (nothing is ASan-linked). #3998's
-          # run-cpp-tests.js wrapper reads this env as-is when present.
-          ASAN_OPTIONS: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1
         run: |
           set -euo pipefail
 
@@ -325,6 +319,7 @@ jobs:
             exit 1
           fi
 
+          # test:cpp:run applies fabric-boundary ASAN_OPTIONS via scripts/run-cpp-tests.js.
           # pipefail: a failing addon-test exit code propagates through tee.
           npm run test:cpp:run 2>&1 | tee build/test/unit/test-output.log
 
