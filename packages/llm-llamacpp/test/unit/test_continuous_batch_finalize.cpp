@@ -105,19 +105,6 @@ TEST(ContinuousBatchFinalize, NaturalFinishRunsGenerationFinishedHook) {
   EXPECT_EQ(driver.terminalReason, GenerationStopReason::None);
 }
 
-/// Scheduler-imposed per-sequence cap is a known truncation reason. Preserve it
-/// at the finalization boundary so recurrent drivers can roll back open
-/// reasoning spans instead of treating the slot as a normal completion and
-/// attempting strict compaction.
-TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
-  RecordingDriver driver;
-  (void)finalizeTerminalDriver(
-      driver, StopReason::LimitReached, /*prefillOnly=*/false, kNoCallback);
-
-  EXPECT_TRUE(driver.fired("onGenerationFinished"));
-  EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
-}
-
 /// A slot whose context window filled must reach the driver as
 /// ContextOverflow, not as the per-sequence cap. Collapsing the two makes a
 /// full context indistinguishable from a prediction-limit cutoff for every

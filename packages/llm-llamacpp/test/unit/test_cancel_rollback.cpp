@@ -25,6 +25,7 @@
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
+#include "test_kv_cache_ops_fake.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 
 // Tests for the cancel-rollback paths introduced alongside
@@ -1265,40 +1266,19 @@ TEST(
 
 namespace {
 
-// `IKvCacheOps` fake that rejects every `seq_rm` call and never
-// touches `seq_add`. Installed on a `ReasoningBlockCompactor` via
-// `setKvCacheOpsForTesting` so `compact()` on the pure-attention
-// path takes the `Outcome::Kind::FailedKvIntact` branch without a real
-// llama.cpp memory rejection (which is essentially impossible to
-// synthesize on a valid range).
-class RejectingKvCacheOps final : public IKvCacheOps {
-public:
-  KvCacheMemoryHandle memory(llama_context* lctx) const override {
-    // Forward the real handle so the compactor's own diagnostics /
-    // `clearSeqOnFailure` short-circuit sensibly. Not strictly needed
-    // for the pure-attention path but keeps the fake honest.
-    return llama_get_memory(lctx);
-  }
-
-  bool seqRm(
-      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos) const override {
-    ++seqRmCalls_;
-    return false;
-  }
-
-  void seqAdd(
-      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos,
-      llama_pos) const override {
-    ++seqAddCalls_;
-  }
-
-  int seqRmCalls() const { return seqRmCalls_; }
-  int seqAddCalls() const { return seqAddCalls_; }
-
-private:
-  mutable int seqRmCalls_ = 0;
-  mutable int seqAddCalls_ = 0;
-};
+// The shared `FakeKvCacheOps`, configured to reject every `seq_rm` and
+// forward the real memory handle. Installed on a `ReasoningBlockCompactor`
+// via `setKvCacheOpsForTesting` so `compact()` on the pure-attention path
+// takes the `Outcome::Kind::FailedKvIntact` branch without a real llama.cpp
+// memory rejection, which is essentially impossible to synthesize on a valid
+// range. The real handle is forwarded so the compactor's own diagnostics and
+// `clearSeqOnFailure` short-circuit sensibly; not strictly needed on the
+// pure-attention path, but it keeps the fake honest.
+qvac_test::FakeKvCacheOps makeRejectingKvCacheOps() {
+  qvac_test::FakeKvCacheOps ops;
+  ops.rejectSeqRm().forwardRealMemory();
+  return ops;
+}
 
 } // namespace
 
@@ -1315,7 +1295,7 @@ private:
 // This test primes the driver with two real prefills (so
 // `preRequestNPast_` sits at a non-zero cursor N1 while `nPast_`
 // advances to N1 + N2), then forces `compactThinkSpan` down the
-// pure-attention failure branch via a `RejectingKvCacheOps` fake, and
+// pure-attention failure branch via a seq_rm-rejecting fake, and
 // checks:
 //   * a `StatusError` is thrown (the caller still fails the request),
 //   * `nPast_` is restored to its pre-request value (N1), NOT reset to
@@ -1370,11 +1350,11 @@ TEST_F(
          "cursor for the recovery-delta assertion to be meaningful";
 
   // Install a plausible reasoning span spanning the tail of turn 2,
-  // then force the pure-attention path with a rejecting slider ops.
+  // then force the pure-attention path with a rejecting ops fake.
   auto& compactor = driver.compactorForTesting();
   compactor.setReasoningEnabled(true);
   compactor.setNeedsRecurrentSnapshot(false);
-  RejectingKvCacheOps rejecting;
+  auto rejecting = makeRejectingKvCacheOps();
   compactor.setKvCacheOpsForTesting(&rejecting);
   const llama_pos spanStart = preRequestNPast + 1;
   const llama_pos spanEnd = postTurn2NPast - 1;
@@ -1466,7 +1446,7 @@ TEST(
   auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
   ASSERT_NE(textCtx, nullptr);
 
-  RejectingKvCacheOps rejecting;
+  auto rejecting = makeRejectingKvCacheOps();
   bool injectedFailure = false;
   LlamaModel::Prompt failing;
   failing.input = R"([{"role":"user","content":"Please answer briefly."}])";
@@ -1487,7 +1467,7 @@ TEST(
     compactor.setNeedsRecurrentSnapshot(false);
     compactor.setKvCacheOpsForTesting(&rejecting);
     // Seed a synthetic, resident span in the prompt tail. `compactThinkSpan`
-    // runs after generation; the rejecting slider makes that final cleanup
+    // runs after generation; the rejecting fake makes that final cleanup
     // throw through the high-level `processPrompt` path.
     compactor.setOpenSpan(pos - 1);
     compactor.requestCloseCapture();
@@ -1616,7 +1596,7 @@ TEST(
   auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
   ASSERT_NE(textCtx, nullptr);
 
-  RejectingKvCacheOps rejecting;
+  auto rejecting = makeRejectingKvCacheOps();
   bool injectedOpenSpan = false;
   LlamaModel::Prompt failing;
   failing.input =

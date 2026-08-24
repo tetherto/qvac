@@ -3,6 +3,7 @@
 const path = require('bare-path')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const overflow = require('./_context-overflow')
 const os = require('bare-os')
 const LlmLlamacpp = require('../../index.js')
 
@@ -1004,9 +1005,11 @@ safeTest(
     const { inference } = await setupReasoningModel(t, false, {
       configOverrides: {
         // Tight ctx so one reasoning turn fills it. 512 rounds up to the
-        // next 256 multiple.
-        ctx_size: '512',
-        n_predict: '512',
+        // next 256 multiple. Sizing and assertions are shared with
+        // `api-behavior.test.js` through `_context-overflow.js` so a
+        // tokenizer change only has to be recalibrated once.
+        ctx_size: String(overflow.CTX_SIZE),
+        n_predict: String(overflow.PREDICT),
         // CPU on darwin-x64. This file otherwise forces GPU there, and that
         // runner's Metal backend cannot decode again after a ContextOverflow
         // throw: the next request dies with `command buffer 0 failed with
@@ -1028,52 +1031,33 @@ safeTest(
     // made the assertion depend on how long the model chose to answer.
     const { stats, response } = await runCompletionWithStats(
       inference,
-      [
-        {
-          role: 'user',
-          content: `${'word '.repeat(430)}\nNow repeat the word "again" over and over without stopping.`
-        }
-      ],
+      [{ role: 'user', content: overflow.fillerPrompt() }],
       {
         generationParams: {
           remove_thinking_from_context: true,
-          predict: 512
+          predict: overflow.PREDICT
         }
       }
     )
     t.comment(`overflow turn stats: ${JSON.stringify(stats)}`)
 
-    t.is(
-      stats.stopReason,
-      'contextOverflow',
-      `a reasoning turn that fills the window must report it (stats=${JSON.stringify(stats)})`
-    )
-    t.ok(
-      response.length > 0,
-      'a generation stopped by a full context still returns the tokens it produced'
-    )
+    overflow.assertStoppedByFullContext(t, stats, response)
 
     // Prefill path. One message that cannot fit on its own is rejected
-    // before any decoding, so this one does throw. Sized just past the
-    // 512-token window rather than many times over it: the guard compares
-    // against the window, so 600 tokens is as deterministic as 4000, and
-    // the darwin-x64 Metal backend fails its NEXT decode after tokenizing
-    // a prompt eight times the context. That failure lands on the recovery
-    // turn below with `command buffer 0 failed with status 5`, so the
-    // symptom points away from the step that caused it.
+    // before any decoding, so this one does throw.
     let prefillError = null
     try {
-      await runCompletionWithStats(inference, [{ role: 'user', content: 'word '.repeat(600) }], {
-        generationParams: { reasoning_budget: 0, remove_thinking_from_context: true }
-      })
+      await runCompletionWithStats(
+        inference,
+        [{ role: 'user', content: overflow.oversizedPrompt() }],
+        {
+          generationParams: { reasoning_budget: 0, remove_thinking_from_context: true }
+        }
+      )
     } catch (err) {
       prefillError = err
     }
-    t.ok(prefillError, 'a prompt larger than the context window must be rejected')
-    t.ok(
-      /context overflow/i.test(prefillError && prefillError.message),
-      `the rejection should say the context is full, got: ${prefillError && prefillError.message}`
-    )
+    overflow.assertPromptAloneRejected(t, prefillError)
 
     const recovery = await runCompletionWithStats(
       inference,

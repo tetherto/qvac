@@ -815,7 +815,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
   // The context is 100% full: no room for even one more token, and nothing
   // is evicted to make room any more. Stop here and report why, so the
   // caller can tell a full context from a prediction-limit cutoff.
-  if (nPast_ + 1 > ctxCeiling()) {
+  if (contextWindowFull(nPast_, ctxCeiling())) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
@@ -1368,13 +1368,13 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   // driver. Text has no positional/cache divergence, so the last two fields
   // mirror the first two and are not applied separately.
   size_t tokenCount = 0;
-  llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {0, 0, 0, 0};
+  SessionMetadata metadata;
   const auto loadedBytes = llama_state_seq_load_file(
       modelCtx_.lctx,
       cacheKey.c_str(),
       seqId_,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT,
+      metadata.data(),
+      metadata.size(),
       &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
@@ -1398,7 +1398,7 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   if (tokenCount <= 1) {
     return false;
   }
-  const llama_pos metadataNPast = sessionTokens[0];
+  const llama_pos metadataNPast = metadata.nPast();
   if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -1432,11 +1432,9 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
 
   const llama_pos restoredCacheTokens =
       static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId_));
-  const llama_pos metadataCacheTokens =
-      tokenCount >= SESSION_METADATA_FIELD_COUNT
-          ? sessionTokens[static_cast<size_t>(
-                SessionMetadataField::CacheTokens)]
-          : metadataNPast;
+  const llama_pos metadataCacheTokens = SessionMetadata::isComplete(tokenCount)
+                                            ? metadata.cacheTokens()
+                                            : metadataNPast;
   if (restoredCacheTokens != metadataCacheTokens) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -1462,18 +1460,14 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
   // Persist the full four-field metadata contract so the file is loadable by
   // every path (CacheManager, MTMD) and by builds that still read the two
   // unused slots.
-  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(getNPast()),
-      0,
-      static_cast<llama_token>(getCacheTokens()),
-      0};
+  const SessionMetadata metadata = SessionMetadata::capture(*this);
   const std::string tmpCacheKey = cacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
       seqId_,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT);
+      metadata.data(),
+      metadata.size());
   if (savedBytes == 0) {
     std::error_code ec;
     std::filesystem::remove(tmpCacheKey, ec);

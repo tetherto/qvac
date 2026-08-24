@@ -874,9 +874,9 @@ TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
 
 // The generating counterpart, which is what a caller actually observes.
 // `advance` marks the slot before `sampleAndAppendIdle` can reach the
-// driver's own overflow check, so if this reported LimitReached the driver's
-// ContextOverflow answer would be unreachable for ordinary text slots and
-// runtime stats would say `sequenceLimit` for a full window.
+// driver's own overflow check, so if this reported a per-sequence cap the
+// driver's ContextOverflow answer would be unreachable for ordinary text
+// slots and runtime stats would say `sequenceLimit` for a full window.
 TEST_F(MultiRequestBatcherTest, GeneratingSlotThatFillsWindowReportsOverflow) {
   const unsigned kMaxChunkSize = 8;
   const unsigned kMaxTokensPerSeq = 4;

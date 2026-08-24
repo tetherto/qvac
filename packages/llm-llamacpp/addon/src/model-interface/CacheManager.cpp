@@ -1,6 +1,5 @@
 #include "CacheManager.hpp"
 
-#include <array>
 #include <filesystem>
 #include <system_error>
 
@@ -18,43 +17,6 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
-
-namespace {
-
-struct SessionMetadata {
-  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
-
-  static SessionMetadata fromContext(const LlmContext& context) {
-    SessionMetadata metadata;
-    auto& tokens = metadata.tokens;
-    using Field = SessionMetadataField;
-    tokens[static_cast<size_t>(Field::NPast)] =
-        static_cast<llama_token>(context.getNPast());
-    tokens[static_cast<size_t>(Field::CacheTokens)] =
-        static_cast<llama_token>(context.getCacheTokens());
-    // Slots 1 and 3 are unused and stay 0.
-    return metadata;
-  }
-
-  llama_token* data() { return tokens.data(); }
-  const llama_token* data() const { return tokens.data(); }
-  size_t size() const { return tokens.size(); }
-
-  llama_token field(SessionMetadataField which) const {
-    return tokens[static_cast<size_t>(which)];
-  }
-  llama_token nPast() const { return field(SessionMetadataField::NPast); }
-  llama_token cacheTokens() const {
-    return field(SessionMetadataField::CacheTokens);
-  }
-
-  void applyTo(LlmContext& context) const {
-    context.setNPast(nPast());
-    context.setCacheTokens(cacheTokens());
-  }
-};
-
-} // namespace
 
 CacheManager::CacheManager(
     LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
@@ -351,7 +313,7 @@ void CacheManager::writeCacheFile(const std::string& path) {
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
   const SessionMetadata sessionMetadata =
-      SessionMetadata::fromContext(*llmContext_);
+      SessionMetadata::capture(*llmContext_);
   if (llama_state_seq_save_file(
           ctx,
           tmpPath.c_str(),

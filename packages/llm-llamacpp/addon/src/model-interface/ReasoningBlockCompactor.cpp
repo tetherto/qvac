@@ -351,9 +351,6 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
       out.kind = Outcome::Kind::CompactedAttention;
       out.newPos = rangeOutcome.newNPast;
       out.discarded = rangeOutcome.discarded;
-      // After `seq_rm + seq_add`, the tail shifts left into the slice
-      // we just removed, so the protected-prefix end becomes `start`.
-      out.keptPrefixEnd = start;
       ++thinkingBlockDiscards_;
       QLOG_IF(
           Priority::DEBUG,
@@ -367,11 +364,33 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
               out.newPos));
       return out;
     }
-    // `seq_rm + seq_add` was rejected. Attention KV was not modified
-    // (the primitive is documented to be all-or-nothing on rejection),
-    // so no seq wipe is performed here — live memory still matches
-    // `pos`. Report `FailedKvIntact` so the caller can roll back
-    // `[preRequestCursor, pos)` on its own driver before rethrowing.
+    // `NoOp` is not a rejection: the primitive declined a degenerate or
+    // out-of-cursor range and left the cache exactly as it was. The guards
+    // above already reduce every such span to a `NoOp` return of their own,
+    // so this is unreachable today — but collapsing it into `FailedKvIntact`
+    // would make the driver roll the WHOLE request back, answer included, for
+    // a range it never touched. Report it as the no-op it is.
+    if (rangeOutcome.kind == CompactRangeOutcome::Kind::NoOp) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "%s thinking-block compaction: primitive declined span "
+              "[%d, %d) as out of range (pos=%d, seqId=%d); cache "
+              "untouched\n",
+              labelTag,
+              start,
+              end,
+              pos,
+              seqId));
+      out.kind = Outcome::Kind::NoOp;
+      return out;
+    }
+    // `seq_rm` was rejected, or the memory module cannot shift and the
+    // primitive refused before touching anything. Either way attention KV was
+    // not modified (the primitive is all-or-nothing on rejection), so no seq
+    // wipe is performed here — live memory still matches `pos`. Report
+    // `FailedKvIntact` so the caller can roll back `[preRequestCursor, pos)`
+    // on its own driver before rethrowing.
     QLOG_IF(
         Priority::WARNING,
         string_format(
@@ -493,7 +512,6 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   out.kind = Outcome::Kind::CompactedRecurrent;
   out.newPos = newPos;
   out.discarded = pos - newPos;
-  out.keptPrefixEnd = snapshotPos;
   out.replayedTokens = replayCount;
   ++thinkingBlockDiscards_;
   QLOG_IF(

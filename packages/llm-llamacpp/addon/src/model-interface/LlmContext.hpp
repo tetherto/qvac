@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -189,6 +190,42 @@ enum class SessionMetadataField : uint8_t {
 
 /// Number of `llama_token` fields in the session metadata contract above.
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+
+/// The wire form of the contract above. Every `saveCache` / `loadCache` goes
+/// through this so the `{nPast, 0, cacheTokens, 0}` layout is written and read
+/// in exactly one place: a writer that forgot one of the retired slots would
+/// make an older, still-sliding build evict from position 0 rather than
+/// protect the first message, and that is silent.
+struct SessionMetadata {
+  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
+
+  /// Reads the two live fields off a context. Slots 1 and 3 stay 0.
+  static SessionMetadata capture(const class LlmContext& context);
+
+  /// Writes the two live fields back onto a context.
+  void applyTo(class LlmContext& context) const;
+
+  [[nodiscard]] llama_token field(SessionMetadataField which) const {
+    return tokens[static_cast<size_t>(which)];
+  }
+  [[nodiscard]] llama_token nPast() const {
+    return field(SessionMetadataField::NPast);
+  }
+  [[nodiscard]] llama_token cacheTokens() const {
+    return field(SessionMetadataField::CacheTokens);
+  }
+
+  [[nodiscard]] llama_token* data() { return tokens.data(); }
+  [[nodiscard]] const llama_token* data() const { return tokens.data(); }
+  [[nodiscard]] size_t size() const { return tokens.size(); }
+
+  /// Whether a `llama_state_seq_load_file` token count covers every field.
+  /// A partial header would leave `cacheTokens` at zero, which diverges from
+  /// `nPast` under M-RoPE and breaks later cap checks.
+  [[nodiscard]] static bool isComplete(size_t tokenCount) {
+    return tokenCount >= SESSION_METADATA_FIELD_COUNT;
+  }
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -474,3 +511,18 @@ protected:
   /// scheduler-assigned slot id at construction.
   llama_seq_id seqId_ = 0;
 };
+
+inline SessionMetadata SessionMetadata::capture(const LlmContext& context) {
+  SessionMetadata metadata;
+  using Field = SessionMetadataField;
+  metadata.tokens[static_cast<size_t>(Field::NPast)] =
+      static_cast<llama_token>(context.getNPast());
+  metadata.tokens[static_cast<size_t>(Field::CacheTokens)] =
+      static_cast<llama_token>(context.getCacheTokens());
+  return metadata;
+}
+
+inline void SessionMetadata::applyTo(LlmContext& context) const {
+  context.setNPast(nPast());
+  context.setCacheTokens(cacheTokens());
+}

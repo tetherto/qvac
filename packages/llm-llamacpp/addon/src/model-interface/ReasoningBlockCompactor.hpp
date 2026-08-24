@@ -180,9 +180,9 @@ public:
   // ---- Compaction ----
   //
   // Performs end-of-generation compaction at the current cache cursor
-  // `pos`. The returned `Outcome` carries the new position, the
-  // dropped-token count, and the kept-prefix end. The compactor itself
-  // does not write to the caller's position fields.
+  // `pos`. The returned `Outcome` carries the new position and the
+  // dropped-token count. The compactor itself does not write to the
+  // caller's position fields.
   //
   // RAII cleanup: per-inference state (`thinkSpan_`, reasoning boundary
   // snapshot, post-reasoning buffer, capture flag) is cleared on every
@@ -243,12 +243,6 @@ public:
     // Original span boundaries (for logging or caller-side guards).
     llama_pos spanStart = 0;
     llama_pos spanEnd = 0;
-    // First cache position the caller should treat as the new
-    // protected-prefix end. Equals `spanStart` for the attention path
-    // (the slice is removed and the tail shifts left); equals the
-    // restored boundary `nPast` for the recurrent path (the prefix
-    // before the boundary is kept verbatim).
-    llama_pos keptPrefixEnd = 0;
     // Post-reasoning tokens replayed (recurrent path only).
     size_t replayedTokens = 0;
     // Populated on the `Failed*` outcomes: the message the caller

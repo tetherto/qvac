@@ -103,13 +103,11 @@ unsigned perSeqCeiling(unsigned ctxTotalTokens, size_t batchSize) {
 }
 
 /// Terminal reason a driver should record for a scheduler-imposed stop.
-/// Both known truncations survive `stopReasonAfterRequestRollback`, so a
-/// recurrent driver rolls back its open reasoning span instead of attempting
-/// strict compaction.
+/// `ContextOverflow` survives `stopReasonAfterRequestRollback`, so a recurrent
+/// driver rolls back its open reasoning span instead of attempting strict
+/// compaction.
 GenerationStopReason toGenerationStopReason(StopReason reason) {
   switch (reason) {
-  case StopReason::LimitReached:
-    return GenerationStopReason::SequenceLimit;
   case StopReason::ContextOverflow:
     return GenerationStopReason::ContextOverflow;
   default:

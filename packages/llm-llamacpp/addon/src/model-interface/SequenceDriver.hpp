@@ -118,6 +118,14 @@ struct PrefillPlan {
   return isPrefillOnlyRequest ? count > ceiling : count >= ceiling;
 }
 
+/// Whether a slot sitting at `pos` has no room for even one more token.
+/// The generation-time half of the rule above, named so the five sites that
+/// test it cannot drift apart again: a slot that will generate needs one free
+/// cell, so `pos == ceiling` is already full.
+[[nodiscard]] inline bool contextWindowFull(llama_pos pos, llama_pos ceiling) {
+  return exceedsContextWindow(pos, ceiling, /*isPrefillOnlyRequest=*/false);
+}
+
 /// Standalone per-sequence driver interface exercised by the
 /// `ContinuousBatchScheduler`. One instance owns the state of a single
 /// in-flight sequence (KV-cache offset, sampler, antiprompt buffer, ...)

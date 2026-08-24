@@ -4,8 +4,9 @@
 
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
+const { cleanupIntegrationCacheFiles, ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
+const overflow = require('./_context-overflow')
 const os = require('bare-os')
 
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
@@ -59,7 +60,7 @@ async function setupModel(t, configOverrides = {}) {
     specLogger.release()
   })
 
-  return { model }
+  return { model, dirPath }
 }
 
 async function collectResponse(response) {
@@ -282,46 +283,77 @@ safeTest(
   async (t) => {
     // Tight window, and `n_predict` far larger than the room left after the
     // prompt, so the stop is always the context rather than the cap.
-    const { model } = await setupModel(t, { ctx_size: '512', n_predict: '512' })
+    const { model } = await setupModel(t, {
+      ctx_size: String(overflow.CTX_SIZE),
+      n_predict: String(overflow.PREDICT)
+    })
 
-    const filler = 'word '.repeat(430)
-    const response = await model.run(
-      [
-        {
-          role: 'user',
-          content: `${filler}\nNow repeat the word "again" over and over without stopping.`
-        }
-      ],
-      { generationParams: { reasoning_budget: 0, predict: 512 } }
-    )
+    const response = await model.run([{ role: 'user', content: overflow.fillerPrompt() }], {
+      generationParams: { reasoning_budget: 0, predict: overflow.PREDICT }
+    })
     const output = await collectResponse(response)
 
-    t.is(
-      response?.stats?.stopReason,
-      'contextOverflow',
-      `a generation that fills the window reports it (stats=${JSON.stringify(response?.stats)})`
-    )
-    t.ok(output.length > 0, 'a generation stopped by a full context still returns its tokens')
+    overflow.assertStoppedByFullContext(t, response?.stats, output)
 
     // A prompt that cannot fit on its own never reaches decoding.
     let prefillError = null
     try {
-      const rejected = await model.run([{ role: 'user', content: 'word '.repeat(4000) }], {
+      const rejected = await model.run([{ role: 'user', content: overflow.oversizedPrompt() }], {
         generationParams: { reasoning_budget: 0 }
       })
       await rejected.await()
     } catch (err) {
       prefillError = err
     }
-    t.ok(prefillError, 'a prompt larger than the context window is rejected')
-    t.ok(
-      /context overflow/i.test(prefillError && prefillError.message),
-      `the rejection says the context is full, got: ${prefillError && prefillError.message}`
-    )
+    overflow.assertPromptAloneRejected(t, prefillError)
 
     const recovery = await model.run(BASE_PROMPT, { generationParams: { reasoning_budget: 0 } })
     const recovered = await collectResponse(recovery)
     t.ok(recovered.length > 0, 'model stays usable after a context-overflow refusal')
+  }
+)
+
+// The other prefill guard. This one is only reachable with a non-zero `nPast_`,
+// so a cached turn has to fill the window first: the follow-up prompt would fit
+// in an empty context and is refused only because of what is already resident.
+// The two guards report different quantities and the SDK's overflow parser
+// matches each wording separately, so a change to either has to fail here.
+safeTest(
+  'run | context full: cached follow-up is refused at prefill',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model, dirPath } = await setupModel(t, {
+      ctx_size: String(overflow.CTX_SIZE),
+      n_predict: String(overflow.PREDICT)
+    })
+    const cachePath = path.join(dirPath, 'api-behavior-cached-overflow.bin')
+    cleanupIntegrationCacheFiles(cachePath)
+    t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+
+    // First turn fills the window and leaves it cached under `cachePath`.
+    const first = await model.run([{ role: 'user', content: overflow.fillerPrompt() }], {
+      cacheKey: cachePath,
+      saveCacheToDisk: true,
+      generationParams: { reasoning_budget: 0, predict: overflow.PREDICT }
+    })
+    await collectResponse(first)
+    t.ok(
+      toNumber(first?.stats?.CacheTokens) > 0,
+      `first turn leaves tokens in cache (stats=${JSON.stringify(first?.stats)})`
+    )
+
+    let followUpError = null
+    try {
+      const rejected = await model.run([{ role: 'user', content: overflow.CACHED_FOLLOW_UP }], {
+        cacheKey: cachePath,
+        saveCacheToDisk: true,
+        generationParams: { reasoning_budget: 0 }
+      })
+      await rejected.await()
+    } catch (err) {
+      followUpError = err
+    }
+    overflow.assertCachedFollowUpRejected(t, followUpError)
   }
 )
 

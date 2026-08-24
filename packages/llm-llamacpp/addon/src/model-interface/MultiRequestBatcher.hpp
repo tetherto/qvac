@@ -16,12 +16,7 @@ namespace qvac_lib_inference_addon_llama::batching {
 
 enum class StopReason : uint8_t {
   None,
-  Finished, // Explicitly marked finished (e.g., EOG sampled)
-  // Reached maxTokensPerSequence. No longer produced: that limit IS the
-  // slot's share of the context window, so reaching it is ContextOverflow.
-  // Kept so the numbering and any explicit `markFinished` caller still
-  // resolve; `sequenceLimit` is unreachable while nothing sets this.
-  LimitReached,
+  Finished,    // Explicitly marked finished (e.g., EOG sampled)
   DecodeError, // llama_decode returned a non-zero rc
   Cancelled,
   // The slot's context window is full: no room for even one more token.

@@ -453,22 +453,23 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   const llama_pos nTokens =
       static_cast<llama_pos>(mtmd_helper_get_n_tokens(chunksPtr));
   const llama_pos nPositions = mtmd_helper_get_n_pos(chunksPtr);
-  if (nTokens >= llama_n_ctx(modelCtx_.lctx) ||
-      nPositions >= llama_n_ctx(modelCtx_.lctx)) {
+  const llama_pos ceiling = ctxCeiling();
+  if (contextWindowFull(nTokens, ceiling) ||
+      contextWindowFull(nPositions, ceiling)) {
     std::string errorMsg = string_format(
         "[MtmdLlm] context overflow at prefill step (%d tokens, %d positions, "
         "max %d)\n",
         nTokens,
         nPositions,
-        llama_n_ctx(modelCtx_.lctx));
+        ceiling);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
   // Cached conversation plus this prompt: the context is full, and there is
   // nothing to evict any more, so the request cannot proceed. Both measures
   // are checked because M-RoPE media occupies more KV cells than positions.
-  if (current_.pos + nPositions >= llama_n_ctx(modelCtx_.lctx) ||
-      current_.cacheTokens + nTokens >= llama_n_ctx(modelCtx_.lctx)) {
+  if (contextWindowFull(current_.pos + nPositions, ceiling) ||
+      contextWindowFull(current_.cacheTokens + nTokens, ceiling)) {
     std::string errorMsg = string_format(
         "[MtmdLlm] context overflow at prefill step: cached %d positions / %d "
         "KV cells plus %d positions / %d KV cells of prompt exceed the max "
@@ -477,7 +478,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         current_.cacheTokens,
         nPositions,
         nTokens,
-        llama_n_ctx(modelCtx_.lctx));
+        ceiling);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
@@ -768,10 +769,8 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     }
     // The context is 100% full on either measure: no room for one more
     // token, and nothing is evicted to make room any more.
-    if (current_.pos + 1 >
-            static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx)) ||
-        current_.cacheTokens + 1 >
-            static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx))) {
+    if (contextWindowFull(current_.pos, ctxCeiling()) ||
+        contextWindowFull(current_.cacheTokens, ctxCeiling())) {
       QLOG_IF(
           Priority::WARNING,
           string_format(
@@ -779,7 +778,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
               "for another token (nPast=%d, cacheTokens=%d, nCtx=%d)\n",
               current_.pos,
               current_.cacheTokens,
-              llama_n_ctx(modelCtx_.lctx)));
+              ctxCeiling()));
       generationStopReason_ = GenerationStopReason::ContextOverflow;
       break;
     }
@@ -1636,8 +1635,8 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
 
   // The per-slot window is 100% full on either measure: no room for one
   // more token, and nothing is evicted to make room any more.
-  if (current_.pos + 1 > ctxCeiling() ||
-      current_.cacheTokens + 1 > ctxCeiling()) {
+  if (contextWindowFull(current_.pos, ctxCeiling()) ||
+      contextWindowFull(current_.cacheTokens, ctxCeiling())) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
@@ -1831,13 +1830,13 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   // survive — see the static_assert above. The per-cell llama_kv_cell_ext
   // (x/y) is restored by the GGSQ sequence-state loader itself.
   size_t tokenCount = 0;
-  llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {0, 0, 0, 0};
+  SessionMetadata metadata;
   const auto loadedBytes = llama_state_seq_load_file(
       modelCtx_.lctx,
       cacheKey.c_str(),
       seqId_,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT,
+      metadata.data(),
+      metadata.size(),
       &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
@@ -1876,9 +1875,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
             " of " + std::to_string(SESSION_METADATA_FIELD_COUNT) + " fields)");
   }
 
-  setNPast(sessionTokens[static_cast<size_t>(SessionMetadataField::NPast)]);
-  setCacheTokens(
-      sessionTokens[static_cast<size_t>(SessionMetadataField::CacheTokens)]);
+  metadata.applyTo(*this);
 
   if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(
@@ -1937,18 +1934,14 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
 
   // Persist all four metadata slots in SessionMetadataField order so the
   // physical KV-cell count that diverges under M-RoPE survives restore.
-  const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(getNPast()),
-      0,
-      static_cast<llama_token>(getCacheTokens()),
-      0};
+  const SessionMetadata metadata = SessionMetadata::capture(*this);
   const std::string tmpCacheKey = cacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
       seqId_,
-      sessionTokens,
-      SESSION_METADATA_FIELD_COUNT);
+      metadata.data(),
+      metadata.size());
   if (savedBytes == 0) {
     std::error_code ec;
     std::filesystem::remove(tmpCacheKey, ec);

@@ -11,6 +11,10 @@ using KvCacheMemoryHandle =
 struct IKvCacheOps {
   virtual ~IKvCacheOps() = default;
   virtual KvCacheMemoryHandle memory(llama_context* lctx) const = 0;
+  /// Whether this memory module can rewrite cell positions. `seq_add`
+  /// `GGML_ASSERT`s on a module that cannot, so this must be checked before
+  /// the `seq_rm` that opens the hole the shift is meant to close.
+  virtual bool canShift(KvCacheMemoryHandle mem) const = 0;
   virtual bool seqRm(
       KvCacheMemoryHandle mem, llama_seq_id seqId, llama_pos startPos,
       llama_pos endPos) const = 0;
@@ -27,7 +31,7 @@ struct CompactRangeOutcome {
   enum class Kind {
     NoOp,                  // Empty / inverted range; cache untouched
     Compacted,             // Range removed and tail shifted
-    MemoryOperationFailed, // seqRm rejected the request
+    MemoryOperationFailed, // Cannot shift, or seqRm rejected the request
   };
 
   Kind kind = Kind::NoOp;
@@ -36,8 +40,15 @@ struct CompactRangeOutcome {
 };
 
 /// Drops `[startPos, endPos)` from `seqId`'s KV cache and shifts the tail
-/// `[endPos, nPast)` down. Pure primitive; the caller owns policy.
-/// Returns NoOp for empty / out-of-range inputs without touching the cache.
+/// down. Pure primitive; the caller owns policy.
+///
+/// Returns `NoOp` without touching the cache for an empty or inverted range,
+/// a negative `startPos`, or a negative `nPast` (llama uses `-1` as its
+/// "to the end of the sequence" sentinel, which is not a cursor).
+///
+/// Returns `MemoryOperationFailed` when the memory module cannot shift, so a
+/// hole is never punched that the shift cannot close, and when `seqRm` itself
+/// rejects the range.
 CompactRangeOutcome compactKvRange(
     llama_context* lctx, llama_seq_id seqId, llama_pos startPos,
     llama_pos endPos, llama_pos nPast,

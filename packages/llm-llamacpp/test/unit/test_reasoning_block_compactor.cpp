@@ -8,6 +8,7 @@
 
 #include "model-interface/KvCacheOps.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
+#include "test_kv_cache_ops_fake.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
@@ -816,75 +817,20 @@ TEST(ReasoningBlockCompactorFailureStats, NoOpOutcomesDoNotThrow) {
 
 namespace {
 
-// Minimal `IKvCacheOps` fakes for the compactor tests.
-// `compactKvRange` on the pure-attention path is the only production
-// call site the compactor routes through the injectable ops. Two
-// fakes are provided so tests can drive either half of the primitive
-// contract without a real llama context:
+// `compactKvRange` on the pure-attention path is the only production call
+// site the compactor routes through the injectable ops, so the shared
+// `FakeKvCacheOps` covers every case here. The tests below drive three
+// halves of the primitive contract, named by how each one configures it:
 //
-//   * `AcceptingKvCacheOps` — `seqRm` returns `true`, so the compactor
-//     proceeds to `seqAdd` and reports `CompactedAttention`. Used by
-//     the successful-drop tests to observe that `seqAdd` fires.
-//   * `RejectingKvCacheOps` — `seqRm` returns `false` to mimic a
-//     rejected primitive. The production contract is "all-or-nothing
-//     on rejection", so `seqAdd` MUST NOT fire afterwards; otherwise
-//     the compactor's `FailedKvIntact` outcome would be misleading
-//     (it would imply KV was touched anyway).
-class AcceptingKvCacheOps final : public IKvCacheOps {
-public:
-  KvCacheMemoryHandle memory(llama_context*) const override {
-    return fakeMemory_;
-  }
-
-  bool seqRm(
-      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos) const override {
-    ++seqRmCalls_;
-    return true;
-  }
-
-  void seqAdd(
-      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos,
-      llama_pos) const override {
-    ++seqAddCalls_;
-  }
-
-  int seqRmCalls() const { return seqRmCalls_; }
-  int seqAddCalls() const { return seqAddCalls_; }
-
-private:
-  KvCacheMemoryHandle fakeMemory_ =
-      reinterpret_cast<KvCacheMemoryHandle>(static_cast<uintptr_t>(0x1));
-  mutable int seqRmCalls_ = 0;
-  mutable int seqAddCalls_ = 0;
-};
-
-class RejectingKvCacheOps final : public IKvCacheOps {
-public:
-  KvCacheMemoryHandle memory(llama_context*) const override {
-    return fakeMemory_;
-  }
-
-  bool seqRm(
-      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos) const override {
-    ++seqRmCalls_;
-    return false;
-  }
-
-  void seqAdd(
-      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos,
-      llama_pos) const override {
-    ++seqAddCalls_;
-  }
-
-  int seqRmCalls() const { return seqRmCalls_; }
-  int seqAddCalls() const { return seqAddCalls_; }
-
-private:
-  KvCacheMemoryHandle fakeMemory_ =
-      reinterpret_cast<KvCacheMemoryHandle>(static_cast<uintptr_t>(0x1));
-  mutable int seqRmCalls_ = 0;
-  mutable int seqAddCalls_ = 0;
-};
+//   * accepting — defaults. `seqRm` returns `true`, so the compactor
+//     proceeds to `seqAdd` and reports `CompactedAttention`.
+//   * rejecting — `rejectSeqRm()`. The production contract is
+//     "all-or-nothing on rejection", so `seqAdd` MUST NOT fire afterwards;
+//     otherwise the `FailedKvIntact` outcome would imply KV was touched
+//     anyway.
+//   * cannot shift — `denyShift()`. The primitive must refuse before
+//     `seqRm`, so no hole is opened that the shift cannot close.
+using qvac_test::FakeKvCacheOps;
 
 } // namespace
 
@@ -903,7 +849,7 @@ TEST(
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingKvCacheOps accepting;
+  FakeKvCacheOps accepting;
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
@@ -913,7 +859,6 @@ TEST(
       outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
   EXPECT_EQ(outcome.newPos, 15);
   EXPECT_EQ(outcome.discarded, 5);
-  EXPECT_EQ(outcome.keptPrefixEnd, 15);
   EXPECT_EQ(accepting.seqRmCalls(), 1);
   EXPECT_EQ(accepting.seqAddCalls(), 1);
   EXPECT_EQ(fx.compactor.blockDiscards(), 1);
@@ -936,7 +881,7 @@ TEST(
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingKvCacheOps accepting;
+  FakeKvCacheOps accepting;
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
@@ -976,7 +921,8 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/20);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  RejectingKvCacheOps rejecting;
+  FakeKvCacheOps rejecting;
+  rejecting.rejectSeqRm();
   fx.compactor.setKvCacheOpsForTesting(&rejecting);
   // `ctx` is passed through untouched by the fake ops; safe to pass
   // nullptr because `memory` does not inspect it.
@@ -1001,6 +947,44 @@ TEST(
   // The `ResetGuard` still clears per-inference bookkeeping on the
   // failure return so a follow-up compact() on the same instance
   // starts clean.
+  EXPECT_FALSE(fx.compactor.hasOpenSpan());
+}
+
+// A memory module that cannot shift must be refused BEFORE `seq_rm`.
+// `llama_memory_seq_add` GGML_ASSERTs on such a module, and since `seq_rm`
+// runs first that abort would land with the reasoning hole already punched
+// and nothing able to close it. The compactor sees the same
+// `MemoryOperationFailed` it gets from a rejected `seq_rm`, so the caller
+// still rolls back `[preRequestCursor, pos)` rather than wiping.
+TEST(
+    ReasoningBlockCompactorFailureStats,
+    PureAttentionUnshiftableMemoryReportsFailedKvIntactWithoutSeqRm) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  fx.compactor.setOpenSpan(/*start=*/15);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(/*pos=*/20);
+  ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
+
+  FakeKvCacheOps unshiftable;
+  unshiftable.denyShift();
+  fx.compactor.setKvCacheOpsForTesting(&unshiftable);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
+
+  EXPECT_EQ(
+      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
+  EXPECT_FALSE(outcome.failureMessage.empty());
+  EXPECT_EQ(unshiftable.canShiftCalls(), 1);
+  EXPECT_EQ(unshiftable.seqRmCalls(), 0)
+      << "a hole must never be opened when the shift that closes it would "
+         "abort the process";
+  EXPECT_EQ(unshiftable.seqAddCalls(), 0);
+  EXPECT_EQ(fx.compactor.blockDiscards(), 0);
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
@@ -1045,7 +1029,7 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingKvCacheOps accepting;
+  FakeKvCacheOps accepting;
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   // `pos = 10 <= start = 15`: reasoning span already gone from cache;
   // NoOp is the correct — not a leak — outcome.
@@ -1083,7 +1067,7 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingKvCacheOps accepting;
+  FakeKvCacheOps accepting;
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   // `pos = 20`, recordedEnd = 25 → effectiveEnd clamped to 20, so the
   // compactor drops `[15, 20)` — 5 tokens.
@@ -1097,7 +1081,6 @@ TEST(
       << "after clamped seq_rm, newPos falls to the reasoning span start";
   EXPECT_EQ(outcome.discarded, 5)
       << "discard length must equal the resident remainder `pos - start`";
-  EXPECT_EQ(outcome.keptPrefixEnd, 15);
   EXPECT_EQ(accepting.seqRmCalls(), 1)
       << "clamped partial cleanup must issue the pure-attention seq_rm";
   EXPECT_EQ(accepting.seqAddCalls(), 1)
@@ -1135,7 +1118,7 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingKvCacheOps accepting;
+  FakeKvCacheOps accepting;
   fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
