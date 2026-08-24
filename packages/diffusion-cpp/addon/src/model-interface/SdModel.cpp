@@ -1,5 +1,6 @@
 #include "SdModel.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -42,21 +43,28 @@ struct ProgressCtx {
 
   // Phase-boundary capture for conditioner / denoise / vae timing.
   //
-  // sd.cpp emits a separate progress sequence for each sampler invocation and
-  // tiled VAE pass. Each sequence restarts at step==0 (sampling:
-  // stable-diffusion.cpp pretty_progress(0, steps); tiling:
-  // ggml_extend.hpp sd_tiling pretty_progress(0, num_tiles)). Image generation
-  // invokes the sampler once per batch item; video generation invokes it once
-  // for the full video-latent tensor. We capture exactly the known number of
-  // leading sampler sequences, leaving later VAE-tiling sequences out of the
-  // denoise window. ESRGAN upscaling runs after generate_*() returns.
+  // sd.cpp emits a separate progress sequence per phase, each restarting at
+  // step==0: text encoders (total = token count), one sampler invocation per
+  // image batch item / video expert (total = its step count), VAE decode and
+  // tiled VAE passes (total = tile count). The 2026-08-11 engine ticks every
+  // phase and may interleave sequences, so ticks are attributed to the
+  // denoise window by their reported total, not by sequence position:
+  //   - exact mode (denoiseTotals non-empty): a tick is denoise iff its total
+  //     is one of the known sampler step counts (image: steps; video: the
+  //     explicit high/low expert split).
+  //   - bounded mode (denoiseTotals empty, denoiseTotalBound > 0): a tick is
+  //     denoise iff 0 < total <= bound, capped at maxDenoiseSequences
+  //     sequence starts (video MoE with the moe_boundary sentinel, where the
+  //     per-expert step split is engine-derived and unknown here).
+  // ESRGAN upscaling runs after generate_*() returns and never ticks here.
+  std::vector<int> denoiseTotals; // exact sampler totals to match
+  int denoiseTotalBound = 0;      // bounded-mode fallback (0 = off)
+  int maxDenoiseSequences = 1;    // bounded-mode cap on sequence starts
   std::chrono::steady_clock::time_point denoiseFirstTime;
   std::chrono::steady_clock::time_point denoiseLastTime;
-  int expectedDenoiseSequences = 1;
   int denoiseSequences = 0;
   int denoiseTicks = 0;
   int denoiseSteps = 0;  // sum of sampler "total" values across sequences
-  int segmentCount = 0;  // number of step==0 sequence-starts seen this job
   int observedTicks = 0; // total progress ticks seen this job (all phases)
 };
 
@@ -84,22 +92,24 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   // conditioner/denoise/vae timings remain available for runtimeStats().
   const auto now = std::chrono::steady_clock::now();
   auto& ctx = g_progressCtx;
-
-  // A step==0 tick marks the start of a new progress sequence. The very first
-  // tick opens the first sequence as a defensive fallback for engines that
-  // omit the start tick.
-  const bool startsSequence = step == 0 || ctx.observedTicks == 0;
-  if (startsSequence)
-    ++ctx.segmentCount;
   ++ctx.observedTicks;
 
-  // The leading sequences are the known sampler invocations: one for video and
-  // one per image batch item. Subsequent sequences are VAE tiling and must not
-  // inflate denoiseMs.
-  if (ctx.segmentCount <= ctx.expectedDenoiseSequences) {
+  // Attribute the tick to the denoise window by its reported total (see the
+  // ProgressCtx comment): encoder / VAE sequences carry unrelated totals and
+  // must not inflate denoiseMs.
+  bool isDenoise = false;
+  if (!ctx.denoiseTotals.empty()) {
+    isDenoise = std::find(
+                    ctx.denoiseTotals.begin(), ctx.denoiseTotals.end(),
+                    steps) != ctx.denoiseTotals.end();
+  } else if (ctx.denoiseTotalBound > 0) {
+    isDenoise = steps > 0 && steps <= ctx.denoiseTotalBound &&
+        (ctx.denoiseSequences < ctx.maxDenoiseSequences || step != 0);
+  }
+  if (isDenoise) {
     if (ctx.denoiseTicks == 0)
       ctx.denoiseFirstTime = now;
-    if (startsSequence) {
+    if (step == 0) {
       ++ctx.denoiseSequences;
       ctx.denoiseSteps += steps;
     }
@@ -449,12 +459,14 @@ std::any SdModel::process(const std::any& input) {
   cancelRequested_.store(false);
   g_progressCtx.job = &job;
   g_progressCtx.startTime = std::chrono::steady_clock::now();
-  // Reset phase-boundary capture for this job.
-  g_progressCtx.expectedDenoiseSequences = 1;
+  // Reset phase-boundary capture for this job. The image/video paths below
+  // fill in the denoise-total matchers once the step counts are known.
+  g_progressCtx.denoiseTotals.clear();
+  g_progressCtx.denoiseTotalBound = 0;
+  g_progressCtx.maxDenoiseSequences = 1;
   g_progressCtx.denoiseSequences = 0;
   g_progressCtx.denoiseTicks = 0;
   g_progressCtx.denoiseSteps = 0;
-  g_progressCtx.segmentCount = 0;
   g_progressCtx.observedTicks = 0;
   sd_set_progress_callback(sdProgressCallback, nullptr);
   g_abortModel = this;
@@ -824,8 +836,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- Generate --------------------------------------------------------------
   // stable-diffusion.cpp invokes sample() once per image batch item before
-  // decoding all final latents. Capture every leading sampler sequence.
-  g_progressCtx.expectedDenoiseSequences = gen.batchCount;
+  // decoding all final latents; each sampler sequence reports total ==
+  // gen.steps, which encoder/VAE sequences never do.
+  g_progressCtx.denoiseTotals = {gen.steps};
   const auto t0 = std::chrono::steady_clock::now();
 
   sd_image_t* genImages = nullptr;
@@ -1272,16 +1285,26 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
     vidParams.cache.reuse_threshold = vid.cacheThreshold;
 
   // -- Generate -------------------------------------------------------------
-  // Wan 2.1 / TI2V-5B invoke one sampler. Wan 2.2 A14B normally invokes the
-  // high-noise expert first and the low-noise expert second, so include both
-  // leading sequences in the denoise timing window. The -1 sentinel derives
-  // the switch point from moe_boundary; a zero boundary never selects the
-  // high-noise sampler. Later VAE tiling sequences remain excluded by
+  // Wan 2.1 / TI2V-5B invoke one sampler (total == vid.sampleSteps). Wan 2.2
+  // A14B normally invokes the high-noise expert first and the low-noise
+  // expert second; with explicit highNoiseSteps both per-expert totals are
+  // known. The -1 sentinel derives the switch point from moe_boundary inside
+  // the engine, so the per-expert split is unknown here — fall back to
+  // bounded matching (any total <= vid.sampleSteps, capped at the expected
+  // sequence count). Encoder/VAE sequences remain excluded by
   // sdProgressCallback().
   const bool hasHighNoiseExpert = !config_.highNoiseDiffusionModelPath.empty();
-  g_progressCtx.expectedDenoiseSequences =
-      qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
-          hasHighNoiseExpert, vid.highNoiseSteps, vid.moeBoundary);
+  if (hasHighNoiseExpert && vid.highNoiseSteps > 0) {
+    g_progressCtx.denoiseTotals = {
+        vid.highNoiseSteps, vid.sampleSteps - vid.highNoiseSteps};
+  } else if (hasHighNoiseExpert) {
+    g_progressCtx.denoiseTotalBound = vid.sampleSteps;
+    g_progressCtx.maxDenoiseSequences =
+        qvac_lib_inference_addon_sd::expectedVideoDenoiseSequences(
+            hasHighNoiseExpert, vid.highNoiseSteps, vid.moeBoundary);
+  } else {
+    g_progressCtx.denoiseTotals = {vid.sampleSteps};
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
   // Upstream's master API returns success as a bool and hands back frames /
