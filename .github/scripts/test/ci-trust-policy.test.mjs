@@ -480,7 +480,6 @@ test('authorize-pr: drafts are denied before internal or fork trust checks', () 
 // on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
 const sdkE2eWorkflows = [
   '.github/workflows/on-pr-test-sdk.yml',
-  '.github/workflows/on-pr-bare-sdk-e2e.yml',
 ]
 
 test('sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified', () => {
