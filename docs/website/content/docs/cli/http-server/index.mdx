@@ -35,7 +35,17 @@ See [System requirements](/system-requirements#environment-setup) for environmen
 </Step>
 
 <Step>
-Create the `qvac.config.*` file at the root of your project declaring which models the server can load. For example:
+Create the `qvac.config.json` file at the root of your project declaring which models the server can load. The recommended way is to let the CLI assemble it for you:
+
+```bash
+qvac configure           # interactive: pick models by capability or search
+qvac configure --yes     # non-interactive: chat + transcription starter
+```
+
+`qvac configure` searches the SDK's model catalog, previews the exact `serve.models` entry it will write, and merges into an existing `qvac.config.json` — see [`qvac configure`](/cli#qvac-configure) for the full reference.
+
+<Callout type="info">
+**Prefer to write it by hand?** Any of `qvac.config.{json,js,mjs,ts}` works. `qvac configure` only writes JSON; skip it and author the file yourself if you want a `.js` or `.ts` config, or if you need to set fields beyond `serve.models` (such as `plugins`, `cacheDirectory`, or `serve.cors`) at the same time. See [Configuration — `ServeConfig`](/configuration#serveconfig) for the full schema. Minimal example:
 
 ```json title="qvac.config.json"
 {
@@ -50,6 +60,7 @@ Create the `qvac.config.*` file at the root of your project declaring which mode
   }
 }
 ```
+</Callout>
 </Step>
 
 <Step>
@@ -1340,6 +1351,8 @@ Abort the job (if still `queued` / `in_progress`) and drop its rendered assets.
 ### Request cancellation
 
 When an HTTP client disconnects before a response finishes (closes the connection or aborts the request), the server cancels the in-flight inference for that request instead of letting it run to completion — freeing the model to serve the next call. This applies to both blocking and streaming requests across the inference routes (`/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/audio/*`).
+
+Multiple HTTP requests to the same LLM alias run in parallel up to that model's `serve.models.<alias>.config.parallel` (see [`modelConfig.parallel`](/ai-capabilities/text-generation#concurrent-completions)), which defaults to `1` — set it explicitly to serve an alias concurrently. Additional requests wait in a first-come-first-serve queue. A client disconnect cancels only that one request — other requests still running on the same model keep going.
 
 Video jobs are asynchronous and are not tied to the creating connection; cancel them explicitly with `DELETE /v1/videos/{id}` (see [Videos](#videos)).
 
