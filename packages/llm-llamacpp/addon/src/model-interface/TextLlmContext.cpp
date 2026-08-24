@@ -346,6 +346,7 @@ void TextLlmContext::tokenizeChat(
   }
   std::string thinkingStartTag;
   std::string thinkingEndTag;
+  std::vector<std::string> thinkingEndTags;
   std::string generationPrompt;
   prompt = getPrompt(
       tmpls_.get(),
@@ -353,6 +354,7 @@ void TextLlmContext::tokenizeChat(
       &thinkingForcedOpen_,
       &thinkingStartTag,
       &thinkingEndTag,
+      &thinkingEndTags,
       &generationPrompt);
   thinkingForcedOpenText_ =
       thinkingForcedOpen_
@@ -364,7 +366,7 @@ void TextLlmContext::tokenizeChat(
           params_,
           modelCtx_.lctx,
           thinkingStartTag,
-          thinkingEndTag,
+          thinkingEndTags,
           generationPrompt)) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {

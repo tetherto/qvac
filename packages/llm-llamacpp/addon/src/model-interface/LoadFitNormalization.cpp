@@ -89,8 +89,10 @@ NormalizedFitSnapshot makeNormalizedFitSnapshot(
       .typeK = static_cast<int32_t>(params.cache_type_k),
       .typeV = static_cast<int32_t>(params.cache_type_v),
       .flashAttnType = static_cast<int32_t>(params.flash_attn_type),
-      .useMmap = params.use_mmap,
-      .useMlock = params.use_mlock,
+      .useMmap = params.load_mode == LLAMA_LOAD_MODE_MMAP ||
+                 params.load_mode == LLAMA_LOAD_MODE_MMAP_MLOCK,
+      .useMlock = params.load_mode == LLAMA_LOAD_MODE_MLOCK ||
+                  params.load_mode == LLAMA_LOAD_MODE_MMAP_MLOCK,
       .kvOffload = !params.no_kv_offload,
       .opOffload = !params.no_op_offload,
       .swaFull = params.swa_full,
@@ -520,36 +522,49 @@ NormalizedLoad normalizeLoadForFit(
     configFilemap.erase(jit);
   }
 
-  // The current llama.cpp common-argument parser does not expose --no-mmap,
-  // so map this addon's string configuration directly to the native model
-  // parameter instead of forwarding it through the generic argument parser.
-  std::optional<bool> noMmap;
-  for (const std::string& key : {"no-mmap", "no_mmap"}) {
+  // Map the addon's load-mode string configuration directly to the native
+  // model parameter (the generic argument parser is bypassed for it). The
+  // accepted values mirror llama_load_mode_from_str: 'none', 'mmap',
+  // 'mlock', 'mmap+mlock' and 'dio'. When absent, llama.cpp's default
+  // (mmap) applies. Validated with a local table instead of
+  // llama_load_mode_from_str: that helper reports unknown values by throwing
+  // std::invalid_argument, and exceptions thrown inside the fabric DLL do
+  // not reliably match catch-by-type across the module boundary on Windows.
+  std::optional<std::string> loadMode;
+  for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
       std::string value = it->second;
       std::ranges::transform(value, value.begin(), ::tolower);
-      const bool enabled = value.empty() || value == "true";
-      if (!enabled && value != "false") {
+      if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
             ADDON_ID,
             qvac_errors::general_error::toString(
                 qvac_errors::general_error::InvalidArgument),
-            string_format(
-                "no-mmap must be true or false, got: %s", it->second.c_str()));
+            "load-mode and load_mode must have the same value");
       }
-      if (noMmap.has_value() && noMmap.value() != enabled) {
-        throw qvac_errors::StatusError(
-            ADDON_ID,
-            qvac_errors::general_error::toString(
-                qvac_errors::general_error::InvalidArgument),
-            "no-mmap and no_mmap must have the same value");
-      }
-      noMmap = enabled;
+      loadMode = value;
       configFilemap.erase(it);
     }
   }
-  if (noMmap.value_or(false)) {
-    params.use_mmap = false;
+  if (loadMode.has_value()) {
+    static const std::unordered_map<std::string, llama_load_mode> kLoadModes = {
+        {"none", LLAMA_LOAD_MODE_NONE},
+        {"mmap", LLAMA_LOAD_MODE_MMAP},
+        {"mlock", LLAMA_LOAD_MODE_MLOCK},
+        {"mmap+mlock", LLAMA_LOAD_MODE_MMAP_MLOCK},
+        {"dio", LLAMA_LOAD_MODE_DIRECT_IO}};
+    const auto mode = kLoadModes.find(loadMode.value());
+    if (mode == kLoadModes.end()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "load-mode must be one of 'none', 'mmap', 'mlock', "
+              "'mmap+mlock' or 'dio', got: %s",
+              loadMode->c_str()));
+    }
+    params.load_mode = mode->second;
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja

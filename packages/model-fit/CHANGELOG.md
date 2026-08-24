@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Load-fit config normalization now uses the b10297 `load_mode` field, accepts
+  `load-mode` directly, and preserves legacy `no-mmap` behavior without relying
+  on the removed `common_params::use_mmap` member.
+
 ## [0.5.0] - 2026-08-20
 
 ### Changed

@@ -58,8 +58,9 @@ TEST(LoadFitSnapshotTest, CapturesEveryFitAffectingCommonParam) {
   params.cache_type_k = GGML_TYPE_Q8_0;
   params.cache_type_v = GGML_TYPE_Q4_0;
   params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
-  params.use_mmap = false;
-  params.use_mlock = true;
+  // mlock without mmap: exercises both snapshot mappings at once
+  // (useMmap = false, useMlock = true).
+  params.load_mode = LLAMA_LOAD_MODE_MLOCK;
   params.no_kv_offload = true;
   params.no_op_offload = true;
   params.swa_full = true;
