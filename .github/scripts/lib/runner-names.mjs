@@ -213,6 +213,26 @@ export function findJobsMissingNeeds(relativePath, source) {
   return findings
 }
 
+/**
+ * The runner_names bootstrap job calls a reusable workflow; a reusable-calling
+ * job with no permissions block inherits broad defaults (flagged by the
+ * workflow-security audit and forbidden by the DevOps GHA rule). Require an
+ * explicit permissions block on it.
+ */
+export function findRunnerNamesMissingPermissions(relativePath, source) {
+  const job = splitJobs(source).find((entry) => entry.id === 'runner_names')
+  if (!job) return []
+  if (/^    permissions:\s*$/m.test(job.body) || /^    permissions:\s*\{/m.test(job.body)) {
+    return []
+  }
+  return [
+    {
+      file: relativePath,
+      message: 'runner_names job must declare an explicit permissions block (e.g. contents: read)',
+    },
+  ]
+}
+
 function jobHasRunnerNamesNeed(body) {
   if (/^    needs:\s+runner_names\s*$/m.test(body)) return true
   if (/^      - runner_names\s*$/m.test(body)) return true

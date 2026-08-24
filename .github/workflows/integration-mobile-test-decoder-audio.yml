@@ -94,6 +94,8 @@ concurrency:
 
 jobs:
   runner_names:
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   # Manual (workflow_dispatch) runs must name a device that exists on Device

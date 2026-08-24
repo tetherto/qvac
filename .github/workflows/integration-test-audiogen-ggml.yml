@@ -65,6 +65,8 @@ permissions:
 
 jobs:
   runner_names:
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   # NOTE: continue-on-error: true mirrors the early-days landing posture the

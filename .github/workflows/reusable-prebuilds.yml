@@ -106,6 +106,8 @@ permissions:
 
 jobs:
   runner_names:
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   prebuild:

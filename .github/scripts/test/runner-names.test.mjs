@@ -11,6 +11,7 @@ import {
   findJobsMissingNeeds,
   findMissingActionlintLabels,
   findMissingRunnerNamesNeeds,
+  findRunnerNamesMissingPermissions,
   listAddonWorkflows,
   loadRunners,
   parseRunnersYaml,
@@ -81,6 +82,33 @@ test('addon workflows do not hardcode catalog runner labels', () => {
     findings.push(...findJobsMissingNeeds(file, source))
   }
   assert.deepEqual(findings, [], JSON.stringify(findings, null, 2))
+})
+
+test('every runner_names job declares an explicit permissions block', () => {
+  const findings = []
+  for (const file of listAddonWorkflows()) {
+    findings.push(...findRunnerNamesMissingPermissions(file, readRepoFile(file)))
+  }
+  assert.deepEqual(findings, [], JSON.stringify(findings, null, 2))
+})
+
+test('runner_names permissions detector flags a bare bootstrap job', () => {
+  const withPerms = [
+    'jobs:',
+    '  runner_names:',
+    '    permissions:',
+    '      contents: read',
+    '    uses: ./.github/workflows/reusable-runner-names.yml',
+    '',
+  ].join('\n')
+  const bare = [
+    'jobs:',
+    '  runner_names:',
+    '    uses: ./.github/workflows/reusable-runner-names.yml',
+    '',
+  ].join('\n')
+  assert.deepEqual(findRunnerNamesMissingPermissions('ok.yml', withPerms), [])
+  assert.equal(findRunnerNamesMissingPermissions('bad.yml', bare).length, 1)
 })
 
 test('hardcoded-label detector catches runner and runs-on literals', () => {

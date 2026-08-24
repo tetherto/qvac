@@ -18,12 +18,16 @@ GitHub evaluates `runs-on` and `strategy.matrix` before any step runs, so caller
 ```yaml
 jobs:
   runner_names:
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   test-cpp:
     needs: runner_names
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
 ```
+
+The `runner_names` job declares an explicit least-privilege `permissions: contents: read` (every job must declare permissions; a reusable-calling job with no block inherits broad defaults and is flagged by the workflow-security audit).
 
 Keep [`.github/actionlint.yaml`](../../.github/actionlint.yaml) in sync: every `qvac-*` label in the catalog must be listed there. Prefer `runner.environment` for cleanup gating so steps do not couple to `qvac-` prefixes.
 

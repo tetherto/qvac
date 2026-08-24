@@ -101,6 +101,8 @@ concurrency:
 
 jobs:
   runner_names:
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   # Defense-in-depth gate for workflow_dispatch. The repository's PR entry

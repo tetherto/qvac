@@ -79,6 +79,8 @@ on:
 
 jobs:
   runner_names:
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
   # Dispatch-only: stage the parakeet GGUF set once and upload a manifest with

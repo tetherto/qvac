@@ -14,6 +14,7 @@ import {
   findJobsMissingNeeds,
   findMissingActionlintLabels,
   findMissingRunnerNamesNeeds,
+  findRunnerNamesMissingPermissions,
   listAddonWorkflows,
   loadRunners,
   readRepoFile,
@@ -48,6 +49,9 @@ function main() {
       errors.push(`${finding.file}: ${finding.message}`)
     }
     for (const finding of findJobsMissingNeeds(file, source)) {
+      errors.push(`${finding.file}: ${finding.message}`)
+    }
+    for (const finding of findRunnerNamesMissingPermissions(file, source)) {
       errors.push(`${finding.file}: ${finding.message}`)
     }
   }
