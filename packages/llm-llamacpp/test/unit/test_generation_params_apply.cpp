@@ -103,7 +103,11 @@ TEST(
   params.sampling.generation_prompt = "<assistant><think>";
 
   EXPECT_TRUE(configureReasoningBudgetSampling(
-      params, nullptr, "<think>", "</think>", "<assistant><think>"));
+      params,
+      nullptr,
+      "<think>",
+      std::vector<std::string>{"</think>", "<tool_call>"},
+      "<assistant><think>"));
   EXPECT_EQ(params.sampling.reasoning_budget_tokens, -1);
   EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());
@@ -123,7 +127,11 @@ TEST(
   params.sampling.generation_prompt = "<assistant><think>";
 
   EXPECT_TRUE(configureReasoningBudgetSampling(
-      params, nullptr, "<think>", "</think>", "<assistant><think>"));
+      params,
+      nullptr,
+      "<think>",
+      std::vector<std::string>{"</think>", "<tool_call>"},
+      "<assistant><think>"));
   EXPECT_EQ(params.sampling.reasoning_budget_tokens, 8);
   EXPECT_TRUE(params.sampling.reasoning_budget_start.empty());
   EXPECT_TRUE(params.sampling.reasoning_budget_end.empty());
