@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `speech-cpp` engine negated the flow DiT velocity (vestigial
   `mm3.dit.output_negated` GGUF metadata) and reused a condition upload the
   graph allocator had recycled, so every flow step after the first ran on
-  garbage conditioning. Both are fixed in `speech-cpp` `2026-08-20`
+  garbage conditioning. Both are fixed in `speech-cpp` `2026-08-24`
   (qvac-ext-lib-whisper.cpp PR #158); the native replay of the official
   Diffusers prompt/codes/noise now reproduces the official mix at 0.9993
   audio correlation.
