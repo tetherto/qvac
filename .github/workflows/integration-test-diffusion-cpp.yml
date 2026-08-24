@@ -133,6 +133,15 @@ jobs:
             arch: arm64
             runner: ubuntu-22.04-arm
             no_gpu: 'true'
+          # CPU-only x64 leg on a disposable GitHub-hosted runner: the exact
+          # environment from gh#3853 (linux-x64 server, no graphics stack).
+          # os is a display/artifact label; -cpu keeps it distinct from the
+          # self-hosted ubuntu-22.04 GPU leg.
+          - os: ubuntu-22.04-cpu
+            platform: linux
+            arch: x64
+            runner: ubuntu-22.04
+            no_gpu: 'true'
           - os: mac-mini-m4
             platform: darwin
             arch: arm64
@@ -360,17 +369,19 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem ${{ env.WORKDIR }}/prebuilds
 
-      # QVAC-23767: these GitHub-hosted arm64 legs used to install
-      # mesa-vulkan-drivers, whose libvulkan1 dependency masked the hard
-      # libvulkan.so.1 link the linux prebuilds carried (gh#3853). Now the leg
-      # asserts the opposite: a host that has never had a graphics stack, so
-      # the whole arm64 CPU suite is the regression gate for "worker starts on
-      # a CPU-only server". GitHub-hosted runners only — never strip packages
-      # from self-hosted runners.
-      - name: Linux arm64 - ensure no graphics stack (no libvulkan)
-        if: matrix.platform == 'linux' && matrix.arch == 'arm64' && matrix.no_gpu == 'true'
+      # QVAC-23767: CPU-only legs must run with no graphics stack at all (the
+      # normal state of a CPU-only server, gh#3853), so the full CPU suite —
+      # including the prebuild dynamic-linking test — exercises that
+      # environment on every PR. Restricted to disposable GitHub-hosted
+      # runners; never strips packages from self-hosted machines. NOTE: red
+      # legs here do not block merges (run-integration-tests is
+      # continue-on-error); the hard-blocking DT_NEEDED gate is the
+      # verify-prebuild-symbols follow-up.
+      - name: Linux - ensure no graphics stack (no libvulkan)
+        if: matrix.platform == 'linux' && matrix.no_gpu == 'true' && runner.environment == 'github-hosted'
         shell: bash
         run: |
+          sudo apt-get remove -y --purge 'libvulkan*' 'mesa-vulkan*' 2>/dev/null || true
           sudo dpkg --force-depends --remove libvulkan1 2>/dev/null || true
           sudo ldconfig
           if ldconfig -p | grep -q libvulkan; then
