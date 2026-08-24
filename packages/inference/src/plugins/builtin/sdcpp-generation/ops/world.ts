@@ -10,6 +10,7 @@ import { generateRandomRequestId } from '@/runtime/request-id'
 import { getCacheDir, generateShortHash, readImageDimensions } from '@/utils/index'
 import {
   InferenceCancelledError,
+  ModelLoadFailedError,
   ModelNotLoadedError,
   ModelOperationNotSupportedError,
   PluginRequestValidationFailedError
@@ -309,6 +310,19 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
       // rather than pointed at — unconditionally, so changing sceneSrc between
       // loads of the same modelId cannot leave a stale world in place.
       if (seedScenePath) {
+        // The same ceiling `promoteStagedScene` applies to a pack we generate.
+        // Both paths end at `files.scene` and are loaded by the same native
+        // session, so capping only the generated one just means an oversized
+        // pack has to arrive via `sceneSrc` instead. Checked before the copy, so
+        // an implausible file is refused rather than duplicated onto disk first.
+        const { size } = await fsPromises.stat(seedScenePath)
+        if (size > maxScenePackBytes) {
+          throw new ModelLoadFailedError(
+            `modelConfig.sceneSrc is ${size} bytes, over the ${maxScenePackBytes}-byte ` +
+              'scene-pack ceiling. Scene packs are produced by worldCreateScene; a file ' +
+              'this large is not one.'
+          )
+        }
         try {
           await fsPromises.copyFile(seedScenePath, files.scene)
         } catch (error) {

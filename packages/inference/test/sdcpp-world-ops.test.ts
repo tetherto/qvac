@@ -672,6 +672,56 @@ test('world session: a failed deactivate makes the session unusable, not silentl
   })
 })
 
+// The generated-pack ceiling is worthless if an oversized pack can simply arrive
+// through sceneSrc instead — both land at files.scene and are loaded by the same
+// native session.
+test('world session: an oversized sceneSrc is refused like an oversized generated pack', async function (t) {
+  const fs = await import('bare-fs')
+  const bareOs = await import('bare-os')
+  const barePath = await import('bare-path')
+  const [worldOps, { getEngineLogger }, { ModelLoadFailedError }] = await Promise.all([
+    import('@/plugins/builtin/sdcpp-generation/ops/world'),
+    import('@/logging/index'),
+    import('@/errors/index')
+  ])
+
+  const dir = barePath.join(bareOs.cwd(), 'test', 'tmp-world-seed')
+  fs.mkdirSync(dir, { recursive: true })
+  const seed = barePath.join(dir, 'oversized.safetensors')
+  fs.writeFileSync(seed, Buffer.alloc(64))
+
+  const modelId = makeId('test-world-seed')
+  const session = worldOps.createWorldSession({
+    modelId,
+    files: {
+      model: '/tmp/dit.gguf',
+      taehv: '/tmp/taehv.gguf',
+      scene: worldOps.worldScenePath(modelId)
+    },
+    config: {},
+    encoders: { t5: '/tmp/t5.gguf', vae: '/tmp/vae.gguf' },
+    seedScenePath: seed,
+    logger: getEngineLogger(),
+    world: fakeNativeSession(makeResponse([]).response),
+    // Same injected-ceiling seam the generated-pack test uses: the real limit is
+    // far larger than anything a test should write to disk.
+    maxScenePackBytes: 16
+  })
+
+  try {
+    let refused: unknown
+    try {
+      await session.load()
+    } catch (error) {
+      refused = error
+    }
+    t.ok(refused instanceof ModelLoadFailedError, 'the oversized seed is refused at load')
+    t.absent(fs.existsSync(session.scenePath), 'and it was never copied into the managed slot')
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
+})
+
 test('world session: unload removes the pack even when native teardown fails', async function (t) {
   const fs = await import('bare-fs')
   const driver = makeResponse([])
