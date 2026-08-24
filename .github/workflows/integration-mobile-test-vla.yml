@@ -448,7 +448,7 @@ jobs:
       # VLA reuses the LLAMACPP_EMBED Device Farm project + pool secrets
       # (see env-block comment above). The composite auto-detects
       # test-groups.json under <addon-workdir>/test/mobile/; VLA ships one
-      # (smolvla/pi05/groot), so the test specs come from it.
+      # (smolvla/groot), so the test specs come from it.
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
