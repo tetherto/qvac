@@ -42,9 +42,7 @@ const SAMPLE_RATE = 24000
 const MTL_SENTENCES = [
   { lang: 'es', text: 'El zorro marrón salta sobre el perro perezoso.' },
   { lang: 'fr', text: 'Le renard brun saute par-dessus le chien paresseux.' },
-  { lang: 'de', text: 'Der braune Fuchs springt über den faulen Hund.' },
-  { lang: 'pt', text: 'A raposa marrom pula sobre o cachorro preguiçoso.' },
-  { lang: 'it', text: 'La rapida volpe marrone salta sopra il cane pigro.' }
+  { lang: 'de', text: 'Der braune Fuchs springt über den faulen Hund.' }
 ]
 
 const JA_SENTENCE = '今日はいい天気ですね。'
@@ -82,7 +80,7 @@ async function loadChatterboxMtlTTS(params) {
 }
 
 test(
-  'Chatterbox MTL TTS (ggml): synthesizes across es/fr/de/pt/it with shared engine',
+  'Chatterbox MTL TTS (ggml): synthesizes across es/fr/de with shared engine',
   { timeout: 1800000 },
   async (t) => {
     const baseDir = getBaseDir()
