@@ -181,7 +181,7 @@ export class TranslationExecutor extends AbstractModelExecutor<typeof allTests> 
     }
   }
 
-  // LLM-only: translate without specifying source language (auto-detected via cld2)
+  // LLM-only: translate without specifying source language (auto-detected via @qvac/langdetect-text)
   async autodetect(params: unknown, _expectation: Expectation): Promise<TestResult> {
     const p = params as TranslateTestParams
     const modelId = await this.resources.ensureLoaded(p.resource)
