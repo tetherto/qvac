@@ -109,9 +109,6 @@ jobs:
             ocr-ggml:
               - "packages/ocr-ggml/**"
               - ".github/workflows/prebuilds-ocr-ggml.yml"
-            onnx:
-              - "packages/onnx/**"
-              - ".github/workflows/prebuilds-onnx.yml"
             translation-nmtcpp:
               - "packages/translation-nmtcpp/**"
               - ".github/workflows/prebuilds-translation-nmtcpp.yml"
