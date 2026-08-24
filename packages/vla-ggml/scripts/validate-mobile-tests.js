@@ -84,23 +84,15 @@ try {
     process.exit(0)
   }
 
-  // Keep timestamp validation as a fast stale-content signal for edited tests.
-  // Skipped in CI: a fresh clone stamps every working-tree file at checkout
-  // time, so the ordering this compares is meaningless there and would fail at
-  // random. The reference checks above are content-based and cover CI.
-  if (!process.env.CI) {
-    const latestIntegrationTime = Math.max(
-      ...integrationFiles.map((f) => fs.statSync(path.join(integrationDir, f)).mtimeMs)
-    )
-    const mobileAutoTime = fs.statSync(mobileAutoFile).mtimeMs
-
-    if (latestIntegrationTime > mobileAutoTime) {
-      console.error('❌ Mobile integration tests are out of date!')
-      console.error('   Integration tests modified after mobile tests were generated.')
-      console.error('   Run: npm run test:mobile:generate')
-      process.exit(1)
-    }
-  }
+  // There is deliberately no mtime comparison here. `buildFileContents`
+  // (generate-mobile-integration-tests.js) derives integration.auto.cjs from the
+  // sorted *filenames* under test/integration/ and never opens a test file, so
+  // editing a test's body cannot make the generated file stale. A timestamp
+  // check can therefore only produce false positives — and since this script now
+  // runs as part of `npm run test:unit`, each one would be a hard failure telling
+  // the author to regenerate a byte-identical file. Every staleness it could
+  // legitimately catch (a test added, renamed or removed) is already caught by
+  // the content-based reference diff above.
 
   // Device Farm shard coverage. This lives here rather than in the generator so
   // that a mobile scheduling mistake can never abort `npm run test:integration`

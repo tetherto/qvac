@@ -73,6 +73,20 @@ function validateTestGroups(groups, runners) {
   const deferredSet = new Set(deferred)
 
   for (const platform of platforms) {
+    // `deferred` nested inside a platform is indistinguishable from a shard: to
+    // `coveredRunners` below it is just another array of runner names, so the
+    // whole file would validate clean — and `upload-to-devicefarm` turns every
+    // `{ groupName: [runners] }` entry into a Device Farm spec, so those runners
+    // would be scheduled (and billed) under a shard literally named "deferred".
+    // Reserving the name here is what makes the top-level rule enforceable
+    // rather than merely documented.
+    if (Object.prototype.hasOwnProperty.call(groups[platform], DEFERRED_KEY)) {
+      problems.push(
+        `[${platform}] "${DEFERRED_KEY}" is nested inside the platform map.\n` +
+          `It must be a top-level key: nested here it is scheduled as a real Device Farm shard.`
+      )
+    }
+
     const covered = new Set(coveredRunners(groups[platform]))
 
     const missing = runners.filter((name) => !covered.has(name) && !deferredSet.has(name))

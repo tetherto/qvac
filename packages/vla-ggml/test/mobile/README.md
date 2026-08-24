@@ -19,6 +19,8 @@ npm run test:mobile:generate
 
 The generator walks `test/integration/`, derives a function name per test file, and rewrites `integration.auto.cjs`. It **only generates** — it performs no `test-groups.json` validation, because `npm run test:integration` chains it, so anything that throws there takes desktop integration tests down on every platform.
 
+Run it **by hand** after adding, renaming or removing a `test/integration/*.test.js` file. `npm test` runs `test:unit` before `test:integration`, and `test:unit` now validates the committed `integration.auto.cjs`, so it will fail first and tell you to regenerate rather than regenerating for you. Editing the *body* of an existing test needs no regeneration: the generated file is derived from filenames alone.
+
 ## `test-groups.json` and deferred runners
 
 `test-groups.json` is the per-platform Device Farm shard split. Every runner in `integration.auto.cjs` must either appear in a group for each platform, or be listed under the top-level `deferred` key:

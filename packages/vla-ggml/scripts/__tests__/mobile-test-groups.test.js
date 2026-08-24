@@ -40,6 +40,26 @@ test('"deferred" is a top-level key, never a platform', () => {
   assert.deepEqual(platformNames(groups).sort(), ['android', 'ios'])
 })
 
+test('a "deferred" key nested inside a platform is reported', () => {
+  // The assertion above only covers the committed file's shape. This covers the
+  // hazard itself: nested under a platform, `deferred` is just another array of
+  // runner names, so every other rule is satisfied and the file would otherwise
+  // validate clean — while upload-to-devicefarm schedules it as a real shard.
+  const nested = {
+    ios: { smolvla: ['runAddonTest'], deferred: ['runPi05Test'] },
+    android: { smolvla: ['runAddonTest'], deferred: ['runPi05Test'] }
+  }
+  const problems = validateTestGroups(nested, ['runAddonTest', 'runPi05Test'])
+
+  assert.equal(problems.length, 2, 'exactly one problem per platform')
+  for (const platform of ['ios', 'android']) {
+    const reported = problems.some(
+      (p) => p.startsWith(`[${platform}]`) && p.includes('nested inside the platform map')
+    )
+    assert.ok(reported, `${platform} must report the nested "deferred" key`)
+  }
+})
+
 test('an unassigned runner is reported', () => {
   const problems = validateTestGroups(groups, [...generatedRunners(), 'runBrandNewTest'])
   assert.equal(problems.length, platformNames(groups).length)
