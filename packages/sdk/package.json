@@ -219,7 +219,7 @@
     "@qvac/diffusion-cpp": "^0.20.0",
     "@qvac/embed-llamacpp": "^0.34.0",
     "@qvac/error": "^0.1.1",
-    "@qvac/inference": "^0.17.0",
+    "@qvac/inference": "^0.18.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.45.0",
     "@qvac/logging": "^0.1.0",
