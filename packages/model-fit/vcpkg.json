@@ -6,7 +6,7 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "10069.2.0"
+      "version>=": "10297.0.0"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",
