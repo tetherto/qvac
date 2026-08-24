@@ -195,18 +195,19 @@ test('world step op: a cancelled block rejects instead of reporting done', async
 // A block delivers every frame at its end, so the addon's mid-block tick is the
 // only liveness a caller gets across 1.8-7.5s. ops/video.ts:213 and
 // ops/diffusion.ts forward theirs the same way.
-test('world step op: the mid-block progress tick is forwarded', async function (t) {
+test('world step op: the end-of-block progress tick is forwarded', async function (t) {
   const { worldStep } = await import('@/plugins/builtin/sdcpp-generation/ops/world')
 
-  // Interleaved exactly as the addon emits: progress JSON while computing, then
-  // frames. Includes a non-JSON string and a JSON object with no `step`, both of
-  // which must be dropped rather than yielded or thrown on.
+  // Ordered exactly as WorldSessionModel.cpp emits: every frame first, then ONE
+  // progress tick carrying the block's final delivered count. Also includes a
+  // non-JSON string and a JSON object with no `step`, both of which must be
+  // dropped rather than yielded or thrown on.
   const driver = makeResponse([
-    '{"step":1,"frames":3,"elapsed_ms":600}',
+    new Uint8Array([1]),
+    new Uint8Array([2]),
     'not json at all',
     '{"unrelated":true}',
-    new Uint8Array([1]),
-    '{"step":2,"frames":9,"elapsed_ms":1800}'
+    '{"step":1,"frames":2,"elapsed_ms":1800}'
   ])
 
   await withWorldSession(fakeNativeSession(driver.response), async ({ modelId }) => {
@@ -227,13 +228,13 @@ test('world step op: the mid-block progress tick is forwarded', async function (
     driver.settleJob()
     await collect.catch(() => {})
 
-    t.is(ticks.length, 2, 'both progress ticks reached the caller')
+    t.is(ticks.length, 1, 'exactly one tick per block, as the engine emits')
     t.alike(
       ticks[0],
-      { type: 'worldStepStream', step: 1, totalSteps: 3, elapsedMs: 600 },
-      'the tick keeps the sibling field names, with frames mapped onto totalSteps'
+      { type: 'worldStepStream', step: 1, totalSteps: 2, elapsedMs: 1800 },
+      "it carries the block's final delivered count, under the sibling field names"
     )
-    t.is(frames.length, 1, 'the frame is still delivered')
+    t.is(frames.length, 2, 'and every frame is still delivered')
     t.absent(
       ticks.some((tick) => tick['data'] !== undefined),
       'a tick is never confused for a frame'
@@ -881,11 +882,35 @@ test('world session: a torn session is still recoverable by unload + load', asyn
     await t.exception(session.deactivate(), /native teardown failed/, 'deactivate fails')
     t.ok(isModelLoaded(modelId), 'the model is still registered while torn')
 
-    // The recovery path. The native unload throws again, so unloadModel
-    // surfaces that — but the entry must already be gone.
+    // The obvious recovery does NOT work: plugins/ops/load-model.ts returns
+    // `{}` without doing anything while the id is registered, so a direct
+    // reload silently hands back this same torn session.
+    const { loadModel } = await import('@/plugins/ops/load-model')
+    await loadModel({
+      modelId,
+      modelPath: '/tmp/dit.gguf',
+      options: {
+        type: 'loadModel',
+        modelSrc: '/tmp/dit.gguf',
+        modelType: ModelType.sdcppGeneration,
+        modelConfig: { mode: 'world' }
+      }
+    } as never)
+    t.ok(isModelLoaded(modelId), 'a direct reload is a no-op — the id is still registered')
+    await t.exception(
+      session.ensureActivated(),
+      /not loaded/i,
+      'and the session it hands back is still torn'
+    )
+
+    // The recovery that does work. The native unload throws again, so
+    // unloadModel surfaces that — but it unregisters BEFORE teardown, so the
+    // id is cleared regardless.
     await t.exception(unloadModel({ modelId }), /native teardown failed/, 'unload surfaces it')
     t.absent(isModelLoaded(modelId), 'the entry is unregistered despite the throw')
     t.absent(fs.existsSync(session.scenePath), 'and the managed pack is gone')
+    // Only now can a load actually build a new session.
+    t.absent(isModelLoaded(modelId), 'so loadModel would build a fresh session')
   } finally {
     unregisterModel(modelId)
     try {

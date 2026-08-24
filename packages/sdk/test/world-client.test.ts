@@ -90,16 +90,16 @@ test('worldStep result: done is terminal, so the stream and the promise agree', 
 })
 
 test('worldStep result: progress ticks stream separately from frames', async (t) => {
-  // Interleaved the way the server yields them: ticks while the block computes,
-  // then the frames at the end.
+  // Ordered the way the server yields them: every frame of the block first, then
+  // ONE tick summarising it. The engine cannot report mid-block.
   async function* stubStream() {
-    yield { type: 'worldStepStream', step: 1, totalSteps: 3, elapsedMs: 600 }
-    yield { type: 'worldStepStream', step: 2, totalSteps: 9, elapsedMs: 1800 }
     yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+    yield { type: 'worldStepStream', data: frame(2), frameIndex: 1 }
+    yield { type: 'worldStepStream', step: 1, totalSteps: 2, elapsedMs: 1800 }
     yield {
       type: 'worldStepStream',
       done: true,
-      stats: { stepMs: 1800, totalSteps: 2, frames: 1, width: 448, height: 256 }
+      stats: { stepMs: 1800, totalSteps: 2, frames: 2, width: 448, height: 256 }
     }
   }
 
@@ -108,16 +108,17 @@ test('worldStep result: progress ticks stream separately from frames', async (t)
   const ticks: number[] = []
   for await (const tick of result.progressStream) ticks.push(tick.totalSteps)
 
-  t.alike(ticks, [3, 9], 'both ticks arrive, in order, on their own stream')
-  t.is((await result.frames).length, 1, 'frames are unaffected by the tick branch')
-  t.is((await result.stats)?.frames, 1, 'and so are stats')
+  t.alike(ticks, [2], 'the block summary arrives on its own stream')
+  t.is((await result.frames).length, 2, 'frames are unaffected by the tick branch')
+  t.is((await result.stats)?.frames, 2, 'and so are stats')
 })
 
 test('worldStep result: a stream failure reaches progressStream too', async (t) => {
   // A caller watching only progress must still learn the walk died, or its
   // spinner spins forever.
   async function* failingStream() {
-    yield { type: 'worldStepStream', step: 1, totalSteps: 3, elapsedMs: 600 }
+    yield { type: 'worldStepStream', data: frame(1), frameIndex: 0 }
+    yield { type: 'worldStepStream', step: 1, totalSteps: 1, elapsedMs: 600 }
     throw new Error('Job cancelled')
   }
 

@@ -448,9 +448,17 @@ export function createWorldSession(args: WorldSessionArgs): WorldSession {
           // later call with ModelNotLoadedError, which tells the caller the truth
           // — reload the model — rather than silently walking a dead world.
           torn = true
+          // Spell out the recovery, because the obvious one does not work:
+          // `loadModel` returns success without doing anything while the id is
+          // still registered (plugins/ops/load-model.ts), so a direct reload
+          // hands back this same torn session. `unloadModel` first — it
+          // unregisters before teardown, so it clears the id even when the
+          // native unload throws again.
           logger.error(
-            `World session teardown failed for "${modelId}"; the session is now unusable and ` +
-              `the model must be reloaded: ${error instanceof Error ? error.message : String(error)}`
+            `World session teardown failed for "${modelId}"; the session is unusable. ` +
+              'Recover with unloadModel({ modelId }) THEN loadModel(...) — loading ' +
+              'again on its own is a no-op while the id stays registered. Cause: ' +
+              `${error instanceof Error ? error.message : String(error)}`
           )
           throw error
         }

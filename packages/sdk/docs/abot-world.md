@@ -128,6 +128,33 @@ can drop. Drive the next step off the previous one.
   the model's concurrency slot is held until it does. Await the result before
   unloading.
 
+## Progress is one summary per block, after the frames
+
+`worldStep` exposes a `progressStream` alongside `frameStream`, matching `video`
+and `diffusion`. It is **not** mid-block liveness and cannot be: the engine runs
+the block to completion, delivers every frame, and only then fires its progress
+callback. So it yields exactly once per step, at the end, carrying the block's
+final delivered frame count and elapsed time. Use it to report what a block did.
+A "still working" indicator for the seconds a block takes has to come from your
+own timer, or from an addon change.
+
+## Recovering a session whose teardown failed
+
+If the native `unload()` rejects, the addon wrapper still believes it is loaded,
+so the session is marked unusable and later steps fail with
+`ModelNotLoadedError` rather than walking a dead world. Recovery is
+**`unloadModel` then `loadModel`, in that order**:
+
+```ts
+await unloadModel({ modelId }).catch(() => {}) // may throw again; the id is freed either way
+const modelId = await loadModel({ modelSrc: ABOT_WORLD_0_5B_Q8_0, ... })
+```
+
+Calling `loadModel` on its own does not recover it. `loadModel` returns success
+without doing any work while the id is still registered, so it hands back the
+same torn session. `unloadModel` unregisters before it tears down, so it clears
+the id even when the native unload throws a second time.
+
 ## Frame size
 
 **At the default `world.numFramePerBlock`**, a block is 9 frames on the first
