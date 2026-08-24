@@ -5,13 +5,13 @@
 # completes ABot-World cached sessions without reverting August's public APIs.
 #
 # Vulkan validation: static library, CLI, server, seven native tests, and
-# ggml f31dab0f all built successfully on NV5090.
+# ggml 0de1c777 all built successfully on NV5090.
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 4027059e8a64e02b61cddccbf37a8de892b85034
-    SHA512 bf84a385634cc816d8f4396ce1911f7696ebe59e87b23d3d4e1aeb9a6a409f6a1bc11e9335d68bd2538251086f346df3daafcd21a93f022c86a1ad406d997f7c
+    REF fbcbcce4966572c32204b0dc06ade9bb6e18da53
+    SHA512 d4e75d28592f2961ceccb11c112a27edf6227e29b1e599a95738a5d18124440917d72cc51f26336653a3a9d6030853b9e8b04b0d0155bc2ea18f0994d4f7fba4
 )
 
 set(SD_FLASH_ATTN OFF)
