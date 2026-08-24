@@ -12,7 +12,6 @@
 #include "../utils/ReasoningUtils.hpp"
 #include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
-#include "ContextShifter.hpp"
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
@@ -23,7 +22,7 @@
 /// `LlmContext` API (driven by the single-prompt path in `LlamaModel`)
 /// and the per-sequence `SequenceDriver` API (driven by the
 /// `ContinuousBatchScheduler`). The overlapping state-query methods
-/// (`getNPast`, `getNSlides`) appear on both
+/// (`getNPast`) appear on both
 /// bases; a single override below satisfies both vtables.
 class TextLlmContext : public LlmContext, public SequenceDriver {
 public:
@@ -117,37 +116,6 @@ public:
    */
   void setNPast(llama_pos nPast) override;
 
-  /**
-   * The get first msg tokens method. It returns the first msg tokens.
-   *
-   * @return - the first msg tokens.
-   */
-  [[nodiscard]] llama_pos getFirstMsgTokens() const override;
-
-  /**
-   * The set first msg tokens method. It sets the first msg tokens.
-   *
-   * @param first_msg_tokens - the first msg tokens.
-   */
-  void setFirstMsgTokens(llama_pos firstMsgTokens) override;
-  /**
-   * The set n_discarded method. It sets the n_discarded.
-   *
-   * @param nDiscarded - the number of tokens to discard.
-   */
-  void setNDiscarded(llama_pos nDiscarded) override;
-
-  /**
-   * The get n_discarded method. It returns the configured context-shift
-   * discard budget. A value of 0 means context shifting is disabled.
-   *
-   * @return - the number of tokens to discard on overflow.
-   */
-  [[nodiscard]] llama_pos getNDiscarded() const;
-
-  [[nodiscard]] int32_t getNSlides() const override;
-  void resetNSlides() override;
-
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
@@ -159,8 +127,6 @@ public:
   takeUserVisiblePerfSnapshot() override;
 
   void setRemoveThinkingFromContext(bool value) override;
-
-  [[nodiscard]] bool supportsSliding() const override { return true; }
 
   /**
    * The reset state method. It resets the context.
@@ -207,8 +173,7 @@ public:
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  [[nodiscard]] bool loadCache(
-      const std::string& cacheKey, llama_pos configuredNDiscarded) override;
+  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
@@ -216,7 +181,7 @@ public:
 
   // Testing seams: expose the owned `ReasoningBlockCompactor` and the
   // otherwise-private `compactThinkSpan()` entry point so driver-level
-  // unit tests can install an `IContextSliderOps` override and drive
+  // unit tests can install an `IKvCacheOps` override and drive
   // the end-of-generation compaction step directly. Production code
   // MUST NOT use these — production compaction fires from within
   // `onGenerationFinished` / the scheduler's slot cleanup.
@@ -268,9 +233,6 @@ private:
   void initializeCommonState();
   void initializeOwnedThreadpools();
   [[nodiscard]] llama_pos ctxCeiling() const;
-  /// Slide the context window if the next token would not fit. Returns
-  /// the number of tokens discarded (0 when no slide happened).
-  llama_pos applyContextDiscard();
 
   // Reasoning-block KV-cache compaction helpers. Single-block policy:
   // at most one `<think>...</think>` block is tracked per inference.
@@ -326,14 +288,11 @@ private:
   std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;
-  llama_pos firstMsgTokens_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
   bool forcePrefillEntryRestoreFailureForTesting_ = false;
-  // Snapshot of `nPast_` / `firstMsgTokens_` at `evalMessageWithTools`
-  // entry. Restored by `onCancel` to roll back to the pre-request cursor.
+  // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
+  // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;
-  llama_pos preRequestFirstMsgTokens_ = 0;
-  bool pendingBatchFirstMsg_ = false;
   GenerationStopReason generationStopReason_ = GenerationStopReason::None;
   ThreadPoolPtr threadpool_;
   ThreadPoolPtr threadpoolBatch_;
@@ -419,9 +378,6 @@ private:
   // span, close-capture flag, and the pure-attention + recurrent
   // compaction paths plus their stats counters.
   qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
-  // Context-window slider: owns `nDiscarded`, `nSlides`, and clears
-  // post-slide-invalidated state on the compactor and rollback owners.
-  qvac_lib_inference_addon_llama::ContextShifter shifter_;
 
   // Snapshot of `llama_perf_context()` taken at the start of
   // `compactThinkSpan` — i.e. right after user-visible generation

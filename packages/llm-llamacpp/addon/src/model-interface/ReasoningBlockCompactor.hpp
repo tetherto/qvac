@@ -8,7 +8,7 @@
 #include <llama.h>
 
 #include "../utils/ReasoningRollbackState.hpp"
-#include "ContextSlider.hpp"
+#include "KvCacheOps.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -30,9 +30,8 @@ namespace qvac_lib_inference_addon_llama {
 // attention `seq_rm + seq_add` rejection (live KV was left untouched)
 // and `Outcome::Kind::FailedKvWiped` on hybrid restore underflow,
 // hybrid replay rejection, recurrent partial-resident spans, recurrent
-// open spans without a captured close marker, generation slides that
-// invalidate tracked reasoning state, or the defensive no-boundary branch
-// (sequence memory was best-effort cleared).
+// open spans without a captured close marker, or the defensive
+// no-boundary branch (sequence memory was best-effort cleared).
 // Callers must run the live-KV recovery documented on the outcome kind
 // (roll back `[preRequestCursor, currentCursor)` or reset positional
 // accounting to zero) before rethrowing `qvac_errors::StatusError` so
@@ -47,7 +46,7 @@ namespace qvac_lib_inference_addon_llama {
 // agnostic to those.
 //
 // Position-specific bookkeeping (`nPast_` for text vs `current_.pos /
-// .cacheTokens` and `protectedPrefix_` for multimodal) is applied by
+// .cacheTokens` for multimodal) is applied by
 // the caller using the returned `Outcome`. The compactor handles only
 // the cache-side operations, logging, and stats.
 class ReasoningBlockCompactor {
@@ -91,19 +90,6 @@ public:
   void clearSpan() noexcept {
     thinkSpan_.reset();
     pendingThinkCloseCapture_ = false;
-  }
-  void markSpanInvalidatedByGenerationSlide(
-      llama_pos pos, llama_pos discarded) noexcept {
-    slideInvalidatedSpan_ = thinkSpan_.has_value();
-    slideInvalidatedPos_ = pos;
-    slideInvalidatedDiscarded_ = discarded;
-    clearSpan();
-  }
-  void markBoundaryInvalidatedByGenerationSlide(
-      llama_pos pos, llama_pos discarded) noexcept {
-    slideInvalidatedBoundary_ = true;
-    slideInvalidatedPos_ = pos;
-    slideInvalidatedDiscarded_ = discarded;
   }
 
   // ---- Close-marker capture lifecycle ----
@@ -195,9 +181,8 @@ public:
   //
   // Performs end-of-generation compaction at the current cache cursor
   // `pos`. The returned `Outcome` carries the new position, the
-  // dropped-token count, and the kept-prefix end (used by callers to
-  // adjust `firstMsgTokens_` / `protectedPrefix_`). The compactor
-  // itself does not write to the caller's position fields.
+  // dropped-token count, and the kept-prefix end. The compactor itself
+  // does not write to the caller's position fields.
   //
   // RAII cleanup: per-inference state (`thinkSpan_`, reasoning boundary
   // snapshot, post-reasoning buffer, capture flag) is cleared on every
@@ -215,9 +200,8 @@ public:
   //     coherent for the next request on the same driver.
   //   * Hybrid `restoreReasoningBoundary` / `replayPostReasoning`
   //     failure, a defensive missing-boundary hit, a recurrent
-  //     partial-resident reasoning span left after a tail trim, a recurrent
-  //     open reasoning span with no captured close marker, or a generation
-  //     slide that invalidated tracked reasoning state:
+  //     partial-resident reasoning span left after a tail trim, or a
+  //     recurrent open reasoning span with no captured close marker:
   //     `compact()` best-effort clears the sequence memory (attention
   //     KV cells + recurrent state) and returns
   //     `Outcome::Kind::FailedKvWiped`. The caller MUST reset its
@@ -276,15 +260,15 @@ public:
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);
 
-  // Testing seam: install a non-owning `IContextSliderOps` override
+  // Testing seam: install a non-owning `IKvCacheOps` override
   // that replaces the default singleton (real `llama_memory_seq_rm` /
   // `llama_memory_seq_add`) inside `compact()`. Set to `nullptr` to
   // clear. Persists across `reset()` because it is a test wiring
   // concern, not per-inference state. Production code MUST NOT call
   // this — the override lets unit and driver-level tests exercise
   // the `FailedKvIntact` branch without a real `llama_context`.
-  void setContextSliderOpsForTesting(const IContextSliderOps* ops) noexcept {
-    sliderOpsOverride_ = ops;
+  void setKvCacheOpsForTesting(const IKvCacheOps* ops) noexcept {
+    kvCacheOpsOverride_ = ops;
   }
 
   // ---- Stats ----
@@ -300,10 +284,6 @@ public:
   void reset() noexcept {
     thinkSpan_.reset();
     pendingThinkCloseCapture_ = false;
-    slideInvalidatedSpan_ = false;
-    slideInvalidatedBoundary_ = false;
-    slideInvalidatedPos_ = 0;
-    slideInvalidatedDiscarded_ = 0;
   }
 
 private:
@@ -311,10 +291,6 @@ private:
 
   std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
   bool pendingThinkCloseCapture_ = false;
-  bool slideInvalidatedSpan_ = false;
-  bool slideInvalidatedBoundary_ = false;
-  llama_pos slideInvalidatedPos_ = 0;
-  llama_pos slideInvalidatedDiscarded_ = 0;
 
   // Default-off: mirrors the owning LlmContext's default. The owner syncs
   // this during initialization and whenever a request overrides it.
@@ -325,11 +301,11 @@ private:
   int32_t thinkingBlockDiscards_ = 0;
 
   // Non-owning override for the KV primitives used by `compact()`.
-  // Null in production (falls back to `defaultContextSliderOps()`);
-  // tests install a fake via `setContextSliderOpsForTesting` so the
+  // Null in production (falls back to `defaultKvCacheOps()`);
+  // tests install a fake via `setKvCacheOpsForTesting` so the
   // `FailedKvIntact` branch can be triggered without a real
   // `llama_context`.
-  const IContextSliderOps* sliderOpsOverride_ = nullptr;
+  const IKvCacheOps* kvCacheOpsOverride_ = nullptr;
 };
 
 } // namespace qvac_lib_inference_addon_llama

@@ -16,10 +16,21 @@ namespace qvac_lib_inference_addon_llama::batching {
 
 enum class StopReason : uint8_t {
   None,
-  Finished,     // Explicitly marked finished (e.g., EOG sampled)
-  LimitReached, // Reached maxTokensPerSequence
-  DecodeError,  // llama_decode returned a non-zero rc
+  Finished, // Explicitly marked finished (e.g., EOG sampled)
+  // Reached maxTokensPerSequence. No longer produced: that limit IS the
+  // slot's share of the context window, so reaching it is ContextOverflow.
+  // Kept so the numbering and any explicit `markFinished` caller still
+  // resolve; `sequenceLimit` is unreachable while nothing sets this.
+  LimitReached,
+  DecodeError, // llama_decode returned a non-zero rc
   Cancelled,
+  // The slot's context window is full: no room for even one more token.
+  // `maxTokensPerSequence` is `ctxTotalTokens / n_parallel`, the same value
+  // the driver gets as its ceiling, and `submit` rejects any request whose
+  // prompt plus a positive `n_predict` would not fit. So a slot can only
+  // walk into this condition with no caller cap, which makes a full window
+  // the one thing it can mean, never a prediction-limit cutoff.
+  ContextOverflow,
 };
 
 struct Request {
@@ -34,11 +45,6 @@ struct Request {
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
   bool hasUnfedSample = false;
-  /// When true, the sequence driver can slide its context window during
-  /// generation: `exceededLimit()` then lets the position reach the cap
-  /// so the slide (which drops it back below) gets a chance to fire
-  /// instead of hard-truncating the sequence.
-  bool slideCapable = false;
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
   /// Observed wall-clock stamps for the per-request end-to-end stats: fixed by
@@ -50,10 +56,10 @@ struct Request {
 
   Request(
       uint32_t rid, PrefillPlan&& plan, unsigned maxTokens,
-      llama_pos initialPos = 0, bool canSlide = false);
+      llama_pos initialPos = 0);
   Request(
       uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
-      llama_pos initialPos = 0, bool canSlide = false);
+      llama_pos initialPos = 0);
 
   [[nodiscard]] bool isPrefillComplete() const;
   [[nodiscard]] bool exceededLimit() const;
@@ -110,8 +116,7 @@ public:
   addRequest(std::vector<llama_token>&& tokens, uint32_t& seqId);
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, std::vector<llama_token>&& tokens,
-      llama_pos initialPos = 0, bool slideCapable = false,
-      llama_pos initialKvCells = -1);
+      llama_pos initialPos = 0, llama_pos initialKvCells = -1);
   /// Plan-aware admission: text tokens plus interleaved media barriers.
   /// Barriers must be sorted by `afterTextTokens` and anchored within
   /// `plan.tokens` (`ErrInvalidPlan` otherwise). Sizing uses
@@ -124,7 +129,7 @@ public:
   /// KV-cap check must use this value rather than `initialPos`.
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos = 0,
-      bool slideCapable = false, llama_pos initialKvCells = -1);
+      llama_pos initialKvCells = -1);
 
   [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
@@ -139,11 +144,6 @@ public:
   void sampleAndAppendIdle(const SamplerFn& samplerFn);
 
   bool markFinished(uint32_t seqId, StopReason reason = StopReason::Finished);
-
-  /// Drop `discarded` tokens from a sequence's position after the driver
-  /// performed an in-step context slide, so the next token feeds at the
-  /// compacted position.
-  void applySlide(uint32_t seqId, llama_pos discarded);
 
   /// Mark every active slot as finished with `reason`. Used to terminate
   /// all in-flight requests (e.g. on a fatal decode error). No-op for

@@ -976,7 +976,6 @@ namespace LlmLlamacpp {
     frequency_penalty?: NumericLike;
     tools?: boolean | string;
     verbosity?: NumericLike;
-    n_discarded?: NumericLike;
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;
     /**
@@ -1300,8 +1299,6 @@ namespace LlmLlamacpp {
     CacheTokens: number;
     generatedTokens: number;
     promptTokens: number;
-    /** Context-window slides for single requests, or the sum across completed batch slots. */
-    contextSlides: number;
     /**
      * Number of `<think>` (or model-equivalent) reasoning blocks dropped
      * from the KV cache at end-of-generation by the

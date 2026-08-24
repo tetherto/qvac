@@ -6,7 +6,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
-#include "model-interface/ContextSlider.hpp"
+#include "model-interface/KvCacheOps.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
@@ -816,36 +816,34 @@ TEST(ReasoningBlockCompactorFailureStats, NoOpOutcomesDoNotThrow) {
 
 namespace {
 
-// Minimal `IContextSliderOps` fakes for the compactor tests.
+// Minimal `IKvCacheOps` fakes for the compactor tests.
 // `compactKvRange` on the pure-attention path is the only production
 // call site the compactor routes through the injectable ops. Two
 // fakes are provided so tests can drive either half of the primitive
 // contract without a real llama context:
 //
-//   * `AcceptingSliderOps` — `seqRm` returns `true`, so the compactor
+//   * `AcceptingKvCacheOps` — `seqRm` returns `true`, so the compactor
 //     proceeds to `seqAdd` and reports `CompactedAttention`. Used by
 //     the successful-drop tests to observe that `seqAdd` fires.
-//   * `RejectingSliderOps` — `seqRm` returns `false` to mimic a
+//   * `RejectingKvCacheOps` — `seqRm` returns `false` to mimic a
 //     rejected primitive. The production contract is "all-or-nothing
 //     on rejection", so `seqAdd` MUST NOT fire afterwards; otherwise
 //     the compactor's `FailedKvIntact` outcome would be misleading
 //     (it would imply KV was touched anyway).
-class AcceptingSliderOps final : public IContextSliderOps {
+class AcceptingKvCacheOps final : public IKvCacheOps {
 public:
-  llama_pos nCtx(llama_context*) const override { return 4096; }
-
-  ContextSliderMemoryHandle memory(llama_context*) const override {
+  KvCacheMemoryHandle memory(llama_context*) const override {
     return fakeMemory_;
   }
 
-  bool seqRm(ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos)
-      const override {
+  bool seqRm(
+      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos) const override {
     ++seqRmCalls_;
     return true;
   }
 
   void seqAdd(
-      ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos,
+      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos,
       llama_pos) const override {
     ++seqAddCalls_;
   }
@@ -854,28 +852,26 @@ public:
   int seqAddCalls() const { return seqAddCalls_; }
 
 private:
-  ContextSliderMemoryHandle fakeMemory_ =
-      reinterpret_cast<ContextSliderMemoryHandle>(static_cast<uintptr_t>(0x1));
+  KvCacheMemoryHandle fakeMemory_ =
+      reinterpret_cast<KvCacheMemoryHandle>(static_cast<uintptr_t>(0x1));
   mutable int seqRmCalls_ = 0;
   mutable int seqAddCalls_ = 0;
 };
 
-class RejectingSliderOps final : public IContextSliderOps {
+class RejectingKvCacheOps final : public IKvCacheOps {
 public:
-  llama_pos nCtx(llama_context*) const override { return 4096; }
-
-  ContextSliderMemoryHandle memory(llama_context*) const override {
+  KvCacheMemoryHandle memory(llama_context*) const override {
     return fakeMemory_;
   }
 
-  bool seqRm(ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos)
-      const override {
+  bool seqRm(
+      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos) const override {
     ++seqRmCalls_;
     return false;
   }
 
   void seqAdd(
-      ContextSliderMemoryHandle, llama_seq_id, llama_pos, llama_pos,
+      KvCacheMemoryHandle, llama_seq_id, llama_pos, llama_pos,
       llama_pos) const override {
     ++seqAddCalls_;
   }
@@ -884,8 +880,8 @@ public:
   int seqAddCalls() const { return seqAddCalls_; }
 
 private:
-  ContextSliderMemoryHandle fakeMemory_ =
-      reinterpret_cast<ContextSliderMemoryHandle>(static_cast<uintptr_t>(0x1));
+  KvCacheMemoryHandle fakeMemory_ =
+      reinterpret_cast<KvCacheMemoryHandle>(static_cast<uintptr_t>(0x1));
   mutable int seqRmCalls_ = 0;
   mutable int seqAddCalls_ = 0;
 };
@@ -907,11 +903,11 @@ TEST(
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  AcceptingKvCacheOps accepting;
+  fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
 
   EXPECT_EQ(
       outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
@@ -940,11 +936,11 @@ TEST(
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  AcceptingKvCacheOps accepting;
+  fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
       << "recurrent open-ended reasoning span must hard-fail instead of "
@@ -980,13 +976,13 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/20);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  RejectingSliderOps rejecting;
-  fx.compactor.setContextSliderOpsForTesting(&rejecting);
+  RejectingKvCacheOps rejecting;
+  fx.compactor.setKvCacheOpsForTesting(&rejecting);
   // `ctx` is passed through untouched by the fake ops; safe to pass
-  // nullptr because neither `memory` nor `nCtx` inspects it.
+  // nullptr because `memory` does not inspect it.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
 
   EXPECT_EQ(
       outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
@@ -1049,13 +1045,13 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  AcceptingKvCacheOps accepting;
+  fx.compactor.setKvCacheOpsForTesting(&accepting);
   // `pos = 10 <= start = 15`: reasoning span already gone from cache;
   // NoOp is the correct — not a leak — outcome.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/10, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::NoOp);
   EXPECT_EQ(accepting.seqRmCalls(), 0)
@@ -1087,13 +1083,13 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  AcceptingKvCacheOps accepting;
+  fx.compactor.setKvCacheOpsForTesting(&accepting);
   // `pos = 20`, recordedEnd = 25 → effectiveEnd clamped to 20, so the
   // compactor drops `[15, 20)` — 5 tokens.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
 
   EXPECT_EQ(
       outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
@@ -1139,11 +1135,11 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  AcceptingSliderOps accepting;
-  fx.compactor.setContextSliderOpsForTesting(&accepting);
+  AcceptingKvCacheOps accepting;
+  fx.compactor.setKvCacheOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setContextSliderOpsForTesting(nullptr);
+  fx.compactor.setKvCacheOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
       << "recurrent partial-resident span must hard-fail instead of "

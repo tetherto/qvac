@@ -166,17 +166,25 @@ struct LlmModelContext {
 /// (de)serializer must persist and restore. Any driver implementing
 /// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
 ///
-/// `cacheTokens`/`firstMsgCacheTokens` (physical KV-cell usage) are owned
-/// separately from `nPast`/`firstMsgTokens` (logical positional span) because
-/// multimodal M-RoPE media can occupy more KV cells than its positional span.
-/// Persisting only the two positional fields would lose the media KV-cell
-/// counts and break context shifting after restore. See `getCacheTokens` /
-/// `getFirstMsgCacheTokens` below for the divergence these fields capture.
+/// `cacheTokens` (physical KV-cell usage) is owned separately from `nPast`
+/// (logical positional span) because multimodal M-RoPE media can occupy more
+/// KV cells than its positional span. See `getCacheTokens` below.
+///
+/// Slots 1 and 3 are retired: they carried the first-message counters the
+/// removed sliding-context feature protected. The layout keeps its four-field
+/// width so a file written by either build still loads; writers put 0 in
+/// those slots and readers ignore them.
+///
+/// Loadability is preserved in both directions, behaviour on downgrade is
+/// not. A build that still slides reads slot 1 as its protected-prefix
+/// boundary, so the 0 written here makes it evict from position 0 instead of
+/// protecting the first message. Rolling this package back over an existing
+/// cache directory therefore drops the system prompt rather than erroring.
 enum class SessionMetadataField : uint8_t {
   NPast = 0,
-  FirstMsgTokens = 1,
+  RetiredFirstMsgTokens = 1,
   CacheTokens = 2,
-  FirstMsgCacheTokens = 3,
+  RetiredFirstMsgCacheTokens = 3,
 };
 
 /// Number of `llama_token` fields in the session metadata contract above.
@@ -314,45 +322,6 @@ public:
    * Set the physical KV-cache token usage.
    */
   virtual void setCacheTokens(llama_pos cacheTokens) { setNPast(cacheTokens); }
-
-  /**
-   * Get the number of tokens belonging to the first user message.
-   */
-  [[nodiscard]] virtual llama_pos getFirstMsgTokens() const = 0;
-
-  /**
-   * Set the number of tokens belonging to the first user message.
-   */
-  virtual void setFirstMsgTokens(llama_pos firstMsgTokens) = 0;
-
-  /**
-   * Get physical KV-cache token usage for the protected first message.
-   */
-  [[nodiscard]] virtual llama_pos getFirstMsgCacheTokens() const {
-    return getFirstMsgTokens();
-  }
-
-  /**
-   * Set physical KV-cache token usage for the protected first message.
-   */
-  virtual void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) {
-    setFirstMsgTokens(firstMsgCacheTokens);
-  }
-
-  /**
-   * Set the number of tokens to discard when overflowing context.
-   */
-  virtual void setNDiscarded(llama_pos nDiscarded) = 0;
-
-  /**
-   * Get the number of context slides (discards) that have occurred.
-   */
-  [[nodiscard]] virtual int32_t getNSlides() const = 0;
-
-  /**
-   * Reset the slide counter to zero. Called at the start of each inference.
-   */
-  virtual void resetNSlides() = 0;
 
   /**
    * Number of `<think>` reasoning blocks compacted out of the KV

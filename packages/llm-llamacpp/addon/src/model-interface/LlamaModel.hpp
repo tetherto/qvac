@@ -351,7 +351,6 @@ private:
     std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
 
     // configuration values parsed from configFilemap
-    llama_pos configuredNDiscarded_ = 0;
     std::optional<load_fit_normalization::NormalizedFitSnapshot>
         normalizedFitSnapshot_;
     std::optional<CacheManager> cacheManager_;

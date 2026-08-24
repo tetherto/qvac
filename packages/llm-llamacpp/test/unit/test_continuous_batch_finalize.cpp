@@ -27,8 +27,6 @@ public:
   GenerationStopReason terminalReason = GenerationStopReason::None;
 
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
-  [[nodiscard]] int32_t getNSlides() const override { return 0; }
-  [[nodiscard]] bool supportsSliding() const override { return true; }
   PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
       const std::vector<std::vector<uint8_t>>&,
@@ -59,9 +57,7 @@ public:
     return rollbackOk;
   }
   bool rollbackOk = true;
-  [[nodiscard]] bool loadCache(const std::string&, llama_pos) override {
-    return false;
-  }
+  [[nodiscard]] bool loadCache(const std::string&) override { return false; }
   void saveCache(const std::string&) const override {}
 
   [[nodiscard]] bool fired(const std::string& hook) const {
@@ -120,6 +116,19 @@ TEST(ContinuousBatchFinalize, LimitReachedPropagatesSequenceLimit) {
 
   EXPECT_TRUE(driver.fired("onGenerationFinished"));
   EXPECT_EQ(driver.terminalReason, GenerationStopReason::SequenceLimit);
+}
+
+/// A slot whose context window filled must reach the driver as
+/// ContextOverflow, not as the per-sequence cap. Collapsing the two makes a
+/// full context indistinguishable from a prediction-limit cutoff for every
+/// batched caller.
+TEST(ContinuousBatchFinalize, ContextOverflowPropagatesContextOverflow) {
+  RecordingDriver driver;
+  (void)finalizeTerminalDriver(
+      driver, StopReason::ContextOverflow, /*prefillOnly=*/false, kNoCallback);
+
+  EXPECT_TRUE(driver.fired("onGenerationFinished"));
+  EXPECT_EQ(driver.terminalReason, GenerationStopReason::ContextOverflow);
 }
 
 TEST(GenerationStopReason, IdentifiesReasoningTruncations) {

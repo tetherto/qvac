@@ -57,11 +57,6 @@ public:
     }
   }
 
-  static llama_pos configuredNDiscarded(const LlamaModel& model) {
-    std::shared_lock lock(model.stateMtx_);
-    return model.state_ ? model.state_->configuredNDiscarded_ : 0;
-  }
-
   static int64_t runtimeBackendDevice(const LlamaModel& model) {
     std::shared_lock lock(model.stateMtx_);
     return model.runtimeBackendDevice_;

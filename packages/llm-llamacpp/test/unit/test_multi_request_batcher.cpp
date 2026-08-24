@@ -863,11 +863,45 @@ TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
   EXPECT_EQ(result.chunkSize, 3);
   batcher.advance(result.chunkSize);
 
-  // Should be finished immediately after prefill due to limit
+  // Should be finished immediately after prefill: the prompt filled the
+  // slot's whole share of the context window, so there is no room to
+  // generate into. That is the window being full, not a caller-set cap.
   auto finished = batcher.extractFinished();
   ASSERT_EQ(finished.size(), 1);
-  EXPECT_EQ(finished[0].stopReason, StopReason::LimitReached);
+  EXPECT_EQ(finished[0].stopReason, StopReason::ContextOverflow);
   EXPECT_TRUE(finished[0].generatedTokens.empty());
+}
+
+// The generating counterpart, which is what a caller actually observes.
+// `advance` marks the slot before `sampleAndAppendIdle` can reach the
+// driver's own overflow check, so if this reported LimitReached the driver's
+// ContextOverflow answer would be unreachable for ordinary text slots and
+// runtime stats would say `sequenceLimit` for a full window.
+TEST_F(MultiRequestBatcherTest, GeneratingSlotThatFillsWindowReportsOverflow) {
+  const unsigned kMaxChunkSize = 8;
+  const unsigned kMaxTokensPerSeq = 4;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  // Leaves exactly one slot of room, so one sampled token fills the window.
+  ASSERT_EQ(
+      batcher.addRequest({10, 20, 30}, seqId),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  auto prefill = batcher.fillBatch(batch);
+  batcher.advance(prefill.chunkSize);
+  ASSERT_TRUE(batcher.extractFinished().empty());
+
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return 40; });
+  auto step = batcher.fillBatch(batch);
+  batcher.advance(step.chunkSize);
+
+  auto finished = batcher.extractFinished();
+  ASSERT_EQ(finished.size(), 1);
+  EXPECT_EQ(finished[0].stopReason, StopReason::ContextOverflow);
 }
 
 TEST_F(MultiRequestBatcherTest, MarkAllFinishedWithDecodeError) {
@@ -1000,7 +1034,6 @@ TEST(MediaBarrierRequestTest, AddRequestAtUsesKvCellsNotPositionsForCap) {
           0,
           std::move(plan),
           /*initialPos=*/2,
-          /*slideCapable=*/false,
           /*initialKvCells=*/8),
       MultiRequestBatcher::AddStatus::ErrTokensTooLarge)
       << "KV-CELL CAP HOLE: 8 loaded KV cells + 3 prompt tokens = 11 > "

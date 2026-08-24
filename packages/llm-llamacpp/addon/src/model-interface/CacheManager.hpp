@@ -29,8 +29,7 @@ struct ParsedPromptPayload {
 class CacheManager {
 public:
   CacheManager(
-      LlmContext* llmContext, llama_pos configuredNDiscarded,
-      std::function<void(bool)> resetStateCallback);
+      LlmContext* llmContext, std::function<void(bool)> resetStateCallback);
 
   bool handleCache(
       ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
@@ -54,7 +53,6 @@ private:
   static bool isParentDirectoryMissing(const std::filesystem::path& path);
 
   LlmContext* llmContext_;
-  llama_pos configuredNDiscarded_;
   std::function<void(bool)> resetStateCallback_;
   std::string sessionPath_;
   bool cacheDisabled_ = true;

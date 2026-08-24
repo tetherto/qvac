@@ -131,7 +131,6 @@ declare namespace LlmLlamacpp {
         frequency_penalty?: NumericLike;
         tools?: boolean | string;
         verbosity?: NumericLike;
-        n_discarded?: NumericLike;
         "main-gpu"?: NumericLike | string;
         /**
          * How to split the model across GPUs: 'none' (default, single GPU), 'layer'
@@ -442,8 +441,6 @@ declare namespace LlmLlamacpp {
         CacheTokens: number;
         generatedTokens: number;
         promptTokens: number;
-        /** Context-window slides for single requests, or the sum across completed batch slots. */
-        contextSlides: number;
         /**
          * Number of `<think>` (or model-equivalent) reasoning blocks dropped
          * from the KV cache at end-of-generation by the

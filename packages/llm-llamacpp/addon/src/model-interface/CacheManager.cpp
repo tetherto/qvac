@@ -30,12 +30,9 @@ struct SessionMetadata {
     using Field = SessionMetadataField;
     tokens[static_cast<size_t>(Field::NPast)] =
         static_cast<llama_token>(context.getNPast());
-    tokens[static_cast<size_t>(Field::FirstMsgTokens)] =
-        static_cast<llama_token>(context.getFirstMsgTokens());
     tokens[static_cast<size_t>(Field::CacheTokens)] =
         static_cast<llama_token>(context.getCacheTokens());
-    tokens[static_cast<size_t>(Field::FirstMsgCacheTokens)] =
-        static_cast<llama_token>(context.getFirstMsgCacheTokens());
+    // Slots 1 and 3 are unused and stay 0.
     return metadata;
   }
 
@@ -47,30 +44,21 @@ struct SessionMetadata {
     return tokens[static_cast<size_t>(which)];
   }
   llama_token nPast() const { return field(SessionMetadataField::NPast); }
-  llama_token firstMsgTokens() const {
-    return field(SessionMetadataField::FirstMsgTokens);
-  }
   llama_token cacheTokens() const {
     return field(SessionMetadataField::CacheTokens);
-  }
-  llama_token firstMsgCacheTokens() const {
-    return field(SessionMetadataField::FirstMsgCacheTokens);
   }
 
   void applyTo(LlmContext& context) const {
     context.setNPast(nPast());
-    context.setFirstMsgTokens(firstMsgTokens());
     context.setCacheTokens(cacheTokens());
-    context.setFirstMsgCacheTokens(firstMsgCacheTokens());
   }
 };
 
 } // namespace
 
 CacheManager::CacheManager(
-    LlmContext* llmContext, llama_pos configuredNDiscarded,
-    std::function<void(bool)> resetStateCallback)
-    : llmContext_(llmContext), configuredNDiscarded_(configuredNDiscarded),
+    LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
+    : llmContext_(llmContext),
       resetStateCallback_(std::move(resetStateCallback)) {}
 
 bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
@@ -254,14 +242,6 @@ bool CacheManager::loadCache() {
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);
   }
   sessionMetadata.applyTo(*llmContext_);
-
-  if (configuredNDiscarded_ >
-      llama_n_ctx(ctx) - llmContext_->getFirstMsgTokens()) {
-    llmContext_->setNDiscarded(
-        llama_n_ctx(ctx) - llmContext_->getFirstMsgTokens() - 1);
-  } else {
-    llmContext_->setNDiscarded(configuredNDiscarded_);
-  }
 
   auto* mem = llama_get_memory(ctx);
   if (mem == nullptr) {

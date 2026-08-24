@@ -48,13 +48,6 @@ namespace qvac_lib_inference_addon_llama::batching {
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback);
 
-/// Decide whether a generating slot may temporarily touch its per-slot token
-/// cap because the driver will slide its window back below the ceiling on the
-/// next step. Slides only happen during generation (never prefill) and only
-/// when sliding is configured.
-[[nodiscard]] bool computeSlideCapable(
-    const SequenceDriver& driver, bool slideConfigured, bool isPrefill);
-
 /// Whether prompt + generation budget overruns the per-sequence cap at
 /// admission. `promptSize` is the position span and `promptKvSize` the KV-cell
 /// span of the prompt; for M-RoPE media `promptKvSize >= promptSize`, so the
@@ -169,7 +162,6 @@ struct TimedDecodeResult {
 /// are derived getters computed from live state, not stored.
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
-  int64_t contextSlides = 0;
   int64_t thinkingBlockDiscards = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
@@ -187,9 +179,8 @@ struct RuntimeStatsSnapshot {
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
   /// Fold one completed slot's contribution into the running totals.
-  void accumulateSlot(
-      int64_t nPast, int64_t nSlides, int64_t thinkingDiscards,
-      const Request& req);
+  void
+  accumulateSlot(int64_t nPast, int64_t thinkingDiscards, const Request& req);
 
   /// How busy the shared backend was, NOT a property of any one request: the
   /// mean number of sequences decoded together, averaged over every
@@ -273,7 +264,7 @@ public:
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-      llama_pos configuredNDiscarded, DriverFactory driverFactory);
+      DriverFactory driverFactory);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
@@ -587,7 +578,6 @@ private:
   common_params_sampling baseSampling_;
   int baseNPredict_;
   common_params baseParams_;
-  llama_pos configuredNDiscarded_;
   DriverFactory driverFactory_;
 
   /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size

@@ -252,7 +252,6 @@ TEST_F(ConcurrentProcessByIdTest, ConsumeJobStatsLeavesLlamaPerfCountersAlone) {
         "CacheTokens",
         "generatedTokens",
         "promptTokens",
-        "contextSlides",
         "thinkingBlockDiscards",
         "avgConcurrentSeq",
         "backendDevice"}) {

@@ -11,7 +11,6 @@
 #include <llama.h>
 
 #include "CacheManager.hpp"
-#include "ContextSlider.hpp"
 #include "GenerationParamsApply.hpp"
 #include "ReasoningRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
@@ -48,7 +47,7 @@ bool isFileInitialized(const std::filesystem::path& path) {
 TextLlmContext::TextLlmContext(
     common_params& commonParams, common_init_result_ptr llamaInit)
     : llamaInit_(std::move(llamaInit)), params_(commonParams),
-      compactor_(rollbackState_), shifter_(compactor_, rollbackState_) {
+      compactor_(rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
@@ -59,8 +58,7 @@ TextLlmContext::TextLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
     llama_seq_id seqId, llama_pos perSeqCtxCeiling)
     : modelCtx_(shared), params_(commonParams),
-      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_),
-      shifter_(compactor_, rollbackState_) {
+      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_) {
   seqId_ = seqId;
   initializeCommonState();
 }
@@ -457,14 +455,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       preparePrefill(chatMsgs, tools, {}, {}, isCacheLoaded, prefill).tokens;
   const auto nTokens = static_cast<llama_pos>(inputTokens.size());
 
-  // Captured AFTER `preparePrefill` so a pure-attention in-prefill
-  // slide (which lowers `nPast_` via `trySlidePrefill`) is reflected
-  // in the anchor. Earlier capture would leave `preRequestNPast_` at
-  // the pre-slide cursor and `removeLastNTokens` under-trims on
-  // rollback, leaking cancelled prompt tokens into live KV. Recurrent
-  // preparePrefill throws instead of sliding, so the ordering matches
-  // for that path. The scheduler admission takes the same anchor
-  // after its own `preparePrefill`.
+  // Captured AFTER `preparePrefill` so the anchor reflects any position
+  // change that preparation made. The scheduler admission takes the same
+  // anchor after its own `preparePrefill`.
   snapshotPreRequestCursor();
   LlamaBatch textBatch(params_.n_batch, 0, 1);
 
@@ -545,7 +538,6 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
         }
       }
       stopGeneration_.store(false);
-      pendingBatchFirstMsg_ = false;
       return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
     }
     // Cap the current chunk at the snapshot boundary so recurrent /
@@ -620,12 +612,10 @@ PrefillPlan TextLlmContext::preparePrefill(
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
 
   const size_t nTokens = inputTokens.size();
-  pendingBatchFirstMsg_ = nPast_ == 0;
 
   // Per-slot usable window: the partitioned per-sequence cap in batch mode,
-  // else the full context. Sliding/overflow must measure against this so a
-  // cached prompt larger than its slot can be discarded to fit instead of
-  // being rejected by the scheduler.
+  // else the full context. Overflow must measure against this so the driver
+  // agrees with the scheduler about what fits.
   const llama_pos ceiling = ctxCeiling();
 
   // exceedsContextWindow mirrors the scheduler's admission, so the driver never
@@ -633,59 +623,27 @@ PrefillPlan TextLlmContext::preparePrefill(
   if (exceedsContextWindow(
           static_cast<llama_pos>(nTokens), ceiling, isPrefillOnlyRequest)) {
     std::string errorMsg = string_format(
-        "[TextLlm] context overflow at batch prefill step: prompt tokens %ld, "
+        "[TextLlm] context overflow at batch prefill step: prompt tokens %zu, "
         "max context tokens %d\n",
         nTokens,
         ceiling);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
+  // Cached conversation plus this prompt: the context is full, and there is
+  // nothing to evict any more, so the request cannot proceed.
   if (exceedsContextWindow(
           nPast_ + static_cast<llama_pos>(nTokens),
           ceiling,
           isPrefillOnlyRequest)) {
-    auto outcome = trySlidePrefill(
-        modelCtx_.lctx,
-        seqId_,
+    std::string errorMsg = string_format(
+        "[TextLlm] context overflow at batch prefill step: cached tokens %d "
+        "plus prompt tokens %zu exceed the max context tokens %d\n",
         nPast_,
-        firstMsgTokens_,
-        static_cast<llama_pos>(nTokens),
-        shifter_.discardBudget(),
-        defaultContextSliderOps(),
+        nTokens,
         ceiling);
-    switch (outcome.kind) {
-    case ContextSlideOutcome::Kind::Slid:
-      nPast_ = outcome.newNPast;
-      shifter_.noteSlide();
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "[TextLlm] Batch prefill step: discarded %d tokens after the "
-              "first message\n",
-              outcome.discarded));
-      break;
-    case ContextSlideOutcome::Kind::Overflow: {
-      std::string errorMsg = string_format(
-          "[TextLlm] context overflow at batch prefill step (%ld tokens, max "
-          "%d)\n",
-          nPast_ + nTokens,
-          ceiling);
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(ContextOverflow), errorMsg);
-    }
-    case ContextSlideOutcome::Kind::MemoryOperationFailed: {
-      std::string errorMsg = string_format(
-          "[TextLlm] failed to slide context memory at prefill step "
-          "(nPast=%d, append=%ld, max=%d)\n",
-          nPast_,
-          nTokens,
-          llama_n_ctx(modelCtx_.lctx));
-      throw qvac_errors::StatusError(
-          ADDON_ID, toString(ContextSlideFailed), errorMsg);
-    }
-    case ContextSlideOutcome::Kind::NotNeeded:
-      break;
-    }
+    throw qvac_errors::StatusError(
+        ADDON_ID, toString(ContextOverflow), errorMsg);
   }
 
   return PrefillPlan{.tokens = std::move(inputTokens)};
@@ -706,14 +664,6 @@ void TextLlmContext::onPrefillComplete(
   // off or this is a prefill-only cache-warm request, so it's safe to
   // call unconditionally.
   snapshotForRecurrentRollback();
-  if (pendingBatchFirstMsg_) {
-    firstMsgTokens_ = nPast_;
-    const llama_pos ctxSize = ctxCeiling();
-    if (shifter_.discardBudget() >= ctxSize - firstMsgTokens_) {
-      shifter_.setDiscardBudget(ctxSize - firstMsgTokens_ - 1);
-    }
-    pendingBatchFirstMsg_ = false;
-  }
 
   // Reset per-inference reasoning detection state here (shared by the
   // single-prompt and continuous-batching paths).
@@ -725,9 +675,7 @@ void TextLlmContext::onPrefillComplete(
   // Lifecycle: single-prompt path calls `rollbackState_.reset()` at
   // the start of `evalMessageWithTools`; the continuous-batching
   // scheduler constructs a fresh driver per slot so the state starts
-  // empty. Subsequent invalidation happens on context slide
-  // (`applyContextDiscard`) and consumption is via `compactThinkSpan`'s
-  // RAII guard.
+  // empty. Consumption is via `compactThinkSpan`'s RAII guard.
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
   compactor_.reset();
@@ -763,22 +711,6 @@ void TextLlmContext::emitOutputPiece(
   if (outputCallback) {
     outputCallback(text);
   }
-}
-
-llama_pos TextLlmContext::applyContextDiscard() {
-  const auto outcome = shifter_.applyGenerationDiscard(
-      modelCtx_.lctx,
-      seqId_,
-      nPast_,
-      firstMsgTokens_,
-      ctxCeiling(),
-      /*cacheTokens=*/-1,
-      "[TextLlm]");
-  if (outcome.kind == ContextShifter::Outcome::Kind::Slid) {
-    nPast_ = outcome.newPos;
-    return outcome.discarded;
-  }
-  return 0;
 }
 
 LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
@@ -880,31 +812,21 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     return {.finished = true};
   }
 
-  if (nPast_ + 1 > ctxCeiling() && shifter_.discardBudget() == 0) {
+  // The context is 100% full: no room for even one more token, and nothing
+  // is evicted to make room any more. Stop here and report why, so the
+  // caller can tell a full context from a prediction-limit cutoff.
+  if (nPast_ + 1 > ctxCeiling()) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
-            "[TextLlm] generation overflow: context is full and nDiscarded "
-            "is 0 (nPast=%d, nCtx=%d, firstMsgTokens=%d)\n",
+            "[TextLlm] generation stopped: context is full, no space left for "
+            "another token (nPast=%d, nCtx=%d)\n",
             nPast_,
-            ctxCeiling(),
-            firstMsgTokens_));
+            ctxCeiling()));
     return {
         .finished = true,
         .contextOverflow = true,
         .stopReason = GenerationStopReason::ContextOverflow};
-  }
-  const llama_pos discarded = applyContextDiscard();
-  // Batch path only: the scheduler cannot retry a full window, so a slot
-  // that is still at its ceiling after the slide attempt must stop here.
-  // Single-prompt keeps its legacy behavior (warn inside the slider and
-  // continue).
-  if (inlineDecodeBatch == nullptr && nPast_ + 1 > ctxCeiling()) {
-    return {
-        .finished = true,
-        .contextOverflow = true,
-        .stopReason = GenerationStopReason::ContextOverflow,
-        .discarded = discarded};
   }
 
   bool sampledToken = forcedTokens_.empty();
@@ -1004,11 +926,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     if (inlineDecodeBatch != nullptr) {
       if (handleReasoningEOS(
               tokenId, tokenStr, **inlineDecodeBatch, nPast_, outputCallback)) {
-        return {
-            .token = tokenId,
-            .finished = false,
-            .decodedInline = true,
-            .discarded = discarded};
+        return {.token = tokenId, .finished = false, .decodedInline = true};
       }
     } else if (
         reasoningState_.inside_reasoning &&
@@ -1033,7 +951,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       if (!completeChars.empty()) {
         emitOutputPiece(outputCallback, completeChars);
       }
-      return {.token = tokenId, .finished = false, .discarded = discarded};
+      return {.token = tokenId, .finished = false};
     }
   }
   // Batch path only: scheduler stops solely on `finished`. Single-prompt's
@@ -1055,8 +973,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     return {
         .token = tokenId,
         .finished = true,
-        .stopReason = GenerationStopReason::Eos,
-        .discarded = discarded};
+        .stopReason = GenerationStopReason::Eos};
   }
   GenerationStopReason stopReason = GenerationStopReason::None;
   if (isEos) {
@@ -1072,11 +989,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     flushPendingUtf8ToCallback(outputCallback);
   }
 
-  return {
-      .token = tokenId,
-      .finished = finished,
-      .stopReason = stopReason,
-      .discarded = discarded};
+  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
 
 void TextLlmContext::onSequenceEnd(
@@ -1155,7 +1068,6 @@ bool TextLlmContext::rollbackCurrentRequest(
       .onPureAttentionRolledBack = [this]() { nPast_ = preRequestNPast_; },
   });
 
-  firstMsgTokens_ = preRequestFirstMsgTokens_;
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -1313,7 +1225,7 @@ void TextLlmContext::snapshotForRecurrentRollback() {
     // tokens, then re-throw. The batch scheduler's slot cleanup
     // additionally passes `SaveCachePolicy::Skip` so the last known-
     // good on-disk cache is preserved.
-    const bool restoredPrefillEntry = restorePrefillEntryOrClearSequence({
+    restorePrefillEntryOrClearSequence({
         .ctx = modelCtx_.lctx,
         .seqId = seqId_,
         .rollback = rollbackState_,
@@ -1321,7 +1233,6 @@ void TextLlmContext::snapshotForRecurrentRollback() {
             [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
         .onCleared = [this]() { nPast_ = 0; },
     });
-    firstMsgTokens_ = restoredPrefillEntry ? preRequestFirstMsgTokens_ : 0;
     rollbackState_.clearPrefillEntry();
     rollbackState_.clearReasoningBoundary();
     rollbackState_.clearPostReasoning();
@@ -1364,9 +1275,6 @@ void TextLlmContext::compactThinkSpan() {
           .onCompacted =
               [this](const ReasoningBlockCompactor::Outcome& compacted) {
                 nPast_ = compacted.newPos;
-                if (compacted.keptPrefixEnd < firstMsgTokens_) {
-                  firstMsgTokens_ = compacted.keptPrefixEnd;
-                }
               },
           .onFailedKvIntact =
               [this]() {
@@ -1375,14 +1283,12 @@ void TextLlmContext::compactThinkSpan() {
                   removeLastNTokens(delta);
                 }
                 nPast_ = preRequestNPast_;
-                firstMsgTokens_ = preRequestFirstMsgTokens_;
                 rollbackState_.reset();
                 compactor_.reset();
               },
           .onFailedKvWiped =
               [this]() {
                 nPast_ = 0;
-                firstMsgTokens_ = 0;
                 rollbackState_.reset();
                 compactor_.reset();
               },
@@ -1432,9 +1338,8 @@ void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   //     returns `Outcome::Kind::FailedKvIntact`. The primitive is
   //     all-or-nothing so live KV is unchanged; `compactThinkSpan`
   //     drops `[preRequestNPast_, nPast_)` from live memory via
-  //     `removeLastNTokens`, restores `nPast_` / `firstMsgTokens_`
-  //     to the pre-request cursor, resets per-inference reasoning
-  //     bookkeeping, and throws.
+  //     `removeLastNTokens`, restores `nPast_` to the pre-request
+  //     cursor, resets per-inference reasoning bookkeeping, and throws.
   //   - Hybrid restore/replay failure — the compactor best-effort
   //     wipes the sequence memory and returns
   //     `Outcome::Kind::FailedKvWiped`. `compactThinkSpan` resets
@@ -1453,9 +1358,7 @@ void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   compactor_.setRemoveThinkingFromContext(value);
 }
 
-bool TextLlmContext::loadCache(
-    const std::string& cacheKey, llama_pos configuredNDiscarded) {
-  shifter_.setDiscardBudget(configuredNDiscarded);
+bool TextLlmContext::loadCache(const std::string& cacheKey) {
   if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
     return false;
   }
@@ -1490,14 +1393,12 @@ bool TextLlmContext::loadCache(
           "[TextLlm] failed to clear sequence after invalid cache load\n");
     }
     nPast_ = 0;
-    firstMsgTokens_ = 0;
   });
 
   if (tokenCount <= 1) {
     return false;
   }
   const llama_pos metadataNPast = sessionTokens[0];
-  const llama_pos metadataFirstMsgTokens = sessionTokens[1];
   if (metadataNPast > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -1549,15 +1450,6 @@ bool TextLlmContext::loadCache(
   }
 
   nPast_ = metadataNPast;
-  firstMsgTokens_ = metadataFirstMsgTokens;
-  // Clamp discard to the per-slot window (ctxCeiling), not the physical
-  // context: in batch mode the slot ceiling is ctx / n_parallel.
-  const llama_pos window = ctxCeiling();
-  if (configuredNDiscarded > window - firstMsgTokens_) {
-    shifter_.setDiscardBudget(window - firstMsgTokens_ - 1);
-  } else {
-    shifter_.setDiscardBudget(configuredNDiscarded);
-  }
   restoredKvGuard.dismiss();
   return true;
 }
@@ -1568,13 +1460,13 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
   }
 
   // Persist the full four-field metadata contract so the file is loadable by
-  // every path (CacheManager, MTMD). For text the cache-token counts equal the
-  // positional counts, so the getters supply mirrored values.
+  // every path (CacheManager, MTMD) and by builds that still read the two
+  // unused slots.
   const llama_token sessionTokens[SESSION_METADATA_FIELD_COUNT] = {
       static_cast<llama_token>(getNPast()),
-      static_cast<llama_token>(getFirstMsgTokens()),
+      0,
       static_cast<llama_token>(getCacheTokens()),
-      static_cast<llama_token>(getFirstMsgCacheTokens())};
+      0};
   const std::string tmpCacheKey = cacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
@@ -1593,10 +1485,7 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
 }
 
-void TextLlmContext::snapshotPreRequestCursor() {
-  preRequestNPast_ = nPast_;
-  preRequestFirstMsgTokens_ = firstMsgTokens_;
-}
+void TextLlmContext::snapshotPreRequestCursor() { preRequestNPast_ = nPast_; }
 
 void TextLlmContext::snapshotPreRequestRollbackAnchor() {
   // Pure-attention drivers rely on `removeLastNTokens` in `onCancel`;
@@ -1660,15 +1549,10 @@ void TextLlmContext::resetState(bool resetStats) {
   // Reset the n_past
   nPast_ = 0;
 
-  // Reset the first msg token length
-  firstMsgTokens_ = 0;
-
-  // On partial reset (resetStats=false), preserve the slide counter
-  // and block discards so `runtimeStats()` can read the per-inference
-  // values. On full reset (resetStats=true), clear them along with
-  // perf stats.
+  // On partial reset (resetStats=false), preserve the block discards so
+  // `runtimeStats()` can read the per-inference value. On full reset
+  // (resetStats=true), clear them along with perf stats.
   if (resetStats) {
-    shifter_.resetSlides();
     compactor_.resetBlockDiscards();
   }
 
@@ -1704,23 +1588,6 @@ llama_context* TextLlmContext::getCtx() { return modelCtx_.lctx; }
 llama_pos TextLlmContext::getNPast() const { return nPast_; }
 
 void TextLlmContext::setNPast(llama_pos nPast) { this->nPast_ = nPast; }
-
-llama_pos TextLlmContext::getFirstMsgTokens() const { return firstMsgTokens_; }
-
-void TextLlmContext::setFirstMsgTokens(llama_pos firstMsgTokens) {
-  this->firstMsgTokens_ = firstMsgTokens;
-}
-
-void TextLlmContext::setNDiscarded(llama_pos nDiscarded) {
-  shifter_.setDiscardBudget(nDiscarded);
-}
-
-llama_pos TextLlmContext::getNDiscarded() const {
-  return shifter_.discardBudget();
-}
-
-int32_t TextLlmContext::getNSlides() const { return shifter_.slides(); }
-void TextLlmContext::resetNSlides() { shifter_.resetSlides(); }
 
 llama_pos TextLlmContext::removeLastNTokens(llama_pos count) {
   // Validate input

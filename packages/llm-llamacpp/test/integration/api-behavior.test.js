@@ -271,6 +271,60 @@ safeTest(
   }
 )
 
+// Plain text path, no reasoning. Nothing is evicted to make room any more, so
+// the two ways a caller can run out of context must both be visible: a
+// generation that fills the window stops with `stopReason=contextOverflow` and
+// still hands back what it produced, and a prompt that cannot fit at all is
+// refused at prefill.
+safeTest(
+  'run | context full: generation reports contextOverflow and keeps its output',
+  { timeout: 600_000 },
+  async (t) => {
+    // Tight window, and `n_predict` far larger than the room left after the
+    // prompt, so the stop is always the context rather than the cap.
+    const { model } = await setupModel(t, { ctx_size: '512', n_predict: '512' })
+
+    const filler = 'word '.repeat(430)
+    const response = await model.run(
+      [
+        {
+          role: 'user',
+          content: `${filler}\nNow repeat the word "again" over and over without stopping.`
+        }
+      ],
+      { generationParams: { reasoning_budget: 0, predict: 512 } }
+    )
+    const output = await collectResponse(response)
+
+    t.is(
+      response?.stats?.stopReason,
+      'contextOverflow',
+      `a generation that fills the window reports it (stats=${JSON.stringify(response?.stats)})`
+    )
+    t.ok(output.length > 0, 'a generation stopped by a full context still returns its tokens')
+
+    // A prompt that cannot fit on its own never reaches decoding.
+    let prefillError = null
+    try {
+      const rejected = await model.run([{ role: 'user', content: 'word '.repeat(4000) }], {
+        generationParams: { reasoning_budget: 0 }
+      })
+      await rejected.await()
+    } catch (err) {
+      prefillError = err
+    }
+    t.ok(prefillError, 'a prompt larger than the context window is rejected')
+    t.ok(
+      /context overflow/i.test(prefillError && prefillError.message),
+      `the rejection says the context is full, got: ${prefillError && prefillError.message}`
+    )
+
+    const recovery = await model.run(BASE_PROMPT, { generationParams: { reasoning_budget: 0 } })
+    const recovered = await collectResponse(recovery)
+    t.ok(recovered.length > 0, 'model stays usable after a context-overflow refusal')
+  }
+)
+
 safeTest('idle | cancel: allowed, no-op', { timeout: 600_000 }, async (t) => {
   const { model } = await setupModel(t)
   await model.cancel()

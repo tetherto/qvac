@@ -11,7 +11,7 @@
 #include "../addon/LlmErrors.hpp"
 #include "../utils/LoggingMacros.hpp"
 #include "../utils/ReasoningRollbackState.hpp"
-#include "ContextSlider.hpp"
+#include "KvCacheOps.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -70,16 +70,6 @@ void ReasoningBlockCompactor::setOpenSpan(llama_pos start) {
   // defensive backstop for future callers that bypass those sites and
   // would otherwise drive `compact()` into its no-boundary
   // `FailedKvWiped` branch.
-  if (needsRecurrentSnapshot_ && slideInvalidatedBoundary_) {
-    // Generated-opener templates can slide after the recurrent boundary
-    // snapshot is captured but before `<think>` is detected. The slide
-    // clears that snapshot because its coordinates are stale. Once an opener
-    // appears, reasoning was actually emitted, so final compaction must
-    // hard-fail rather than silently refusing to track the span.
-    slideInvalidatedSpan_ = true;
-    clearSpan();
-    return;
-  }
   if (needsRecurrentSnapshot_ && !rollback_.hasReasoningBoundary()) {
     return;
   }
@@ -186,9 +176,9 @@ void ReasoningBlockCompactor::snapshotAtPrefillBoundary(
 ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
     const char* labelTag) {
-  const IContextSliderOps& sliderOps = sliderOpsOverride_ != nullptr
-                                           ? *sliderOpsOverride_
-                                           : defaultContextSliderOps();
+  const IKvCacheOps& kvCacheOps = kvCacheOpsOverride_ != nullptr
+                                      ? *kvCacheOpsOverride_
+                                      : defaultKvCacheOps();
   // RAII-style cleanup so every early return drops the per-inference
   // rollback buffers and span. The original sites in `TextLlmContext`
   // and `MtmdLlmContext` had identical guards; centralised here so
@@ -197,40 +187,12 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     ReasoningBlockCompactor* self;
     ~ResetGuard() {
       self->thinkSpan_.reset();
-      self->slideInvalidatedSpan_ = false;
-      self->slideInvalidatedBoundary_ = false;
-      self->slideInvalidatedPos_ = 0;
-      self->slideInvalidatedDiscarded_ = 0;
       self->rollback_.clearReasoningBoundary();
       self->rollback_.clearPostReasoning();
     }
   } guard{this};
 
   Outcome out;
-  if (removeThinkingFromContext_ && slideInvalidatedSpan_) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "%s thinking-block compaction failed: generation-time context "
-            "slide invalidated tracked reasoning state (pos=%d, "
-            "discarded=%d, seqId=%d); wiping sequence and hard-failing so "
-            "reasoning does not remain in cache\n",
-            labelTag,
-            slideInvalidatedPos_,
-            slideInvalidatedDiscarded_,
-            seqId));
-    clearSeqOnFailure(ctx, seqId);
-    out.kind = Outcome::Kind::FailedKvWiped;
-    out.failureMessage = string_format(
-        "%s ReasoningBlockCompactor::compact: generation-time context "
-        "slide invalidated tracked reasoning state (pos=%d, discarded=%d, "
-        "seqId=%d)",
-        labelTag,
-        slideInvalidatedPos_,
-        slideInvalidatedDiscarded_,
-        seqId);
-    return out;
-  }
   if (!removeThinkingFromContext_ || !thinkSpan_.has_value()) {
     return out;
   }
@@ -384,7 +346,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   // reasoning span still resident in cache.
   if (!needsRecurrentSnapshot_) {
     const CompactRangeOutcome rangeOutcome =
-        compactKvRange(ctx, seqId, start, end, pos, sliderOps);
+        compactKvRange(ctx, seqId, start, end, pos, kvCacheOps);
     if (rangeOutcome.kind == CompactRangeOutcome::Kind::Compacted) {
       out.kind = Outcome::Kind::CompactedAttention;
       out.newPos = rangeOutcome.newNPast;

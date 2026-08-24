@@ -94,8 +94,7 @@ TEST_F(TextLlmContextTest, Constructor) {
   EXPECT_TRUE(model->isLoaded());
 }
 
-// Make sure nDiscarded config is not dropped
-TEST_F(TextLlmContextTest, LoadCacheKeepsConfiguredNDiscardedWithoutCache) {
+TEST_F(TextLlmContextTest, LoadCacheReportsMissForEmptyKey) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
@@ -113,13 +112,8 @@ TEST_F(TextLlmContextTest, LoadCacheKeepsConfiguredNDiscardedWithoutCache) {
   common_params params;
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
-  constexpr llama_pos kConfiguredNDiscarded = 64;
-  const bool loaded = driver.loadCache(/*cacheKey=*/"", kConfiguredNDiscarded);
-
-  EXPECT_FALSE(loaded) << "an empty cache key must not load a cache";
-  EXPECT_EQ(driver.getNDiscarded(), kConfiguredNDiscarded)
-      << "no-cache batch slot dropped the configured nDiscarded budget; "
-         "context shifting is disabled (nDiscarded stuck at 0)";
+  EXPECT_FALSE(driver.loadCache(/*cacheKey=*/""))
+      << "an empty cache key must not load a cache";
 }
 
 TEST_F(TextLlmContextTest, LoadCacheClearsLegacyOneFieldMetadata) {
@@ -159,7 +153,7 @@ TEST_F(TextLlmContextTest, LoadCacheClearsLegacyOneFieldMetadata) {
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
-  EXPECT_FALSE(driver.loadCache(cachePathString, 64));
+  EXPECT_FALSE(driver.loadCache(cachePathString));
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "legacy metadata load returned false but left KV rows resident";
@@ -206,8 +200,7 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
-      { (void)driver.loadCache(cachePathString, 64); },
-      qvac_errors::StatusError);
+      { (void)driver.loadCache(cachePathString); }, qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed sequence cache validation left loaded KV rows resident";
@@ -261,8 +254,7 @@ TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
   TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
-      { (void)driver.loadCache(cachePathString, 64); },
-      qvac_errors::StatusError);
+      { (void)driver.loadCache(cachePathString); }, qvac_errors::StatusError);
   EXPECT_EQ(driver.getNPast(), 0);
   EXPECT_EQ(seqPosMax(*model), -1)
       << "failed cache-token validation left loaded KV rows resident";

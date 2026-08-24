@@ -668,8 +668,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
       "thinkingBlockDiscards=" + std::to_string(discards) +
       ", nPast=" + std::to_string(ctx->getNPast()) +
       ", cacheTokens=" + std::to_string(ctx->getCacheTokens()) +
-      ", firstMsgTokens=" + std::to_string(ctx->getFirstMsgTokens()) +
-      ", firstMsgCacheTokens=" + std::to_string(ctx->getFirstMsgCacheTokens()) +
       ", seqPosMax=" + std::to_string(posMax) +
       ", sequenceCells=" + std::to_string(sequenceCells) +
       ", output (first 200 chars): " + output.substr(0, 200));
@@ -698,10 +696,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
          "compaction";
   EXPECT_EQ(ctx->getNPast(), posMax + 1)
       << "MTMD current_.pos must match the compacted sequence cursor";
-  EXPECT_LE(ctx->getFirstMsgTokens(), ctx->getNPast())
-      << "protected text prefix must not extend beyond compacted position";
-  EXPECT_LE(ctx->getFirstMsgCacheTokens(), ctx->getCacheTokens())
-      << "protected cache prefix must not extend beyond compacted KV cells";
 
   fs::remove(cachePath);
 }
@@ -796,7 +790,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRollsBackRestoredKvOnPostRestoreFailure) {
 
   bool threw = false;
   try {
-    (void)ctx->loadCache(cachePath.string(), 0);
+    (void)ctx->loadCache(cachePath.string());
   } catch (const qvac_errors::StatusError&) {
     threw = true;
   }
@@ -840,12 +834,8 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   ASSERT_GT(ctx->getCacheTokens(), 0);
 
   const llama_token nPast = static_cast<llama_token>(ctx->getNPast());
-  const llama_token firstMsgTokens =
-      static_cast<llama_token>(ctx->getFirstMsgTokens());
   const llama_token cacheTokens =
       static_cast<llama_token>(ctx->getCacheTokens());
-  const llama_token firstMsgCacheTokens =
-      static_cast<llama_token>(ctx->getFirstMsgCacheTokens());
 
   const fs::path nPastMismatchPath =
       fs::temp_directory_path() / "qvac-mtmd-loadcache-npast-mismatch.bin";
@@ -856,10 +846,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   fs::remove(cacheTokensMismatchPath);
 
   const llama_token nPastMismatch[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(nPast + 1),
-      firstMsgTokens,
-      cacheTokens,
-      firstMsgCacheTokens};
+      static_cast<llama_token>(nPast + 1), 0, cacheTokens, 0};
   ASSERT_GT(
       llama_state_seq_save_file(
           lctx,
@@ -870,10 +857,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
       0u);
 
   const llama_token cacheTokensMismatch[SESSION_METADATA_FIELD_COUNT] = {
-      nPast,
-      firstMsgTokens,
-      static_cast<llama_token>(cacheTokens + 1),
-      firstMsgCacheTokens};
+      nPast, 0, static_cast<llama_token>(cacheTokens + 1), 0};
   ASSERT_GT(
       llama_state_seq_save_file(
           lctx,
@@ -889,7 +873,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   ASSERT_EQ(llama_memory_seq_token_count(mem, seqId), 0u);
 
   EXPECT_THROW(
-      { (void)ctx->loadCache(nPastMismatchPath.string(), 0); },
+      { (void)ctx->loadCache(nPastMismatchPath.string()); },
       qvac_errors::StatusError)
       << "loadCache must reject metadata nPast that differs from live KV";
   EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)
@@ -898,7 +882,7 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   EXPECT_EQ(ctx->getCacheTokens(), 0);
 
   EXPECT_THROW(
-      { (void)ctx->loadCache(cacheTokensMismatchPath.string(), 0); },
+      { (void)ctx->loadCache(cacheTokensMismatchPath.string()); },
       qvac_errors::StatusError)
       << "loadCache must reject metadata cacheTokens that differs from live KV";
   EXPECT_EQ(llama_memory_seq_token_count(mem, seqId), 0u)

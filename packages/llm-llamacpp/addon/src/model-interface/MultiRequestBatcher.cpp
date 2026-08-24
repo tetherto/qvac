@@ -8,12 +8,10 @@ namespace qvac_lib_inference_addon_llama::batching {
 namespace views = std::views;
 
 Request::Request(
-    uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos,
-    bool canSlide)
+    uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos)
     : seqId(rid), pendingPrefillTokens(std::move(plan.tokens)),
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
-      currentPos(initialPos), slideCapable(canSlide),
-      maxTokensPerSequence(maxTokens) {
+      currentPos(initialPos), maxTokensPerSequence(maxTokens) {
   prefillTokenCount = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
     prefillTokenCount += static_cast<size_t>(barrier.nPos);
@@ -22,10 +20,9 @@ Request::Request(
 
 Request::Request(
     uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
-    llama_pos initialPos, bool canSlide)
+    llama_pos initialPos)
     : Request(
-          rid, PrefillPlan{.tokens = std::move(toks)}, maxTokens, initialPos,
-          canSlide) {}
+          rid, PrefillPlan{.tokens = std::move(toks)}, maxTokens, initialPos) {}
 
 bool Request::isPrefillComplete() const {
   return prefillFedCount >= pendingPrefillTokens.size() &&
@@ -33,12 +30,7 @@ bool Request::isPrefillComplete() const {
 }
 
 bool Request::exceededLimit() const {
-  // A slide-capable generating sequence may touch the cap: the driver's
-  // next step slides it back below (or reports contextOverflow and the
-  // scheduler truncates it explicitly).
-  const bool slideMayRecover = slideCapable && isPrefillComplete();
-  return currentPos >= static_cast<llama_pos>(maxTokensPerSequence) &&
-         !slideMayRecover;
+  return currentPos >= static_cast<llama_pos>(maxTokensPerSequence);
 }
 
 bool Request::isFinished() const {
@@ -144,17 +136,16 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequest(
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     uint32_t seqId, std::vector<llama_token>&& tokens, llama_pos initialPos,
-    bool slideCapable, llama_pos initialKvCells) {
+    llama_pos initialKvCells) {
   return addRequestAt(
       seqId,
       PrefillPlan{.tokens = std::move(tokens)},
       initialPos,
-      slideCapable,
       initialKvCells);
 }
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
-    uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos, bool slideCapable,
+    uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos,
     llama_pos initialKvCells) {
   if (plan.tokens.empty() && plan.mediaBarriers.empty()) {
     return AddStatus::ErrEmptyTokens;
@@ -187,7 +178,7 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     return AddStatus::ErrNoFreeSlot;
   }
   slots_[seqId].emplace(
-      seqId, std::move(plan), maxTokensPerSequence_, initialPos, slideCapable);
+      seqId, std::move(plan), maxTokensPerSequence_, initialPos);
   return AddStatus::Ok;
 }
 
@@ -306,7 +297,7 @@ void MultiRequestBatcher::advance(
     Request& req = *slot;
     req.currentPos += chunk;
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
-      req.stopReason = StopReason::LimitReached;
+      req.stopReason = StopReason::ContextOverflow;
     }
     if (!req.isPrefillComplete()) {
       advanceReqPrefill(req, chunk, onPrefillComplete);
@@ -337,7 +328,7 @@ bool MultiRequestBatcher::completeMediaBarrier(
     req.pendingMediaBarriers.erase(req.pendingMediaBarriers.begin());
     req.currentPos = newPos;
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
-      req.stopReason = StopReason::LimitReached;
+      req.stopReason = StopReason::ContextOverflow;
     }
     finishPrefillIfComplete(req, onPrefillComplete);
   }
@@ -376,13 +367,6 @@ bool MultiRequestBatcher::markFinished(uint32_t seqId, StopReason reason) {
     slots_[seqId]->stopReason = reason;
   }
   return valid;
-}
-
-void MultiRequestBatcher::applySlide(uint32_t seqId, llama_pos discarded) {
-  if (isValid(seqId) && discarded > 0) {
-    Request& req = *slots_[seqId];
-    req.currentPos = std::max<llama_pos>(0, req.currentPos - discarded);
-  }
 }
 
 void MultiRequestBatcher::markAllFinished(StopReason reason) {

@@ -81,7 +81,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/KvCacheOps.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
@@ -93,7 +93,6 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
@@ -141,7 +140,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/CacheManager.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextSlider.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/KvCacheOps.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContinuousBatchScheduler.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/GenerationParamsApply.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
@@ -153,7 +152,6 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultiRequestBatcher.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ContextShifter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
