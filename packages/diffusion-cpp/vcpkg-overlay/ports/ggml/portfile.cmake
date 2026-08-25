@@ -57,17 +57,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 0de1c777cb20b167afd80677e4213f96f500f8d4
-    SHA512 91c39b0f072e9b087da4d297e5aeae809e2684f021287fa8c9ced8cb739ff3eee4feefb91d72d5fe2fcff69f418d079236e5096b1cc742fcc83a6d4cde54427b
-)
-
-# The pinned ggml revision contains the same OpenCL POOL_2D dispatch case twice.
-# Keep both OpenCL and Vulkan enabled on Android by removing the duplicate at
-# the port boundary until the upstream source is corrected.
-vcpkg_apply_patches(
-    SOURCE_PATH "${SOURCE_PATH}"
-    PATCHES
-        "${CMAKE_CURRENT_LIST_DIR}/patches/opencl-remove-duplicate-pool-case.patch"
+    REF 7d9ce11cd47f338b361a00e866ffe7c224abedff
+    SHA512 0c7c99a799a6479d8fbf72d47240119da52d5d4b63ee1ecabf05cf84a0317588ee78939d9c6dba5a881d1bb4fc22765ac0991395cfc47204aa0548fe4c937d15
 )
 
 # --- GPU feature flags ---
