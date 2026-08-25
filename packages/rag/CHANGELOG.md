@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Convert `@qvac/rag` to TypeScript compiled ESM (`"type": "module"`). CommonJS `require('@qvac/rag')` no longer works. Switch to `import`. Named exports are unchanged (#3718).
+- Convert `@qvac/rag` to TypeScript compiled ESM (`"type": "module"`). CommonJS `require('@qvac/rag')` no longer works; switch to `import`. Named exports are unchanged (#3718).
 
 ### Fixed
 
