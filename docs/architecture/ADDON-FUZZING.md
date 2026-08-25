@@ -43,12 +43,9 @@ libFuzzer).
 ## Scope
 
 Scope is **every QVAC native addon** — all packages whose `package.json`
-declares `"addon": true`. The ONNX Runtime addons that were originally carved
-out of this effort (`onnx`, `ocr-onnx`) have since been removed from the
-monorepo, so no exception remains. The in-scope addons are
-C++20 Bare addons built with CMake + vcpkg on the centrally-pinned
-**clang-22 / libc++** toolchain, linked against `ggml` / `llama.cpp` /
-`whisper.cpp` / `stable-diffusion.cpp`.
+declares `"addon": true`. The in-scope addons are C++20 Bare addons built with
+CMake + vcpkg on the centrally-pinned **clang-22 / libc++** toolchain, linked
+against `ggml` / `llama.cpp` / `whisper.cpp` / `stable-diffusion.cpp`.
 
 ### Addon inventory
 

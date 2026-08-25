@@ -8,8 +8,8 @@ llama/ggml runtime is **built once** and **loaded once per process** instead of
 being statically embedded into every addon.
 
 It follows the npm + `prebuilds/` + `include_bare_module(... PREBUILD)` +
-companion-`.bare` pattern that the retired `@qvac/onnx` shared addon
-established. See [INTEGRATION.md](./INTEGRATION.md) for the consumer guide.
+companion-`.bare` pattern. See [INTEGRATION.md](./INTEGRATION.md) for the
+consumer guide.
 
 ## What it ships
 
