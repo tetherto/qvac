@@ -57,7 +57,16 @@ def build(sdk: Path, *, force: bool) -> Path:
     # `bun run build` is lint + tsc + alias resolution; run the worker-producing
     # steps directly so a build here doesn't depend on the SDK's lint passing
     # (the SDK has its own lint CI). `bun install` pulls the addon prebuilds.
-    _run(["bun", "install"], sdk)
+    #
+    # The SDK sources its surface from @qvac/inference, declared as a registry
+    # dependency. In the monorepo, compile against the sibling engine at this
+    # commit instead: the published release lags the engine API the SDK already
+    # consumes, so tsc below fails on anything unreleased. The helper installs
+    # the SDK against `file:../inference`, so it stands in for the plain install.
+    if (sdk.parent / "inference").is_dir():
+        _run(["bun", "run", "sdk-source:workspace"], sdk)
+    else:
+        _run(["bun", "install"], sdk)
     # bun/npm don't reliably set the exec bit on the prebuilt Bare binary, and
     # the client execs it directly (node_modules/bare-runtime-<plat>/bin/bare),
     # so it fails with EACCES on Linux CI. Make every installed bare runnable.

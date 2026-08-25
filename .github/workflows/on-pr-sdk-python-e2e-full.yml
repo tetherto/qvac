@@ -124,14 +124,6 @@ jobs:
         run: |
           "$PYBIN" -m pip install -e ".[gen,dev,vla,notebook]"
 
-      # build_worker.py compiles the sibling packages/sdk from source, and the
-      # SDK sources its surface from @qvac/inference. Point that at the in-repo
-      # engine at this commit rather than the published release, which lags the
-      # engine API the SDK already consumes. Same reason as publish-sdk.yml.
-      - name: Build against workspace @qvac/inference
-        working-directory: packages/sdk
-        run: bun run sdk-source:workspace
-
       - name: Build worker
         run: |
           "$PYBIN" scripts/build_worker.py

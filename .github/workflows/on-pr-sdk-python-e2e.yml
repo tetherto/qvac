@@ -53,14 +53,6 @@ jobs:
           python3 -m venv .venv
           .venv/bin/pip install --quiet -e ".[gen,dev,vla,notebook]"
 
-      # build_worker.py compiles the sibling packages/sdk from source, and the
-      # SDK sources its surface from @qvac/inference. Point that at the in-repo
-      # engine at this commit rather than the published release, which lags the
-      # engine API the SDK already consumes. Same reason as publish-sdk.yml.
-      - name: Build against workspace @qvac/inference
-        working-directory: packages/sdk
-        run: bun run sdk-source:workspace
-
       # All-public @qvac deps, no auth — same as the CLI's plain build.
       - name: Build worker
         run: .venv/bin/python3 scripts/build_worker.py
