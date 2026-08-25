@@ -1,15 +1,30 @@
 import {
   AudioEditOperationType,
   AudioGen,
+  ENGINE_MINIMAX,
   ERR_CODES,
   QvacErrorAudioGen,
   RepaintMode,
+  detectEngineType,
+  type AudioGenEngine,
   type AudiogenOutputChunk
 } from '../../index'
+
+type InvalidEngineIsAllowed =
+  'invalid-engine' extends Parameters<typeof detectEngineType>[1] ? true : false
 
 const audioGen = new AudioGen()
 const errorCode: number = ERR_CODES.INVALID_INPUT
 const errorConstructor: typeof QvacErrorAudioGen = QvacErrorAudioGen
+const engine: AudioGenEngine = ENGINE_MINIMAX
+const invalidEngineIsAllowed: InvalidEngineIsAllowed = false
+const minimax = new AudioGen({
+  engine,
+  files: {
+    lmModel: '/models/mm3-lm.gguf',
+    synthModel: '/models/mm3-synth.gguf'
+  }
+})
 const output: AudiogenOutputChunk = {
   outputArray: new Int16Array(0),
   sampleRate: 48000,
@@ -38,7 +53,9 @@ const editResponse = editSession.run({ seed: 22883 })
 void audioGen
 void errorCode
 void errorConstructor
+void minimax
 void output
+void invalidEngineIsAllowed
 void editSession
 void editResponse
 void operationType
