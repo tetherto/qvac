@@ -19,6 +19,14 @@
   `include-rocm-sdk: true` because `ggml-config.cmake` resolves
   `find_dependency(hip/hipblas/rocblas)` at configure time. No AMD GPU is
   required on either runner.
+- `qvac-registry-vcpkg` baseline `c57eec31` -> `f04e2447`, matching
+  `@qvac/vla-ggml`. Required because `qvac-fabric[hip-backend]` depends on `hip`
+  with no version constraint, so its version comes from the pinned baseline, and
+  the `hip` port does not exist at `c57eec31`. No other version selected by this
+  package changes: `qvac-fabric` and `qvac-lint-cpp` are pinned above their
+  baseline entries by `version>=`, `opencl` / `vcpkg-cmake` /
+  `vcpkg-cmake-config` are identical in both baselines, and `spirv-headers`
+  resolves from the separately pinned `microsoft/vcpkg` registry.
 
 ## [0.8.0] - 2026-08-24
 
