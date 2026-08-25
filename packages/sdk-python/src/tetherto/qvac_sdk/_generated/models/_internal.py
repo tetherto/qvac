@@ -8695,57 +8695,133 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["chatterbox"], Field(alias="ttsEngine")] = (
-        "chatterbox"
-    )
+    tts_engine: Annotated[
+        Literal["chatterbox"],
+        Field(
+            alias="ttsEngine",
+            description="TTS engine: Chatterbox (multilingual, voice cloning).",
+        ),
+    ] = "chatterbox"
     language: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"),
+        Field(
+            description="Language code. Default `en`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage",
+        ),
     ]
     voice: str | None = None
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
     stream_chunk_tokens: Annotated[
-        int | None, Field(alias="streamChunkTokens", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamChunkTokens",
+            description="Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     stream_first_chunk_tokens: Annotated[
-        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamFirstChunkTokens",
+            description="Smaller first streaming chunk for lower first-audio latency.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     cfm_steps: Annotated[
-        int | None, Field(alias="cfmSteps", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="cfmSteps",
+            description="Chatterbox CFM Euler step count. Default 2.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
-    cfg_rate: Annotated[float | None, Field(alias="cfgRate", ge=0.0)] = None
-    threads: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
+    cfg_rate: Annotated[
+        float | None,
+        Field(
+            alias="cfgRate",
+            description="Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.",
+            ge=0.0,
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; overrides the hardware default.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     s3gen_model_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc | None,
-        Field(alias="s3genModelSrc"),
+        Field(
+            alias="s3genModelSrc",
+            description="Chatterbox S3Gen + HiFT model source (speech tokens to 24 kHz waveform).",
+        ),
     ] = None
     reference_audio_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc | None,
-        Field(alias="referenceAudioSrc"),
+        Field(
+            alias="referenceAudioSrc",
+            description="Chatterbox voice-cloning reference audio source (wav).",
+        ),
     ] = None
     mecab_dict_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc | None,
-        Field(alias="mecabDictSrc"),
+        Field(
+            alias="mecabDictSrc",
+            description="Chatterbox MTL only: compiled MeCab/IPAdic dictionary source for Japanese segmentation (required for language `ja`).",
+        ),
     ] = None
     cangjie_tsv_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc | None,
-        Field(alias="cangjieTsvSrc"),
+        Field(
+            alias="cangjieTsvSrc",
+            description="Chatterbox MTL only: Cangjie TSV source for Chinese romanisation (required for language `zh`).",
+        ),
     ] = None
     lavasr_enhancer_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
         | None,
-        Field(alias="lavasrEnhancerModelSrc"),
+        Field(
+            alias="lavasrEnhancerModelSrc",
+            description="LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
+        ),
     ] = None
     lavasr_denoiser_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc
         | None,
-        Field(alias="lavasrDenoiserModelSrc"),
+        Field(
+            alias="lavasrDenoiserModelSrc",
+            description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
     ] = None
     tts_supertonic_multilingual: Annotated[
         Any | None, Field(alias="ttsSupertonicMultilingual")
@@ -8910,36 +8986,75 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["supertonic"], Field(alias="ttsEngine")] = (
-        "supertonic"
-    )
+    tts_engine: Annotated[
+        Literal["supertonic"],
+        Field(alias="ttsEngine", description="TTS engine: Supertonic."),
+    ] = "supertonic"
     language: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"),
+        Field(
+            description="Language code. Default `en`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage",
+        ),
     ]
-    voice: str | None = None
-    tts_speed: Annotated[float | None, Field(alias="ttsSpeed")] = None
-    tts_num_inference_steps: Annotated[
-        float | None, Field(alias="ttsNumInferenceSteps")
+    voice: Annotated[
+        str | None, Field(description="Supertonic baked voice id, e.g. `F1` or `M1`.")
     ] = None
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    tts_speed: Annotated[
+        float | None,
+        Field(
+            alias="ttsSpeed",
+            description="Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor.",
+        ),
+    ] = None
+    tts_num_inference_steps: Annotated[
+        float | None,
+        Field(
+            alias="ttsNumInferenceSteps",
+            description="Supertonic vector-estimator CFM steps; 0 uses the GGUF default.",
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
     output_sample_rate: Annotated[
-        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+        int | None,
+        Field(
+            alias="outputSampleRate",
+            description="Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active).",
+            ge=8000,
+            le=192000,
+        ),
     ] = None
     vulkan_cache_dir: Annotated[
-        str | None, Field(alias="vulkanCacheDir", min_length=1)
+        str | None,
+        Field(
+            alias="vulkanCacheDir",
+            description="Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
+            min_length=1,
+        ),
     ] = None
     lavasr_enhancer_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
         | None,
-        Field(alias="lavasrEnhancerModelSrc"),
+        Field(
+            alias="lavasrEnhancerModelSrc",
+            description="LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
+        ),
     ] = None
     lavasr_denoiser_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc
         | None,
-        Field(alias="lavasrDenoiserModelSrc"),
+        Field(
+            alias="lavasrDenoiserModelSrc",
+            description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
     ] = None
     tts_supertonic_multilingual: Annotated[
         Any | None, Field(alias="ttsSupertonicMultilingual")
@@ -8992,57 +9107,193 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerPace(Enum):
 
 
 class MaxFrames(RootModel[int]):
-    root: Annotated[int, Field(ge=10, le=2147483647)]
+    root: Annotated[
+        int,
+        Field(
+            description="Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
+            ge=10,
+            le=2147483647,
+        ),
+    ]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["parler"], Field(alias="ttsEngine")] = "parler"
-    description: Annotated[str | None, Field(min_length=1)] = None
-    voice_description: Annotated[
-        str | None, Field(alias="voiceDescription", min_length=1)
+    tts_engine: Annotated[
+        Literal["parler"], Field(alias="ttsEngine", description="TTS engine: Parler.")
+    ] = "parler"
+    description: Annotated[
+        str | None,
+        Field(
+            description="Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
+            min_length=1,
+        ),
     ] = None
-    voice: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None,
+        Field(
+            alias="voiceDescription",
+            description="Alias of `description`; mutually exclusive with the voice-template fields.",
+            min_length=1,
+        ),
+    ] = None
+    voice: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template speaker name; also Supertonic’s baked voice id.",
+            min_length=1,
+        ),
+    ] = None
     emotion: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"),
+        Field(
+            description="Speaking style (Parler voice-template field).",
+            title="LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion",
+        ),
     ] = None
-    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pitch: Annotated[
+        str | None,
+        Field(description="Parler voice-template pitch descriptor.", min_length=1),
+    ] = None
     pace: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigParlerPace | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigParlerPace"),
+        Field(
+            description="Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigParlerPace",
+        ),
     ] = None
-    expressivity: Annotated[str | None, Field(min_length=1)] = None
-    noise: Annotated[str | None, Field(min_length=1)] = None
-    reverb: Annotated[str | None, Field(min_length=1)] = None
-    quality: Annotated[str | None, Field(min_length=1)] = None
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    expressivity: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template expressivity descriptor.", min_length=1
+        ),
+    ] = None
+    noise: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template background-noise descriptor.",
+            min_length=1,
+        ),
+    ] = None
+    reverb: Annotated[
+        str | None,
+        Field(description="Parler voice-template reverb descriptor.", min_length=1),
+    ] = None
+    quality: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template audio-quality descriptor.", min_length=1
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
     output_sample_rate: Annotated[
-        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+        int | None,
+        Field(
+            alias="outputSampleRate",
+            description="Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active).",
+            ge=8000,
+            le=192000,
+        ),
     ] = None
     stream_chunk_tokens: Annotated[
-        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
+        int | None,
+        Field(
+            alias="streamChunkTokens",
+            description="Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
+            ge=0,
+            le=2147483647,
+        ),
     ] = None
     stream_first_chunk_tokens: Annotated[
-        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
+        int | None,
+        Field(
+            alias="streamFirstChunkTokens",
+            description="Smaller first streaming chunk for lower first-audio latency.",
+            ge=0,
+            le=2147483647,
+        ),
     ] = None
-    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; overrides the hardware default.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
     ] = None
-    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
-    temperature: Annotated[float | None, Field(ge=0.0)] = None
-    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
-    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
-    max_frames: Annotated[Literal[0] | MaxFrames | None, Field(alias="maxFrames")] = (
-        None
-    )
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None,
+        Field(
+            description="Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).",
+            ge=0.0,
+        ),
+    ] = None
+    top_k: Annotated[
+        int | None,
+        Field(
+            alias="topK",
+            description="Top-k sampling cutoff; unset defers to the engine default (50).",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    top_p: Annotated[
+        float | None,
+        Field(
+            alias="topP",
+            description="Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.",
+            gt=0.0,
+            le=1.0,
+        ),
+    ] = None
+    max_frames: Annotated[
+        Literal[0] | MaxFrames | None,
+        Field(
+            alias="maxFrames",
+            description="Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
+        ),
+    ] = None
     min_new_tokens: Annotated[
-        int | None, Field(alias="minNewTokens", ge=-1, le=2147483647)
+        int | None,
+        Field(
+            alias="minNewTokens",
+            description="Parler minimum tokens before EOS; `-1` uses the model default.",
+            ge=-1,
+            le=2147483647,
+        ),
     ] = None
-    normalize_numbers: Annotated[bool | None, Field(alias="normalizeNumbers")] = None
+    normalize_numbers: Annotated[
+        bool | None,
+        Field(
+            alias="normalizeNumbers",
+            description="Parler prompt digit expansion (engine default: enabled).",
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion(Enum):
@@ -9059,7 +9310,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace(Enum):
 
 
 class Instruct(RootModel[str]):
-    root: Annotated[str, Field(min_length=1)]
+    root: Annotated[
+        str,
+        Field(
+            description="Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis.",
+            min_length=1,
+        ),
+    ]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect(Enum):
@@ -9210,46 +9467,106 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["cosyvoice3"], Field(alias="ttsEngine")] = (
-        "cosyvoice3"
-    )
+    tts_engine: Annotated[
+        Literal["cosyvoice3"],
+        Field(alias="ttsEngine", description="TTS engine: CosyVoice3."),
+    ] = "cosyvoice3"
     emotion: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"),
+        Field(
+            description="Speaking style: `'anger'`, `'happy'`, `'neutral'`, or `'sad'`. One conditioning control per synthesis (emotion / non-moderate pace / instruct).",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion",
+        ),
     ] = None
     pace: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"),
+        Field(
+            description="Speaking rate: `'slow'`, `'moderate'`, or `'fast'`; `'moderate'` disengages the pace channel.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace",
+        ),
     ] = None
-    instruct: (
-        Instruct | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct | None
-    ) = None
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    instruct: Annotated[
+        Instruct | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct | None,
+        Field(
+            description="Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis."
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
     output_sample_rate: Annotated[
-        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+        int | None,
+        Field(
+            alias="outputSampleRate",
+            description="Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active).",
+            ge=8000,
+            le=192000,
+        ),
     ] = None
     stream_chunk_tokens: Annotated[
-        int | None, Field(alias="streamChunkTokens", ge=0, le=2147483647)
+        int | None,
+        Field(
+            alias="streamChunkTokens",
+            description="Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
+            ge=0,
+            le=2147483647,
+        ),
     ] = None
     stream_first_chunk_tokens: Annotated[
-        int | None, Field(alias="streamFirstChunkTokens", ge=0, le=2147483647)
+        int | None,
+        Field(
+            alias="streamFirstChunkTokens",
+            description="Smaller first streaming chunk for lower first-audio latency.",
+            ge=0,
+            le=2147483647,
+        ),
     ] = None
-    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; overrides the hardware default.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
     ] = None
-    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
     lavasr_enhancer_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
         | None,
-        Field(alias="lavasrEnhancerModelSrc"),
+        Field(
+            alias="lavasrEnhancerModelSrc",
+            description="LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
+        ),
     ] = None
     lavasr_denoiser_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
         | None,
-        Field(alias="lavasrDenoiserModelSrc"),
+        Field(
+            alias="lavasrDenoiserModelSrc",
+            description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
     ] = None
 
 
@@ -9399,39 +9716,117 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tts_engine: Annotated[Literal["audio8"], Field(alias="ttsEngine")] = "audio8"
+    tts_engine: Annotated[
+        Literal["audio8"], Field(alias="ttsEngine", description="TTS engine: Audio8.")
+    ] = "audio8"
     reference_text: Annotated[
-        str | None, Field(alias="referenceText", min_length=1)
+        str | None,
+        Field(
+            alias="referenceText",
+            description="Transcript of `referenceAudioSrc`; required when cloning a voice.",
+            min_length=1,
+        ),
     ] = None
-    greedy: bool | None = None
-    temperature: Annotated[float | None, Field(ge=0.0)] = None
-    top_k: Annotated[int | None, Field(alias="topK", ge=0, le=2147483647)] = None
-    top_p: Annotated[float | None, Field(alias="topP", gt=0.0, le=1.0)] = None
-    max_frames: Annotated[int | None, Field(alias="maxFrames", ge=0, le=2147483647)] = (
-        None
-    )
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    greedy: Annotated[
+        bool | None, Field(description="Audio8: take the argmax instead of sampling.")
+    ] = None
+    temperature: Annotated[
+        float | None,
+        Field(
+            description="Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).",
+            ge=0.0,
+        ),
+    ] = None
+    top_k: Annotated[
+        int | None,
+        Field(
+            alias="topK",
+            description="Top-k sampling cutoff; unset defers to the engine default (50).",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    top_p: Annotated[
+        float | None,
+        Field(
+            alias="topP",
+            description="Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.",
+            gt=0.0,
+            le=1.0,
+        ),
+    ] = None
+    max_frames: Annotated[
+        int | None,
+        Field(
+            alias="maxFrames",
+            description="Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
+        ),
+    ] = None
     output_sample_rate: Annotated[
-        int | None, Field(alias="outputSampleRate", ge=8000, le=192000)
+        int | None,
+        Field(
+            alias="outputSampleRate",
+            description="Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active).",
+            ge=8000,
+            le=192000,
+        ),
     ] = None
-    threads: Annotated[int | None, Field(gt=0, le=2147483647)] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; overrides the hardware default.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=-2147483648, le=2147483647)
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
     ] = None
-    seed: Annotated[int | None, Field(ge=-2147483648, le=2147483647)] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
     audio8_codec_decoder_model_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc,
-        Field(alias="audio8CodecDecoderModelSrc"),
+        Field(
+            alias="audio8CodecDecoderModelSrc",
+            description="Audio8 codec decoder model source (codes to 44.1 kHz waveform).",
+        ),
     ]
     audio8_codec_encoder_model_src: Annotated[
         str
         | LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
         | None,
-        Field(alias="audio8CodecEncoderModelSrc"),
+        Field(
+            alias="audio8CodecEncoderModelSrc",
+            description="Audio8 codec encoder model source (waveform to codes); required only for voice cloning.",
+        ),
     ] = None
     reference_audio_src: Annotated[
         str | LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc | None,
-        Field(alias="referenceAudioSrc"),
+        Field(
+            alias="referenceAudioSrc",
+            description="Audio8 voice-cloning reference recording source; pair with `referenceText`.",
+        ),
     ] = None
 
 
@@ -12439,22 +12834,69 @@ class TextToSpeechRequest(GeneratedBaseModel):
     sentence_stream_max_chunk_scalars: Annotated[
         float | None, Field(alias="sentenceStreamMaxChunkScalars", gt=0.0)
     ] = None
-    description: Annotated[str | None, Field(min_length=1)] = None
+    description: Annotated[
+        str | None,
+        Field(
+            description="Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
+            min_length=1,
+        ),
+    ] = None
     voice_description: Annotated[
-        str | None, Field(alias="voiceDescription", min_length=1)
+        str | None,
+        Field(
+            alias="voiceDescription",
+            description="Alias of `description`; mutually exclusive with the voice-template fields.",
+            min_length=1,
+        ),
     ] = None
-    voice: Annotated[str | None, Field(min_length=1)] = None
+    voice: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template speaker name; also Supertonic’s baked voice id.",
+            min_length=1,
+        ),
+    ] = None
     emotion: Annotated[
-        TextToSpeechRequestEmotion | None, Field(title="TextToSpeechRequestEmotion")
+        TextToSpeechRequestEmotion | None,
+        Field(
+            description="Speaking style (Parler voice-template field).",
+            title="TextToSpeechRequestEmotion",
+        ),
     ] = None
-    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pitch: Annotated[
+        str | None,
+        Field(description="Parler voice-template pitch descriptor.", min_length=1),
+    ] = None
     pace: Annotated[
-        TextToSpeechRequestPace | None, Field(title="TextToSpeechRequestPace")
+        TextToSpeechRequestPace | None,
+        Field(
+            description="Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
+            title="TextToSpeechRequestPace",
+        ),
     ] = None
-    expressivity: Annotated[str | None, Field(min_length=1)] = None
-    noise: Annotated[str | None, Field(min_length=1)] = None
-    reverb: Annotated[str | None, Field(min_length=1)] = None
-    quality: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template expressivity descriptor.", min_length=1
+        ),
+    ] = None
+    noise: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template background-noise descriptor.",
+            min_length=1,
+        ),
+    ] = None
+    reverb: Annotated[
+        str | None,
+        Field(description="Parler voice-template reverb descriptor.", min_length=1),
+    ] = None
+    quality: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template audio-quality descriptor.", min_length=1
+        ),
+    ] = None
     type: Literal["textToSpeech"] = "textToSpeech"
 
 
@@ -12532,24 +12974,69 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         float | None, Field(alias="maxBufferScalars", gt=0.0)
     ] = None
     flush_after_ms: Annotated[float | None, Field(alias="flushAfterMs", gt=0.0)] = None
-    description: Annotated[str | None, Field(min_length=1)] = None
-    voice_description: Annotated[
-        str | None, Field(alias="voiceDescription", min_length=1)
+    description: Annotated[
+        str | None,
+        Field(
+            description="Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
+            min_length=1,
+        ),
     ] = None
-    voice: Annotated[str | None, Field(min_length=1)] = None
+    voice_description: Annotated[
+        str | None,
+        Field(
+            alias="voiceDescription",
+            description="Alias of `description`; mutually exclusive with the voice-template fields.",
+            min_length=1,
+        ),
+    ] = None
+    voice: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template speaker name; also Supertonic’s baked voice id.",
+            min_length=1,
+        ),
+    ] = None
     emotion: Annotated[
         TextToSpeechStreamRequestEmotion | None,
-        Field(title="TextToSpeechStreamRequestEmotion"),
+        Field(
+            description="Speaking style (Parler voice-template field).",
+            title="TextToSpeechStreamRequestEmotion",
+        ),
     ] = None
-    pitch: Annotated[str | None, Field(min_length=1)] = None
+    pitch: Annotated[
+        str | None,
+        Field(description="Parler voice-template pitch descriptor.", min_length=1),
+    ] = None
     pace: Annotated[
         TextToSpeechStreamRequestPace | None,
-        Field(title="TextToSpeechStreamRequestPace"),
+        Field(
+            description="Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
+            title="TextToSpeechStreamRequestPace",
+        ),
     ] = None
-    expressivity: Annotated[str | None, Field(min_length=1)] = None
-    noise: Annotated[str | None, Field(min_length=1)] = None
-    reverb: Annotated[str | None, Field(min_length=1)] = None
-    quality: Annotated[str | None, Field(min_length=1)] = None
+    expressivity: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template expressivity descriptor.", min_length=1
+        ),
+    ] = None
+    noise: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template background-noise descriptor.",
+            min_length=1,
+        ),
+    ] = None
+    reverb: Annotated[
+        str | None,
+        Field(description="Parler voice-template reverb descriptor.", min_length=1),
+    ] = None
+    quality: Annotated[
+        str | None,
+        Field(
+            description="Parler voice-template audio-quality descriptor.", min_length=1
+        ),
+    ] = None
     type: Literal["textToSpeechStream"] = "textToSpeechStream"
 
 

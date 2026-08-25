@@ -154,25 +154,74 @@ const ttsInt32Schema = ttsIntegerSchema.min(-2147483648).max(2147483647)
 const ttsNonNegativeInt32Schema = ttsInt32Schema.nonnegative()
 const ttsPositiveInt32Schema = ttsInt32Schema.positive()
 
+// Describe text shared by fields repeated across engine arms.
+const TTS_USE_GPU_DESC =
+  'Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.'
+const TTS_SEED_DESC =
+  'RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).'
+const TTS_THREADS_DESC = 'CPU thread count; overrides the hardware default.'
+const TTS_NGPU_LAYERS_DESC =
+  'Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.'
+const TTS_STREAM_CHUNK_TOKENS_DESC =
+  'Speech tokens per native streaming chunk; 0 disables native chunk streaming.'
+const TTS_STREAM_FIRST_CHUNK_TOKENS_DESC =
+  'Smaller first streaming chunk for lower first-audio latency.'
+const TTS_TEMPERATURE_DESC =
+  'Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).'
+const TTS_TOP_K_DESC = 'Top-k sampling cutoff; unset defers to the engine default (50).'
+const TTS_TOP_P_DESC =
+  'Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.'
+const TTS_MAX_FRAMES_DESC =
+  'Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).'
+
 // Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
 // accepted range; omit to keep the engine's native rate (or 48 kHz when the
 // LavaSR enhancer is active). Supertonic-only: the Chatterbox engine does not
 // yet resample its output, so the field is not exposed on that config.
-const ttsOutputSampleRateSchema = ttsIntegerSchema.min(8000).max(192000)
+const ttsOutputSampleRateSchema = ttsIntegerSchema
+  .min(8000)
+  .max(192000)
+  .describe(
+    'Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active).'
+  )
 
 const ttsParlerDescriptionFieldsShape = {
-  description: z.string().min(1).optional(),
-  voiceDescription: z.string().min(1).optional(),
-  voice: z.string().min(1).optional(),
-  emotion: ttsParlerEmotionSchema.optional(),
-  pitch: z.string().min(1).optional(),
+  description: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.'
+    ),
+  voiceDescription: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Alias of `description`; mutually exclusive with the voice-template fields.'),
+  voice: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Parler voice-template speaker name; also Supertonic’s baked voice id.'),
+  emotion: ttsParlerEmotionSchema
+    .optional()
+    .describe('Speaking style (Parler voice-template field).'),
+  pitch: z.string().min(1).optional().describe('Parler voice-template pitch descriptor.'),
   // Canonical cross-engine vocabulary since @qvac/tts-ggml 0.7 (QVAC-23154);
   // free-form pace strings are rejected natively.
-  pace: ttsPaceSchema.optional(),
-  expressivity: z.string().min(1).optional(),
-  noise: z.string().min(1).optional(),
-  reverb: z.string().min(1).optional(),
-  quality: z.string().min(1).optional()
+  pace: ttsPaceSchema.optional().describe("Speaking rate: `'slow'`, `'moderate'`, or `'fast'`."),
+  expressivity: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Parler voice-template expressivity descriptor.'),
+  noise: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Parler voice-template background-noise descriptor.'),
+  reverb: z.string().min(1).optional().describe('Parler voice-template reverb descriptor.'),
+  quality: z.string().min(1).optional().describe('Parler voice-template audio-quality descriptor.')
 }
 
 const ttsParlerTemplateFieldNames = [
@@ -248,48 +297,87 @@ function refineParlerRuntimeConfig(config: TtsParlerRuntimeRefinementInput, ctx:
 }
 
 export const ttsChatterboxRuntimeConfigSchema = z.object({
-  ttsEngine: z.literal('chatterbox'),
-  language: ttsChatterboxLanguageSchema,
+  ttsEngine: z
+    .literal('chatterbox')
+    .describe('TTS engine: Chatterbox (multilingual, voice cloning).'),
+  language: ttsChatterboxLanguageSchema.describe('Language code. Default `en`.'),
+  // TODO(QVAC-23933): `voice` is not forwarded for Chatterbox (cloning uses
+  // referenceAudioSrc); left undescribed pending an accurate meaning from the addon owner.
   voice: z.string().optional(),
-  useGPU: z.boolean().optional(),
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   // Chatterbox-only native streaming controls.
-  streamChunkTokens: ttsNonNegativeIntegerSchema.optional(),
-  streamFirstChunkTokens: ttsNonNegativeIntegerSchema.optional(),
-  cfmSteps: ttsNonNegativeIntegerSchema.optional(),
-  cfgRate: z.number().nonnegative().optional(),
-  threads: ttsPositiveIntegerSchema.optional(),
-  nGpuLayers: ttsIntegerSchema.optional(),
-  seed: ttsIntegerSchema.optional()
+  streamChunkTokens: ttsNonNegativeIntegerSchema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
+  streamFirstChunkTokens: ttsNonNegativeIntegerSchema
+    .optional()
+    .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
+  cfmSteps: ttsNonNegativeIntegerSchema
+    .optional()
+    .describe('Chatterbox CFM Euler step count. Default 2.'),
+  cfgRate: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.'
+    ),
+  threads: ttsPositiveIntegerSchema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsIntegerSchema.optional().describe(TTS_NGPU_LAYERS_DESC),
+  seed: ttsIntegerSchema.optional().describe(TTS_SEED_DESC)
 })
 
 export const ttsSupertonicRuntimeConfigSchema = z.object({
-  ttsEngine: z.literal('supertonic'),
-  language: ttsSupertonicLanguageSchema,
-  voice: z.string().optional(),
-  ttsSpeed: z.number().optional(),
-  ttsNumInferenceSteps: z.number().optional(),
-  useGPU: z.boolean().optional(),
+  ttsEngine: z.literal('supertonic').describe('TTS engine: Supertonic.'),
+  language: ttsSupertonicLanguageSchema.describe('Language code. Default `en`.'),
+  voice: z.string().optional().describe('Supertonic baked voice id, e.g. `F1` or `M1`.'),
+  ttsSpeed: z
+    .number()
+    .optional()
+    .describe(
+      'Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor.'
+    ),
+  ttsNumInferenceSteps: z
+    .number()
+    .optional()
+    .describe('Supertonic vector-estimator CFM steps; 0 uses the GGUF default.'),
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
-  vulkanCacheDir: z.string().min(1).optional()
+  vulkanCacheDir: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.'
+    )
 })
 
 export const ttsParlerRuntimeConfigSchema = z
   .object({
-    ttsEngine: z.literal('parler'),
+    ttsEngine: z.literal('parler').describe('TTS engine: Parler.'),
     ...ttsParlerDescriptionFieldsShape,
-    useGPU: z.boolean().optional(),
+    useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
     outputSampleRate: ttsOutputSampleRateSchema.optional(),
-    streamChunkTokens: ttsNonNegativeInt32Schema.optional(),
-    streamFirstChunkTokens: ttsNonNegativeInt32Schema.optional(),
-    threads: ttsPositiveInt32Schema.optional(),
-    nGpuLayers: ttsInt32Schema.optional(),
-    seed: ttsInt32Schema.optional(),
-    temperature: z.number().nonnegative().optional(),
-    topK: ttsNonNegativeInt32Schema.optional(),
-    topP: z.number().positive().max(1).optional(),
-    maxFrames: z.union([z.literal(0), ttsInt32Schema.min(10)]).optional(),
-    minNewTokens: ttsInt32Schema.min(-1).optional(),
-    normalizeNumbers: z.boolean().optional()
+    streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
+    streamFirstChunkTokens: ttsNonNegativeInt32Schema
+      .optional()
+      .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
+    threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+    nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+    seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
+    temperature: z.number().nonnegative().optional().describe(TTS_TEMPERATURE_DESC),
+    topK: ttsNonNegativeInt32Schema.optional().describe(TTS_TOP_K_DESC),
+    topP: z.number().positive().max(1).optional().describe(TTS_TOP_P_DESC),
+    maxFrames: z
+      .union([z.literal(0), ttsInt32Schema.min(10)])
+      .optional()
+      .describe(TTS_MAX_FRAMES_DESC),
+    minNewTokens: ttsInt32Schema
+      .min(-1)
+      .optional()
+      .describe('Parler minimum tokens before EOS; `-1` uses the model default.'),
+    normalizeNumbers: z
+      .boolean()
+      .optional()
+      .describe('Parler prompt digit expansion (engine default: enabled).')
   })
   .superRefine(refineParlerRuntimeConfig)
 
@@ -371,17 +459,31 @@ function refineCosyvoice3RuntimeConfig(config: TtsCosyvoice3RefinementInput, ctx
 }
 
 const ttsCosyvoice3RuntimeConfigShape = {
-  ttsEngine: z.literal('cosyvoice3'),
-  emotion: ttsCosyvoice3EmotionSchema.optional(),
-  pace: ttsPaceSchema.optional(),
-  instruct: ttsCosyvoice3InstructSchema.optional(),
-  useGPU: z.boolean().optional(),
+  ttsEngine: z.literal('cosyvoice3').describe('TTS engine: CosyVoice3.'),
+  emotion: ttsCosyvoice3EmotionSchema
+    .optional()
+    .describe(
+      "Speaking style: `'anger'`, `'happy'`, `'neutral'`, or `'sad'`. One conditioning control per synthesis (emotion / non-moderate pace / instruct)."
+    ),
+  pace: ttsPaceSchema
+    .optional()
+    .describe(
+      "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`; `'moderate'` disengages the pace channel."
+    ),
+  instruct: ttsCosyvoice3InstructSchema
+    .optional()
+    .describe(
+      'Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis.'
+    ),
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
-  streamChunkTokens: ttsNonNegativeInt32Schema.optional(),
-  streamFirstChunkTokens: ttsNonNegativeInt32Schema.optional(),
-  threads: ttsPositiveInt32Schema.optional(),
-  nGpuLayers: ttsInt32Schema.optional(),
-  seed: ttsInt32Schema.optional()
+  streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
+  streamFirstChunkTokens: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
+  threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+  seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC)
 }
 
 export const ttsCosyvoice3RuntimeConfigSchema = z
@@ -389,24 +491,28 @@ export const ttsCosyvoice3RuntimeConfigSchema = z
   .superRefine(refineCosyvoice3RuntimeConfig)
 
 const ttsAudio8RuntimeConfigShape = {
-  ttsEngine: z.literal('audio8'),
+  ttsEngine: z.literal('audio8').describe('TTS engine: Audio8.'),
   // Transcript of the load-time reference recording (zero-shot voice cloning).
   // Paired with `referenceAudioSrc` on the load config; kept on the runtime
   // config because it survives artifact resolution as plain data.
   // Trimmed for the same reason as the CosyVoice3 instruct string: a
   // whitespace-only transcript would reach the engine as a non-empty value.
-  referenceText: z.string().trim().min(1).optional(),
-  greedy: z.boolean().optional(),
-  temperature: z.number().nonnegative().optional(),
-  topK: ttsNonNegativeInt32Schema.optional(),
-  topP: z.number().positive().max(1).optional(),
-  // Codec frames on Audio8's ~46 ms grid (~21.5 frames/s); 0 = engine default.
-  maxFrames: ttsNonNegativeInt32Schema.optional(),
-  useGPU: z.boolean().optional(),
+  referenceText: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('Transcript of `referenceAudioSrc`; required when cloning a voice.'),
+  greedy: z.boolean().optional().describe('Audio8: take the argmax instead of sampling.'),
+  temperature: z.number().nonnegative().optional().describe(TTS_TEMPERATURE_DESC),
+  topK: ttsNonNegativeInt32Schema.optional().describe(TTS_TOP_K_DESC),
+  topP: z.number().positive().max(1).optional().describe(TTS_TOP_P_DESC),
+  maxFrames: ttsNonNegativeInt32Schema.optional().describe(TTS_MAX_FRAMES_DESC),
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
-  threads: ttsPositiveInt32Schema.optional(),
-  nGpuLayers: ttsInt32Schema.optional(),
-  seed: ttsInt32Schema.optional()
+  threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+  seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC)
 }
 
 export const ttsAudio8RuntimeConfigSchema = z.object(ttsAudio8RuntimeConfigShape)
@@ -424,17 +530,35 @@ export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
 // denoiser GGUF (runs before the enhancer, rate-preserving). Resolved to
 // artifacts by the plugin's resolveConfig and forwarded to @qvac/tts-ggml.
 const ttsLavasrLoadFieldsShape = {
-  lavasrEnhancerModelSrc: modelSrcInputSchema.optional(),
-  lavasrDenoiserModelSrc: modelSrcInputSchema.optional()
+  lavasrEnhancerModelSrc: modelSrcInputSchema
+    .optional()
+    .describe('LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.'),
+  lavasrDenoiserModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).'
+    )
 }
 
 export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema.extend({
   // Optional at schema time so legacy ONNX configs (no s3genModelSrc) reach
   // the plugin's resolveConfig and raise LegacyTtsModelDeprecatedError.
-  s3genModelSrc: modelSrcInputSchema.optional(),
-  referenceAudioSrc: modelSrcInputSchema.optional(),
-  mecabDictSrc: modelSrcInputSchema.optional(),
-  cangjieTsvSrc: modelSrcInputSchema.optional(),
+  s3genModelSrc: modelSrcInputSchema
+    .optional()
+    .describe('Chatterbox S3Gen + HiFT model source (speech tokens to 24 kHz waveform).'),
+  referenceAudioSrc: modelSrcInputSchema
+    .optional()
+    .describe('Chatterbox voice-cloning reference audio source (wav).'),
+  mecabDictSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Chatterbox MTL only: compiled MeCab/IPAdic dictionary source for Japanese segmentation (required for language `ja`).'
+    ),
+  cangjieTsvSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Chatterbox MTL only: Cangjie TSV source for Chinese romanisation (required for language `zh`).'
+    ),
   ...ttsLavasrLoadFieldsShape
 })
 
@@ -521,9 +645,17 @@ function refineAudio8LoadConfig(config: TtsAudio8LoadRefinementInput, ctx: z.Ref
 export const ttsAudio8LoadConfigSchema = z
   .object({
     ...ttsAudio8RuntimeConfigShape,
-    audio8CodecDecoderModelSrc: modelSrcInputSchema,
-    audio8CodecEncoderModelSrc: modelSrcInputSchema.optional(),
-    referenceAudioSrc: modelSrcInputSchema.optional()
+    audio8CodecDecoderModelSrc: modelSrcInputSchema.describe(
+      'Audio8 codec decoder model source (codes to 44.1 kHz waveform).'
+    ),
+    audio8CodecEncoderModelSrc: modelSrcInputSchema
+      .optional()
+      .describe(
+        'Audio8 codec encoder model source (waveform to codes); required only for voice cloning.'
+      ),
+    referenceAudioSrc: modelSrcInputSchema
+      .optional()
+      .describe('Audio8 voice-cloning reference recording source; pair with `referenceText`.')
   })
   .superRefine(refineAudio8LoadConfig)
 
