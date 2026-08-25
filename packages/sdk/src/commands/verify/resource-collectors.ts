@@ -260,7 +260,8 @@ export async function measureTarget(
   const pack = tarStream.pack()
   const gzip = createGzip({ level: 9 })
   const compressedBytesPromise = countStreamBytes(gzip)
-  // A node Gzip pipes to streamx at runtime but does not type as one.
+  // tar-stream types `pipe` for a streamx Writable, which a node Gzip is missing
+  // members of, though the two interoperate at runtime.
   pack.pipe(gzip as unknown as PackSink)
 
   try {
