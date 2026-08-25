@@ -151,12 +151,13 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private operationTail: Promise<void> = Promise.resolve()
   private activeSearches = new Set<Promise<SearchResult[]>>()
   private checkpointScheduled = false
-  private refreshScheduled = false
+  private refreshPromise: Promise<void> | null = null
   private dirty = false
   private needsRecovery = false
   private mutationsSinceCheckpoint = 0
   private lockHeartbeat: TimerHandle | null = null
   private ownsLock = false
+  private writerFenced = false
   private readonly lockOwner: string
   private readonly indexProvider: TurboVecIndexProvider
   private readonly storage: HyperDBStorage
@@ -247,8 +248,28 @@ export class TurboVecAdapter extends BaseDBAdapter {
       throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
     }
 
-    this._scheduleRefresh()
-    if (!this.index || this.index.length === 0 || this.needsRecovery) {
+    const visibleRevision = await this.storage.withSnapshot((snapshot) =>
+      this._readCurrentRevision(snapshot)
+    )
+    if (
+      visibleRevision !== this.indexRevision &&
+      this.index &&
+      !this.needsRecovery &&
+      !this.writerFenced
+    ) {
+      try {
+        await this._scheduleRefresh()
+      } catch (error) {
+        this.needsRecovery = true
+        this.logger.warn('TurboVec search refresh failed; scanning HyperDB directly:', error)
+      }
+    }
+    if (
+      !this.index ||
+      this.index.length === 0 ||
+      this.needsRecovery ||
+      visibleRevision !== this.indexRevision
+    ) {
       return this._searchAllDocuments(query, queryVector, topK, signal)
     }
 
@@ -279,9 +300,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     embeddedDocs: EmbeddedDoc[],
     opts: SaveEmbeddingsOpts
   ): Promise<SaveEmbeddingsResult[]> {
-    const batchConfig = this.storage.validateEmbeddingBatch(embeddedDocs, {
-      requireUniformDimension: true
-    })
+    const batchConfig = this.storage.validateEmbeddingBatch(embeddedDocs)
     if (batchConfig) {
       await this.storage.ensureConfig(batchConfig.embeddingModelId, batchConfig.dimension, {
         NUM_CENTROIDS: 0,
@@ -333,7 +352,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
     nativeIds: NativeId[],
     revision: number
   ): void {
+    if (this.needsRecovery) return
     try {
+      this._assertWriterOwnership()
       this._ensureIndex(docs[0].dimension)
       if (!this.index) {
         for (let index = 0; index < docs.length; index++) {
@@ -362,7 +383,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private _applyDeletedDocuments(ids: string[], revision: number): void {
+    if (this.needsRecovery) return
     try {
+      this._assertWriterOwnership()
       if (!this.index) {
         this.indexRevision = revision
         return
@@ -475,7 +498,14 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (this.isClosingIndex) {
       return Promise.reject(this._closingError())
     }
-    const result = this.operationTail.then(operation, operation)
+    if (this.writerFenced) {
+      return Promise.reject(this._lockLostError())
+    }
+    const guardedOperation = () => {
+      this._assertWriterOwnership()
+      return operation()
+    }
+    const result = this.operationTail.then(guardedOperation, guardedOperation)
     this.operationTail = result.then(
       () => undefined,
       () => undefined
@@ -483,16 +513,18 @@ export class TurboVecAdapter extends BaseDBAdapter {
     return result
   }
 
-  private _scheduleRefresh(): void {
-    if (this.refreshScheduled || this.isClosingIndex) return
-    this.refreshScheduled = true
-    void this._enqueue(() => this._refreshIndex())
-      .catch((error) => {
-        this.logger.warn('TurboVec background refresh failed:', error)
-      })
-      .finally(() => {
-        this.refreshScheduled = false
-      })
+  private _scheduleRefresh(): Promise<void> {
+    if (this.refreshPromise) return this.refreshPromise
+    if (this.isClosingIndex) return Promise.reject(this._closingError())
+    if (this.writerFenced) return Promise.reject(this._lockLostError())
+
+    const refresh = this._enqueue(() => this._refreshIndex())
+    this.refreshPromise = refresh
+    const clearRefresh = () => {
+      if (this.refreshPromise === refresh) this.refreshPromise = null
+    }
+    void refresh.then(clearRefresh, clearRefresh)
+    return refresh
   }
 
   private _searchAllDocuments(
@@ -552,9 +584,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     tx: HyperDBTransaction,
     documentId: string,
     nativeId: NativeId,
-    now: Date
+    now: Date,
+    runtimeMappings = this.idToDocument
   ): Promise<void> {
-    this._assertRuntimeMapping(nativeId.value, documentId)
+    this._assertMapping(runtimeMappings, nativeId.value, documentId)
     const existing = await tx.get<NativeIdRecord>(this.nativeIdsTable, {
       nativeId: nativeId.hex
     })
@@ -690,13 +723,21 @@ export class TurboVecAdapter extends BaseDBAdapter {
       throw error
     }
 
+    try {
+      await this._persistMissingMappings(nativeIdsByDocument, nextMappings)
+      this._assertWriterOwnership()
+    } catch (error) {
+      nextIndex.dispose()
+      this.needsRecovery = true
+      throw error
+    }
+
     this.index?.dispose()
     this.index = nextIndex
     this.idToDocument = nextMappings
     this.indexRevision = currentRevision
     this.needsRecovery = false
     this.dirty = true
-    await this._persistMissingMappings(nativeIdsByDocument)
     return vectors.length
   }
 
@@ -719,25 +760,51 @@ export class TurboVecAdapter extends BaseDBAdapter {
         return false
       }
 
-      let expectedRevision = fromRevision + 1
       try {
+        let expectedRevision = fromRevision + 1
+        const documentIds = new Set<string>()
         for (const mutation of mutations) {
           if (mutation.revision !== expectedRevision) return false
-          if (mutation.operation === DELETE_OPERATION) {
-            for (const documentId of mutation.documentIds) {
-              this.index!.remove(this._nativeIdForDocument(documentId).value)
-            }
-          } else if (mutation.operation === UPSERT_OPERATION) {
-            for (const documentId of mutation.documentIds) {
-              await this._replayUpsert(snapshot, documentId)
-            }
-          } else {
+          if (mutation.operation !== DELETE_OPERATION && mutation.operation !== UPSERT_OPERATION) {
             return false
           }
-          this.indexRevision = mutation.revision
+          for (const documentId of mutation.documentIds) documentIds.add(documentId)
           expectedRevision++
         }
-        this.dirty = this.indexRevision > fromRevision
+
+        const replayDocuments = await Promise.all(
+          Array.from(documentIds, async (documentId) => {
+            const nativeId = this._nativeIdForDocument(documentId)
+            const vector = await snapshot.get<VectorRecord>(this.storage.vectorsTable, {
+              docId: documentId
+            })
+            return { documentId, nativeId, vector }
+          })
+        )
+        const nextMappings = new Map(this.idToDocument)
+        for (const replay of replayDocuments) {
+          if (replay.vector) {
+            this._assertMapping(nextMappings, replay.nativeId.value, replay.documentId)
+          }
+        }
+
+        // All HyperDB reads complete before the live index is touched. The
+        // synchronous section below cannot be observed halfway through by a search.
+        this._assertWriterOwnership()
+        for (const replay of replayDocuments) {
+          if (this.index!.contains(replay.nativeId.value)) {
+            this.index!.remove(replay.nativeId.value)
+          }
+          if (replay.vector) {
+            this.index!.addWithIds(
+              new Float32Array(this._normalizeVector(replay.vector.vector)),
+              new BigUint64Array([replay.nativeId.value])
+            )
+          }
+        }
+        this.idToDocument = nextMappings
+        this.indexRevision = toRevision
+        this.dirty = toRevision > fromRevision
         this.needsRecovery = false
         return true
       } catch (error) {
@@ -746,22 +813,6 @@ export class TurboVecAdapter extends BaseDBAdapter {
         return false
       }
     })
-  }
-
-  private async _replayUpsert(snapshot: HyperDBReader, documentId: string): Promise<void> {
-    const nativeId = this._nativeIdForDocument(documentId)
-    const vector = await snapshot.get<VectorRecord>(this.storage.vectorsTable, {
-      docId: documentId
-    })
-    if (this.index!.contains(nativeId.value)) {
-      this.index!.remove(nativeId.value)
-    }
-    if (!vector) return
-    this._assertRuntimeMapping(nativeId.value, documentId)
-    this.index!.addWithIds(
-      new Float32Array(this._normalizeVector(vector.vector)),
-      new BigUint64Array([nativeId.value])
-    )
   }
 
   private _ensureIndex(dimension: number): void {
@@ -840,11 +891,19 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private _assertRuntimeMapping(nativeId: bigint, documentId: string): void {
-    const existing = this.idToDocument.get(nativeId)
+    this._assertMapping(this.idToDocument, nativeId, documentId)
+  }
+
+  private _assertMapping(
+    mappings: Map<bigint, string>,
+    nativeId: bigint,
+    documentId: string
+  ): void {
+    const existing = mappings.get(nativeId)
     if (existing && existing !== documentId) {
       throw this._nativeIdCollision(nativeId.toString(16).padStart(16, '0'), existing, documentId)
     }
-    this.idToDocument.set(nativeId, documentId)
+    mappings.set(nativeId, documentId)
   }
 
   private _nativeIdCollision(nativeId: string, existing: string, incoming: string): QvacErrorRAG {
@@ -886,7 +945,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     this.idToDocument = mappings
   }
 
-  private async _persistMissingMappings(nativeIds: Map<string, NativeId>): Promise<void> {
+  private async _persistMissingMappings(
+    nativeIds: Map<string, NativeId>,
+    runtimeMappings: Map<bigint, string>
+  ): Promise<void> {
     if (nativeIds.size === 0) return
     const tx = await this.storage.db!.exclusiveTransaction()
     const now = new Date()
@@ -894,7 +956,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       // These writes share a transaction and do not depend on each other.
       await Promise.all(
         Array.from(nativeIds, ([documentId, nativeId]) =>
-          this._ensureNativeIdRecord(tx, documentId, nativeId, now)
+          this._ensureNativeIdRecord(tx, documentId, nativeId, now, runtimeMappings)
         )
       )
       await tx.flush()
@@ -930,38 +992,62 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private async _checkpoint(): Promise<boolean> {
-    if (!this.checkpointDir || !this.index || !this.dirty || !this.activeStorage) return false
+    if (
+      !this.checkpointDir ||
+      !this.index ||
+      !this.dirty ||
+      !this.activeStorage ||
+      this.needsRecovery
+    ) {
+      return false
+    }
+    this._assertWriterOwnership()
     fs.mkdirSync(this.checkpointDir, { recursive: true })
-    const snapshot = `index-${this.indexRevision}.tvim`
+    const checkpointId = `${this.lockOwner.slice(0, 12)}-${Date.now()}`
+    const snapshot = `index-${this.indexRevision}-${checkpointId}.tvim`
     const snapshotPath = path.join(this.checkpointDir, snapshot)
-    this.index.write(snapshotPath)
-
-    const manifest: CheckpointManifest = {
-      version: MANIFEST_VERSION,
-      revision: this.indexRevision,
-      dimension: this.index.dim,
-      storage: this.activeStorage,
-      mappingVersion: ID_MAPPING_VERSION,
-      snapshot
-    }
+    const temporarySnapshot = `${snapshotPath}.tmp`
     const manifestPath = this._manifestPath()
-    const temporaryManifest = `${manifestPath}.tmp-${Date.now()}`
-    fs.writeFileSync(temporaryManifest, `${JSON.stringify(manifest)}\n`)
-    const manifestFd = fs.openSync(temporaryManifest, 'r')
+    const temporaryManifest = `${manifestPath}.tmp-${checkpointId}`
+    let manifestInstalled = false
     try {
-      fs.fsyncSync(manifestFd)
-    } finally {
-      fs.closeSync(manifestFd)
-    }
-    fs.renameSync(temporaryManifest, manifestPath)
+      this.index.write(temporarySnapshot)
+      this._assertWriterOwnership()
+      fs.renameSync(temporarySnapshot, snapshotPath)
 
-    this.dirty = false
-    this.mutationsSinceCheckpoint = 0
-    if (this._syncCheckpointDirectory()) {
-      await this._pruneMutations(manifest.revision)
+      const manifest: CheckpointManifest = {
+        version: MANIFEST_VERSION,
+        revision: this.indexRevision,
+        dimension: this.index.dim,
+        storage: this.activeStorage,
+        mappingVersion: ID_MAPPING_VERSION,
+        snapshot
+      }
+      fs.writeFileSync(temporaryManifest, `${JSON.stringify(manifest)}\n`)
+      const manifestFd = fs.openSync(temporaryManifest, 'r')
+      try {
+        fs.fsyncSync(manifestFd)
+      } finally {
+        fs.closeSync(manifestFd)
+      }
+      this._assertWriterOwnership()
+      fs.renameSync(temporaryManifest, manifestPath)
+      manifestInstalled = true
+
+      this._assertWriterOwnership()
+      if (this._syncCheckpointDirectory()) {
+        await this._pruneMutations(manifest.revision)
+      }
+      this._assertWriterOwnership()
+      this._removeOldSnapshots(snapshot)
+      this.dirty = false
+      this.mutationsSinceCheckpoint = 0
+      return true
+    } finally {
+      if (fs.existsSync(temporaryManifest)) fs.unlinkSync(temporaryManifest)
+      if (fs.existsSync(temporarySnapshot)) fs.unlinkSync(temporarySnapshot)
+      if (!manifestInstalled && fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath)
     }
-    this._removeOldSnapshots(snapshot)
-    return true
   }
 
   private _readManifest(): CheckpointManifest | null {
@@ -1010,11 +1096,13 @@ export class TurboVecAdapter extends BaseDBAdapter {
       })
     )
     if (covered.length === 0) return
+    this._assertWriterOwnership()
     const tx = await this.storage.db!.exclusiveTransaction()
     try {
       await Promise.all(
         covered.map((mutation) => tx.delete(this.mutationsTable, { revision: mutation.revision }))
       )
+      this._assertWriterOwnership()
       await tx.flush()
     } finally {
       await tx.close()
@@ -1024,6 +1112,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private _removeOldSnapshots(current: string): void {
     for (const entry of fs.readdirSync(this.checkpointDir!)) {
       if (entry.startsWith('index-') && entry.endsWith('.tvim') && entry !== current) {
+        this._assertWriterOwnership()
         fs.unlinkSync(path.join(this.checkpointDir!, entry))
       }
     }
@@ -1038,9 +1127,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
       try {
         fs.mkdirSync(lockPath)
         try {
-          this._writeLockRecord(lockPath)
-          this._startLockHeartbeat(lockPath)
+          this._writeLockRecord(lockPath, false)
           this.ownsLock = true
+          this._startLockHeartbeat(lockPath)
         } catch (error) {
           this._removeLockArtifact(lockPath)
           throw error
@@ -1089,10 +1178,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private _startLockHeartbeat(lockPath: string): void {
     const heartbeat = timerRuntime.setInterval(() => {
       try {
-        if (!this.ownsLock || this._readLockRecord(lockPath)?.owner !== this.lockOwner) {
-          this._releaseLock()
-          return
-        }
+        this._assertWriterOwnership()
         this._writeLockRecord(lockPath)
       } catch (error) {
         this.logger.warn('TurboVec writer lock heartbeat failed:', error)
@@ -1102,12 +1188,27 @@ export class TurboVecAdapter extends BaseDBAdapter {
     this.lockHeartbeat = heartbeat
   }
 
-  private _writeLockRecord(lockPath: string): void {
+  private _writeLockRecord(lockPath: string, verifyOwnership = true): void {
     const record: LockRecord = {
       owner: this.lockOwner,
       updatedAt: Date.now()
     }
-    fs.writeFileSync(path.join(lockPath, 'owner.json'), `${JSON.stringify(record)}\n`)
+    const ownerPath = path.join(lockPath, 'owner.json')
+    const temporaryOwnerPath = path.join(lockPath, `owner.json.tmp-${this.lockOwner}`)
+    if (verifyOwnership) this._assertWriterOwnership()
+    try {
+      fs.writeFileSync(temporaryOwnerPath, `${JSON.stringify(record)}\n`)
+      const ownerFd = fs.openSync(temporaryOwnerPath, 'r')
+      try {
+        fs.fsyncSync(ownerFd)
+      } finally {
+        fs.closeSync(ownerFd)
+      }
+      if (verifyOwnership) this._assertWriterOwnership()
+      fs.renameSync(temporaryOwnerPath, ownerPath)
+    } finally {
+      if (fs.existsSync(temporaryOwnerPath)) fs.unlinkSync(temporaryOwnerPath)
+    }
   }
 
   private _readLockRecord(lockPath: string): LockRecord | null {
@@ -1133,12 +1234,45 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private _removeLockArtifact(lockPath: string): void {
-    const ownerPath = path.join(lockPath, 'owner.json')
-    if (fs.existsSync(ownerPath)) fs.unlinkSync(ownerPath)
     try {
+      for (const entry of fs.readdirSync(lockPath)) {
+        if (entry === 'owner.json' || entry.startsWith('owner.json.tmp-')) {
+          fs.unlinkSync(path.join(lockPath, entry))
+        }
+      }
       fs.rmdirSync(lockPath)
     } catch {
       if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath)
     }
+  }
+
+  private _assertWriterOwnership(): void {
+    if (!this.checkpointDir) return
+    const lockPath = path.join(this.checkpointDir, 'writer.lock')
+    if (
+      this.writerFenced ||
+      !this.ownsLock ||
+      this._readLockRecord(lockPath)?.owner !== this.lockOwner
+    ) {
+      this._fenceWriter()
+      throw this._lockLostError()
+    }
+  }
+
+  private _fenceWriter(): void {
+    if (this.lockHeartbeat !== null) {
+      timerRuntime.clearInterval(this.lockHeartbeat)
+      this.lockHeartbeat = null
+    }
+    this.ownsLock = false
+    this.writerFenced = true
+    this.needsRecovery = true
+  }
+
+  private _lockLostError(): QvacErrorRAG {
+    return new QvacErrorRAG({
+      code: ERR_CODES.DB_OPERATION_FAILED,
+      adds: 'TurboVec writer lock ownership was lost'
+    })
   }
 }

@@ -177,10 +177,7 @@ export class HyperDBStorage {
     }
   }
 
-  validateEmbeddingBatch(
-    embeddedDocs: EmbeddedDoc[],
-    options: { requireUniformDimension?: boolean } = {}
-  ): {
+  validateEmbeddingBatch(embeddedDocs: EmbeddedDoc[]): {
     embeddingModelId: string
     dimension: number
   } | null {
@@ -199,14 +196,12 @@ export class HyperDBStorage {
       })
     }
     const dimension = embeddedDocs[0].embedding.length
-    if (options.requireUniformDimension) {
-      const mismatched = embeddedDocs.find((doc) => doc.embedding.length !== dimension)
-      if (mismatched) {
-        throw new QvacErrorRAG({
-          code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
-          adds: `All documents must have the same embedding dimension. Document '${mismatched.id}' has ${mismatched.embedding.length}, expected ${dimension}`
-        })
-      }
+    const mismatched = embeddedDocs.find((doc) => doc.embedding.length !== dimension)
+    if (mismatched) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
+        adds: `All documents must have the same embedding dimension. Document '${mismatched.id}' has ${mismatched.embedding.length}, expected ${dimension}`
+      })
     }
     return {
       embeddingModelId: Array.from(modelIds)[0],
@@ -272,42 +267,48 @@ export class HyperDBStorage {
       }
       preparedCount += batch.length
 
-      const tx = await this.db!.exclusiveTransaction()
-      let batchResults: SaveEmbeddingsResult[] = []
-      try {
+      const batchResults: SaveEmbeddingsResult[] = []
+      let pendingDocs = preparedDocs
+      // A partial attempt is discarded without flushing. Retry only complete
+      // documents so durable rows stay intact and hooks share the final commit.
+      while (pendingDocs.length > 0) {
+        const tx = await this.db!.exclusiveTransaction()
         const now = new Date()
-        const { written, failed } = await this.insertDocumentsAndVectors(tx, preparedDocs, now)
-        batchResults = failed.map((failure) => ({
-          id: failure.id,
-          status: 'rejected' as const,
-          error: failure.error
-        }))
-        if (written.length > 0) {
+        try {
+          const { written, failed } = await this.insertDocumentsAndVectors(tx, pendingDocs, now)
           if (failed.length > 0) {
-            // Remove partial rows before flushing. Otherwise a retry could look
-            // like a duplicate and leave its vector missing.
-            await this.deleteDocumentsAndVectors(
-              tx,
-              failed.map((failure) => failure.id)
+            batchResults.push(
+              ...failed.map((failure) => ({
+                id: failure.id,
+                status: 'rejected' as const,
+                error: failure.error
+              }))
             )
+            pendingDocs = written
+            continue
           }
+
           const writeResult = await hooks.write(tx, written, now)
           await tx.flush()
 
           this.cacheDocuments(written)
           hooks.committed?.(written, writeResult)
           batchResults.push(...written.map((doc) => ({ id: doc.id, status: 'fulfilled' as const })))
+          pendingDocs = []
+        } catch (error) {
+          const message =
+            error instanceof Error && error.message ? error.message : 'Batch insertion failed'
+          batchResults.push(
+            ...pendingDocs.map((doc) => ({
+              id: doc.id,
+              status: 'rejected' as const,
+              error: message
+            }))
+          )
+          pendingDocs = []
+        } finally {
+          await tx.close()
         }
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message ? error.message : 'Batch insertion failed'
-        batchResults = preparedDocs.map((doc) => ({
-          id: doc.id,
-          status: 'rejected' as const,
-          error: message
-        }))
-      } finally {
-        await tx.close()
       }
       results.push(...batchResults)
 
@@ -393,29 +394,29 @@ export class HyperDBStorage {
     now: Date
   ): Promise<{ written: TDoc[]; failed: Array<{ id: string; error: string }> }> {
     const outcomes = await Promise.all(
-      docs.map((doc) =>
-        Promise.all([
-          tx.insert(this.documentsTable, {
+      docs.map(async (doc) => {
+        try {
+          await tx.insert(this.documentsTable, {
             id: doc.id,
             content: doc.content,
             contentHash: doc.contentHash,
             metadata: doc.metadata,
             createdAt: now,
             updatedAt: now
-          }),
-          tx.insert(this.vectorsTable, {
+          })
+          await tx.insert(this.vectorsTable, {
             docId: doc.id,
             vector: doc.vector,
             createdAt: now
           })
-        ]).then(
-          () => ({ doc, error: null as string | null }),
-          (error: unknown) => ({
+          return { doc, error: null as string | null }
+        } catch (error) {
+          return {
             doc,
             error: error instanceof Error && error.message ? error.message : String(error)
-          })
-        )
-      )
+          }
+        }
+      })
     )
 
     const written: TDoc[] = []
