@@ -173,14 +173,17 @@ struct LlmModelContext {
 ///
 /// Slots 1 and 3 are retired: they carried the first-message counters the
 /// removed sliding-context feature protected. The layout keeps its four-field
-/// width so a file written by either build still loads; writers put 0 in
-/// those slots and readers ignore them.
+/// width so a file written by either build still loads. This build's readers
+/// ignore them; they are written only so an older build downgraded onto the
+/// same cache directory fails closed.
 ///
-/// Loadability is preserved in both directions, behaviour on downgrade is
-/// not. A build that still slides reads slot 1 as its protected-prefix
-/// boundary, so the 0 written here makes it evict from position 0 instead of
-/// protecting the first message. Rolling this package back over an existing
-/// cache directory therefore drops the system prompt rather than erroring.
+/// A build that still slides reads slot 1 as its protected-prefix boundary
+/// and evicts `[slot1, slot1 + n_discarded)`. Writing 0 there would point
+/// that eviction at position 0 and silently drop the system prompt and tool
+/// definitions. Writing the full cursor instead makes its `leftTokens =
+/// currentPos - protectedPrefixPos - discard` go negative, so it refuses the
+/// slide and reports a context overflow with the cache intact. A visible
+/// error beats silently losing the guardrail text.
 enum class SessionMetadataField : uint8_t {
   NPast = 0,
   RetiredFirstMsgTokens = 1,
@@ -198,7 +201,9 @@ inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
 struct SessionMetadata {
   std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
 
-  /// Reads the two live fields off a context. Slots 1 and 3 stay 0.
+  /// Reads the two live fields off a context, then mirrors them into the
+  /// retired slots so a downgraded build refuses to slide rather than
+  /// evicting from position 0. See the contract above.
   static SessionMetadata capture(const class LlmContext& context);
 
   /// Writes the two live fields back onto a context.
@@ -536,6 +541,12 @@ inline SessionMetadata SessionMetadata::capture(const LlmContext& context) {
       static_cast<llama_token>(context.getNPast());
   metadata.tokens[static_cast<size_t>(Field::CacheTokens)] =
       static_cast<llama_token>(context.getCacheTokens());
+  // Retired here, read as the protected prefix by any build still sliding.
+  // Mirroring the live cursors makes that build's slide guard fail closed.
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::NPast)];
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgCacheTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::CacheTokens)];
   return metadata;
 }
 

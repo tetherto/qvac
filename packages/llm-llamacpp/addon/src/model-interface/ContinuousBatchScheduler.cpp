@@ -772,7 +772,8 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
 }
 
-void ContinuousBatchScheduler::drainFinishedLocked() {
+void ContinuousBatchScheduler::drainFinishedLocked(
+    std::unique_lock<std::mutex>* lock) {
   auto finished = batcher_.extractFinished();
   for (const auto& req : finished | std::views::filter(hasValidDriverF())) {
     auto& slot = *slots_[req.seqId];
@@ -787,8 +788,25 @@ void ContinuousBatchScheduler::drainFinishedLocked() {
     // paths already sync via `sampleAndAppendIdle` and this call is a
     // no-op for them.
     slot.driver->syncPosition(req.currentPos);
-    const bool rollbackOk = finalizeTerminalDriver(
-        *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
+    // `finalizeTerminalDriver` runs the driver's `onGenerationFinished`, and
+    // for a reasoning turn that means `compactThinkSpan()` rewinding and
+    // REPLAYING the kept tokens through `llama_decode`. That is the same
+    // blocking work the main decode step drops the lock for; holding it here
+    // stalls every co-tenant slot and blocks a cross-thread `cancel()` for
+    // the length of the replay.
+    //
+    // Unlike the decode window, this one holds `slot` across the unlock, so
+    // deferred teardown must not reconcile inside it. See
+    // `TeardownDeferGuard`. Declaration order matters: the unlock guard is
+    // destroyed first, so it reacquires and skips the reconcile while the
+    // defer guard is still live.
+    bool rollbackOk = false;
+    {
+      TeardownDeferGuard deferTeardown(*this);
+      StepUnlockGuard unlockGuard(*this, lock);
+      rollbackOk = finalizeTerminalDriver(
+          *slot.driver, req.stopReason, slot.prefillOnly, outputCallback);
+    }
     accumulateSlotRuntimeStats(slot, req);
     // Skip save when the driver reports a failed cancel rollback: live
     // state may not match `getNPast()` and persisting it would leak the
@@ -828,7 +846,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     // A media segment serviced above can finish a slot (prefill-only
     // request or per-sequence cap) without leaving tokens to feed; drain
     // here or the worker would spin on the occupied slot forever.
-    drainFinishedLocked();
+    drainFinishedLocked(lock);
     return true;
   }
 
@@ -939,7 +957,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
     batcher_.markAllFinished(StopReason::Cancelled);
   }
 
-  drainFinishedLocked();
+  drainFinishedLocked(lock);
   return true;
 }
 
@@ -1259,6 +1277,13 @@ void ContinuousBatchScheduler::cancelSlotLocked(
 }
 
 void ContinuousBatchScheduler::applyDeferredTeardownLocked() noexcept {
+  // A step is inside an unlock window that owns a slot; reconciling now would
+  // tear that slot down under the code holding it. Every record stays queued
+  // (nothing is swapped out below, and `clearRequested_` stays set) and the
+  // worker applies them once the step returns. See `TeardownDeferGuard`.
+  if (teardownDeferred_) {
+    return;
+  }
   std::vector<PendingSlotCancel> pendingCancels;
   std::vector<uint64_t> pendingGroups;
   try {

@@ -1127,6 +1127,30 @@ TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
 /// `cacheTokens`/`firstMsgCacheTokens` defaulted to zero — which diverges from
 /// `nPast` under M-RoPE and corrupts later cap checks. An over-long layout
 /// (`> 4`) is equally unexpected. Only an exact four-field header is complete.
+/// The retired slots are written as a downgrade guard, not as zeros. An older
+/// build reads slot 1 as its protected-prefix boundary and evicts
+/// `[slot1, slot1 + n_discarded)`; a 0 there points that at position 0 and
+/// silently drops the system prompt. Mirroring the live cursors instead makes
+/// its `leftTokens` go negative so it refuses the slide and reports an
+/// overflow with the cache intact.
+TEST(SessionMetadataDowngradeGuard, RetiredSlotsMirrorTheLiveCursors) {
+  SessionMetadata metadata;
+  using Field = SessionMetadataField;
+  metadata.tokens[static_cast<size_t>(Field::NPast)] = 128;
+  metadata.tokens[static_cast<size_t>(Field::CacheTokens)] = 160;
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::NPast)];
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgCacheTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::CacheTokens)];
+
+  EXPECT_EQ(metadata.field(Field::RetiredFirstMsgTokens), 128)
+      << "a 0 here makes a downgraded build evict from position 0";
+  EXPECT_EQ(metadata.field(Field::RetiredFirstMsgCacheTokens), 160);
+  // This build ignores them: the live accessors still read slots 0 and 2.
+  EXPECT_EQ(metadata.nPast(), 128);
+  EXPECT_EQ(metadata.cacheTokens(), 160);
+}
+
 TEST(MtmdSessionMetadataGate, AcceptsOnlyTheFullFourFieldContract) {
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(0));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(1));

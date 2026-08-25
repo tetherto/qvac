@@ -1597,6 +1597,39 @@ TEST_F(
   }
 }
 
+/// The finalize window in `drainFinishedLocked` also drops the mutex, because
+/// `onGenerationFinished` runs reasoning compaction, which now rewinds and
+/// REPLAYS the kept tokens through `llama_decode`. Unlike the decode window it
+/// holds a reference into `slots_` across the unlock, so the usual
+/// reconcile-on-every-reacquisition would run `onCancel` on a driver
+/// mid-finalize and free the slot the drain loop is still using: the slot
+/// keeps its `admissionId` until `freeSlot`, and `extractFinished` only
+/// removed it from the batcher, so it still passes `slotOwnedByLocked`.
+///
+/// Suspension must therefore be lossless. A record made during the window
+/// survives it, and the very next reconcile outside the window consumes it.
+TEST_F(ContinuousBatchingIntegrationTest, TeardownDeferralKeepsPendingCancels) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // No request is in flight, so the record names a free slot and the apply
+  // outside the window drops it on the ownership re-check rather than
+  // tearing anything down.
+  const auto [survivedDeferred, survivedAfter] =
+      ContinuousBatchSchedulerTestPeer::pendingCancelSurvivesTeardown(
+          *scheduler);
+  EXPECT_TRUE(survivedDeferred)
+      << "a cancel recorded inside the finalize unlock window was consumed "
+         "while the drain loop still held the slot";
+  EXPECT_FALSE(survivedAfter)
+      << "the suspended record was never applied once the window closed";
+}
+
 /// Reproduce bug: A per-slot cancel that lands while `stepLocked()` has
 /// released the scheduler mutex (around media eval / llama_decode) is recorded
 /// in `pendingSlotCancels_` and only applied at the *next* worker-loop top.

@@ -339,12 +339,21 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   for (auto& slot : slots_ | views::filter(Request::isOptGenerationIdle)) {
     const int logitIdx = lastLogitIndices_[slot->seqId];
     const llama_token sampled = samplerFn(slot->seqId, logitIdx);
-    // A driver that stops without producing a token returns
-    // `LLAMA_TOKEN_NULL` (see `SequenceStepResult::token`), which the MTMD
-    // context-overflow return does. It is never fed, so recording it would
-    // put an invalid id in the feed queue and overstate `generatedTokens`
-    // by one.
-    if (sampled == LLAMA_TOKEN_NULL) {
+    // `generatedTokens` is both the feed queue and the runtime-stats count,
+    // so it must hold exactly the tokens that reach the cache.
+    //
+    // A sample that ends the sequence never does. `samplerFn` marks the slot
+    // finished for a terminal EOG, an antiprompt hit, a prediction limit or a
+    // context overflow, and `fillBatch` then filters the slot out, so the
+    // token is dropped without ever being decoded. Recording it would report
+    // one token more than the cache grew, which is the single-prompt path's
+    // rule (`lastGeneratedTokenCount_` increments after a successful decode,
+    // never for the token that stopped generation).
+    //
+    // A driver can also stop without producing a token at all and return
+    // `LLAMA_TOKEN_NULL` (see `SequenceStepResult::token`); the MTMD
+    // context-overflow return does. That id must never enter the feed queue.
+    if (sampled == LLAMA_TOKEN_NULL || slot->isFinished()) {
       continue;
     }
     slot->generatedTokens.push_back(sampled);

@@ -417,6 +417,40 @@ private:
     std::unique_lock<std::mutex>* lock_;
   };
 
+  /// RAII that suspends deferred-teardown application while a step has
+  /// dropped `mutex_` around work that owns a specific slot.
+  ///
+  /// `StepUnlockGuard` reconciles teardown on every reacquisition, which is
+  /// exactly right for the decode and media-eval windows: they touch no slot
+  /// the teardown could pull out from under them. It is wrong for the
+  /// finalize window in `drainFinishedLocked`, which holds a reference into
+  /// `slots_` across the unlock. A cancel recorded during that window still
+  /// passes `slotOwnedByLocked` (the slot keeps its `admissionId` until
+  /// `freeSlot`, and `extractFinished` only removed it from the batcher), so
+  /// the reconcile would run `onCancel` on a driver mid-finalize and free the
+  /// slot the loop is still using.
+  ///
+  /// Suspending leaves every record queued: `applyDeferredTeardownLocked`
+  /// returns before it swaps the pending vectors out, and `clearRequested_`
+  /// stays set. The worker applies them at its loop top once the step
+  /// returns, where the apply-time ownership re-check drops the ones whose
+  /// slot has since been freed.
+  class TeardownDeferGuard {
+  public:
+    explicit TeardownDeferGuard(ContinuousBatchScheduler& scheduler) noexcept
+        : scheduler_(scheduler) {
+      scheduler_.teardownDeferred_ = true;
+    }
+    ~TeardownDeferGuard() noexcept { scheduler_.teardownDeferred_ = false; }
+    TeardownDeferGuard(const TeardownDeferGuard&) = delete;
+    TeardownDeferGuard& operator=(const TeardownDeferGuard&) = delete;
+    TeardownDeferGuard(TeardownDeferGuard&&) = delete;
+    TeardownDeferGuard& operator=(TeardownDeferGuard&&) = delete;
+
+  private:
+    ContinuousBatchScheduler& scheduler_;
+  };
+
   struct BatchGroup {
     explicit BatchGroup(size_t requestCount)
         : outputs(requestCount), requestStats(requestCount) {}
@@ -486,7 +520,7 @@ private:
   /// cache-save throw is contained per slot: it fails only that slot's
   /// group (via failSlotLocked), never the sibling slots decoding for
   /// other groups.
-  void drainFinishedLocked();
+  void drainFinishedLocked(std::unique_lock<std::mutex>* lock);
   [[nodiscard]] bool hasWorkLocked() const noexcept;
   [[nodiscard]] unsigned numActiveLocked() const noexcept;
   /// One deferred targeted cancel, kept as the full (seqId, admissionId)
@@ -607,6 +641,10 @@ private:
   /// Deferred group cancels, same threading rationale as pendingSlotCancels_.
   std::vector<uint64_t> pendingGroupCancels_;
   bool clearRequested_ = false;
+  /// Set while a step has dropped `mutex_` around work that owns a slot; see
+  /// `TeardownDeferGuard`. Worker-thread only, so it needs no atomicity: the
+  /// only writer is the thread holding `mutex_` when the window opens.
+  bool teardownDeferred_ = false;
   /// Live tagged groups, so a cancel can find a group that holds no slot yet.
   /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`
   /// call. Weak, so a group settled and abandoned by its submitter cannot be

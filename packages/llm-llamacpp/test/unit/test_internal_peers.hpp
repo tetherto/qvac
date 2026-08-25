@@ -150,6 +150,28 @@ public:
     }
     return scheduler.slots_[seqId]->admissionId;
   }
+
+  /// Records a deferred slot cancel, then applies teardown once inside a
+  /// `TeardownDeferGuard` window and once outside it, reporting whether the
+  /// record survived each time. Drives the suspension in isolation: the
+  /// finalize unlock window holds a reference into `slots_`, so a reconcile
+  /// inside it would free the slot out from under the drain loop.
+  static std::pair<bool, bool>
+  pendingCancelSurvivesTeardown(Scheduler& scheduler) {
+    scheduler.recordPendingSlotCancel(/*seqId=*/0, /*admissionId=*/1);
+    bool survivedDeferred = false;
+    {
+      typename Scheduler::TeardownDeferGuard defer(scheduler);
+      std::scoped_lock lock(scheduler.mutex_);
+      scheduler.applyDeferredTeardownLocked();
+    }
+    survivedDeferred = scheduler.hasPendingCancels();
+    {
+      std::scoped_lock lock(scheduler.mutex_);
+      scheduler.applyDeferredTeardownLocked();
+    }
+    return {survivedDeferred, scheduler.hasPendingCancels()};
+  }
 };
 
 class MtmdLlmContextTestPeer {

@@ -874,6 +874,52 @@ TEST_F(MultiRequestBatcherTest, NullSampleIsNotRecorded) {
   EXPECT_TRUE(req->generatedTokens.empty());
 }
 
+/// A sample that ends the sequence never reaches the cache: the slot is
+/// marked finished and `fillBatch` filters it out before the token is fed.
+/// `generatedTokens` is both the feed queue and the runtime-stats count, so
+/// recording it would report one token more than the cache grew. The
+/// single-prompt path has always counted this way, incrementing
+/// `lastGeneratedTokenCount_` only after a successful decode.
+TEST_F(MultiRequestBatcherTest, FinishingSampleIsNotRecorded) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  // First sample continues the sequence and is recorded.
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return 40; });
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  ASSERT_EQ(req->generatedTokens.size(), 1u);
+
+  auto genResult = batcher.fillBatch(batch);
+  ASSERT_EQ(genResult.chunkSize, 1);
+  mocked_llama_decode(*batch);
+  batcher.advance(genResult.chunkSize);
+
+  // Second sample is terminal: the driver marks the slot finished from inside
+  // the sampler, exactly as the scheduler's lambda does on an EOG.
+  batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
+    batcher.markFinished(sid);
+    return 41;
+  });
+  req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_EQ(req->generatedTokens.size(), 1u)
+      << "the terminal sample never reached the cache but was still counted";
+}
+
 TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
   const unsigned kMaxChunkSize = 8;
   const unsigned kMaxTokensPerSeq = 3;
