@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0]
+
+### Changed
+
+- Convert `@qvac/rag` to TypeScript compiled ESM (`"type": "module"`). CommonJS `require('@qvac/rag')` no longer works — switch to `import`. Named exports are unchanged (#3718).
+
+### Fixed
+
+- Validate `search` and `infer` queries before logging so a non-string or blank query throws `QvacErrorRAG { code: INVALID_INPUT }` instead of a raw `TypeError` (#3729).
+
 ## [0.6.4]
 
 ### Changed
