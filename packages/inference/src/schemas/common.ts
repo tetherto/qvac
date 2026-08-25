@@ -57,6 +57,10 @@ import {
   getSystemResourcesRequestSchema,
   getSystemResourcesResponseSchema
 } from '@/schemas/system-resources'
+import {
+  assessModelFitRequestSchema,
+  assessModelFitResponseSchema
+} from '@/schemas/assess-model-fit'
 import { ocrStreamRequestSchema, ocrStreamResponseSchema } from '@/schemas/ocr'
 import {
   diffusionStreamRequestSchema,
@@ -120,6 +124,7 @@ export const requestSchema = z.union([
   getModelInfoRequestSchema,
   getLoadedModelInfoRequestSchema,
   getSystemResourcesRequestSchema,
+  assessModelFitRequestSchema,
   ocrStreamRequestSchema,
   diffusionStreamRequestSchema,
   videoStreamRequestSchema,
@@ -163,6 +168,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   getModelInfoResponseSchema,
   getLoadedModelInfoResponseSchema,
   getSystemResourcesResponseSchema,
+  assessModelFitResponseSchema,
   ocrStreamResponseSchema,
   diffusionStreamResponseSchema,
   videoStreamResponseSchema,
