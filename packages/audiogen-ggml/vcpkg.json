@@ -41,6 +41,20 @@
     }
   ],
   "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "version>=": "2026-08-24#2",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
     "tests": {
       "description": "Build C++ unit tests",
       "dependencies": [
