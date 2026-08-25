@@ -177,7 +177,10 @@ export class HyperDBStorage {
     }
   }
 
-  validateEmbeddingBatch(embeddedDocs: EmbeddedDoc[]): {
+  validateEmbeddingBatch(
+    embeddedDocs: EmbeddedDoc[],
+    options: { requireUniformDimension?: boolean } = {}
+  ): {
     embeddingModelId: string
     dimension: number
   } | null {
@@ -196,12 +199,14 @@ export class HyperDBStorage {
       })
     }
     const dimension = embeddedDocs[0].embedding.length
-    const mismatched = embeddedDocs.find((doc) => doc.embedding.length !== dimension)
-    if (mismatched) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
-        adds: `All documents must have the same embedding dimension. Document '${mismatched.id}' has ${mismatched.embedding.length}, expected ${dimension}`
-      })
+    if (options.requireUniformDimension) {
+      const mismatched = embeddedDocs.find((doc) => doc.embedding.length !== dimension)
+      if (mismatched) {
+        throw new QvacErrorRAG({
+          code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
+          adds: `All documents must have the same embedding dimension. Document '${mismatched.id}' has ${mismatched.embedding.length}, expected ${dimension}`
+        })
+      }
     }
     return {
       embeddingModelId: Array.from(modelIds)[0],

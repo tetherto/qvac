@@ -201,7 +201,7 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
   // Search for documents given a text query.
   // Uses IVF buckets and ranking based on cosine similarity and text score.
-  override search(
+  override async search(
     query: string,
     queryVector: number[],
     params: SearchParams = {}
@@ -215,7 +215,7 @@ export class HyperDBAdapter extends BaseDBAdapter {
 
     this.logger.debug(`HyperDB search: topK=${topK}, n=${n}, centroids=${this.centroids.length}`)
 
-    return this.storage.withSnapshot(async (dbSnapshot) => {
+    return await this.storage.withSnapshot(async (dbSnapshot) => {
       let candidateIds = new Set<string>()
       const topCentroids = this._findTopNCentroids(queryVector, n)
 

@@ -279,7 +279,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
     embeddedDocs: EmbeddedDoc[],
     opts: SaveEmbeddingsOpts
   ): Promise<SaveEmbeddingsResult[]> {
-    const batchConfig = this.storage.validateEmbeddingBatch(embeddedDocs)
+    const batchConfig = this.storage.validateEmbeddingBatch(embeddedDocs, {
+      requireUniformDimension: true
+    })
     if (batchConfig) {
       await this.storage.ensureConfig(batchConfig.embeddingModelId, batchConfig.dimension, {
         NUM_CENTROIDS: 0,
