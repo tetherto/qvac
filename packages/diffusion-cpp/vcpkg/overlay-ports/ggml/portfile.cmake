@@ -19,17 +19,21 @@
 # Pulls from the tetherto/qvac-ext-ggml GitHub branch 2026-08-11
 # (REF pinned to that branch's tip commit for reproducibility).
 #
-# 0de1c77 is the 2026-08-11 head after merging qvac-ext-ggml PR #61
-# (QVAC-23767): one cmake-only commit on top of f31dab0 that skips the x86
-# cpu-feats OBJECT helper in hybrid GGML_BACKEND_DL + GGML_CPU_STATIC builds,
-# where the statically-linked CPU backend never consults the DL variant score
-# and the un-exported helper broke install(EXPORT ggml-targets). Required for
-# the desktop-Linux hybrid mode below.
+# 7d9ce11 is the 2026-08-11 head after merging the two QVAC-23767 fixes on
+# top of f31dab0:
+# - PR #61: cmake-only, skips the x86 cpu-feats OBJECT helper in hybrid
+#   GGML_BACKEND_DL + GGML_CPU_STATIC builds, where the statically-linked CPU
+#   backend never consults the DL variant score and the un-exported helper
+#   broke install(EXPORT ggml-targets). Required for the desktop-Linux hybrid
+#   mode below.
+# - PR #64: drops a duplicated `case GGML_OP_POOL_2D` in the OpenCL backend
+#   that made ggml-opencl fail to compile (Android is the only OpenCL
+#   consumer in this family).
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-ggml
-    REF 21429b091036548f9661c01e3bad3a9e23287929
-    SHA512 e239fd661e1f425713e374e9d11e26e5ac07814f312090eda8434d94048982e9e71275d1ee2906dea587a43aa7931c0cc3021b7173d54a66d7d7a988b609bca3
+    REF 7d9ce11cd47f338b361a00e866ffe7c224abedff
+    SHA512 0c7c99a799a6479d8fbf72d47240119da52d5d4b63ee1ecabf05cf84a0317588ee78939d9c6dba5a881d1bb4fc22765ac0991395cfc47204aa0548fe4c937d15
 )
 
 # --- GPU feature flags ---
