@@ -100,11 +100,16 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   EXPECT_GT(progressTicks.size(), 0u)
       << "Must receive at least 1 progress tick";
 
-  // The last tick should report total == 10 (the configured step count).
-  // Progress JSON shape: {"step":N,"total":M,"elapsed_ms":T}
-  const auto& lastTick = progressTicks.back();
-  EXPECT_NE(lastTick.find("\"total\":10"), std::string::npos)
-      << "Final progress tick must report total=10, got: " << lastTick;
+  // Diffusion emits total == 10, followed by VAE/post-processing ticks
+  // with their own totals. Assert that the configured diffusion phase completed
+  // instead of assuming its tick is the final callback overall.
+  const bool sawDiffusionCompletion = std::any_of(
+      progressTicks.begin(), progressTicks.end(), [](const std::string& tick) {
+        return tick.find("\"step\":10") != std::string::npos &&
+               tick.find("\"total\":10") != std::string::npos;
+      });
+  EXPECT_TRUE(sawDiffusionCompletion)
+      << "Expected a completed diffusion progress tick with total=10";
 
   // -- Save output to output/ -------------------------------------------------
 #ifdef PROJECT_ROOT
