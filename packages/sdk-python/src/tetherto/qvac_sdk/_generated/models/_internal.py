@@ -6929,12 +6929,34 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(
     GeneratedBaseModel
 ):
-    threshold: float | None = None
-    min_speech_duration_ms: float | None = None
-    min_silence_duration_ms: float | None = None
-    max_speech_duration_s: float | None = None
-    speech_pad_ms: float | None = None
-    samples_overlap: float | None = None
+    threshold: Annotated[
+        float | None,
+        Field(
+            description="VAD probability threshold for classifying a segment as speech."
+        ),
+    ] = None
+    min_speech_duration_ms: Annotated[
+        float | None,
+        Field(description="Minimum duration for a segment to count as speech (ms)."),
+    ] = None
+    min_silence_duration_ms: Annotated[
+        float | None,
+        Field(
+            description="Minimum silence duration required to split speech segments (ms)."
+        ),
+    ] = None
+    max_speech_duration_s: Annotated[
+        float | None,
+        Field(description="Maximum duration of a single speech segment (s)."),
+    ] = None
+    speech_pad_ms: Annotated[
+        float | None,
+        Field(description="Padding added before and after each speech segment (ms)."),
+    ] = None
+    samples_overlap: Annotated[
+        float | None,
+        Field(description="Overlap between consecutive speech segments (0–1)."),
+    ] = None
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(Enum):
@@ -6945,16 +6967,27 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(Enum):
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
     GeneratedBaseModel
 ):
-    model: str | None = None
-    use_gpu: bool | None = None
-    flash_attn: bool | None = None
-    gpu_device: float | None = None
+    model: Annotated[
+        str | None,
+        Field(description="Path to the whisper model file (context override)."),
+    ] = None
+    use_gpu: Annotated[
+        bool | None, Field(description="Enable GPU acceleration. Default false.")
+    ] = None
+    flash_attn: Annotated[bool | None, Field(description="Enable flash attention.")] = (
+        None
+    )
+    gpu_device: Annotated[
+        float | None, Field(description="GPU device index to use.")
+    ] = None
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
     GeneratedBaseModel
 ):
-    caption_enabled: bool | None = None
+    caption_enabled: Annotated[
+        bool | None, Field(description="Format output segments as captions.")
+    ] = None
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum):
@@ -7008,59 +7041,144 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(
 class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     strategy: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy | None,
-        Field(title="LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"),
+        Field(
+            description="Decoding strategy: `'greedy'` or `'beam_search'`.",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy",
+        ),
     ] = None
     n_threads: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="CPU threads for transcription; `0` = auto (half of hardware cores).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     n_max_text_ctx: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Maximum text tokens from previous segments used as context.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     offset_ms: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Milliseconds to skip at the start of the audio.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     duration_ms: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Maximum duration of audio to transcribe, in milliseconds.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     audio_ctx: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Audio context window size in samples; `0` = model default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    translate: bool | None = None
+    translate: Annotated[
+        bool | None, Field(description="Translate the transcribed audio into English.")
+    ] = None
     no_context: bool | None = None
-    no_timestamps: bool | None = None
+    no_timestamps: Annotated[
+        bool | None, Field(description="Omit timestamps from the transcription output.")
+    ] = None
     single_segment: bool | None = None
-    print_special: bool | None = None
-    print_progress: bool | None = None
+    print_special: Annotated[
+        bool | None, Field(description="Print special tokens in the output.")
+    ] = None
+    print_progress: Annotated[
+        bool | None, Field(description="Print progress updates during transcription.")
+    ] = None
     print_realtime: bool | None = None
     print_timestamps: bool | None = None
     token_timestamps: bool | None = None
-    thold_pt: float | None = None
+    thold_pt: Annotated[
+        float | None,
+        Field(
+            description="Word-timestamp probability threshold for accepting a word (0–1)."
+        ),
+    ] = None
     thold_ptsum: float | None = None
-    max_len: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
-        None
-    )
+    max_len: Annotated[
+        int | None,
+        Field(
+            description="Maximum tokens per transcription segment.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     split_on_word: bool | None = None
     max_tokens: Annotated[
         int | None, Field(ge=-9007199254740991, le=9007199254740991)
     ] = None
     debug_mode: bool | None = None
-    tdrz_enable: bool | None = None
-    suppress_regex: str | None = None
-    initial_prompt: str | None = None
-    language: str | None = None
-    detect_language: bool | None = None
+    tdrz_enable: Annotated[
+        bool | None,
+        Field(description="Enable tinydiarize (lightweight speaker-turn detection)."),
+    ] = None
+    suppress_regex: Annotated[
+        str | None,
+        Field(description="Regular-expression pattern for tokens to suppress."),
+    ] = None
+    initial_prompt: Annotated[
+        str | None,
+        Field(description="Initial prompt (context) prepended to the transcription."),
+    ] = None
+    language: Annotated[
+        str | None,
+        Field(description="Transcription language (ISO 639-1) or `'auto'` to detect."),
+    ] = None
+    detect_language: Annotated[
+        bool | None, Field(description="Automatically detect the spoken language.")
+    ] = None
     suppress_blank: bool | None = None
-    suppress_nst: bool | None = None
-    temperature: float | None = None
+    suppress_nst: Annotated[
+        bool | None, Field(description="Suppress non-speech tokens (NST).")
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–1). Default 0.0.")
+    ] = None
     length_penalty: float | None = None
-    temperature_inc: float | None = None
-    entropy_thold: float | None = None
-    logprob_thold: float | None = None
+    temperature_inc: Annotated[
+        float | None,
+        Field(description="Temperature increment applied when sampling fails."),
+    ] = None
+    entropy_thold: Annotated[
+        float | None,
+        Field(description="Entropy threshold for filtering uncertain words."),
+    ] = None
+    logprob_thold: Annotated[
+        float | None,
+        Field(
+            description="Log-probability threshold for filtering words; `-1` disables."
+        ),
+    ] = None
     greedy_best_of: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Greedy decoding: number of candidate completions; `-1` = default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     beam_search_beam_size: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Beam size for beam-search decoding; `-1` = default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     vad_params: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams | None,
@@ -7068,7 +7186,10 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     ] = None
     audio_format: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat | None,
-        Field(title="LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat"),
+        Field(
+            description="Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
+            title="LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat",
+        ),
     ] = None
     context_params: Annotated[
         LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams | None,
@@ -7086,7 +7207,10 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     ] = None
     vad_model_src: Annotated[
         str | LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc | None,
-        Field(alias="vadModelSrc"),
+        Field(
+            alias="vadModelSrc",
+            description="Voice-activity-detection (VAD) model source; enables VAD when set.",
+        ),
     ] = None
 
 
@@ -7395,61 +7519,185 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         extra="forbid",
     )
     max_threads: Annotated[
-        int | None, Field(alias="maxThreads", ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            alias="maxThreads",
+            description="CPU threads; `0` defers to hardware concurrency. Default 4.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU", description="Enable the ggml GPU backend. Default false."
+        ),
+    ] = None
     sample_rate: Annotated[
-        int | None, Field(alias="sampleRate", ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            alias="sampleRate",
+            description="Input audio sample rate in Hz. Default 16000.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     channels: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Input audio channel count. Default 1 (mono).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    caption_enabled: Annotated[bool | None, Field(alias="captionEnabled")] = None
-    timestamps_enabled: Annotated[bool | None, Field(alias="timestampsEnabled")] = None
-    seed: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = None
-    streaming: bool | None = None
+    caption_enabled: Annotated[
+        bool | None,
+        Field(
+            alias="captionEnabled",
+            description="Format output segments as captions. Default false.",
+        ),
+    ] = None
+    timestamps_enabled: Annotated[
+        bool | None,
+        Field(
+            alias="timestampsEnabled",
+            description="Emit per-segment timestamps. Default true.",
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="Sampling RNG seed; `-1` picks a random seed. Default -1.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    streaming: Annotated[
+        bool | None,
+        Field(description="Open a long-lived streaming session. Default false."),
+    ] = None
     streaming_chunk_ms: Annotated[
-        int | None, Field(alias="streamingChunkMs", gt=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamingChunkMs",
+            description="Streaming chunk cadence in ms. Default 2000.",
+            gt=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_history_ms: Annotated[
-        int | None, Field(alias="streamingHistoryMs", gt=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamingHistoryMs",
+            description="Sortformer rolling-history window in ms. Default 30000.",
+            gt=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_emit_partials: Annotated[
-        bool | None, Field(alias="streamingEmitPartials")
+        bool | None,
+        Field(
+            alias="streamingEmitPartials",
+            description="Emit partial results before chunk boundaries. Default true.",
+        ),
     ] = None
-    streaming_energy_vad: Annotated[bool | None, Field(alias="streamingEnergyVad")] = (
-        None
-    )
+    streaming_energy_vad: Annotated[
+        bool | None,
+        Field(
+            alias="streamingEnergyVad",
+            description="CTC/TDT-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+        ),
+    ] = None
     streaming_left_context_ms: Annotated[
-        int | None, Field(alias="streamingLeftContextMs", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamingLeftContextMs",
+            description="ASR encoder left-context window in ms; `-1` keeps the model default (10000).",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_right_lookahead_ms: Annotated[
-        int | None, Field(alias="streamingRightLookaheadMs", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamingRightLookaheadMs",
+            description="ASR encoder right-lookahead window in ms; `-1` keeps the model default (2000).",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
-    language: str | None = None
+    language: Annotated[
+        str | None,
+        Field(
+            description="Multilingual CTC language id (e.g. `hi`, `ta`); required for Indic Conformer GGUFs, ignored on monolingual CTC."
+        ),
+    ] = None
     streaming_spk_cache_enable: Annotated[
-        bool | None, Field(alias="streamingSpkCacheEnable")
+        bool | None,
+        Field(
+            alias="streamingSpkCacheEnable",
+            description="AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
+        ),
     ] = None
     streaming_spk_cache_len: Annotated[
-        int | None, Field(alias="streamingSpkCacheLen", gt=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamingSpkCacheLen",
+            description="AOSC: long-term speaker-cache rows (~15 s). Default 188.",
+            gt=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_fifo_len: Annotated[
-        int | None, Field(alias="streamingFifoLen", gt=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="streamingFifoLen",
+            description="AOSC: FIFO warmup buffer rows. Default 188.",
+            gt=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_chunk_left_context_ms: Annotated[
         int | None,
-        Field(alias="streamingChunkLeftContextMs", ge=0, le=9007199254740991),
+        Field(
+            alias="streamingChunkLeftContextMs",
+            description="AOSC: encoder left-context window in ms. Default 80.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_chunk_right_context_ms: Annotated[
         int | None,
-        Field(alias="streamingChunkRightContextMs", ge=0, le=9007199254740991),
+        Field(
+            alias="streamingChunkRightContextMs",
+            description="AOSC: encoder right-context window in ms. Default 560.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     streaming_spk_cache_update_period: Annotated[
         int | None,
-        Field(alias="streamingSpkCacheUpdatePeriod", gt=0, le=9007199254740991),
+        Field(
+            alias="streamingSpkCacheUpdatePeriod",
+            description="AOSC: FIFO-overflow pop-out count. Default 144.",
+            gt=0,
+            le=9007199254740991,
+        ),
     ] = None
-    backends_dir: Annotated[str | None, Field(alias="backendsDir")] = None
-    opencl_cache_dir: Annotated[str | None, Field(alias="openclCacheDir")] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+        ),
+    ] = None
+    opencl_cache_dir: Annotated[
+        str | None,
+        Field(
+            alias="openclCacheDir",
+            description="Persistent directory for ggml-opencl's compiled-program cache (Android only).",
+        ),
+    ] = None
     parakeet_encoder_src: Annotated[Any | None, Field(alias="parakeetEncoderSrc")] = (
         None
     )
@@ -11193,12 +11441,34 @@ class ReloadConfigRequestModelConfigStrategy(Enum):
 
 
 class ReloadConfigRequestModelConfigVadParams(GeneratedBaseModel):
-    threshold: float | None = None
-    min_speech_duration_ms: float | None = None
-    min_silence_duration_ms: float | None = None
-    max_speech_duration_s: float | None = None
-    speech_pad_ms: float | None = None
-    samples_overlap: float | None = None
+    threshold: Annotated[
+        float | None,
+        Field(
+            description="VAD probability threshold for classifying a segment as speech."
+        ),
+    ] = None
+    min_speech_duration_ms: Annotated[
+        float | None,
+        Field(description="Minimum duration for a segment to count as speech (ms)."),
+    ] = None
+    min_silence_duration_ms: Annotated[
+        float | None,
+        Field(
+            description="Minimum silence duration required to split speech segments (ms)."
+        ),
+    ] = None
+    max_speech_duration_s: Annotated[
+        float | None,
+        Field(description="Maximum duration of a single speech segment (s)."),
+    ] = None
+    speech_pad_ms: Annotated[
+        float | None,
+        Field(description="Padding added before and after each speech segment (ms)."),
+    ] = None
+    samples_overlap: Annotated[
+        float | None,
+        Field(description="Overlap between consecutive speech segments (0–1)."),
+    ] = None
 
 
 class ReloadConfigRequestModelConfigAudioFormat(Enum):
@@ -11207,14 +11477,25 @@ class ReloadConfigRequestModelConfigAudioFormat(Enum):
 
 
 class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
-    model: str | None = None
-    use_gpu: bool | None = None
-    flash_attn: bool | None = None
-    gpu_device: float | None = None
+    model: Annotated[
+        str | None,
+        Field(description="Path to the whisper model file (context override)."),
+    ] = None
+    use_gpu: Annotated[
+        bool | None, Field(description="Enable GPU acceleration. Default false.")
+    ] = None
+    flash_attn: Annotated[bool | None, Field(description="Enable flash attention.")] = (
+        None
+    )
+    gpu_device: Annotated[
+        float | None, Field(description="GPU device index to use.")
+    ] = None
 
 
 class ReloadConfigRequestModelConfigMiscConfig(GeneratedBaseModel):
-    caption_enabled: bool | None = None
+    caption_enabled: Annotated[
+        bool | None, Field(description="Format output segments as captions.")
+    ] = None
 
 
 class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
@@ -11262,59 +11543,144 @@ class ReloadConfigRequestModelConfigVadModelSrc(GeneratedBaseModel):
 class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     strategy: Annotated[
         ReloadConfigRequestModelConfigStrategy | None,
-        Field(title="ReloadConfigRequestModelConfigStrategy"),
+        Field(
+            description="Decoding strategy: `'greedy'` or `'beam_search'`.",
+            title="ReloadConfigRequestModelConfigStrategy",
+        ),
     ] = None
     n_threads: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="CPU threads for transcription; `0` = auto (half of hardware cores).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     n_max_text_ctx: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Maximum text tokens from previous segments used as context.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     offset_ms: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Milliseconds to skip at the start of the audio.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     duration_ms: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Maximum duration of audio to transcribe, in milliseconds.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     audio_ctx: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Audio context window size in samples; `0` = model default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    translate: bool | None = None
+    translate: Annotated[
+        bool | None, Field(description="Translate the transcribed audio into English.")
+    ] = None
     no_context: bool | None = None
-    no_timestamps: bool | None = None
+    no_timestamps: Annotated[
+        bool | None, Field(description="Omit timestamps from the transcription output.")
+    ] = None
     single_segment: bool | None = None
-    print_special: bool | None = None
-    print_progress: bool | None = None
+    print_special: Annotated[
+        bool | None, Field(description="Print special tokens in the output.")
+    ] = None
+    print_progress: Annotated[
+        bool | None, Field(description="Print progress updates during transcription.")
+    ] = None
     print_realtime: bool | None = None
     print_timestamps: bool | None = None
     token_timestamps: bool | None = None
-    thold_pt: float | None = None
+    thold_pt: Annotated[
+        float | None,
+        Field(
+            description="Word-timestamp probability threshold for accepting a word (0–1)."
+        ),
+    ] = None
     thold_ptsum: float | None = None
-    max_len: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
-        None
-    )
+    max_len: Annotated[
+        int | None,
+        Field(
+            description="Maximum tokens per transcription segment.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
     split_on_word: bool | None = None
     max_tokens: Annotated[
         int | None, Field(ge=-9007199254740991, le=9007199254740991)
     ] = None
     debug_mode: bool | None = None
-    tdrz_enable: bool | None = None
-    suppress_regex: str | None = None
-    initial_prompt: str | None = None
-    language: str | None = None
-    detect_language: bool | None = None
+    tdrz_enable: Annotated[
+        bool | None,
+        Field(description="Enable tinydiarize (lightweight speaker-turn detection)."),
+    ] = None
+    suppress_regex: Annotated[
+        str | None,
+        Field(description="Regular-expression pattern for tokens to suppress."),
+    ] = None
+    initial_prompt: Annotated[
+        str | None,
+        Field(description="Initial prompt (context) prepended to the transcription."),
+    ] = None
+    language: Annotated[
+        str | None,
+        Field(description="Transcription language (ISO 639-1) or `'auto'` to detect."),
+    ] = None
+    detect_language: Annotated[
+        bool | None, Field(description="Automatically detect the spoken language.")
+    ] = None
     suppress_blank: bool | None = None
-    suppress_nst: bool | None = None
-    temperature: float | None = None
+    suppress_nst: Annotated[
+        bool | None, Field(description="Suppress non-speech tokens (NST).")
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–1). Default 0.0.")
+    ] = None
     length_penalty: float | None = None
-    temperature_inc: float | None = None
-    entropy_thold: float | None = None
-    logprob_thold: float | None = None
+    temperature_inc: Annotated[
+        float | None,
+        Field(description="Temperature increment applied when sampling fails."),
+    ] = None
+    entropy_thold: Annotated[
+        float | None,
+        Field(description="Entropy threshold for filtering uncertain words."),
+    ] = None
+    logprob_thold: Annotated[
+        float | None,
+        Field(
+            description="Log-probability threshold for filtering words; `-1` disables."
+        ),
+    ] = None
     greedy_best_of: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Greedy decoding: number of candidate completions; `-1` = default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     beam_search_beam_size: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Beam size for beam-search decoding; `-1` = default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     vad_params: Annotated[
         ReloadConfigRequestModelConfigVadParams | None,
@@ -11322,7 +11688,10 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     ] = None
     audio_format: Annotated[
         ReloadConfigRequestModelConfigAudioFormat | None,
-        Field(title="ReloadConfigRequestModelConfigAudioFormat"),
+        Field(
+            description="Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
+            title="ReloadConfigRequestModelConfigAudioFormat",
+        ),
     ] = None
     context_params: Annotated[
         ReloadConfigRequestModelConfigContextParams | None,
@@ -11336,7 +11705,10 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     ] = None
     vad_model_src: Annotated[
         str | ReloadConfigRequestModelConfigVadModelSrc | None,
-        Field(alias="vadModelSrc"),
+        Field(
+            alias="vadModelSrc",
+            description="Voice-activity-detection (VAD) model source; enables VAD when set.",
+        ),
     ] = None
 
 
