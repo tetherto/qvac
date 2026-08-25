@@ -10333,10 +10333,16 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
-    threads: float | None = None
+    threads: Annotated[
+        float | None,
+        Field(description="CPU threads for loading and CPU ops. Default: auto."),
+    ] = None
     device: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigDevice | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigDevice"),
+        Field(
+            description="Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`).",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigDevice",
+        ),
     ] = None
     main_gpu: Annotated[
         MainGpu2 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
@@ -10361,11 +10367,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     ] = None
     rng: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigRng | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigRng"),
+        Field(
+            description="Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigRng",
+        ),
     ] = None
     sampler_rng: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"),
+        Field(
+            description="Sampler RNG type override. Default: auto (follows `rng`).",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng",
+        ),
     ] = None
     clip_on_cpu: Annotated[
         bool | None, Field(description="Force CLIP text encoder to run on CPU")
@@ -10411,7 +10423,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
         ),
     ] = None
-    verbosity: float | None = None
+    verbosity: Annotated[
+        float | None,
+        Field(
+            description="Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0."
+        ),
+    ] = None
     clip_l_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc | None,
         Field(

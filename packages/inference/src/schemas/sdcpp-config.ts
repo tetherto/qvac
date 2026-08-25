@@ -72,8 +72,11 @@ export const sdcppConfigSchema = z.object({
         'shipped by QVAC are too large to load on typical mobile devices; ' +
         'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.'
     ),
-  threads: z.number().optional(),
-  device: z.enum(['gpu', 'cpu']).optional(),
+  threads: z.number().optional().describe('CPU threads for loading and CPU ops. Default: auto.'),
+  device: z
+    .enum(['gpu', 'cpu'])
+    .optional()
+    .describe("Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`)."),
   'main-gpu': z
     .union([z.number().int().min(0), z.enum(['integrated', 'dedicated'])])
     .optional()
@@ -111,8 +114,16 @@ export const sdcppConfigSchema = z.object({
     ])
     .optional()
     .describe('Weight quantization type override; auto-detected when omitted'),
-  rng: z.enum(['cpu', 'cuda', 'std_default']).optional(),
-  sampler_rng: z.enum(['cpu', 'cuda', 'std_default']).optional(),
+  rng: z
+    .enum(['cpu', 'cuda', 'std_default'])
+    .optional()
+    .describe(
+      "Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`."
+    ),
+  sampler_rng: z
+    .enum(['cpu', 'cuda', 'std_default'])
+    .optional()
+    .describe('Sampler RNG type override. Default: auto (follows `rng`).'),
   clip_on_cpu: z.boolean().optional().describe('Force CLIP text encoder to run on CPU'),
   vae_on_cpu: z.boolean().optional().describe('Force VAE decoder to run on CPU'),
   vae_auto_cpu_fallback: z
@@ -148,7 +159,10 @@ export const sdcppConfigSchema = z.object({
         "'at_runtime': adapter is applied per-call and not persisted; use this mode " +
         'for the LTX Ingredients workflow.'
     ),
-  verbosity: z.number().optional(),
+  verbosity: z
+    .number()
+    .optional()
+    .describe('Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.'),
   clipLModelSrc: modelSrcInputSchema
     .optional()
     .describe('CLIP-L text encoder model — required for SD3'),
