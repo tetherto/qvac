@@ -189,6 +189,9 @@ jobs:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/fabric
+      # fabric pulls qvac-fabric[hip-backend]; ggml-config find_dependency(hip)
+      # needs ROCm on the lint runner at configure time.
+      include-rocm-sdk: true
 
   detect-fabric-stack:
     if: needs.authorize.outputs.allowed == 'true'
