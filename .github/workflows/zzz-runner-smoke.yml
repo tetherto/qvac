@@ -1,0 +1,75 @@
+# TEMPORARY runner image-parity smoke test.
+# Triggers ONLY on the throwaway `smoke/runner-image-check` branch (no other
+# workflow matches this ref). Delete the branch after the run to remove it.
+# Validates the newly rolled-out deps: pwsh as the default Windows `run:` shell,
+# plus node / ninja / ccache (Windows) and node / ninja / shellcheck / mesa (Linux).
+name: zzz-runner-smoke
+
+on:
+  push:
+    branches: [smoke/runner-image-check]
+
+permissions: {}
+
+jobs:
+  windows-cpu:
+    runs-on: qvac-win25-x64
+    timeout-minutes: 10
+    steps:
+      - name: Default run shell must be pwsh (Core 7.x, not Desktop 5.1)
+        run: |
+          "shell edition : $($PSVersionTable.PSEdition)"
+          "shell version : $($PSVersionTable.PSVersion)"
+          if ($PSVersionTable.PSEdition -ne 'Core') { throw "default run shell is NOT pwsh" }
+      - name: Tools on PATH
+        run: |
+          "pwsh    : $(pwsh --version)"
+          "node    : $(node --version)"
+          "npm     : $(npm --version)"
+          "ninja   : $(ninja --version)"
+          "ccache  : $((ccache --version | Select-Object -First 1))"
+
+  windows-gpu:
+    runs-on: qvac-win25-x64-gpu
+    timeout-minutes: 10
+    steps:
+      - name: Default run shell must be pwsh (Core 7.x, not Desktop 5.1)
+        run: |
+          "shell edition : $($PSVersionTable.PSEdition)"
+          "shell version : $($PSVersionTable.PSVersion)"
+          if ($PSVersionTable.PSEdition -ne 'Core') { throw "default run shell is NOT pwsh" }
+      - name: Tools on PATH
+        run: |
+          "pwsh    : $(pwsh --version)"
+          "node    : $(node --version)"
+          "ninja   : $(ninja --version)"
+          "ccache  : $((ccache --version | Select-Object -First 1))"
+
+  linux-2404:
+    runs-on: qvac-ubuntu2404-x64
+    timeout-minutes: 10
+    steps:
+      - name: Tools on PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "node       : $(node --version)"
+          echo "npm        : $(npm --version)"
+          echo "ninja      : $(ninja --version)"
+          echo "git-lfs    : $(git lfs version)"
+          echo "shellcheck : $(shellcheck --version | awk '/version:/{print $2}')"
+          echo "mesa-vk    : $(dpkg-query -W -f='${Version}' mesa-vulkan-drivers)"
+
+  linux-2204:
+    runs-on: qvac-ubuntu2204-x64
+    timeout-minutes: 10
+    steps:
+      - name: Tools on PATH
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "node       : $(node --version)"
+          echo "npm        : $(npm --version)"
+          echo "ninja      : $(ninja --version)"
+          echo "git-lfs    : $(git lfs version)"
+          echo "mesa-vk    : $(dpkg-query -W -f='${Version}' mesa-vulkan-drivers)"
