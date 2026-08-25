@@ -17,6 +17,7 @@ REGISTRY_PREFIX_Q8_0="qvac_models_compiled/ggml/parakeet/2026-05-11"
 REGISTRY_PREFIX_Q4_0="qvac_models_compiled/ggml/parakeet/2026-05-27"
 REGISTRY_PREFIX_2026_07_01="qvac_models_compiled/ggml/parakeet/2026-07-01"
 REGISTRY_PREFIX_STREAMING="qvac_models_compiled/ggml/parakeet/2026-05-20"
+REGISTRY_PREFIX_UNIFIED="qvac_models_compiled/ggml/parakeet/2026-08-13"
 
 Q4_CTC_FILES=(
   "parakeet-ctc-0.6b.q4_0.gguf"
@@ -36,7 +37,12 @@ STREAMING_FILES=(
   "diar_streaming_sortformer_4spk-v2.1.q4_0.gguf"
   "diar_streaming_sortformer_4spk-v2.1.q8_0.gguf"
 )
-ALL_FILES=("${Q4_CTC_FILES[@]}" "${Q4_FILES[@]}" "${Q8_FILES[@]}" "${STREAMING_FILES[@]}")
+UNIFIED_FILES=(
+  "parakeet-unified-en-0.6b.q4_0.gguf"
+  "parakeet-unified-en-0.6b.q8_0.gguf"
+  "parakeet-unified-en-0.6b.f16.gguf"
+)
+ALL_FILES=("${Q4_CTC_FILES[@]}" "${Q4_FILES[@]}" "${Q8_FILES[@]}" "${STREAMING_FILES[@]}" "${UNIFIED_FILES[@]}")
 
 download_models_from_prefix() {
   local prefix="$1"
@@ -57,6 +63,7 @@ download_models_from_prefix "$REGISTRY_PREFIX_2026_07_01" "${Q4_CTC_FILES[@]}"
 download_models_from_prefix "$REGISTRY_PREFIX_Q4_0" "${Q4_FILES[@]}"
 download_models_from_prefix "$REGISTRY_PREFIX_Q8_0" "${Q8_FILES[@]}"
 download_models_from_prefix "$REGISTRY_PREFIX_STREAMING" "${STREAMING_FILES[@]}"
+download_models_from_prefix "$REGISTRY_PREFIX_UNIFIED" "${UNIFIED_FILES[@]}"
 
 echo ""
 echo "[$(basename "$0")] Downloaded GGUFs:"

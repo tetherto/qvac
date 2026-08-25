@@ -7,7 +7,7 @@ ggml-based ASR engines behind a single class, `ASRGgml`:
 | Engine | Native library | Good for |
 | --- | --- | --- |
 | **Whisper** | [whisper.cpp](https://github.com/ggerganov/whisper.cpp) | Multilingual offline transcription, translation, Silero-VAD-segmented live capture |
-| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
+| **Parakeet** | [parakeet-cpp](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) through the `speech-cpp` umbrella port (NVIDIA Parakeet / Sortformer) | Low-latency streaming ASR, native end-of-turn detection, 4-speaker diarization |
 
 This package replaces `@qvac/transcription-whispercpp` and
 `@qvac/transcription-parakeet`. See [CHANGELOG.md](CHANGELOG.md) for the
@@ -74,7 +74,9 @@ GGUF metadata** — there is no `modelType` to pass.
 |---------|-----------|---------|-------------:|-------|
 | **CTC** (`parakeet-ctc-0.6b`) | English | argmax CTC | ~700 MiB | Fast, no punctuation/capitalization |
 | **TDT** (`parakeet-tdt-0.6b-v3`) | ~25 | RNN-T greedy + duration | ~715 MiB | Recommended default; PnC + language auto-detect |
+| **Unified** (`parakeet-unified-en-0.6b`) | English | RNN-T | ~715 MiB | One checkpoint for batch and low-latency streaming; PnC |
 | **EOU** (`parakeet-eou-120m-v1`) | English | RNN-T greedy + `<EOU>` | ~132 MiB | Streaming-trained; native end-of-turn token |
+| **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic aggregate | argmax CTC + language mask | ~701 MiB | Multilingual Indic; set `parakeetConfig.language` (e.g. `"hi"`) |
 | **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
 | **Sortformer v2.1 + AOSC** (`diar_streaming_sortformer_4spk-v2.1`) | n/a | Diarization head + speaker cache | ~141 MiB | 4-speaker. Default for **streaming** diarization; AOSC anchors speaker slots across silence, auto-detected from GGUF metadata |
 
@@ -93,8 +95,10 @@ language coverage, translation, and diarization.
 | If you need… | Use this model | Notes |
 | --- | --- | --- |
 | Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect, low-latency streaming. |
+| English batch and low-latency streaming with one checkpoint | `parakeet-unified-en-0.6b` | Standard RNN-T with punctuation and capitalization; use when multilingual TDT or native EOU tokens are not required. |
 | Native end-of-turn for conversational / duplex English | `parakeet-eou-120m-v1` | Emits `<EOU>`; smallest Parakeet (~132 MiB). Pair with TDT when you need broader language coverage *and* EOU. |
 | Fast English-only, no punctuation | `parakeet-ctc-0.6b` | Lowest decode cost in the Parakeet family; no PnC. |
+| Indic-language ASR (Hindi and other Indic ids) | `indic-conformer-ctc` | Pass `parakeetConfig.language` (e.g. `"hi"`). Same Parakeet engine; GGUF lives under `indic_conformer/` in the registry. |
 | Offline 4-speaker diarization | `sortformer-4spk-v1` | Default offline diarization head. |
 | Streaming 4-speaker diarization | `diar_streaming_sortformer_4spk-v2.1` | AOSC keeps speaker slots across silence; prefer over v1 for live streams. |
 | Broadest language set + translate-to-English | `ggml-large-v3-turbo.bin` (or `ggml-small.bin` on edge) | Whisper: ~99 languages, translation, Silero-VAD live capture. Turbo is the accuracy/speed sweet spot; use `tiny`/`base` only when size dominates. |
@@ -123,7 +127,7 @@ SDK code — see [Engine Selection](#engine-selection).
 **Dependencies:**
 
 - `qvac-lib-inference-addon-cpp` — C++ addon framework (vcpkg port; version pinned in `vcpkg.json`)
-- `whisper-cpp` — provides both the whisper.cpp and parakeet-cpp engines (vcpkg port; version pinned in `vcpkg.json`)
+- `speech-cpp` — umbrella vcpkg port enabling the `whisper` and `parakeet` engine features plus each platform's GPU features
 - Bare runtime — see `engines.bare` in `package.json`
 - Linux requires Clang/LLVM 22 with libc++
 
@@ -333,7 +337,7 @@ Every verb has one signature and one meaning regardless of engine.
 | `runStreaming(audio, opts?)` | Duplex/VAD-segmented streaming. Resolves once the native session is open; `opts` is the engine's streaming vocabulary. |
 | `reload(newConfig?)` | Applies an engine-scoped partial config in place where possible. Rejects with `NOT_SUPPORTED` (6019) on an engine whose driver has no native reload. |
 | `cancel(jobId?)` | Cancels the active job **and fails it**, so a draining `iterate()` throws. The native verb takes no id; `jobId` is accepted for source compatibility only. |
-| `status()` | Native state string. Rejects with `FAILED_TO_GET_STATUS` (24004) before `load()`. |
+| `status()` | Native state string. Before `load()`, rejects with `FAILED_TO_GET_STATUS`: 6004 for Whisper and 24004 for Parakeet. |
 | `addon` | The native interface, or `undefined` before `load()` (not cleared by `unload()`, as in both pre-merge packages). Escape hatch for a native hard cancel that stops the decode *without* failing the job (what the SDK's model-wide `cancel` uses). Not otherwise part of the supported surface. |
 | `unload()` / `destroy()` | Release the model / retire the instance. |
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
@@ -394,11 +398,12 @@ const config = {
 }
 ```
 
-**The authoritative vocabulary is the whitelist in
-[`src/engines/whisper/configChecker.ts`](src/engines/whisper/configChecker.ts).**
-It accepts a curated subset of `whisper_full_params` (decoder strategy,
-thresholds, timestamps, VAD, prompts) plus the `vadParams` sub-object; any key
-outside the list throws from the constructor. `contextParams` accepts only
+The public Whisper keys, including `vad_params`, are declared by
+[`WhisperConfig`](engines/whisper/driver.d.ts). The constructor accepts a
+curated subset of `whisper_full_params` covering decoder strategy, thresholds,
+timestamps, VAD, and prompts.
+`WhisperDriver` maps `vad_params` to the native `vadParams` object; callers
+must not pass `vadParams`. Any key outside the list throws from the constructor. `contextParams` accepts only
 `model`, `use_gpu`, `flash_attn`, `gpu_device`; `miscConfig` only
 `caption_enabled`, `seed`. For what each flag means see the upstream
 [`whisper_full_params` reference](https://github.com/ggerganov/whisper.cpp/blob/master/examples/stream/stream.cpp#L30-L96).
@@ -438,7 +443,7 @@ const config = {
 ```
 
 **The authoritative vocabulary is `ParakeetConfig` in
-[`src/engines/parakeet/driver.ts`](src/engines/parakeet/driver.ts)** — every
+published [`driver.d.ts`](engines/parakeet/driver.d.ts)** — every
 key is documented inline there, and any key outside it throws
 `INVALID_CONFIG` (24015) from the constructor. Groups:
 
@@ -447,6 +452,7 @@ key is documented inline there, and any key outside it throws
 | Compute | `maxThreads`, `useGPU`, `seed` |
 | Audio | `sampleRate` (16000), `channels` (1) |
 | Output | `captionEnabled`, `timestampsEnabled` |
+| Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
 | Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
 | Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
 | Backends | `backendsDir`, `openclCacheDir` |
@@ -463,9 +469,11 @@ knobs without the `streaming` prefix: `chunkMs`, `historyMs`, `leftContextMs`,
 `spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`,
 `spkCacheUpdatePeriod`.
 
-For a deep dive on Sortformer streaming, AOSC, and the `.nemo` → `.gguf`
-pipeline, see the heritage
-[`docs/PARAKEET-README.md`](docs/PARAKEET-README.md) (pre-merge API names).
+For streaming diarization, use the Sortformer v2.1 GGUF. Its metadata enables
+AOSC automatically; keep the speaker-cache defaults unless you are comparing
+against the v1 sliding-window path. Sortformer v1 remains the offline
+diarization default. The conversion scripts support both variants and read
+NVIDIA `.nemo` archives directly.
 
 ## Audio Input
 
@@ -503,10 +511,11 @@ Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.
 
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
-(see the `BackendId` enum), `backendDevice`, `backendDescription`,
+(see the `BackendId` enum), string `backendDevice`, `backendDescription`,
 `encoderBackend`, and `encoderOnCoreml` (Apple: whether the Neural Engine
 Core ML sidecar drove the encoder). Whisper additionally reports
-`gpuMemTotalMb` / `gpuMemFreeMb`.
+`gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
+`RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
 Two paths matter on mobile:
 
@@ -539,6 +548,7 @@ npm run download-models                 # interactive picker into ./models/
 ```bash
 npm run download-models:parakeet:registry              # all types
 npm run download-models:parakeet:registry -- -t tdt    # just TDT
+npm run download-models:parakeet:registry -- -t unified
 ```
 
 **Parakeet**, converting NVIDIA `.nemo` yourself:
@@ -546,6 +556,7 @@ npm run download-models:parakeet:registry -- -t tdt    # just TDT
 ```bash
 npm run setup-models:parakeet                  # venv + download + convert (all types, q8_0)
 npm run setup-models:parakeet -- -t tdt        # just TDT
+npm run setup-models:parakeet -- -t unified    # Unified RNN-T
 npm run setup-models:parakeet -- -t eou -q f16 # full-precision EOU
 ```
 
@@ -579,8 +590,8 @@ The map spans **two ranges**, because no historical code was allowed to move:
 
 Every number from both historical tables is registered, so pre-merge codes
 still resolve to a name and message. See
-[`src/lib/error.ts`](src/lib/error.ts) for the full table and
-[`docs/engines.md`](docs/engines.md#error-codes-across-engines) for the
+published [`error.d.ts`](lib/error.d.ts) for the full table and
+[the engine architecture document](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/engines.md#error-codes-across-engines) for the
 rationale.
 
 ## Development
@@ -613,18 +624,29 @@ npm run build          # build:ts (TypeScript) + build:native (bare-make)
 ### Test
 
 ```bash
-npm test                              # unit + the main integration suites
+npm test                              # complete standard gate
+npm run test:all                      # same aggregate, named explicitly
 npm run test:unit
-npm run test:integration              # both engines
+npm run test:package                  # packed tarball and consumer contract
+npm run test:integration              # standard suites for both engines
 npm run test:integration:whisper
 npm run test:integration:parakeet
 npm run test:cpp                      # native gtest suite
-npm run lint                          # separate from npm test
+npm run lint
 ```
 
-Targeted suites worth knowing: `test:integration:chunking` (reload-per-chunk
-long audio), `test:integration:live-stream-simultion` (single long-lived job),
-`test:integration:gpu`, `test:integration:model-file-validation`.
+The standard integration gate covers representative transcription
+correctness, streaming, validation, and lifecycle behavior. Accuracy,
+long-audio, cold-start, GPU, and C++ suites stay explicit because they need
+specialized models, hardware, timing conditions, or toolchains:
+`test:integration:accuracy`, `test:integration:long`,
+`test:integration:cold-start`, `test:integration:gpu` (Whisper),
+`test:integration:parakeet:gpu`, and `test:cpp`.
+The Parakeet GPU command is manual; ASR CI keeps
+`test:integration:gpu` Whisper-only.
+`test:integration:live-stream-simulation` runs only the long-lived Whisper
+stream test; the misspelled `test:integration:live-stream-simultion` remains
+as a temporary alias.
 
 Typical loop: `npm install && npm run build && npm run test:integration`.
 
@@ -663,42 +685,69 @@ workflow. Aggregated historical results:
 
 Whisper:
 
-- [`examples/quickstart.js`](examples/quickstart.js) — basic transcription (`npm run example:whisper`)
-- [`examples/example.streaming-vad.js`](examples/example.streaming-vad.js) — VAD-segmented `runStreaming()`
-- [`examples/example.mic-conversation.js`](examples/example.mic-conversation.js) — mic capture with VAD state and end-of-turn events
-- [`examples/example.live-transcription.js`](examples/example.live-transcription.js) — small chunks into one long-lived job
-- [`examples/example.audio-ctx-chunking.js`](examples/example.audio-ctx-chunking.js) — long recordings via per-chunk `reload()`
-- [`examples/example.reload.js`](examples/example.reload.js) — reloading with a different language/temperature
-- [`examples/example.decoder.js`](examples/example.decoder.js) — the FFmpeg decoder standalone
+- [`examples/quickstart.js`](examples/quickstart.js) — basic transcription (`npm run example:whisper -- [audioPath] [modelPath] [vadModelPath]`)
+- [`examples/example.streaming-vad.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.streaming-vad.js) — VAD-segmented `runStreaming()`
+- [`examples/example.mic-conversation.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.mic-conversation.js) — mic capture with VAD state and end-of-turn events
+- [`examples/example.live-transcription.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.live-transcription.js) — small chunks into one long-lived job
+- [`examples/example.audio-ctx-chunking.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.audio-ctx-chunking.js) — long recordings via per-chunk `reload()`
+- [`examples/example.reload.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.reload.js) — reloading with a different language/temperature
+- [`examples/example.decoder.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/example.decoder.js) — the FFmpeg decoder standalone
 
 Parakeet:
 
-- [`examples/parakeet-transcribe.js`](examples/parakeet-transcribe.js) — universal transcribe/diarize, any GGUF (`npm run example:parakeet`)
-- [`examples/parakeet-diarized-transcribe.js`](examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
-- [`examples/parakeet-live-mic.js`](examples/parakeet-live-mic.js) — live mic via the duplex streaming session
-- [`examples/parakeet-live-mic-diarized.js`](examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
-- [`examples/parakeet-live-mic-diarized-aosc.js`](examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
-- [`examples/parakeet-decode-audio.js`](examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+- [`examples/parakeet-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-transcribe.js) — CTC, TDT, Unified, EOU, or Sortformer transcription
+- [`examples/parakeet-unified-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-unified-transcribe.js) — batch transcription with `parakeet-unified-en-0.6b`
+- [`examples/parakeet-indic-conformer-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-indic-conformer-transcribe.js) — Indic Conformer transcription with the required `--language <id>` option
+- [`examples/parakeet-diarized-transcribe.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-diarized-transcribe.js) — Sortformer + ASR, "who said what"
+- [`examples/parakeet-live-mic.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic.js) — live mic via the duplex streaming session
+- [`examples/parakeet-live-mic-diarized.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized.js) — live mic with speaker tags
+- [`examples/parakeet-live-mic-diarized-aosc.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-live-mic-diarized-aosc.js) — same, with the AOSC tuning knobs as CLI flags
+- [`examples/parakeet-decode-audio.js`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/examples/parakeet-decode-audio.js) — decode + transcribe any FFmpeg-supported container
+
+The npm tarball includes the dependency-clean Whisper quickstart. The other
+examples are repository examples. Run their matching commands from a source
+checkout:
+
+```bash
+npm run example:whisper:streaming-vad
+npm run example:whisper:mic
+npm run example:whisper:live-transcription
+npm run example:whisper:audio-ctx-chunking
+npm run example:whisper:reload
+npm run example:whisper:decoder
+npm run example:parakeet
+npm run example:parakeet:unified
+npm run example:parakeet:indic-conformer
+npm run example:parakeet:diarize
+npm run example:parakeet:mic
+npm run example:parakeet:mic-diarize
+npm run example:parakeet:mic-diarize-aosc
+npm run example:parakeet:decode-audio
+```
+
+The published quickstart uses the Bare global for arguments and exit handling
+so it does not require the repository-only `bare-process` development
+dependency.
 
 The live-mic examples capture the default input device via `sox -d`
 (`brew install sox` / `apt install sox` / `choco install sox`). With
-`npm run example:* -- ...`, keep the `--` separator or npm eats the flags.
+`npm run example:whisper -- ...`, keep the `--` separator or npm eats the flags.
 
 ## Documentation
 
-- [`docs/engines.md`](docs/engines.md) — the orchestrator + driver layout, the
+- [`docs/engines.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/engines.md) — the orchestrator + driver layout, the
   native verb table, engine resolution, and how to add a third engine
-- [`docs/architecture.md`](docs/architecture.md) — full architecture write-up
+- [`docs/architecture.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/architecture.md) — full architecture write-up
   (heritage: whisper engine, pre-merge naming)
-- [`docs/data-flows-detailed.md`](docs/data-flows-detailed.md) — sequence
+- [`docs/data-flows-detailed.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/data-flows-detailed.md) — sequence
   diagrams for load / run / streaming / reload (heritage: whisper engine)
-- [`docs/whisper-addon-help.md`](docs/whisper-addon-help.md) — whisper.cpp
+- [`docs/whisper-addon-help.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/whisper-addon-help.md) — whisper.cpp
   parameter reference
-- [`docs/PARAKEET-README.md`](docs/PARAKEET-README.md) — heritage
+- [`docs/PARAKEET-README.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-README.md) — heritage
   `@qvac/transcription-parakeet` README; still the deepest reference for
   Sortformer/AOSC behaviour and the `.nemo` → `.gguf` pipeline
-- [`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) /
-  [`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md) — the two
+- [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) /
+  [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md) — the two
   pre-merge histories, preserved verbatim
 - [`CHANGELOG.md`](CHANGELOG.md) — the merged package's history, starting at
   `0.1.0`

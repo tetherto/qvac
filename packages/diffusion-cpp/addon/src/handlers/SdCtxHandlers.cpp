@@ -125,6 +125,20 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
      [](SdCtxConfig& c, const std::string& v) {
        c.keepVaeOnCpu = parseBool(v, "vae_on_cpu");
      }},
+    {"vae_auto_cpu_fallback",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.vaeAutoCpuFallback = parseBool(v, "vae_auto_cpu_fallback");
+     }},
+    {"vae_auto_cpu_fallback_memory_ratio",
+     [](SdCtxConfig& c, const std::string& v) {
+       const float ratio = parseFloat(v, "vae_auto_cpu_fallback_memory_ratio");
+       if (!(ratio > 0.0f && ratio <= 1.0f)) {
+         throw StatusError(
+             general_error::InvalidArgument,
+             "vae_auto_cpu_fallback_memory_ratio must be in (0, 1]");
+       }
+       c.vaeAutoCpuFallbackMemoryRatio = ratio;
+     }},
     {"vae_decode_only",
      [](SdCtxConfig& c, const std::string& v) {
        c.vaeDecodeOnly = parseBool(v, "vae_decode_only");

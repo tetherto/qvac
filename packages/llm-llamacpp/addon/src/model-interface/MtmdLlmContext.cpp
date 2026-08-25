@@ -43,10 +43,9 @@ bool isFileInitialized(const std::filesystem::path& path) {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 MtmdLlmContext::MtmdLlmContext(
-    common_params& commonParams, common_init_result_ptr llamaInit,
-    ToolsCompactController& tools)
-    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      compactor_(rollbackState_, tools_), shifter_(compactor_, rollbackState_) {
+    common_params& commonParams, common_init_result_ptr llamaInit)
+    : llamaInit_(std::move(llamaInit)), params_(commonParams),
+      compactor_(rollbackState_), shifter_(compactor_, rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
@@ -54,11 +53,10 @@ MtmdLlmContext::MtmdLlmContext(
 
 MtmdLlmContext::MtmdLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
-    ToolsCompactController& tools, mtmd_context* sharedVision,
-    llama_seq_id seqId, llama_pos perSeqCtxCeiling)
-    : tools_(tools), sharedVision_(sharedVision), modelCtx_(shared),
-      params_(commonParams), perSeqCtxCeiling_(perSeqCtxCeiling),
-      compactor_(rollbackState_, tools_), shifter_(compactor_, rollbackState_) {
+    mtmd_context* sharedVision, llama_seq_id seqId, llama_pos perSeqCtxCeiling)
+    : sharedVision_(sharedVision), modelCtx_(shared), params_(commonParams),
+      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_),
+      shifter_(compactor_, rollbackState_) {
   seqId_ = seqId;
   if (sharedVision_ == nullptr) {
     throw qvac_errors::StatusError(
@@ -89,8 +87,7 @@ void MtmdLlmContext::initializeCommonState() {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
 
-  std::string chatTemplate =
-      getChatTemplate(modelCtx_.model, params_, tools_.enabled());
+  std::string chatTemplate = getChatTemplate(modelCtx_.model, params_);
   tmpls_ = common_chat_templates_init(modelCtx_.model, chatTemplate);
 
   smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
@@ -207,6 +204,7 @@ void MtmdLlmContext::initVisionContext() {
   mparams.print_timings = true;
   mparams.n_threads = params_.cpuparams.n_threads;
   mparams.image_tile_mode = params_.image_tile_mode;
+  mparams.image_no_upscale = params_.image_no_upscale;
   // Forward the per-image token budget to the vision encoder. These were
   // previously dropped: the addon parsed image_min/max_tokens into
   // common_params but never copied them into mtmd_context_params, so a
@@ -336,7 +334,6 @@ void MtmdLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (current_.pos == 0 && !isCacheLoaded) {
-    tools_.reset();
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
@@ -357,6 +354,7 @@ void MtmdLlmContext::tokenizeChat(
   }
   std::string thinkingStartTag;
   std::string thinkingEndTag;
+  std::vector<std::string> thinkingEndTags;
   std::string generationPrompt;
   formattedChat = getPrompt(
       tmpls_.get(),
@@ -364,6 +362,7 @@ void MtmdLlmContext::tokenizeChat(
       &thinkingForcedOpen_,
       &thinkingStartTag,
       &thinkingEndTag,
+      &thinkingEndTags,
       &generationPrompt);
   thinkingForcedOpenText_ =
       thinkingForcedOpen_
@@ -382,7 +381,7 @@ void MtmdLlmContext::tokenizeChat(
           params_,
           modelCtx_.lctx,
           thinkingStartTag,
-          thinkingEndTag,
+          thinkingEndTags,
           generationPrompt)) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
@@ -415,38 +414,6 @@ void MtmdLlmContext::tokenizeChat(
     std::string errorMsg = string_format(
         "[MtmdLlm] %s: Unable to tokenize prompt, res = %d\n", __func__, res);
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
-  }
-
-  if (tools_.enabled() && !tools.empty()) {
-    inputs.tools = {};
-    inputs.add_generation_prompt = false;
-    inputs.use_jinja = params_.use_jinja;
-    inputs.enable_thinking = params_.reasoning_budget != 0;
-    auto promptNoTools = getPrompt(tmpls_.get(), inputs);
-
-    if (!promptNoTools.empty()) {
-      mtmd_input_text textNoTools;
-      textNoTools.text = promptNoTools.c_str();
-      textNoTools.text_len = promptNoTools.size();
-      textNoTools.add_special = addSpecial;
-      textNoTools.parse_special = true;
-
-      mtmd::input_chunks chunksNoTools(mtmd_input_chunks_init());
-      int32_t resNoTools = mtmd_tokenize(
-          visionContext(),
-          chunksNoTools.ptr.get(),
-          &textNoTools,
-          bitmapsCPtr.data(),
-          bitmapsCPtr.size());
-
-      if (resNoTools == 0) {
-        tools_.onTokenize(
-            mtmd_helper_get_n_tokens(chunks.ptr.get()),
-            mtmd_helper_get_n_tokens(chunksNoTools.ptr.get()));
-      }
-    }
-  } else {
-    tools_.onTokenize(mtmd_helper_get_n_tokens(chunks.ptr.get()), 0);
   }
 
   resetMedia();
@@ -512,7 +479,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         protectedPrefix_,
         ContextUsage{nPositions, nTokens},
         shifter_.discardBudget(),
-        tools_,
         defaultContextSliderOps());
     switch (outcome.kind) {
     case ContextSlideOutcome::Kind::Slid:
@@ -711,7 +677,6 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       shifter_.setDiscardBudget(ctxSize - protectedPrefix_.pos - 1);
     }
   }
-  tools_.onEvalComplete(current_.pos, nPositions);
   return {};
 }
 
@@ -873,14 +838,10 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
           Priority::WARNING,
           string_format(
               "[MtmdLlm] generation overflow: context is full and nDiscarded "
-              "is "
-              "0 (nPast=%d, nCtx=%d, firstMsgTokens=%d, nPastBeforeTools=%d, "
-              "toolsCompact=%s)\n",
+              "is 0 (nPast=%d, nCtx=%d, firstMsgTokens=%d)\n",
               current_.pos,
               llama_n_ctx(modelCtx_.lctx),
-              protectedPrefix_.pos,
-              tools_.anchor(),
-              tools_.enabled() ? "true" : "false"));
+              protectedPrefix_.pos));
       generationStopReason_ = GenerationStopReason::ContextOverflow;
       break;
     }
@@ -1483,7 +1444,6 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
 
 void MtmdLlmContext::resetState(bool resetStats) {
 
-  tools_.reset();
   current_ = {};
   protectedPrefix_ = {};
 
@@ -1755,8 +1715,6 @@ void MtmdLlmContext::onPrefillComplete(
     }
     pendingBatchFirstMsg_ = false;
   }
-  tools_.onEvalComplete(
-      current_.pos, static_cast<llama_pos>(prefillTokenCount));
 
   // Reset per-inference reasoning detection state shared by the single-prompt
   // and continuous-batching paths. Do not clear rollbackState_'s boundary
@@ -1971,13 +1929,6 @@ bool MtmdLlmContext::onCancel(
   return cancelGenerationCleanup(outputCallback);
 }
 
-void MtmdLlmContext::validatePromptPolicy(
-    const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-    bool hasKvCacheContext) const {
-  tools_.validatePrompt(chatMsgs, tools, layout, hasKvCacheContext);
-}
-
 /// Prompt caching on the multimodal batch path round-trips the full four-field
 /// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
 /// exactly as `CacheManager` does. All four fields are required: copying only
@@ -2035,7 +1986,6 @@ bool MtmdLlmContext::loadCache(
     }
     current_ = {};
     protectedPrefix_ = {};
-    tools_.reset();
   });
 
   // Accepting a partial header would leave `cacheTokens`/`firstMsgCacheTokens`

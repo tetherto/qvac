@@ -110,9 +110,8 @@ TEST_F(TextLlmContextTest, LoadCacheKeepsConfiguredNDiscardedWithoutCache) {
       .lctx = model->getContext(),
       .vocab = llama_model_get_vocab(model->getModel()),
   };
-  ToolsCompactController tools(std::nullopt);
   common_params params;
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   constexpr llama_pos kConfiguredNDiscarded = 64;
   const bool loaded = driver.loadCache(/*cacheKey=*/"", kConfiguredNDiscarded);
@@ -157,9 +156,8 @@ TEST_F(TextLlmContextTest, LoadCacheClearsLegacyOneFieldMetadata) {
       .lctx = model->getContext(),
       .vocab = llama_model_get_vocab(model->getModel()),
   };
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_FALSE(driver.loadCache(cachePathString, 64));
   EXPECT_EQ(driver.getNPast(), 0);
@@ -204,9 +202,8 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
       .lctx = model->getContext(),
       .vocab = llama_model_get_vocab(model->getModel()),
   };
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
       { (void)driver.loadCache(cachePathString, 64); },
@@ -260,9 +257,8 @@ TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
       .lctx = model->getContext(),
       .vocab = llama_model_get_vocab(model->getModel()),
   };
-  ToolsCompactController tools(std::nullopt);
   common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, tools, /*seqId=*/0);
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   EXPECT_THROW(
       { (void)driver.loadCache(cachePathString, 64); },
@@ -555,12 +551,11 @@ TEST_F(TextLlmContextTest, ProcessWithMultipleTools) {
   });
 }
 
-TEST_F(TextLlmContextTest, DoubleTokenizeWithoutToolsCompact) {
+TEST_F(TextLlmContextTest, ToolsPromptTokenizesWithToolDefinitions) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
 
-  config_files["tools_compact"] = "false";
   config_files["tools"] = "true";
   auto model = createModel();
   if (!model) {
@@ -593,85 +588,4 @@ TEST_F(TextLlmContextTest, DoubleTokenizeWithoutToolsCompact) {
   EXPECT_EQ(cacheTokens, 0);
   // prompt tokens with tools
   EXPECT_GT(promptTokens, 200);
-}
-
-TEST_F(TextLlmContextTest, DoubleTokenizeWithToolsCompactNoTools) {
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_compact"] = "true";
-  config_files["tools"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello, how are you?"}])";
-
-  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
-
-  // Without tools, CacheTokens should equal promptTokens (no cached
-  // conversation tokens)
-  auto stats = model->runtimeStats();
-  int promptTokens = static_cast<int>(getStatValue(stats, "promptTokens"));
-  EXPECT_LT(promptTokens, 50);
-}
-
-TEST_F(TextLlmContextTest, NPastBeforeToolsMinusOneWithoutTools) {
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_compact"] = "true";
-  config_files["tools"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([{"role": "user", "content": "Hello, how are you?"}])";
-
-  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
-}
-
-TEST_F(TextLlmContextTest, NPastBeforeToolsMinusOneWhenToolsCompactFalse) {
-  if (!hasValidModel()) {
-    FAIL() << "Test model not found";
-  }
-
-  config_files["tools_compact"] = "false";
-  config_files["tools"] = "true";
-  auto model = createModel();
-  if (!model) {
-    FAIL() << "Model failed to load";
-  }
-
-  LlamaModel::Prompt prompt;
-  prompt.input = R"([
-    {"role": "user", "content": "What is the weather in Tokyo?"},
-    {
-      "type": "function",
-      "name": "getWeather",
-      "description": "Get weather forecast for a city",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "city": {"type": "string", "description": "City name"},
-          "date": {"type": "string", "description": "Date in YYYY-MM-DD"}
-        },
-        "required": ["city", "date"]
-      }
-    }
-  ])";
-
-  EXPECT_NO_THROW({ std::string output = model->processPrompt(prompt); });
-
-  llama_pos nPastBeforeTools = model->getNPastBeforeTools();
-  EXPECT_EQ(nPastBeforeTools, -1);
 }

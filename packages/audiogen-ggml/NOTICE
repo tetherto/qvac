@@ -66,6 +66,14 @@ C++ Dependencies
   audiogen-cpp
     https://github.com/tetherto/qvac-ext-lib-whisper.cpp
 
+--- minimax-music3-community-license ---
+
+  MiniMax-Music3 model weights
+    https://huggingface.co/MiniMaxAI/MiniMax-Music3
+
+  Model weights are governed by the MiniMax-Music3 Community License.
+  Distribute the upstream license text with converted model files.
+
 --- Unknown ---
 
   qvac-lint-cpp

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.32.0",
+  "version": "0.36.0",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -10,7 +10,7 @@
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js addonLogging.js index.d.ts addon.d.ts addonLogging.d.ts",
+    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.mjs addon.js addonLogging.js idMapIndex.js idMapIndex.mjs index.d.ts addon.d.ts addonLogging.d.ts idMapIndex.d.ts test/types/consumer-cjs.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
@@ -40,7 +40,8 @@
     "test:mobile:generate": "npm run generate:benchmark-shards && bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
-    "test:types": "npm run typecheck && npm run check:generated",
+    "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
+    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json",
     "test:dts": "npm run test:types",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
     "performance:install": "cd ./benchmarks/performance && npm install",
@@ -51,10 +52,14 @@
   "files": [
     "binding.js",
     "index.js",
+    "index.mjs",
     "addon.js",
     "addonLogging.js",
     "addonLogging.d.ts",
     "addon.d.ts",
+    "idMapIndex.js",
+    "idMapIndex.mjs",
+    "idMapIndex.d.ts",
     "prebuilds",
     "index.d.ts",
     "LICENSE",
@@ -94,8 +99,15 @@
     "./package": "./package.json",
     ".": {
       "types": "./index.d.ts",
+      "import": "./index.mjs",
       "default": "./index.js"
     },
+    "./idMapIndex": {
+      "types": "./idMapIndex.d.ts",
+      "import": "./idMapIndex.mjs",
+      "default": "./idMapIndex.js"
+    },
+    "./idMapIndex.js": "./idMapIndex.js",
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"

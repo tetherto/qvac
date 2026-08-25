@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 const createOcrTest = (
   testId: string,

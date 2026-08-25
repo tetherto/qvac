@@ -31,6 +31,7 @@ export async function writeConfigDir(t: TestContext, config: unknown): Promise<s
 export const E2E = {
   llm: 'test-llm',
   embed: 'test-embed',
+  embedLazy: 'test-embed-lazy',
   whisper: 'test-whisper',
   whisperTranslate: 'test-whisper-translate',
   video: 'test-video'
@@ -40,7 +41,11 @@ export const MODEL_CONFIG = {
   serve: {
     models: {
       'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } },
-      'test-embed': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: true },
+      // default:true so the vector-stores default-embedding pick stays
+      // unambiguous now that a second embedding alias exists.
+      'test-embed': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: true, default: true },
+      // preload:false — exercises real lazy-load on first request.
+      'test-embed-lazy': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: false },
       'test-whisper': { model: 'WHISPER_EN_TINY_Q8_0', preload: true },
       'test-whisper-translate': {
         model: 'WHISPER_EN_TINY_Q8_0',

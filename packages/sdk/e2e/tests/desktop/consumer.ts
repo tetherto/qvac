@@ -1,4 +1,4 @@
-import { createExecutor, SkipExecutor, type TestDefinition } from '@tetherto/qvac-test-suite'
+import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/qvac-test-suite'
 import {
   profiler,
   LLAMA_3_2_1B_INST_Q4_0,
@@ -21,20 +21,24 @@ import {
   TTS_S3GEN_EN_CHATTERBOX_Q4_0,
   TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
   TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  TTS_CODEC_DECODER_AUDIO8_Q8_0,
   TTS_EN_SUPERTONIC_Q8_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
   TTS_ENHANCER_LAVASR_FP16,
   TTS_DENOISER_LAVASR_FP16,
   PARAKEET_TDT_0_6B_V3_Q4_0,
   PARAKEET_CTC_0_6B_Q4_0,
+  PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
   PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   PARAKEET_EOU_120M_V1_Q4_0,
   SMOLVLA_LIBERO_VISION_Q8,
   PI05_BASE_Q_AGGRESSIVE,
   GROOT_Q5_VF16,
   GROOT_MULTI_Q5_VF16,
-  SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
@@ -162,12 +166,6 @@ resources.define('tools', {
   constant: QWEN3_1_7B_INST_Q4,
   type: 'llamacpp-completion',
   config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('tools-dynamic', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true, toolsMode: 'dynamic' }
 })
 
 resources.define('tools-qwen35', {
@@ -353,6 +351,42 @@ resources.define('tts-parler-indic', {
   }
 })
 
+resources.define('tts-cosyvoice3', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42
+  }
+})
+
+// Same model with native chunk streaming engaged, so the streaming e2e can
+// exercise the native 24 kHz chunk path rather than generic SDK streaming.
+resources.define('tts-cosyvoice3-native-stream', {
+  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'cosyvoice3',
+    useGPU: true,
+    seed: 42,
+    streamChunkTokens: 25,
+    streamFirstChunkTokens: 10
+  }
+})
+
+resources.define('tts-audio8', {
+  constant: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  type: 'tts-ggml',
+  config: {
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    greedy: true,
+    maxFrames: 130,
+    seed: 42
+  }
+})
+
 resources.define('tts-supertonic', {
   constant: TTS_EN_SUPERTONIC_Q8_0,
   type: 'tts-ggml',
@@ -417,6 +451,12 @@ resources.define('parakeet-ctc', {
   config: {}
 })
 
+resources.define('parakeet-indic-conformer', {
+  constant: PARAKEET_INDIC_CONFORMER_CTC_Q4_0,
+  type: 'parakeet-transcription',
+  config: { language: 'hi' }
+})
+
 resources.define('parakeet-sortformer', {
   constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
   type: 'parakeet-transcription',
@@ -442,21 +482,33 @@ resources.define('bci', {
 })
 
 resources.define('vision', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 4096,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
 resources.define('vision-batch', {
-  constant: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   type: 'llamacpp-completion',
   config: {
     ctx_size: 2048,
     parallel: 2,
-    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0
+    image_no_upscale: 'on',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+  }
+})
+
+resources.define('vision-upscale', {
+  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  type: 'llamacpp-completion',
+  config: {
+    ctx_size: 4096,
+    image_no_upscale: 'off',
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
   }
 })
 
@@ -643,7 +695,9 @@ export const executor = createExecutor({
     new DownloadExecutor(),
     new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
-    new AudioGenExecutor(resources),
+    new AudioGenExecutor(resources, {
+      resolveAudioAsset: (fileName) => path.resolve(process.cwd(), 'assets/audio', fileName)
+    }),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),

@@ -44,6 +44,7 @@ find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInter
 # IMPORTED interface. Make OpenSSL discoverable before find_package(llama)
 # so the target chain resolves on local builds.
 find_package(OpenSSL)
+find_package(ggml CONFIG REQUIRED)
 find_package(llama CONFIG REQUIRED)
 
 if(WIN32)
@@ -68,6 +69,7 @@ target_sources(
   ${embed-llamacpp}
   PRIVATE
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/js-interface/vector-index-binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
@@ -75,6 +77,7 @@ target_sources(
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/VectorIndex.cpp
 )
 target_include_directories(
   ${embed-llamacpp}
@@ -82,10 +85,45 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/addon/src
 )
+
+if(TARGET llama AND NOT TARGET llama::llama)
+  add_library(llama::llama ALIAS llama)
+endif()
+if(NOT TARGET llama::common)
+  if(TARGET llama::llama-common)
+    add_library(llama::common ALIAS llama::llama-common)
+  elseif(TARGET llama-common)
+    add_library(llama::common ALIAS llama-common)
+  else()
+    find_library(LLAMA_COMMON_LIB
+      NAMES llama-common
+      REQUIRED
+      HINTS ${LLAMA_LIB_DIR}
+      NO_CMAKE_FIND_ROOT_PATH)
+    add_library(llama-common UNKNOWN IMPORTED)
+    set_target_properties(llama-common
+      PROPERTIES
+        IMPORTED_LOCATION "${LLAMA_COMMON_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${LLAMA_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "llama::llama")
+    add_library(llama::common ALIAS llama-common)
+  endif()
+endif()
+
+if(TARGET ggml::ggml-vector-index)
+  set(QVAC_VECTOR_INDEX_TARGET ggml::ggml-vector-index)
+elseif(TARGET ggml::vector-index)
+  set(QVAC_VECTOR_INDEX_TARGET ggml::vector-index)
+elseif(TARGET ggml-vector-index)
+  set(QVAC_VECTOR_INDEX_TARGET ggml-vector-index)
+else()
+  message(FATAL_ERROR "qvac-fabric did not export a ggml vector-index target")
+endif()
+
 target_link_libraries(
   ${embed-llamacpp}
   PRIVATE
-    llama::llama llama::llama-common
+    llama::llama llama::common ${QVAC_VECTOR_INDEX_TARGET}
 )
 
 target_compile_definitions(${embed-llamacpp} PUBLIC JS_LOGGER)

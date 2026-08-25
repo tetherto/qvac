@@ -96,6 +96,7 @@ inline bool isAvi(const std::vector<uint8_t>& buf) {
 class SdWanValidationTest : public ::testing::Test {
 protected:
   static std::unique_ptr<SdModel> model;
+  static std::unique_ptr<SdModel> decodeOnlyModel;
 
   static void SetUpTestSuite() {
     const auto path = sd_test_helpers::getModelPath();
@@ -108,11 +109,19 @@ protected:
     config.nThreads = sd_test_helpers::getTestThreads();
     config.device = sd_test_helpers::getTestDevice();
 
+    SdCtxConfig decodeOnlyConfig = config;
+    decodeOnlyConfig.vaeDecodeOnly = true;
+
     model = std::make_unique<SdModel>(std::move(config));
     model->load();
+    decodeOnlyModel = std::make_unique<SdModel>(std::move(decodeOnlyConfig));
+    decodeOnlyModel->load();
   }
 
-  static void TearDownTestSuite() { model.reset(); }
+  static void TearDownTestSuite() {
+    decodeOnlyModel.reset();
+    model.reset();
+  }
 
   void SetUp() override {
     if (!model)
@@ -124,10 +133,10 @@ protected:
   // Build and run a job, expecting a StatusError-derived throw whose message
   // contains `needle`. Using substring matching keeps the tests resilient to
   // wording tweaks while still pinning down which validation branch fired.
-  static void
-  expectThrowContains(SdModel::GenerationJob job, const std::string& needle) {
+  static void expectThrowContainsOn(
+      SdModel& target, SdModel::GenerationJob job, const std::string& needle) {
     try {
-      model->process(std::any(job));
+      target.process(std::any(job));
       FAIL() << "Expected processVideo to throw but it returned normally";
     } catch (const std::exception& e) {
       const std::string msg = e.what();
@@ -135,9 +144,15 @@ protected:
           << "Thrown message did not contain '" << needle << "'. Got: " << msg;
     }
   }
+
+  static void
+  expectThrowContains(SdModel::GenerationJob job, const std::string& needle) {
+    expectThrowContainsOn(*model, std::move(job), needle);
+  }
 };
 
 std::unique_ptr<SdModel> SdWanValidationTest::model = nullptr;
+std::unique_ptr<SdModel> SdWanValidationTest::decodeOnlyModel = nullptr;
 
 // ---------------------------------------------------------------------------
 // Unknown "mode" value routes to processImage() (not processVideo())
@@ -190,6 +205,59 @@ TEST_F(SdWanValidationTest, RejectsMoEControlsWithoutHighNoiseExpert) {
   expectThrowContains(
       std::move(job),
       "high_noise_steps requires high_noise_diffusion_model_path");
+}
+
+TEST_F(SdWanValidationTest, DirectCallerRequiresExactlyOneReferenceSheet) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "txt2vid",
+    "prompt": "test",
+    "lora": "/tmp/ltx-ic-lora.safetensors"
+  })";
+  job.referenceImagesBytes = {{0x01}, {0x02}};
+  expectThrowContains(std::move(job), "exactly one composite reference sheet");
+}
+
+TEST_F(SdWanValidationTest, DirectCallerRequiresLoraForReferenceImages) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({ "mode": "txt2vid", "prompt": "test" })";
+  job.referenceImagesBytes = {{0x01}};
+  expectThrowContains(std::move(job), "reference_images requires params.lora.");
+}
+
+TEST_F(SdWanValidationTest, DirectCallerRejectsReferenceImg2VidCombination) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2vid",
+    "prompt": "test",
+    "lora": "/tmp/ltx-ic-lora.safetensors"
+  })";
+  job.initImageBytes = {0x01};
+  job.referenceImagesBytes = {{0x02}};
+  expectThrowContains(std::move(job), "cannot be combined with img2vid");
+}
+
+TEST_F(SdWanValidationTest, DirectCallerRejectsReferenceWithVaeDecodeOnly) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "txt2vid",
+    "prompt": "test",
+    "lora": "/tmp/ltx-ic-lora.safetensors"
+  })";
+  job.referenceImagesBytes = {{0x01}};
+  expectThrowContainsOn(
+      *decodeOnlyModel, std::move(job), "requires VAE encoder weights");
+}
+
+TEST_F(SdWanValidationTest, DirectCallerRejectsActiveStgForNonLtxModel) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "txt2vid",
+    "prompt": "test",
+    "stg_scale": 1.0,
+    "stg_block": 29
+  })";
+  expectThrowContains(std::move(job), "active stg_scale is only supported");
 }
 
 // ---------------------------------------------------------------------------

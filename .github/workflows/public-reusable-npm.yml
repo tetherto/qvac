@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
@@ -67,7 +67,7 @@ jobs:
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ inputs.workdir }}
 
       - name: Run integration tests if labeled
@@ -76,7 +76,7 @@ jobs:
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           npm-token: ${{ secrets.NPM_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           workdir: ${{ inputs.workdir }}
 
       - name: Check for disallowed dependencies
@@ -112,7 +112,7 @@ jobs:
           exit 1
 
       - name: Call Publish NPM Action
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           tag: "dev"
           workdir: ${{ inputs.workdir }}
@@ -134,7 +134,7 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ inputs.workdir }}
 
@@ -148,7 +148,7 @@ jobs:
 
       - name: Publish to npm
         id: publish-npm
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ inputs.workdir }}
           tag: ${{ steps.dist-tag.outputs.tag }}

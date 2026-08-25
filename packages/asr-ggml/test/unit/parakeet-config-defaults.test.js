@@ -47,6 +47,11 @@ test('streamingSpkCacheEnable defaults to true and coerces to a boolean', (t) =>
   )
 })
 
+test('language is forwarded when the caller sets it', (t) => {
+  t.is(buildParams().language, '', 'empty string when unset')
+  t.is(buildParams({ language: 'hi' }).language, 'hi')
+})
+
 test('unknown parakeetConfig keys are rejected at construction', (t) => {
   try {
     buildParams({ notARealKey: 1 })

@@ -1,5 +1,282 @@
 # Changelog
 
+## [0.18.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.1
+
+QVAC SDK 0.18.1 adds human-readable descriptions on every llamacpp `modelConfig` field and exports those schemas from `@qvac/sdk/schemas`. CLI, typed-client, and Python generators can now surface what each completion and embedding option means. The CosyVoice3 companion-set cache key also changes, so the first load after upgrade uses a new companion cache folder. Load APIs are otherwise unchanged.
+
+## New APIs
+
+### Config schemas at `@qvac/sdk/schemas`
+
+`@qvac/sdk/schemas` exports `llamacppCompletionConfigSchema`, `llamacppEmbeddingConfigSchema`, and `modelSourceSchema`. Field `.describe()` text comes from the addon README / `index.d.ts` (or an existing SDK description) and is written into `contract/schema.json`. The same descriptions land on the generated Python pydantic fields.
+
+```typescript
+import { llamacppCompletionConfigSchema } from '@qvac/sdk/schemas'
+
+llamacppCompletionConfigSchema.shape.ctx_size.description
+// "Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+```
+
+The internal schema identifiers are unchanged.
+
+## Bug Fixes
+
+### CosyVoice3 companion cache folder
+
+CosyVoice3 companion files still download with the LLM, as in 0.18.0. The companion-set cache key for `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` changed, so the first load after upgrading fills a new cache folder. Later loads reuse that folder. Speech APIs and `pace` / `instruct` rules are unchanged.
+
+## [0.18.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.0
+
+QVAC SDK 0.18.0 adds VisionPsy Nano multimodal constants, Audio8 and CosyVoice3 TTS engines, Indic Conformer transcription, and ACE-Step cover generation from a source track. One loaded LLM can now serve several completions at once, sharded GGUFs load directly from disk, and `loadModel` can fall back to a backup source when the origin fails. The dynamic `toolsMode` config is removed, and CosyVoice3 `pace` is restricted to `slow` | `moderate` | `fast`.
+
+## Breaking Changes
+
+### Dynamic toolsMode Removed
+
+`TOOLS_MODE`, `ToolsMode`, and the `toolsMode` load-config field are gone. Tools are always prepended after the system message (the previous static default). Passing `toolsMode` to `loadModel` now fails validation instead of being ignored. Drop the key from existing configs.
+
+**Before:**
+
+```typescript
+import { loadModel, TOOLS_MODE } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_1_7B_INST_Q4,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true, toolsMode: TOOLS_MODE.dynamic }
+})
+```
+
+**After:**
+
+```typescript
+import { loadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_1_7B_INST_Q4,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true }
+})
+```
+
+Existing automatic KV-cache prefixes that were primed under dynamic tools mode are not reusable; the next turn rebuilds the prefix.
+
+### CosyVoice3 Pace Values
+
+`textToSpeech` `pace` no longer accepts engine-specific strings such as `'very fast'`. Use `'slow'`, `'moderate'`, or `'fast'`.
+
+**Before:**
+
+```typescript
+textToSpeech({ modelId, text, pace: 'very fast' })
+```
+
+**After:**
+
+```typescript
+textToSpeech({ modelId, text, pace: 'fast' })
+```
+
+## New APIs
+
+### Continuous Batching
+
+One loaded LLM can run several `completion` calls at once. A new request takes a free slot without waiting for the whole batch to drain. Cancelling one request leaves the others running, and each result reports its own timings. Single-slot models and fine-tuning stay one-at-a-time.
+
+```typescript
+const runs = prompts.map((p) => completion({ modelId, history: p, stream: true }))
+const outputs = await Promise.all(runs.map((r) => r.final))
+
+await cancel({ requestId: runs[0].requestId })
+```
+
+### loadModel fallbackSrc
+
+If the primary `modelSrc` cannot be fetched, `loadModel` retries from `fallbackSrc` (URL or local path) so callers do not have to build their own origin failover.
+
+```typescript
+import { loadModel, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  fallbackSrc: 'https://mirror.example.com/llama-3.2-1b-instruct-q4_0.gguf'
+})
+```
+
+### AudioGen Cover From a Source Track
+
+AudioGen can now generate a cover from source audio, not only a text caption. Pass `taskType: "cover-nofsq"` with `sourceAudio` (path or stereo 48 kHz f32le PCM) and optional `referenceAudio` for timbre.
+
+```typescript
+const cover = audioGen({
+  modelId,
+  caption: 'orchestral arrangement with dramatic strings',
+  lyrics: '[Instrumental]',
+  taskType: 'cover-nofsq',
+  sourceAudio: '/path/to/source.wav',
+  referenceAudio: '/path/to/reference.mp3',
+  audioCoverStrength: 1,
+  coverNoiseStrength: 0.75
+})
+```
+
+### CosyVoice3 TTS
+
+Load CosyVoice3 with `ttsEngine: "cosyvoice3"`. Companion files download with the LLM; `instruct` accepts exactly one of dialect, emotion, or pace.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelConfig: {
+    ttsEngine: 'cosyvoice3',
+    instruct: { dialect: 'cantonese' },
+    seed: 42
+  }
+})
+const result = textToSpeech({
+  modelId,
+  text: 'Hey there!',
+  stream: false,
+  emotion: 'happy'
+})
+```
+
+### Audio8 TTS
+
+Audio8 is a multilingual LM + codec stack with optional zero-shot cloning via reference audio and matching transcript.
+
+```typescript
+await loadModel({
+  modelSrc: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  modelConfig: {
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    audio8CodecEncoderModelSrc: TTS_CODEC_ENCODER_AUDIO8_Q8_0,
+    referenceAudioSrc: 'file:///path/to/voice.wav',
+    referenceText: 'Exactly what the recording says.'
+  }
+})
+```
+
+### Streaming Transcription Stats
+
+`transcribeStream` sessions now expose `stats` after the stream ends (`audioDuration`, `realTimeFactor`).
+
+```typescript
+const session = await transcribeStream({ modelId })
+for await (const event of session) {
+  // streamed events
+}
+const stats = await session.stats
+console.log(stats?.audioDuration, stats?.realTimeFactor)
+```
+
+### Vision image_no_upscale
+
+VisionPsy (and other llama.cpp multimodal loads) can set `image_no_upscale: "on"` in `modelConfig` so the projector does not upscale tiles.
+
+```typescript
+await loadModel({
+  modelType: 'llm',
+  modelSrc: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  modelConfig: {
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
+    image_no_upscale: 'on'
+  }
+})
+```
+
+## Features
+
+### Indic Conformer Transcription
+
+Parakeet Indic Conformer CTC models are in the registry (`PARAKEET_INDIC_CONFORMER_CTC_*`). They use the existing unified ASR transcription path.
+
+### OCR pipelineType Inference
+
+Doctr OCR models no longer require `langList`. EasyOCR still defaults to `['en']` when `langList` is omitted, and explicit lists are forwarded unchanged.
+
+### NMT Timing Units
+
+Translation stats (`totalTime` and related fields) are true milliseconds, matching the documented schema. Values that previously looked like `1.5` are now `1500`.
+
+## Bug Fixes
+
+Sharded llama.cpp models load by pointing the addon at the on-disk files instead of concatenating shards in memory, so large split GGUFs start faster and fine-tuning a sharded model works.
+
+Tool definitions are kept out of the primed KV-cache prefix, so changing tools across turns does not reuse a prefix that baked the old tool list.
+
+Audio-format constants no longer require the optional `@qvac/decoder-audio` package to be installed.
+
+## Model Changes
+
+This release adds VisionPsy Nano (base and Flash) multimodal constants, Indic Conformer transcription weights, Audio8 codec + LM constants, CosyVoice3 companions, and Qwen3-8 27B multimodal shards. `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` is updated.
+
+### Added Models
+
+```text
+MMPROJ_QWEN3_8_27B_MULTIMODAL_F16
+MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
+PARAKEET_INDIC_CONFORMER_CTC_F16
+PARAKEET_INDIC_CONFORMER_CTC_Q4_0
+PARAKEET_INDIC_CONFORMER_CTC_Q8_0
+QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL
+QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
+TTS_CODEC_DECODER_AUDIO8_FP16
+TTS_CODEC_DECODER_AUDIO8_Q8_0
+TTS_CODEC_ENCODER_AUDIO8_FP16
+TTS_CODEC_ENCODER_AUDIO8_Q8_0
+TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32
+TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0
+TTS_LM_MULTILINGUAL_AUDIO8_FP16
+TTS_LM_MULTILINGUAL_AUDIO8_Q8_0
+VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M
+VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M_1
+VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
+```
+
+### Updated Models
+
+```text
+TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
+```
+
+## [0.17.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.1
+
+QVAC SDK 0.17.1 is a patch cut focused on Python packaging and release lockstep. It ships self-contained per-platform `tetherto-qvac-sdk` wheels on the GitHub release, keeps thin wheels on PyPI, makes the embedded Python examples runnable without shared helpers, and publishes `@qvac/inference` together with `@qvac/sdk`, `@qvac/bare-sdk`, and `tetherto-qvac-sdk` at the same version. It also fixes Windows fat-wheel builds and a dropped `bare-rpc` stream teardown.
+
+## Features
+
+### Self-Contained Python Wheels on the GitHub Release
+
+`tetherto-qvac-sdk` now builds per-platform "fat" wheels that bundle a platform-matched Bare runtime for turnkey installs from the `sdk-v*` GitHub release assets. PyPI continues to publish thin wheels; use the release asset URL with `pip install … -f` when you want the self-contained path.
+
+## Bug Fixes
+
+### Windows Fat-Wheel Build and bare-rpc Stream Teardown
+
+Fat-wheel builds on Windows failed because `subprocess` launched `npm` without resolving `npm.cmd`. The build script now resolves `npm` via `shutil.which`. Separately, peer STREAM DESTROY frames from `bare-rpc` invoked async `OutgoingStream.destroy` without scheduling it; the Python transport now schedules that coroutine on the RPC task set so the outgoing stream actually closes.
+
+## Docs
+
+### Standalone Python Examples
+
+The embedded Python examples no longer depend on a shared `_common.py` helper. Each example is self-contained so the docs snippets and local runs stay aligned.
+
+## Release Packaging
+
+This cut also folds `@qvac/inference` into the same `publish-sdk.yml` release path as the other lockstep packages, so a `release-sdk-*` push ships inference / sdk / bare-sdk / python together (including `inference-v*` tags) instead of relying on a standalone inference publish workflow.
+
 ## [0.17.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.0

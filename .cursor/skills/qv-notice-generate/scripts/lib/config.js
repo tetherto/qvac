@@ -58,11 +58,14 @@ for (const [engine, pkgDir] of Object.entries(ENGINE_MAP)) {
 // ---------------------------------------------------------------------------
 // Packages that get the FULL model list in their NOTICE
 // bare-sdk re-exports sdk's compiled output, so it must carry the same
-// model attributions (Gemma terms, etc.) as sdk.
+// model attributions (Gemma terms, etc.) as sdk. inference is the engine that
+// loads and runs every registry model, so it carries the full list too — the
+// SDK is a transport wrapper over it.
 // ---------------------------------------------------------------------------
 const FULL_MODEL_LIST_PACKAGES = [
   'sdk',
   'bare-sdk',
+  'inference',
   'registry-server/client'
 ]
 

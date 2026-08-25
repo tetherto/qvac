@@ -27,9 +27,6 @@ public:
   [[nodiscard]] llama_pos getNPast() const override { return 0; }
   [[nodiscard]] int32_t getNSlides() const override { return 0; }
   [[nodiscard]] bool supportsSliding() const override { return slides_; }
-  void validatePromptPolicy(
-      const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
-      const PromptLayout&, bool) const override {}
   PrefillPlan preparePrefill(
       const std::vector<common_chat_msg>&, const std::vector<common_chat_tool>&,
       const std::vector<std::vector<uint8_t>>&,

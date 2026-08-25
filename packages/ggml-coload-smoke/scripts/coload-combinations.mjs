@@ -29,7 +29,12 @@ import { appendFileSync, readFileSync } from 'node:fs'
 
 const require = createRequire(import.meta.url)
 const here = dirname(fileURLToPath(import.meta.url))
-const { ADDONS, allNames, stacks } = require(join(here, '..', 'addons.js'))
+const { ADDONS, allNames, pluginsOf, withPlugins, stacks } = require(join(here, '..', 'addons.js'))
+
+// Below this, a mobile combo bundles too few plugin-backed addons to co-load
+// anything on device. test/combinations.unit.test.js restates the value rather
+// than importing it, so both have to move together.
+const MIN_MOBILE_COLOAD_ADDONS = 2
 
 function parseArgs (argv) {
   const opts = {
@@ -106,8 +111,7 @@ function combo (name, names) {
   // that expose a built-in SDK plugin -- used by the mobile (Device Farm)
   // co-load to bundle a consumer with only this subset.
   const plugins = names
-    .map(n => ADDONS[n].plugin)
-    .filter(Boolean)
+    .flatMap(pluginsOf)
     .map(suffix => `@qvac/sdk/${suffix}/plugin`)
   return { name, addons: names.join(','), plugins: plugins.join(',') }
 }
@@ -187,9 +191,10 @@ if (opts.mode === 'changed') {
 }
 // Mobile co-load goes through the SDK bundle, which can only include addons
 // that expose a built-in SDK plugin. Drop combos that would bundle fewer than
-// two such addons (nothing to co-load on device).
+// two such addons (nothing to co-load on device). Count ADDONS, not plugin
+// specifiers: a single addon backing two plugins is still only one dlopen.
 if (opts.mobile) {
-  matrix = matrix.filter(c => c.plugins.split(',').filter(Boolean).length >= 2)
+  matrix = matrix.filter(c => withPlugins(parseNames(c.addons)).length >= MIN_MOBILE_COLOAD_ADDONS)
 }
 // Keep only named combos (e.g. --only all to run just the full bundle on PRs).
 if (opts.only) {

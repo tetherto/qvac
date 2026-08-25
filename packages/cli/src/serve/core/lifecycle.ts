@@ -1,15 +1,13 @@
-import {
-  loadModel as sdkLoadModel,
-  unloadModel as sdkUnloadModel,
-  close as sdkClose
-} from '@qvac/sdk'
+import { unloadModel as sdkUnloadModel, close as sdkClose } from '@qvac/sdk'
 import type { ModelRegistry, ServeConfig } from './model-registry.js'
+import type { LoadManager } from './load-manager.js'
 import type { Logger } from '../../logger.js'
 
 export async function preloadModels(
   serveConfig: ServeConfig,
   registry: ModelRegistry,
-  logger: Logger
+  logger: Logger,
+  loadManager: LoadManager
 ): Promise<void> {
   const toPreload: string[] = []
 
@@ -29,7 +27,8 @@ export async function preloadModels(
 
   for (const alias of toPreload) {
     try {
-      await loadModel(alias, registry, logger)
+      // No signal: a preload is a permanent waiter, never disconnect-cancelled.
+      await loadManager.load(alias)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`Failed to preload "${alias}": ${message}`)
@@ -37,53 +36,27 @@ export async function preloadModels(
   }
 }
 
-export async function loadModel(
-  alias: string,
-  registry: ModelRegistry,
-  logger: Logger
-): Promise<void> {
-  const entry = registry.getEntry(alias)
-  if (!entry) throw new Error(`Model "${alias}" not registered`)
-
-  if (entry.state === registry.STATES.READY) {
-    logger.debug(`Model "${alias}" already loaded.`)
-    return
-  }
-
-  if (entry.state === registry.STATES.LOADING) {
-    logger.debug(`Model "${alias}" is already loading, skipping.`)
-    return
-  }
-
-  const displaySrc = typeof entry.modelSrc === 'string' ? entry.modelSrc : entry.modelSrc.src
-  logger.info(`Loading model "${alias}" from ${displaySrc}...`)
-  registry.setLoading(alias)
-
-  try {
-    const sdkModelId = await sdkLoadModel({
-      modelSrc: entry.modelSrc,
-      modelType: entry.sdkType,
-      modelConfig: entry.config
-    })
-    registry.setReady(alias, sdkModelId)
-    logger.info(`Model "${alias}" loaded (SDK modelId: ${sdkModelId}).`)
-  } catch (err) {
-    registry.setError(alias, err)
-    throw err
-  }
-}
-
 export async function unloadModel(
   alias: string,
   registry: ModelRegistry,
-  logger: Logger
+  logger: Logger,
+  loadManager: LoadManager
 ): Promise<void> {
   const entry = registry.getEntry(alias)
   if (!entry) throw new Error(`Model "${alias}" not found`)
 
-  if (entry.sdkModelId) {
+  // If a load is in flight, wait for it to settle first — otherwise we would
+  // unload nothing (sdkModelId still null) and the in-flight load would set the
+  // model back to READY right after DELETE reported success.
+  if (loadManager.isLoading(alias)) {
+    logger.info(`Waiting for in-flight load of "${alias}" to settle before unload...`)
+    await loadManager.settled(alias)
+  }
+
+  const current = registry.getEntry(alias)
+  if (current?.sdkModelId) {
     try {
-      await sdkUnloadModel({ modelId: entry.sdkModelId })
+      await sdkUnloadModel({ modelId: current.sdkModelId })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.error(`SDK unload for "${alias}" failed: ${message}`)
@@ -92,7 +65,10 @@ export async function unloadModel(
     }
   }
 
-  registry.remove(alias)
+  // Keep the alias registered (reset to IDLE) rather than removing it, so a
+  // later request can lazy-reload it. Removing the entry would leave the alias
+  // resolvable from config but unloadable — the original preload/lifecycle gap.
+  registry.markUnloaded(alias)
   logger.info(`Unloaded model "${alias}".`)
 }
 

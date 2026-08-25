@@ -109,8 +109,8 @@ public:
   // `maxCapturedTail` tokens. The seeded prefix (close marker + any
   // other tokens added via `appendPostReasoningToken`) is never
   // dropped, so passing 0 still preserves the structural prefix.
-  // Used when the tools-compact tail trim shrinks the live tail
-  // between close-marker capture and replay.
+  // Used when a tail trim shrinks the live tail between close-marker
+  // capture and replay.
   void clipPostReasoningTokens(size_t maxCapturedTail);
   void clearPostReasoning() noexcept;
 

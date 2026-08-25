@@ -153,13 +153,10 @@ TimedDecodeResult timeDecodeStep(
 ContinuousBatchScheduler::ContinuousBatchScheduler(
     LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
     size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-    llama_pos configuredNDiscarded,
-    std::optional<ToolsCompactProfile> toolsCompactProfile,
-    DriverFactory driverFactory)
+    llama_pos configuredNDiscarded, DriverFactory driverFactory)
     : shared_(shared), baseSampling_(baseParams.sampling),
       baseNPredict_(baseParams.n_predict), baseParams_(baseParams),
       configuredNDiscarded_(configuredNDiscarded),
-      toolsCompactProfile_(std::move(toolsCompactProfile)),
       driverFactory_(std::move(driverFactory)),
       perSeqMaxTokens_(perSeqCeiling(ctxTotalTokens, batchSize)),
       batcher_(maxChunkSize, perSeqMaxTokens_, batchSize),
@@ -402,9 +399,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
-  auto tools = std::make_unique<ToolsCompactController>(toolsCompactProfile_);
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
-      tmpParams, *tools, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
+      tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
   // `applyGenerationParamsToContext` above resolves the sampling/n_predict/
   // reasoning_budget overrides into `tmpParams` (which the driver copies),
@@ -415,18 +411,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     driver->setRemoveThinkingFromContext(
         *request.overrides.remove_thinking_from_context);
   }
-
-  bool hasKvCacheContext = false;
-  if (!request.cacheKey.empty()) {
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(request.cacheKey, ec);
-    if (!ec && size != 0) {
-      hasKvCacheContext = true;
-    }
-  }
-
-  driver->validatePromptPolicy(
-      request.chatMsgs, request.tools, request.layout, hasKvCacheContext);
 
   const bool isCacheLoaded =
       driver->loadCache(request.cacheKey, configuredNDiscarded_);
@@ -535,7 +519,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   slots_[seqId].emplace(
       SlotState{
           .streams = std::move(streamsLocal),
-          .tools = std::move(tools),
           .driver = std::move(driver),
           .cacheKey = std::move(request.cacheKey),
           .group = std::move(queued.group),
@@ -1443,8 +1426,9 @@ void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
   // fails the batch (failGroupLocked) instead of completing it as a success;
   // teardown paths use notifyDoneNoexcept. The throw then skips freeSlot below,
   // so recovery re-runs teardown (onCancel/saveCache/onDone) on this slot. That
-  // is benign and only happens when onDone itself threw: onGenerationFinished's
-  // generationStarted_ guard makes the re-run a no-op, recovery's onCancel({})
+  // is benign and only happens when onDone itself threw: the re-run's
+  // onGenerationFinished finds an already-consumed reasoning span (compaction
+  // no-ops) and an already-flushed UTF-8 buffer, recovery's onCancel({})
   // re-emits nothing, and saveCache just rewrites the same file.
   auto& slot = slots_[seqId];
   if (slot.has_value() && slot->streams.onDone) {

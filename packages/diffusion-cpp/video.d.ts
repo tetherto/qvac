@@ -33,6 +33,14 @@ export interface VideoGenerationParams {
     mode: VideoMode;
     prompt: string;
     negative_prompt?: string;
+    /** LTX IC-LoRA adapter path. Unsupported by Wan video models. */
+    lora?: string;
+    /** Runtime multiplier for the LTX LoRA adapter. Ingredients recommends 1.4. */
+    lora_strength?: number;
+    /** LTX video-only spatiotemporal guidance scale. Ingredients recommends 1.0. */
+    stg_scale?: number;
+    /** Transformer block whose video self-attention is skipped for STG. */
+    stg_block?: number;
     /**
      * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V and LTX-2 use a
      * 32-pixel spatial grid; native validation derives the TI2V requirement from
@@ -60,10 +68,18 @@ export interface VideoGenerationParams {
     vace_strength?: number;
     init_image?: Uint8Array;
     control_frames?: Uint8Array[];
+    /** LTX IC-LoRA reference images as encoded PNG/JPEG bytes. */
+    reference_images?: Uint8Array[];
+    /** LTX IC-LoRA reference denoise-mask strength in [0, 1]. */
+    reference_attention_strength?: number;
+    /** LTX IC-LoRA reference-image spatial factor. Currently only exactly 1 is supported. */
+    reference_downscale_factor?: number;
     vae_tiling?: boolean;
     vae_tile_size?: number | string;
     vae_tile_overlap?: number;
     temporal_tiling?: boolean;
+    /** Backend-specific VAE tiling overrides as a comma-separated key=value list. */
+    vae_extra_tiling_args?: string;
     cache_mode?: CacheMode;
     cache_preset?: string;
     cache_threshold?: number;

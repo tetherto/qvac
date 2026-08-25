@@ -39,6 +39,39 @@ public:
     return model.state_ ? model.state_->llmContext_.get() : nullptr;
   }
 
+  static std::optional<load_fit_normalization::NormalizedFitSnapshot>
+  normalizedFitSnapshot(const LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    if (!model.state_) {
+      return std::nullopt;
+    }
+    return model.state_->normalizedFitSnapshot_;
+  }
+
+  static void replaceNormalizedFitSnapshot(
+      LlamaModel& model,
+      load_fit_normalization::NormalizedFitSnapshot snapshot) {
+    std::unique_lock lock(model.stateMtx_);
+    if (model.state_) {
+      model.state_->normalizedFitSnapshot_ = std::move(snapshot);
+    }
+  }
+
+  static llama_pos configuredNDiscarded(const LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_ ? model.state_->configuredNDiscarded_ : 0;
+  }
+
+  static int64_t runtimeBackendDevice(const LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.runtimeBackendDevice_;
+  }
+
+  static void setRuntimeBackendDevice(LlamaModel& model, int64_t device) {
+    std::unique_lock lock(model.stateMtx_);
+    model.runtimeBackendDevice_ = device;
+  }
+
   /// The multi-job routing predicate (private static on the model).
   static bool isConcurrentEligible(const LlamaModel::Prompt& prompt) {
     return LlamaModel::isConcurrentEligible(prompt);

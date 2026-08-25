@@ -1,6 +1,6 @@
 {
   "name": "@qvac/tts-ggml",
-  "version": "0.6.2",
+  "version": "0.7.5",
   "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
   "addon": true,
   "engines": {
@@ -15,24 +15,27 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "example": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
     "example:chatterbox": "bare examples/chatterbox-tts.js \"Hello from qvac tts ggml.\"",
+    "example:chatterbox-enhanced": "bare examples/chatterbox-enhanced.js \"Hello from enhanced Chatterbox.\"",
     "example:chatterbox-mtl": "bare examples/chatterbox-mtl-tts.js \"Hello from the multilingual Chatterbox engine.\"",
     "example:chatterbox-adjust-speed": "bare examples/chatterbox-adjust-speed.js",
     "example:chatterbox-mtl-sweep": "bare examples/chatterbox-mtl-sweep-tts.js",
     "example:chatterbox-sentence-stream": "bare examples/chatterbox-sentence-stream-tts.js",
     "example:chatterbox-chunk-stream": "bare examples/chatterbox-chunk-stream-tts.js",
     "example:supertonic": "bare examples/supertonic-tts.js \"Hello from supertonic.\"",
+    "example:supertonic-enhanced": "bare examples/supertonic-enhanced.js \"Hello from enhanced Supertonic.\"",
     "example:supertonic-mtl": "bare examples/supertonic-mtl-tts.js \"Hello from the multilingual Supertonic engine.\"",
     "example:supertonic-mtl-sweep": "bare examples/supertonic-mtl-sweep-tts.js",
     "example:supertonic-sentence-stream": "bare examples/supertonic-sentence-stream-tts.js",
     "example:cosyvoice": "bare examples/cosyvoice-tts.js \"Hello from CosyVoice three.\"",
     "example:cosyvoice-enhanced": "bare examples/cosyvoice-enhanced.js \"Hello from CosyVoice three.\"",
     "example:parler": "bare examples/parler-tts.js \"Hey, how are you doing today?\"",
+    "example:parler-enhanced": "bare examples/parler-enhanced.js \"Hello from enhanced Parler.\"",
     "example:audio8": "bare examples/audio8-tts.js \"Audio eight speaks on-device.\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"test/**/*.js\" \"binding.js\" && lunte \"test/**/*.js\" \"binding.js\"",
+    "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"test/**/*.js\" \"binding.js\"",
+    "format": "prettier --write \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"binding.js\"",
     "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:node",
     "test:node": "node --test scripts/__tests__/*.test.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
@@ -66,6 +69,8 @@
     "prebuilds",
     "index.d.ts",
     "tts.js",
+    "examples",
+    "scripts/download-tts-ggml-models.js",
     "test/integration",
     "test/mobile",
     "test/reference-audio",
@@ -93,6 +98,10 @@
       "types": "./lib/textChunker.d.ts",
       "default": "./lib/textChunker.js"
     },
+    "./text-stream-accumulator": {
+      "types": "./lib/textStreamAccumulator.d.ts",
+      "default": "./lib/textStreamAccumulator.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
@@ -115,12 +124,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/registry-client": "^0.4.0",
-    "@qvac/transcription-whispercpp": "^0.10.1",
-    "bare-process": "^4.2.2",
-    "bare-subprocess": "^5.2.1",
-    "brittle": "^3.17.0",
+    "@qvac/asr-ggml": "^0.3.2",
+    "@qvac/registry-client": "^0.6.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -137,10 +142,17 @@
   "dependencies": {
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.2",
+    "@qvac/langdetect-text": "^0.1.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.6",
+    "bare-https": "^3.0.0",
     "bare-os": "^3.8.0",
-    "bare-path": "^3.0.0"
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-stream": "^2.7.0",
+    "bare-subprocess": "^5.2.1",
+    "bare-url": "^2.4.3",
+    "brittle": "^3.17.0"
   },
   "types": "index.d.ts"
 }

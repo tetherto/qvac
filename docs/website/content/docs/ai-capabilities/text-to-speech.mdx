@@ -31,6 +31,8 @@ The response does not include a sample rate. Use the rate implied by the loaded 
 | Chatterbox              | 24,000 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | Supertonic              | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | Parler                  | 44,100 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 44,100 Hz |
+| CosyVoice3              | 24,000 Hz, or `modelConfig.outputSampleRate` when native streaming is disabled; native streaming requires 24,000 Hz unless the LavaSR enhancer is loaded |
+| Audio8                  | 44,100 Hz, or `modelConfig.outputSampleRate` when set                                                               |
 | LavaSR enhancer enabled | 48,000 Hz by default, or `modelConfig.outputSampleRate` when set                                                    |
 
 ## Models
@@ -160,11 +162,123 @@ async for response in text_to_speech(transport, request):
     samples.extend(response.buffer)
 ```
 
+### CosyVoice3
+
+CosyVoice3 uses the **LLM GGUF** as the top-level `modelSrc`; its registry
+companion set auto-downloads the flow and HiFT GGUFs, the baked `voice.gguf`,
+and the tokenizer files alongside it. Speech is synthesized with the baked
+default voice — the engine's reference-audio path is reserved and voice
+cloning is not yet exposed — and emits native 24 kHz audio.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "cosyvoice3",
+    seed: 42,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text: "Hey, how are you doing today?",
+  inputType: "text",
+  stream: false,
+  emotion: "happy",
+});
+
+const pcm = await result.buffer;
+```
+
+Conditioning uses one of three controls:
+
+- `emotion` — `anger`, `happy`, `neutral`, or `sad`.
+- `pace` — `slow`, `moderate`, or `fast`; `moderate` engages nothing and
+  takes the plain zero-shot path.
+- `instruct` — a raw instruction string, or a structured object with
+  `dialect`, `volume` (`loud` / `soft`), or `style` (`peppa` / `robot`),
+  resolved by precedence `dialect > volume > style`. Supported dialects:
+  `cantonese`, `northeastern`, `gansu`, `guizhou`, `henan`, `hubei`, `hunan`,
+  `jiangxi`, `minnan`, `ningxia`, `shanxi`, `shaanxi`, `shandong`,
+  `shanghai`, `sichuan`, `tianjin`, and `yunnan`.
+
+<Callout type="warn">
+  CosyVoice3 accepts **one conditioning control per synthesis** — an
+  `emotion`, a non-`moderate` `pace`, or an `instruct`. Combining them is
+  rejected at load and request validation. `emotion` and `pace` can also be
+  set per request on `textToSpeech()`; `instruct` is load-time only.
+</Callout>
+
+Set `streamChunkTokens` above zero for native chunk streaming
+(`streamFirstChunkTokens` tunes the first chunk only). Native streaming emits
+at 24 kHz, so omit `outputSampleRate` or set it to `24000` unless the LavaSR
+enhancer is loaded. `useGPU` offloads to Metal on macOS/iOS, Vulkan on
+desktop Linux/Windows, and OpenCL on Adreno Android devices; `threads`,
+`nGpuLayers`, `seed`, and `outputSampleRate` (8,000–192,000 Hz) work as on
+the other engines. CosyVoice3 also supports [LavaSR](#lavasr)
+post-processing via `lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
+`lavasrDenoiserModelSrc` (batch-only; runs before the enhancer).
+
+### Audio8
+
+Audio8 uses the **DualAR LM GGUF** as the top-level `modelSrc`
+(`TTS_LM_MULTILINGUAL_AUDIO8_Q8_0` or `TTS_LM_MULTILINGUAL_AUDIO8_FP16`) and
+a required **codec decoder** via `modelConfig.audio8CodecDecoderModelSrc`.
+The model is multilingual — the language is inferred from the text itself —
+and emits native 44.1 kHz audio.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  modelType: "tts",
+  modelConfig: {
+    ttsEngine: "audio8",
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    temperature: 0.7,
+    topP: 0.9,
+    seed: 42,
+  },
+});
+
+const result = textToSpeech({
+  modelId,
+  text: "Hey, how are you doing today?",
+  inputType: "text",
+  stream: false,
+});
+
+const pcm = await result.buffer;
+```
+
+For zero-shot voice cloning, add the optional **codec encoder**
+(`audio8CodecEncoderModelSrc`, e.g. `TTS_CODEC_ENCODER_AUDIO8_Q8_0`) and
+supply `referenceAudioSrc` (a reference recording) together with
+`referenceText` (its exact transcript). The three fields are validated
+together — a reference without its transcript or without the encoder is
+rejected at load.
+
+Generation is sampled by default: `temperature` (default `0.7`), `topK`
+(`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
+and ignores all three, and `maxFrames` caps generation in codec frames
+(~21.5 frames per second of audio). `seed`, `threads`, `nGpuLayers`, and
+`outputSampleRate` work as on the other engines; `useGPU` offloads to Metal
+on macOS/iOS, Vulkan on desktop Linux/Windows, and OpenCL on Android/Adreno —
+elsewhere it falls back to CPU and sets `stats.gpuUnsupported` in the
+response.
+
+<Callout type="warn">
+  Audio8 has no `emotion`, `pace`, or description fields (at load or per
+  request), no LavaSR post-processing, and no native chunk streaming.
+  Sentence streaming (`sentenceStream: true`) and duplex
+  `textToSpeechStream()` work as with every engine.
+</Callout>
+
 For model constants, see [SDK — Models](/introduction#models).
 
 ### LavaSR
 
-With either Chatterbox or Supertonic, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag.
+With Chatterbox, Supertonic, or CosyVoice3, you can choose to perform post-processing using **LavaSR** models. They are applied to the synthesized audio before it is returned, and each stage is enabled purely by supplying its model source — i.e., there is no separate on/off flag.
 
 - `lavasrDenoiserModelSrc` — a denoiser GGUF that cleans the speech (noise reduction). It runs **first** and is rate-preserving. Constants: `TTS_DENOISER_LAVASR_FP16`, `TTS_DENOISER_LAVASR_FP32`.
 - `lavasrEnhancerModelSrc` — an enhancer GGUF that neurally bandwidth-extends the output to **48 kHz**. It runs **after** the denoiser. Constants: `TTS_ENHANCER_LAVASR_FP16`, `TTS_ENHANCER_LAVASR_FP32`.
@@ -268,6 +382,62 @@ plays it:
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/tts/parler.ts title="tts-parler.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### CosyVoice3
+
+The following script loads the registry-hosted CosyVoice3 model (the LLM GGUF
+downloads its flow/HiFT, voice, and tokenizer companions automatically),
+applies per-request emotion conditioning, saves the PCM output, and plays it:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/cosyvoice3.js title="tts-cosyvoice3.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/cosyvoice3.ts title="tts-cosyvoice3.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Audio8
+
+The following script loads the registry-hosted Audio8 LM together with its
+codec decoder, synthesizes 44.1 kHz audio with the default sampling settings,
+saves the PCM output, and plays it:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tts/audio8.js title="tts-audio8.js" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tts/audio8.ts title="tts-audio8.ts" lineNumbers
 
 ```
 

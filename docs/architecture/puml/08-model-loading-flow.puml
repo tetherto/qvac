@@ -7,10 +7,12 @@ participant "Download Manager" as Download
 participant "Plugin Registry" as PluginReg
 participant "Plugin.createModel" as Plugin
 
-Client -> Handler : loadModel()
+Client -> Handler : loadModel({ modelSrc, modelType, requestId })
 Handler -> Download : resolve source
 
-alt pear:// (Hyperdrive)
+alt Model constant / descriptor object
+    Download -> Download : expand metadata, artifacts, checksum
+else pear:// or hyperdrive source
     Download --> Handler : P2P download
 else https:// (HTTP)
     Download --> Handler : HTTP download
@@ -27,7 +29,7 @@ Handler -> PluginReg : getPlugin(modelType)
 PluginReg -> Plugin : createModel({ modelId, modelPath, modelConfig, artifacts })
 Plugin -> Plugin : load weights via native addon
 
-Handler -> Handler : register(modelId, instance)
+Handler -> Handler : register(modelId, instance, source metadata)
 Handler -> Client : modelId
 
 @enduml

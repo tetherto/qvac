@@ -23,6 +23,15 @@ on:
         type: boolean
         required: false
         default: true
+      build-testing:
+        description: >-
+          Configure with BUILD_TESTING=ON so unit-test translation units land in
+          compile_commands.json and are analysed like any other changed source.
+          Packages whose tests are guarded by BUILD_TESTING (off by default)
+          need this, or a changed test file is silently skipped by clang-tidy.
+        type: boolean
+        required: false
+        default: false
       include-rocm-sdk:
         description: >-
           Install the ROCm (TheRock) SDK before generating the build system.
@@ -80,7 +89,7 @@ jobs:
           submodules: recursive
           repository: ${{ env.HEAD_REPO }}
           ref: ${{ env.HEAD_SHA }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
       - name: Setup AWS + Windows CLI
@@ -143,7 +152,7 @@ jobs:
       - name: Generate build system
         id: bare_make_generate
         working-directory: ${{ env.WORKDIR }}
-        run: bare-make generate -D ENABLE_VULKAN=OFF
+        run: bare-make generate -D ENABLE_VULKAN=OFF ${{ inputs.build-testing && '-D BUILD_TESTING=ON' || '' }}
 
       - name: Check C++ files format
         id: cpp_files_fmt

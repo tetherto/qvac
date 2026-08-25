@@ -14,6 +14,7 @@
 
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 
 namespace fs = std::filesystem;
 
@@ -711,6 +712,84 @@ TEST_F(LlamaModelTest, SpecialCharactersAndUnicode) {
   });
 }
 
+TEST_F(LlamaModelTest, OrdinaryLoadRetainsCanonicalNormalizationSnapshot) {
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const auto snapshot = LlamaModelTestPeer::normalizedFitSnapshot(model);
+  ASSERT_TRUE(snapshot.has_value());
+  const auto expected = load_fit_normalization::makeNormalizedFitSnapshot(
+      model.getCommonParams(),
+      static_cast<uint32_t>(llama_n_ctx(model.getContext())));
+  EXPECT_EQ(*snapshot, expected);
+  EXPECT_EQ(
+      snapshot->nCtx, static_cast<uint32_t>(llama_n_ctx(model.getContext())));
+  EXPECT_EQ(
+      snapshot->nBatch, static_cast<uint32_t>(model.getCommonParams().n_batch));
+  EXPECT_EQ(
+      snapshot->nUbatch,
+      static_cast<uint32_t>(model.getCommonParams().n_ubatch));
+  EXPECT_EQ(snapshot->nGpuLayers, model.getCommonParams().n_gpu_layers);
+}
+
+TEST_F(LlamaModelTest, OmittedContextSnapshotMatchesAllocatedContext) {
+  auto config = config_files;
+  config.erase("ctx_size");
+  config.erase("ctx-size");
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  ASSERT_EQ(model.getCommonParams().n_ctx, 0);
+  const auto snapshot = LlamaModelTestPeer::normalizedFitSnapshot(model);
+  ASSERT_TRUE(snapshot.has_value());
+  EXPECT_GT(snapshot->nCtx, 0U);
+  EXPECT_EQ(
+      snapshot->nCtx, static_cast<uint32_t>(llama_n_ctx(model.getContext())));
+}
+
+TEST_F(LlamaModelTest, OrdinaryLoadPreservesDiscardAndBackendSideEffects) {
+  auto config = config_files;
+  config["device"] = "cpu";
+  config["gpu_layers"] = "0";
+  config["n_discarded"] = "64";
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  EXPECT_EQ(LlamaModelTestPeer::configuredNDiscarded(model), 64);
+  EXPECT_EQ(LlamaModelTestPeer::runtimeBackendDevice(model), 0);
+  LlamaModelTestPeer::setRuntimeBackendDevice(model, 1);
+  ASSERT_EQ(LlamaModelTestPeer::runtimeBackendDevice(model), 1);
+
+  model.reload();
+
+  EXPECT_EQ(LlamaModelTestPeer::configuredNDiscarded(model), 64);
+  EXPECT_EQ(LlamaModelTestPeer::runtimeBackendDevice(model), 0);
+}
+
+TEST_F(LlamaModelTest, OrdinaryReloadRegeneratesCanonicalSnapshot) {
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const auto initial = LlamaModelTestPeer::normalizedFitSnapshot(model);
+  ASSERT_TRUE(initial.has_value());
+  auto poison = *initial;
+  poison.nGpuLayers += 1000;
+  ASSERT_NE(poison, *initial);
+  LlamaModelTestPeer::replaceNormalizedFitSnapshot(model, poison);
+  ASSERT_EQ(LlamaModelTestPeer::normalizedFitSnapshot(model), poison);
+
+  model.reload();
+
+  const auto reloaded = LlamaModelTestPeer::normalizedFitSnapshot(model);
+  ASSERT_TRUE(reloaded.has_value());
+  EXPECT_EQ(*reloaded, *initial);
+  EXPECT_NE(*reloaded, poison);
+}
+
 TEST_F(LlamaModelTest, CommonParamsParseMissingDevice) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
@@ -802,34 +881,64 @@ TEST_F(LlamaModelTest, CommonParamsParseInvalidArgument) {
       qvac_errors::StatusError);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringTrue) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeNone) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["no_mmap"] = "true";
+  config["load_mode"] = "none";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_FALSE(model.getCommonParams().use_mmap);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
 }
 
-TEST_F(LlamaModelTest, CommonParamsParseNoMmapStringFalse) {
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeDefaultsToMmap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
 
   auto config = config_files;
-  config["no_mmap"] = "false";
 
   LlamaModel model = createModelWithConfig(std::move(config));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
-  EXPECT_TRUE(model.getCommonParams().use_mmap);
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeHyphenVariant) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["load-mode"] = "mmap";
+
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LlamaModelTest, CommonParamsParseLoadModeInvalid) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  auto config = config_files;
+  config["load_mode"] = "invalid_value";
+
+  EXPECT_THROW(
+      {
+        LlamaModel model = createModelWithConfig(std::move(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
 }
 
 TEST_F(LlamaModelTest, FormatPromptMediaInTextOnlyModel) {
@@ -1148,93 +1257,6 @@ TEST_F(LlamaModelTest, ReloadDuringProcessingWaitsAndDoesNotCrash) {
   EXPECT_NO_THROW({
     std::string output = model.processPrompt(postReload);
     EXPECT_GE(output.length(), 0);
-  });
-}
-
-TEST_F(LlamaModelTest, CommonParamsParseToolsCompactTrue) {
-  if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
-  }
-
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "2048";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "10";
-  config["tools_compact"] = "true";
-
-  fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-  backendDir = fs::path(TEST_BINARY_DIR);
-#else
-  backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-  config["backendsDir"] = backendDir.string();
-
-  EXPECT_NO_THROW({
-    LlamaModel model(
-        getValidModelPath(),
-        std::string(test_projection_path),
-        std::unordered_map<std::string, std::string>(config));
-    model.waitForLoadInitialization();
-  });
-}
-
-TEST_F(LlamaModelTest, CommonParamsParseToolsCompactFalse) {
-  if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
-  }
-
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "2048";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "10";
-  config["tools_compact"] = "false";
-
-  fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-  backendDir = fs::path(TEST_BINARY_DIR);
-#else
-  backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-  config["backendsDir"] = backendDir.string();
-
-  EXPECT_NO_THROW({
-    LlamaModel model(
-        getValidModelPath(),
-        std::string(test_projection_path),
-        std::unordered_map<std::string, std::string>(config));
-    model.waitForLoadInitialization();
-  });
-}
-
-TEST_F(LlamaModelTest, CommonParamsParseToolsCompactUppercase) {
-  if (!fs::exists(getValidModelPath())) {
-    FAIL() << "Test model not found at: " << getValidModelPath();
-  }
-
-  std::unordered_map<std::string, std::string> config;
-  config["device"] = test_common::getTestDevice();
-  config["ctx_size"] = "2048";
-  config["gpu_layers"] = test_common::getTestGpuLayers();
-  config["n_predict"] = "10";
-  config["tools_compact"] = "TRUE";
-
-  fs::path backendDir;
-#ifdef TEST_BINARY_DIR
-  backendDir = fs::path(TEST_BINARY_DIR);
-#else
-  backendDir = fs::current_path() / "build" / "test" / "unit";
-#endif
-  config["backendsDir"] = backendDir.string();
-
-  EXPECT_NO_THROW({
-    LlamaModel model(
-        getValidModelPath(),
-        std::string(test_projection_path),
-        std::unordered_map<std::string, std::string>(config));
-    model.waitForLoadInitialization();
   });
 }
 

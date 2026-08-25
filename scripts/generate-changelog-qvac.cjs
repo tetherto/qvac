@@ -18,7 +18,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
-const { getPackageDir } = require("./sdk/package-paths.cjs");
+const { getPackageDir, getChangelogScanDirs } = require("./sdk/package-paths.cjs");
 
 /**
  * Execute git command
@@ -169,15 +169,19 @@ function extractPRNumberFromSubject(line) {
  * Searches all commits (not just merges) because squash-merged PRs
  * have only one parent but still contain "#123" in the commit message.
  * @param {string|null} baseRef - Tag, commit SHA, or null for all commits
- * @param {string} packagePath - e.g., "packages/sdk"
+ * @param {string|string[]} packagePaths - e.g., "packages/sdk" or
+ *   ["packages/sdk", "packages/inference"]
  * @returns {number[]}
  */
-function getPRNumbers(baseRef, packagePath) {
+function getPRNumbers(baseRef, packagePaths) {
   try {
     const range = baseRef ? `${baseRef}..HEAD` : "HEAD";
-    // Use :(top) pathspec to resolve from repo root regardless of CWD
+    const paths = Array.isArray(packagePaths) ? packagePaths : [packagePaths];
+    // Use :(top) pathspec to resolve from repo root regardless of CWD.
+    // Multiple pathspecs union: a commit touching any of them is included.
+    const pathspecs = paths.map((p) => `":(top)${p}"`).join(" ");
     const commits = git(
-      `log ${range} --oneline -- ":(top)${packagePath}"`,
+      `log ${range} --oneline -- ${pathspecs}`,
     );
 
     if (!commits) {
@@ -424,9 +428,10 @@ async function generateChangelog(options) {
   }
   console.log("");
 
-  // Get PR numbers scoped to package path
+  // Get PR numbers scoped to the package's changelog scan dirs. For sdk this
+  // also covers packages/inference, whose engine ships out of the sdk package.
   console.log("🔍 Finding merged PRs...");
-  const prNumbers = getPRNumbers(baseRef, packagePath);
+  const prNumbers = getPRNumbers(baseRef, getChangelogScanDirs(packageName));
 
   if (prNumbers.length === 0) {
     console.log("No PRs found to generate changelog");

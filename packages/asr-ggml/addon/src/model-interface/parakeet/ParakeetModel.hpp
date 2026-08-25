@@ -8,13 +8,13 @@
 // post-processing pipeline. All of that has been replaced by a single
 // `pkt::Engine` from `parakeet-cpp` (vcpkg overlay port). The
 // engine internally handles mel + encoder + decoder + diarization for any
-// of the four model types (CTC, TDT, EOU, Sortformer) given a single GGUF
+// of the model types (CTC, TDT, RNN-T, EOU, Sortformer) given a single GGUF
 // file, so the binding's job is reduced to:
 //
 //   1. accumulate GGUF bytes from `setWeightsForFile()` into a temp file,
 //   2. open `pkt::Engine` against that path,
 //   3. dispatch `process()` to either `transcribe_samples()` (CTC / TDT /
-//      EOU) or `diarize_samples()` (Sortformer),
+//      RNN-T / EOU) or `diarize_samples()` (Sortformer),
 //   4. wrap the engine result in `Transcript` and fire the on-segment
 //      callback.
 
@@ -231,6 +231,8 @@ public:
   [[nodiscard]] static std::vector<float> preprocessAudioData(
       const std::vector<uint8_t>& audioData,
       const std::string& audioFormat = "s16le");
+  [[nodiscard]] static ModelType modelTypeFromMetadata(
+      const std::string& detected, ModelType fallback);
 
 private:
   void throwIfCancelled() const;

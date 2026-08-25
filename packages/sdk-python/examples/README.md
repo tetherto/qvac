@@ -4,6 +4,11 @@ Self-contained, runnable ports of the TypeScript SDK examples
 (`packages/sdk/examples`). Each file is one `asyncio` script (`async def main()`
 + `asyncio.run`) that opens a `Client`, does one thing, and exits.
 
+No example imports another. Helpers like the `print_progress` download printer
+are repeated inline, exactly as the TypeScript examples repeat theirs, so a file
+copied out of this directory still runs. The docs embed these files verbatim,
+and `docs/website` tests that invariant.
+
 Examples use the flat public surface — `from tetherto.qvac_sdk import ...` — plus
 model constants from `tetherto.qvac_sdk.models`. Generated request models and raw
 method stubs may also be imported explicitly from `tetherto.qvac_sdk.schemas`
@@ -54,4 +59,3 @@ Models download over P2P from the registry on first use and are cached locally.
 | `vla.py` | `vla-smolvla.ts` | `vla`, `vla_hparams`, `vla_preprocess_image`, `vla_pad_state` |
 | `plugins.py` | `plugins.ts` | `invoke_plugin`, `invoke_plugin_stream` |
 | `notebook.ipynb` / `notebook.py` | (Python-only) | `notebook.SyncClient` — synchronous, numpy/pandas, live streaming (Jupyter notebook + script) |
-| `_common.py` | (shared `onProgress` printer) | `print_progress` helper |

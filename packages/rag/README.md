@@ -1,6 +1,6 @@
 # QVAC RAG Library
 
-A JavaScript library for Retrieval-Augmented Generation (RAG) within the QVAC ecosystem. Build powerful, context-aware AI applications with seamless document ingestion, vector search, and LLM integration.
+A TypeScript library for Retrieval-Augmented Generation (RAG) within the QVAC ecosystem. Build powerful, context-aware AI applications with seamless document ingestion, vector search, and LLM integration.
 
 ## Features
 
@@ -51,7 +51,7 @@ npm install @qvac/llm-llamacpp
 # Option 1: Directly through the addon (you will need local model files)
 # No additional dependencies. See example in `examples/direct-rag.js`
 
-# Option 2: Through runtime manager. See example in `examples/quickstart.js`
+# Option 2: Through runtime manager. See example in `examples/quickstart.ts`
 npm install @qvac/rt @qvac/router-inference @qvac/manager-inference
 ```
 
@@ -77,7 +77,7 @@ npm install @qvac/embed-llamacpp
 # Option 1: Directly through the addon (you will need local model files)
 # No additional dependencies. See example in `examples/direct-rag.js`
 
-# Option 2: Through runtime manager. See example in `examples/quickstart.js`
+# Option 2: Through runtime manager. See example in `examples/quickstart.ts`
 npm install @qvac/rt @qvac/router-inference @qvac/manager-inference
 ```
 
@@ -202,8 +202,8 @@ new RAG({
 The default database adapter requires a Corestore instance for persistent storage:
 
 ```javascript
-const Corestore = require('corestore')
-const { HyperDBAdapter } = require('@qvac/rag')
+import Corestore from 'corestore'
+import { HyperDBAdapter } from '@qvac/rag'
 
 // Create a Corestore instance with persistent storage
 const store = new Corestore('./my-rag-data')
@@ -212,8 +212,8 @@ const store = new Corestore('./my-rag-data')
 const dbAdapter = new HyperDBAdapter({ store })
 
 // Alternative: Use external HyperDB instance
-const HyperDB = require('hyperdb')
-const dbSpec = require('./path/to/your/db-spec')
+import HyperDB from 'hyperdb'
+import dbSpec from './path/to/your/db-spec.js'
 const hypercore = store.get({ name: 'my-db' })
 const db = HyperDB.bee(hypercore, dbSpec)
 const dbAdapter = new HyperDBAdapter({ db })
@@ -397,7 +397,7 @@ Use model-specific tokenizers for accurate chunk sizing:
 
 ```javascript
 // Install: npm install tiktoken
-const tiktoken = require('tiktoken')
+import tiktoken from 'tiktoken'
 
 // Create tiktoken-based splitter
 const encoding = tiktoken.encoding_for_model('text-embedding-ada-002')
@@ -420,21 +420,29 @@ encoding.free()
 
 Get started with these examples:
 
-### [Quick Start](./examples/quickstart.js)
+### [Quick Start](./examples/quickstart.ts)
 
 Complete RAG workflow with document ingestion, search, and inference:
 
 ```bash
-bare examples/quickstart.js
+npm run build
+bare examples/quickstart.ts
 ```
 
-### [Custom Chunking Strategies](./examples/chunking.js)
+### [Custom Chunking Strategies](./examples/chunking.ts)
 
 Comparing different tokenizers and chunking approaches:
 
 ```bash
-bare examples/chunking.js
+npm run build
+bare examples/chunking.ts
 ```
+
+## Development
+
+The package is written in TypeScript under `src/` and compiled to `dist/` with `tsc`.
+After cloning, run `npm install` (its `prepare` script builds `dist/`); run `npm run build`
+to recompile and `npm run typecheck` to type-check.
 
 ## Testing
 
@@ -446,9 +454,6 @@ npm run test:unit
 
 # Integration tests
 npm run test:integration
-
-# All tests
-npm test
 ```
 
 **Important**: Before running the integration tests, make sure you have installed the required libraries as specified in the integration test.

@@ -190,7 +190,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: ${{ needs.context.outputs.workdir }}
 
@@ -350,49 +350,19 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       workdir: ${{ needs.context.outputs.workdir }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write # Allow commenting on PRs
-      id-token: write
-    needs:
-      - fork-approval
-      - authorize
-      - context
-      - prebuild
-      - prebuild-artifact-reuse
-      - ci-router
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
+  # Mobile integration tests are no longer run on PRs. They run on demand via
+  # `integration-mobile-test-asr-ggml.yml` (workflow_dispatch), where the
+  # dispatcher must pick a specific device. The `run-mobile-addon-tests` label /
+  # ci-router `run_mobile` output are kept for a possible future revival but no
+  # longer trigger anything here. (Benchmark / weekend / on-merge mobile runs
+  # are unaffected — they call the mobile workflow directly.)
 
   # ---------------------------------------------------------------------------
-  # Co-load smoke: HARD-DISABLED until the first npm release of @qvac/asr-ggml.
-  #
-  # Both legs resolve their co-resident addon set from
+  # Co-load smoke: both legs resolve their co-resident addon set from
   # packages/ggml-coload-smoke/addons.js, which is keyed to PUBLISHED npm
-  # packages. The QIP deliberately defers adding the `asr-ggml` entry to the
-  # release step (docs/QIP-asr-ggml.md, "co-load"), because the smoke harness
-  # installs published packages. With no entry, `addon: asr-ggml` cannot report
-  # anything useful — both legs fail fast rather than misreport:
-  #   * desktop: coload-combinations.mjs rejects the unknown name and exits 1
-  #     before emitting a matrix, and the overlay step refuses to write into a
-  #     package the combo never installed.
-  #   * mobile: test-android-sdk.yml's overlay step `find`s no installed
-  #     @qvac/asr-ggml and exits 1 => hard failure after a full app build.
-  # Failing every PR on an addon that is not published yet helps nobody, so the
-  # `false &&` below keeps both jobs skipped. The job blocks themselves must
-  # stay (the
-  # ci-trust-policy test asserts the coload-smoke-mobile shape and its label
-  # gating in this file), and `skipped` is a pass for merge-guard.
-  #
-  # TO RE-ENABLE (at the npm release step): add the `asr-ggml` entry to
-  # packages/ggml-coload-smoke/addons.js, then delete the `false &&` from both
-  # `if:` expressions below.
+  # packages. @qvac/asr-ggml is now released, so it carries the `asr-ggml` entry
+  # and these jobs run for real; they stay gated by run-coload (and run_mobile)
+  # like every other addon family.
   # ---------------------------------------------------------------------------
   coload-smoke:
     permissions:
@@ -406,7 +376,7 @@ jobs:
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-    if: false && always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/coload-smoke.yml
     secrets: inherit
     with:
@@ -428,7 +398,7 @@ jobs:
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
-    if: false && always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.ci-router.outputs.run_coload == 'true' && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     uses: ./.github/workflows/coload-smoke-mobile.yml
     secrets: inherit
     with:
@@ -437,11 +407,11 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
 
   combine-unified-performance-report:
+    # run-mobile-integration-tests removed — only desktop perf is combined on PRs now.
     needs:
       - fork-approval
       - context
       - run-integration-tests
-      - run-mobile-integration-tests
       - ci-router
     if: always() && !cancelled() && (needs.ci-router.outputs.run_desktop == 'true' || needs.ci-router.outputs.run_mobile == 'true')
     runs-on: ubuntu-latest
@@ -454,7 +424,7 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.event_name == 'pull_request_target' && needs.context.outputs.base_sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download desktop RTF artifacts
         continue-on-error: true
@@ -531,10 +501,12 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, run-mobile-integration-tests, coload-smoke, coload-smoke-mobile, combine-unified-performance-report]
+    # run-mobile-integration-tests removed — mobile is on-demand only now.
+    needs: [authorize, ci-router, sanity-checks, cpp-lint, cpp-tests-coverage, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, run-integration-tests, coload-smoke, coload-smoke-mobile, combine-unified-performance-report]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.cpp-tests-coverage.result == 'success' || needs.cpp-tests-coverage.result == 'skipped') }}
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') && (needs.coload-smoke.result == 'success' || needs.coload-smoke.result == 'skipped') && (needs.coload-smoke-mobile.result == 'success' || needs.coload-smoke-mobile.result == 'skipped') && (needs.combine-unified-performance-report.result == 'success' || needs.combine-unified-performance-report.result == 'skipped') }}
+      # run-mobile-integration-tests removed — mobile is on-demand only now.
+      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.coload-smoke.result == 'success' || needs.coload-smoke.result == 'skipped') && (needs.coload-smoke-mobile.result == 'success' || needs.coload-smoke-mobile.result == 'skipped') && (needs.combine-unified-performance-report.result == 'success' || needs.combine-unified-performance-report.result == 'skipped') }}

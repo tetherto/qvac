@@ -1,5 +1,84 @@
 # Changelog
 
+## [0.47.0] - 2026-08-24
+
+### Added
+
+- Load configuration now accepts `load_mode` (`none`, `mmap`, `mlock`, `mmap+mlock`, `dio`) so callers can select the qvac-fabric model loading path explicitly.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with chat-template, sampling and load-mode API changes).
+- Load-fit normalization now validates load modes locally so fabric-thrown exceptions do not cross the native boundary on Windows.
+
+### Fixed
+
+- Reasoning-budget stop detection now preserves every template-provided thinking
+  end tag, so Qwen3-Coder and DeepSeek tool-call openers can end reasoning
+  without forced-close text corrupting the tool call.
+
+## [0.46.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.45.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (fixes MoE models
+  emitting garbage on Adreno 830 OpenCL, and re-enables the GPU MoE kernels that
+  were falling back to CPU; no API change for this package).
+
+## [0.44.0] - 2026-08-17
+
+### Added
+
+- `image_no_upscale` in the addon load config — an idefics3-style preprocessing
+  override forwarded to the vision context, accepting `"on"` or `"off"`. Left
+  unset, the model's own GGUF value is used unchanged. This is what separates the
+  VisionPsy Flash checkpoint from the base one, whose mmprojs are otherwise
+  indistinguishable: a Flash checkpoint loaded without it silently runs base
+  preprocessing, which changes the image token count and so moves both accuracy
+  and encode time.
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule), which is what supplies
+  `image_no_upscale` on `common_params` and `mtmd_context_params`.
+
+## [0.43.0] - 2026-08-14
+
+This release removes the Qwen3-only dynamic tools feature behind
+`tools_compact`. Regular static tool calling remains supported and continues to
+use the fixed Qwen3 chat template.
+
+### Breaking Changes
+
+- The `tools_compact` load option is no longer supported. Configurations that
+  pass it now fail model loading as an unsupported option; remove the key and
+  keep tool definitions in the normal prompt flow.
+- Tool definitions are no longer added mid-conversation and trimmed from the KV
+  cache after a tool-call chain. This removes the Qwen3-specific cache behavior
+  that depended on context-sliding anchor bookkeeping.
+
+### Changed
+
+- Qwen3 tool calling now always uses the fixed chat template, so tool definitions
+  remain in the prompt throughout the conversation. General context sliding,
+  M-RoPE sliding, reasoning-block compaction, and static tool calling are
+  unchanged.
+
+### Removed
+
+- The `nPastBeforeTools` and `toolsTrimmed` runtime debug statistics, which only
+  reported dynamic tool compaction state, have been removed.
+
+### Pull Requests
+
+- [#3373](https://github.com/tetherto/qvac/pull/3373) - QVAC-22567 feat[bc]:
+  remove dynamic tools (tools_compact) from llm-llamacpp addon
+
 ## [0.42.0] - 2026-08-10
 
 ### Changed

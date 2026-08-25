@@ -1,6 +1,191 @@
 # Changelog
 
-## [0.1.0] - 2026-08-10
+## [0.7.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Load-fit config normalization now uses the b10297 `load_mode` field, accepts
+  `load-mode` directly, and preserves legacy `no-mmap` behavior without relying
+  on the removed `common_params::use_mmap` member.
+
+## [0.6.0] - 2026-08-22
+
+### Added
+
+- Disposable-process protocol v2, carrying an explicit
+  `loadKind: 'completion' | 'embedding'` so the runner can select the matching
+  normalization policy internally. `encodeFitLlamaProcessRequest(loadKind,
+  config)` encodes it; `parseFitProcessResponse` answers both versions.
+  Protocol v1 is unchanged and still accepted.
+
+- Fit-relevant completion and embedding load normalization — backend selection,
+  context/batch settings, split policy, flash/KV defaults, SWA and CPU
+  placement — so a raw llama load config can be projected the way the addon
+  that will run it would resolve it. This duplicates `llm-llamacpp` and
+  `embed-llamacpp` for now; shared ownership can be revisited separately.
+
+- `FitLlamaResult` and `FitLlamaReason` in `./process`, adding the
+  `unsupported-config` outcome for a configuration the normalization cannot
+  represent (mobile, streaming, sharded, multimodal, finetune, LoRA, RoPE/YaRN,
+  unknown keys). The result is advisory and must never be used to deny a load.
+
+  Deliberately a separate type: `fitParams()` cannot produce that outcome, so
+  `FitResult` and `FitReason` are unchanged and existing low-level consumers
+  narrow nothing new. Every `FitResult` is assignable to `FitLlamaResult`.
+
+### Changed
+
+- Raw load-parameter normalization stays private to the disposable process
+  runner. `./binding.js`, which is a public export, now re-exports `paramsFit`
+  explicitly rather than the whole addon, and the runner reaches the load-config
+  fitter through the unexported `./binding-internal.js`. The package root
+  continues to expose only the existing low-level `fitParams()` API.
+
+- The C++ unit targets behind `BUILD_TESTING` now run in CI via
+  `cpp-tests-model-fit.yml` and the `test:cpp` scripts, and their translation
+  units are linted, so the normalization above is covered by the PR gate rather
+  than by a local step.
+
+### Fixed
+
+These are all divergences between what this package projected and what the load
+would actually do. Each was found by review of the normalization above and is
+fixed against the behaviour of `llm-llamacpp` / `embed-llamacpp`:
+
+- `llama_model_params::devices` is a NULL-terminated list, and neither list this
+  package built carried the terminator. The single-GPU list read one element
+  past its allocation on every fit; the CPU path passed an empty vector, which
+  is not the same as an empty list — `common_model_params_to_llama` forwards
+  only a non-empty one — so fabric fell back to default device selection,
+  enumerating every GPU and skipping the host-memory check that is the only real
+  constraint on a CPU load.
+
+- The CPU path no longer pins `n_gpu_layers` to 0. The addons leave the field
+  alone, and forcing it made `common_fit_params` abort when the projection
+  needed to adjust it.
+
+- An unset embedding context is pinned to the model's trained context, and an
+  oversized one is capped rather than rejected, matching
+  `embed-llamacpp`. Leaving it at 0 invited the fitter to report a reduced
+  context, and a correspondingly reduced memory figure, for a load that runs at
+  the full trained context.
+
+- `flash-attn` is recognised as enabled on `on` only, as `llm-llamacpp` does.
+  Accepting any truthy spelling fired the q8_0 KV auto-default where the real
+  load keeps f16, under-estimating KV memory by roughly 2x.
+
+- `ctx-size: '0'` no longer becomes a 4096 context floor. Fabric encodes "do not
+  reduce the context" as `UINT32_MAX` in a signed field, and clamping that at
+  zero inverted the one configuration that explicitly forbids reduction.
+
+- Conflicting key aliases (`gpu-layers`/`n-gpu-layers`,
+  `kv-offload`/`no-kv-offload`, `op-offload`/`no-op-offload`) are rejected
+  instead of resolved by hash-bucket order, which made the verdict depend on
+  internal hashing rather than on the request.
+
+- `no-host` is a valueless flag upstream, so `no-host: 'false'` now reports
+  `unsupported-config` instead of projecting the opposite weight placement.
+  `host`, `extra-bufts` and `no-extra-bufts` leave the supported set for the
+  same reason: qvac-fabric registers no such option, so no load can express
+  them.
+
+### Pull Requests
+
+- [#3930](https://github.com/tetherto/qvac/pull/3930) - QVAC-22630 feat[api]:
+  add config normalization to model-fit addon
+
+## [0.5.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.4.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+### Pull Requests
+
+- [#3929](https://github.com/tetherto/qvac/pull/3929) - QVAC-23195 fix: bump
+  qvac-fabric to 10069.1.1 across consumers
+
+## [0.3.0] - 2026-08-18
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.1` -> `1.3.3`,
+  bringing this package onto the same shared-runtime floor every other addon
+  consumer already builds against. `model-fit` was the last one left behind.
+
+  No source change is needed here. The addon uses only the header-only JS
+  boundary (`inference-addon-cpp/Errors.hpp`, `JsInterface.hpp`, `JsUtils.hpp`)
+  and its binding is synchronous — it never constructs an `AddonCpp`, a
+  scheduler or an `OutputQueue` — so 1.3.0's two breaking changes (the
+  `JobRunner` -> `SingleJobScheduler` rename with the `JobRunner.hpp` forwarding
+  header removed, and `OutputQueue::clear()` returning job-tagged entries) reach
+  nothing this package compiles.
+
+  What the floor does pick up is the run of lifecycle fixes released between the
+  two versions: the `dlclose()` self-pin that makes `Worklet.terminate()` safe on
+  Android bionic (1.2.2), the `JsLogger` teardown and re-`setLogger` crash fixes
+  and their concurrent-env ownership hardening (1.2.3, 1.2.4), and the
+  `JsAsyncTask` teardown-thread and capture-release fixes (1.3.2, 1.3.3). The
+  first three matter to `model-fit` in particular: it is designed to run in a
+  short-lived isolated worklet, which is exactly the load/terminate cycle those
+  fixes cover.
+
+### Pull Requests
+
+- [#3926](https://github.com/tetherto/qvac/pull/3926) - chore[notask]: bump
+  model-fit to inference-addon-cpp 1.3.3
+
+## [0.2.1] - 2026-08-18
+
+Records a fix that was left out of `0.2.0`. It merged (#3890) before the
+`model-fit-v0.2.0` tag was cut, so the code already shipped in `0.2.0` — this
+release carries no source change of its own, only the entry that should have
+been in that one.
+
+### Fixed
+
+- Reject a successful fit whose context could not be resolved. `runFit` already
+  rewrote a fitted `nCtx` of 0 — llama's encoding for "use the trained context"
+  — to the model's declared context length, but when that GGUF metadata was
+  itself unavailable the zero survived and the caller was handed a `SUCCESS`
+  carrying `nCtx: 0`: a verdict with no load plan it could replay. Such a result
+  is now `ERROR` / `model-unreadable`, which is what the missing metadata
+  actually means. The resolution moved out of `runFit` into
+  `detail::finalizeFitContext` (`addon/src/fit/FitResultContext.cpp`) so it can
+  be tested without a model, covered by a new `ModelFitContextUnit` test built
+  under `BUILD_TESTING`.
+
+- Reject a malformed successful response in the process codec.
+  `parseFitProcessResponse` accepted a `completed` result with `status: 0` and a
+  non-positive `nCtx`, so a child that answered with an unresolved context put
+  it straight into a supervisor's hands. Defence in depth rather than a live
+  path: with the fix above the runner can no longer produce one.
+
+### Pull Requests
+
+- [#3890](https://github.com/tetherto/qvac/pull/3890) - QVAC-22630 fix: reject
+  unresolved successful fit contexts
+
+## [0.2.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.1.0] - 2026-08-12
 
 ### Added
 
@@ -42,6 +227,30 @@
   projection was actually made against. Zero registered devices now returns
   `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
   be read as a detection result.
+- `@qvac/model-fit/process`, a boundary for running a projection in a child that
+  can be thrown away. The subpath exports a versioned NDJSON codec
+  (`encodeFitProcessRequest`, `parseFitProcessResponse`) and resolves a private
+  one-shot runner to spawn with a Bare executable. It exists because the crash
+  paths above terminate whoever calls the fitter, so the only way to survive
+  them is to ask the question from a process that is expendable. Spawning and
+  supervision are deliberately left to the caller.
+- The runner answers with one line on stdout, and that line rather than the exit
+  code is the result: `completed` for a projection, `invocation-error` for a
+  request that threw or never reached the fitter, and no line at all when native
+  code aborted. A missing or unparseable line is a failure whatever the status —
+  exit 0 does not prove delivery, and exit 2 arrives both with and without a
+  response. The outcome table in the README is the full contract.
+- The addon is loaded only once a request has parsed, so a malformed or oversized
+  request costs a spawn and never backend registration. The runner imposes no
+  timeout of its own; bounding and cancelling the child is the supervisor's job.
+- Two platform constraints a supervisor has to honour. On Windows the child's
+  stdio must be created as overlapped pipes (`stdio: ['overlapped', ...]`), or
+  the runner — itself a libuv program handed synchronous handles — never
+  observes the request and hangs with no output and no diagnostic; the flag is a
+  no-op elsewhere, so set it unconditionally. On darwin a cold child recompiles
+  the embedded Metal library during backend discovery, which costs roughly ten
+  seconds against a quarter of a second on linux and Windows, so a deadline must
+  be sized for discovery rather than for the projection.
 
 ### Changed
 

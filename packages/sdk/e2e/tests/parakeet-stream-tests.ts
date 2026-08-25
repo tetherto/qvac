@@ -11,7 +11,7 @@
  * hint to parakeet-cpp's segmentation. Whisper is the only engine
  * that surfaces `vad` events.
  */
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 // The duplex runner feeds raw PCM directly into the parakeet session
 // (no FFmpegDecoder hop, unlike `transcribe()`), so the fixture itself

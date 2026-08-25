@@ -4,7 +4,10 @@
     "path": "packages/sdk",
     "pkg_manager": "bun",
     "needs_bare": true,
-    "tests_bare": true
+    "tests_bare": true,
+    "sdk_sources": ["workspace"],
+    "sdk_sources_release": ["workspace", "published"],
+    "depends_on": ["packages/inference"]
   },
   {
     "package": "bare-sdk",
@@ -12,7 +15,8 @@
     "pkg_manager": "bun",
     "needs_bare": true,
     "tests_bare": true,
-    "sdk_sources": ["workspace"]
+    "sdk_sources": ["workspace"],
+    "depends_on": ["packages/inference"]
   },
   {
     "package": "inference",

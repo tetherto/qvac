@@ -62,14 +62,13 @@ src/
 - Constructor options parsing and **engine resolution** (see below).
 - The shared `state` machine (`configLoaded` / `weightsLoaded` /
   `destroyed`).
-- The single serialized queue behind `exclusiveRun`, with two release
-  policies:
+- Separate serialized inference and lifecycle queues behind `exclusiveRun`,
+  with two release policies:
   - `"onSettle"` — used by `run()`. The slot is held until the returned
     `QvacResponse` settles, so queued batch runs never overlap.
-  - `"onReturn"` — used by `runStreaming()`, `reload()`, `unload()`,
-    `destroy()`. The slot is released when the call returns; for
-    `runStreaming()` that is the moment the native session is *open*, so a
-    minutes-long session does not block the queue.
+  - `"onReturn"` — used by `runStreaming()` on the inference queue and by
+    `reload()`, `unload()`, and `destroy()` on the lifecycle queue. For
+    `runStreaming()` the slot is released when the native session is open.
 - The open-streaming-session flag (`STREAMING_SESSION_ACTIVE`, 6020) that
   rejects a concurrent `run()`/`runStreaming()`.
 - `pause()` / `unpause()` rejection with `NOT_SUPPORTED` (6019).
@@ -111,6 +110,9 @@ vocabularies are flattened onto the shared output types in
 
 Both drivers respect `ctx.enableStats`: on `JobEnded` they call
 `ctx.job.end(stats)` when it is true and `ctx.job.end()` when it is not.
+`BackendInfo.backendDevice` is a descriptive string from the selected
+backend, while `RuntimeStats.backendDevice` is the native numeric
+device-class code.
 
 ## Native: one module, two model interfaces
 
@@ -200,6 +202,8 @@ stay resolvable:
   `ERR_CODES_PARAKEET` table so a parakeet append failure still surfaces as
   24003 rather than 6003. That table is internal — it is not part of the
   package's public type surface.
+- `status()` before `load()` therefore reports `FAILED_TO_GET_STATUS` as
+  6004 through `WhisperDriver` and 24004 through `ParakeetDriver`.
 
 Every number from both historical tables is registered with `addCodes`, so
 old numeric codes remain resolvable to a name and message.

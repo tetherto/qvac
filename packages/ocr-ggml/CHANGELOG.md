@@ -6,6 +6,39 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Declared the runtime modules used by the published integration and mobile test files.
+
+## [0.19.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.18.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.17.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.16.0] - 2026-08-11
+
 ### Added
 
 - `langList` is now optional for the language-agnostic DocTR pipeline
@@ -36,6 +69,11 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   time by the published entrypoints).
 - Examples and the README read `RuntimeStats` from `response.stats` instead of
   the `response.await()` result.
+
+### Pull Requests
+
+- [#3740](https://github.com/tetherto/qvac/pull/3740) - fix[api]: address
+  ocr-ggml package-review findings
 
 ## [0.15.0] - 2026-08-10
 

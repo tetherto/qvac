@@ -3,6 +3,19 @@ title Domain Model
 
 top to bottom direction
 
+class SDKEntryPoint {
+    packageName: string
+    language: TypeScript|Python
+    defaultPlugins: boolean
+    transport: socket|worklet|loopback|direct
+}
+
+class WireContract {
+    schemaJson: JSONSchema
+    manifestJson: methods
+    modelsJson: constants
+}
+
 class Plugin {
     modelType: string
     displayName: string
@@ -16,6 +29,18 @@ class Model {
     modelType: string
     config: object
     name?: string
+}
+
+class Request {
+    requestId: string
+    type: string
+    modelId?: string
+}
+
+class RequestContext {
+    requestId: string
+    kind: string
+    state: running|cancelling|completed|failed|cancelled
 }
 
 class ModelConstant {
@@ -69,16 +94,18 @@ class RAGDocument {
 }
 
 class Provider {
-    topic: string
-    firewall: allow|deny
+    publicKey: string
+    firewall?: allow|deny
 }
 
 class Consumer {
     providerPublicKey: string
-    topic: string
 }
 
+SDKEntryPoint "0..*" --> "1" WireContract : generated/validated against
+SDKEntryPoint "1" --> "0..*" Request : sends
 Plugin "1" --> "0..*" Model : creates
+Request "1" --> "0..1" RequestContext : tracked by
 ModelSource "1" --> "1" Model : loads
 ModelConstant --|> ModelSource : is a
 
@@ -91,6 +118,6 @@ RAGWorkspace "1" --> "1" Model : uses (embeddings)
 RAGWorkspace "1" --> "0..*" RAGDocument : stores
 
 Provider "1" --> "1" Model : exposes
-Consumer "0..*" --> "1" Provider : delegates to
+Consumer "0..*" --> "1" Provider : delegates to by public key
 
 @enduml

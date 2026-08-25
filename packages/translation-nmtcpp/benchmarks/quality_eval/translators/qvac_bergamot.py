@@ -76,7 +76,13 @@ def translate_direct(texts, src_lang, trg_lang):
 
         # Build shell command using cat pipe
         # Use --bergamot flag for Bergamot model format and --cpu for CPU inference
-        cmd = f"cat {input_path} | bare {script_path} --bergamot {batch_flag} --model-dir {models_dir} --cpu {src_lang} {trg_lang} > {output_path} 2> {stderr_path}"
+        # BARE_BIN lets CI point at bare.cmd on Windows, where shell=True runs
+        # cmd.exe: no `cat` builtin, so `type` feeds the pipe instead.
+        bare_bin = str(Path(env.get("BARE_BIN", "bare")))
+        if os.name == "nt":
+            cmd = f'type "{input_path}" | "{bare_bin}" "{script_path}" --bergamot {batch_flag} --model-dir "{models_dir}" --cpu {src_lang} {trg_lang} > "{output_path}" 2> "{stderr_path}"'
+        else:
+            cmd = f'cat "{input_path}" | "{bare_bin}" "{script_path}" --bergamot {batch_flag} --model-dir "{models_dir}" --cpu {src_lang} {trg_lang} > "{output_path}" 2> "{stderr_path}"'
 
         print(f"[QVAC_BERGAMOT] Command: {cmd}", file=sys.stderr)
         print(f"[QVAC_BERGAMOT] Stderr will be captured to: {stderr_path}", file=sys.stderr)

@@ -18,10 +18,7 @@ import {
   type TTSConfigurationParams,
   type TTSOutputCallback,
 } from "./tts";
-import {
-  ERR_CODES,
-  QvacErrorAddonTTSGgml,
-} from "./lib/error";
+import * as errorModule from "./lib/error";
 import { splitTtsText } from "./lib/textChunker";
 import {
   accumulateTextStream,
@@ -30,6 +27,7 @@ import {
 } from "./lib/textStreamAccumulator";
 
 const { platform } = bareOs;
+const { ERR_CODES, QvacErrorAddonTTSGgml } = errorModule;
 
 const ENGINE_CHATTERBOX = "chatterbox";
 const ENGINE_SUPERTONIC = "supertonic";
@@ -83,15 +81,6 @@ const COSYVOICE_DIALECTS = {
   tianjin: "天津话",
   yunnan: "云南话",
 } as const;
-const COSYVOICE_EMOTIONS = {
-  happy: "请非常开心地说一句话。",
-  sad: "请非常伤心地说一句话。",
-  angry: "请非常生气地说一句话。",
-} as const;
-const COSYVOICE_SPEEDS = {
-  slow: "请用尽可能慢地语速说一句话。",
-  fast: "请用尽可能快地语速说一句话。",
-} as const;
 const COSYVOICE_VOLUMES = {
   loud: "Please say a sentence as loudly as possible.",
   soft: "Please say a sentence in a very soft voice.",
@@ -102,17 +91,16 @@ const COSYVOICE_STYLES = {
 } as const;
 
 /**
- * Structured CosyVoice3 control. Exactly one field takes effect per synthesis,
- * resolved by precedence dialect > emotion > speed > volume > style. Pass a raw
- * string instead for an arbitrary instruction (advanced escape hatch).
+ * CosyVoice3 controls that have no canonical cross-engine vocabulary yet.
+ * Emotion and speaking rate are NOT here -- use the top-level `emotion` /
+ * `pace` options, which work the same way on every engine that supports them.
+ * Exactly one field takes effect per synthesis, resolved by precedence
+ * dialect > volume > style. Pass a raw string instead for an arbitrary
+ * instruction (advanced escape hatch).
  */
 interface CosyvoiceInstruct {
   /** Chinese dialect; renders "请用{dialect}表达。". */
   dialect?: keyof typeof COSYVOICE_DIALECTS;
-  /** Emotion. */
-  emotion?: keyof typeof COSYVOICE_EMOTIONS;
-  /** Speaking speed. */
-  speed?: keyof typeof COSYVOICE_SPEEDS;
   /** Loudness. */
   volume?: keyof typeof COSYVOICE_VOLUMES;
   /** Playful style preset. */
@@ -141,8 +129,8 @@ function cosyvoiceInstructValue(
 /**
  * Render a CosyVoice3 `instruct` option to the trained instruction string.
  * A raw string passes through (trimmed); the structured form emits exactly one
- * control by precedence dialect > emotion > speed > volume > style. Returns ""
- * for no instruction (zero-shot). An invalid structured key throws.
+ * control by precedence dialect > volume > style. Returns "" for no
+ * instruction. An invalid structured key throws.
  */
 function renderCosyvoiceInstruct(
   instruct: string | CosyvoiceInstruct | undefined,
@@ -173,33 +161,26 @@ function renderCosyvoiceInstruct(
   }
   // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)
   // before the precedence chain, which would otherwise fall through to "".
-  const supportedControls = ["dialect", "emotion", "speed", "volume", "style"];
+  const supportedControls = ["dialect", "volume", "style"];
   const unknownKeys = Object.keys(instruct).filter(
     (key) => !supportedControls.includes(key),
   );
   if (unknownKeys.length > 0) {
+    const hint = unknownKeys.some((key) => key === "emotion" || key === "speed")
+      ? " Emotion and speaking rate moved to the top-level `emotion` / `pace` options."
+      : "";
     throw new Error(
       `Invalid CosyVoice instruct key(s): ${unknownKeys.join(", ")}. ` +
-        "Valid keys: dialect, emotion, speed, volume, style.",
+        `Valid keys: dialect, volume, style.${hint}`,
     );
   }
   // Presence, not truthiness: a control that is set to a malformed value
   // (`{ dialect: '' }`, `{ dialect: null }`) must raise via
   // cosyvoiceInstructValue rather than fall through to zero-shot. `undefined`
   // means the field was not set, so it is skipped. Precedence: dialect >
-  // emotion > speed > volume > style.
+  // volume > style.
   if (instruct.dialect !== undefined) {
     return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
-  }
-  if (instruct.emotion !== undefined) {
-    return cosyvoiceInstructValue(
-      COSYVOICE_EMOTIONS,
-      instruct.emotion,
-      "emotion",
-    );
-  }
-  if (instruct.speed !== undefined) {
-    return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
   }
   if (instruct.volume !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
@@ -218,6 +199,9 @@ const PARLER_RE =
 const PARLER_VARIANT_ORDER = ["mini", "large", "indic"];
 const PARLER_QUANT_ORDER = ["q8_0", "q6_k", "f16", "f32"];
 const PARLER_DESCRIPTION_KEYS = ["description", "voiceDescription"] as const;
+// What native Parler reads as template fields. `emotion` / `pace` stay listed
+// here because build_description() still renders them, even though they are
+// cross-engine options at the JS surface.
 const PARLER_TEMPLATE_KEYS = [
   "voice",
   "emotion",
@@ -228,12 +212,52 @@ const PARLER_TEMPLATE_KEYS = [
   "reverb",
   "quality",
 ] as const;
+// The subset that stays Parler-only now that emotion/pace are cross-engine.
+const PARLER_ONLY_TEMPLATE_KEYS = [
+  "voice",
+  "pitch",
+  "expressivity",
+  "noise",
+  "reverb",
+  "quality",
+] as const;
 const PARLER_FIELD_KEYS = [
   ...PARLER_DESCRIPTION_KEYS,
   ...PARLER_TEMPLATE_KEYS,
 ] as const;
+const PARLER_ONLY_KEYS = [
+  ...PARLER_DESCRIPTION_KEYS,
+  ...PARLER_ONLY_TEMPLATE_KEYS,
+] as const;
 type ParlerFieldKey = (typeof PARLER_FIELD_KEYS)[number];
 type ParlerDescFields = Partial<Record<ParlerFieldKey, string>>;
+// Everything legal on one job object: Parler's description/template surface
+// plus the cross-engine conditioning that Parler also renders.
+type ParlerJobSource = ParlerDescriptionFields & TTSConditioningFields;
+
+// Canonical cross-engine conditioning vocabulary. This is a MIRROR, not the
+// source of truth: tts-cpp owns it in include/tts-cpp/voice_controls.h, and
+// test/unit/voice-controls.test.js pins this copy against the native lists.
+const EMOTIONS = [
+  "command",
+  "anger",
+  "narration",
+  "conversation",
+  "disgust",
+  "fear",
+  "happy",
+  "neutral",
+  "proper noun",
+  "news",
+  "sad",
+  "surprise",
+] as const;
+const PACES = ["slow", "moderate", "fast"] as const;
+type Emotion = (typeof EMOTIONS)[number];
+type Pace = (typeof PACES)[number];
+const CONDITIONING_KEYS = ["emotion", "pace"] as const;
+type ConditioningKey = (typeof CONDITIONING_KEYS)[number];
+type ConditioningFields = Partial<Record<ConditioningKey, string>>;
 
 // Audio8 ships three GGUFs per quant tier, with the tier in the filename
 // (`audio8-lm-q8_0.gguf`); a bare `audio8-lm.gguf` matches too, as
@@ -260,6 +284,40 @@ type EngineType =
   | typeof ENGINE_COSYVOICE3
   | typeof ENGINE_PARLER
   | typeof ENGINE_AUDIO8;
+
+// Per-engine supported subsets, mirroring controls::supported_emotions() /
+// supported_paces(). An empty list means the engine has no such control.
+const ENGINE_EMOTIONS: Record<EngineType, readonly Emotion[]> = {
+  [ENGINE_PARLER]: EMOTIONS,
+  // Only the emotions Fun-CosyVoice3 has a trained instruction for; the rest,
+  // and the upstream spelling "angry", are rejected rather than paraphrased.
+  [ENGINE_COSYVOICE3]: ["anger", "happy", "neutral", "sad"],
+  [ENGINE_SUPERTONIC]: [],
+  [ENGINE_CHATTERBOX]: [],
+  [ENGINE_AUDIO8]: [],
+};
+
+const ENGINE_PACES: Record<EngineType, readonly Pace[]> = {
+  [ENGINE_PARLER]: PACES, // rendered into the training caption
+  [ENGINE_COSYVOICE3]: PACES, // slow/fast -> instruct; moderate -> none
+  [ENGINE_SUPERTONIC]: PACES, // mapped onto the duration multiplier
+  [ENGINE_CHATTERBOX]: [], // time-stretch only; use `speed`
+  [ENGINE_AUDIO8]: [], // no rate control at all
+};
+
+// Which channels an engine can change per call. Supertonic takes its pace
+// through EngineOptions when the engine is built, and tts-cpp exposes no
+// per-call surface for it, so it only moves at construction or reload().
+const ENGINE_PER_CALL_CONDITIONING: Record<
+  EngineType,
+  readonly ConditioningKey[]
+> = {
+  [ENGINE_PARLER]: CONDITIONING_KEYS,
+  [ENGINE_COSYVOICE3]: CONDITIONING_KEYS,
+  [ENGINE_SUPERTONIC]: [],
+  [ENGINE_CHATTERBOX]: [],
+  [ENGINE_AUDIO8]: [],
+};
 
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
@@ -317,6 +375,13 @@ interface TTSGgmlFiles {
   cosyvoiceFlowModelPath?: string;
   cosyvoiceHiftModel?: string;
   cosyvoiceHiftModelPath?: string;
+  /**
+   * CosyVoice3 voice-cloning add-on GGUFs, required only when
+   * `referenceAudio` is set: the speech_tokenizer_v3 speech tokenizer
+   * (`cosyvoice3-s3tok-*.gguf`) and the CAM++ speaker encoder
+   * (`cosyvoice3-campplus-*.gguf`). Auto-discovered under
+   * `cosyvoiceModelDir` by those name prefixes when unset.
+   */
   cosyvoiceS3tokModel?: string;
   cosyvoiceS3tokModelPath?: string;
   cosyvoiceCampplusModel?: string;
@@ -367,14 +432,17 @@ interface TTSGgmlRuntimeConfig {
   /**
    * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
    * available. Defaults to `false`. Audio8 uses Vulkan on Linux and Windows;
-   * the other GPU-capable engines select a backend for the host platform.
+   * CosyVoice3 selects Metal on Apple, Vulkan on desktop Linux / Windows, and
+   * OpenCL/Adreno on Android (Mali / Xclipse decline to CPU); the other
+   * GPU-capable engines select a backend for the host platform.
    */
   useGPU?: boolean;
   /**
    * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
-   * native rate. Resamples the native output (24 kHz Chatterbox and
-   * CosyVoice3, 44.1 kHz Supertonic), or the 48 kHz LavaSR-enhanced signal,
-   * before emitting. `TTSOutputChunk.sampleRate` reports the resulting rate.
+   * native rate. Resamples the native output (24 kHz for Chatterbox and
+   * CosyVoice3; 44.1 kHz for Supertonic, Parler, and Audio8), or the 48 kHz
+   * LavaSR-enhanced signal, before emitting. `TTSOutputChunk.sampleRate`
+   * reports the resulting rate.
    *
    * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
    * only accepted there when the LavaSR enhancer is active, because the
@@ -409,19 +477,36 @@ interface LavaSRDenoiserOptions {
 }
 
 /**
+ * Cross-engine conditioning. Accepted at construction and on `reload()` by
+ * every engine that supports them, and per call by Parler and CosyVoice3. A
+ * value outside the canonical vocabulary, outside the engine's supported
+ * subset, or on a channel the engine cannot change per call, throws naming the
+ * alternative -- nothing is silently degraded.
+ */
+interface TTSConditioningFields {
+  /** Speaking style. Parler: all 12. CosyVoice3: anger|happy|neutral|sad. */
+  emotion?: Emotion;
+  /**
+   * Speaking rate. Parler / CosyVoice3 / Supertonic. Supertonic conditions its
+   * engine at construction, so its pace only moves there or via `reload()`.
+   */
+  pace?: Pace;
+}
+
+/**
  * Parler voice-description inputs. Either a free-text `description` (alias
  * `voiceDescription`) or the template fields, rendered natively through
  * tts-cpp's build_description(); mixing the two at the same level is rejected.
  * Accepted at construction, on `reload()`, and per call (Parler only).
+ * `emotion` and `pace` moved to TTSConditioningFields -- Parler still renders
+ * both, but they are no longer Parler-only at the JS surface.
  */
 interface ParlerDescriptionFields {
   description?: string;
   voiceDescription?: string;
   /** Parler voice-template field; also Supertonic's baked voice id. */
   voice?: string;
-  emotion?: string;
   pitch?: string;
-  pace?: string;
   expressivity?: string;
   noise?: string;
   reverb?: string;
@@ -438,10 +523,20 @@ interface ParlerDescriptionFields {
  */
 interface Audio8VoiceFields {
   /**
-   * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3: reserved
-   * / not yet effective — zero-shot cloning needs the native S3 tokenizer +
-   * CAM++ (not ported yet), so the engine falls back to the baked voice.
-   * Audio8: the recording to clone, with `referenceText` alongside it.
+   * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3:
+   * zero-shot / cross-lingual cloning reference (0.5-30 s hard limits,
+   * 5-15 s of clean speech recommended; multichannel input is downmixed to
+   * mono) — the native front-end tokenizes it (speech_tokenizer_v3),
+   * extracts the CAM++ speaker embedding and prompt mel at load, replacing
+   * the baked voice; requires the `cosyvoiceS3tokModel` +
+   * `cosyvoiceCampplusModel` files and fails the load (never silently falls
+   * back) when they are missing or the audio is unusable. Pair with
+   * `promptText` (the verbatim transcript) for zero-shot or omit it for
+   * cross-lingual. The reference is fixed at construction: `reload()`
+   * re-bakes the same recording (it is forwarded to the new addon instance)
+   * but cannot switch to a different one, so changing voices means a new
+   * instance. Audio8: the recording to clone, with `referenceText`
+   * alongside it.
    */
   referenceAudio?: string;
   /** Audio8: what `referenceAudio` says. Required when cloning. */
@@ -461,7 +556,8 @@ interface Audio8SamplingFields {
 
 interface TTSGgmlOptions
   extends ParlerDescriptionFields,
-    Audio8VoiceFields {
+    Audio8VoiceFields,
+    TTSConditioningFields {
   files?: TTSGgmlFiles;
   config?: TTSGgmlRuntimeConfig;
   logger?: object;
@@ -476,6 +572,9 @@ interface TTSGgmlOptions
    * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
    * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
    * Audio8: pass 99 to use Vulkan on Linux and Windows.
+   * CosyVoice3: pass 99 to offload on Metal (macOS / iOS), Vulkan (desktop
+   * Linux / Windows), or OpenCL/Adreno (Android); other hosts fall back to
+   * CPU by policy.
    */
   nGpuLayers?: number;
   /**
@@ -523,7 +622,15 @@ interface TTSGgmlOptions
    * model's baked rate. Omit it to retain the baked rate.
    */
   cfgRate?: number;
-  /** CosyVoice3: transcript of `referenceAudio` for zero-shot voice cloning (conditions the LM prompt). */
+  /**
+   * CosyVoice3: verbatim transcript of `referenceAudio`, selecting the
+   * cloning mode per the upstream frontends — set it for zero-shot (the LM
+   * is prompted with transcript + reference speech tokens; best fidelity in
+   * the reference's own language), omit it for cross-lingual (timbre-only
+   * conditioning; best when synthesizing a different language than the
+   * reference). Without `referenceAudio` it still overrides the baked
+   * voice's transcript metadata for the LM prompt.
+   */
   promptText?: string;
   /**
    * CosyVoice3: natural-language control (instruct2) — Chinese dialect, emotion,
@@ -627,6 +734,29 @@ interface NormalizedFiles {
   cangjieTsvPath?: string;
 }
 
+/** The instance state reload() may overwrite, snapshotted so it can roll back. */
+interface ReloadableState {
+  language?: string;
+  useGPU?: boolean;
+  outputSampleRate: number | null;
+  emotion?: string;
+  pace?: string;
+  description?: string;
+  voice?: string;
+  pitch?: string;
+  expressivity?: string;
+  noise?: string;
+  reverb?: string;
+  quality?: string;
+  temperature?: number;
+  topK?: number;
+  topP?: number;
+  maxFrames?: number;
+  minNewTokens?: number;
+  normalizeNumbers?: boolean;
+  seed?: number;
+}
+
 interface InferenceState {
   configLoaded: boolean;
   weightsLoaded: boolean;
@@ -634,12 +764,12 @@ interface InferenceState {
 }
 
 interface TTSOutputChunk {
-  /** PCM audio payload. Kept as `ArrayBuffer` for public API compatibility. */
-  outputArray: ArrayBuffer;
+  /** Signed 16-bit mono PCM audio payload. */
+  outputArray: Int16Array;
   /**
-   * Output sample rate. The native engine rate (24000 for Chatterbox,
-   * 44100 for Supertonic and Parler), or 48000 when the LavaSR enhancer is
-   * active.
+   * Output sample rate. The native engine rate (24000 for Chatterbox and
+   * CosyVoice3; 44100 for Supertonic, Parler, and Audio8), or 48000 when the
+   * LavaSR enhancer is active.
    */
   sampleRate?: number;
 }
@@ -659,6 +789,10 @@ interface RuntimeStats {
   backendDevice?: number;
   /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other GPU. */
   backendId?: number;
+  /** LavaSR enhancer compute device. -1 = not loaded, 0 = CPU, 1 = GPU. */
+  enhancerBackendDevice?: number;
+  /** LavaSR enhancer backend code, using the same values as `backendId`. */
+  enhancerBackendId?: number;
   /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
   gpuUnsupported?: number;
   /**
@@ -687,7 +821,8 @@ interface SentenceStreamChunkMeta {
 
 interface SentenceStreamOptions
   extends ParlerDescriptionFields,
-    Audio8VoiceFields {
+    Audio8VoiceFields,
+    TTSConditioningFields {
   /** BCP-47 locale for `Intl.Segmenter` when available. */
   locale?: string;
   /** Maximum graphemes per chunk; defaults to 300, or 120 for Korean. */
@@ -696,7 +831,8 @@ interface SentenceStreamOptions
 
 interface RunStreamingOptions
   extends ParlerDescriptionFields,
-    Audio8VoiceFields {
+    Audio8VoiceFields,
+    TTSConditioningFields {
   accumulateSentences?: boolean;
   sentenceDelimiter?: RegExp;
   sentenceDelimiterPreset?: SentenceDelimiterPreset;
@@ -711,13 +847,15 @@ type TextStreamInput =
   | Iterable<string>
   | AsyncIterable<string>;
 
-interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields {
+interface TTSRunInput
+  extends ParlerDescriptionFields,
+    Audio8VoiceFields,
+    TTSConditioningFields {
   type?: string;
   input: string;
   streamOutput?: boolean;
   locale?: string;
   maxChunkScalars?: number;
-  outputSampleRate?: number;
   /**
    * Cancels non-streaming `run()`. An already-aborted signal rejects without
    * native dispatch. Ignored by all streaming paths.
@@ -927,7 +1065,7 @@ function pickAudio8VoiceFields(
  * when none are set.
  */
 function pickParlerDescFields(
-  source: ParlerDescriptionFields | null | undefined,
+  source: ParlerJobSource | null | undefined,
 ): ParlerDescFields | undefined {
   if (source == null || typeof source !== "object") return undefined;
   const out: ParlerDescFields = {};
@@ -963,6 +1101,150 @@ function assertParlerDescFieldsConsistent(
         `voice-template options (got ${templateKeys.join(", ")})`,
     );
   }
+}
+
+/** Which of `keys` are set on `source`. Used to name stray options in errors. */
+function keysPresent(
+  source: object | null | undefined,
+  keys: readonly string[],
+): string[] {
+  if (source == null || typeof source !== "object") return [];
+  const record = source as Record<string, unknown>;
+  return keys.filter((key) => record[key] != null && record[key] !== "");
+}
+
+/** Collect the cross-engine conditioning properties present on `source`. */
+function pickConditioningFields(
+  source: TTSConditioningFields | null | undefined,
+): ConditioningFields | undefined {
+  if (source == null || typeof source !== "object") return undefined;
+  const out: ConditioningFields = {};
+  let any = false;
+  for (const key of CONDITIONING_KEYS) {
+    const value: string | undefined = source[key];
+    if (value != null && value !== "") {
+      out[key] = value;
+      any = true;
+    }
+  }
+  return any ? out : undefined;
+}
+
+function assertCanonicalValue(
+  value: string,
+  canonical: readonly string[],
+  kind: string,
+): void {
+  if (canonical.includes(value.toLowerCase())) return;
+  throw new Error(
+    `tts-ggml: invalid ${kind} "${value}". ` +
+      `Valid ${kind}s: ${canonical.join(", ")}.`,
+  );
+}
+
+function supportedValues(engine: EngineType, kind: ConditioningKey) {
+  return kind === "emotion" ? ENGINE_EMOTIONS[engine] : ENGINE_PACES[engine];
+}
+
+function assertEngineSupports(
+  engine: EngineType,
+  kind: ConditioningKey,
+  value: string,
+): void {
+  const supported: readonly string[] = supportedValues(engine, kind);
+  if (supported.length === 0) {
+    const hint =
+      kind === "pace"
+        ? "; use `speed` (an exact multiplier) instead"
+        : "";
+    throw new Error(
+      `tts-ggml: the ${engine} engine does not support \`${kind}\`${hint}`,
+    );
+  }
+  if (supported.includes(value.toLowerCase())) return;
+  throw new Error(
+    `tts-ggml: ${kind} "${value}" is not supported by the ${engine} engine. ` +
+      `${engine} supports: ${supported.join(", ")}.`,
+  );
+}
+
+/**
+ * Validate emotion/pace against the canonical vocabulary first (so a typo reads
+ * clearly), then against what this engine actually supports.
+ */
+function validateConditioning(
+  engine: EngineType,
+  fields: ConditioningFields | undefined,
+): void {
+  if (!fields) return;
+  if (fields.emotion != null) {
+    assertCanonicalValue(fields.emotion, EMOTIONS, "emotion");
+    assertEngineSupports(engine, "emotion", fields.emotion);
+  }
+  if (fields.pace != null) {
+    assertCanonicalValue(fields.pace, PACES, "pace");
+    assertEngineSupports(engine, "pace", fields.pace);
+  }
+}
+
+/**
+ * Reject a channel the engine supports but cannot change per call, so it is
+ * never accepted here and then dropped on the way to the engine. Runs after
+ * validateConditioning so an engine with no such control keeps its own message.
+ */
+function assertPerCallConditioning(
+  engine: EngineType,
+  fields: ConditioningFields | undefined,
+  where: string,
+): void {
+  if (!fields) return;
+  const perCall = ENGINE_PER_CALL_CONDITIONING[engine];
+  const fixed = CONDITIONING_KEYS.filter(
+    (key) => fields[key] != null && !perCall.includes(key),
+  );
+  if (fixed.length === 0) return;
+  throw new Error(
+    `tts-ggml: ${where}: ${engine} applies ` +
+      `${fixed.map((key) => `\`${key}\``).join(", ")} when the engine is ` +
+      `built, so it cannot change per call; set it in the constructor or ` +
+      `reload({ ${fixed.join(", ")} })`,
+  );
+}
+
+// CosyVoice3 is trained on one instruction per synthesis. Only `pace: moderate`
+// resolves to no instruction, so it is the one value that never conflicts; every
+// emotion carries a trained instruction, `neutral` included.
+const COSYVOICE_DISENGAGED: Record<string, string> = {
+  pace: "moderate",
+};
+
+function engagedCosyvoiceControls(
+  fields: ConditioningFields | undefined,
+  instruct: string | undefined,
+): string[] {
+  const engaged: string[] = [];
+  for (const key of CONDITIONING_KEYS) {
+    const value = fields?.[key];
+    if (value != null && value.toLowerCase() !== COSYVOICE_DISENGAGED[key]) {
+      engaged.push(`${key}="${value}"`);
+    }
+  }
+  if (instruct != null && instruct !== "") engaged.push("instruct");
+  return engaged;
+}
+
+function assertSingleCosyvoiceControl(
+  fields: ConditioningFields | undefined,
+  instruct: string | undefined,
+  where: string,
+): void {
+  const engaged = engagedCosyvoiceControls(fields, instruct);
+  if (engaged.length <= 1) return;
+  throw new Error(
+    `tts-ggml: ${where}: conflicting conditioning controls ` +
+      `(${engaged.join(", ")}); cosyvoice3 is trained on one instruction per ` +
+      `synthesis -- set exactly one (pace="moderate" disengages a channel)`,
+  );
 }
 
 function normalizeGgmlFiles(
@@ -1670,7 +1952,9 @@ class TTSGgml {
     // is reported ahead of the engine-agnostic streaming constraints.
     this._assertParlerOptionConsistency();
     this._assertCosyvoiceOptionConsistency();
+    this._assertCosyvoiceCloneConsistent();
     this._assertAudio8OptionConsistency();
+    this._assertConditioningConsistency("constructor");
     if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
       throw new Error(
         "tts-ggml: the LavaSR denoiser is not yet supported with " +
@@ -1695,9 +1979,9 @@ class TTSGgml {
         pickParlerDescFields({
           description: this._description,
           voice: this._voice,
-          emotion: this._emotion,
+          emotion: this._emotion as Emotion | undefined,
           pitch: this._pitch,
-          pace: this._pace,
+          pace: this._pace as Pace | undefined,
           expressivity: this._expressivity,
           noise: this._noise,
           reverb: this._reverb,
@@ -1711,13 +1995,12 @@ class TTSGgml {
     if (this._description != null) {
       parlerOnly.push("description/voiceDescription");
     }
-    // temperature / topK / topP / maxFrames are deliberately absent: audio8
-    // samples too, so SAMPLING_ENGINES decides who may set them.
+    // emotion / pace are absent because they are cross-engine, validated by
+    // _assertConditioningConsistency; temperature / topK / topP / maxFrames are
+    // absent because audio8 samples too, so SAMPLING_ENGINES decides them.
     parlerOnly.push(
       ...setOptionNames({
-        emotion: this._emotion,
         pitch: this._pitch,
-        pace: this._pace,
         expressivity: this._expressivity,
         noise: this._noise,
         reverb: this._reverb,
@@ -1810,6 +2093,27 @@ class TTSGgml {
     }
   }
 
+  /**
+   * `promptText` is deliberately not required: its absence selects
+   * cross-lingual mode. With a model dir present but no cloning GGUFs in it,
+   * the native load fail-closes instead.
+   */
+  private _assertCosyvoiceCloneConsistent(): void {
+    if (this._engineType !== ENGINE_COSYVOICE3) return;
+    if (!this._referenceAudio) return;
+    const haveExplicit =
+      this._cosyvoiceS3tokModelPath && this._cosyvoiceCampplusModelPath;
+    if (!haveExplicit && !this._cosyvoiceModelDir) {
+      throw new Error(
+        "tts-ggml: referenceAudio (CosyVoice3 voice cloning) needs the " +
+          "speech-tokenizer and speaker-encoder GGUFs: set " +
+          "files.cosyvoiceS3tokModel + files.cosyvoiceCampplusModel, or a " +
+          "files.cosyvoiceModelDir containing cosyvoice3-s3tok*.gguf and " +
+          "cosyvoice3-campplus*.gguf",
+      );
+    }
+  }
+
   private _assertCosyvoiceOptionConsistency(): void {
     if (this._engineType === ENGINE_COSYVOICE3) return;
     const cosyvoiceOnly: string[] = [];
@@ -1833,24 +2137,62 @@ class TTSGgml {
   }
 
   /**
-   * Extract + validate the per-call parler description/template fields from a
-   * run input or streaming options. Returns undefined when none are present.
-   * Parler-only; a per-call template cannot be merged with a constructor-level
-   * free-text description.
+   * Validate the cross-engine emotion/pace surface against this engine, and
+   * enforce CosyVoice3's one-instruction-per-synthesis rule.
+   */
+  private _assertConditioningConsistency(where: string): void {
+    const fields = pickConditioningFields({
+      emotion: this._emotion as Emotion | undefined,
+      pace: this._pace as Pace | undefined,
+    });
+    validateConditioning(this._engineType, fields);
+    if (this._engineType === ENGINE_COSYVOICE3) {
+      assertSingleCosyvoiceControl(fields, this._instruct, where);
+    }
+  }
+
+  /**
+   * The per-call surface of a non-Parler engine: only the cross-engine
+   * emotion/pace it declares support for, never Parler's template fields.
+   */
+  private _resolveConditioningJobFields(
+    source: ParlerJobSource | null | undefined,
+    where: string,
+  ): ParlerDescFields | undefined {
+    const parlerOnly = keysPresent(source, PARLER_ONLY_KEYS);
+    if (parlerOnly.length > 0) {
+      throw new Error(
+        `tts-ggml: ${where}: per-call description/voice-template options ` +
+          `are parler-only (engine is ${this._engineType}; got ` +
+          `${parlerOnly.join(", ")})`,
+      );
+    }
+    const fields = pickConditioningFields(source);
+    if (!fields) return undefined;
+    validateConditioning(this._engineType, fields);
+    assertPerCallConditioning(this._engineType, fields, where);
+    if (this._engineType === ENGINE_COSYVOICE3) {
+      // A per-call control replaces the constructor's, so only the per-call
+      // fields participate in the one-instruction count.
+      assertSingleCosyvoiceControl(fields, undefined, where);
+    }
+    return fields;
+  }
+
+  /**
+   * Parler's per-call surface: description/template fields, where a per-call
+   * template cannot be merged with a constructor-level free-text description.
    */
   private _resolveParlerJobFields(
-    source: ParlerDescriptionFields | null | undefined,
+    source: ParlerJobSource | null | undefined,
     where: string,
   ): ParlerDescFields | undefined {
     const fields = pickParlerDescFields(source);
     if (!fields) return undefined;
-    if (this._engineType !== ENGINE_PARLER) {
-      throw new Error(
-        `tts-ggml: ${where}: per-call description/voice-template options ` +
-          `are parler-only (engine is ${this._engineType})`,
-      );
-    }
     assertParlerDescFieldsConsistent(fields, where);
+    const conditioning = pickConditioningFields(source);
+    validateConditioning(this._engineType, conditioning);
+    assertPerCallConditioning(this._engineType, conditioning, where);
     const hasDescription = PARLER_DESCRIPTION_KEYS.some(
       (key) => fields[key] != null,
     );
@@ -1908,15 +2250,22 @@ class TTSGgml {
     return fields;
   }
 
-  /** The per-call fields of whichever engine is loaded, if any are set. */
+  /**
+   * The per-call fields of whichever engine is loaded, if any are set. Parler
+   * takes the full description/template surface, Audio8 its voice override,
+   * and every engine the cross-engine conditioning it supports.
+   */
   private _resolveJobFields(
-    source: (ParlerDescriptionFields & Audio8VoiceFields) | null | undefined,
+    source: (ParlerJobSource & Audio8VoiceFields) | null | undefined,
     where: string,
   ): JobFields | undefined {
-    const parler = this._resolveParlerJobFields(source, where);
+    const engineFields =
+      this._engineType === ENGINE_PARLER
+        ? this._resolveParlerJobFields(source, where)
+        : this._resolveConditioningJobFields(source, where);
     const audio8 = this._resolveAudio8JobFields(source, where);
-    if (!parler && !audio8) return undefined;
-    return { ...(parler ?? {}), ...(audio8 ?? {}) };
+    if (!engineFields && !audio8) return undefined;
+    return { ...(engineFields ?? {}), ...(audio8 ?? {}) };
   }
 
   getEngineType(): EngineType {
@@ -2014,7 +2363,7 @@ class TTSGgml {
       streamOutput: true,
       locale: normalized.locale,
       maxChunkScalars: normalized.maxChunkScalars,
-      ...(pickParlerDescFields(normalized) ?? {}),
+      ...((pickParlerDescFields(normalized) ?? {}) as ParlerJobSource),
       ...(pickAudio8VoiceFields(normalized) ?? {}),
     });
   }
@@ -2376,6 +2725,9 @@ class TTSGgml {
       parameters.promptText = String(this._promptText);
     }
     if (this._instruct) parameters.instruct = this._instruct;
+    // Canonical values; the native layer maps them to the trained instructions.
+    if (this._emotion != null) parameters.emotion = String(this._emotion);
+    if (this._pace != null) parameters.pace = String(this._pace);
     if (this._voice) parameters.voice = this._voice;
     this._assignCommonNativeParams(parameters);
     if (this._cfmSteps != null) parameters.cfmSteps = this._cfmSteps | 0;
@@ -2440,6 +2792,9 @@ class TTSGgml {
     if (this._voice) parameters.voice = this._voice;
     if (this._steps != null) parameters.steps = this._steps | 0;
     if (this._speed != null) parameters.speed = Number(this._speed);
+    // The native layer maps the step onto a multiplier relative to the GGUF's
+    // own default_speed, and rejects pace + speed together.
+    if (this._pace != null) parameters.pace = String(this._pace);
     if (this._noiseNpyPath) {
       parameters.noiseNpyPath = this._noiseNpyPath;
     }
@@ -2733,16 +3088,11 @@ class TTSGgml {
   ): TTSOutputChunk & SentenceStreamChunkMeta {
     const context = this._sentenceStreamCtx;
     if (!context) {
-      // Preserve the historical ArrayBuffer declaration without changing the
-      // native Int16Array payload or allocating a compatibility copy.
-      return data as unknown as TTSOutputChunk &
-        SentenceStreamChunkMeta;
+      return data;
     }
     const index = context.chunkIdx;
     const enriched: TTSOutputChunk & SentenceStreamChunkMeta = {
-      // Public declarations historically expose ArrayBuffer; native output is
-      // the more precise Int16Array representation at runtime.
-      outputArray: data.outputArray as unknown as ArrayBuffer,
+      outputArray: data.outputArray,
       chunkIndex: index,
       sentenceChunk: context.chunks[index] || "",
     };
@@ -2798,15 +3148,57 @@ class TTSGgml {
     this._job.fail(reason);
   }
 
-  async reload(
-    newConfig: Record<string, unknown> = {},
-  ): Promise<void> {
-    this._getLogger().debug(
-      "Reloading addon with new configuration",
-      newConfig,
-    );
-    const runtimeConfig =
-      newConfig as Partial<TTSGgmlRuntimeConfig>;
+  /** Everything reload() may overwrite, so a rejected reload can undo itself. */
+  private _captureReloadableState(): ReloadableState {
+    return {
+      language: this._config.language,
+      useGPU: this._config.useGPU,
+      outputSampleRate: this._outputSampleRate,
+      emotion: this._emotion,
+      pace: this._pace,
+      description: this._description,
+      voice: this._voice,
+      pitch: this._pitch,
+      expressivity: this._expressivity,
+      noise: this._noise,
+      reverb: this._reverb,
+      quality: this._quality,
+      temperature: this._temperature,
+      topK: this._topK,
+      topP: this._topP,
+      maxFrames: this._maxFrames,
+      minNewTokens: this._minNewTokens,
+      normalizeNumbers: this._normalizeNumbers,
+      seed: this._seed,
+    };
+  }
+
+  private _restoreReloadableState(state: ReloadableState): void {
+    this._config.language = state.language;
+    this._config.useGPU = state.useGPU;
+    this._outputSampleRate = state.outputSampleRate;
+    this._emotion = state.emotion;
+    this._pace = state.pace;
+    this._description = state.description;
+    this._voice = state.voice;
+    this._pitch = state.pitch;
+    this._expressivity = state.expressivity;
+    this._noise = state.noise;
+    this._reverb = state.reverb;
+    this._quality = state.quality;
+    this._temperature = state.temperature;
+    this._topK = state.topK;
+    this._topP = state.topP;
+    this._maxFrames = state.maxFrames;
+    this._minNewTokens = state.minNewTokens;
+    this._normalizeNumbers = state.normalizeNumbers;
+    this._seed = state.seed;
+  }
+
+  private _applyReloadableRuntimeConfig(
+    newConfig: Record<string, unknown>,
+  ): void {
+    const runtimeConfig = newConfig as Partial<TTSGgmlRuntimeConfig>;
     if (runtimeConfig.language !== undefined) {
       this._config.language = runtimeConfig.language;
     }
@@ -2814,78 +3206,128 @@ class TTSGgml {
       this._config.useGPU = runtimeConfig.useGPU;
     }
     if (runtimeConfig.outputSampleRate !== undefined) {
-      this._outputSampleRate = runtimeConfig.outputSampleRate;
+      this._outputSampleRate = validateOutputSampleRate(
+        runtimeConfig.outputSampleRate,
+      );
     }
     this._applyAudio8Reload(newConfig);
-    // Parler description/template + sampling knobs are reloadable; they rebuild
-    // the engine's default description / sampler. _buildParlerParams re-validates
-    // so a wrong-engine reload still throws.
-    if (this._engineType === ENGINE_PARLER) {
-      const parlerConfig = newConfig as Partial<ParlerDescriptionFields> & {
-        temperature?: number;
-        topK?: number;
-        topP?: number;
-        maxFrames?: number;
-        minNewTokens?: number;
-        normalizeNumbers?: boolean;
-        seed?: number;
-      };
-      if (
-        parlerConfig.description !== undefined ||
-        parlerConfig.voiceDescription !== undefined
-      ) {
-        this._description = firstNonEmpty(
-          parlerConfig.description,
-          parlerConfig.voiceDescription,
-        );
-      }
-      if (parlerConfig.voice !== undefined) {
-        this._voice = parlerConfig.voice;
-      }
-      if (parlerConfig.emotion !== undefined) {
-        this._emotion = parlerConfig.emotion;
-      }
-      if (parlerConfig.pitch !== undefined) {
-        this._pitch = parlerConfig.pitch;
-      }
-      if (parlerConfig.pace !== undefined) {
-        this._pace = parlerConfig.pace;
-      }
-      if (parlerConfig.expressivity !== undefined) {
-        this._expressivity = parlerConfig.expressivity;
-      }
-      if (parlerConfig.noise !== undefined) {
-        this._noise = parlerConfig.noise;
-      }
-      if (parlerConfig.reverb !== undefined) {
-        this._reverb = parlerConfig.reverb;
-      }
-      if (parlerConfig.quality !== undefined) {
-        this._quality = parlerConfig.quality;
-      }
-      if (parlerConfig.temperature !== undefined) {
-        this._temperature = parlerConfig.temperature;
-      }
-      if (parlerConfig.topK !== undefined) {
-        this._topK = parlerConfig.topK;
-      }
-      if (parlerConfig.topP !== undefined) {
-        this._topP = parlerConfig.topP;
-      }
-      if (parlerConfig.maxFrames !== undefined) {
-        this._maxFrames = parlerConfig.maxFrames;
-      }
-      if (parlerConfig.minNewTokens !== undefined) {
-        this._minNewTokens = parlerConfig.minNewTokens;
-      }
-      if (parlerConfig.normalizeNumbers !== undefined) {
-        this._normalizeNumbers = parlerConfig.normalizeNumbers;
-      }
-      if (parlerConfig.seed !== undefined) {
-        this._seed = parlerConfig.seed;
-      }
+  }
+
+  // Cross-engine conditioning is reloadable on every engine that supports it,
+  // so both families change emotion the same way.
+  private _applyReloadableConditioning(
+    newConfig: Record<string, unknown>,
+  ): void {
+    const conditioning = newConfig as Partial<TTSConditioningFields>;
+    if (
+      conditioning.emotion === undefined &&
+      conditioning.pace === undefined
+    ) {
+      return;
     }
-    const parameters = this._buildTtsParams();
+    if (conditioning.emotion !== undefined) {
+      this._emotion = conditioning.emotion;
+    }
+    if (conditioning.pace !== undefined) {
+      this._pace = conditioning.pace;
+    }
+    this._assertConditioningConsistency("reload");
+  }
+
+  // Parler description/template + sampling knobs are reloadable; they rebuild
+  // the engine's default description / sampler. _buildParlerParams re-validates
+  // so a wrong-engine reload still throws.
+  private _applyReloadableParlerConfig(
+    newConfig: Record<string, unknown>,
+  ): void {
+    if (this._engineType !== ENGINE_PARLER) return;
+    const parlerConfig = newConfig as Partial<ParlerDescriptionFields> & {
+      temperature?: number;
+      topK?: number;
+      topP?: number;
+      maxFrames?: number;
+      minNewTokens?: number;
+      normalizeNumbers?: boolean;
+      seed?: number;
+    };
+    if (
+      parlerConfig.description !== undefined ||
+      parlerConfig.voiceDescription !== undefined
+    ) {
+      this._description = firstNonEmpty(
+        parlerConfig.description,
+        parlerConfig.voiceDescription,
+      );
+    }
+    if (parlerConfig.voice !== undefined) {
+      this._voice = parlerConfig.voice;
+    }
+    if (parlerConfig.pitch !== undefined) {
+      this._pitch = parlerConfig.pitch;
+    }
+    if (parlerConfig.expressivity !== undefined) {
+      this._expressivity = parlerConfig.expressivity;
+    }
+    if (parlerConfig.noise !== undefined) {
+      this._noise = parlerConfig.noise;
+    }
+    if (parlerConfig.reverb !== undefined) {
+      this._reverb = parlerConfig.reverb;
+    }
+    if (parlerConfig.quality !== undefined) {
+      this._quality = parlerConfig.quality;
+    }
+    if (parlerConfig.temperature !== undefined) {
+      this._temperature = parlerConfig.temperature;
+    }
+    if (parlerConfig.topK !== undefined) {
+      this._topK = parlerConfig.topK;
+    }
+    if (parlerConfig.topP !== undefined) {
+      this._topP = parlerConfig.topP;
+    }
+    if (parlerConfig.maxFrames !== undefined) {
+      this._maxFrames = parlerConfig.maxFrames;
+    }
+    if (parlerConfig.minNewTokens !== undefined) {
+      this._minNewTokens = parlerConfig.minNewTokens;
+    }
+    if (parlerConfig.normalizeNumbers !== undefined) {
+      this._normalizeNumbers = parlerConfig.normalizeNumbers;
+    }
+    if (parlerConfig.seed !== undefined) {
+      this._seed = parlerConfig.seed;
+    }
+  }
+
+  /**
+   * Apply the new configuration and build the native parameters from it. A
+   * rejected value leaves the instance exactly as it was, so a later partial
+   * reload is not validated against state the caller never accepted.
+   */
+  private _applyReloadableConfig(
+    newConfig: Record<string, unknown>,
+  ): TTSConfigurationParams {
+    const snapshot = this._captureReloadableState();
+    try {
+      this._applyReloadableRuntimeConfig(newConfig);
+      this._applyReloadableConditioning(newConfig);
+      this._applyReloadableParlerConfig(newConfig);
+      return this._buildTtsParams();
+    } catch (error) {
+      this._restoreReloadableState(snapshot);
+      throw error;
+    }
+  }
+
+  async reload(
+    newConfig: Record<string, unknown> = {},
+  ): Promise<void> {
+    this._getLogger().debug(
+      "Reloading addon with new configuration",
+      newConfig,
+    );
+    const parameters = this._applyReloadableConfig(newConfig);
     await this.cancel();
     this._failAndClearActiveResponse("Model was reloaded");
     const existingAddon = this._optionalAddon();
@@ -3009,6 +3451,9 @@ type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the established class namespace API.
 namespace TTSGgml {
+  export import QvacErrorAddonTTSGgml =
+    errorModule.QvacErrorAddonTTSGgml;
+  export import ERR_CODES = errorModule.ERR_CODES;
   export type TTSGgmlFiles = NamespaceFiles;
   export type TTSGgmlRuntimeConfig = NamespaceRuntimeConfig;
   export type TTSGgmlOptions = NamespaceOptions;
@@ -3027,3 +3472,8 @@ namespace TTSGgml {
 }
 
 export = TTSGgml;
+
+(module as { exports: typeof TTSGgml }).exports.QvacErrorAddonTTSGgml =
+  errorModule.QvacErrorAddonTTSGgml;
+(module as { exports: typeof TTSGgml }).exports.ERR_CODES =
+  errorModule.ERR_CODES;

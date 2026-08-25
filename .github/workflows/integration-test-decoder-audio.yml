@@ -43,7 +43,7 @@ jobs:
           - os: macos-14
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
           - os: windows-2025
             platform: win32
             arch: x64
@@ -65,7 +65,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir }}

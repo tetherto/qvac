@@ -33,10 +33,16 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'parakeet-models.manifest.json')
+const MANIFEST_PATH = resolve(
+  __dirname,
+  '..',
+  'test',
+  'integration',
+  'parakeet-models.manifest.json'
+)
 const DEFAULT_OUT_DIR = resolve(__dirname, '..', 'models')
 
-function parseArgs (argv) {
+function parseArgs(argv) {
   const args = { output: DEFAULT_OUT_DIR }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--output' || argv[i] === '-o') args.output = resolve(argv[++i])
@@ -45,7 +51,7 @@ function parseArgs (argv) {
   return args
 }
 
-function sha256File (filePath) {
+function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = createHash('sha256')
     const stream = createReadStream(filePath)
@@ -57,7 +63,7 @@ function sha256File (filePath) {
 
 // Mirrors warm-models.mjs verify ordering: cheap size check before the
 // expensive hash. Returns { ok, reason }.
-async function verify (filePath, entry) {
+async function verify(filePath, entry) {
   if (entry.bytes != null) {
     const { size } = statSync(filePath)
     if (size !== entry.bytes) return { ok: false, reason: `size ${size} != ${entry.bytes}` }
@@ -69,7 +75,7 @@ async function verify (filePath, entry) {
   return { ok: true }
 }
 
-function s3Cp (bucket, s3Path, dest) {
+function s3Cp(bucket, s3Path, dest) {
   const uri = `s3://${bucket}/${s3Path}`
   console.log(`  > aws s3 cp ${uri}`)
   const res = spawnSync('aws', ['s3', 'cp', uri, dest], { stdio: 'inherit' })
@@ -77,7 +83,7 @@ function s3Cp (bucket, s3Path, dest) {
   if (res.status !== 0) throw new Error(`aws s3 cp exited ${res.status} for ${uri}`)
 }
 
-async function main () {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
 
   const bucket = process.env.MODEL_S3_BUCKET
@@ -103,14 +109,16 @@ async function main () {
       if (hasIntegrity) {
         const res = await verify(dest, entry)
         if (res.ok) {
-          console.log(`  ✓ ${name}: present + verified — skip`)
+          console.log(`  OK ${name}: present + verified — skip`)
           skipped++
           continue
         }
         console.log(`  ! ${name}: present but failed integrity (${res.reason}) — re-staging`)
         rmSync(dest, { force: true })
       } else if (statSync(dest).size > 0) {
-        console.log(`  ✓ ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`)
+        console.log(
+          `  OK ${name}: present (no sha256/bytes pinned — integrity check SKIPPED) — skip`
+        )
         skipped++
         continue
       } else {
@@ -131,7 +139,7 @@ async function main () {
       }
     }
     const { size } = statSync(dest)
-    console.log(`  ✓ ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
+    console.log(`  OK ${name}: ready (${(size / 1024 / 1024).toFixed(1)}MB)`)
     staged++
   }
 

@@ -38,9 +38,26 @@ Supported model families:
 
 - **[SmolVLA](https://huggingface.co/lerobot/smolvla_base)**: single all-in-one `*.gguf` file. Expects **2 camera views** and a **continuous** robot state. Available constant: `SMOLVLA_LIBERO_VISION_Q8`.
 - **[π₀.₅ (pi05)](https://www.physicalintelligence.company/blog/pi05)**: single all-in-one `*.gguf` file. Expects **`vlaHparams().numCameras` camera views** (3 for `PI05_BASE_Q_AGGRESSIVE`) and a **discrete** robot state tokenized into the language prompt instead of a state buffer; the `noise` prior is required. Available constant: `PI05_BASE_Q_AGGRESSIVE`.
-- **[NVIDIA GR00T N1.7-3B (LIBERO)](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO)**: single all-in-one `*.gguf` file. Reports `imageInputMode: "patches"` — each of its **2 camera views** is passed as a pre-patchified buffer of `vlaHparams().imagePatchElems` floats (not a `3·w·h` pixel plane), so `vlaPreprocessImage()` does not apply. Uses a **continuous** robot state (pad it with `vlaPadState()`), and the `noise` prior is required (flow-matching). Available constants: `GROOT_Q8_VF16` (desktop) and `GROOT_Q5_VF16` (mobile).
+- **NVIDIA GR00T N1.7-3B (LIBERO)**: single all-in-one `*.gguf` file converted from the [LIBERO checkpoint](https://huggingface.co/nvidia/GR00T-N1.7-LIBERO). Expects **2 camera views** and **stores a single embodiment row** — `vlaSetEmbodiment()` is rejected. Reports `imageInputMode: "patches"` — each camera view is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats, so `vlaPreprocessImage()` does not apply. Uses a **continuous** robot state (pad with `vlaPadState()`); the `noise` prior is required (flow-matching). Available constants: `GROOT_Q8_VF16` (desktop) and `GROOT_Q5_VF16` (mobile). Preferred for LIBERO-only use.
+- **NVIDIA GR00T N1.7-3B (base, multi-embodiment)**: single all-in-one `*.gguf` file converted from the [base checkpoint](https://huggingface.co/nvidia/GR00T-N1.7-3B), carrying **multiple embodiments** — 17 rows shipped (out of up to 32), camera count per embodiment (see [GR00T embodiments](#gr00t-embodiments) below). Same input contract as the LIBERO build: `imageInputMode: "patches"` (each camera view is a pre-patchified buffer of `vlaHparams().imagePatchElems` floats, so `vlaPreprocessImage()` does not apply), **continuous** robot state (pad with `vlaPadState()`), `noise` prior required (flow-matching). Available constants: `GROOT_MULTI_Q8_VF16` (desktop) and `GROOT_MULTI_Q5_VF16` (mobile).
 
 For models available as constants, see [SDK — Models](/introduction#models).
+
+### GR00T embodiments
+
+Multi-embodiment selection applies to the `GROOT_MULTI_*` constants. The LIBERO-only `GROOT_Q8_VF16` / `GROOT_Q5_VF16` GGUFs store a single embodiment row and reject any switch — the rest of this section is about `GROOT_MULTI_*`. A single `GROOT_MULTI_*` GGUF carries up to 32 embodiments; 17 rows ship in the current builds.
+
+**Pick one at load** via `modelConfig.embodiment`. The selector accepts:
+- a tag string (e.g. `"libero_sim"`),
+- a numeric `cat_id` in `0..31`,
+- an object `{ tag? | catId?, numCameras? }` — at most one of `tag` / `catId`, plus an optional `numCameras` override bounded to `1..64`. On the load path, an object with only `numCameras` and no `tag` or `catId` is valid: it keeps the GGUF's default embodiment and overrides the count.
+- omitted — the GGUF's default embodiment is used.
+
+**`numCameras` is not only an override for a rig with a different view count** — it is required for an embodiment the GGUF has no count for. Only a subset of the shipped rows are self-describing in the GGUF (9 of 17 in `GROOT_MULTI_*`), so most rows will not load or switch without it; the runtime never guesses.
+
+**Switch at runtime** with `vlaSetEmbodiment({ modelId, embodiment })` — same selector shape, except a switch must name an embodiment (a `tag` or a `catId`; the bare `{ numCameras }` form is rejected). A switch reads ~20 MB from the GGUF versus reloading the whole ~4 GB file — rejected on a single-embodiment GGUF (`GROOT_Q8_VF16` / `GROOT_Q5_VF16`), and while a `vla()` response is outstanding (the queued switch throws `JOB_ALREADY_RUNNING` — await the in-flight `vla()` first).
+
+`vlaHparams()` reports the resolved embodiment as `selectedEmbodimentTag` and `selectedEmbodimentCatId`, together with the active `numCameras` and `actionDim`. These fields are also present on the single-embodiment `GROOT_Q*` constants (they surface the baked-in row), so their presence is not a capability check — a switch may still be rejected. Rebuild your inference buffers from `vlaHparams()` after every `vlaSetEmbodiment()`.
 
 ## Examples
 
@@ -98,7 +115,13 @@ The following script loads pi05 from the registry, builds synthetic inputs (zero
 
 ### GR00T
 
-The following script loads GR00T N1.7-3B (LIBERO) from the registry and runs a single inference pass with synthetic inputs. Unlike SmolVLA and pi05, GR00T reports `imageInputMode: "patches"`: each camera entry is a pre-patchified buffer of `hparams.imagePatchElems` floats, the continuous state is padded with `vlaPadState()`, and the `noise` prior is required:
+The following script loads a GR00T N1.7-3B GGUF from the registry and runs a single inference pass with synthetic inputs. Unlike SmolVLA and pi05, GR00T reports `imageInputMode: "patches"`: each camera entry is a pre-patchified buffer of `hparams.imagePatchElems` floats, the continuous state is padded with `vlaPadState()`, and the `noise` prior is required.
+
+Two optional environment variables drive the multi-embodiment path exposed by `GROOT_MULTI_*`:
+- `QVAC_GROOT_EMBODIMENT` selects the embodiment at load — a tag string (e.g. `libero_sim`) or a numeric `cat_id`.
+- `QVAC_GROOT_SWITCH_EMBODIMENT` triggers a runtime `vlaSetEmbodiment()` after the first inference pass; the example then rebuilds its inputs from the refreshed `vlaHparams()` and runs a second pass on the new embodiment.
+
+The example defaults to `GROOT_Q8_VF16` (the LIBERO single-embodiment build), on which a switch is rejected. To exercise `QVAC_GROOT_SWITCH_EMBODIMENT`, pass a local `GROOT_MULTI_*` GGUF path on the command line — the multi-embodiment constants are supported by `@qvac/vla-ggml` 0.17.0 and later.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

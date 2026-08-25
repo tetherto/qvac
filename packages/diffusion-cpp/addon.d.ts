@@ -27,6 +27,7 @@ export interface SdJobParams {
     init_image?: Uint8Array;
     init_images?: Uint8Array[];
     control_frames?: Uint8Array[];
+    reference_images?: Uint8Array[];
 }
 export interface NativeJobArgs {
     type: 'text';
@@ -34,6 +35,7 @@ export interface NativeJobArgs {
     initImageBuffer?: Uint8Array;
     initImageBuffers?: Uint8Array[];
     controlFramesBuffers?: Uint8Array[];
+    referenceImagesBuffers?: Uint8Array[];
 }
 export interface NativeUpscaleJobArgs {
     type: 'image';

@@ -2,6 +2,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
@@ -9,7 +10,6 @@
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 #include "utils/ChatTemplateUtils.hpp"
-#include "utils/Qwen3ToolsDynamicTemplate.hpp"
 #include "utils/QwenTemplate.hpp"
 
 namespace fs = std::filesystem;
@@ -38,6 +38,20 @@ protected:
 
 TEST_F(ChatTemplateUtilsTest, IsQwen3ModelWithNullptr) {
   EXPECT_FALSE(isQwen3Model(nullptr));
+}
+
+// `isQwen3Architecture` is the exact-match predicate that drives fixed Qwen3
+// chat-template selection (via isQwen3Model -> getChatTemplateForModel). It
+// must stay strictly `qwen3`: `qwen35` and other family members must NOT match
+// (they are covered separately by isQwen3ReasoningFamilyArchitecture for
+// reasoning-tag purposes only).
+TEST_F(ChatTemplateUtilsTest, IsQwen3ArchitectureExactMatch) {
+  EXPECT_TRUE(isQwen3Architecture("qwen3"));
+  EXPECT_TRUE(isQwen3Architecture("Qwen3")); // case-insensitive (normalized)
+  EXPECT_FALSE(isQwen3Architecture("qwen35"));
+  EXPECT_FALSE(isQwen3Architecture("qwen3moe"));
+  EXPECT_FALSE(isQwen3Architecture("llama"));
+  EXPECT_FALSE(isQwen3Architecture(""));
 }
 
 TEST_F(ChatTemplateUtilsTest, IsMedPsyModelWithNullptr) {
@@ -213,57 +227,14 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourceTemplateMatchesFallback) {
   EXPECT_EQ(result->close, "</think>");
 }
 
-TEST_F(
-    ChatTemplateUtilsTest, SupportsToolsCompactForModelMetadataByArchitecture) {
-  EXPECT_TRUE(supportsToolsCompactForModelMetadata(std::string("qwen3")));
-  EXPECT_FALSE(supportsToolsCompactForModelMetadata(std::string("qwen35")));
-  EXPECT_FALSE(supportsToolsCompactForModelMetadata(std::string("llama")));
-  EXPECT_FALSE(supportsToolsCompactForModelMetadata(std::nullopt));
-}
-
-TEST_F(
-    ChatTemplateUtilsTest,
-    SelectToolsCompactMarkerForModelMetadataUsesArchitecture) {
-  auto markerFromArch =
-      selectToolsCompactMarkerForModelMetadata(std::string("qwen3"));
-  ASSERT_TRUE(markerFromArch.has_value());
-  EXPECT_EQ(markerFromArch.value(), "<tool_call>");
-
-  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(std::string("qwen35"))
-                   .has_value());
-  EXPECT_FALSE(selectToolsCompactMarkerForModelMetadata(std::string("llama"))
-                   .has_value());
-  EXPECT_FALSE(
-      selectToolsCompactMarkerForModelMetadata(std::nullopt).has_value());
-}
-
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelWithManualOverrideToolsCompactFalse) {
+TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelWithManualOverride) {
   std::string manual_override = "custom template";
-  std::string result = getChatTemplateForModel(nullptr, manual_override, false);
+  std::string result = getChatTemplateForModel(nullptr, manual_override);
   EXPECT_EQ(result, manual_override);
 }
 
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelWithManualOverrideToolsCompactTrue) {
-  std::string manual_override = "custom template";
-  std::string result = getChatTemplateForModel(nullptr, manual_override, true);
-  EXPECT_EQ(result, manual_override);
-}
-
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelEmptyOverrideNullptrToolsCompactFalse) {
-  std::string result = getChatTemplateForModel(nullptr, "", false);
-  EXPECT_EQ(result, "");
-}
-
-TEST_F(
-    ChatTemplateUtilsTest,
-    GetChatTemplateForModelEmptyOverrideNullptrToolsCompactTrue) {
-  std::string result = getChatTemplateForModel(nullptr, "", true);
+TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelEmptyOverrideNullptr) {
+  std::string result = getChatTemplateForModel(nullptr, "");
   EXPECT_EQ(result, "");
 }
 
@@ -272,7 +243,7 @@ TEST_F(ChatTemplateUtilsTest, GetChatTemplateWithNullptrModel) {
   params.chat_template = "test template";
   params.use_jinja = false;
 
-  std::string result = getChatTemplate(nullptr, params, false);
+  std::string result = getChatTemplate(nullptr, params);
   EXPECT_EQ(result, params.chat_template);
 }
 
@@ -281,7 +252,7 @@ TEST_F(ChatTemplateUtilsTest, GetChatTemplateJinjaDisabled) {
   params.chat_template = "test template";
   params.use_jinja = false;
 
-  std::string result = getChatTemplate(nullptr, params, false);
+  std::string result = getChatTemplate(nullptr, params);
   EXPECT_EQ(result, "test template");
 }
 
@@ -290,7 +261,7 @@ TEST_F(ChatTemplateUtilsTest, GetChatTemplateJinjaEnabledWithOverride) {
   params.chat_template = "custom template";
   params.use_jinja = true;
 
-  std::string result = getChatTemplate(nullptr, params, false);
+  std::string result = getChatTemplate(nullptr, params);
   EXPECT_EQ(result, "custom template");
 }
 
@@ -299,7 +270,7 @@ TEST_F(ChatTemplateUtilsTest, GetChatTemplateJinjaEnabledWithoutOverride) {
   params.chat_template = "";
   params.use_jinja = true;
 
-  std::string result = getChatTemplate(nullptr, params, false);
+  std::string result = getChatTemplate(nullptr, params);
   EXPECT_EQ(result, "");
 }
 
@@ -308,7 +279,7 @@ TEST_F(ChatTemplateUtilsTest, GetChatTemplateParamsNotModified) {
   params.chat_template = "original template";
   params.use_jinja = false;
 
-  std::string result = getChatTemplate(nullptr, params, false);
+  std::string result = getChatTemplate(nullptr, params);
 
   EXPECT_EQ(params.chat_template, "original template");
   EXPECT_FALSE(params.use_jinja);
@@ -317,15 +288,14 @@ TEST_F(ChatTemplateUtilsTest, GetChatTemplateParamsNotModified) {
 
 TEST_F(ChatTemplateUtilsTest, GetChatTemplateForModelPreservesWhitespace) {
   std::string overrideWithSpaces = "  template with spaces  ";
-  std::string result =
-      getChatTemplateForModel(nullptr, overrideWithSpaces, false);
+  std::string result = getChatTemplateForModel(nullptr, overrideWithSpaces);
   EXPECT_EQ(result, overrideWithSpaces);
 }
 
 TEST_F(
     ChatTemplateUtilsTest, GetChatTemplateForModelPreservesSpecialCharacters) {
   std::string overrideSpecial = "template\nwith\tspecial\rchars";
-  std::string result = getChatTemplateForModel(nullptr, overrideSpecial, false);
+  std::string result = getChatTemplateForModel(nullptr, overrideSpecial);
   EXPECT_EQ(result, overrideSpecial);
 }
 
@@ -333,39 +303,6 @@ TEST_F(ChatTemplateUtilsTest, GetFixedQwen3TemplateNotNull) {
   const char* expectedTemplate = getFixedQwen3Template();
   ASSERT_NE(expectedTemplate, nullptr);
   EXPECT_GT(strlen(expectedTemplate), 0u);
-}
-
-TEST_F(ChatTemplateUtilsTest, GetToolsDynamicQwen3TemplateNotNull) {
-  const char* expectedTemplate = getToolsDynamicQwen3Template();
-  ASSERT_NE(expectedTemplate, nullptr);
-  EXPECT_GT(strlen(expectedTemplate), 0u);
-}
-
-TEST_F(ChatTemplateUtilsTest, TemplatesAreDifferent) {
-  const char* fixedTemplate = getFixedQwen3Template();
-  const char* dynamicTemplate = getToolsDynamicQwen3Template();
-  ASSERT_NE(fixedTemplate, nullptr);
-  ASSERT_NE(dynamicTemplate, nullptr);
-  EXPECT_STRNE(fixedTemplate, dynamicTemplate);
-}
-
-TEST_F(ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsCompact) {
-  common_params params;
-  params.chat_template = "my_custom_template";
-  params.use_jinja = true;
-
-  std::string result = getChatTemplate(nullptr, params, true);
-  EXPECT_EQ(result, "my_custom_template");
-}
-
-TEST_F(
-    ChatTemplateUtilsTest, ManualOverrideTakesPrecedenceOverToolsCompactFalse) {
-  common_params params;
-  params.chat_template = "my_custom_template";
-  params.use_jinja = true;
-
-  std::string result = getChatTemplate(nullptr, params, false);
-  EXPECT_EQ(result, "my_custom_template");
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
@@ -385,6 +322,7 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
   bool thinkingForcedOpen = true;
   std::string thinkingStartTag;
   std::string thinkingEndTag;
+  std::vector<std::string> thinkingEndTags;
   std::string generationPrompt;
   const std::string prompt = getPrompt(
       tmpls.get(),
@@ -392,11 +330,13 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
       &thinkingForcedOpen,
       &thinkingStartTag,
       &thinkingEndTag,
+      &thinkingEndTags,
       &generationPrompt);
 
   EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
   EXPECT_EQ(thinkingStartTag, "<think>");
   EXPECT_EQ(thinkingEndTag, "</think>");
+  EXPECT_EQ(thinkingEndTags, std::vector<std::string>{"</think>"});
   EXPECT_NE(generationPrompt.find("<|im_start|>assistant"), std::string::npos);
   EXPECT_FALSE(thinkingForcedOpen);
 }

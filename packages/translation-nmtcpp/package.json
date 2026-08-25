@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "10.0.0",
+  "version": "0.12.0",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -19,9 +19,10 @@
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js && npm run test:prestage",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js && npm run test:prestage && npm run test:package",
+    "test:package": "npm run build:ts && node --test test/package/package-contract.test.js",
     "test:prestage": "node --test scripts/__tests__/generate-prestage-block.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
     "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js",
@@ -76,13 +77,10 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/registry-client": "^0.4.0",
+    "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
-    "bare-fs": "^4.5.1",
-    "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
-    "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -98,7 +96,20 @@
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
-    "bare-path": "^3.0.0"
+    "bare-fs": "^4.5.1",
+    "bare-os": "^3.9.3",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.4.0"
+  },
+  "peerDependencies": {
+    "bare-fetch": "^3.0.1"
+  },
+  "peerDependenciesMeta": {
+    "bare-fetch": {
+      "optional": true
+    }
   },
   "exports": {
     "./package": "./package.json",

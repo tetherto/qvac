@@ -9,7 +9,6 @@
 
 #include "../utils/ReasoningRollbackState.hpp"
 #include "ContextSlider.hpp"
-#include "ToolsCompactController.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 
@@ -50,12 +49,10 @@ namespace qvac_lib_inference_addon_llama {
 // Position-specific bookkeeping (`nPast_` for text vs `current_.pos /
 // .cacheTokens` and `protectedPrefix_` for multimodal) is applied by
 // the caller using the returned `Outcome`. The compactor handles only
-// the cache-side operations, logging, stats, and tools-compact slide
-// notification.
+// the cache-side operations, logging, and stats.
 class ReasoningBlockCompactor {
 public:
-  ReasoningBlockCompactor(
-      utils::ReasoningRollbackState& rollback, ToolsCompactController& tools);
+  explicit ReasoningBlockCompactor(utils::ReasoningRollbackState& rollback);
 
   // ---- Feature gates ----
   void setRemoveThinkingFromContext(bool v) noexcept {
@@ -290,13 +287,6 @@ public:
     sliderOpsOverride_ = ops;
   }
 
-  // Access to the underlying tools-compact controller. Exposed so
-  // `ContextShifter` can route slide notifications to the same
-  // controller without holding an independent reference.
-  [[nodiscard]] ToolsCompactController& toolsController() noexcept {
-    return tools_;
-  }
-
   // ---- Stats ----
   [[nodiscard]] int32_t blockDiscards() const noexcept {
     return thinkingBlockDiscards_;
@@ -318,7 +308,6 @@ public:
 
 private:
   utils::ReasoningRollbackState& rollback_;
-  ToolsCompactController& tools_;
 
   std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
   bool pendingThinkCloseCapture_ = false;

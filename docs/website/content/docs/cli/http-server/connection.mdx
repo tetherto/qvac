@@ -230,7 +230,7 @@ On the tool side, register QVAC as a custom OpenAI-compatible provider. The exac
 
 - **Base URL** pointing at the running server (`http://localhost:11434/v1` by default).
 - **Model name(s)** that match the aliases declared in `serve.models`.
-- **API key** — the server does not validate it, but some clients refuse to send a request without an `Authorization` header, so set any non-empty value when required.
+- **API key** — when the server was started with `--api-key`, configure that exact value; a missing, placeholder, or incorrect token receives `401`. When server authentication is disabled, omit this field if the tool allows it. If the tool requires a non-empty placeholder, the unauthenticated server ignores its value. Authentication is strongly recommended for non-loopback binds.
 
 Consult your tool's documentation for where it stores custom-provider settings (often a settings UI or a JSON/YAML config file). The manual OpenCode recipe below is a concrete example of this pattern.
 
@@ -245,7 +245,10 @@ If you are not using the plugin, configure `opencode.json` with a full `qvac` pr
     "qvac": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "QVAC (local)",
-      "options": { "baseURL": "http://localhost:11434/v1" },
+      "options": {
+        "baseURL": "http://localhost:11434/v1",
+        "apiKey": "the-value-you-passed-to-qvac-serve"
+      },
       "models": {
         "qwen3-8b-chat": {
           "name": "Qwen3 8B (chat)",
@@ -259,6 +262,8 @@ If you are not using the plugin, configure `opencode.json` with a full `qvac` pr
   "model": "qvac/qwen3-8b-chat"
 }
 ```
+
+Drop `options.apiKey` only if you started the server without authentication. `opencode.json` is a plaintext file that is commonly committed, so prefer starting the server with `--api-key-file` and keeping the key somewhere you are willing to have on disk in the clear.
 
 For a custom (non-[models.dev](https://models.dev)) provider, OpenCode will not list or let you select the QVAC models unless `opencode.json` also declares a `provider.qvac.models` map. Without it, you get `Provider not found: qvac` and no models in the picker.
 

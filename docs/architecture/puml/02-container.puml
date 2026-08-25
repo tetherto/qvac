@@ -1,14 +1,18 @@
 @startuml
 !include <C4/C4_Container>
 
-title QVAC SDK – Container Diagram
+title QVAC SDK Family - Container Diagram
 
-Person(dev, "Application Developer", "Integrates SDK into desktop or mobile apps")
+Person(dev, "Application Developer", "Integrates QVAC into JS, Python, Bare, desktop, or mobile apps")
 
-System_Boundary(sdk, "QVAC SDK") {
-    Container(client, "@qvac/sdk Client", "TypeScript", "Public API, config loading, RPC transport")
-    Container(worker, "Worker", "TypeScript/C++ on Bare Runtime", "RPC server, plugin host, inference engines")
-    ContainerDb(cache, "Model Cache", "Filesystem", "Downloaded models (~/.qvac/models)")
+System_Boundary(sdk, "QVAC SDK Family") {
+    Container(ts_client, "@qvac/sdk Host Client", "TypeScript", "Public API, config loading, worker resolution, RPC transports, default plugin distribution")
+    Container(bare_client, "@qvac/bare-sdk Direct Client", "TypeScript on Bare", "Same API surface, in-process dispatch, explicit plugin assembly, slim dependency profile")
+    Container(inference, "@qvac/inference Engine", "TypeScript on Bare", "In-process engine, explicit plugin assembly, no RPC, worker, or subprocess layer")
+    Container(py_client, "tetherto-qvac-sdk Client", "Python", "Generated methods and typed models from SDK contract, worker launcher, bare-rpc transport")
+    Container(contract, "SDK Wire Contract", "JSON Schema + manifest + model catalog", "Generated from Zod schemas and method registry")
+    Container(worker, "Bare Worker Core", "TypeScript on Bare", "Worker lifecycle, platform transport, and RPC adapter around the engine")
+    ContainerDb(cache, "Model Cache", "Filesystem", "Downloaded and expanded model artifacts")
     ContainerDb(rag_store, "RAG Storage", "HyperDB / Corestore", "Vector embeddings per workspace")
 }
 
@@ -18,15 +22,22 @@ System_Ext(cdn, "HTTP Servers", "CDN / direct download")
 System_Ext(registry, "QVAC Model Registry", "Catalog and HTTP downloads")
 System_Ext(providers, "Remote Providers", "Delegated inference via P2P")
 
-Rel_D(dev, client, "Calls SDK API")
-Rel_D(client, worker, "JSON-RPC over IPC / native bridge")
-Rel_L(worker, cache, "Reads/writes model files")
-Rel_R(worker, rag_store, "Persists/queries vectors")
-Rel_D(worker, dht, "Discovers peers via DHT")
-Rel_D(worker, hyperdrive, "Downloads models via P2P")
-Rel_D(worker, cdn, "Downloads models via HTTP")
-Rel_D(worker, registry, "Queries catalog, downloads models")
-Rel_D(worker, providers, "Delegates inference requests")
+Rel_D(dev, ts_client, "Calls JS/TS API")
+Rel_D(dev, bare_client, "Calls Bare API")
+Rel_D(dev, inference, "Calls Bare engine API")
+Rel_D(dev, py_client, "Calls Python API")
+Rel_D(py_client, contract, "Generated from")
+Rel_D(ts_client, worker, "bare-rpc over socket or BareKit IPC")
+Rel_D(py_client, worker, "bare-rpc-python over loopback TCP")
+Rel_D(worker, inference, "Adapts RPC requests to engine API")
+Rel_D(bare_client, inference, "Direct in-process dispatch")
+Rel_L(inference, cache, "Reads/writes model files")
+Rel_R(inference, rag_store, "Persists/queries vectors")
+Rel_D(inference, dht, "Discovers peers via DHT")
+Rel_D(inference, hyperdrive, "Downloads models via P2P")
+Rel_D(inference, cdn, "Downloads models via HTTP")
+Rel_D(inference, registry, "Queries catalog, downloads models")
+Rel_D(inference, providers, "Delegates inference requests")
 
 Lay_R(dht, hyperdrive)
 Lay_R(hyperdrive, cdn)

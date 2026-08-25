@@ -52,7 +52,8 @@ enum class ModelType : std::uint8_t {
   CTC,       // English-only, fast transcription with punctuation/capitalization
   TDT,       // Multilingual (~25 languages) with auto-detection
   EOU,       // Real-time streaming with end-of-utterance detection
-  SORTFORMER // Speaker diarization (up to 4 speakers)
+  SORTFORMER, // Speaker diarization (up to 4 speakers)
+  RNNT
 };
 
 /**

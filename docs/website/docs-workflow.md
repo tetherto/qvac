@@ -24,6 +24,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [PR Checks](#1-docs-website-pr-checks)
   - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
   - [SDK release docs (local, skill-driven)](#3-sdk-release-docs-local-skill-driven)
+  - [Production health check (scheduled)](#4-production-health-check-scheduled)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides](#release-notes-overrides)
 - [Troubleshooting](#troubleshooting)
@@ -326,17 +327,22 @@ hosting provider's build the same way.
 ### Production (manual promotion)
 
 ```
-Staging is verified and ready
+Staging is verified and ready at a known commit
     │
     ▼
-Manually run the "Promote docs to production" workflow (workflow_dispatch)
+Manually run the "Promote docs to production" workflow (workflow_dispatch),
+passing that commit as the `commit` input
     │
     ▼
-Job pauses for docs-production environment approval
+Preflight job (ungated) validates the commit and publishes the
+commit list to the run summary
+    │  (fails here if the commit is not on main, or the ff is not possible)
+    ▼
+Promote job pauses for docs-production environment approval
     │  (required reviewer: qvac-internal-release)
     ▼
-Workflow fast-forwards docs-production to origin/main (--ff-only)
-    │  (fails if docs-production has diverged from main)
+Workflow fast-forwards docs-production to the commit (--ff-only)
+    │
     ▼
 Push to docs-production (as the GitHub App — ruleset bypass identity)
     │
@@ -350,11 +356,29 @@ Hosting provider builds the static site and deploys to production
 Production is promoted by manually running the **Promote docs to
 production** workflow (`.github/workflows/promote-docs-production.yml`),
 never by merging a PR into `docs-production`. The workflow advances
-`docs-production` to the current `main` commit using **fast-forward-only**
-semantics: if the branches have diverged it fails instead of creating a
-merge commit, so `docs-production` stays a pure pointer into `main`'s
-history. A `docs-production` environment required-reviewer gate pauses the
-job until a `qvac-internal-release` member approves.
+`docs-production` to the commit given in the required `commit` input,
+using **fast-forward-only** semantics: if the branches have diverged it
+fails instead of creating a merge commit, so `docs-production` stays a
+pure pointer into `main`'s history. A `docs-production` environment
+required-reviewer gate pauses the job until a `qvac-internal-release`
+member approves.
+
+The target is an explicit input rather than "whatever `main` points at"
+because the approval gate introduces an unbounded delay between dispatch
+and push. Resolving `main` after the approval would promote commits that
+landed while the run waited — commits nobody verified on staging. Naming
+the commit pins the promotion to the state the operator actually
+inspected, and makes the run self-documenting: the target appears in the
+run title, so the approver sees what they are approving.
+
+The validation runs in a separate ungated `preflight` job for the same
+reason. An environment gate pauses a job before any of its steps run, so
+a single-job workflow can only discover a bad input *after* someone has
+been asked to approve it. Splitting the work means every rejectable
+condition fails while the run is still unattended, and the reviewer is
+only ever paged for a promotion that is known to be valid. Preflight also
+writes the resolved SHA and the exact list of commits being promoted to
+the run summary, which is what the reviewer reads before approving.
 
 The person promoting is responsible for confirming staging is healthy and
 that the docs PR Checks have passed on `main` before running the workflow.
@@ -374,7 +398,7 @@ Head of QVAC to publish the SDK package) is a human decision.
 
 ## CI Workflows
 
-Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`. SDK release docs are generated locally by a Cursor skill (no release workflow). Neither workflow builds or deploys the site — the hosting provider does that on branch pushes.
+Three GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes `main` to `docs-production`, and one probes the deployed production site on a daily schedule. SDK release docs are generated locally by a Cursor skill (no release workflow). None of these workflows build or deploy the site — the hosting provider does that on branch pushes.
 
 ### 1. Docs Website PR Checks
 
@@ -398,13 +422,19 @@ The API summary `index.mdx` lives at `content/docs/reference/api/` and is commit
 
 **Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
 
+**Inputs:**
+
+| Input | Required | Description |
+|---|---|---|
+| `commit` | Yes | The commit to promote. Any revision already merged to `main` (a full SHA is recommended; the resolved SHA is echoed in the log). |
+
 **What it does:**
 - Pauses for approval on the `docs-production` environment (`qvac-internal-release` required reviewers)
 - Mints a short-lived **GitHub App token** (`actions/create-github-app-token`) and checks out `docs-production` (full history) with it — the App is the only bypass identity on the `docs-production` ruleset (the default `GITHUB_TOKEN` / GitHub Actions integration cannot be a ruleset bypass actor)
 - Fetches `origin/main` and runs `git merge --ff-only origin/main`
 - Pushes the fast-forwarded `docs-production`, which the hosting provider picks up to deploy production
 
-**Fails when:** `docs-production` has diverged from `main` (the `--ff-only` merge is rejected). This is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
+Divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`. Promoting the commit `docs-production` already points at is a no-op that exits cleanly.
 
 **Purpose:** Give the docs owner a single, deliberate button to promote the reviewed `main` state to production once the SDK package is (about to be) published, without ever letting `docs-production` drift from `main`'s history.
 
@@ -428,6 +458,22 @@ The dual-checkout race window the old CI workflow guarded against does not apply
 Once the SDK release PR (and its backmerge) lands on `main`, the hosting provider's `main` build picks it up and deploys to staging.
 
 Patches never re-run TypeDoc — they touch only the frontmatter title of the API summary and append a section to the release notes — so `api-data.json` only changes on minor releases.
+
+### 4. Production health check (scheduled)
+
+**File:** `.github/workflows/docs-website-health-check.yml`
+
+**Triggers:** Daily `schedule` (`30 2 * * *`, i.e. 02:30 UTC / 08:00 IST), manual `workflow_dispatch`, and `pull_request` (only when the workflow, script, or its test change — runs the unit tests, never the production probe).
+
+**What it does:**
+- **`probe-production`** runs `.github/scripts/docs-website-health-check.mjs` against `https://docs.qvac.tether.io`. The script assembles the set of URLs a reader or crawler should reach — every `<loc>` in the live `sitemap.xml`, each page's `.md` sibling, every literal `301` source in `public/_redirects` (pulled from the `docs-production` branch so it matches what the CDN serves), and `llms.txt` / `llms-full.txt` — then GETs each one (following redirects) with bounded concurrency. Any `404`, other `>= 400`, or network error fails the job.
+- **`notify-on-failure`** runs only on the scheduled trigger and, on failure, opens (or comments on) a tracking issue labelled `docs-health`.
+
+**What it deliberately does NOT do:** the list of broken URLs is written to the run's step summary and job log only — never to the issue body and never to Slack. A Slack webhook stored in this public repo is a credential-leak risk (a leaked webhook lets anyone post malicious links into the workspace), so the notification carries only a link back to the run. Consult the failed run to see which URLs broke.
+
+**Purpose:** Catch broken pages on the deployed production site (e.g. a page removed or renamed without a matching redirect) shortly after they appear, rather than waiting for a user report.
+
+> The collector/probe logic is pure and unit-tested (`.github/scripts/test/docs-website-health-check.test.mjs`); run `node --test .github/scripts/test/docs-website-health-check.test.mjs` locally. To probe manually, run `node .github/scripts/docs-website-health-check.mjs --redirects-file docs/website/public/_redirects` from the repo root.
 
 ---
 

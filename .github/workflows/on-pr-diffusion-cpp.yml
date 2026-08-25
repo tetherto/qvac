@@ -103,7 +103,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/diffusion-cpp
 
@@ -298,28 +298,17 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name }}
       ref: ${{ github.event.pull_request.head.sha }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write # Allow commenting on PRs
-      id-token: write
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    needs:
-      - fork-approval
-      - authorize
-      - prebuild
-      - prebuild-artifact-reuse
-      - ci-router
-    uses: ./.github/workflows/integration-mobile-test-diffusion-cpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name }}
-      ref: ${{ github.event.pull_request.head.sha }}
+  # Mobile integration tests are no longer run on PRs. They run on demand via
+  # `integration-mobile-test-diffusion-cpp.yml` (workflow_dispatch), where the
+  # dispatcher must pick a specific device. The `run-mobile-addon-tests` label /
+  # ci-router `run_mobile` output are kept for a possible future revival but no
+  # longer trigger anything here. (Benchmark / weekend / on-merge mobile runs
+  # are unaffected — they call the mobile workflow directly.)
 
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
+    # run-mobile-integration-tests removed — only desktop perf is combined on PRs now.
+    needs: [fork-approval, authorize, run-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -381,7 +370,8 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, ci-router, run-integration-tests, run-mobile-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks]
+    # run-mobile-integration-tests removed — mobile is on-demand only now.
+    needs: [authorize, ci-router, run-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     permissions:

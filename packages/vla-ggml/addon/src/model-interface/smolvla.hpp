@@ -205,6 +205,11 @@ struct SmolvlaModel {
   void* mmap_addr = nullptr;
   size_t mmap_size = 0;
 
+  // Reason the last smolvlaLoadModel call failed, empty on success. Read by
+  // SmolvlaModelAdapter so the JS-visible error names the failing step
+  // instead of only the GGUF path.
+  std::string load_error;
+
   // Precomputed `1/period` table for the sinusoidal time embedding. Sized
   // to `expert_hidden_size / 2` and populated once at load time so the
   // per-ODE-step embedding only needs sinf/cosf, not powf.
@@ -276,11 +281,19 @@ struct ggml_tensor* buildDenoiseStepGraph(
 void computeSinusoidalTimeEmbeddingCached(
     float timestep, const float* invPeriods, int dimension, float* out);
 
+// Whether a weight load on `backend` can map the GGUF instead of allocating a
+// copy of it. This is the gate smolvlaLoadModel branches on; exposed so a unit
+// test asserts the decision itself rather than a helper beside it.
+bool smolvlaCanMmapWeights(ggml_backend_t backend);
+
 // Load model from GGUF file. `force_cpu`: skip GPU device selection.
 // `backendsDir`: absolute path to the prebuilds folder; BACKENDS_SUBDIR is
 // appended before calling ggml_backend_load_all_from_path so dlopen works
 // regardless of process CWD (critical on mobile). Pass empty string to fall
 // back to ggml_backend_load_all() (static builds / desktop dev).
+//
+// On failure `model.load_error` holds a human-readable reason; callers
+// surface it so a load failure is diagnosable from the JS error alone.
 bool smolvlaLoadModel(
     const char* path, SmolvlaModel& model, bool forceCpu,
     const std::string& backendsDir);

@@ -14,9 +14,12 @@
  *     as the engine emits them, with stable session state across
  *     chunks (rolling encoder context, EOU detector, Sortformer
  *     history all preserved);
- *   - `endStreaming` synthesises a JobEnded event in JS so the
- *     wrapper response chain (`onUpdate(...).await()`) resolves
- *     when the input iterable completes.
+ *   - `endStreaming` drains the buffered backlog, then the native
+ *     ParakeetStreamingProcessor queues a terminal RuntimeStats
+ *     (surfaced as JobEnded) through the same FIFO output queue as
+ *     the drained segments, so the wrapper response chain
+ *     (`onUpdate(...).await()`) resolves only after every segment
+ *     has been delivered.
  *
  * Coverage:
  *
@@ -28,12 +31,12 @@
  *      offline `run()` path cannot satisfy this since it batches
  *      everything in JS until end-of-input).
  *   3. The response settles cleanly after `endStreaming` -- proves
- *      the JS-side synthetic JobEnded path actually resolves the
+ *      the queue-delivered terminal JobEnded actually resolves the
  *      response chain.
  *
  * Skips cleanly when no GGUF is available (matching the rest of the
- * integration suite). Uses the TDT model by default because it gives
- * the most stable transcript text under streaming.
+ * integration suite). Runs both TDT and Unified so each transducer
+ * path proves incremental output through the public duplex API.
  */
 
 const test = require('brittle')
@@ -52,6 +55,7 @@ const { samplesDir } = getTestPaths()
 const SAMPLE_RATE = 16000
 const STREAM_CHUNK_MS = 1000
 const FEED_CHUNK_MS = 500
+const MIN_STREAMING_AUDIO_MS = 4000
 
 function loadAudioSample() {
   const samplePath = path.join(samplesDir, 'sample.raw')
@@ -137,109 +141,102 @@ async function feedAndCollect(model, audio) {
   return { segments, firstSegmentTime, lastChunkPushedTime }
 }
 
-test(
-  'runStreaming — duplex feed surfaces transcripts incrementally and resolves cleanly',
-  { timeout: 600000 },
-  async (t) => {
-    const loggerBinding = setupJsLogger(binding)
+async function runDuplexStreamingTest(t, modelType) {
+  const loggerBinding = setupJsLogger(binding)
+
+  try {
+    const modelPath = await loadGgufOrSkip(t, modelType)
+    if (!modelPath) return
+
+    const audio = loadAudioSample()
+    if (!audio) {
+      t.pass('sample.raw not found - skipping')
+      return
+    }
+
+    const audioDurationMs = (audio.length / SAMPLE_RATE) * 1000
+    if (audioDurationMs < MIN_STREAMING_AUDIO_MS) {
+      t.pass(
+        `sample.raw is too short (${audioDurationMs.toFixed(0)} ms) for incremental streaming check - skipping`
+      )
+      return
+    }
+
+    const model = new ASRGgml({
+      files: { model: modelPath },
+      config: {
+        engine: 'parakeet',
+        parakeetConfig: {
+          streaming: true,
+          streamingChunkMs: STREAM_CHUNK_MS,
+          maxThreads: 4,
+          useGPU: false
+        }
+      }
+    })
 
     try {
-      const modelPath = await loadGgufOrSkip(t, 'tdt')
-      if (!modelPath) return
+      await model.load()
 
-      const audio = loadAudioSample()
-      if (!audio) {
-        t.pass('sample.raw not found - skipping')
-        return
-      }
+      console.log(`[${modelType}/duplex] audio duration: ${(audioDurationMs / 1000).toFixed(2)}s`)
+      console.log(
+        `[${modelType}/duplex] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`
+      )
 
-      const audioDurationMs = (audio.length / SAMPLE_RATE) * 1000
-      if (audioDurationMs < 4000) {
-        t.pass(
-          `sample.raw is too short (${audioDurationMs.toFixed(0)} ms) for incremental streaming check - skipping`
-        )
-        return
-      }
+      const startTime = Date.now()
+      const { segments, firstSegmentTime, lastChunkPushedTime } = await feedAndCollect(model, audio)
+      const totalElapsed = Date.now() - startTime
 
-      const model = new ASRGgml({
-        files: { model: modelPath },
-        config: {
-          engine: 'parakeet',
-          parakeetConfig: {
-            streaming: true,
-            streamingChunkMs: STREAM_CHUNK_MS,
-            maxThreads: 4,
-            useGPU: false
-          }
-        }
-      })
+      const transcript = segments
+        .map((s) => s.text)
+        .join(' ')
+        .trim()
 
-      try {
-        await model.load()
-
-        console.log(`[duplex/streaming] audio duration: ${(audioDurationMs / 1000).toFixed(2)}s`)
+      console.log(`[${modelType}/duplex] segments=${segments.length} chars=${transcript.length}`)
+      console.log(
+        `[${modelType}/duplex] result: "${transcript.substring(0, 150)}${transcript.length > 150 ? '...' : ''}"`
+      )
+      if (firstSegmentTime !== null && lastChunkPushedTime !== null) {
+        const firstSegmentLeadMs = lastChunkPushedTime - firstSegmentTime
         console.log(
-          `[duplex/streaming] feed chunk: ${FEED_CHUNK_MS}ms; session chunk: ${STREAM_CHUNK_MS}ms`
+          `[${modelType}/duplex] first segment arrived ${firstSegmentLeadMs}ms before last chunk was pushed (negative = arrived after last push)`
         )
-
-        const startTime = Date.now()
-        const { segments, firstSegmentTime, lastChunkPushedTime } = await feedAndCollect(
-          model,
-          audio
-        )
-        const totalElapsed = Date.now() - startTime
-
-        const transcript = segments
-          .map((s) => s.text)
-          .join(' ')
-          .trim()
-
-        console.log(`[duplex/streaming] segments=${segments.length} chars=${transcript.length}`)
-        console.log(
-          `[duplex/streaming] result: "${transcript.substring(0, 150)}${transcript.length > 150 ? '...' : ''}"`
-        )
-        if (firstSegmentTime !== null && lastChunkPushedTime !== null) {
-          const firstSegmentLeadMs = lastChunkPushedTime - firstSegmentTime
-          console.log(
-            `[duplex/streaming] first segment arrived ${firstSegmentLeadMs}ms before last chunk was pushed (negative = arrived after last push)`
-          )
-        }
-        console.log(`[duplex/streaming] total elapsed=${totalElapsed}ms`)
-
-        t.ok(
-          segments.length > 0,
-          `runStreaming should emit at least one segment (got ${segments.length})`
-        )
-        t.ok(
-          transcript.length > 0,
-          `runStreaming transcript should be non-empty (got ${transcript.length} chars)`
-        )
-
-        // The duplex API guarantees at least one segment arrives before
-        // the *last* chunk is pushed, given an audio clip longer than
-        // (chunkMs + right_lookahead_ms). The offline `run()` path
-        // cannot satisfy this -- it batches everything until
-        // end-of-input -- so this assertion is what differentiates the
-        // two execution paths in the integration suite.
-        t.ok(
-          firstSegmentTime !== null &&
-            lastChunkPushedTime !== null &&
-            firstSegmentTime <= lastChunkPushedTime,
-          'first segment should arrive at or before the last chunk is pushed (incremental streaming)'
-        )
-      } finally {
-        try {
-          await model.unload()
-        } catch (e) {
-          /* ignore */
-        }
       }
+      console.log(`[${modelType}/duplex] total elapsed=${totalElapsed}ms`)
+
+      t.ok(
+        segments.length > 0,
+        `runStreaming should emit at least one segment (got ${segments.length})`
+      )
+      t.ok(
+        transcript.length > 0,
+        `runStreaming transcript should be non-empty (got ${transcript.length} chars)`
+      )
+
+      t.ok(
+        firstSegmentTime !== null &&
+          lastChunkPushedTime !== null &&
+          firstSegmentTime <= lastChunkPushedTime,
+        'first segment should arrive at or before the last chunk is pushed (incremental streaming)'
+      )
     } finally {
       try {
-        loggerBinding.releaseLogger()
+        await model.unload()
       } catch (e) {
         /* ignore */
       }
     }
+  } finally {
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
+}
+
+test(
+  'TDT runStreaming — duplex feed surfaces transcripts incrementally and resolves cleanly',
+  { timeout: 600000 },
+  (t) => runDuplexStreamingTest(t, 'tdt')
 )

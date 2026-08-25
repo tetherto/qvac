@@ -1,4 +1,4 @@
-import type { TestDefinition, Expectation } from '@tetherto/qvac-test-suite'
+import type { TestDefinition, Expectation } from '@qvac/qvac-test-suite'
 
 const createIndicTransTest = (
   testId: string,

@@ -13,9 +13,8 @@ export interface FitConfig {
    * Path to the GGUF weights file.
    *
    * Must be absolute; a relative path throws. It would otherwise resolve
-   * against the process working directory, which nothing in a worklet
-   * controls, so the same call could name a different file — or no file — from
-   * one launch to the next.
+   * against the process working directory, so the same call could name a
+   * different file — or no file — from one launch to the next.
    */
   modelPath: string
   /**
@@ -78,7 +77,7 @@ export interface FitConfig {
    * `enum llama_split_mode`: how the model splits across multiple GPUs.
    */
   splitMode?: number
-  /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
   mainGpu?: number
   /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
   typeK?: number
@@ -86,6 +85,8 @@ export interface FitConfig {
   typeV?: number
   /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
   flashAttnType?: number
+  /** Whether the intended load uses the full-size SWA cache. */
+  swaFull?: boolean
 }
 
 /** A tensor buffer-type override the fitter selected. */
@@ -142,7 +143,7 @@ export interface FitPlan {
    * projected to fit.
    */
   splitMode: number
-  /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
   mainGpu: number
   /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
   typeK: number
@@ -159,13 +160,19 @@ export interface FitPlan {
  * meaning: the plan is only valid on SUCCESS, and every non-success branch
  * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
  * apart from "could not read the model" or "no backend registered".
+ *
+ * This is the contract of `fitParams()` and nothing else. The raw llama-load
+ * path adds one further outcome, `unsupported-config`, which this API cannot
+ * produce — it has no normalization step to fail — so that reason lives on
+ * `FitLlamaResult` in `./process` rather than widening the union every existing
+ * consumer has to narrow.
  */
 export type FitResult =
   | ({ status: 0, fits: true, reason: 'fits' } & FitPlan & FitDeviceInventory)
   | ({ status: 1, fits: false, reason: 'does-not-fit' } & Partial<FitPlan> & FitDeviceInventory)
   | ({ status: 2, fits: false, reason: 'model-unreadable' | 'no-backend-device' } & Partial<FitPlan> & FitDeviceInventory)
 
-/** Stable, machine-readable explanation of a fit outcome. */
+/** Stable, machine-readable explanation of a `fitParams()` outcome. */
 export type FitReason = FitResult['reason']
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
@@ -222,7 +229,7 @@ const NUMERIC_FIELDS = Object.freeze({
   // so the shape check lives here and the exact bound stays in the binding,
   // which is compiled against the same ggml.h.
   splitMode: { min: 0, max: 3 },
-  mainGpu: { min: 0, max: INT32_MAX },
+  mainGpu: { min: -1, max: INT32_MAX },
   typeK: { min: 0, max: INT32_MAX },
   typeV: { min: 0, max: INT32_MAX },
   flashAttnType: { min: -1, max: 1 }
@@ -258,6 +265,14 @@ function validateRelationships (config: FitConfig): void {
   if (nCtx > 0 && nCtxMin > 0 && nCtxMin > nCtx) {
     throw new RangeError('model-fit: config.nCtxMin must not exceed config.nCtx')
   }
+  if (
+    config.mainGpu === -1 &&
+    (config.nGpuLayers !== 0 || config.splitMode !== 0)
+  ) {
+    throw new RangeError(
+      'model-fit: config.mainGpu -1 requires config.nGpuLayers 0 and config.splitMode NONE'
+    )
+  }
 }
 
 /**
@@ -265,9 +280,9 @@ function validateRelationships (config: FitConfig): void {
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
- * This is a synchronous, blocking native call. It is designed to run in its own
- * short-lived worklet so that any backend/driver instability during probing
- * stays isolated from the inference worker.
+ * This is a synchronous, blocking in-process native call. Callers that need
+ * isolation should use `@qvac/model-fit/process` to run it in a disposable
+ * Bare subprocess.
  *
  * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of
@@ -286,12 +301,8 @@ export function fitParams (config: FitConfig): FitResult {
   if (typeof config.modelPath !== 'string' || config.modelPath.length === 0) {
     throw new TypeError('model-fit: config.modelPath must be a non-empty string')
   }
-  // A relative path resolves against the process working directory, which
-  // nothing in a worklet controls and which the caller cannot rely on — the
-  // same call would then succeed or fail depending on where the host was
-  // launched. The API already documents this field as absolute; enforce it
-  // rather than leaving it to be discovered at the native fopen. Mirrors
-  // `backendsDir`, and `files.model` in @qvac/embed-llamacpp.
+  // A relative path depends on the process working directory, so enforce the
+  // documented absolute-path contract before the native fopen.
   if (!path.isAbsolute(config.modelPath)) {
     throw new TypeError(`model-fit: config.modelPath must be an absolute path, got '${config.modelPath}'`)
   }
@@ -301,6 +312,9 @@ export function fitParams (config: FitConfig): FitResult {
   for (const key of Object.keys(NUMERIC_FIELDS) as NumericField[]) {
     const { min, max } = NUMERIC_FIELDS[key]
     validateNumber(config, key, min, max)
+  }
+  if (config.swaFull !== undefined && typeof config.swaFull !== 'boolean') {
+    throw new TypeError('model-fit: config.swaFull must be a boolean when provided')
   }
   validateRelationships(config)
 

@@ -17,9 +17,9 @@ JavaScript Dependencies
 
 --- apache-2.0 (Apache License 2.0) ---
 
-  @ai-sdk/provider@4.0.3
+  @ai-sdk/provider@4.0.7
     https://github.com/vercel/ai
-  @ai-sdk/provider-utils@5.0.12
+  @ai-sdk/provider-utils@5.0.26
     https://github.com/vercel/ai
   @workflow/serde@4.1.0
     https://github.com/vercel/workflow
@@ -28,8 +28,10 @@ JavaScript Dependencies
 
   @standard-schema/spec@1.1.0
     https://github.com/standard-schema/standard-schema
-  eventsource-parser@3.1.0
+  eventsource-parser@3.1.1
     https://github.com/rexxars/eventsource-parser
+  undici@7.29.0
+    https://github.com/nodejs/undici
   zod@4.4.3
     https://github.com/colinhacks/zod
 

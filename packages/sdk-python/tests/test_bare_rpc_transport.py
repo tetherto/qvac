@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 from tetherto.qvac_sdk.methods import (
@@ -47,7 +47,6 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     str(Path(__file__).resolve().parent.parent.parent / "sdk"),
 )
-WORKER_PATH = f"{SDK_DIR}/dist/server/worker.js"
 AUDIO_FIXTURE = f"{SDK_DIR}/e2e/assets/audio/transcription-short-wav.wav"
 NEURAL_FIXTURE = f"{SDK_DIR}/e2e/assets/neural/neural-not-too-controversial.bin"
 

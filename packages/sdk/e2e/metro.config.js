@@ -36,13 +36,13 @@ try {
   console.error('[Metro] Failed to resolve @qvac/sdk symlink:', e.message)
 }
 
-// Redirect bare @tetherto/qvac-test-suite imports to the /mobile entry point,
+// Redirect bare @qvac/qvac-test-suite imports to the /mobile entry point,
 // which excludes Node.js-only modules (config-loader, test-loader) that use
 // dynamic import() and node:fs — incompatible with Metro.
 const originalResolveRequest = config.resolver.resolveRequest
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === '@tetherto/qvac-test-suite') {
-    return context.resolveRequest(context, '@tetherto/qvac-test-suite/mobile', platform)
+  if (moduleName === '@qvac/qvac-test-suite') {
+    return context.resolveRequest(context, '@qvac/qvac-test-suite/mobile', platform)
   }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform)

@@ -633,7 +633,6 @@ test('all ci-router callers re-run when a draft becomes ready', () => {
     'on-pr-llm-llamacpp.yml',
     'on-pr-model-fit.yml',
     'on-pr-ocr-ggml.yml',
-    'on-pr-onnx.yml',
     'on-pr-translation-nmtcpp.yml',
     'on-pr-tts-ggml.yml',
     'on-pr-vla.yml',
@@ -827,6 +826,47 @@ test('mobile SDK callers forward the AWS OIDC role to Device Farm jobs', () => {
   MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole)
 })
 
+// Any indent, so reindenting a workflow header cannot quietly move a caller
+// into the exempt branch below.
+const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m
+
+// The key alone is not enough: `repository: ''` and `repository: ${{
+// github.repository }}` both parse yet leave the callee falling back to this
+// repo, which is the bug. The value has to carry the caller's own repository,
+// either directly (`inputs.repository`) or via a context job that derives it.
+const FORWARDS_REPOSITORY_RE =
+  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m
+
+function declaresRepositoryInput(path) {
+  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)))
+}
+
+function assertPinsRepositoryWithRef(reusable, { path, job }) {
+  const block = withoutComments(job.text)
+  if (!/^\s*test-version:/m.test(block)) return
+  if (!declaresRepositoryInput(path)) return
+  assert.match(
+    block,
+    FORWARDS_REPOSITORY_RE,
+    `${path} job "${job.name}" passes test-version to ${reusable} without forwarding its own repository, so a fork ref would resolve against this repo`,
+  )
+}
+
+test('mobile SDK callers that can target a fork forward the repository too', () => {
+  // These workflows check out `test-version` from `inputs.repository ||
+  // github.repository`. A caller that can be pointed at a fork but forwards
+  // only the ref makes them resolve that ref against THIS repo: a fork-only
+  // branch fails to fetch, and a branch name that also exists here silently
+  // builds the wrong code while still reporting on the caller's addon.
+  // Callers with no `repository` input of their own are same-repo by
+  // construction and stay exempt.
+  MOBILE_SDK_WORKFLOWS.forEach((reusable) => {
+    const callers = callersOf(reusable)
+    assertEveryCallWasParsed(reusable, callers)
+    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller))
+  })
+})
+
 test('npm integration uses a dedicated run label, not verified', () => {
   const source = read('.github/workflows/public-reusable-npm.yml')
   const integrationStep = source.slice(
@@ -854,14 +894,13 @@ test('npm reusable pins PR checkout and keeps user input out of run scripts', ()
 const FORK_CI_ENV_RE =
   /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
 
-test('reusable-fork-approval: fork-ci gate, harden-runner, and status recording', () => {
+test('reusable-fork-approval: fork-ci gate and status recording', () => {
   const source = read('.github/workflows/reusable-fork-approval.yml')
   assert.match(
     source,
     FORK_CI_ENV_RE,
     'reusable-fork-approval must gate on the fork-ci environment (fork-only conditional)',
   )
-  assert.match(source, /step-security\/harden-runner@/)
   assert.match(source, /context=qvac\/fork-verified/)
   assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/)
   assert.match(source, /statuses:\s*write/)
@@ -907,6 +946,26 @@ test('audit-called-out privileged checkouts are pinned to event head SHA', () =>
   assert.doesNotMatch(
     sanityChecks,
     /PR_HEAD_REF|PR_FORK_URL|refs\/pr\/head/,
+  )
+})
+
+test('audiogen mobile actions come from an isolated default-branch checkout', () => {
+  const workflow = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
+  const trustedActionUses = workflow.match(
+    /uses:\s+\.\/trusted-actions\/\.github\/actions\/run-mobile-integration-tests\//g,
+  ) || []
+
+  assert.match(
+    workflow,
+    /name:\s+Checkout composite action source[\s\S]*?repository:\s+\$\{\{ github\.repository \}\}[\s\S]*?ref:\s+\$\{\{ github\.event\.repository\.default_branch \}\}[\s\S]*?path:\s+trusted-actions[\s\S]*?persist-credentials:\s+false/,
+  )
+  // 10, not 9: the on-demand validate-devices job also runs in the release
+  // environment (OIDC), so it too sources its action from the default-branch
+  // trusted-actions checkout rather than a caller-selected ref.
+  assert.equal(trustedActionUses.length, 10)
+  assert.doesNotMatch(
+    workflow,
+    /uses:\s+\.\/\.github\/actions\/run-mobile-integration-tests\//,
   )
 })
 
@@ -1524,9 +1583,12 @@ test('mobile scheduler preserves automatic sharding and supports explicit multi-
     action,
     /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{\{ github\.run_id \}\}\.\$\{\{ github\.run_attempt \}\}-\$\{APP_UPLOAD_ID\}"/,
   )
+  // Automatic sharding is preserved, but the manual on-demand path
+  // (manual-devices) is deliberately excluded from the sharded branch so a
+  // manual multi-spec run pins to the chosen device(s) instead of the pool.
   assert.match(
     action,
-    /if \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
+    /if \[ "\$SCHEDULING_MODE" != "manual-devices" \] && \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
   )
   assert.match(action, /for IDX in \$\(seq 0 \$\(\(SPEC_COUNT - 1\)\)\); do/)
   assert.match(action, /RUN_NAME_PREFIX="\$\{RUN_NAME_BASE\}-\$\{GROUP_NAME\}"/)
@@ -1539,16 +1601,212 @@ test('mobile scheduler preserves automatic sharding and supports explicit multi-
   assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/)
   assert.match(action, /iPhone 17/)
   assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/)
+
+  // Manual on-demand (workflow_dispatch) path: fan out one run per
+  // (spec x device), pinned to a single device, never the pool.
+  assert.match(action, /elif \[ "\$SCHEDULING_MODE" = "manual-devices" \]; then/)
+  assert.match(action, /Manual on-demand fan-out/)
+  // The device list is de-duplicated so `Pixel 9,Pixel 9` cannot bill twice ...
+  assert.match(action, /map\(select\(length > 0\)\) \| unique/)
+  // ... and bounded so a fat-fingered list cannot spray the whole fleet.
+  assert.match(action, /MAX_DEVICES=10/)
+  // Backstop cap: validate-devices enforces the same ceiling earlier (before
+  // build/upload) from the addon's test-groups.json; 40 covers the documented
+  // broad-coverage flow (e.g. 3 devices x the heaviest shard set).
+  assert.match(action, /MAX_RUNS=40/)
+  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
+  assert.match(action, /for MIDX in \$\(seq 0 \$\(\(MODEL_COUNT - 1\)\)\); do/)
 })
 
-test('mobile monitor maps both flagship runs back to each test spec', () => {
+test('mobile validate-devices fails fast on an unknown tests filter and an oversized fan-out', () => {
+  const action = read(
+    '.github/actions/run-mobile-integration-tests/validate-devices/action.yml',
+  )
+  // Device existence check (unchanged).
+  assert.match(action, /aws devicefarm list-devices/)
+  // The device list is de-duplicated + capped, matching the scheduler.
+  assert.match(action, /map\(select\(length > 0\)\) \| unique/)
+  assert.match(action, /MAX_DEVICES=10/)
+  // Overlapping CONTAINS selectors that resolve to the same fleet model are
+  // rejected before scheduling, so a model can't be billed twice.
+  assert.match(action, /select\(\.model \| contains\(\$m\)\)/)
+  assert.match(action, /group_by\(\.\) \| map\(select\(length > 1\)/)
+  assert.match(action, /selectors overlap on model/)
+  // A `tests` filter that matches zero known runners is rejected here (before
+  // any build) so a typo can't run zero tests and pass green. Multi-spec addons
+  // source runner names + shard count from their test-groups.json.
+  assert.match(action, /RUNNERS_JSON=\$\(jq -c/)
+  assert.match(action, /grep -Ec -- "\$TESTS"/)
+  assert.match(action, /matches none of the/)
+  // The mocha-safe charset allowlist the workflows enforce at the sink is ALSO
+  // enforced here (before the build) so an anchored/invalid pattern fails fast
+  // instead of wasting build minutes only to be rejected afterwards.
+  assert.match(action, /grep -Eq '\^\[A-Za-z0-9_ \|\(\)\.\*\+-\]\+\$'/)
+  // Single-spec addons validate the SAME filter against their committed
+  // integration.auto.cjs runner declarations.
+  assert.match(action, /runner-source-path/)
+  assert.match(action, /RUNNER_SOURCE_PATH/)
+  assert.match(action, /async function run\[A-Za-z0-9_\]\+/)
+  // Spec-count-aware run-count cap, enforced before build/upload spend (specs =
+  // 1 when a tests filter is given, else the platform's group count).
+  assert.match(action, /SPEC_COUNT=\$GROUP_COUNT/)
+  assert.match(action, /MAX_RUNS=40/)
+  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
+})
+
+const MOBILE_TEST_WORKFLOWS = workflowPaths().filter((path) =>
+  /integration-mobile-test-.*\.ya?ml$/.test(path),
+)
+
+test('mobile validate-devices reads its filter/shard data from the tested ref, not the workflow ref', () => {
+  // The build checks out addon code from the tested ref, so the validator must
+  // read test-groups.json / integration.auto.cjs from the SAME ref — otherwise
+  // a branch that renames/adds runners passes stale validation and can run zero
+  // tests. The executable composite action stays on the trusted workflow ref,
+  // so the data file must NEVER be sparse-checked-out alongside it.
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
+  for (const path of MOBILE_TEST_WORKFLOWS) {
+    const src = read(path)
+    // Validation data comes from the SAME immutable commit the build compiles,
+    // into a dedicated dir. Most addons pin to `inputs.ref || github.sha`
+    // (github.sha is the constant triggering commit, so a mid-run push can't
+    // make validation and build diverge); inference uses the equivalent
+    // `pull_request.head.sha || inputs.ref || github.sha` (the trailing
+    // github.sha pins a blank workflow_dispatch to the triggering commit too).
+    // github.ref (mutable) is never used for a checkout ref — only as a
+    // concurrency-group key.
+    assert.match(
+      src,
+      /ref: \$\{\{ (inputs\.ref \|\| github\.sha|github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha) \}\}/,
+      `${path} must check out validation data from the same immutable ref the build uses`,
+    )
+    assert.doesNotMatch(
+      src,
+      /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/,
+      `${path} must not resolve a checkout to the mutable github.ref`,
+    )
+    assert.match(
+      src,
+      /path: validation-data/,
+      `${path} must isolate validation data in validation-data/`,
+    )
+    // The path handed to the validator points at that dir, never a raw
+    // workflow-ref checkout path.
+    assert.match(
+      src,
+      /(test-groups-path|runner-source-path): validation-data\//,
+      `${path} must validate against the tested-ref data copy`,
+    )
+    // The data file is never co-located on the trusted composite-action
+    // checkout (that would pin validation to the workflow ref again).
+    assert.doesNotMatch(
+      src,
+      /run-mobile-integration-tests\n\s+packages\/[^\n]*\/test\/mobile\//,
+      `${path} must not sparse-checkout mobile test data on the action checkout`,
+    )
+  }
+})
+
+test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
+  // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
+  // run: script — it goes through an `env:` block per github-actions.mdc, else a
+  // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
+  // renders after the quotes break; (2) the model-match operator defaults to
+  // EQUALS so a maxDevices:1 dispatch bills the exact fleet model, not a CONTAINS
+  // near-match (e.g. Pixel 9 -> Pixel 9 Pro); (3) the dispatch package spec
+  // defaults to EMPTY so a `--ref <branch>` run tests the branch's native
+  // prebuild artifact, not the published @latest.
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
+  for (const path of MOBILE_TEST_WORKFLOWS) {
+    const src = read(path)
+    assert.doesNotMatch(
+      src,
+      /"\$\{\{ github\.event\.inputs\.package \}\}" =~/,
+      `${path} must validate the package spec via an env: block, not an inline run: template`,
+    )
+    assert.doesNotMatch(
+      src,
+      /default: CONTAINS/,
+      `${path} must default device_model_operator to EQUALS`,
+    )
+    assert.doesNotMatch(
+      src,
+      /default:\s*['"]@[a-z]+\/[^'"]*@latest['"]/,
+      `${path} must default the dispatch package spec to empty (artifact-first), not @latest`,
+    )
+  }
+})
+
+test('audiogen keeps the composite action on the default branch but reads data from the tested ref', () => {
+  // audiogen runs validate-devices in the `release` environment, so the
+  // executable action stays pinned to the default branch (supply-chain guard);
+  // only the JSON data follows the tested ref.
+  const src = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
+  assert.match(src, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
+  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.sha \}\}/)
+  assert.match(src, /test-groups-path: validation-data\//)
+})
+
+test('translation validation data and build check out the SAME repository', () => {
+  // Translation's build hardcodes the tetherto/qvac fallback, so its
+  // validation-data checkout must use the identical fallback — otherwise a
+  // blank-`repository` fork dispatch validates the fork but builds tetherto.
+  const src = read('.github/workflows/integration-mobile-test-translation-nmtcpp.yml')
+  const repoLines = src.match(/repository: \$\{\{ inputs\.repository \|\| [^\n]+/g) || []
+  assert.ok(repoLines.length >= 2, 'expected both data + build repository lines')
+  for (const line of repoLines) {
+    assert.match(
+      line,
+      /inputs\.repository \|\| 'tetherto\/qvac'/,
+      `translation must not fall back to github.repository (found: ${line})`,
+    )
+  }
+})
+
+test('inference generates its runner map in an unprivileged job and fails closed', () => {
+  const src = read(
+    '.github/workflows/integration-mobile-test-inference-addon-cpp.yml',
+  )
+  // The generator runs repo-branch code, so it must hold no secrets.
+  const mapJob = src.slice(
+    src.indexOf('  resolve-runner-map:'),
+    src.indexOf('  validate-devices:'),
+  )
+  assert.ok(mapJob.length > 0, 'resolve-runner-map job must exist')
+  assert.match(mapJob, /permissions:\n\s+contents: read/)
+  assert.doesNotMatch(mapJob, /id-token: write/)
+  assert.doesNotMatch(mapJob, /environment:/)
+  // It regenerates from the SAME immutable commit the build compiles: the
+  // build jobs share this exact expression, and the trailing github.sha pins a
+  // blank workflow_dispatch to the triggering commit (github.ref is deliberately
+  // NOT a fallback, so a mid-run push can't make validation inspect different
+  // code than the build), and fails closed.
+  assert.match(
+    mapJob,
+    /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha \}\}/,
+  )
+  assert.doesNotMatch(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
+  assert.match(mapJob, /set -euo pipefail/)
+  assert.doesNotMatch(src, /falling back to device-only/)
+  // validate-devices consumes the artifact as data and hard-fails if the map
+  // could not be produced, before any build or Device Farm spend.
+  assert.match(src, /needs\.resolve-runner-map\.result != 'success'/)
+  assert.match(src, /Failing closed/)
+  assert.match(src, /test-groups-path: validation-data\/inference-mobile-test-groups\.json/)
+})
+
+test('mobile monitor maps each run back to its spec for any per-spec fan-out', () => {
   const action = read(
     '.github/actions/run-mobile-integration-tests/monitor-test-run/action.yml',
   )
   assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
   assert.match(action, /spec_index_for_run\(\)/)
-  assert.match(action, /RUN_COUNT" -eq \$\(\(SPEC_COUNT \* 2\)\)/)
-  assert.match(action, /echo \$\(\(run_index \/ 2\)\)/)
+  // The legend generalises runs_per_spec = RUN_COUNT / SPEC_COUNT so it labels
+  // dual-flagship (2), single-pool (1) AND manual fan-outs with >2 devices
+  // correctly, instead of only special-casing the *2 shape.
+  assert.match(action, /RUN_COUNT % SPEC_COUNT/)
+  assert.match(action, /per_spec=\$\(\(RUN_COUNT \/ SPEC_COUNT\)\)/)
+  assert.match(action, /echo \$\(\(run_index \/ per_spec\)\)/)
   assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/)
 })
 
@@ -1579,10 +1837,15 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
 
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+  // The workflow_call branch (benchmark || functional) is unchanged; it is now
+  // preceded inside fromJSON() by the manual-dispatch single-platform branch,
+  // so anchor on the matrix JSON rather than on `fromJSON(` directly.
   const matrices = workflow.match(
-    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+    /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
   )
-  const jobName = workflow.match(/^\s{4}name:\s*(.+)$/m)
+  // Scope to the build job's name: validate-devices is now the first job in the
+  // file, so a bare "first name:" capture would pick the wrong job.
+  const jobName = workflow.match(/^\s{4}name:\s*(Build .+)$/m)
 
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
   assert.ok(jobName, 'build-and-test job must have a name')
@@ -1592,6 +1855,18 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],
   )
+  // Manual dispatch (inputs.platform set) selects ONE row on the chosen
+  // platform; devices come from the manual inputs, not the matrix.
+  const dispatchMatrices = workflow.match(
+    /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
+  )
+  assert.ok(dispatchMatrices, 'manual dispatch must select a single-platform matrix')
+  const dispatchIos = JSON.parse(dispatchMatrices[1])
+  const dispatchAndroid = JSON.parse(dispatchMatrices[2])
+  assert.equal(dispatchIos.include.length, 1)
+  assert.equal(dispatchIos.include[0].platform, 'iOS')
+  assert.equal(dispatchAndroid.include.length, 1)
+  assert.equal(dispatchAndroid.include[0].platform, 'Android')
   assert.equal(benchmarkMatrix.include.length, 25)
   assert.equal(
     benchmarkMatrix.include.filter((entry) => entry.platform === 'Android').length,
@@ -1601,20 +1876,25 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
     benchmarkMatrix.include.filter((entry) => entry.platform === 'iOS').length,
     12,
   )
+  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  // A manual `tests` filter (steps.manual_tests) overrides the automatic
+  // perf/functional groups; otherwise the auto-sharded groups are used.
   assert.match(
     workflow,
-    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
+    /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
   )
-  assert.match(workflow, /egress-policy:\s*audit/)
-  assert.match(workflow, /release environment authorizes GitHub OIDC/)
-  assert.match(workflow, /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/)
   assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
   assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/)
   assert.match(jobName[1], /matrix\.engine/)
   assert.match(jobName[1], /matrix\.variant/)
   assert.match(jobName[1], /matrix\.use_gpu/)
   assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/)
-  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
+  // workflow_call path keeps its dual-flagship sharding, unchanged.
+  assert.match(
+    workflow,
+    /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
+  )
   assert.match(
     workflow,
     /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
@@ -1643,8 +1923,11 @@ test('tts-ggml functional mobile workflow opts into dual flagship per shard', ()
 
 test('asr-ggml functional mobile workflow opts into dual flagship per engine shard', () => {
   const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+  // The workflow_call branch (benchmark || functional) is unchanged; it is now
+  // preceded inside fromJSON() by the manual-dispatch single-platform branch,
+  // so anchor on the matrix JSON rather than on `fromJSON(` directly.
   const matrices = workflow.match(
-    /fromJSON\(inputs\.run_rtf_benchmarks && '([^']+)' \|\| '([^']+)'\)/,
+    /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
   )
 
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
@@ -1655,19 +1938,29 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],
   )
+  // Manual dispatch (inputs.platform set) selects ONE row on the chosen
+  // platform; devices come from the manual inputs, not the matrix.
+  const dispatchMatrices = workflow.match(
+    /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
+  )
+  assert.ok(dispatchMatrices, 'manual dispatch must select a single-platform matrix')
+  const dispatchIos = JSON.parse(dispatchMatrices[1])
+  const dispatchAndroid = JSON.parse(dispatchMatrices[2])
+  assert.equal(dispatchIos.include.length, 1)
+  assert.equal(dispatchIos.include[0].platform, 'iOS')
+  assert.equal(dispatchAndroid.include.length, 1)
+  assert.equal(dispatchAndroid.include[0].platform, 'Android')
+  // Manual dispatch is serialized per (workflow, branch) and supersedes an
+  // in-flight manual run; workflow_call keys on the unique run_id and never
+  // cancels, so parallel automated callers cannot collide or cancel each other.
   assert.match(
     workflow,
-    /concurrency:\s*\n\s+group:[\s\S]*?\n\s+cancel-in-progress:\s*true/,
+    /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}', github\.workflow, github\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
   )
   assert.match(
     workflow,
-    /group:.*inputs\.repository \|\| github\.repository.*inputs\.package_spec \|\| inputs\.prebuild_package \|\| 'artifact'/,
+    /cancel-in-progress:\s*\$\{\{ inputs\.platform != '' \}\}/,
   )
-  assert.match(
-    workflow,
-    /steps:\s*\n\s+- name: Harden runner\s*\n\s+uses: step-security\/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2\.20\.0/,
-  )
-  assert.match(workflow, /egress-policy:\s*audit/)
   assert.match(
     workflow,
     /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,
@@ -1681,11 +1974,18 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     workflow,
     /if \[\[ ! "\$\{\{ github\.event\.inputs\.package_spec \}\}"/,
   )
+  // A manual `tests` filter (steps.manual_tests) overrides the automatic
+  // perf/functional groups; otherwise the auto-sharded groups are used.
   assert.match(
     workflow,
-    /test-groups:\s*\$\{\{ steps\.perf_groups\.outputs\.groups \}\}/,
+    /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
   )
-  assert.match(workflow, /scheduling-mode:\s*dual-flagship/)
+  // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
+  // workflow_call path keeps its dual-flagship sharding, unchanged.
+  assert.match(
+    workflow,
+    /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
+  )
   assert.match(
     workflow,
     /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
@@ -1706,4 +2006,50 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
     workflow,
     /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
   )
+})
+
+// --- SDK-only GitHub Releases policy ----------------------------------------
+// Only the SDK cuts GitHub Releases; every other package cuts a plain version
+// tag via create-release-tag.yml, keeping the Releases page SDK-focused. Adding
+// a caller here is a deliberate policy decision, not a drive-by edit.
+const GITHUB_RELEASE_REUSABLE = './.github/workflows/create-github-release.yml'
+const ALLOWED_RELEASE_CALLERS = ['.github/workflows/publish-sdk.yml']
+
+test('release policy: only the SDK workflow calls create-github-release.yml', () => {
+  const callers = [
+    ...new Set(callersOf(GITHUB_RELEASE_REUSABLE).map(({ path }) => path)),
+  ]
+  assert.deepEqual(
+    callers.sort(),
+    [...ALLOWED_RELEASE_CALLERS].sort(),
+    'non-SDK packages must use create-release-tag.yml (tag only, no GitHub Release)',
+  )
+})
+
+// Workflows allowed to touch GitHub Releases directly, each SDK-owned so the
+// Releases page stays SDK-only. Adding an entry is a deliberate policy decision.
+//  - create-github-release.yml: the reusable itself (softprops path); its sole
+//    caller is asserted above.
+//  - build-sdk-python-fat-wheels.yml: attaches the Python SDK fat wheels as
+//    assets to the SDK's own sdk-v<version> release, and (manual backfill only)
+//    drafts that sdk-v* tag if missing. Invoked by publish-sdk.yml.
+const RELEASE_WRITE_EXEMPT = new Set([
+  '.github/workflows/create-github-release.yml',
+  '.github/workflows/build-sdk-python-fat-wheels.yml',
+])
+
+test('release policy: no workflow cuts a GitHub Release outside the SDK surface', () => {
+  const offenders = []
+  for (const path of workflowPaths()) {
+    if (RELEASE_WRITE_EXEMPT.has(path)) continue
+    // Strip comments so prose like "no GitHub Release" cannot false-positive.
+    const code = withoutComments(read(path))
+    if (/softprops\/action-gh-release@/.test(code)) {
+      offenders.push(`${path}: uses softprops/action-gh-release directly`)
+    }
+    if (/gh release create\b/.test(code)) {
+      offenders.push(`${path}: calls 'gh release create'`)
+    }
+  }
+  assert.deepEqual(offenders, [])
 })

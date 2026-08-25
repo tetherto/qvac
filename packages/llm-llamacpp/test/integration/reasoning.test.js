@@ -380,8 +380,7 @@ safeTest(
 
 // Opt-out path: when the caller explicitly disables the compaction, the
 // runtime stats should report no discards and the cache should retain the
-// full prompt + generated span (modulo the existing protected-first-message
-// trimming the tools_compact controller already performs).
+// full prompt + generated span.
 safeTest(
   'remove_thinking_from_context=false keeps thinking in cache',
   {

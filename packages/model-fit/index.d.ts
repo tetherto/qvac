@@ -3,9 +3,8 @@ export interface FitConfig {
      * Path to the GGUF weights file.
      *
      * Must be absolute; a relative path throws. It would otherwise resolve
-     * against the process working directory, which nothing in a worklet
-     * controls, so the same call could name a different file — or no file — from
-     * one launch to the next.
+     * against the process working directory, so the same call could name a
+     * different file — or no file — from one launch to the next.
      */
     modelPath: string;
     /**
@@ -68,7 +67,7 @@ export interface FitConfig {
      * `enum llama_split_mode`: how the model splits across multiple GPUs.
      */
     splitMode?: number;
-    /** Device holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
     mainGpu?: number;
     /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
     typeK?: number;
@@ -76,6 +75,8 @@ export interface FitConfig {
     typeV?: number;
     /** `enum llama_flash_attn_type`. Changes KV/compute memory. */
     flashAttnType?: number;
+    /** Whether the intended load uses the full-size SWA cache. */
+    swaFull?: boolean;
 }
 /** A tensor buffer-type override the fitter selected. */
 export interface FitBuftOverride {
@@ -129,7 +130,7 @@ export interface FitPlan {
      * projected to fit.
      */
     splitMode: number;
-    /** GPU holding the whole model when `splitMode` is LLAMA_SPLIT_MODE_NONE. */
+    /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
     mainGpu: number;
     /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
     typeK: number;
@@ -145,6 +146,12 @@ export interface FitPlan {
  * meaning: the plan is only valid on SUCCESS, and every non-success branch
  * carries a stable `reason` so an SDK can tell "won't fit on this hardware"
  * apart from "could not read the model" or "no backend registered".
+ *
+ * This is the contract of `fitParams()` and nothing else. The raw llama-load
+ * path adds one further outcome, `unsupported-config`, which this API cannot
+ * produce — it has no normalization step to fail — so that reason lives on
+ * `FitLlamaResult` in `./process` rather than widening the union every existing
+ * consumer has to narrow.
  */
 export type FitResult = ({
     status: 0;
@@ -159,7 +166,7 @@ export type FitResult = ({
     fits: false;
     reason: 'model-unreadable' | 'no-backend-device';
 } & Partial<FitPlan> & FitDeviceInventory);
-/** Stable, machine-readable explanation of a fit outcome. */
+/** Stable, machine-readable explanation of a `fitParams()` outcome. */
 export type FitReason = FitResult['reason'];
 /** Mirrors `enum common_params_fit_status` in llama.cpp's common/fit.h. */
 export declare const FIT_STATUS: Readonly<{
@@ -172,9 +179,9 @@ export declare const FIT_STATUS: Readonly<{
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
- * This is a synchronous, blocking native call. It is designed to run in its own
- * short-lived worklet so that any backend/driver instability during probing
- * stays isolated from the inference worker.
+ * This is a synchronous, blocking in-process native call. Callers that need
+ * isolation should use `@qvac/model-fit/process` to run it in a disposable
+ * Bare subprocess.
  *
  * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of

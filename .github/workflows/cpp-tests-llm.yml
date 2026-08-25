@@ -39,7 +39,7 @@ jobs:
             arch: x64
           - os: macos-15-xlarge
             platform: darwin
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
             arch: arm64
           - os: windows-2025
             platform: windows
@@ -67,7 +67,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - if: ${{ matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path on Windows

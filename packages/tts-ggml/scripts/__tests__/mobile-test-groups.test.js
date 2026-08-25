@@ -39,7 +39,13 @@ const EXPECTED_ASSIGNMENTS = {
 const EXCLUDED_RUNNERS = [
   'runParlerWerTest',
   'runRtfBenchmarkTest',
-  'runStreamingBenchmarkTest'
+  'runStreamingBenchmarkTest',
+  // Desktop-scoped engines/features whose models are not in the mobile
+  // manifest: Audio8 (surfaced when integration.auto.cjs was regenerated -
+  // the checked-in file predated audio8.test.js) and CosyVoice3 cloning
+  // (the s3tok/campplus add-on GGUFs ship for desktop only).
+  'runAudio8Test',
+  'runCosyvoice3CloneTest'
 ]
 
 function sorted(values) {

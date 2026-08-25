@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.23.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+## [0.22.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.21.1] - 2026-08-19
+
+### Fixed
+
+- SmolVLA weight loads on a CPU backend now map the model file instead of
+  allocating a private copy of it. The check that decides between the two read
+  the device off the buffer type, and ggml declares the CPU buffer type with no
+  device attached, so every CPU load fell back to allocate-and-copy and charged
+  the whole model (~1.9 GB for the q8 LIBERO file) to the process. On iOS that
+  pushed the process against its memory limit and the load failed with a bare
+  `Failed to load SmolVLA model` — intermittently, and more often later in a
+  long run once other models had already been resident. The check now takes the
+  device from the backend being loaded onto, which is where the host-pointer
+  capability the mapped path needs is actually reported. GPU loads are
+  unaffected; they already resolved a device.
+- A failed SmolVLA load now reports why it failed. The error carried no reason,
+  so an exhausted allocation, an unreadable file and a malformed GGUF were
+  indistinguishable in application logs.
+- The mapped path now rejects a GGUF whose per-tensor offsets fall outside the
+  mapped region or ignore the file's own declared alignment, falling back to
+  allocate-and-copy rather than wiring tensors that would later be read out of
+  bounds. When it bails part-way it also releases the tensors it had already
+  wired before unmapping, so none is left pointing into an unmapped range.
+
+### Pull Requests
+
+- [#3905](https://github.com/tetherto/qvac/pull/3905) - QVAC-23327 fix: use the
+  mmap weights path for CPU SmolVLA loads
+
+## [0.21.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.20.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
 ## [0.19.0] - 2026-08-10
 
 ### Changed

@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@qvac/sdk": "file:..",
-    "@tetherto/qvac-test-suite": "^0.10.1",
+    "@qvac/qvac-test-suite": "^0.10.3",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",

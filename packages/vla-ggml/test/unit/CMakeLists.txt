@@ -4,6 +4,7 @@ add_executable(
   addon-test
   test_hparams.cpp
   test_backend_selection.cpp
+  test_smolvla_mmap_gate.cpp
   test_model_factory.cpp
   test_groot_load.cpp
   test_groot_m4_1_vlfusion.cpp

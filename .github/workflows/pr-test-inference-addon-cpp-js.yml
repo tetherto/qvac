@@ -98,7 +98,7 @@ jobs:
             name: linux-x64-asan
             asan: true
             run_tests: true
-          - runner: macos-26
+          - runner: qvac-macos26-arm64-gpu
             platform: darwin
             arch: arm64
             name: darwin-arm64

@@ -9,11 +9,52 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "audiogen-cpp",
-      "version>=": "2026-08-10"
+      "name": "speech-cpp",
+      "version>=": "2026-08-24#2",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "metal"
+      ],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-24#2",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "vulkan",
+        "opencl"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-24#2",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "vulkan"
+      ],
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "version>=": "2026-08-24#2",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
     "tests": {
       "description": "Build C++ unit tests",
       "dependencies": [
@@ -24,8 +65,13 @@
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [
         {
-          "name": "audiogen-cpp",
-          "features": ["vulkan"]
+          "name": "speech-cpp",
+          "version>=": "2026-08-24#2",
+          "default-features": false,
+          "features": [
+            "vulkan"
+          ],
+          "platform": "!(osx | ios)"
         }
       ]
     }

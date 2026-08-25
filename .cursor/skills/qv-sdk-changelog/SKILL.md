@@ -209,16 +209,17 @@ See `.cursor/skills/qv-notice-generate/SKILL.md` for full details.
 
 ### Step 7: Sync lockstep clients (only when `--package=sdk`)
 
-`@qvac/bare-sdk` and `tetherto-qvac-sdk` release in lockstep with `@qvac/sdk`.
-Every sdk release must mirror bare-sdk metadata (+ NOTICE) and regenerate the
-Python client (`SDK_VERSION` and other `_generated/` outputs). Skip this step
-for any other `--package` value.
+`@qvac/sdk`, `@qvac/bare-sdk` and `tetherto-qvac-sdk` release in lockstep at the
+`@qvac/inference` version anchor. Every sdk release must stamp that anchor into
+sdk + bare-sdk, mirror bare-sdk metadata (+ NOTICE), and regenerate the Python
+client (`SDK_VERSION` and other `_generated/` outputs). Skip this step for any
+other `--package` value.
 
 Read and follow `.cursor/skills/qv-sdk-lockstep-sync/SKILL.md` (Steps 1–3).
 Short form:
 
 ```bash
-node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-bare-sdk.mjs
+node .cursor/skills/qv-sdk-lockstep-sync/scripts/sync-sdk-pod.mjs
 cd packages/bare-sdk && bun run check:deps-vs-sdk && cd -
 source .env
 node .cursor/skills/qv-notice-generate/scripts/generate-notice.js bare-sdk

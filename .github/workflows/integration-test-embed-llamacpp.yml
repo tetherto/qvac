@@ -56,7 +56,7 @@ jobs:
           - os: macos-15-xlarge
             platform: darwin
             arch: arm64
-            runner: macos-26
+            runner: qvac-macos26-arm64-gpu
           - os: macos-15-large
             platform: darwin
             arch: x64
@@ -81,7 +81,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache integration test models
         id: model-cache

@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       platforms:
-        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "macos-26"])'
+        description: 'JSON array of runner labels (e.g., ["qvac-ubuntu2404-x64"] or ["qvac-ubuntu2404-x64-gpu", "qvac-macos26-arm64-gpu"])'
         required: true
         type: string
       consumer-timeout:
@@ -44,6 +44,26 @@ on:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
         type: string
+      inference-source:
+        description: "Resolved inference source"
+        required: false
+        type: string
+        default: manifest
+      inference-dependency-spec:
+        description: "Resolved inference package spec for npm"
+        required: false
+        type: string
+        default: ""
+      inference-artifact-name:
+        description: "Branch inference tarball artifact"
+        required: false
+        type: string
+        default: ""
+      inference-provenance:
+        description: "Immutable inference source identity"
+        required: false
+        type: string
+        default: ""
       cache-models:
         description: "Cache downloaded models between runs"
         required: false
@@ -73,12 +93,11 @@ on:
         required: false
       NPM_TOKEN:
         required: false
-      PAT_TOKEN:
-        required: true
 
 permissions:
   actions: read
   contents: read
+  packages: read
 
 jobs:
   report-start:
@@ -123,6 +142,7 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
 
   test-node:
     name: "[${{ inputs.consumer }}] test (${{ matrix.os }})"
@@ -134,7 +154,7 @@ jobs:
     environment: release
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MQTT_PROTOCOL: ${{ secrets.MQTT_PROTOCOL }}
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_PORT: ${{ secrets.MQTT_PORT }}
@@ -150,10 +170,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             ${{ inputs.project-directory }}
             .github/actions/sdk-e2e-fail-on-failures
+            .github/actions/sdk-e2e-prepare-inference
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -170,19 +191,28 @@ jobs:
           const path = require('path');
 
           if (!process.env.NPM_TOKEN) { console.log('❌ NPM_TOKEN is empty'); process.exit(1); }
-          if (!process.env.PAT_TOKEN) { console.log('❌ PAT_TOKEN is empty'); process.exit(1); }
+          if (!process.env.GITHUB_TOKEN) { console.log('❌ GITHUB_TOKEN is empty'); process.exit(1); }
 
           const lines = [
             'registry=https://registry.npmjs.org/',
             '@qvac:registry=https://registry.npmjs.org/',
             '@tetherto:registry=https://npm.pkg.github.com/',
             `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`,
-            `//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`
+            `//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`
           ];
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
           console.log(`.npmrc configured at ${target}`);
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
 
       - name: Setup MQTT certificates
         shell: node {0}
@@ -342,6 +372,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: first
+          TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
 
       - name: Preserve first Snap revision
@@ -357,6 +388,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           QVAC_TEST_SNAP_BUILD_ID: second
+          TMPDIR: ${{ runner.temp }}
         run: npx qvac-test build:consumer:snap --config=. --skip-install
 
       - name: Verify Snap refresh persistence
@@ -379,6 +411,15 @@ jobs:
         if: inputs.consumer == 'snap'
         working-directory: ${{ inputs.working-directory }}
         run: sudo snap install --dangerous snap/dist/qvac-sdk-e2e.snap
+
+      - name: Connect Snap GPU interfaces
+        if: inputs.consumer == 'snap'
+        run: |
+          sudo snap connect qvac-sdk-e2e:opengl
+          sudo snap connect qvac-sdk-e2e:hardware-observe
+          sudo snap connect qvac-sdk-e2e:graphics-core22 mesa-core22:graphics-core22
+          snap list mesa-core22
+          snap connections qvac-sdk-e2e
 
       - name: Determine Snap model requirements
         id: snap-model-requirements
@@ -804,3 +845,4 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}

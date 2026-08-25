@@ -303,6 +303,130 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "lmTemperature": {
+          "description": "LM sampling temperature (ACE-Step default: 0.85).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmTopP": {
+          "description": "LM nucleus-sampling probability (ACE-Step default: 0.9).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lmTopK": {
+          "description": "LM top-k cutoff; 0 disables top-k filtering.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lmCfgScale": {
+          "description": "Classifier-free guidance scale used by the LM.",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmPhase1": {
+          "description": "Allow the LM to infer missing metadata before semantic-code generation.",
+          "type": "boolean"
+        },
+        "dcwEnabled": {
+          "description": "Apply the official ACE-Step Haar DCW correction during DiT sampling (default: true).",
+          "type": "boolean"
+        },
+        "dcwScaler": {
+          "description": "DCW low-frequency correction strength (official default: 0.05).",
+          "type": "number",
+          "minimum": 0
+        },
+        "dcwHighScaler": {
+          "description": "DCW high-frequency correction strength (official default: 0.02).",
+          "type": "number",
+          "minimum": 0
+        },
+        "taskType": {
+          "description": "Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+          "type": "string",
+          "enum": ["text2music", "cover-nofsq"],
+          "title": "AudioGenStreamRequestTaskType"
+        },
+        "audioCoverStrength": {
+          "description": "Fraction of DiT steps that keep the source context (0..1, default 1). cover-nofsq currently requires 1.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "coverNoiseStrength": {
+          "description": "Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "referenceAudio": {
+          "description": "Optional timbre reference audio; omit to keep the engine default.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestReferenceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestReferenceAudioFilePath"
+            }
+          ]
+        },
+        "sourceAudio": {
+          "description": "Source audio to re-render; required for cover tasks.",
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioGenStreamRequestSourceAudioFilePath"
+            }
+          ]
+        },
         "type": {
           "type": "string",
           "const": "audioGenStream"
@@ -438,7 +562,7 @@
                         "properties": {
                           "path": {
                             "type": "string",
-                            "description": "Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+                            "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
                           }
                         },
                         "required": ["path"],
@@ -1086,7 +1210,7 @@
           "const": "bciTranscribe"
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+          "description": "Stable identifier for this in-flight BCI transcription, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
           "type": "string",
           "minLength": 1
         }
@@ -1230,7 +1354,7 @@
           "title": "BciTranscribeStreamRequestStreamOpts"
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight duplex BCI transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+          "description": "Stable identifier for this in-flight duplex BCI transcription, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
           "type": "string",
           "minLength": 1
         }
@@ -1520,7 +1644,7 @@
                   "properties": {
                     "path": {
                       "type": "string",
-                      "description": "Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+                      "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
                     }
                   },
                   "required": ["path"],
@@ -1690,7 +1814,7 @@
           "type": "boolean"
         },
         "toolDialect": {
-          "description": "Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
+          "description": "Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
           "type": "string",
           "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionOrchestrateRequestToolDialect"
@@ -1767,7 +1891,7 @@
           ]
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
+          "description": "Stable identifier for this in-flight request, generated by the caller at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing. Note: cancel-by-requestId only takes effect once the request has begun, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
           "type": "string",
           "minLength": 1
         },
@@ -2128,7 +2252,7 @@
                   "properties": {
                     "path": {
                       "type": "string",
-                      "description": "Absolute or SDK-resolvable path to the attachment file (e.g., image for multimodal models)."
+                      "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
                     }
                   },
                   "required": ["path"],
@@ -2298,7 +2422,7 @@
           "type": "boolean"
         },
         "toolDialect": {
-          "description": "Override auto-detected tool-call dialect. Use when the SDK's name-based detection picks the wrong parser chain for your model.",
+          "description": "Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.",
           "type": "string",
           "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
           "title": "CompletionStreamRequestToolDialect"
@@ -2375,7 +2499,7 @@
           ]
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight request, generated by the client at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Note: cancel-by-requestId only takes effect once the server has begun the request, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
+          "description": "Stable identifier for this in-flight request, generated by the caller at call time (opaque token, UUIDv4 when available). Surfaced on the `CompletionRun` result so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing. Note: cancel-by-requestId only takes effect once the request has begun, so a cancel issued in the same tick as `completion()` may arrive before the request is registered.",
           "type": "string",
           "minLength": 1
         },
@@ -2672,6 +2796,12 @@
       "required": ["type", "events"],
       "additionalProperties": false
     },
+    "constants.AudioGenTaskType": {
+      "title": "AudioGenTaskType",
+      "type": "string",
+      "enum": ["text2music", "cover-nofsq"],
+      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ"]
+    },
     "constants.ModelType": {
       "title": "ModelType",
       "type": "string",
@@ -2742,11 +2872,71 @@
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
       "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
-    "constants.ToolsMode": {
-      "title": "ToolsMode",
+    "constants.TtsCosyvoice3Emotion": {
+      "title": "TtsCosyvoice3Emotion",
       "type": "string",
-      "enum": ["static", "dynamic"],
-      "x-enum-varnames": ["static", "dynamic"]
+      "enum": ["anger", "happy", "neutral", "sad"],
+      "x-enum-varnames": ["ANGER", "HAPPY", "NEUTRAL", "SAD"]
+    },
+    "constants.TtsCosyvoice3InstructDialect": {
+      "title": "TtsCosyvoice3InstructDialect",
+      "type": "string",
+      "enum": [
+        "cantonese",
+        "northeastern",
+        "gansu",
+        "guizhou",
+        "henan",
+        "hubei",
+        "hunan",
+        "jiangxi",
+        "minnan",
+        "ningxia",
+        "shanxi",
+        "shaanxi",
+        "shandong",
+        "shanghai",
+        "sichuan",
+        "tianjin",
+        "yunnan"
+      ],
+      "x-enum-varnames": [
+        "CANTONESE",
+        "NORTHEASTERN",
+        "GANSU",
+        "GUIZHOU",
+        "HENAN",
+        "HUBEI",
+        "HUNAN",
+        "JIANGXI",
+        "MINNAN",
+        "NINGXIA",
+        "SHANXI",
+        "SHAANXI",
+        "SHANDONG",
+        "SHANGHAI",
+        "SICHUAN",
+        "TIANJIN",
+        "YUNNAN"
+      ]
+    },
+    "constants.TtsCosyvoice3InstructStyle": {
+      "title": "TtsCosyvoice3InstructStyle",
+      "type": "string",
+      "enum": ["peppa", "robot"],
+      "x-enum-varnames": ["PEPPA", "ROBOT"]
+    },
+    "constants.TtsCosyvoice3InstructVolume": {
+      "title": "TtsCosyvoice3InstructVolume",
+      "type": "string",
+      "enum": ["loud", "soft"],
+      "x-enum-varnames": ["LOUD", "SOFT"]
+    },
+    "constants.TtsPace": {
+      "title": "TtsPace",
+      "type": "string",
+      "enum": ["slow", "moderate", "fast"],
+      "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
     },
     "constants.Verbosity": {
       "title": "Verbosity",
@@ -2898,7 +3088,7 @@
           "title": "DiffusionStreamRequestScheduler"
         },
         "seed": {
-          "description": "Random seed; when omitted the SDK picks one and returns it in stats.",
+          "description": "Random seed; when omitted we pick one and return it in stats.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -3099,7 +3289,7 @@
           "type": "boolean"
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight download, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this download with `cancel({ requestId })`.",
+          "description": "Stable identifier for this in-flight download, generated by the caller at call time. Optional — falls back to a generated id when the field is missing. Exposed on the decorated promise so callers can target this download with `cancel({ requestId })`.",
           "type": "string",
           "minLength": 1
         }
@@ -3157,7 +3347,7 @@
           "const": "embed"
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight embed, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+          "description": "Stable identifier for this in-flight embed, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
           "type": "string",
           "minLength": 1
         }
@@ -3447,7 +3637,7 @@
               "type": "boolean"
             },
             "requestId": {
-              "description": "Stable identifier for this in-flight finetune, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+              "description": "Stable identifier for this in-flight finetune, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
               "type": "string",
               "minLength": 1
             }
@@ -3993,7 +4183,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "The model's registry name (as found in the SDK's built-in catalog)."
+          "description": "The model's registry name (as found in QVAC's built-in catalog)."
         },
         "type": {
           "type": "string",
@@ -4019,7 +4209,7 @@
             },
             "modelId": {
               "type": "string",
-              "description": "Unique identifier used to reference the model in SDK calls."
+              "description": "Unique identifier used to reference the model in QVAC calls."
             },
             "registryPath": {
               "description": "Registry-relative path (set for registry-backed models).",
@@ -7850,6 +8040,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestLlamacppCompletionDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -7863,36 +8057,45 @@
                   "type": "object",
                   "properties": {
                     "ctx_size": {
+                      "description": "Context window size in tokens; `0` uses the model's trained context length. Default 1024.",
                       "type": "number"
                     },
                     "temp": {
+                      "description": "Sampling temperature (0–2). Default 0.8.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 2
                     },
                     "top_p": {
+                      "description": "Top-p (nucleus) sampling cutoff (0–1). Default 0.9.",
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1
                     },
                     "top_k": {
+                      "description": "Top-k sampling — keep only the top K tokens (0–128). Default 40.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 128
                     },
                     "seed": {
+                      "description": "Sampling RNG seed; `-1` (default) picks a random seed.",
                       "type": "number"
                     },
                     "gpu_layers": {
+                      "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "number"
                     },
                     "lora": {
+                      "description": "Path to a LoRA adapter file to apply on top of the base model.",
                       "type": "string"
                     },
                     "device": {
+                      "description": "Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`.",
                       "type": "string"
                     },
                     "predict": {
+                      "description": "Max tokens to predict. `-1` = until stop token, `-2` = until context filled.",
                       "anyOf": [
                         {
                           "type": "number",
@@ -7910,55 +8113,62 @@
                       ]
                     },
                     "system_prompt": {
+                      "description": "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`",
                       "type": "string"
                     },
                     "no_mmap": {
+                      "description": "Disable memory-mapped model loading. Default false.",
                       "type": "boolean"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number",
                       "enum": [0, 1, 2, 3],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity"
                     },
                     "presence_penalty": {
+                      "description": "Presence penalty applied to tokens that have already appeared. Default 0.",
                       "type": "number"
                     },
                     "frequency_penalty": {
+                      "description": "Frequency penalty applied to tokens by their frequency so far. Default 0.",
                       "type": "number"
                     },
                     "repeat_penalty": {
+                      "description": "Repetition penalty applied to repeated tokens. Default 1.1.",
                       "type": "number"
                     },
                     "stop_sequences": {
+                      "description": "Strings that stop generation when produced (forwarded to the addon as `reverse_prompt`).",
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "n_discarded": {
+                      "description": "Tokens to discard from the front of the context when it fills (sliding window); `0` (default) disables sliding. In batch mode clamped to the per-slot window (`ctx_size / parallel`).",
                       "type": "number"
                     },
                     "parallel": {
+                      "description": "Concurrent sequence slots for continuous batching (1–256). Default 1 (sequential, batching off); `>= 2` enables batched decoding and splits the KV cache evenly across slots.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "tools": {
+                      "description": "Enable tool calling via the model's jinja chat template. Default false.",
                       "type": "boolean"
                     },
-                    "toolsMode": {
-                      "type": "string",
-                      "enum": ["static", "dynamic"],
-                      "description": "Controls tool placement in the prompt. \"static\" (default) prepends the tool set once and reuses it across the session. \"dynamic\" anchors tools after the last user message and trims them from the kv-cache after the chain resolves so each user prompt can carry its own tools.",
-                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigToolsMode"
-                    },
                     "cache-type-k": {
+                      "description": "KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
                       "type": "string"
                     },
                     "cache-type-v": {
+                      "description": "KV-cache value quantization type; quantizing the value cache requires flash attention. Unset selects a backend-safe default.",
                       "type": "string"
                     },
                     "main-gpu": {
+                      "description": "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -7973,22 +8183,27 @@
                       ]
                     },
                     "split-mode": {
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
                       "type": "string",
                       "enum": ["none", "layer", "row"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
                     "tensor-split": {
+                      "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
                     },
                     "openclCacheDir": {
+                      "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
                       "type": "string"
                     },
                     "reasoning_budget": {
+                      "description": "Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).",
                       "type": "integer",
                       "minimum": -1,
                       "maximum": 2147483647
                     },
                     "projectionModelSrc": {
+                      "description": "Multimodal projection (mmproj / vision encoder) model source; multimodal models only.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -8072,11 +8287,19 @@
                       ]
                     },
                     "image_tile_mode": {
+                      "description": "Qwen3.5-VL multi-tile image encoding mode (multimodal models only): `'sequential'` (default) encodes image tiles one at a time, `'batched'` encodes all tiles in a single batched pass, `'disabled'` does no multi-tile encoding (single tile). Ignored by text-only models.",
                       "type": "string",
                       "enum": ["disabled", "batched", "sequential"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageTileMode"
                     },
+                    "image_no_upscale": {
+                      "description": "idefics3-style image preprocessing rule (multimodal models only): `'on'` rounds the image's long side up to a whole number of slices and caps it, so an image smaller than the cap keeps its own resolution and becomes far fewer slices; `'off'` always stretches the long side to the cap. When unset, the model's own GGUF value is used; ignored with a warning by models that do not use idefics3-style preprocessing. Changes the number of image tokens (and therefore both accuracy and encode time), so a checkpoint whose GGUF omits the key needs this set to preprocess correctly.",
+                      "type": "string",
+                      "enum": ["on", "off"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigImageNoUpscale"
+                    },
                     "mmproj-use-gpu": {
+                      "description": "Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
                       "type": "boolean"
                     }
                   },
@@ -8137,6 +8360,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestWhispercppTranscriptionDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -8473,6 +8700,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestBciWhispercppTranscriptionDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8730,6 +8961,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestParakeetTranscriptionDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8799,6 +9034,9 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "language": {
+                      "type": "string"
                     },
                     "streamingSpkCacheEnable": {
                       "type": "boolean"
@@ -8903,6 +9141,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestLlamacppEmbeddingDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -8916,41 +9158,49 @@
                   "type": "object",
                   "properties": {
                     "gpuLayers": {
+                      "description": "Number of model layers to offload to the GPU. Default 99 (offload all).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "device": {
+                      "description": "Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`.",
                       "type": "string",
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice"
                     },
                     "batchSize": {
+                      "description": "Tokens processed per batch (input throughput). Default 1024.",
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "pooling": {
+                      "description": "Pooling strategy collapsing token embeddings into one sequence vector: `'none'`, `'mean'`, `'cls'`, `'last'`, or `'rank'`. Unset uses the model default.",
                       "type": "string",
                       "enum": ["none", "mean", "cls", "last", "rank"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigPooling"
                     },
                     "attention": {
+                      "description": "Attention type: `'causal'` or `'non-causal'`. Unset uses the model default.",
                       "type": "string",
                       "enum": ["causal", "non-causal"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigAttention"
                     },
                     "embdNormalize": {
+                      "description": "Embedding normalization: `-1` none, `0` max-abs int16, `1` taxicab, `2` euclidean, `>2` p-norm. Default 2 (euclidean).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "flashAttention": {
+                      "description": "Flash attention: `'on'`, `'off'`, or `'auto'`. Default `'auto'`.",
                       "type": "string",
                       "enum": ["on", "off", "auto"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention"
                     },
                     "mainGpu": {
+                      "description": "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
                       "anyOf": [
                         {
                           "type": "integer",
@@ -8965,19 +9215,23 @@
                       ]
                     },
                     "splitMode": {
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
                       "type": "string",
                       "enum": ["none", "layer", "row"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode"
                     },
                     "tensorSplit": {
+                      "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number",
                       "enum": [0, 1, 2, 3],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity"
                     },
                     "openclCacheDir": {
+                      "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
                       "type": "string"
                     }
                   },
@@ -9038,6 +9292,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestNmtcppTranslationDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -9828,6 +10086,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestTtsGgmlDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -10724,7 +10986,8 @@
                         },
                         "pace": {
                           "type": "string",
-                          "minLength": 1
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerPace"
                         },
                         "expressivity": {
                           "type": "string",
@@ -10814,6 +11077,585 @@
                       "required": ["ttsEngine"],
                       "additionalProperties": false,
                       "title": "LoadModelSrcRequestTtsGgmlModelConfigParler"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "cosyvoice3"
+                        },
+                        "emotion": {
+                          "type": "string",
+                          "enum": ["anger", "happy", "neutral", "sad"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"
+                        },
+                        "pace": {
+                          "type": "string",
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"
+                        },
+                        "instruct": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "dialect": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cantonese",
+                                    "northeastern",
+                                    "gansu",
+                                    "guizhou",
+                                    "henan",
+                                    "hubei",
+                                    "hunan",
+                                    "jiangxi",
+                                    "minnan",
+                                    "ningxia",
+                                    "shanxi",
+                                    "shaanxi",
+                                    "shandong",
+                                    "shanghai",
+                                    "sichuan",
+                                    "tianjin",
+                                    "yunnan"
+                                  ],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"
+                                },
+                                "volume": {
+                                  "type": "string",
+                                  "enum": ["loud", "soft"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"
+                                },
+                                "style": {
+                                  "type": "string",
+                                  "enum": ["peppa", "robot"],
+                                  "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"
+                                }
+                              },
+                              "additionalProperties": false,
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct"
+                            }
+                          ]
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "streamChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "streamFirstChunkTokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ttsEngine": {
+                          "type": "string",
+                          "const": "audio8"
+                        },
+                        "referenceText": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "greedy": {
+                          "type": "boolean"
+                        },
+                        "temperature": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "topK": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "topP": {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "maxFrames": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "audio8CodecDecoderModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc"
+                            }
+                          ]
+                        },
+                        "audio8CodecEncoderModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc"
+                            }
+                          ]
+                        },
+                        "referenceAudioSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["ttsEngine", "audio8CodecDecoderModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8"
                     }
                   ]
                 }
@@ -10872,6 +11714,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestGgmlOcrDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -11070,6 +11916,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestSdcppGenerationDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -11084,7 +11934,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -11157,6 +12007,16 @@
                       "description": "Force VAE decoder to run on CPU",
                       "type": "boolean"
                     },
+                    "vae_auto_cpu_fallback": {
+                      "description": "Automatically move the VAE to CPU when GPU memory is insufficient",
+                      "type": "boolean"
+                    },
+                    "vae_auto_cpu_fallback_memory_ratio": {
+                      "description": "GPU-memory threshold for automatic VAE CPU fallback as a ratio in (0, 1]",
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1
+                    },
                     "vae_tiling": {
                       "description": "Enable VAE tiling for large images on limited VRAM",
                       "type": "boolean"
@@ -11174,7 +12034,7 @@
                       "type": "boolean"
                     },
                     "lora_apply_mode": {
-                      "description": "How LoRA adapters passed via diffusion({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent diffusion() calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted.",
+                      "description": "How LoRA adapters passed via diffusion({ lora }) or video({ lora }) are applied. 'auto' (default): picked based on weight type — 'at_runtime' for quantized weights, 'immediately' for full-precision. 'immediately': adapter is fused into the model on first use and persists across subsequent generation calls until the model is unloaded. 'at_runtime': adapter is applied per-call and not persisted; use this mode for the LTX Ingredients workflow.",
                       "type": "string",
                       "enum": ["auto", "immediately", "at_runtime"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode"
@@ -12206,6 +13066,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestAudiogenGgmlDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12637,6 +13501,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestGgmlVlaDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12761,6 +13629,10 @@
                   "required": ["providerPublicKey"],
                   "title": "LoadModelSrcRequestGgmlClassificationDelegate"
                 },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
                   "type": "string",
@@ -12842,6 +13714,10 @@
                   },
                   "required": ["providerPublicKey"],
                   "title": "LoadModelCustomPluginRequestDelegate"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
                 },
                 "requestId": {
                   "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
@@ -13389,7 +14265,7 @@
             },
             "modelId": {
               "type": "string",
-              "description": "Unique identifier used to reference the model in SDK calls."
+              "description": "Unique identifier used to reference the model in QVAC calls."
             },
             "addon": {
               "type": "string",
@@ -13533,7 +14409,7 @@
               },
               "modelId": {
                 "type": "string",
-                "description": "Unique identifier used to reference the model in SDK calls."
+                "description": "Unique identifier used to reference the model in QVAC calls."
               },
               "addon": {
                 "type": "string",
@@ -13707,7 +14583,7 @@
               },
               "modelId": {
                 "type": "string",
-                "description": "Unique identifier used to reference the model in SDK calls."
+                "description": "Unique identifier used to reference the model in QVAC calls."
               },
               "addon": {
                 "type": "string",
@@ -14927,7 +15803,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechRequestPace"
         },
         "expressivity": {
           "type": "string",
@@ -15064,7 +15941,8 @@
         },
         "pace": {
           "type": "string",
-          "minLength": 1
+          "enum": ["slow", "moderate", "fast"],
+          "title": "TextToSpeechStreamRequestPace"
         },
         "expressivity": {
           "type": "string",
@@ -15188,7 +16066,7 @@
           "const": "transcribe"
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+          "description": "Stable identifier for this in-flight transcription, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
           "type": "string",
           "minLength": 1
         }
@@ -15428,7 +16306,7 @@
           "title": "TranscribeStreamRequestParakeetStreamingConfig"
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight duplex transcription, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+          "description": "Stable identifier for this in-flight duplex transcription, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
           "type": "string",
           "minLength": 1
         }
@@ -15618,7 +16496,7 @@
               "const": "translate"
             },
             "requestId": {
-              "description": "Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+              "description": "Stable identifier for this in-flight translation, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
               "type": "string",
               "minLength": 1
             }
@@ -15649,7 +16527,7 @@
               "title": "TranslateLlmRequestModelType"
             },
             "from": {
-              "description": "Source language code. When omitted, the SDK attempts to auto-detect the source language.",
+              "description": "Source language code. When omitted, QVAC attempts to auto-detect the source language.",
               "type": "string"
             },
             "to": {
@@ -15665,7 +16543,7 @@
               "const": "translate"
             },
             "requestId": {
-              "description": "Stable identifier for this in-flight translation, generated by the client at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+              "description": "Stable identifier for this in-flight translation, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
               "type": "string",
               "minLength": 1
             }
@@ -15880,10 +16758,10 @@
       "properties": {
         "modelId": {
           "type": "string",
-          "description": "The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by the SDK are too large to load on typical mobile devices."
+          "description": "The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices."
         },
         "requestId": {
-          "description": "Stable identifier for this in-flight video generation. Optional on the wire — the server falls back to a server-generated id when the field is missing.",
+          "description": "Stable identifier for this in-flight video generation. Optional — falls back to a generated id when the field is missing.",
           "type": "string",
           "minLength": 1
         },
@@ -15894,6 +16772,30 @@
         "negative_prompt": {
           "description": "Optional negative prompt describing what to avoid.",
           "type": "string"
+        },
+        "lora": {
+          "description": "LTX video only. Worker-local absolute path to a LoRA adapter. Under delegated inference the file must already exist on the provider.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
+        },
+        "lora_strength": {
+          "description": "LTX video only. Runtime LoRA multiplier in [0, 10]; requires lora.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "stg_scale": {
+          "description": "LTX video only. Spatiotemporal guidance scale in [0, 10].",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "stg_block": {
+          "description": "LTX video only. Transformer block skipped for spatiotemporal guidance.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "width": {
           "description": "Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
@@ -15922,7 +16824,7 @@
           "maximum": 120
         },
         "seed": {
-          "description": "Random seed; when omitted the SDK picks one and returns it in stats.",
+          "description": "Random seed; when omitted we pick one and return it in stats.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -15968,7 +16870,8 @@
             "lcm",
             "smoothstep",
             "kl_optimal",
-            "bong_tangent"
+            "bong_tangent",
+            "ltx2"
           ],
           "title": "VideoStreamRequestScheduler"
         },
@@ -16111,6 +17014,28 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "reference_images": {
+          "description": "LTX txt2vid only. Exactly one base64-encoded composite reference sheet; requires lora.",
+          "minItems": 1,
+          "maxItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          }
+        },
+        "reference_attention_strength": {
+          "description": "LTX txt2vid only. Reference denoise-mask strength in [0, 1]; requires reference_images.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reference_downscale_factor": {
+          "description": "LTX txt2vid only. Reference-image spatial factor; currently exactly 1.",
+          "type": "number",
+          "const": 1
         },
         "type": {
           "type": "string",

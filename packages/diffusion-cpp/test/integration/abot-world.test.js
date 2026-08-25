@@ -3,7 +3,7 @@
 // ABot-World integration tests.
 //
 // Lanes below run through the addon built against the published
-// stable-diffusion-cpp registry port (2026-07-03#6, engine PRs #22 + #27):
+// stable-diffusion-cpp registry port (2026-07-03#7, engine PRs #22 + #27):
 //
 //   1. Guard lane — the ABot model set loads natively and batch video
 //      generation is rejected: ABot is a causal/interactive model, not a

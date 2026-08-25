@@ -16,7 +16,6 @@
 #include "LlmContext.hpp"
 #include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
-#include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// A multimodal session cache is only safe to restore when its header carries
@@ -43,19 +42,16 @@ public:
    * @param params - the parameters.
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
-   * @param tools - reference to the tools compact controller
    */
-  MtmdLlmContext(
-      common_params& commonParams, common_init_result_ptr llamaInit,
-      ToolsCompactController& tools);
+  MtmdLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must
   /// outlive this instance.
   MtmdLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
-      ToolsCompactController& tools, mtmd_context* sharedVision,
-      llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
+      mtmd_context* sharedVision, llama_seq_id seqId,
+      llama_pos perSeqCtxCeiling = -1);
 
   /**
    * The destructor.
@@ -272,11 +268,6 @@ public:
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const override;
-
   /// Disk prompt-cache for a multimodal batch slot, round-tripping the full
   /// four-field session metadata (see MtmdLlmContext.cpp). `loadCache` records
   /// the discard budget and returns false (cache miss) on an empty key, a
@@ -373,7 +364,6 @@ private:
   [[nodiscard]] bool cancelGenerationCleanup(
       const std::function<void(const std::string&)>& outputCallback);
 
-  ToolsCompactController& tools_;
   common_init_result_ptr llamaInit_;
   mtmd::context_ptr ctxVision_;
   /// Non-owning vision context for per-slot batch drivers; null in

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Bumped the `@qvac/infer-base` runtime dependency from `^0.4.0` to `^0.6.0` ([#2634](https://github.com/tetherto/qvac/pull/2634)).
+- Promoted `bare-fs`, `bare-path`, and `bare-url` to runtime dependencies because the published mobile test runtime imports them.
 
 ## [0.5.0]
 

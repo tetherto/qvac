@@ -84,6 +84,7 @@ on:
           - ctc
           - eou
           - sortformer
+          - indic-conformer
           - all
       custom_model_repo:
         description: 'Custom HuggingFace model repository URL (whisper only; leave empty to use default models)'
@@ -241,12 +242,24 @@ jobs:
                   "ctc": "parakeet-ctc-0.6b.{quant}.gguf",
                   "eou": "parakeet-eou-120m-v1.{quant}.gguf",
                   "sortformer": "sortformer-4spk-v1.{quant}.gguf",
+                  "indic-conformer": "indic-conformer-ctc.{quant}.gguf",
               }
 
-              model_types = [model_type] if model_type != "all" else ["tdt", "ctc", "eou", "sortformer"]
+              model_types = [model_type] if model_type != "all" else ["tdt", "ctc", "eou", "sortformer", "indic-conformer"]
 
               def get_configs_for_type(mt):
-                  if mt == "sortformer":
+                  if mt == "indic-conformer":
+                      return [
+                          {"language": "hindi", "model_language": "hi", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                          {"language": "hindi", "model_language": "hi", "dataset_type": "fleurs", "use_gpu": True, "streaming": False},
+                          {"language": "gujarati", "model_language": "gu", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                          {"language": "gujarati", "model_language": "gu", "dataset_type": "fleurs", "use_gpu": True, "streaming": False},
+                          {"language": "kannada", "model_language": "kn", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                          {"language": "kannada", "model_language": "kn", "dataset_type": "fleurs", "use_gpu": True, "streaming": False},
+                          {"language": "tamil", "model_language": "ta", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
+                          {"language": "tamil", "model_language": "ta", "dataset_type": "fleurs", "use_gpu": True, "streaming": False},
+                      ]
+                  elif mt == "sortformer":
                       return [
                           {"language": "english", "dataset_type": "librispeech", "use_gpu": False, "streaming": False},
                           {"language": "english", "dataset_type": "librispeech", "use_gpu": True, "streaming": False},
@@ -273,9 +286,9 @@ jobs:
                           {"language": "spanish", "dataset_type": "fleurs", "use_gpu": False, "streaming": False},
                       ]
 
-              quant = "f16"
               parakeet_max_samples = max_samples if max_samples != -1 else 50
               for mt in model_types:
+                  quant = "q8_0" if mt == "indic-conformer" else "f16"
                   for cfg in get_configs_for_type(mt):
                       mode_str = "streaming" if cfg["streaming"] else "batch"
                       gpu_str = "gpu" if cfg["use_gpu"] else "cpu"
@@ -288,6 +301,7 @@ jobs:
                           "gguf": gguf_by_type[mt].format(quant=quant),
                           "use_gpu": cfg["use_gpu"],
                           "language": cfg["language"],
+                          "model_language": cfg.get("model_language", ""),
                           "dataset_type": cfg["dataset_type"],
                           "streaming": cfg["streaming"],
                           "max_samples": parakeet_max_samples,
@@ -314,11 +328,15 @@ jobs:
     environment: release
     timeout-minutes: 1440
     env:
-      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: read
       packages: read
       id-token: write
+      # `gh run list` / `gh run download` in the prebuilds step read another
+      # workflow's run + artifacts. PAT_TOKEN bypassed the permissions block;
+      # GITHUB_TOKEN is bounded by it, so the scope must be declared.
+      actions: read
 
     strategy:
       fail-fast: false
@@ -345,6 +363,7 @@ jobs:
           else
             echo "Model Type: ${{ matrix.model_type }} (${{ matrix.gguf }})"
             echo "Dataset: ${{ matrix.dataset_type }} / ${{ matrix.language }}"
+            echo "Model language: ${{ matrix.model_language }}"
             echo "GPU: ${{ matrix.use_gpu }}"
             echo "Streaming: ${{ matrix.streaming }}"
             echo "Max Samples: ${{ matrix.max_samples }}"
@@ -371,7 +390,7 @@ jobs:
         with:
           repository: ${{ github.event.inputs.repository || github.repository }}
           ref: ${{ github.event.inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Install system dependencies
@@ -382,7 +401,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
-          python-version: '3.14'
+          python-version: '3.12'
 
       - name: Install Poetry
         run: |
@@ -398,7 +417,7 @@ jobs:
         id: prebuilds
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BENCHMARK_REPOSITORY: ${{ github.event.inputs.repository || github.repository }}
           BENCHMARK_REF: ${{ github.event.inputs.ref || github.ref_name }}
         run: |
@@ -675,6 +694,7 @@ jobs:
           DATASET_TYPE="${{ matrix.dataset_type }}"
           DATASET_LANGUAGE="${{ matrix.language }}"
           MODEL_TYPE="${{ matrix.model_type }}"
+          MODEL_LANGUAGE="${{ matrix.model_language }}"
           USE_GPU="${{ matrix.use_gpu }}"
           STREAMING_MODE="${{ matrix.streaming }}"
           MAX_SAMPLES="${{ matrix.max_samples }}"
@@ -684,6 +704,7 @@ jobs:
             ctc) CONFIG_FILE="config-parakeet-ctc.yaml" ;;
             eou) CONFIG_FILE="config-parakeet-eou.yaml" ;;
             sortformer) CONFIG_FILE="config-parakeet-sortformer.yaml" ;;
+            indic-conformer) CONFIG_FILE="config-parakeet-indic-conformer.yaml" ;;
             *) CONFIG_FILE="config-parakeet.yaml" ;;
           esac
 
@@ -696,6 +717,7 @@ jobs:
             ctc) TIMEOUT=60 ;;
             eou) TIMEOUT=120 ;;
             sortformer) TIMEOUT=180 ;;
+            indic-conformer) TIMEOUT=120 ;;
             *) TIMEOUT=120 ;;
           esac
 
@@ -714,6 +736,7 @@ jobs:
           sed -i "/^dataset:/,/^[^ ]/ s|  language:.*|  language: \"${DATASET_LANGUAGE}\"|" "$CONFIG_PATH"
           sed -i "/^dataset:/,/^[^ ]/ s|  max_samples:.*|  max_samples: ${MAX_SAMPLES}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  model_type:.*|  model_type: \"${MODEL_TYPE}\"|" "$CONFIG_PATH"
+          sed -i "/^model:/,/^[^ ]/ s|  language:.*|  language: \"${MODEL_LANGUAGE}\"|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  use_gpu:.*|  use_gpu: ${USE_GPU}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  streaming:.*|  streaming: ${STREAMING_MODE}|" "$CONFIG_PATH"
           sed -i "/^model:/,/^[^ ]/ s|  streaming_chunk_size:.*|  streaming_chunk_size: ${STREAMING_CHUNK_SIZE}|" "$CONFIG_PATH"
@@ -770,7 +793,9 @@ jobs:
           HF_DATASETS_CACHE: /tmp/hf_cache
         run: |
           echo "Running benchmark with config: ${CONFIG_FILE}"
-          poetry run python -u -m src.main --config config/${CONFIG_FILE}
+          BENCHMARK_TMP_DIR="${GITHUB_WORKSPACE}/${WORKDIR}/benchmarks/data/tmp"
+          mkdir -p "$BENCHMARK_TMP_DIR"
+          TMPDIR="$BENCHMARK_TMP_DIR" poetry run python -u -m src.main --config config/${CONFIG_FILE}
           rm -rf /tmp/hf_cache || true
 
       - name: Stop benchmark server
@@ -925,7 +950,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           MODEL_NAME="${{ matrix.gguf }}"
-          MODEL_NAME="${MODEL_NAME%.gguf}"
           MODEL_TYPE="${{ matrix.model_type }}"
           DATASET_TYPE="${{ matrix.dataset_type }}"
           DATASET_LANG="${{ matrix.language }}"
@@ -972,7 +996,6 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           MODEL_NAME="${{ matrix.gguf }}"
-          MODEL_NAME="${MODEL_NAME%.gguf}"
           MODEL_TYPE="${{ matrix.model_type }}"
           DATASET_TYPE="${{ matrix.dataset_type }}"
           DATASET_LANG="${{ matrix.language }}"
@@ -1013,3 +1036,66 @@ jobs:
             echo "❌ **Results file not found**" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: asr-accuracy-results-${{ matrix.model_variant }}
+          path: ${{ env.WORKDIR }}/benchmarks/results
+          if-no-files-found: error
+
+  summarize:
+    needs:
+      - benchmark
+    if: always() && needs.benchmark.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.inputs.repository || github.repository }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: asr-accuracy-results-*
+          path: ${{ env.WORKDIR }}/benchmarks/results
+          merge-multiple: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install benchmark client dependencies
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        run: poetry install --no-cache
+
+      - name: Generate consolidated summary
+        working-directory: ${{ env.WORKDIR }}/benchmarks/client
+        env:
+          BENCHMARK_ENGINE: ${{ github.event.inputs.engine }}
+        run: |
+          if [ "$BENCHMARK_ENGINE" = "parakeet" ]; then
+            poetry run python -c "from src.parakeet.utils import generate_summary; generate_summary()"
+          else
+            poetry run python -c "from src.whisper.utils import generate_summary; generate_summary()"
+          fi
+          cat ../results/results_summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated summary
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: asr-accuracy-summary
+          path: ${{ env.WORKDIR }}/benchmarks/results/results_summary.md
+          if-no-files-found: error

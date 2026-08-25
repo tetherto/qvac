@@ -119,7 +119,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}
           workdir: packages/llm-llamacpp
 
@@ -316,31 +316,19 @@ jobs:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write # Allow commenting on PRs
-      id-token: write
-    if: always() && !cancelled() && needs.ci-router.outputs.run_mobile == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
-    needs:
-      - fork-approval
-      - authorize
-      - prebuild
-      - prebuild-artifact-reuse
-      - ci-router
-    uses: ./.github/workflows/integration-mobile-test-llm-llamacpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+  # MOBILE IS NOW ON-DEMAND ONLY. The PR mobile lane was removed to stop PRs from
+  # auto-launching (costly) AWS Device Farm runs. Run it by dispatching
+  # integration-mobile-test-llm-llamacpp.yml (Actions -> Run workflow), choosing
+  # the platform, device(s) and an optional test filter (LLM is sharded, so a
+  # filter is strongly recommended). The run-mobile-addon-tests label is kept for
+  # a future re-enable but no longer triggers anything here.
 
   # QVAC-17830: per-run joint perf reporter. Lives in the umbrella (not in
-  # either child workflow) so it can block on BOTH `run-integration-tests`
-  # (desktop matrix) and `run-mobile-integration-tests` (Android / iOS)
-  # before scanning for perf-report artifacts. Fixes the race where
-  # test-darwin-x64 (or any slow desktop job) finished AFTER the old
-  # mobile-local combine-reports had already shipped the summary.
+  # the child workflow) so it can block on `run-integration-tests`
+  # (desktop matrix) before scanning for perf-report artifacts. Fixes the race
+  # where test-darwin-x64 (or any slow desktop job) finished AFTER the old
+  # mobile-local combine-reports had already shipped the summary. (Mobile perf
+  # reports are now produced by the on-demand mobile dispatch, not on PRs.)
   # SECURITY (CodeQL js/cache-poisoning, alerts 735/736):
   # This job runs in the privileged `pull_request_target` context (see
   # `on:` at the top of this file). The integration matrix it depends
@@ -365,7 +353,7 @@ jobs:
   #     `[A-Za-z0-9-]` allowlist + 64-char cap below before use.
   combine-perf-reports:
     name: Combined Performance Report
-    needs: [fork-approval, authorize, run-integration-tests, run-mobile-integration-tests]
+    needs: [fork-approval, authorize, run-integration-tests]
     if: always() && !cancelled() && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -605,7 +593,7 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, run-integration-tests, run-mobile-integration-tests, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router]
+    needs: [authorize, verify-fabric-lockstep, run-integration-tests, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:

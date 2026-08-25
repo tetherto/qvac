@@ -152,7 +152,8 @@ test(
       'constructor description + emotion throws'
     )
 
-    // Wrong-engine guard: parler-only options on supertonic throw.
+    // Wrong-engine guard. emotion is cross-engine now, so supertonic reports it
+    // has no emotion control; the description/template fields stay parler-only.
     t.exception(
       () =>
         new TTSGgml({
@@ -160,8 +161,18 @@ test(
           files: { supertonicModel: download.path },
           emotion: 'happy'
         }),
-      /parler-only/,
+      /does not support `emotion`/,
       'emotion on a supertonic instance throws'
+    )
+    t.exception(
+      () =>
+        new TTSGgml({
+          engine: TTSGgml.ENGINE_SUPERTONIC,
+          files: { supertonicModel: download.path },
+          pitch: 'high'
+        }),
+      /parler-only/,
+      'a parler-only template field on a supertonic instance still throws'
     )
 
     const model = await loadParlerTTS({
@@ -251,16 +262,19 @@ test(
         happy.data.samples.every((v, i) => v === sad.data.samples[i])
       t.ok(!identical, 'happy vs sad conditioning produces different audio (same seed/text)')
 
-      // Invalid emotion is rejected with the valid list (validated natively,
-      // so the failure surfaces on the response, not on run() itself).
-      const bad = await model.run({ input: text, emotion: 'angry' })
+      // Invalid emotion is rejected with the valid list. The canonical
+      // vocabulary is mirrored in JS now, so this fails on run() itself --
+      // before any native dispatch -- rather than on the response.
       let badMsg = ''
       try {
-        await bad.await()
+        await model.run({ input: text, emotion: 'angry' })
       } catch (e) {
         badMsg = String((e && e.message) || e)
       }
-      t.ok(/valid:/.test(badMsg), `invalid emotion rejects listing valid values (got: ${badMsg})`)
+      t.ok(
+        /invalid emotion/i.test(badMsg) && /anger/.test(badMsg),
+        `invalid emotion rejects listing valid values (got: ${badMsg})`
+      )
     } finally {
       try {
         await model.unload()

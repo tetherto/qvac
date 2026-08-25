@@ -1,14 +1,9 @@
-/**
- * Flat native configuration object, read 1:1 by the C++ JSAdapter
- * (buildAcestepConfig). Either `modelDir` (auto-classify the four GGUFs) or the
- * explicit per-stage paths are set. The numeric/bool fields are REQUIRED by the
- * native side (it carries no defaults); the high-level class fills them in.
- */
 export interface AudioGenConfigurationParams {
     engineType?: string;
     modelDir?: string;
     textEncModelPath?: string;
     lmModelPath?: string;
+    synthModelPath?: string;
     ditModelPath?: string;
     vaeModelPath?: string;
     inferenceSteps?: number;
@@ -23,6 +18,32 @@ export interface AudioGenConfigurationParams {
      */
     backendsDir?: string;
 }
+/** Stable string values serialized across the JS -> native addon boundary. */
+export declare enum AudioEditOperationType {
+    FlowEdit = "flow-edit",
+    Repaint = "repaint"
+}
+export declare enum RepaintMode {
+    Conservative = "conservative",
+    Balanced = "balanced",
+    Aggressive = "aggressive"
+}
+export interface AudioEditOperationJobData {
+    type: AudioEditOperationType;
+    sourceCaption?: string;
+    sourceLyrics?: string;
+    targetCaption?: string;
+    targetLyrics?: string;
+    caption?: string;
+    lyrics?: string;
+    nMin?: number;
+    nMax?: number;
+    nAvg?: number;
+    start?: number;
+    end?: number;
+    mode?: RepaintMode;
+    strength?: number;
+}
 /** One generation job handed to the native `runJob`. */
 export interface AudioGenJobData {
     type: string;
@@ -33,6 +54,7 @@ export interface AudioGenJobData {
     bpm?: number;
     keyscale?: string;
     timesignature?: string;
+    augmentCaptionWithMetadata?: boolean;
     duration?: number;
     lmTemperature?: number;
     lmTopP?: number;
@@ -43,6 +65,15 @@ export interface AudioGenJobData {
     dcwScaler?: number;
     dcwHighScaler?: number;
     audioCodes?: Int32Array;
+    referenceAudio?: Float32Array;
+    sourceAudio?: Float32Array;
+    taskType?: string;
+    audioCoverStrength?: number;
+    coverNoiseStrength?: number;
+    maxFrames?: number;
+    inferenceSteps?: number;
+    cfgScale?: number;
+    editOperations?: AudioEditOperationJobData[];
 }
 /** Native output event: (handle, event, data, error). */
 export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unknown, error: unknown) => void;
@@ -50,7 +81,7 @@ export type AudioGenOutputCallback = (handle: unknown, event: unknown, data: unk
 export interface AudioGenBinding {
     createInstance(owner: AudioGenInterface, configuration: AudioGenConfigurationParams, outputCallback: AudioGenOutputCallback | null): object;
     activate(handle: object | null): Promise<void>;
-    runJob(handle: object | null, data: AudioGenJobData): void | Promise<void>;
+    runJob(handle: object | null, data: AudioGenJobData): boolean | Promise<boolean>;
     cancel(handle: object | null): Promise<void>;
     destroyInstance(handle: object): Promise<void> | void;
 }
@@ -60,7 +91,7 @@ export declare class AudioGenInterface {
     private _handle;
     constructor(binding: AudioGenBinding, configuration?: AudioGenConfigurationParams, outputCallback?: AudioGenOutputCallback | null);
     activate(): Promise<void>;
-    runJob(data: AudioGenJobData): Promise<void>;
+    runJob(data: AudioGenJobData): Promise<boolean>;
     cancel(): Promise<void>;
     destroyInstance(): Promise<void>;
 }

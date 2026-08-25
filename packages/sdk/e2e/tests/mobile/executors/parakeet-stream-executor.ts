@@ -1,4 +1,4 @@
-import type { TestResult } from '@tetherto/qvac-test-suite/mobile'
+import type { TestResult } from '@qvac/qvac-test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import {

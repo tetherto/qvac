@@ -144,7 +144,8 @@ test('shouldCommitCachedTurn: completed turn with tokens commits', (t) => {
       aborted: false,
       producedTokens: true,
       generatedTokens: 12,
-      predict: 64
+      predict: 64,
+      stoppedAtContextBoundary: false
     }),
     true
   )
@@ -156,7 +157,21 @@ test('shouldCommitCachedTurn: token-budget stop rolls back', (t) => {
       aborted: false,
       producedTokens: true,
       generatedTokens: 64,
-      predict: 64
+      predict: 64,
+      stoppedAtContextBoundary: false
+    }),
+    false
+  )
+})
+
+test('shouldCommitCachedTurn: context-boundary stop rolls back', (t) => {
+  t.is(
+    shouldCommitCachedTurn({
+      aborted: false,
+      producedTokens: true,
+      generatedTokens: 12,
+      predict: -2,
+      stoppedAtContextBoundary: true
     }),
     false
   )
@@ -168,7 +183,8 @@ test('shouldCommitCachedTurn: unlimited prediction does not imply truncation', (
       aborted: false,
       producedTokens: true,
       generatedTokens: 64,
-      predict: -1
+      predict: -1,
+      stoppedAtContextBoundary: false
     }),
     true
   )
@@ -180,7 +196,8 @@ test('shouldCommitCachedTurn: aborted or empty turns roll back', (t) => {
       aborted: true,
       producedTokens: true,
       generatedTokens: 12,
-      predict: 64
+      predict: 64,
+      stoppedAtContextBoundary: false
     }),
     false
   )
@@ -189,7 +206,8 @@ test('shouldCommitCachedTurn: aborted or empty turns roll back', (t) => {
       aborted: false,
       producedTokens: false,
       generatedTokens: 0,
-      predict: 64
+      predict: 64,
+      stoppedAtContextBoundary: false
     }),
     false
   )

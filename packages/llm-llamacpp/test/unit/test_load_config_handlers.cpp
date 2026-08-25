@@ -60,6 +60,29 @@ TEST(LoadConfigHandlers_ImageTileMode, RejectsUnknownValue) {
   EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
 }
 
+TEST(LoadConfigHandlers_ImageNoUpscale, ParsesNamedAndNumericValues) {
+  EXPECT_EQ(applyOne("image-no-upscale", "on").image_no_upscale, 1);
+  EXPECT_EQ(applyOne("image_no_upscale", "1").image_no_upscale, 1);
+  EXPECT_EQ(applyOne("image-no-upscale", "off").image_no_upscale, 0);
+  EXPECT_EQ(applyOne("image_no_upscale", "false").image_no_upscale, 0);
+}
+
+// Absent key must leave the -1 sentinel alone, otherwise every existing caller
+// would start forcing base preprocessing instead of honouring the GGUF.
+TEST(LoadConfigHandlers_ImageNoUpscale, AbsentKeyKeepsModelDefault) {
+  common_params params;
+  std::unordered_map<std::string, std::string> map{};
+  applyLoadConfigHandlers(params, map);
+  EXPECT_EQ(params.image_no_upscale, -1);
+}
+
+TEST(LoadConfigHandlers_ImageNoUpscale, RejectsUnknownValue) {
+  common_params params;
+  std::unordered_map<std::string, std::string> map{
+      {"image-no-upscale", "maybe"}};
+  EXPECT_THROW(applyLoadConfigHandlers(params, map), StatusError);
+}
+
 TEST(LoadConfigHandlers_ImageTokens, ParsesMaxAndMin) {
   EXPECT_EQ(applyOne("image-max-tokens", "1024").image_max_tokens, 1024);
   EXPECT_EQ(applyOne("image-min-tokens", "16").image_min_tokens, 16);

@@ -14,8 +14,6 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from _common import print_progress
-
 from tetherto.qvac_sdk import (
     Client,
     TranscribeRequest,
@@ -24,6 +22,17 @@ from tetherto.qvac_sdk import (
     unload_model,
 )
 from tetherto.qvac_sdk.models import WHISPER_TINY
+
+
+def print_progress(p) -> None:
+    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    line = (
+        f"▸ Downloading {p.percentage:.0f}% "
+        f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
+    )
+    print(line, end="\r" if sys.stderr.isatty() else "\n", file=sys.stderr)
+    if p.percentage >= 100:
+        print(file=sys.stderr)
 
 
 async def main() -> int:

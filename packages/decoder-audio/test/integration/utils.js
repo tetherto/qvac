@@ -21,7 +21,7 @@ const isMobile = platform === 'ios' || platform === 'android'
  * const audioPath = getAssetPath('sample.mp3')
  * const audioStream = fs.createReadStream(audioPath)
  */
-function getAssetPath (filename, options = {}) {
+function getAssetPath(filename, options = {}) {
   const { desktopDir = 'example' } = options
 
   // Mobile environment - use asset loading from testAssets
@@ -33,7 +33,9 @@ function getAssetPath (filename, options = {}) {
       return resolvedPath
     }
     // Asset not found in manifest
-    throw new Error(`Asset not found in testAssets: ${filename}. Make sure ${filename} is in test/mobile/testAssets/ directory and rebuild the app.`)
+    throw new Error(
+      `Asset not found in testAssets: ${filename}. Make sure ${filename} is in test/mobile/testAssets/ directory and rebuild the app.`
+    )
   }
 
   // Desktop environment - check multiple locations
@@ -58,7 +60,7 @@ function getAssetPath (filename, options = {}) {
  * Check if running on mobile platform
  * @returns {boolean}
  */
-function checkIsMobile () {
+function checkIsMobile() {
   return isMobile
 }
 

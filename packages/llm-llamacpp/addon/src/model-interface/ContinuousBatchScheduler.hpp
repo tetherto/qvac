@@ -22,7 +22,6 @@
 #include "MediaLoadOrder.hpp"
 #include "MultiRequestBatcher.hpp"
 #include "SequenceDriver.hpp"
-#include "ToolsCompactController.hpp"
 
 /// Defined in test/unit/test_internal_peers.hpp (tests only); befriended below
 /// so unit tests can inject decode/media-eval stubs. Never defined in
@@ -33,9 +32,10 @@ namespace qvac_lib_inference_addon_llama::batching {
 
 /// Fire the terminal lifecycle hook for a finished sequence. A sequence that
 /// ran generation goes through onCancel (cancel/error) or onGenerationFinished
-/// (natural stop) so onGenerationCompletePolicy runs; a prefill-only slot only
-/// flushes via onSequenceEnd. One place for the mapping every terminal path
-/// shares (normal drain, cancel-all, decode-error finalization).
+/// (natural stop, which flushes output and runs end-of-generation reasoning
+/// compaction); a prefill-only slot only flushes via onSequenceEnd. One place
+/// for the mapping every terminal path shares (normal drain, cancel-all,
+/// decode-error finalization).
 ///
 /// Returns `true` when the terminal hook left the driver in a state safe
 /// to persist via `saveCache`. Cancel/DecodeError paths forward
@@ -122,7 +122,6 @@ struct StreamCallbacks {
 struct SubmitRequest {
   std::vector<common_chat_msg> chatMsgs;
   std::vector<common_chat_tool> tools;
-  PromptLayout layout;
   /// Raw media payloads (images/audio) referenced by the prompt. Only
   /// accepted when the scheduler's driver factory builds multimodal
   /// drivers; text drivers reject a non-empty list at admission.
@@ -243,8 +242,7 @@ struct BatchResult {
 /// factory, so the scheduler depends on no concrete driver type. `params`
 /// already carries the merged per-request sampling overrides.
 using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
-    const common_params& params, ToolsCompactController& tools, uint32_t seqId,
-    llama_pos perSeqCtxCeiling)>;
+    const common_params& params, uint32_t seqId, llama_pos perSeqCtxCeiling)>;
 
 /// Continuous-batching driver: owns the underlying `MultiRequestBatcher`,
 /// per-slot `common_sampler` + UTF-8 buffers, and the production wiring
@@ -275,9 +273,7 @@ public:
   ContinuousBatchScheduler(
       LlmModelContext shared, unsigned maxChunkSize, unsigned ctxTotalTokens,
       size_t batchSize, int32_t batchCapacity, const common_params& baseParams,
-      llama_pos configuredNDiscarded,
-      std::optional<ToolsCompactProfile> toolsCompactProfile,
-      DriverFactory driverFactory);
+      llama_pos configuredNDiscarded, DriverFactory driverFactory);
 
   ContinuousBatchScheduler(const ContinuousBatchScheduler&) = delete;
   ContinuousBatchScheduler& operator=(const ContinuousBatchScheduler&) = delete;
@@ -458,7 +454,6 @@ private:
 
   struct SlotState {
     StreamCallbacks streams;
-    std::unique_ptr<ToolsCompactController> tools;
     std::unique_ptr<SequenceDriver> driver;
     std::string cacheKey;
     std::shared_ptr<BatchGroup> group;
@@ -593,7 +588,6 @@ private:
   int baseNPredict_;
   common_params baseParams_;
   llama_pos configuredNDiscarded_;
-  std::optional<ToolsCompactProfile> toolsCompactProfile_;
   DriverFactory driverFactory_;
 
   /// Per-seq hard ceiling = ctxTotalTokens / batchSize. Drives prompt-size
