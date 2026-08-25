@@ -86,6 +86,18 @@ void ReasoningRollbackState::clipPostReasoningTokens(size_t maxCapturedTail) {
   }
 }
 
+void ReasoningRollbackState::clipSeededPrefix(size_t maxSeeded) {
+  if (seededPostReasoningCount_ <= maxSeeded) {
+    return;
+  }
+  const auto first =
+      postReasoningTokens_.begin() + static_cast<std::ptrdiff_t>(maxSeeded);
+  const auto last = postReasoningTokens_.begin() +
+                    static_cast<std::ptrdiff_t>(seededPostReasoningCount_);
+  postReasoningTokens_.erase(first, last);
+  seededPostReasoningCount_ = maxSeeded;
+}
+
 void ReasoningRollbackState::clearPostReasoning() noexcept {
   postReasoningTokens_.clear();
   seededPostReasoningCount_ = 0;

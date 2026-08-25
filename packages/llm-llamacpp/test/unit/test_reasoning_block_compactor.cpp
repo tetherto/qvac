@@ -883,6 +883,49 @@ TEST(
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
+// An unfinished span must not replay the pieces that opened it. The seeded
+// prefix runs up to and including the open marker, and those tokens live
+// inside `[start, pos)`, the range compaction drops. No close marker was ever
+// captured, so replaying them would rebuild a `<think>` with nothing to close
+// it and the next turn would resume from an open block.
+//
+// Reachable on any pure-attention reasoning model whose generation stops
+// inside the think block: an `n_predict` cutoff, an antiprompt, or a full
+// context. Recurrent memory hard-fails this case instead, and pure attention
+// used to drop the whole span with `seq_rm` + `seq_add`, so it only became
+// reachable when every model started replaying.
+TEST(ReasoningBlockCompactorOpenSpan, OpenSpanDoesNotReplayTheOpener) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.compactor.setNeedsRecurrentSnapshot(false);
+
+  constexpr llama_pos kSnapshotPos = 10;
+  constexpr llama_pos kSpanStart = 11;
+  constexpr llama_pos kLivePos = 20;
+
+  fx.rollback.seedReasoningBoundaryForTesting(kSnapshotPos);
+  // Production seeds every token sampled before the open flip: the template
+  // preamble at position 10, then the open marker at position 11.
+  fx.compactor.recordPreReasoningToken(/*preamble=*/700);
+  fx.compactor.recordPreReasoningToken(/*openMarker=*/701);
+  fx.compactor.setOpenSpan(kSpanStart);
+  ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
+  ASSERT_EQ(fx.rollback.seededPostReasoningCount(), 2u);
+
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
+  const auto outcome = fx.compactor.compact(
+      /*ctx=*/nullptr, /*seqId=*/0, kLivePos, "[Test]");
+  fx.compactor.setRewindOpsForTesting(nullptr);
+
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  // Only the preamble is replayed, so the cache lands at 11, not 12.
+  EXPECT_EQ(outcome.newPos, kSpanStart);
+  EXPECT_EQ(outcome.replayedTokens, 1u);
+  EXPECT_EQ(outcome.discarded, kLivePos - kSpanStart);
+}
+
 TEST(
     ReasoningBlockCompactorOpenSpan,
     RecurrentResidentOpenSpanHardFailsWithoutClose) {

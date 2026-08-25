@@ -400,6 +400,16 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   // tail trim has since removed from the live cache,
   // without touching the structural prefix.
   const llama_pos snapshotPos = rollback_.reasoningBoundaryNPast();
+  if (openEnded) {
+    // No close marker was ever captured, so the seeded prefix ends with the
+    // pieces that OPEN the block, and those live inside `[start, pos)`, the
+    // range being dropped. Replaying them would rebuild a `<think>` the next
+    // turn resumes from with nothing to close it. Keep only what sat before
+    // the span. The recurrent path hard-failed above, so this is the
+    // pure-attention case.
+    const llama_pos keep = start > snapshotPos ? start - snapshotPos : 0;
+    rollback_.clipSeededPrefix(static_cast<size_t>(keep));
+  }
   rollback_.clipPostReasoningTokens(static_cast<size_t>(pos - end));
 
   if (!rewindOps.restoreBoundary(rollback_, ctx, seqId)) {

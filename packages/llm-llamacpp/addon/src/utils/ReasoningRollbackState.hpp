@@ -117,6 +117,14 @@ public:
   // Used when a tail trim shrinks the live tail between close-marker
   // capture and replay.
   void clipPostReasoningTokens(size_t maxCapturedTail);
+
+  // Drop seeded tokens past `maxSeeded`, keeping the captured tail behind
+  // them intact. Needed for an unfinished reasoning span: the seeded prefix
+  // runs up to and including the pieces that open the block, and those sit
+  // inside the range compaction is dropping. With no close marker captured
+  // there is nothing to balance them, so replaying them would leave the
+  // block open in cache for the next turn to resume from.
+  void clipSeededPrefix(size_t maxSeeded);
   void clearPostReasoning() noexcept;
 
   // Replays captured tokens through the decoder, attaching them at
