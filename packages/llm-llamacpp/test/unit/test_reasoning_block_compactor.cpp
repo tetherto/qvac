@@ -361,7 +361,7 @@ TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenReasoningDisabled) {
 
 TEST(ReasoningBlockCompactorReplaySeed, NoOpForPureAttentionModels) {
   // The replay buffer is consumed only on the recurrent / hybrid
-  // compact path. Pure-attention models use `seq_rm + seq_add` and
+  // compact path. Pure-attention models anchor a position instead and
   // never replay tokens, so seeding the buffer would be dead state.
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
@@ -452,7 +452,7 @@ TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpWhenReasoningDisabled) {
 
 TEST(
     ReasoningBlockCompactorReplaySeed, PreReasoningNoOpForPureAttentionModels) {
-  // Pure attention uses `seq_rm + seq_add` at compact time and never
+  // Pure attention anchors a position at compact time and never
   // consumes the replay buffer, so pre-reasoning seeding would be dead
   // state exactly like the close-marker seed path.
   CompactorFixture fx;
@@ -889,7 +889,7 @@ TEST(
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
-// Pure-attention `seq_rm + seq_add` rejection MUST surface as
+// A rejected boundary restore MUST surface as
 // `FailedKvWiped` so the caller resets to zero rather than rolling back
 // `[preRequestCursor, currentCursor)` on live KV instead of resetting
 // to zero. Regression coverage for the single-prompt hardening in
@@ -929,7 +929,7 @@ TEST(
   EXPECT_EQ(rejecting.restoreCalls(), 1)
       << "compactor must attempt the pure-attention primitive exactly once";
   EXPECT_EQ(rejecting.replayCalls(), 0)
-      << "seq_rm rejection must short-circuit before seq_add fires — "
+      << "a rejected restore must short-circuit before replay fires — "
          "replaying on top of a failed restore would decode the answer into "
          "positions nothing describes";
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
@@ -989,7 +989,7 @@ TEST(ReasoningBlockCompactorFailureStats, ReplayRejectionReportsFailedKvWiped) {
 //   b. Partial span still resident (`start < pos < end`):
 //      * Pure-attention: honor the default-on strict-cleanup
 //        contract by dropping the resident remainder via a
-//        clamped `[start, pos)` `seq_rm + seq_add`; reports
+//        clamped `[start, pos)` rewind and replay; reports
 //        `Compacted`.
 //      * Recurrent / hybrid: hard-fail — replay is anchored at a
 //        captured post-reasoning tail we can no longer reconcile

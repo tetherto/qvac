@@ -47,9 +47,9 @@ struct GenerationParams {
   // compaction. Contexts default off except the Qwen3 family, which defaults
   // on. `false` keeps the reasoning block in cache; `true` enables
   // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
-  // models — recurrent / hybrid takes the snapshot + restore + replay path
-  // documented on `TextLlmContext::needsRecurrentSnapshot_`; pure-attention
-  // takes the `seq_rm + seq_add` path. Restored at end-of-request.
+  // models. Every model rewinds to the end-of-prefill boundary and replays;
+  // `TextLlmContext::needsRecurrentSnapshot_` documents what differs between
+  // them. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /

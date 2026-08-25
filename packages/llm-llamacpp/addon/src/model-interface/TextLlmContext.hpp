@@ -352,9 +352,9 @@ private:
   // DeepSeek V4 has the same checkpoint requirement despite not reporting
   // either predicate. We snapshot the full sequence state at end-of-prefill,
   // restore at end-of-generation,
-  // then batched-replay the captured post-reasoning tokens.
-  // Pure-attention models keep the existing
-  // `seq_rm + seq_add` path untouched.
+  // then batched-replay the captured post-reasoning tokens. Pure-attention
+  // models replay too; they anchor a position instead of a state payload,
+  // because rewinding positionally indexed cells is a tail trim.
   bool needsRecurrentSnapshot_ = false;
 
   // Tracks whether the currently-prepared prefill is a cache-warm
@@ -370,9 +370,8 @@ private:
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the end-of-prefill
   // snapshot (compaction + cancel during generation), and the
-  // post-reasoning token replay buffer. Always empty / inactive on
-  // pure-attention models, where compaction is just `seq_rm + seq_add`
-  // on the attention KV.
+  // post-reasoning token replay buffer. Populated on every model now; on
+  // pure attention the boundary is a position rather than a state payload.
   qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
   // Reasoning-block tracker + compactor: owns the `<think>...</think>`
   // span, close-capture flag, and the pure-attention + recurrent
