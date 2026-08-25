@@ -70,6 +70,12 @@ npm install
 npm run build   # bare-make generate && bare-make build && bare-make install
 ```
 
+On **linux-x64** a ROCm/TheRock SDK is required, discovered via `ROCM_PATH` or
+`/opt/rocm`. The `hip` port is deterministic — it hard-fails rather than
+installing empty, so that the vcpkg binary cache cannot conflate a no-HIP build
+with a real one under the same ABI hash. Other platforms need nothing extra; the
+`hip` dependency is gated on `linux & x64`.
+
 ## Supported platforms
 
 | Platform | Triplet | Backends |

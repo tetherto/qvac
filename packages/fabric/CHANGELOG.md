@@ -9,8 +9,14 @@
   `GGML_BACKEND_DL` module under `prebuilds/linux-x64/qvac__fabric/` alongside
   Vulkan, so every consumer of the shared runtime can select it — previously the
   feature was requested per-consumer by `@qvac/vla-ggml`, which no longer builds
-  its own ggml. The DL loader skips the module on non-AMD hosts, and the build is
-  fail-safe: no ROCm SDK at build time means a Vulkan/CPU-only prebuild.
+  its own ggml. At **runtime** this is fail-safe: the DL loader skips the module
+  on non-AMD hosts and falls back to Vulkan/CPU. At **build time** it is not —
+  the `hip` port is deterministic and hard-fails when no ROCm SDK is found,
+  because a host-dependent skip would let the vcpkg binary cache conflate a
+  no-HIP build with a real HIP build under an identical ABI hash. Building
+  `packages/fabric` for linux-x64 therefore requires a ROCm/TheRock install,
+  located via `ROCM_PATH` or `/opt/rocm`. Other platforms are unaffected — the
+  `hip` dependency is gated on `linux & x64`.
 
 ### Changed
 
@@ -18,7 +24,10 @@
   cross-compiles the HIP backend, and `on-pr-fabric.yml`'s `cpp-lint` sets
   `include-rocm-sdk: true` because `ggml-config.cmake` resolves
   `find_dependency(hip/hipblas/rocblas)` at configure time. No AMD GPU is
-  required on either runner.
+  required on either runner, but the SDK itself is mandatory on both: without it
+  `cpp-lint` fails at configure time resolving the port's `$ENV{ROCM_PATH}` shim
+  to an empty prefix (`/lib/cmake/hip/hip-config.cmake`), which a warm vcpkg
+  binary cache can disguise as a successful `hip` install.
 - `qvac-registry-vcpkg` baseline `c57eec31` -> `f04e2447`, matching
   `@qvac/vla-ggml`. Required because `qvac-fabric[hip-backend]` depends on `hip`
   with no version constraint, so its version comes from the pinned baseline, and
