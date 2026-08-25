@@ -37,6 +37,22 @@ Run it **by hand** after adding, renaming or removing a `test/integration/*.test
 
 `deferred` **must stay a top-level key**. The CI composites consume only `.<platform>` and ignore every other top-level key (as OCR's `perf_report_filter` already relies on), so nesting `deferred` inside `ios`/`android` would schedule it as a real Device Farm shard.
 
+A runner may also be deferred on one platform only, by keying `deferred` by platform instead of using a flat list:
+
+```json
+{ "deferred": { "ios": ["runBigTest"] } }
+```
+
+### Running a deferred runner on device
+
+`validate-devices` builds its runner allowlist from `.<platform>` too, so a manual `workflow_dispatch` with `-f tests=runPi05Test` is rejected as an unknown runner — the deferral is enforced at both ends. To run pi05 on device from a branch:
+
+1. Move `runPi05Test` out of `deferred` into a group in `test-groups.json` (or into a platform-scoped `deferred` for the other platform).
+2. Relax `_skipMobilePi05` in `test/integration/pi05.test.js` — it skips both pi05 cases on mobile regardless of scheduling, so step 1 alone runs zero tests and passes green.
+3. Dispatch `integration-mobile-test-vla.yml` with `-f tests=runPi05Test` to collapse the run to a single spec.
+
+Step 1 alone is what CI validates; step 2 is why deferral is recorded here rather than enforced only by the skip.
+
 Coverage is enforced by:
 
 ```bash

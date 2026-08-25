@@ -4,7 +4,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const { validateTestGroups } = require('./lib/validate-test-groups.js')
+const { validateTestGroups, generatedRunnerNames } = require('./lib/validate-test-groups.js')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -33,14 +33,6 @@ function getGeneratedIntegrationRefs(content) {
   }
 
   return references
-}
-
-// integration.auto.cjs declares one `async function run<Name>` per on-device
-// test. Once it is confirmed in sync with test/integration (above), it is the
-// authoritative runner-name list — the same source .github/actions/
-// run-mobile-integration-tests/validate-devices uses.
-function getGeneratedRunnerNames(content) {
-  return Array.from(content.matchAll(/^async function (run[A-Za-z0-9_]+)\s*\(/gm), (m) => m[1])
 }
 
 function setDiff(left, right) {
@@ -90,9 +82,14 @@ try {
   // editing a test's body cannot make the generated file stale. A timestamp
   // check can therefore only produce false positives — and since this script now
   // runs as part of `npm run test:unit`, each one would be a hard failure telling
-  // the author to regenerate a byte-identical file. Every staleness it could
-  // legitimately catch (a test added, renamed or removed) is already caught by
-  // the content-based reference diff above.
+  // the author to regenerate a byte-identical file.
+  //
+  // The reference diff above covers the staleness that matters day to day: a
+  // test file added, renamed or removed. It does not cover a change to the
+  // generator's own template (the `__shouldRunTest` guard, the header comments),
+  // since it compares only the `runIntegrationModule` paths — that still needs a
+  // manual `npm run test:mobile:generate`. The mtime check did not catch that
+  // either: it compared test-file timestamps, not the generator's.
 
   // Device Farm shard coverage. This lives here rather than in the generator so
   // that a mobile scheduling mistake can never abort `npm run test:integration`
@@ -103,7 +100,7 @@ try {
   }
 
   const groups = JSON.parse(fs.readFileSync(groupsFile, 'utf8'))
-  const runners = getGeneratedRunnerNames(mobileAutoContent)
+  const runners = generatedRunnerNames(mobileAutoContent)
   const problems = validateTestGroups(groups, runners)
 
   if (problems.length > 0) {
