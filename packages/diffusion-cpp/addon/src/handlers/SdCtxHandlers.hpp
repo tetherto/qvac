@@ -85,6 +85,11 @@ struct SdCtxConfig {
   bool offloadToCpu = false; // offload_to_cpu: keep weights in RAM, load
                              // per-layer to GPU (applied via the engine's
                              // params_backend assignment spec)
+  std::string backendSpec; // runtime module assignment, e.g. diffusion=vulkan0
+  std::string
+      paramsBackendSpec;      // parameter residency: cpu, disk, or assignments
+  std::string maxVramSpec;    // graph-cut VRAM budget in GiB or assignments
+  bool streamLayers = false;  // layer residency/prefetch on top of maxVramSpec
   std::string device = "gpu"; // "cpu" or "gpu" -- selects compute backend
   // Optional GPU pick when device == "gpu": a device index, "integrated", or
   // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend

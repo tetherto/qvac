@@ -39,6 +39,19 @@ void freeSdImageData(sd_image_t& image) noexcept {
   image.data = nullptr;
 }
 
+void freeSdImageBatch(sd_image_t* images, int count) noexcept {
+  if (images == nullptr) {
+    return;
+  }
+
+  // The engine owns the count on successful output. A negative count is
+  // invalid, so only release the outer allocation in that malformed case.
+  for (int i = 0; i < count; ++i) {
+    freeSdImageData(images[i]);
+  }
+  free(images);
+}
+
 } // namespace
 
 EsrganUpscalerConfig makeUpscalerConfig(const SdCtxConfig& config) {
@@ -183,25 +196,25 @@ sd_image_t EsrganUpscaler::upscaleImage(
       throw errors::makeCancelledError();
     }
 
-    sd_image_t* outImages = nullptr;
-    int outCount = 0;
-    const bool ok = upscale(ctx, current, factor, &outImages, &outCount);
-    if (!ok || outCount < 1 || outImages == nullptr ||
-        outImages[0].data == nullptr) {
-      if (outImages != nullptr) {
-        free_sd_images(outImages, outCount);
-      }
+    // The current stable-diffusion.cpp C API returns an owned image batch via
+    // out-parameters. Upscaling one input must yield exactly one output.
+    int nextImageCount = 0;
+    sd_image_t* nextImages = nullptr;
+    const bool upscaled =
+        upscale(ctx, current, factor, &nextImages, &nextImageCount);
+    if (!upscaled || nextImages == nullptr || nextImageCount != 1) {
+      freeSdImageBatch(nextImages, nextImageCount);
       if (currentOwned) {
         freeSdImageData(current);
       }
       throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
     }
-    // Keep the first image's pixels; free any extras and the array container.
-    sd_image_t next = outImages[0];
-    for (int j = 1; j < outCount; ++j) {
-      freeSdImageData(outImages[j]);
-    }
-    free(outImages);
+
+    // Transfer the pixel buffer out of the one-element output array, then
+    // release that array. The next pass (or caller) retains pixel ownership.
+    sd_image_t next = nextImages[0];
+    nextImages[0].data = nullptr;
+    free(nextImages);
 
     if (currentOwned) {
       freeSdImageData(current);

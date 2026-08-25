@@ -25,6 +25,7 @@ const WAN22_MOE_PARAMS = [
     'high_noise_flow_shift',
     'moe_boundary'
 ];
+const MINIMAX_H3_MODEL_NAME = /minimax[-_. ]*h3|h3[-_. ]*minimax/i;
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed';
 function assertAbsolute(key, value) {
     if (typeof value !== 'string' || value.length === 0) {
@@ -34,7 +35,14 @@ function assertAbsolute(key, value) {
         throw new TypeError(`files.${key} must be an absolute path (got: ${value})`);
     }
 }
-function validateVideoFrames(frameCount, isLtx = false) {
+function validateVideoFrames(frameCount, isLtx = false, isMiniMaxH3 = false) {
+    if (isMiniMaxH3) {
+        if (!Number.isInteger(frameCount) || frameCount < 5 || (frameCount - 5) % 17 !== 0) {
+            throw new Error('MiniMax-H3 video_frames must be an integer of the form (17*k + 5) with k >= 0. ' +
+                `Got: ${frameCount}`);
+        }
+        return;
+    }
     const factor = isLtx ? 8 : 4;
     const minimum = factor + 1;
     if (!Number.isInteger(frameCount)) {
@@ -224,7 +232,7 @@ class VideoStableDiffusion {
         if (!inputParams || typeof inputParams !== 'object') {
             throw new TypeError('run(params): params must be an object');
         }
-        const params = inputParams;
+        let params = inputParams;
         if (typeof params.prompt !== 'string' || params.prompt.length === 0) {
             throw new TypeError(`params.prompt is required and must be a non-empty string. Got: ${typeof params.prompt}`);
         }
@@ -233,9 +241,60 @@ class VideoStableDiffusion {
                 `'txt2vid' | 'img2vid'. Got: ${JSON.stringify(params.mode)}`);
         }
         const { mode } = params;
+        const isMiniMaxH3 = this._isMiniMaxH3();
+        if (isMiniMaxH3) {
+            if (mode !== 'txt2vid') {
+                throw new Error("MiniMax-H3 supports text-to-audio-video only; use mode='txt2vid'.");
+            }
+            if (params.init_image != null || params.init_images != null) {
+                throw new Error('MiniMax-H3 does not support image conditioning (init_image/init_images).');
+            }
+            if (params.control_frames != null || params.vace_strength != null) {
+                throw new Error('MiniMax-H3 does not support control_frames or vace_strength.');
+            }
+            if (params.strength != null || params.img_cfg_scale != null) {
+                throw new Error('MiniMax-H3 does not support image-conditioning strength or img_cfg_scale.');
+            }
+            const h3MoeControls = WAN22_MOE_PARAMS.filter((key) => params[key] != null);
+            if (h3MoeControls.length > 0 || this._files.highNoiseDiffusionModel) {
+                throw new Error('MiniMax-H3 does not support Wan 2.2 high-noise expert controls or files.highNoiseDiffusionModel.');
+            }
+            if (params.reference_images != null ||
+                params.reference_attention_strength != null ||
+                params.reference_downscale_factor != null ||
+                params.lora != null ||
+                params.lora_strength != null ||
+                params.stg_scale != null ||
+                params.stg_block != null) {
+                throw new Error('MiniMax-H3 does not support reference images, video LoRAs, or STG.');
+            }
+            if (params.cfg_scale != null && params.cfg_scale !== 1) {
+                throw new RangeError(`MiniMax-H3 requires cfg_scale to be exactly 1.0. Got: ${params.cfg_scale}`);
+            }
+            if (params.scheduler != null && params.scheduler !== 'discrete') {
+                throw new Error("MiniMax-H3 requires scheduler='discrete'.");
+            }
+            if (params.guidance != null &&
+                (typeof params.guidance !== 'number' || !Number.isFinite(params.guidance))) {
+                throw new TypeError(`MiniMax-H3 guidance must be a finite number. Got: ${params.guidance}`);
+            }
+            // This is filename-based early UX only. Native GGUF tensor inspection
+            // applies the same defaults and restrictions authoritatively at runtime.
+            params = {
+                ...params,
+                width: params.width ?? 960,
+                height: params.height ?? 544,
+                video_frames: params.video_frames ?? 124,
+                fps: params.fps ?? 24,
+                steps: params.steps ?? 8,
+                scheduler: params.scheduler ?? 'discrete',
+                cfg_scale: 1,
+                guidance: params.guidance ?? 7
+            };
+        }
         const dimensionsImplicit = params.width == null && params.height == null;
         const isLtx = this._isLtx();
-        const alignTo = isLtx ? 32 : 16;
+        const alignTo = isMiniMaxH3 || isLtx ? 32 : 16;
         const width = params.width;
         const height = params.height;
         const widthBad = width != null &&
@@ -260,7 +319,7 @@ class VideoStableDiffusion {
                 `Got: ${width}x${height}. Use ${suggestedWidth}x${suggestedHeight} instead.`);
         }
         if (params.video_frames != null) {
-            validateVideoFrames(params.video_frames, isLtx);
+            validateVideoFrames(params.video_frames, isLtx, isMiniMaxH3);
         }
         if (params.fps != null &&
             (!Number.isFinite(params.fps) || params.fps <= 0 || params.fps > 120)) {
@@ -489,6 +548,9 @@ class VideoStableDiffusion {
     }
     _isLtx() {
         return !!this._files.embeddingsConnectors;
+    }
+    _isMiniMaxH3() {
+        return MINIMAX_H3_MODEL_NAME.test(this._files.model);
     }
 }
 exports.default = VideoStableDiffusion;

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime and vector-index support; no API change for this package).
+
 ## [0.7.0] - 2026-08-20
 
 ### Changed

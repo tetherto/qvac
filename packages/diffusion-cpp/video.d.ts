@@ -3,7 +3,8 @@ import { type QvacResponse } from '@qvac/infer-base';
 import type { CacheMode, SamplerMethod, ScheduleType, SdConfig } from './index';
 export type VideoMode = 'txt2vid' | 'img2vid';
 /**
- * File paths for a video model context (Wan 2.1 / 2.2 or LTX-2 / LTXAV).
+ * File paths for a video model context (Wan 2.1 / 2.2, LTX-2 / LTXAV, or
+ * MiniMax-H3).
  *
  * Wan 2.2 TI2V-5B uses only `model`, like Wan 2.1, but requires the matching
  * Wan 2.2 VAE. Wan 2.2 T2V-A14B uses both `model` (low noise) and
@@ -42,9 +43,9 @@ export interface VideoGenerationParams {
     /** Transformer block whose video self-attention is skipped for STG. */
     stg_block?: number;
     /**
-     * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V and LTX-2 use a
-     * 32-pixel spatial grid; native validation derives the TI2V requirement from
-     * the loaded GGUF instead of the filename.
+     * Wan 2.1 dimensions must be multiples of 16. Wan 2.2 TI2V, LTX-2, and
+     * MiniMax-H3 use a 32-pixel spatial grid; native validation derives the
+     * actual requirement from the loaded GGUF instead of the filename.
      */
     width?: number;
     height?: number;
@@ -54,6 +55,8 @@ export interface VideoGenerationParams {
     steps?: number;
     sampling_method?: SamplerMethod;
     scheduler?: ScheduleType;
+    /** MiniMax-H3 distilled guidance scale (default: 7.0). */
+    guidance?: number;
     cfg_scale?: number;
     flow_shift?: number;
     /** High-noise sample count; `-1` uses native moe_boundary-based routing. */
@@ -139,4 +142,5 @@ export default class VideoStableDiffusion {
         configLoaded: boolean;
     };
     private _isLtx;
+    private _isMiniMaxH3;
 }

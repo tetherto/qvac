@@ -6,6 +6,7 @@
 #include <ranges>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <llama.h>
 
@@ -255,6 +256,7 @@ std::string getPrompt(
     const struct common_chat_templates* tmpls,
     struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen,
     std::string* outThinkingStartTag, std::string* outThinkingEndTag,
+    std::vector<std::string>* outThinkingEndTags,
     std::string* outGenerationPrompt) {
   auto exportParams = [&](const common_chat_params& params) {
     if (outThinkingForcedOpen) {
@@ -264,7 +266,12 @@ std::string getPrompt(
       *outThinkingStartTag = params.thinking_start_tag;
     }
     if (outThinkingEndTag) {
-      *outThinkingEndTag = params.thinking_end_tag;
+      *outThinkingEndTag = params.thinking_end_tags.empty()
+                               ? std::string()
+                               : params.thinking_end_tags.front();
+    }
+    if (outThinkingEndTags) {
+      *outThinkingEndTags = params.thinking_end_tags;
     }
     if (outGenerationPrompt) {
       *outGenerationPrompt = params.generation_prompt;
@@ -322,7 +329,8 @@ std::string getPrompt(
 
 bool configureReasoningBudgetSampling(
     common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& thinkingStartTag,
+    const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt) {
   common_params_sampling next = params.sampling;
   next.reasoning_budget_tokens =
@@ -333,17 +341,23 @@ bool configureReasoningBudgetSampling(
   next.generation_prompt.clear();
 
   if (params.reasoning_budget > 0 && lctx != nullptr &&
-      !thinkingEndTag.empty()) {
+      !thinkingEndTags.empty() && !thinkingEndTags.front().empty()) {
     next.generation_prompt = generationPrompt;
     if (!thinkingStartTag.empty()) {
       next.reasoning_budget_start =
           common_tokenize(lctx, thinkingStartTag, false, true);
     }
-    next.reasoning_budget_end =
-        common_tokenize(lctx, thinkingEndTag, false, true);
+
+    next.reasoning_budget_end.reserve(thinkingEndTags.size());
+    for (const std::string& thinkingEndTag : thinkingEndTags) {
+      if (!thinkingEndTag.empty()) {
+        next.reasoning_budget_end.emplace_back(
+            common_tokenize(lctx, thinkingEndTag, false, true));
+      }
+    }
     next.reasoning_budget_forced = common_tokenize(
         lctx,
-        params.sampling.reasoning_budget_message + thinkingEndTag,
+        params.sampling.reasoning_budget_message + thinkingEndTags.front(),
         false,
         true);
   }

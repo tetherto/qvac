@@ -116,6 +116,16 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
      [](SdCtxConfig& c, const std::string& v) {
        c.offloadToCpu = parseBool(v, "offload_to_cpu");
      }},
+    {"backend",
+     [](SdCtxConfig& c, const std::string& v) { c.backendSpec = v; }},
+    {"params_backend",
+     [](SdCtxConfig& c, const std::string& v) { c.paramsBackendSpec = v; }},
+    {"max_vram",
+     [](SdCtxConfig& c, const std::string& v) { c.maxVramSpec = v; }},
+    {"stream_layers",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.streamLayers = parseBool(v, "stream_layers");
+     }},
     {"device", [](SdCtxConfig& c, const std::string& v) { c.device = v; }},
     {"clip_on_cpu",
      [](SdCtxConfig& c, const std::string& v) {
