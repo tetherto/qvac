@@ -126,6 +126,14 @@ export function getAllPlugins(): QvacPlugin[] {
   return Array.from(plugins.values())
 }
 
+export function getTurboVecIndexProvider() {
+  for (const plugin of plugins.values()) {
+    const provider = plugin.capabilities?.turbovecIndexProvider
+    if (provider) return provider
+  }
+  return undefined
+}
+
 export function clearPlugins(): void {
   const loggingModules = new Map<PluginLoggingModule, string>()
   for (const plugin of plugins.values()) {
