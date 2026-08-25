@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 // Demonstrates QVAC-21225: an in-flight model download must survive an app
 // suspend/resume and a mid-stream network drop and complete from the partial,

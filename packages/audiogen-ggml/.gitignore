@@ -29,6 +29,14 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 
+# Downloaded ACE-Step GGUFs (multi-GB; fetched from the model registry)
+models/
+
+# Benchmark run output (uploaded as CI artifacts, never committed).
+# benchmarks/manual-results/ is tracked: it is the drop point for backends CI
+# cannot cover.
+benchmarks/results/
+
 # IDE and editor files
 .vscode/
 .idea/

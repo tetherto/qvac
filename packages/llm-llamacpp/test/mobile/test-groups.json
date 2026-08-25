@@ -20,7 +20,6 @@
       "runCacheStateMachineTest",
       "runConfigParametersTest",
       "runKvCacheTypeDefaultsTest",
-      "runToolsCompactTest",
       "runUnloadThrowingListenerTest"
     ],
     "lightB": [
@@ -48,9 +47,9 @@
       "runFinetuningArchsTest"
     ],
     "funcShardB": [
-      "runToolsCompactTest",
       "runSlidingContextTest",
       "runKvCacheTypeDefaultsTest",
+      "runCacheStateMachineTest",
       "runUnloadThrowingListenerTest"
     ],
     "funcShardC": [
@@ -60,8 +59,7 @@
       "runGenerationParamsTest"
     ],
     "funcShardD": [
-      "runGemma4Test",
-      "runCacheStateMachineTest"
+      "runGemma4Test"
     ],
     "funcShardE": [
       "runApiBehaviorTest",
@@ -85,7 +83,8 @@
     ],
     "imageHeavy": [
       "runImageElephantTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runVisionpsyImageNoUpscaleTokensTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",
@@ -110,7 +109,8 @@
     ],
     "imageHeavy": [
       "runImageElephantTest",
-      "runImageHighResAuroraTest"
+      "runImageHighResAuroraTest",
+      "runVisionpsyImageNoUpscaleTokensTest"
     ],
     "vlmPerfGemma4": [
       "runGemma4ImageElephantPerfTest",

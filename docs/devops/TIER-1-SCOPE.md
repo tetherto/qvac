@@ -113,13 +113,13 @@ the workflow-hardening sibling of the §B2 security baseline (which scans repo
   - **Pass 1 — job `workflow-security` ([`zizmor`](https://docs.zizmor.sh)):**
     deterministic, offline, secret-free static analysis over the `.github/` tree
     (workflows + composite actions). The reproducible backbone; catches the
-    machine-modellable subset of the A1–A15 checklist.
+    machine-modellable subset of the A1–A14 checklist.
   - **Pass 2 — job `workflow-security-agent` (Claude Code):** an
     [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action)
-    run that applies the full A1–A15 checklist from
+    run that applies the full A1–A14 checklist from
     [`.cursor/skills/qv-devops-pr-review`](../../.cursor/skills/qv-devops-pr-review/SKILL.md),
-    prioritising the repo-specific conventions zizmor **cannot** model (mandatory
-    `harden-runner`, the `# v<ver>` pin comment, per-job `timeout-minutes`,
+    prioritising the repo-specific conventions zizmor **cannot** model (the
+    `# v<ver>` pin comment, per-job `timeout-minutes`,
     filename conventions, state-mutating concurrency). This automates what was
     previously the *human* `qv-devops-pr-review` fallback. It is scoped to just
     the changed workflow/action files (bounded cost) and posts its own job summary

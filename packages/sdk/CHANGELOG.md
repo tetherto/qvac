@@ -1,10 +1,315 @@
 # Changelog
 
+## [0.18.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.1
+
+QVAC SDK 0.18.1 adds human-readable descriptions on every llamacpp `modelConfig` field and exports those schemas from `@qvac/sdk/schemas`. CLI, typed-client, and Python generators can now surface what each completion and embedding option means. The CosyVoice3 companion-set cache key also changes, so the first load after upgrade uses a new companion cache folder. Load APIs are otherwise unchanged.
+
+## New APIs
+
+### Config schemas at `@qvac/sdk/schemas`
+
+`@qvac/sdk/schemas` exports `llamacppCompletionConfigSchema`, `llamacppEmbeddingConfigSchema`, and `modelSourceSchema`. Field `.describe()` text comes from the addon README / `index.d.ts` (or an existing SDK description) and is written into `contract/schema.json`. The same descriptions land on the generated Python pydantic fields.
+
+```typescript
+import { llamacppCompletionConfigSchema } from '@qvac/sdk/schemas'
+
+llamacppCompletionConfigSchema.shape.ctx_size.description
+// "Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+```
+
+The internal schema identifiers are unchanged.
+
+## Bug Fixes
+
+### CosyVoice3 companion cache folder
+
+CosyVoice3 companion files still download with the LLM, as in 0.18.0. The companion-set cache key for `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` changed, so the first load after upgrading fills a new cache folder. Later loads reuse that folder. Speech APIs and `pace` / `instruct` rules are unchanged.
+
+## [0.18.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.0
+
+QVAC SDK 0.18.0 adds VisionPsy Nano multimodal constants, Audio8 and CosyVoice3 TTS engines, Indic Conformer transcription, and ACE-Step cover generation from a source track. One loaded LLM can now serve several completions at once, sharded GGUFs load directly from disk, and `loadModel` can fall back to a backup source when the origin fails. The dynamic `toolsMode` config is removed, and CosyVoice3 `pace` is restricted to `slow` | `moderate` | `fast`.
+
+## Breaking Changes
+
+### Dynamic toolsMode Removed
+
+`TOOLS_MODE`, `ToolsMode`, and the `toolsMode` load-config field are gone. Tools are always prepended after the system message (the previous static default). Passing `toolsMode` to `loadModel` now fails validation instead of being ignored. Drop the key from existing configs.
+
+**Before:**
+
+```typescript
+import { loadModel, TOOLS_MODE } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_1_7B_INST_Q4,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true, toolsMode: TOOLS_MODE.dynamic }
+})
+```
+
+**After:**
+
+```typescript
+import { loadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_1_7B_INST_Q4,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true }
+})
+```
+
+Existing automatic KV-cache prefixes that were primed under dynamic tools mode are not reusable; the next turn rebuilds the prefix.
+
+### CosyVoice3 Pace Values
+
+`textToSpeech` `pace` no longer accepts engine-specific strings such as `'very fast'`. Use `'slow'`, `'moderate'`, or `'fast'`.
+
+**Before:**
+
+```typescript
+textToSpeech({ modelId, text, pace: 'very fast' })
+```
+
+**After:**
+
+```typescript
+textToSpeech({ modelId, text, pace: 'fast' })
+```
+
+## New APIs
+
+### Continuous Batching
+
+One loaded LLM can run several `completion` calls at once. A new request takes a free slot without waiting for the whole batch to drain. Cancelling one request leaves the others running, and each result reports its own timings. Single-slot models and fine-tuning stay one-at-a-time.
+
+```typescript
+const runs = prompts.map((p) => completion({ modelId, history: p, stream: true }))
+const outputs = await Promise.all(runs.map((r) => r.final))
+
+await cancel({ requestId: runs[0].requestId })
+```
+
+### loadModel fallbackSrc
+
+If the primary `modelSrc` cannot be fetched, `loadModel` retries from `fallbackSrc` (URL or local path) so callers do not have to build their own origin failover.
+
+```typescript
+import { loadModel, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  fallbackSrc: 'https://mirror.example.com/llama-3.2-1b-instruct-q4_0.gguf'
+})
+```
+
+### AudioGen Cover From a Source Track
+
+AudioGen can now generate a cover from source audio, not only a text caption. Pass `taskType: "cover-nofsq"` with `sourceAudio` (path or stereo 48 kHz f32le PCM) and optional `referenceAudio` for timbre.
+
+```typescript
+const cover = audioGen({
+  modelId,
+  caption: 'orchestral arrangement with dramatic strings',
+  lyrics: '[Instrumental]',
+  taskType: 'cover-nofsq',
+  sourceAudio: '/path/to/source.wav',
+  referenceAudio: '/path/to/reference.mp3',
+  audioCoverStrength: 1,
+  coverNoiseStrength: 0.75
+})
+```
+
+### CosyVoice3 TTS
+
+Load CosyVoice3 with `ttsEngine: "cosyvoice3"`. Companion files download with the LLM; `instruct` accepts exactly one of dialect, emotion, or pace.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelConfig: {
+    ttsEngine: 'cosyvoice3',
+    instruct: { dialect: 'cantonese' },
+    seed: 42
+  }
+})
+const result = textToSpeech({
+  modelId,
+  text: 'Hey there!',
+  stream: false,
+  emotion: 'happy'
+})
+```
+
+### Audio8 TTS
+
+Audio8 is a multilingual LM + codec stack with optional zero-shot cloning via reference audio and matching transcript.
+
+```typescript
+await loadModel({
+  modelSrc: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  modelConfig: {
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    audio8CodecEncoderModelSrc: TTS_CODEC_ENCODER_AUDIO8_Q8_0,
+    referenceAudioSrc: 'file:///path/to/voice.wav',
+    referenceText: 'Exactly what the recording says.'
+  }
+})
+```
+
+### Streaming Transcription Stats
+
+`transcribeStream` sessions now expose `stats` after the stream ends (`audioDuration`, `realTimeFactor`).
+
+```typescript
+const session = await transcribeStream({ modelId })
+for await (const event of session) {
+  // streamed events
+}
+const stats = await session.stats
+console.log(stats?.audioDuration, stats?.realTimeFactor)
+```
+
+### Vision image_no_upscale
+
+VisionPsy (and other llama.cpp multimodal loads) can set `image_no_upscale: "on"` in `modelConfig` so the projector does not upscale tiles.
+
+```typescript
+await loadModel({
+  modelType: 'llm',
+  modelSrc: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  modelConfig: {
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
+    image_no_upscale: 'on'
+  }
+})
+```
+
+## Features
+
+### Indic Conformer Transcription
+
+Parakeet Indic Conformer CTC models are in the registry (`PARAKEET_INDIC_CONFORMER_CTC_*`). They use the existing unified ASR transcription path.
+
+### OCR pipelineType Inference
+
+Doctr OCR models no longer require `langList`. EasyOCR still defaults to `['en']` when `langList` is omitted, and explicit lists are forwarded unchanged.
+
+### NMT Timing Units
+
+Translation stats (`totalTime` and related fields) are true milliseconds, matching the documented schema. Values that previously looked like `1.5` are now `1500`.
+
+## Bug Fixes
+
+Sharded llama.cpp models load by pointing the addon at the on-disk files instead of concatenating shards in memory, so large split GGUFs start faster and fine-tuning a sharded model works.
+
+Tool definitions are kept out of the primed KV-cache prefix, so changing tools across turns does not reuse a prefix that baked the old tool list.
+
+Audio-format constants no longer require the optional `@qvac/decoder-audio` package to be installed.
+
+## Model Changes
+
+This release adds VisionPsy Nano (base and Flash) multimodal constants, Indic Conformer transcription weights, Audio8 codec + LM constants, CosyVoice3 companions, and Qwen3-8 27B multimodal shards. `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` is updated.
+
+### Added Models
+
+```text
+MMPROJ_QWEN3_8_27B_MULTIMODAL_F16
+MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
+PARAKEET_INDIC_CONFORMER_CTC_F16
+PARAKEET_INDIC_CONFORMER_CTC_Q4_0
+PARAKEET_INDIC_CONFORMER_CTC_Q8_0
+QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL
+QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
+TTS_CODEC_DECODER_AUDIO8_FP16
+TTS_CODEC_DECODER_AUDIO8_Q8_0
+TTS_CODEC_ENCODER_AUDIO8_FP16
+TTS_CODEC_ENCODER_AUDIO8_Q8_0
+TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32
+TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0
+TTS_LM_MULTILINGUAL_AUDIO8_FP16
+TTS_LM_MULTILINGUAL_AUDIO8_Q8_0
+VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M
+VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M_1
+VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
+```
+
+### Updated Models
+
+```text
+TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
+```
+
+## [0.17.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.1
+
+QVAC SDK 0.17.1 is a patch cut focused on Python packaging and release lockstep. It ships self-contained per-platform `tetherto-qvac-sdk` wheels on the GitHub release, keeps thin wheels on PyPI, makes the embedded Python examples runnable without shared helpers, and publishes `@qvac/inference` together with `@qvac/sdk`, `@qvac/bare-sdk`, and `tetherto-qvac-sdk` at the same version. It also fixes Windows fat-wheel builds and a dropped `bare-rpc` stream teardown.
+
+## Features
+
+### Self-Contained Python Wheels on the GitHub Release
+
+`tetherto-qvac-sdk` now builds per-platform "fat" wheels that bundle a platform-matched Bare runtime for turnkey installs from the `sdk-v*` GitHub release assets. PyPI continues to publish thin wheels; use the release asset URL with `pip install … -f` when you want the self-contained path.
+
+## Bug Fixes
+
+### Windows Fat-Wheel Build and bare-rpc Stream Teardown
+
+Fat-wheel builds on Windows failed because `subprocess` launched `npm` without resolving `npm.cmd`. The build script now resolves `npm` via `shutil.which`. Separately, peer STREAM DESTROY frames from `bare-rpc` invoked async `OutgoingStream.destroy` without scheduling it; the Python transport now schedules that coroutine on the RPC task set so the outgoing stream actually closes.
+
+## Docs
+
+### Standalone Python Examples
+
+The embedded Python examples no longer depend on a shared `_common.py` helper. Each example is self-contained so the docs snippets and local runs stay aligned.
+
+## Release Packaging
+
+This cut also folds `@qvac/inference` into the same `publish-sdk.yml` release path as the other lockstep packages, so a `release-sdk-*` push ships inference / sdk / bare-sdk / python together (including `inference-v*` tags) instead of relying on a standalone inference publish workflow.
+
 ## [0.17.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.0
 
-QVAC SDK 0.17.0 adds music generation through AudioGen (ACE-Step), unifies Whisper and Parakeet behind a single ASR addon without changing the transcription API, and teaches the SDK to parse DeepSeek V3.2/V4 DSML tool calls. It also ships backend-selection diagnostics and opt-in profiler resource gauges, tightens automatic KV cache disk use, and refreshes the model registry with AudioGen, DeepSeek V4, MoE 35B, and related constants.
+QVAC SDK 0.17.0 adds music generation through AudioGen (ACE-Step), Parler-TTS, Wan 2.2 video, and local system-resource diagnostics. It unifies Whisper and Parakeet behind a single ASR addon, adds DeepSeek DSML tool-call parsing, GR00T multi-embodiment selection, backend diagnostics, and opt-in profiler resource gauges. It also removes legacy ONNX OCR constants, tightens automatic KV cache disk use, and refreshes the model registry.
+
+## Breaking Changes
+
+### Legacy ONNX OCR Constants Removed
+
+Legacy ONNX OCR model constants are no longer exported. Use the GGML-OCR equivalents that already ship in the SDK.
+
+**Before:**
+
+```typescript
+import { OCR_CRAFT_DETECTOR, OCR_LATIN_RECOGNIZER } from '@qvac/sdk'
+```
+
+**After:**
+
+```typescript
+import { OCR_CRAFT, OCR_LATIN } from '@qvac/sdk'
+```
+
+Migration notes:
+
+- `OCR_CRAFT_DETECTOR` → `OCR_CRAFT`, `OCR_LATIN_RECOGNIZER` → `OCR_LATIN`
+- `OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL` → `OCR_DOCTR`, `OCR_DETECTOR_DB_MOBILENET_V3_LARGE` → `OCR_DOCTR_1`
+- Non-Latin per-script recognizers have no GGML replacement today. Track GGML-OCR coverage before upgrading if you depend on those scripts.
+
+### Wan 2.2 Single-Expert Validation
+
+Wan 2.2 A14B-only options such as `high_noise_steps` are rejected for single-expert models like TI2V-5B before generation starts. Omit `high_noise_*` and `moe_boundary` options for TI2V-5B and use the single-expert parameters instead.
 
 ## New APIs
 
@@ -43,6 +348,49 @@ for await (const progress of run.progressStream) {
 const { pcm, sampleRate, channels } = await run.audio
 ```
 
+### Parler-TTS
+
+Parler-TTS models are available through the public text-to-speech API, including description-conditioned voice controls and emotion options.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  modelConfig: {
+    ttsEngine: 'parler',
+    voice: 'Laura',
+    seed: 42
+  }
+})
+
+const result = textToSpeech({
+  modelId,
+  text: 'Hey, how are you doing today?',
+  inputType: 'text',
+  stream: false,
+  emotion: 'happy'
+})
+
+const audio = await result.buffer
+```
+
+### Local System Resources
+
+`getSystemResources` reports locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Metrics use `supported`, `unavailable`, `unverified`, or `failed` status and do not reserve memory or guarantee a model can load.
+
+```typescript
+import { getSystemResources } from '@qvac/sdk'
+
+const resources = await getSystemResources({ sample: true })
+
+if (resources.capabilities.memory.totalBytes.status === 'supported') {
+  console.log(resources.capabilities.memory.totalBytes.value)
+}
+
+if (resources.sample?.cpu.status === 'supported') {
+  console.log(resources.sample.cpu.value)
+}
+```
+
 ### DSML Tool Calls for DeepSeek V3.2 / V4
 
 DeepSeek V3.2 and V4 emit tool calls in DSML (DeepSeek Markup Language). The SDK now parses that dialect so tool calls surface on `toolCallStream` instead of leaking raw markup into content. Set `toolDialect: "dsml"` explicitly, or let the SDK auto-detect it from DeepSeek V3.2 / V4 model ids.
@@ -71,6 +419,33 @@ const stats = await result.stats
 stats?.generatedTokens
 // Addon-streamed non-empty pieces — prefer for OpenAI usage accounting
 stats?.emittedTokens
+```
+
+### Context-Boundary Termination
+
+Streamed completions that fill the model context window now finish with a length stop instead of stalling forever. Generation-time context exhaustion maps to a terminal `length` outcome; incomplete KV-cache turns are rolled back.
+
+### GR00T Multi-Embodiment Selection
+
+Multi-embodiment GR00T GGUFs can select an embodiment at load and switch at runtime without a full reload via `vlaSetEmbodiment`. `vlaHparams` reports the resolved embodiment tag and category id.
+
+```typescript
+import { loadModel, vlaHparams, vlaSetEmbodiment, GROOT_MULTI_Q8_VF16 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: GROOT_MULTI_Q8_VF16,
+  modelType: 'ggml-vla',
+  modelConfig: { embodiment: 'libero_sim' }
+})
+
+const { hparams } = await vlaHparams({ modelId })
+hparams.selectedEmbodimentTag // 'libero_sim'
+
+const { hparams: refreshed } = await vlaSetEmbodiment({
+  modelId,
+  embodiment: 24
+})
+refreshed.numCameras // camera count follows the new embodiment
 ```
 
 ### Backend Diagnostics Contract
@@ -109,11 +484,21 @@ console.log(profile.recentEvents?.map((event) => event.resources))
 
 ## Features
 
+### Worker Resource Collector
+
+The worker now hosts independent CPU and GPU collectors that cache inventory and sample on demand. Missing or ambiguous metrics normalize to explicit statuses without affecting model loading.
+
 ### Unified ASR Addon
 
 Whisper and Parakeet transcription now run through the unified `@qvac/asr-ggml` addon. Existing transcription callers keep the same SDK contract; adapters normalize segments, VAD scores, end-of-turn sources, and runtime stats back to the stable surface while dependencies and examples move onto the shared ASR package.
 
+### Wan 2.2 Video Support
+
+Wan 2.2 single-expert and dual-expert model layouts are wired through `@qvac/diffusion-cpp`, including a runnable TI2V-5B text-to-video example.
+
 ## Bug Fixes
+
+Declaration output now emits NodeNext-compatible `.js` specifiers for internal references, so model constants resolve under `moduleResolution: "NodeNext"`.
 
 `clearPlugins` now finishes cleanup even when a plugin's `releaseLogger` throws, so a failing logger teardown cannot leave plugins half-cleared.
 
@@ -121,7 +506,7 @@ Automatic KV caches under `~/.qvac/kv-cache` are bounded with a 24-hour idle TTL
 
 ## Model Changes
 
-This release adds AudioGen (ACE-Step) model constants and refreshes the registry with DeepSeek V4, MoE 35B, GR00T variants, UMT5, and ABot-World entries.
+This release refreshes registry constants (including CosyVoice3, LTX 2.3, Wan 2.2, and Gemma), adds AudioGen (ACE-Step) and GR00T multi-embodiment constants, and removes legacy ONNX OCR exports.
 
 ### Added Models
 
@@ -136,12 +521,57 @@ AUDIOGEN_ACESTEP_V15_TURBO_Q8_0
 AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0
 AUDIOGEN_VAE_BF16
 DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD
+GEMMA_3_12B_Q4_K_XL
+GROOT_MULTI_Q5_VF16
+GROOT_MULTI_Q8_VF16
 GROOT_Q5_VF16_1
 GROOT_Q8_VF16_1
+LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
+LTX_2_3_22B_Q2_K
+LTX_2_3_22B_Q5_K_M
+LTX_2_3_VAE
+LTX_2_3_VAE_1
+MMPROJ_OCR_3B_MULTIMODAL_F16
+MMPROJ_OCR_3B_MULTIMODAL_Q8_0
 MOE_35B_INST_IQ2_XXS
 MOE_35B_INST_Q4_K_M
 MOE_35B_INST_Q8_0
+OCR_3B_MULTIMODAL_Q4_0
+TTS_COSYVOICE3_FLOW_COSYVOICE_FP32
+TTS_COSYVOICE3_HIFT_COSYVOICE_FP32
+TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
+TTS_COSYVOICE3_TOKENIZER_COSYVOICE
+TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1
+TTS_COSYVOICE3_VOICE_COSYVOICE
+TTS_COSYVOICE3_VOICE_COSYVOICE_1
+TTS_COSYVOICE3_VOICE_COSYVOICE_2
 UMT5_XXL_ENC_Q8_0
+WAN2_2_TI2V_5B_Q5_K_S
+WAN_2_2_COMFYUI_REPACKAGED_VAE
+```
+
+### Removed Models
+
+```text
+OCR_ARABIC_RECOGNIZER
+OCR_BENGALI_RECOGNIZER
+OCR_CRAFT_DETECTOR
+OCR_CYRILLIC_RECOGNIZER
+OCR_DETECTOR_DB_MOBILENET_V3_LARGE
+OCR_DETECTOR_DB_RESNET50
+OCR_DEVANAGARI_RECOGNIZER
+OCR_JAPANESE_RECOGNIZER
+OCR_KANNADA_RECOGNIZER
+OCR_KOREAN_RECOGNIZER
+OCR_LATIN_RECOGNIZER
+OCR_LATIN_RECOGNIZER_1
+OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL
+OCR_RECOGNIZER_PARSEQ
+OCR_TAMIL_RECOGNIZER
+OCR_TELUGU_RECOGNIZER
+OCR_THAI_RECOGNIZER
+OCR_ZH_SIM_RECOGNIZER
+OCR_ZH_TRA_RECOGNIZER
 ```
 
 ## [0.16.0]

@@ -95,8 +95,8 @@ jobs:
         shell: powershell
         run: |
           git config --global core.longpaths true
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://${{ secrets.PAT_TOKEN }}:@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf "git@github.com:"
 
       # Self-hosted runners (e.g. qvac-macos26-arm64-gpu) keep their workspace
       # between jobs; wipe it before checkout so each run starts clean. No-op on
@@ -112,7 +112,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # EasyOCR + Doctr GGUFs live in S3 under date-stamped snapshot
       # directories. Bump the date segments below when new snapshots are

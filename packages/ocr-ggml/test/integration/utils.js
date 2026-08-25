@@ -652,15 +652,29 @@ function _loadMobileUrlConfig() {
   return urlConfig
 }
 
-// The Device Farm pre_test phase adb-pushes models here (app-scoped dirs reject
-// adb writes on Android 11+); we copy from here instead of downloading from
-// presigned S3. Host side: scripts/generate-prestage-block.js.
+// The Device Farm pre_test phase pushes models here; we copy from here instead
+// of downloading from presigned S3. Android uses adb into /data/local/tmp
+// (app-scoped dirs reject adb writes on Android 11+). iOS uses
+// pymobiledevice3 apps push into the app's Documents dir, exposed as
+// global.testDir. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
+function prestagedModelDir() {
+  if (platform === 'android') return PRESTAGED_MODEL_DIR
+  if (platform === 'ios') return iosPrestagedModelDir()
+  return null
+}
+
 function readPrestagedModel(modelName) {
-  if (platform !== 'android') return null
+  const stagedDir = prestagedModelDir()
+  if (!stagedDir) return null
   try {
-    const src = path.join(PRESTAGED_MODEL_DIR, modelName)
+    const src = path.join(stagedDir, modelName)
     const sizePath = `${src}.size`
     if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
     const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())

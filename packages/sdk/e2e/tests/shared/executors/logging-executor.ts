@@ -8,7 +8,7 @@ import {
   unloadModel,
   SDK_LOG_ID
 } from '@qvac/sdk'
-import { type TestResult } from '@tetherto/qvac-test-suite'
+import { type TestResult } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { loggingTests } from '../../logging-tests.js'
 import { callWhenAddonIdle } from '../utils/addon-idle.js'

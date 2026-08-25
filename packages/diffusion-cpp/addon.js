@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
+exports.WorldSessionInterface = exports.ActionFlag = exports.EsrganUpscalerInterface = exports.SdInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 exports.readImageDimensions = readImageDimensions;
 /* eslint-disable @typescript-eslint/no-require-imports -- bare-path exposes a CommonJS export shape. */
@@ -118,11 +118,15 @@ class SdInterface {
             throw new Error('addon.runJob: init_image and init_images are mutually exclusive — pick one.');
         }
         const controlFramesBuffers = Array.isArray(params.control_frames) ? params.control_frames : null;
+        const referenceImagesBuffers = Array.isArray(params.reference_images)
+            ? params.reference_images
+            : null;
         if (Array.isArray(params.init_images) && params.init_images.length > 0) {
             const initImageBuffers = params.init_images;
             const serializable = { ...params };
             delete serializable.init_images;
             delete serializable.control_frames;
+            delete serializable.reference_images;
             this._fillDimsFromImage(serializable, initImageBuffers[0]);
             const jobArgs = {
                 type: 'text',
@@ -132,6 +136,9 @@ class SdInterface {
             if (controlFramesBuffers) {
                 jobArgs.controlFramesBuffers = controlFramesBuffers;
             }
+            if (referenceImagesBuffers) {
+                jobArgs.referenceImagesBuffers = referenceImagesBuffers;
+            }
             return this._binding.runJob(this._handle, jobArgs);
         }
         if (params.init_image) {
@@ -139,6 +146,7 @@ class SdInterface {
             const serializable = { ...params };
             delete serializable.init_image;
             delete serializable.control_frames;
+            delete serializable.reference_images;
             this._fillDimsFromImage(serializable, initImageBuffer);
             const jobArgs = {
                 type: 'text',
@@ -148,16 +156,23 @@ class SdInterface {
             if (controlFramesBuffers) {
                 jobArgs.controlFramesBuffers = controlFramesBuffers;
             }
+            if (referenceImagesBuffers) {
+                jobArgs.referenceImagesBuffers = referenceImagesBuffers;
+            }
             return this._binding.runJob(this._handle, jobArgs);
         }
         const serializable = { ...params };
         delete serializable.control_frames;
+        delete serializable.reference_images;
         const jobArgs = {
             type: 'text',
             input: JSON.stringify(serializable)
         };
         if (controlFramesBuffers) {
             jobArgs.controlFramesBuffers = controlFramesBuffers;
+        }
+        if (referenceImagesBuffers) {
+            jobArgs.referenceImagesBuffers = referenceImagesBuffers;
         }
         return this._binding.runJob(this._handle, jobArgs);
     }
@@ -224,9 +239,93 @@ class EsrganUpscalerInterface {
     }
 }
 exports.EsrganUpscalerInterface = EsrganUpscalerInterface;
+/**
+ * Named bits for the walk action mask (WASD move, IJKL look camera).
+ * Combine with bitwise OR: `ActionFlag.W | ActionFlag.L`. Values mirror
+ * `KEY_ORDER` in world.ts and the native `ActionFlag` enum in
+ * WorldSessionModel.hpp (pinned there by test_world_session.cpp and here
+ * by the unit matrix).
+ */
+var ActionFlag;
+(function (ActionFlag) {
+    ActionFlag[ActionFlag["None"] = 0] = "None";
+    ActionFlag[ActionFlag["W"] = 1] = "W";
+    ActionFlag[ActionFlag["A"] = 2] = "A";
+    ActionFlag[ActionFlag["S"] = 4] = "S";
+    ActionFlag[ActionFlag["D"] = 8] = "D";
+    ActionFlag[ActionFlag["I"] = 16] = "I";
+    ActionFlag[ActionFlag["J"] = 32] = "J";
+    ActionFlag[ActionFlag["K"] = 64] = "K";
+    ActionFlag[ActionFlag["L"] = 128] = "L";
+})(ActionFlag || (exports.ActionFlag = ActionFlag = {}));
+/**
+ * JavaScript wrapper around the native ABot-World walk-session addon. The
+ * session is a standalone model object (own DiT + taehv decoder + scene
+ * pack); frames stream through the same string/typed-array output handlers
+ * as batch generation.
+ */
+class WorldSessionInterface {
+    _binding;
+    _handle;
+    constructor(binding, configurationParams, outputCallback) {
+        this._binding = binding;
+        if (!configurationParams.config) {
+            configurationParams.config = {};
+        }
+        if (!configurationParams.config.backendsDir) {
+            configurationParams.config.backendsDir = path.join(__dirname, 'prebuilds');
+        }
+        configurationParams.config = Object.fromEntries(Object.entries(configurationParams.config)
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => [key, String(value)]));
+        this._handle = this._binding.createWorldInstance(this, configurationParams, outputCallback);
+    }
+    // eslint-disable-next-line @typescript-eslint/require-await -- preserve the original async wrapper semantics.
+    async activate() {
+        this._binding.activateWorld(this._handle);
+    }
+    async cancel() {
+        if (!this._handle)
+            return;
+        await this._binding.cancel(this._handle);
+    }
+    /**
+     * Generate the next block under an 8-key action mask — a bitwise OR of
+     * `ActionFlag` values (bit 0..7 = W,A,S,D,I,J,K,L held).
+     * @returns true if the job was accepted, false if busy
+     */
+    async runStep(actionMask) {
+        return this._binding.runWorldStepJob(this._handle, {
+            type: 'text',
+            input: JSON.stringify({ actionMask })
+        });
+    }
+    /**
+     * Create a scene pack natively (umT5 prompt encode + Wan2.2 VAE first-frame
+     * encode). Standalone: works before/without activate().
+     * @returns true if the job was accepted, false if busy
+     */
+    async runSceneCreate(params, imageBytes) {
+        return this._binding.runWorldSceneJob(this._handle, {
+            type: 'text',
+            input: JSON.stringify(params),
+            initImageBuffer: imageBytes
+        });
+    }
+    // eslint-disable-next-line @typescript-eslint/require-await -- preserve the original async wrapper semantics.
+    async unload() {
+        if (!this._handle)
+            return;
+        this._binding.destroyInstance(this._handle);
+        this._handle = null;
+    }
+}
+exports.WorldSessionInterface = WorldSessionInterface;
 const cjsExports = {
     SdInterface,
     EsrganUpscalerInterface,
+    WorldSessionInterface,
+    ActionFlag,
     mapAddonEvent,
     readImageDimensions
 };

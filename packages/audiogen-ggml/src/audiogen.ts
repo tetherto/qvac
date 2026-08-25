@@ -1,18 +1,9 @@
-// Thin JS <-> C++ boundary for the ACE-Step music addon, mirroring
-// tts-ggml/src/tts.ts. `AudioGenInterface` owns the native handle and forwards
-// createInstance / activate / runJob / cancel / destroyInstance to the binding.
-
-/**
- * Flat native configuration object, read 1:1 by the C++ JSAdapter
- * (buildAcestepConfig). Either `modelDir` (auto-classify the four GGUFs) or the
- * explicit per-stage paths are set. The numeric/bool fields are REQUIRED by the
- * native side (it carries no defaults); the high-level class fills them in.
- */
 export interface AudioGenConfigurationParams {
   engineType?: string
   modelDir?: string
   textEncModelPath?: string
   lmModelPath?: string
+  synthModelPath?: string
   ditModelPath?: string
   vaeModelPath?: string
   inferenceSteps?: number
@@ -28,6 +19,35 @@ export interface AudioGenConfigurationParams {
   backendsDir?: string
 }
 
+/** Stable string values serialized across the JS -> native addon boundary. */
+export enum AudioEditOperationType {
+  FlowEdit = 'flow-edit',
+  Repaint = 'repaint'
+}
+
+export enum RepaintMode {
+  Conservative = 'conservative',
+  Balanced = 'balanced',
+  Aggressive = 'aggressive'
+}
+
+export interface AudioEditOperationJobData {
+  type: AudioEditOperationType
+  sourceCaption?: string
+  sourceLyrics?: string
+  targetCaption?: string
+  targetLyrics?: string
+  caption?: string
+  lyrics?: string
+  nMin?: number
+  nMax?: number
+  nAvg?: number
+  start?: number
+  end?: number
+  mode?: RepaintMode
+  strength?: number
+}
+
 /** One generation job handed to the native `runJob`. */
 export interface AudioGenJobData {
   type: string
@@ -38,7 +58,26 @@ export interface AudioGenJobData {
   bpm?: number
   keyscale?: string
   timesignature?: string
+  augmentCaptionWithMetadata?: boolean
   duration?: number
+  lmTemperature?: number
+  lmTopP?: number
+  lmTopK?: number
+  lmCfgScale?: number
+  lmPhase1?: boolean
+  dcwEnabled?: boolean
+  dcwScaler?: number
+  dcwHighScaler?: number
+  audioCodes?: Int32Array
+  referenceAudio?: Float32Array
+  sourceAudio?: Float32Array
+  taskType?: string
+  audioCoverStrength?: number
+  coverNoiseStrength?: number
+  maxFrames?: number
+  inferenceSteps?: number
+  cfgScale?: number
+  editOperations?: AudioEditOperationJobData[]
 }
 
 /** Native output event: (handle, event, data, error). */
@@ -57,7 +96,7 @@ export interface AudioGenBinding {
     outputCallback: AudioGenOutputCallback | null,
   ): object
   activate(handle: object | null): Promise<void>
-  runJob(handle: object | null, data: AudioGenJobData): void | Promise<void>
+  runJob(handle: object | null, data: AudioGenJobData): boolean | Promise<boolean>
   cancel(handle: object | null): Promise<void>
   destroyInstance(handle: object): Promise<void> | void
 }
@@ -80,8 +119,8 @@ export class AudioGenInterface {
     return this._binding.activate(this._handle)
   }
 
-  async runJob (data: AudioGenJobData): Promise<void> {
-    await this._binding.runJob(this._handle, data)
+  async runJob (data: AudioGenJobData): Promise<boolean> {
+    return this._binding.runJob(this._handle, data)
   }
 
   async cancel (): Promise<void> {

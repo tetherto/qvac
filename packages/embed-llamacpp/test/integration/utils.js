@@ -407,22 +407,32 @@ function getModelConfig(modelName) {
   return MODEL_CONFIGS[modelName] || null
 }
 
-// Android Device Farm pre-staging: the device's network to huggingface.co is
+// Mobile Device Farm pre-staging: the device's network to huggingface.co is
 // unreliable, but the Device Farm HOST has solid network. The test-spec
-// pre_test phase downloads each model on the host and `adb push`es it here; when
-// a model is already staged we skip the on-device download entirely.
+// pre_test phase downloads each model on the host and pushes it to a
+// platform-readable staging dir; when a model is already staged we skip the
+// on-device download entirely.
 //
-// /data/local/tmp is the one location that is both adb-writable from the host
-// AND readable by the app process (the harness already pushes testFilter.txt
-// here). The app's own scoped dirs reject adb access on Android 11+, so they
-// cannot be used for host pre-staging.
+// Android uses /data/local/tmp because it is both adb-writable from the host AND
+// readable by the app process. iOS uses global.testDir, which maps to the test
+// app's Documents directory where pymobiledevice3 apps push places files.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
 function prestagedModelDir(modelName) {
-  if (os.platform() !== 'android') return null
+  const platform = os.platform()
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return null
+
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+    const p = path.join(stagedDir, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
   } catch (_) {}
   return null
 }

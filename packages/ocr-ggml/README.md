@@ -12,9 +12,9 @@ PyTorch, and no ONNX Runtime at runtime:
 Select the pipeline at construction time via `params.pipelineType`
 (default `'easyocr'`). Both pipelines emit the same output shape.
 
-Successor of `@qvac/ocr-onnx` (retired and removed from the monorepo,
-QVAC-22515 — browse it in git history at tag `ocr-onnx-v0.7.2`). Same
-input/output shape, same public surface — only the inference engine differs.
+Successor of `@qvac/ocr-onnx` (retired and removed from the monorepo —
+browse it in git history at tag `ocr-onnx-v0.7.2`). Same input/output
+shape, same public surface — only the inference engine differs.
 
 | | `@qvac/ocr-onnx` | `@qvac/ocr-ggml` |
 |---|---|---|
@@ -38,6 +38,23 @@ npm install @qvac/ocr-ggml
 The package ships a Bare addon. Build prerequisites (clang-22, libc++,
 vcpkg, bare-make) match the rest of the QVAC monorepo — see the
 [root README](../../README.md) for the canonical setup.
+
+### Supported platforms
+
+Prebuilds are produced by CI for the following targets (see
+[`reusable-prebuilds.yml`](../../.github/workflows/reusable-prebuilds.yml)):
+
+| Platform | Architectures |
+|---|---|
+| Linux | x64, arm64 |
+| macOS (`darwin`) | arm64, x64 |
+| Windows (`win32`) | x64 |
+| Android | arm64 |
+| iOS (device + simulator) | arm64 (simulator also x64) |
+
+On other targets the package can still be built from source with the
+monorepo toolchain (`bare-make generate && bare-make build && bare-make
+install`).
 
 ```bash
 cd packages/ocr-ggml
@@ -75,20 +92,42 @@ response.onUpdate(rows => {
   }
 })
 
-const stats = await response.await()
-console.log(stats)
+await response.await() // resolves with the full output rows
+console.log(response.stats) // RuntimeStats (populated when opts.stats: true)
 
 await ocr.unload()
 ```
 
-### Quickstart example
+The `doctr` pipeline is language-agnostic, so `langList` can be omitted
+entirely:
+
+```js
+const ocr = new OcrGgml({
+  params: {
+    pathDetector: '/abs/path/db_mobilenet_v3_large.gguf',
+    pathRecognizer: '/abs/path/crnn_mobilenet_v3_small.gguf',
+    pipelineType: 'doctr'
+  }
+})
+```
+
+### Runnable examples
 
 ```bash
+# EasyOCR quickstart
 bare examples/quickstart.js \
   --image samples/english.png \
   --detector models/craft_mlt_25k.gguf \
   --recognizer models/english_g2.gguf \
   --lang en
+
+# DocTR pipeline (DBNet + doctr CRNN; no langList)
+bare examples/doctr.js \
+  --detector models/db_mobilenet_v3_large.gguf \
+  --recognizer models/crnn_mobilenet_v3_small.gguf
+
+# GPU backend selection with transparent CPU fallback
+bare examples/backend-device.js --backend metal
 ```
 
 ## API
@@ -99,9 +138,10 @@ bare examples/quickstart.js \
 |---|---|:-:|---|---|
 | `params.pathDetector` | `string` | ✓ | — | detector `.gguf` (CRAFT for `easyocr`, DBNet for `doctr`) |
 | `params.pathRecognizer` | `string` | ✓ | — | recognizer `.gguf` (`english_g2`/`latin_g2` for `easyocr`, doctr CRNN for `doctr`) |
-| `params.langList` | `string[]` | ✓ | — | language codes (`['en']`, `['en','fr']`, …) — used by `easyocr`, ignored by `doctr` |
+| `params.langList` | `string[]` | ✓ (`easyocr`) | — | language codes (`['en']`, `['en','fr']`, …). Required for `easyocr` and validated by the **native** pipeline against its language registry and the loaded recognizer's character set (an incompatible list rejects `load()` with `ERR_CODES.UNSUPPORTED_LANGUAGE`, preserving the native error message). Optional and ignored for the language-agnostic `doctr` pipeline |
 | `params.pipelineType` | `'easyocr'` \| `'doctr'` | | `'easyocr'` | which pipeline backs the addon |
 | `params.magRatio` | `number` | | `1.5` | CRAFT input-image magnification (`easyocr` only) |
+| `params.canvasSize` | `number` | | `2560` | detection canvas cap (long side, px) applied after `magRatio` scaling — EasyOCR's `canvas_size`. Bounds CRAFT peak memory on dense/high-resolution pages; lower it (e.g. `1280`) on memory-constrained targets such as mobile (`easyocr` only) |
 | `params.defaultRotationAngles` | `number[]` | | `[90, 270]` | rotations tried on low-confidence boxes (`easyocr` only) |
 | `params.contrastRetry` | `boolean` | | `false` | retry low-confidence boxes with contrast adjustment (`easyocr` only) |
 | `params.lowConfidenceThreshold` | `number` | | `0.4` | retry threshold (`easyocr` only) |
@@ -122,6 +162,41 @@ bare examples/quickstart.js \
 - `getState(): InferenceClientState`
 - `getBackendInfo(): BackendInfo | null` — backend device resolved at `load()` (`{ requested, backendDevice, backendName, deviceIndex, backendDescription, fallbackReason }`); `null` before `load()` / after `unload()`. `deviceIndex` is the ggml device index of the selected device (or `-1` on CPU); `backendDescription` is the human-readable model (e.g. `'NVIDIA GeForce RTX 4090'`, `'Apple M3'`)
 - `OcrGgml.getModelKey(): string` — `"ocr-ggml"`, used by the inference manager
+
+### Errors
+
+Failures reject with a structured `QvacErrorAddonOcrGgml` (extends
+`QvacErrorBase` from `@qvac/error`; the original error is preserved as
+`cause` where one exists). Both the error class and the `ERR_CODES` map are
+part of the public surface:
+
+```js
+const { QvacErrorAddonOcrGgml, ERR_CODES } = require('@qvac/ocr-ggml')
+
+try {
+  await ocr.run({ path })
+} catch (err) {
+  if (err instanceof QvacErrorAddonOcrGgml && err.code === ERR_CODES.NOT_LOADED) {
+    await ocr.load() // …and retry
+  }
+}
+```
+
+The allocated code range is `8101..8200`:
+
+| Code | Name | Thrown when |
+|---|---|---|
+| 8101 | `FAILED_TO_LOAD_WEIGHTS` | creating the native instance failed for a non-language reason (e.g. bad/unreadable model file). The native error message is preserved in the wrapper's message and `cause` |
+| 8102 | `FAILED_TO_CANCEL` | cancelling an in-flight job failed |
+| 8103 | `FAILED_TO_RUN_JOB` | submitting a job to the native addon failed |
+| 8104 | `FAILED_TO_GET_STATUS` | reserved |
+| 8105 | `FAILED_TO_DESTROY` | releasing the native instance failed |
+| 8106 | `FAILED_TO_ACTIVATE` | native activation failed (after the instance was created) |
+| 8107 | `MISSING_REQUIRED_PARAMETER` | `load()` called without `pathDetector` / `pathRecognizer` / a non-empty `langList` (the latter only for `easyocr`) |
+| 8108 | `UNSUPPORTED_LANGUAGE` | the native pipeline rejected `langList` (unknown language, or a mix the recognizer does not support). The native message is preserved in the wrapper's message and `cause` |
+| 8109 | `INVALID_IMAGE_OR_INSUFFICIENT_DATA` | the input file is empty, truncated, or a malformed BMP |
+| 8110 | `UNSUPPORTED_IMAGE_FORMAT` | the input is not JPEG / PNG / BMP (or an unsupported BMP variant) |
+| 8111 | `NOT_LOADED` | `run()` called before `load()` |
 
 ### Backend device (CPU / Vulkan / Metal / OpenCL)
 
@@ -347,6 +422,31 @@ are set):
 > on a backend without `GGML_OP_CONV_2D` will abort. It does not affect the
 > DocTR pipeline.
 
+### DocTR direct conv path (backend-aware; `OCR_DOCTR_FUSED_CONV`)
+
+The DocTR pipeline has its own counterpart of the switch above: its DBNet
+detection and CRNN recognition graphs run their regular (non-depthwise)
+convolutions either through `ggml_conv_2d` (im2col → GEMM) or the fused
+`ggml_conv_2d_direct` (`GGML_OP_CONV_2D`). The default is **backend-aware**,
+resolved at graph-build time from the compute backend:
+
+| Resolved backend | DocTR regular-conv default |
+|---|---|
+| OpenCL (Adreno) / Vulkan (Mali) | **`ggml_conv_2d_direct`** (avoids the im2col path that is slow on those GPUs) |
+| CPU / Metal | **`ggml_conv_2d`** (im2col — faster on the tuned Metal GEMM) |
+
+`OCR_DOCTR_FUSED_CONV` overrides the default for A/B testing (read at
+graph-build time; only the exact values `1` / `0` apply):
+
+| Env var | Effect |
+|---|---|
+| `OCR_DOCTR_FUSED_CONV=1` | force `ggml_conv_2d_direct` on every backend |
+| `OCR_DOCTR_FUSED_CONV=0` | force the `ggml_conv_2d` (im2col) path on every backend |
+
+Depthwise convolutions always use `ggml_conv_2d_dw_direct` regardless of
+this setting, and the EasyOCR pipeline is unaffected (it has its own
+`OCR_GGML_DIRECT_CONV` / `OCR_GGML_IM2COL_CONV` switches above).
+
 ### Conv bias broadcast (`OCR_GGML_CRAFT_BIAS_REPEAT`)
 
 Each convolution adds a per-output-channel bias. By default the EasyOCR
@@ -407,7 +507,7 @@ This is byte-for-byte the same shape `@qvac/ocr-onnx` returns.
   detectionTime: number,    // seconds (CRAFT inference)
   recognitionTime: number,  // seconds (CRNN inference)
   numBoxes: number,         // total boxes (aligned + unaligned)
-  backendIsGpu: number      // 1 if inference ran on a GPU (Vulkan/Metal) device, else 0
+  backendIsGpu: number      // 1 if inference ran on a GPU (Vulkan / Metal / OpenCL) device, else 0
 }
 ```
 
@@ -424,10 +524,18 @@ detector + recognizer pair:
 | `english_g2.gguf` / `*_q8_0.gguf` / `*_q4_k.gguf` | English recognizer (gen-2) |
 | `latin_g2.gguf` | Latin-script recognizer (gen-2; fr/de/it/es/pt/…) |
 
-Use the converter in the upstream
-[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml/blob/main/scripts/pth_to_gguf.py)
-repo (`scripts/pth_to_gguf.py`) to produce these from EasyOCR PyTorch
-`.pth` checkpoints.
+Produce these from EasyOCR PyTorch `.pth` checkpoints with the converter
+that ships in this package (`scripts/pth_to_gguf.py`, wrapped by
+`scripts/convert-model.sh` — full usage in
+[`scripts/README.md`](./scripts/README.md)):
+
+```bash
+npm run setup:venv       # one-time: provision ./venv (torch, easyocr, gguf, numpy)
+npm run convert-model -- \
+    ~/.EasyOCR/model/english_g2.pth \
+    models/english_g2.q8_0.gguf \
+    --quantize Q8_0
+```
 
 This first release ships the **gen-2 recognizer family only** (English /
 Latin). Other language groups (Arabic, Bengali, Cyrillic, Devanagari, CJK)
@@ -443,6 +551,39 @@ will land as GGUFs are produced.
 Doctr is language-agnostic: it recognises any Latin-script text the
 underlying CRNN was trained on, so it ignores `langList`, `magRatio` and
 the contrast-retry / rotation knobs.
+
+### Registry-hosted models (`@qvac/inference`)
+
+The QVAC model registry hosts ready-made GGUFs for both pipelines, and the
+[`@qvac/inference`](../inference) package consumes this addon through its
+`ggml-ocr` engine plugin — it downloads the registry weights and drives
+`OcrGgml` for you:
+
+| Registry constant | File | Role |
+|---|---|---|
+| `OCR_CRAFT` | `craft_mlt_25k.gguf` | EasyOCR CRAFT detector |
+| `OCR_LATIN` | `latin_g2.gguf` | EasyOCR Latin recognizer (gen-2) |
+| `OCR_DOCTR_1` | `db_mobilenet_v3_large.gguf` | Doctr DBNet detector |
+| `OCR_DOCTR` | `crnn_mobilenet_v3_small.gguf` | Doctr CRNN recognizer |
+
+```js
+import { registerPlugin, loadModel, ocr, unloadModel, OCR_LATIN } from '@qvac/inference'
+import { ocrPlugin } from '@qvac/inference/ggml-ocr/plugin'
+
+registerPlugin(ocrPlugin)
+
+const modelId = await loadModel({
+  modelSrc: OCR_LATIN,
+  modelConfig: { langList: ['en'] }
+})
+const { blocks } = ocr({ modelId, image: '/abs/path/photo.jpg' })
+for (const block of await blocks) console.log(block.text)
+await unloadModel({ modelId, autoClose: true })
+```
+
+See [`packages/inference/examples/ocr.ts`](../inference/examples/ocr.ts)
+for the full runnable example. Direct use of this addon (paths to local
+GGUF files, as in [Usage](#usage)) stays fully supported.
 
 ### CI distribution
 
@@ -504,10 +645,11 @@ omission for v1: `--debug-png` (annotated overlay) — print boxes via
 | Script | Purpose |
 |---|---|
 | [`scripts/check_ggml_backends.sh`](./scripts/check_ggml_backends.sh) | Probe shipped ggml backends + BLAS/Vulkan/OpenCL paths in `prebuilds/` |
+| [`scripts/pth_to_gguf.py`](./scripts/pth_to_gguf.py) | Weight converter: EasyOCR PyTorch `.pth` → `.gguf` (optionally `Q8_0` / `Q4_K` quantized) |
+| [`scripts/convert-model.sh`](./scripts/convert-model.sh) | Wrapper around the converter (`npm run convert-model`) — venv discovery, sanity checks |
+| [`scripts/setup-venv.sh`](./scripts/setup-venv.sh) | One-time provisioning of the converter venv (`npm run setup:venv`) |
 
-Full usage in [`scripts/README.md`](./scripts/README.md). For weight
-conversion (PyTorch `.pth` → GGUF), use the upstream converter in
-[`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml/blob/main/scripts/pth_to_gguf.py).
+Full usage in [`scripts/README.md`](./scripts/README.md).
 
 ## Testing
 
@@ -642,27 +784,28 @@ packages/ocr-ggml/
 ├── CMakeLists.txt           # bare_module(ocr-ggml), links ggml + opencv4
 ├── vcpkg.json               # ggml from qvac-fabric, opencv4, inference-addon-cpp
 ├── vcpkg-configuration.json
-├── vcpkg/                   # custom triplets + toolchains
 ├── ocr-ggml-cli             # dev-time CLI (mirrors nmt-cli), not shipped to npm
 ├── binding.js               # require.addon() entry
-├── index.js, index.d.ts     # public JS surface (OcrGgml class)
-├── ocr-ggml.js              # thin wrapper over the bare binding
-├── addonLogging.{js,d.ts}   # setLogger / releaseLogger surface
-├── lib/error.js             # QvacErrorAddonOcrGgml + ERR_CODES
-├── examples/quickstart.js   # JS code example
-├── samples/                 # sample fixture images (english.png, …)
-├── scripts/                 # check_ggml_backends.sh diagnostic
-├── test/{unit,integration}
+├── src/                     # TypeScript sources (index.ts, ocr-ggml.ts, addonLogging.ts, lib/error.ts)
+├── index.{js,d.ts}          # generated public JS surface (OcrGgml class)
+├── ocr-ggml.{js,d.ts}       # generated thin wrapper over the bare binding
+├── addonLogging.{js,d.ts}   # generated setLogger / releaseLogger surface
+├── lib/error.{js,d.ts}      # generated QvacErrorAddonOcrGgml + ERR_CODES
+├── examples/                # runnable examples: quickstart.js, doctr.js, backend-device.js
+├── samples/                 # sample fixture images (english.png)
+├── benchmarks/              # quality / performance benchmarks
+├── scripts/                 # converter + diagnostics (see scripts/README.md)
+├── test/{unit,integration,mobile}
 └── addon/src/
-    ├── js-interface/binding.cpp                  # BARE_MODULE entry
-    ├── addon/AddonJs.hpp                         # createInstance / runJob / output handler
-    ├── model-interface/
-    │   ├── OcrTypes.hpp                          # shared OcrInput/OcrConfig + PipelineMode enum
-    │   └── Pipeline.{hpp,cpp}                    # unified IModel adapter (EasyOCR + DocTR via mode)
-    ├── ggml/                                     # gguf_loader, ops, craft, crnn, weights (lifted)
-    ├── pipeline/                                 # lang, steps, step_* (EasyOCR; lifted)
-    ├── easyocr-ggml/                             # headers for the EasyOCR lifted code
-    └── doctr-ggml/                               # MobileNetGraph + DBNet/CRNN steps
+    ├── js-interface/binding.cpp    # BARE_MODULE entry
+    ├── addon/AddonJs.hpp           # createInstance / runJob / output handler
+    └── model-interface/
+        ├── OcrTypes.hpp            # shared OcrInput/OcrConfig + PipelineMode enum
+        ├── Pipeline.{hpp,cpp}      # unified IModel adapter (EasyOCR + DocTR via mode)
+        ├── OcrBackendSelection.*   # CPU/Vulkan/Metal/OpenCL device resolution
+        ├── OcrLazyInitializeBackend.*
+        ├── easyocr/                # lifted EasyOCR code: craft, crnn, ops, gguf_loader + pipeline/ steps (lang, step_*)
+        └── doctr/                  # DocTR DBNet/CRNN steps + MobileNetGraph
 ```
 
 ## Provenance

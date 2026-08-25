@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Positional and MOCK_* references are defaulted throughout: the action calls
+# git with a varying number of arguments, and an unbound expansion under
+# `set -u` would fail the mock rather than the case under test.
+set -euo pipefail
+
+if [ "${1:-}" = "fetch" ] && [ "${2:-}" = "origin" ] && \
+   [ -n "${MOCK_EXPECTED_HEAD_SHA:-}" ] && [ "${3:-}" = "$MOCK_EXPECTED_HEAD_SHA" ]; then
+  [ -n "${MOCK_GIT_ORIGIN_FAILURE_MARKER:-}" ] && touch "$MOCK_GIT_ORIGIN_FAILURE_MARKER"
+  exit 1
+fi
+
+if [ "${1:-}" = "fetch" ] && [ -n "${MOCK_EXPECTED_HEAD_REPO:-}" ] && \
+   [ "${2:-}" = "https://github.com/${MOCK_EXPECTED_HEAD_REPO}.git" ] && \
+   [ "${3:-}" = "${MOCK_EXPECTED_HEAD_SHA:-}" ]; then
+  [ -n "${MOCK_GIT_FALLBACK_MARKER:-}" ] && touch "$MOCK_GIT_FALLBACK_MARKER"
+fi
+
+# Drives the local merge-base fallback, reached when mock-gh rejects the compare
+# call. The value `none` reproduces an unresolvable merge base.
+if [ "${1:-}" = "merge-base" ] && [ -n "${MOCK_GIT_MERGE_BASE:-}" ]; then
+  if [ "$MOCK_GIT_MERGE_BASE" = "none" ]; then
+    exit 1
+  fi
+  printf '%s\n' "$MOCK_GIT_MERGE_BASE"
+  exit 0
+fi
+
+if [ "${1:-}" = "diff" ]; then
+  if [ -n "${MOCK_GIT_DIFF_ARGS_FILE:-}" ]; then
+    printf '%s\n' "$*" >> "$MOCK_GIT_DIFF_ARGS_FILE"
+  fi
+  if [ -n "${MOCK_GIT_DIFF_FILES:-}" ]; then
+    printf '%s\n' "$MOCK_GIT_DIFF_FILES"
+    exit 0
+  fi
+fi
+
+exec /usr/bin/git "$@"

@@ -1,5 +1,141 @@
 # Changelog
 
+## [0.11.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.11.0
+
+This release tightens the security posture of `qvac serve`. Browser access now requires an explicit list of trusted origins, a bind beyond loopback refuses to start without authentication, and the bearer key can be read from a file instead of the command line. Existing `--cors` and `--host` invocations will need updating.
+
+## Breaking Changes
+
+### Trusted browser origins must be named explicitly
+
+`--cors` no longer opens the server to every origin. It is now only a compatibility validation switch: it does not enable CORS by itself, and it fails startup unless at least one exact origin is supplied through `--cors-origin` or `serve.cors.origins`. Wildcards are rejected, as are origins ending in a trailing dot, which no browser sends.
+
+`--docs` no longer inherits wildcard access either. It adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins for Swagger UI, and it rejects `--port 0`, because a same-port origin cannot be computed before the port is known.
+
+**Before:**
+
+```bash
+qvac serve openai --cors --docs
+```
+
+**After:**
+
+```bash
+qvac serve openai --cors --cors-origin https://app.example.com
+```
+
+### A non-loopback bind must authenticate
+
+Binding beyond `127.0.0.1` used to log a warning and start anyway, which quietly exposed an unauthenticated API to the network. It now fails startup unless a key is supplied, or unless the operator says outright that the exposure is intended.
+
+**Before:**
+
+```bash
+# Warned, then served the whole network with no authentication.
+qvac serve openai --host 0.0.0.0
+```
+
+**After:**
+
+```bash
+# Require a bearer token...
+qvac serve openai --host 0.0.0.0 --api-key-file ~/.qvac/serve-key
+
+# ...or accept the risk explicitly, which warns and starts as before.
+qvac serve openai --host 0.0.0.0 --allow-unauthenticated
+```
+
+## New Flags
+
+### `--api-key-file` keeps the credential out of the process list
+
+`--api-key <key>` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file <path>` reads it from a file instead:
+
+```bash
+printf '%s' "$QVAC_API_KEY" > ~/.qvac/serve-key
+chmod 600 ~/.qvac/serve-key
+qvac serve openai --api-key-file ~/.qvac/serve-key
+```
+
+The path must be a regular file — symlinks and directories are refused — and the CLI warns when the file is readable beyond its owner. `--api-key` and `--api-key-file` are mutually exclusive.
+
+### `--allow-unauthenticated` opts back into an open bind
+
+For operators who genuinely want an unauthenticated listener beyond loopback, this restores the previous warn-and-start behaviour. Anyone who can reach the address can use the server.
+
+## [0.10.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.10.0
+
+This release moves the CLI onto `@qvac/sdk` 0.17.0 and improves the OpenAI-compatible serve surface for transcription timing, companion model config, and completion-token accounting. It also removes the retired `ocr-onnx` plugin path in favor of `ggml-ocr`.
+
+## Breaking Changes
+
+### OCR plugin path
+
+Serve configs and docs that still reference the retired ONNX OCR plugin must switch to the ggml OCR plugin.
+
+**Before:**
+
+```json
+{ "plugins": ["@qvac/sdk/onnx-ocr/plugin"] }
+```
+
+**After:**
+
+```json
+{ "plugins": ["@qvac/sdk/ggml-ocr/plugin"] }
+```
+
+## New APIs
+
+### Timed transcription response formats
+
+`POST /v1/audio/transcriptions` now accepts OpenAI-compatible timed formats such as `vtt` and `srt`, in addition to plain text and JSON. Clients can request timed captions without a separate post-processing step:
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
+  -F model=whisper-transcribe \
+  -F file=@./sample.wav \
+  -F response_format=vtt
+```
+
+### Nested companion model constants in serve config
+
+Serve model entries can resolve nested `*ModelSrc` constant names such as `s3genModelSrc` for multi-component TTS engines. Companion weights no longer need to be hard-coded as raw paths when the constant is already exported by the SDK:
+
+```json
+{
+  "serve": {
+    "models": {
+      "chatterbox": {
+        "model": "TTS_T3_TURBO_EN_CHATTERBOX_Q8_0",
+        "type": "tts",
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "s3genModelSrc": "TTS_S3GEN_EN_CHATTERBOX"
+        }
+      }
+    }
+  }
+}
+```
+
+### Completion usage prefers emitted tokens
+
+OpenAI-compatible chat usage now prefers `stats.emittedTokens` (non-empty pieces actually streamed to the client) when the addon reports it, while `generatedTokens` remains the decode-count signal for length and KV-cache budgeting. This keeps `usage.completion_tokens` aligned with what clients observe in the response stream.
+
+## Dependency Alignment
+
+`@qvac/cli` now depends on `@qvac/sdk@^0.17.0`. Publish and promote this release after `@qvac/sdk` 0.17.0 is on npm.
+
+## Other
+
+The package build now uses `tsc-alias` instead of the previous custom path-alias resolver.
+
 ## [0.9.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.9.0

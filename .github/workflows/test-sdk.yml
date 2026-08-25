@@ -56,6 +56,17 @@ on:
       test-version:
         description: "Code ref to test (branch, tag, or SHA; blank = selected workflow branch)"
         type: string
+      inference-source:
+        description: "Inference source (branch builds packages/inference; npm resolves a version; manifest keeps SDK package.json)"
+        type: choice
+        options:
+          - manifest
+          - branch
+          - npm
+        default: manifest
+      inference-version:
+        description: "npm inference version or dist-tag (blank defaults to latest)"
+        type: string
       cache-models:
         description: "Reuse downloaded models for Desktop, Electron, and Snap"
         type: boolean
@@ -71,7 +82,7 @@ on:
       device-farm-timeout:
         description: "Device Farm run timeout (minutes)"
         type: number
-        default: 90
+        default: 120
       device-farm-start-timeout:
         description: "Wait for Device Farm run to start (minutes)"
         type: number
@@ -95,7 +106,7 @@ on:
       snap-platforms:
         description: "Advanced: Snap runners (JSON array)"
         type: string
-        default: '["ubuntu-22.04"]'
+        default: '["qvac-ubuntu2204-x64-gpu"]'
 
   workflow_call:
     inputs:
@@ -120,7 +131,7 @@ on:
         default: 1200
       device-farm-timeout:
         type: number
-        default: 90
+        default: 120
       device-farm-start-timeout:
         type: number
         default: 15
@@ -138,6 +149,14 @@ on:
         default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]'
       test-version:
         type: string
+      inference-source:
+        description: "Inference source: branch, npm, or manifest"
+        type: string
+        default: "manifest"
+      inference-version:
+        description: "Inference version or dist-tag for npm"
+        type: string
+        default: ""
       cache-models:
         type: boolean
         default: true
@@ -254,8 +273,93 @@ jobs:
             echo "run-ios=$RESOLVED_IOS"
           } >> "$GITHUB_OUTPUT"
 
-  desktop-tests:
+  prepare-inference:
+    name: Resolve inference source
     needs: resolve
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      checkout-sha: ${{ steps.checkout.outputs.commit }}
+      source: ${{ steps.inference.outputs.source }}
+      dependency-spec: ${{ steps.inference.outputs.dependency-spec }}
+      provenance: ${{ steps.inference.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/inference
+            .github/actions/sdk-e2e-prepare-inference
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure package registries
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+          ];
+          if (process.env.NPM_TOKEN) {
+            lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
+          }
+          if (process.env.PAT_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          }
+          fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
+
+      - name: Resolve and prepare inference
+        id: inference
+        shell: bash
+        env:
+          INFERENCE_SOURCE: ${{ inputs.inference-source || 'manifest' }}
+          INFERENCE_VERSION: ${{ inputs.inference-version || '' }}
+          PROJECT_DIRECTORY: packages/sdk
+          INFERENCE_DIRECTORY: packages/inference
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-inference-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-inference/prepare.mjs resolve
+
+      - name: Derive branch artifact name
+        id: artifact
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const name = `sdk-e2e-inference-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\n`);
+
+      - name: Upload branch inference package
+        if: steps.inference.outputs.source == 'branch'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.inference.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop-tests:
+    needs: [resolve, prepare-inference]
     if: needs.resolve.outputs.run-desktop == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -267,12 +371,16 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      test-version: ${{ inputs.test-version || '' }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   electron-tests:
-    needs: resolve
+    needs: [resolve, prepare-inference]
     if: needs.resolve.outputs.run-electron == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
@@ -284,29 +392,37 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      test-version: ${{ inputs.test-version || '' }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   snap-tests:
-    needs: resolve
+    needs: [resolve, prepare-inference]
     if: needs.resolve.outputs.run-snap == 'true'
     uses: ./.github/workflows/test-node-sdk.yml
     with:
       consumer: snap
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
-      platforms: ${{ inputs.snap-platforms || '["ubuntu-22.04"]' }}
+      platforms: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      test-version: ${{ inputs.test-version || '' }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
       cache-models: ${{ inputs.cache-models }}
     secrets: inherit
 
   android-tests:
-    needs: resolve
+    needs: [resolve, prepare-inference]
     permissions:
       actions: read
       id-token: write
@@ -322,16 +438,20 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       device-pools: ${{ vars.SDK_ANDROID_DEVICE_FARM_POOLS }}
       device-pool-name: ${{ inputs.android-device-pool }}
-      test-version: ${{ inputs.test-version || '' }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
     secrets: inherit
 
   ios-tests:
-    needs: resolve
+    needs: [resolve, prepare-inference]
     permissions:
       actions: read
       id-token: write
@@ -347,10 +467,14 @@ jobs:
       filter: ${{ inputs.filter }}
       suite: ${{ needs.resolve.outputs.suite }}
       exclude-suite: ${{ inputs.exclude-suite }}
-      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '90') }}
+      device-farm-timeout: ${{ fromJSON(inputs.device-farm-timeout || '120') }}
       device-farm-start-timeout: ${{ fromJSON(inputs.device-farm-start-timeout || '15') }}
       device-farm-project-arn: ${{ vars.SDK_DEVICE_FARM_PROJECT_ARN }}
       ios-device-pools: ${{ vars.SDK_IOS_DEVICE_FARM_POOLS }}
       device-pool-name: ${{ inputs.ios-device-pool }}
-      test-version: ${{ inputs.test-version || '' }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
     secrets: inherit

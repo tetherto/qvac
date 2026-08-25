@@ -53,7 +53,7 @@
 - **Caller-supplied paths**: Application passes absolute file paths; addon streams them from disk
 - **Batch processing**: Process multiple texts in a single forward pass
 - **GPU acceleration**: Metal, Vulkan, OpenCL
-- **Multi-GPU**: `split-mode`/`tensor-split` config for pipeline (`'layer'`) and tensor (`'row'` on CUDA/SYCL) parallelism (see `examples/multiGpuBenchmark.js`)
+- **Multi-GPU**: `split-mode`/`tensor-split` config for pipeline (`'layer'`) parallelism (see `examples/multiGpuBenchmark.js`). Tensor parallelism (`'row'`) needs split buffers, which only SYCL provides as of qvac-fabric v10069 — none of the backends shipped here do, so `'row'` is accepted but degraded to `'layer'` at load with a warning
 - **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
 - **Sharded loading**: Caller passes every shard + `.tensors.txt` companion; addon streams them in order
 - **Encoder-only models**: Optimized for embedding generation

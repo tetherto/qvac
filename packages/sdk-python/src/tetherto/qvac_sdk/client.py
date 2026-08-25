@@ -14,7 +14,7 @@ and `bare_path` resolve independently, so an explicit `worker_path` with no
   3. A self-contained bundled wheel: the Bare runtime + built worker staged
      under `qvac/_bundle/` by scripts/build_wheel.py -- zero configuration.
   4. `sdk_dir` argument or `QVAC_SDK_DIR` env var, an installed `@qvac/sdk`
-     package directory (`<sdk_dir>/dist/server/worker.js` +
+     package directory (`<sdk_dir>/dist/src/worker/index.js` +
      `<sdk_dir>/node_modules/bare-runtime-<platform>-<arch>/bin/bare`).
   5. A thin wheel's fetched worker: `python -m tetherto.qvac_sdk install-worker` puts the
      version-matched `@qvac/sdk` under a per-user cache dir, else a global
@@ -61,19 +61,25 @@ def _bare_runtime_package_suffix() -> str:
     return f"{_PLATFORM_MAP[system]}-{_ARCH_MAP[machine]}"
 
 
+def _bare_executable_name() -> str:
+    return "bare.exe" if os.name == "nt" else "bare"
+
+
 def _derive_from_sdk_root(
     sdk_root: Path, worker_path: str | None, bare_path: str | None
 ) -> tuple[str, str]:
     """(bare, worker) paths for an installed `@qvac/sdk` package directory:
-    `<root>/dist/server/worker.js` and the platform Bare binary under its
+    `<root>/dist/src/worker/index.js` and the platform Bare binary under its
     node_modules -- the same layout the JS SDK locates its own worker in."""
-    resolved_worker = worker_path or str(sdk_root / "dist" / "server" / "worker.js")
+    resolved_worker = worker_path or str(
+        sdk_root / "dist" / "src" / "worker" / "index.js"
+    )
     resolved_bare = bare_path or str(
         sdk_root
         / "node_modules"
         / f"bare-runtime-{_bare_runtime_package_suffix()}"
         / "bin"
-        / "bare"
+        / _bare_executable_name()
     )
     return resolved_bare, resolved_worker
 
@@ -134,8 +140,8 @@ def _resolve_command(
     # and the built worker under qvac/_bundle/, so an installed bundled
     # wheel needs no explicit paths, env, or sdk checkout at all.
     bundle = Path(__file__).parent / "_bundle"
-    bundled_worker = bundle / "worker" / "dist" / "server" / "worker.js"
-    bundled_bare = bundle / "runtime" / "bare"
+    bundled_worker = bundle / "worker" / "dist" / "src" / "worker" / "index.js"
+    bundled_bare = bundle / "runtime" / _bare_executable_name()
     if bundled_worker.exists() and bundled_bare.exists():
         return (
             bare_path or str(bundled_bare),
@@ -150,13 +156,13 @@ def _resolve_command(
     # (version-scoped, so it always matches this client), then a global
     # `npm install -g @qvac/sdk` (version-checked, warns on mismatch).
     managed = _managed_sdk_root()
-    if (managed / "dist" / "server" / "worker.js").exists():
+    if (managed / "dist" / "src" / "worker" / "index.js").exists():
         return _derive_from_sdk_root(managed, worker_path, bare_path)
 
     global_root = _npm_global_sdk_root()
     if (
         global_root is not None
-        and (global_root / "dist" / "server" / "worker.js").exists()
+        and (global_root / "dist" / "src" / "worker" / "index.js").exists()
     ):
         _warn_on_version_mismatch(global_root)
         return _derive_from_sdk_root(global_root, worker_path, bare_path)

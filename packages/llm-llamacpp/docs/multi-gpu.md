@@ -18,22 +18,33 @@ Controls how the model is distributed across GPUs.
 |----------|----------|
 | `'none'` | **Default.** Pin the entire model to a single GPU selected by `main-gpu` (or auto-detected). No multi-GPU. |
 | `'layer'`| **Pipeline parallelism.** Each transformer layer is assigned to a GPU. Layers flow sequentially through GPUs. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
-| `'row'`  | **Tensor parallelism if supported by the backend.** On CUDA/SYCL, each layer's weight matrices are split row-wise across GPUs — all GPUs compute every layer in parallel. On Vulkan/Metal, falls back to layer assignment (same as `'layer'`). **See [backend limitations](#tensor-parallelism-on-vulkan) below.** |
+| `'row'`  | **Accepted, but not effective on any shipped backend.** Degraded to `'layer'` at load with a warning, because no backend this package ships provides the split buffers row-split requires. **See [backend limitations](#tensor-parallelism-is-unavailable-in-shipped-builds) below.** |
 
 Accepts both `split-mode` (hyphen) and `split_mode` (underscore). Providing both throws an error. Case-insensitive (`'LAYER'` works).
 
-#### Tensor parallelism on Vulkan
+#### Tensor parallelism is unavailable in shipped builds
 
-True tensor parallelism (`row` mode) requires a "split buffer" that slices each weight tensor across GPUs. Only **CUDA** and **SYCL** backends implement split buffers. **Vulkan and Metal do not**, so `split-mode: 'row'` falls back to layer assignment on those backends — behaving identically to `split-mode: 'layer'`.
+True tensor parallelism (`row` mode) requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. As of **qvac-fabric v10069, only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`, which this package does not expose. Vulkan, Metal and OpenCL never provided it.
 
-This applies to both inference and finetuning. On Vulkan and Metal, only pipeline (layer) parallelism is effective regardless of the `split-mode` value.
+This package ships Metal (Apple), Vulkan (Linux/Windows/Android), OpenCL (Android) and optionally HIP — **none of them, so `split-mode: 'row'` is never effective in a shipped build.**
+
+Two things changed in the v10069 rebase:
+
+- qvac-fabric no longer silently treats `row` as `layer` on a backend without split buffers; it **fails the model load** with `device <name> does not support split buffers`.
+- So the addon now degrades `row` → `layer` itself before loading, and logs a `WARNING`. Models keep loading, and `row` keeps behaving like `layer` as before — but the fallback is now explicit and logged rather than implicit in qvac-fabric.
+
+The degrade requires *every* GPU device to lack split buffers to be skipped, matching what qvac-fabric checks: it builds a split buffer for each device it distributes over and throws on the first one that cannot. A single unsupported backend registered in the process is enough.
+
+This applies to both inference and finetuning. Only pipeline (layer) parallelism is effective, regardless of the `split-mode` value.
 
 | Backend | `'layer'` | `'row'` |
 |---------|-----------|---------|
-| CUDA    | Layer parallelism | True tensor parallelism (split buffers) |
-| SYCL    | Layer parallelism | True tensor parallelism (split buffers) |
-| Vulkan  | Layer parallelism | Falls back to layer parallelism |
-| Metal   | Layer parallelism | Falls back to layer parallelism |
+| SYCL (not shipped) | Layer parallelism | True tensor parallelism (split buffers) |
+| CUDA (not shipped) | Layer parallelism | Degraded to layer parallelism — split buffers dropped at v10069 |
+| Vulkan  | Layer parallelism | Degraded to layer parallelism |
+| Metal   | Layer parallelism | Degraded to layer parallelism |
+| OpenCL  | Layer parallelism | Degraded to layer parallelism |
+| HIP     | Layer parallelism | Degraded to layer parallelism |
 
 ### `tensor-split`
 
@@ -48,7 +59,7 @@ A comma-separated string of proportions that control how much of the model each 
 The values are relative weights, not absolute sizes. qvac-fabric normalizes them internally so `'1,1'` and `'50,50'` produce the same result.
 
 - In `layer` mode: controls how many layers are assigned to each GPU (proportional to the weights).
-- In `row` mode on CUDA/SYCL: controls both layer assignment **and** the row-wise split ratio within each layer's weight tensors. On Vulkan/Metal, only the layer assignment applies (same as `layer` mode).
+- In `row` mode: only the layer assignment applies, since `row` is degraded to `layer` on every shipped backend (same as `layer` mode). On a split-buffer backend it would also control the row-wise split ratio within each layer's weight tensors.
 - When `split-mode` is `'none'` (or omitted): `tensor-split` has no effect since only one GPU is used.
 
 ### `main-gpu`
@@ -133,7 +144,7 @@ const config = {
 
 Distributes transformer layers equally across 2 GPUs. Each GPU processes roughly half the layers sequentially.
 
-### Two-GPU unequal split (tensor parallelism, CUDA/SYCL)
+### Two-GPU unequal split (`row` requested, degraded to `layer`)
 
 ```js
 const config = {
@@ -144,9 +155,9 @@ const config = {
 }
 ```
 
-On CUDA/SYCL, splits each layer's weight matrix 75/25 across 2 GPUs. Both GPUs compute every layer in parallel, with GPU 0 handling the larger portion. On Vulkan/Metal, this behaves identically to `'layer'` with the same proportions.
+On every shipped backend this behaves identically to `'layer'` with the same proportions, and logs the degrade warning. On a split-buffer backend it would split each layer's weight matrix 75/25 across 2 GPUs, with both GPUs computing every layer in parallel and GPU 0 handling the larger portion.
 
-### Row split with main-gpu (CUDA/SYCL)
+### Row split with main-gpu
 
 ```js
 const config = {
@@ -158,7 +169,7 @@ const config = {
 }
 ```
 
-Weight tensors are split row-wise across 2 GPUs (CUDA/SYCL only). GPU 0 is designated for intermediate results and KV cache via `main-gpu`.
+`main-gpu` designates GPU 0 for intermediate results and KV cache. On a split-buffer backend weight tensors would also be split row-wise across the 2 GPUs; on every shipped backend the request is degraded to `layer`.
 
 ### Single GPU (explicit)
 
@@ -215,6 +226,8 @@ The benchmark runs all three modes (none, layer, row) on the same model and prin
 
 ## Choosing a split strategy
 
+The `row` column describes what tensor parallelism would give on a split-buffer backend; it is kept for reference, not as available behaviour.
+
 | Factor | `layer` (pipeline) | `row` (tensor) |
 |--------|-------------------|----------------|
 | GPU interconnect | Works over PCIe | Benefits from NVLink / fast PCIe |
@@ -222,8 +235,6 @@ The benchmark runs all three modes (none, layer, row) on the same model and prin
 | Throughput | Good for large batches | Good for interactive / low-latency |
 | VRAM distribution | Even if layers are uniform | Even split of every layer |
 | Complexity | Simpler scheduling | Requires cross-GPU communication per layer |
-| Backend support | All backends (CUDA, SYCL, Vulkan, Metal) | **CUDA/SYCL only** — Vulkan/Metal fall back to layer mode |
+| Backend support | All backends | **SYCL only** (not shipped) — every shipped backend degrades to layer mode |
 
-For Vulkan and Metal systems, `layer` is the only effective strategy. `row` can be set but behaves identically to `layer`.
-
-For CUDA/SYCL systems with 2 GPUs over NVLink or fast PCIe, `row` mode provides lower per-token latency. Otherwise start with `layer` mode and equal `tensor-split`.
+`layer` is the only effective strategy on every backend this package ships. `row` can be set but is degraded to `layer` at load with a warning — see [above](#tensor-parallelism-is-unavailable-in-shipped-builds). Start with `layer` mode and equal `tensor-split`.

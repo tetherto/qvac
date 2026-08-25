@@ -3,7 +3,7 @@
 
 The real-worker tests (`test_bare_rpc_transport.py`, the poc tests, the
 conformance corpus, the orchestrate e2e) and every example spawn a real worker
-from the sibling `@qvac/sdk` package's `dist/server/worker.js`. That file is a
+from the sibling `@qvac/sdk` package's `dist/src/worker/index.js`. That file is a
 build artifact -- if it's missing the tests skip themselves, which silently
 hides real integration coverage (notably in CI). This script builds it so they
 actually run.
@@ -36,7 +36,7 @@ def sdk_dir() -> Path:
 
 
 def worker_path(sdk: Path) -> Path:
-    return sdk / "dist" / "server" / "worker.js"
+    return sdk / "dist" / "src" / "worker" / "index.js"
 
 
 def _run(cmd: list[str], cwd: Path) -> None:

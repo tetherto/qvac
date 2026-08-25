@@ -28,10 +28,11 @@ as the project model by default.
    spawn its detached supervisor from there. The host gives it a real runtime,
    and means the serve is reaped even if OpenCode is killed hard.)
 2. The host starts a small local proxy and immediately reports it is listening —
-   **before** the model downloads. The plugin injects an OpenAI-compatible
-   `qvac` provider pointed at the proxy and returns, so `opencode run` never
-   trips OpenCode's startup timeout. The model loads in the background; the first
-   turn waits on it (a slow cold turn, not a failure).
+   **before** the model downloads — handing the plugin the proxy's URL and a
+   freshly generated access token over a dedicated pipe. The plugin injects an
+   OpenAI-compatible `qvac` provider pointed at the proxy and returns, so
+   `opencode run` never trips OpenCode's startup timeout. The model loads in the
+   background; the first turn waits on it (a slow cold turn, not a failure).
 3. The host runs `createQvac({ mode: 'managed' })` from
    [`@qvac/ai-sdk-provider`](https://www.npmjs.com/package/@qvac/ai-sdk-provider),
    which brings up a shared, idle-reaped serve on an auto-allocated port.
@@ -39,6 +40,23 @@ as the project model by default.
 Multiple OpenCode windows **share one serve** (the provider's `reuse` default):
 the detached runner owns the loaded model and reaps it a few minutes after the
 last session leaves, so a second window doesn't reload the model.
+
+## Authentication
+
+Managed `qvac serve` requires a bearer token, and the proxy in front of it does
+too — it is a loopback HTTP server, so anything else on the machine could
+otherwise drive your local model.
+
+- The host generates a random per-session **proxy token** and sends it to the
+  plugin over a dedicated handshake pipe, never over its log stream. OpenCode
+  authenticates with that token; a missing or wrong one gets the same
+  `401 invalid_api_key` response serve returns.
+- The managed serve's own key stays inside the host process. The proxy replaces
+  the inbound `Authorization` header with that key, read fresh per request so a
+  serve that was respawned after a crash is never sent a stale credential.
+- Neither secret is written to stdout, `QVAC_HOST_LOG`, or debug traces.
+- If the handshake is missing or malformed, the plugin fails startup and
+  terminates the host rather than registering an unauthenticated provider.
 
 ## Model selection
 
@@ -80,6 +98,7 @@ a `qvac.json` in the project dir, the `opencode.json` plugin-tuple options, and
 | `shim`                              | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms (see below)                       |
 | `runtime`                           | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve                    |
 | `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download  |
+| `listenTimeoutMs`                   | `QVAC_LISTEN_TIMEOUT_MS` | `30000`      | budget for the host proxy to listen and hand over its handshake      |
 | `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model            |
 | `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                |
 
@@ -110,8 +129,9 @@ two points today, so the host runs a small in-process proxy that bridges them:
   OpenCode shows a collapsed "Thought" block instead of raw tags.
 
 Both are stopgaps for serve gaps. Set `shim: false` (or `QVAC_SHIM=0`) to turn
-the transforms off once serve closes those gaps; the proxy itself stays (it is
-what lets startup return before the model finishes loading).
+the transforms off once serve closes those gaps; the proxy itself stays — it is
+what lets startup return before the model finishes loading, and it owns the
+authentication handoff described above.
 
 ## Performance expectations
 
@@ -124,8 +144,29 @@ running `opencode` from the terminal.
 
 ## Requirements
 
-- [`@qvac/ai-sdk-provider@^0.4.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
-  for managed mode (AI SDK 7).
-- [`@qvac/cli@^0.9.0`](https://www.npmjs.com/package/@qvac/cli) available so the
-  host can run `qvac serve` (SDK 0.16 runtime).
+- [`@qvac/ai-sdk-provider@^0.6.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
+  for managed mode (AI SDK 7). The host proxies on behalf of the managed serve,
+  so it needs the provider's `ManagedQvacProvider.apiKey` getter — see
+  [Provider compatibility](#provider-compatibility).
+- [`@qvac/cli@^0.11.0`](https://www.npmjs.com/package/@qvac/cli) available so the
+  host can run `qvac serve` (SDK 0.17 runtime). 0.11.0 is also the first CLI that
+  accepts `--api-key-file`, which keeps the managed serve's bearer key out of the
+  process command line.
 - Node.js 22 or newer.
+
+### Provider compatibility
+
+The managed serve requires bearer authentication, and the proxy reads the
+serve's key from the resolved `ManagedQvacProvider`. A provider release that
+predates that getter cannot supply one, so the host checks for it as soon as the
+managed provider is created and fails startup with an
+`IncompatibleProviderError` (code `INCOMPATIBLE_PROVIDER`) naming the required
+upgrade, rather than answering every proxied request with an opaque `503`. The
+credential itself is never part of that error or of any log line.
+
+The `@qvac/ai-sdk-provider` dependency floor in this package is raised as part of
+the ordered agent-stack release cascade — the provider is published first, then
+the plugins that depend on the new surface are bumped against the published
+version. A feature branch that adds a provider surface therefore leaves the floor
+alone and relies on the runtime check above; the release cascade is what turns it
+into a manifest guarantee.

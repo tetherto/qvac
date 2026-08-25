@@ -74,3 +74,26 @@ qvac bundle sdk
 ```
 
 If you do not install the CLI globally, run the latest version with `npx` instead.
+## SDK fails to load on GCC-10-era embedded Linux
+
+### Situation
+
+You are running the QVAC SDK on a Yocto-based or other embedded Linux image with GCC 10 era `libstdc++` (GLIBCXX version 3.4.28 or lower). The SDK fails at module load time with an error such as:
+
+<WrapCode>
+
+```
+Error: /usr/lib/aarch64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.29' not found
+```
+
+</WrapCode>
+
+### Cause
+
+`rocksdb-native`, a transitive dependency reached through `corestore` and `hypercore-storage`, requires `GLIBCXX_3.4.30`. Its Linux ARM64 prebuilds are compiled against Ubuntu 22.04, and every version within the SDK's current semver range carries this floor. Pinning an older version does not help.
+
+### Solution
+
+Switch the embedded image toolchain from GCC to clang with static `libc++` linkage. This removes the versioned `libstdc++` symbol dependency entirely. The QVAC-owned inference addons (such as `@qvac/translation-nmtcpp`) already use this approach and carry no `libstdc++` requirement.
+
+GCC-10-era embedded Linux images are not a currently supported target. See [GitHub issue #3365](https://github.com/tetherto/qvac/issues/3365) for the full diagnosis and audit.

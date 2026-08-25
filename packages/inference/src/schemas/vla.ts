@@ -3,6 +3,98 @@ import { z } from 'zod'
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 
 // ============================================
+// Embodiment selection (GR00T only)
+// ============================================
+
+// Bounds mirrored from @qvac/vla-ggml: a cat_id indexes GR00T's
+// CategorySpecificLinear bank whose category dim the architecture fixes at 32,
+// and the native resolver caps camera counts at 64.
+const MAX_EMBODIMENT_CAT_ID = 31
+const MAX_NUM_CAMERAS = 64
+
+// Sanity bound, not an addon contract — the addon only requires non-empty.
+// Real tags are short snake_case identifiers (longest known: 37 chars); the
+// cap stops a garbage or hostile string from travelling into the native
+// resolver while leaving ample headroom for legitimate tags.
+const MAX_EMBODIMENT_TAG_LENGTH = 256
+
+const embodimentTagSchema = z
+  .string()
+  .min(1)
+  .max(MAX_EMBODIMENT_TAG_LENGTH)
+  .describe("Embodiment tag string as stored in the GGUF (e.g. 'libero_sim').")
+
+const embodimentCatIdSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_EMBODIMENT_CAT_ID)
+  .describe("The embodiment's numeric `cat_id` (0..31).")
+
+const embodimentObjectSchema = z
+  .object({
+    tag: embodimentTagSchema.optional(),
+    catId: embodimentCatIdSchema.optional(),
+    numCameras: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_NUM_CAMERAS)
+      .optional()
+      .describe(
+        'Overrides the camera count stored in the GGUF for the selected ' +
+          'embodiment. Required to select an embodiment whose count was ' +
+          'unknown at conversion time.'
+      )
+  })
+  .refine((value) => value.tag === undefined || value.catId === undefined, {
+    message: 'embodiment accepts either tag or catId, not both'
+  })
+
+/**
+ * How a GR00T embodiment is named when selecting one: a tag string, its
+ * numeric `cat_id` (0..31), or an object carrying either plus an optional
+ * camera-count override. Mirrors the addon's `VlaEmbodimentSelector`.
+ *
+ * On the load path (`config.embodiment`) an object naming neither `tag` nor
+ * `catId` is allowed — the GGUF's default embodiment is used, with only the
+ * `numCameras` override applied.
+ */
+export const vlaEmbodimentSelectorSchema = z.union([
+  embodimentTagSchema,
+  embodimentCatIdSchema,
+  embodimentObjectSchema
+])
+
+export type VlaEmbodimentSelector = z.input<typeof vlaEmbodimentSelectorSchema>
+
+/**
+ * The selector shape `vlaSetEmbodiment` accepts: a switch must name an
+ * embodiment, so the neither-tag-nor-catId object form is rejected here
+ * (matching the addon's `setEmbodiment` validation).
+ */
+export const vlaEmbodimentSelectionSchema = z.union([
+  embodimentTagSchema,
+  embodimentCatIdSchema,
+  embodimentObjectSchema.refine((value) => value.tag !== undefined || value.catId !== undefined, {
+    message: 'embodiment must name a tag or a catId'
+  })
+])
+
+/**
+ * The static type matching `vlaEmbodimentSelectionSchema`. Hand-written
+ * because zod refinements don't narrow the inferred type — `z.input` of the
+ * schema would still allow the load-path-only `{ numCameras }` / `{}`
+ * spellings that the switch schema rejects at runtime. The `never` fields
+ * encode "exactly one of tag / catId" structurally.
+ */
+export type VlaEmbodimentSelection =
+  | string
+  | number
+  | { tag: string; catId?: never; numCameras?: number }
+  | { catId: number; tag?: never; numCameras?: number }
+
+// ============================================
 // Load-time config
 // ============================================
 
@@ -19,7 +111,15 @@ export const vlaConfigSchema = z.object({
     .number()
     .int()
     .optional()
-    .describe('Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).')
+    .describe('Native log verbosity forwarded to the addon (0=ERROR, 1=WARN, 2=INFO, 3=DEBUG).'),
+  embodiment: vlaEmbodimentSelectorSchema
+    .optional()
+    .describe(
+      'GR00T only: which embodiment of a multi-embodiment GGUF to activate at ' +
+        'load — a tag string, a numeric `cat_id` (0..31), or `{ tag | catId, ' +
+        "numCameras }`. Omitted = the GGUF's default embodiment. Rejected by " +
+        'the addon for non-GR00T models.'
+    )
 })
 
 export type VlaConfig = z.input<typeof vlaConfigSchema>
@@ -74,6 +174,26 @@ export const vlaHparamsSchema = z.object({
       "For patch-input models (`imageInputMode === 'patches'`), the exact " +
         'per-camera patch buffer length each `images` entry must have. Absent ' +
         'for pixel-input models.'
+    ),
+  selectedEmbodimentTag: z
+    .string()
+    .optional()
+    .describe(
+      'GR00T only: the embodiment tag resolved at load / after ' +
+        '`vlaSetEmbodiment`. Absent for SmolVLA / π₀.₅. Present is not the ' +
+        'same as switchable — a single-embodiment GGUF reports its baked tag ' +
+        'and still rejects `vlaSetEmbodiment`.'
+    ),
+  selectedEmbodimentCatId: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_EMBODIMENT_CAT_ID)
+    .optional()
+    .describe(
+      "The resolved embodiment's numeric `cat_id` — the value to pass back " +
+        'to select the same embodiment by id. Absent when no embodiment was ' +
+        'resolved (SmolVLA / π₀.₅).'
     )
 })
 
@@ -192,6 +312,31 @@ export const vlaHparamsResponseSchema = z.object({
 })
 
 export type VlaHparamsResponse = z.infer<typeof vlaHparamsResponseSchema>
+
+// ============================================
+// Set-embodiment request / response (plugin handler)
+// ============================================
+
+export const vlaSetEmbodimentRequestSchema = z.object({
+  type: z.literal('vlaSetEmbodiment'),
+  modelId: z.string(),
+  embodiment: vlaEmbodimentSelectionSchema.describe(
+    'The embodiment to switch the loaded GR00T model to — a tag string, a ' +
+      'numeric `cat_id` (0..31), or `{ tag | catId, numCameras }`. Must name ' +
+      'a tag or a catId.'
+  )
+})
+
+export type VlaSetEmbodimentRequest = z.input<typeof vlaSetEmbodimentRequestSchema>
+
+export const vlaSetEmbodimentResponseSchema = z.object({
+  hparams: vlaHparamsSchema.describe(
+    'The refreshed hparams after the switch — `numCameras`, `actionDim` and ' +
+      'the `selectedEmbodiment*` fields follow the newly active embodiment.'
+  )
+})
+
+export type VlaSetEmbodimentResponse = z.infer<typeof vlaSetEmbodimentResponseSchema>
 
 // ============================================
 // Client-facing input shapes

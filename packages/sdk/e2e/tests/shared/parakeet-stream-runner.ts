@@ -8,9 +8,10 @@
 import {
   transcribeStream,
   type TranscribeStreamConversationSession,
-  type TranscribeStreamSession
+  type TranscribeStreamSession,
+  type TranscribeStats
 } from '@qvac/sdk'
-import type { TestResult } from '@tetherto/qvac-test-suite'
+import type { TestResult } from '@qvac/qvac-test-suite'
 import { decodeWavToMonoF32 } from './wav-pcm.js'
 
 export interface ParakeetStreamParams {
@@ -78,7 +79,7 @@ export async function runParakeetStreamHappy(
       events.push(event as CollectedEvent)
     }
 
-    return assertHappy(events)
+    return assertHappyWithStats(events, await session.stats)
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     return { passed: false, output: `parakeet stream failed: ${errorMsg}` }
@@ -495,6 +496,24 @@ function assertHappy(events: CollectedEvent[]): TestResult {
     }
   }
   return { passed: true, output: summary }
+}
+
+function assertHappyWithStats(
+  events: CollectedEvent[],
+  stats: TranscribeStats | undefined
+): TestResult {
+  const eventResult = assertHappy(events)
+  if (!eventResult.passed) return eventResult
+  if (stats?.audioDuration === undefined || stats.audioDuration <= 0) {
+    return {
+      passed: false,
+      output: `expected positive streaming audioDuration stats, got: ${JSON.stringify(stats)}`
+    }
+  }
+  return {
+    passed: true,
+    output: `${eventResult.output}; stats=${JSON.stringify(stats)}`
+  }
 }
 
 function assertEou(events: CollectedEvent[]): TestResult {

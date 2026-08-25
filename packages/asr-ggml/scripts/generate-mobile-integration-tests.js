@@ -10,26 +10,27 @@ const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileDir = path.join(repoRoot, 'test', 'mobile')
 const outputFile = path.join(mobileDir, 'integration.auto.cjs')
 
-function getIntegrationFiles () {
+function getIntegrationFiles() {
   if (!fs.existsSync(integrationDir)) {
     throw new Error(`Integration directory not found: ${integrationDir}`)
   }
 
-  const files = fs.readdirSync(integrationDir)
-    .filter(entry => entry.endsWith('.test.js'))
-    .filter(entry => !DESKTOP_ONLY.has(entry))
+  const files = fs
+    .readdirSync(integrationDir)
+    .filter((entry) => entry.endsWith('.test.js'))
+    .filter((entry) => !DESKTOP_ONLY.has(entry))
 
   return orderIntegrationFiles(files)
 }
 
-function toFunctionName (fileName) {
+function toFunctionName(fileName) {
   const base = fileName.replace(/\.js$/, '')
   const parts = base.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const suffix = parts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+  const suffix = parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join('')
   return `run${suffix}`
 }
 
-function buildFileContents (files) {
+function buildFileContents(files) {
   const lines = []
   const functionNames = files.map(toFunctionName)
   lines.push("'use strict'")
@@ -64,7 +65,7 @@ function buildFileContents (files) {
   return `${lines.join('\n')}\n`
 }
 
-function main () {
+function main() {
   const files = getIntegrationFiles()
   if (files.length === 0) {
     throw new Error(`No integration test files found inside ${integrationDir}`)

@@ -74,11 +74,12 @@ test('readIndicTransModels returns [] when config is missing or malformed', () =
   })
 })
 
-test('buildScript stages the model to the prestage dir via adb push', () => {
+test('buildScript stages the model to the Android prestage dir via adb push', () => {
   const script = buildScript([{ name: 'm.bin', url: 'https://example.com/m.bin?sig=x' }])
   assert.match(script, /PRESTAGE_DIR=\/data\/local\/tmp\/prestaged-models/)
   assert.match(script, /stage "m\.bin" "https:\/\/example\.com\/m\.bin\?sig=x"/)
   assert.match(script, /adb push/)
+  assert.doesNotMatch(script, /pymobiledevice3/)
   assert.match(script, /wc -c/)
   assert.match(script, /\.size/)
   assert.match(script, /device will use network fallback/)
@@ -92,6 +93,28 @@ test('buildScript stages the model to the prestage dir via adb push', () => {
   const failedAdb = runWithStubs(script, { adbExit: 1 })
   assert.equal(failedAdb.status, 0, failedAdb.stderr)
   assert.match(failedAdb.stdout, /adb setup failed/)
+})
+
+test('buildScript ios backend uses pymobiledevice3 apps push into Documents', () => {
+  const script = buildScript([{ name: 'm.bin', url: 'https://example.com/m.bin?sig=x' }], 'ios')
+  assert.match(script, /stage "m\.bin" "https:\/\/example\.com\/m\.bin\?sig=x"/)
+  assert.match(script, /pymobiledevice3 apps push/)
+  assert.match(script, /Documents\/\$NAME/)
+  assert.match(script, /Documents\/\$NAME\.size/)
+  assert.match(script, /unset SUDO_UID SUDO_GID/)
+  assert.match(script, /not found during afc operation\|failed to perform afc operation/)
+  assert.match(script, /pymobiledevice3==10\.3\.1/)
+  assert.match(script, /device will use network fallback/)
+  assert.match(script, /\.size/)
+  assert.doesNotMatch(script, /adb push/)
+  assert.doesNotMatch(script, /PRESTAGE_DIR=\/data\/local\/tmp/)
+  assert.doesNotMatch(script, /FATAL/)
+  const syntax = childProcess.spawnSync('sh', ['-n'], { input: script, encoding: 'utf8' })
+  assert.equal(syntax.status, 0, syntax.stderr)
+})
+
+test('buildScript rejects unknown platforms', () => {
+  assert.throws(() => buildScript([], 'windows'), /unknown platform/)
 })
 
 test('formatYamlBlock emits a literal block with every shell line indented', () => {

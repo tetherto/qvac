@@ -1,5 +1,6 @@
 import { ModelType } from '@/schemas/model-types'
 import {
+  ADDON_AUDIOGEN,
   ADDON_BCI,
   ADDON_CLASSIFICATION,
   ADDON_DIFFUSION,
@@ -31,6 +32,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.ggmlOcr]: 'ocr',
   [ModelType.parakeetTranscription]: 'parakeet',
   [ModelType.sdcppGeneration]: 'diffusion',
+  [ModelType.audiogenGgml]: 'audiogen',
   [ModelType.ggmlVla]: 'vla',
   [ModelType.ggmlClassification]: 'classification',
   'onnx-vad': 'vad'
@@ -66,6 +68,9 @@ export const LEGACY_ENGINE_TO_CANONICAL: Record<string, ModelRegistryEngine> = {
   ocr: ModelType.ggmlOcr,
   [ADDON_DIFFUSION]: ModelType.sdcppGeneration,
   diffusion: ModelType.sdcppGeneration,
+  [ADDON_AUDIOGEN]: ModelType.audiogenGgml,
+  '@qvac/audiogen': ModelType.audiogenGgml,
+  audiogen: ModelType.audiogenGgml,
   [ADDON_VLA]: ModelType.ggmlVla,
   vla: ModelType.ggmlVla,
   [ADDON_CLASSIFICATION]: ModelType.ggmlClassification,

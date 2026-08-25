@@ -12,7 +12,6 @@
 #include "../utils/LoggingMacros.hpp"
 #include "../utils/ReasoningRollbackState.hpp"
 #include "ContextSlider.hpp"
-#include "ToolsCompactController.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -55,8 +54,8 @@ void clearSeqOnFailure(::llama_context* ctx, llama_seq_id seqId) noexcept {
 } // namespace
 
 ReasoningBlockCompactor::ReasoningBlockCompactor(
-    utils::ReasoningRollbackState& rollback, ToolsCompactController& tools)
-    : rollback_(rollback), tools_(tools) {}
+    utils::ReasoningRollbackState& rollback)
+    : rollback_(rollback) {}
 
 void ReasoningBlockCompactor::setOpenSpan(llama_pos start) {
   // `start < 0` only for degenerate templates whose entire rendered
@@ -120,7 +119,7 @@ void ReasoningBlockCompactor::recordPreReasoningToken(llama_token id) {
   }
   // Same primitive as the close marker: append to the seeded prefix
   // so `clipPostReasoningTokens` will preserve these tokens across a
-  // tools-compact tail trim. Order in `postReasoningTokens_` is
+  // tail trim. Order in `postReasoningTokens_` is
   // `[pre-reasoning..., close, captured tail...]`, matching the
   // desired replay sequence after the boundary snapshot is restored.
   rollback_.appendPostReasoningToken(id);
@@ -281,9 +280,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     // `end > start` themselves.
     return out;
   }
-  // `recordedEnd > pos` means a tail-eraser (today: the tools_compact
-  // tail trim in `TextLlmContext::onGenerationCompletePolicy`, which
-  // runs just before `compactThinkSpan()`) shrank the cache past the
+  // `recordedEnd > pos` means a tail-eraser shrank the cache past the
   // recorded close marker.
   //
   // Two sub-cases:
@@ -395,9 +392,6 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
       // After `seq_rm + seq_add`, the tail shifts left into the slice
       // we just removed, so the protected-prefix end becomes `start`.
       out.keptPrefixEnd = start;
-      if (tools_.enabled()) {
-        tools_.onSlide(rangeOutcome.discarded, start);
-      }
       ++thinkingBlockDiscards_;
       QLOG_IF(
           Priority::DEBUG,
@@ -461,8 +455,8 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   // cache holds tokens at positions `[end, pos)`). The replay buffer
   // additionally holds a seeded close marker at its head, which
   // `clipPostReasoningTokens` preserves regardless of the cap; passing
-  // the captured-tail length here drops any captured tokens that the
-  // tools-compact tail trim has since removed from the live cache,
+  // the captured-tail length here drops any captured tokens that a
+  // tail trim has since removed from the live cache,
   // without touching the structural prefix.
   const llama_pos snapshotPos = rollback_.reasoningBoundaryNPast();
   rollback_.clipPostReasoningTokens(static_cast<size_t>(pos - end));
@@ -539,9 +533,6 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   out.discarded = pos - newPos;
   out.keptPrefixEnd = snapshotPos;
   out.replayedTokens = replayCount;
-  if (tools_.enabled()) {
-    tools_.onSlide(out.discarded, snapshotPos);
-  }
   ++thinkingBlockDiscards_;
   QLOG_IF(
       Priority::DEBUG,

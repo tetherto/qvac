@@ -6,20 +6,12 @@ import {
   buildWhisperReloadConfig
 } from '@/plugins/builtin/asr-ggml/config'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
-import {
-  isEndOfTurnEvent,
-  isVadEvent,
-  toEndOfTurnEvent,
-  toVadStateEvent
-} from '@/utils/asr-events'
+import { isEndOfTurnEvent, isVadEvent, toEndOfTurnEvent, toVadStateEvent } from '@/utils/asr-events'
 import { ADDON_ASR, ADDON_PARAKEET, ADDON_WHISPER } from '@/schemas/plugin'
 import { LEGACY_ENGINE_TO_CANONICAL } from '@/schemas/engine-addon-map'
 import { ModelType } from '@/schemas/model-types'
 import { clearAllAddonLoggers, createAddonLoggerCallback, unregisterAddonLogger } from '@/logging'
-import {
-  clearAllLoggingStreams,
-  registerLoggingStream
-} from '@/runtime/logging-stream-registry'
+import { clearAllLoggingStreams, registerLoggingStream } from '@/runtime/logging-stream-registry'
 
 test('ASR addon constants preserve legacy engine mappings', (t) => {
   t.is(ADDON_ASR, '@qvac/asr-ggml')
@@ -84,6 +76,21 @@ test('buildParakeetEngineConfig removes undefined addon fields', (t) => {
   })
 })
 
+test('buildParakeetEngineConfig forwards Indic Conformer language', (t) => {
+  const config = buildParakeetEngineConfig({
+    language: 'hi',
+    useGPU: true
+  })
+
+  t.alike(config, {
+    engine: 'parakeet',
+    parakeetConfig: {
+      language: 'hi',
+      useGPU: true
+    }
+  })
+})
+
 test('ASR reload config builders keep engine-specific wrappers', (t) => {
   t.alike(
     buildWhisperReloadConfig({
@@ -97,9 +104,10 @@ test('ASR reload config builders keep engine-specific wrappers', (t) => {
       }
     }
   )
-  t.alike(buildParakeetReloadConfig({ streamingChunkMs: 480 }), {
+  t.alike(buildParakeetReloadConfig({ streamingChunkMs: 480, language: 'ta' }), {
     parakeetConfig: {
-      streamingChunkMs: 480
+      streamingChunkMs: 480,
+      language: 'ta'
     }
   })
 })

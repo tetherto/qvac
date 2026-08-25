@@ -163,6 +163,7 @@ export const registry: Record<string, HandlerEntry> = {
   textToSpeech: { type: 'stream', pluginOp: true, handler: pluginStream('textToSpeech') },
   ocrStream: { type: 'stream', pluginOp: true, handler: pluginStream('ocrStream') },
   diffusionStream: { type: 'stream', pluginOp: true, handler: pluginStream('diffusionStream') },
+  audioGenStream: { type: 'stream', pluginOp: true, handler: pluginStream('audioGenStream') },
   videoStream: { type: 'stream', pluginOp: true, handler: pluginStream('videoStream') },
   upscaleStream: { type: 'stream', pluginOp: true, handler: pluginStream('upscaleStream') },
   classify: { type: 'stream', pluginOp: true, handler: pluginStream('classify') },

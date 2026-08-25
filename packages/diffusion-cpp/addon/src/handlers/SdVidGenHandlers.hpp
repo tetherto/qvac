@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -63,6 +64,9 @@ struct SdVidGenConfig {
   int sampleSteps = 30;
   sample_method_t sampleMethod = EULER_SAMPLE_METHOD; // Wan recommended
   scheduler_t scheduler = SIMPLE_SCHEDULER;           // Wan recommended
+  // LTX-2 needs its own shift-based sigma schedule (LTX2_SCHEDULER); the Wan
+  // default above is only applied when the caller did not ask for a scheduler.
+  bool schedulerExplicit = false;
   float cfgScale = 6.0f;                              // guidance.txt_cfg
   // Image-conditioning guidance for img2vid. Mirrors the image
   // path's SdGenConfig::imgCfgScale exactly:
@@ -114,6 +118,16 @@ struct SdVidGenConfig {
   // when control_frames are supplied on the GenerationJob.
   float vaceStrength = 1.0f;
 
+  // -- LTX IC-LoRA -----------------------------------------------------------
+  // Reference image bytes are carried by GenerationJob. These optionals are
+  // assigned only when supplied so sd_vid_gen_params_init() retains defaults.
+  std::string loraPath;
+  float loraStrength = 1.0f;
+  std::optional<float> referenceAttentionStrength;
+  std::optional<float> referenceDownscaleFactor;
+  float stgScale = 0.0f;
+  int stgBlock = 29;
+
   // -- VAE tiling -- strongly recommended ON for Wan (VAE peaks ~4-6 GB
   //                  at 832x480 / 480x832 without tiling). Mapped to
   //                  sd_vid_gen_params_t::vae_tiling_params.
@@ -125,6 +139,9 @@ struct SdVidGenConfig {
   // axis to bound peak VRAM at high resolution / long clips. Maps to
   // sd_tiling_params_t::temporal_tiling. No effect on Wan (spatial-only VAE).
   bool vaeTemporalTiling = false;
+  // Backend-specific key=value overrides, such as LTX video VAE
+  // temporal_tile_frames and temporal_tile_overlap.
+  std::string vaeExtraTilingArgs;
 
   // -- Step-caching ----------------------------------------------------------
   // Mapped to sd_vid_gen_params_t::cache. Same enum as image generation.

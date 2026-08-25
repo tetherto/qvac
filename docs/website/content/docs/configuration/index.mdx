@@ -35,6 +35,9 @@ Values marked with `<placeholders>` should be replaced with your actual values.
   ],
   "bareRuntimeVersion": "<x.y.z>",
   "serve": {
+    "cors": {
+      "origins": ["https://app.example.com"]
+    },
     "models": {
       "<model_alias>": {
         "model": "<SDK_MODEL_CONSTANT>",
@@ -107,11 +110,39 @@ Model types (allowed keys): `llm` | `embeddings` | `whisper` | `parakeet` | `bci
 | --- | --- | --- | --- | --- |
 | `models` | Map of model aliases to model entries (see [`ModelEntry`](#modelentry) below). Required when running the server. | `Record<string, string \| ModelEntry>` | Yes | — |
 | `publicBaseUrl` | Externally reachable origin (e.g., `"https://api.example.com"`). Required for image `response_format=url`. Must start with `http://` or `https://`. The CLI flag `--public-base-url` overrides this value. | `string` | No | — |
+| `cors` | Browser origins trusted to make cross-origin requests. See [`CorsOptions`](#corsoptions). | `CorsOptions` | No | — |
 | `openai` | OpenAI-adapter–specific options. See [`OpenAIOptions`](#openaioptions). | `OpenAIOptions` | No | — |
+
+#### `CorsOptions`
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `origins` | Exact HTTP(S) origins allowed by CORS, such as `"https://app.example.com"`. Values cannot include credentials, a path, query, or fragment. Wildcard (`"*"`) is not allowed. CLI `--cors-origin` values are added to this list. | `string[]` | No | `[]` |
+
+Configure every browser origin explicitly:
+
+```json
+{
+  "serve": {
+    "cors": {
+      "origins": [
+        "https://app.example.com",
+        "http://localhost:3000"
+      ]
+    }
+  }
+}
+```
+
+Configuring one or more origins enables CORS. `--docs` also enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when it is itself loopback. The legacy `--cors` flag is a compatibility validation switch: it does not enable CORS by itself and fails unless `--cors-origin` or `serve.cors.origins` supplies at least one explicit origin. `--cors --docs` still needs an explicit origin because the docs defaults do not satisfy that validation.
 
 #### `ModelEntry`
 
 The `serve.models` field is a map of model aliases to model entries. Keys are the **model aliases** — the names that HTTP clients use in the `model` field of their requests. Values can be either a **string** (SDK model constant name, e.g., `"QWEN3_600M_INST_Q4"`) or a `ModelEntry` object:
+
+<Callout type="success">
+**Tip:** you can generate or extend `serve.models` interactively with [`qvac configure`](/cli#qvac-configure) instead of writing entries by hand.
+</Callout>
 
 | Field | Description | Type | Required |
 | --- | --- | --- | --- |
@@ -119,7 +150,7 @@ The `serve.models` field is a map of model aliases to model entries. Keys are th
 | `src` | Explicit model source (URL or path). | `string` | Yes (if no `model`) |
 | `type` | Model type: `llm` \| `embeddings` \| `whisper` \| `parakeet` \| `nmt` \| `tts` \| `ocr` \| `whispercpp-audio-translation` \| `diffusion`. | `string` | Yes (if using `src`) |
 | `default` | Use as the default model for its endpoint category. | `boolean` | No (`false`) |
-| `preload` | Load model into memory on server startup. | `boolean` | No (`true` for constant entries, `false` for explicit) |
+| `preload` | Load the model at server startup. When `false`, it loads lazily on the first request that names it (cold start). | `boolean` | No (`true` for constant entries, `false` for explicit) |
 | `config` | Model config overrides (same as [`modelConfig` in `loadModel()`](/reference/api#loadmodel)). | `object` | No |
 
 Example:
@@ -139,6 +170,17 @@ Example:
   }
 }
 ```
+
+#### `LoadOptions` (`serve.load`)
+
+Controls how models are loaded on demand. Each field has a matching CLI flag on `qvac serve openai`.
+
+| Field | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `lazy` | When `false`, requests never trigger a load; an unloaded model returns `503 model_not_loaded`. Only preloaded models serve. CLI: `--no-lazy-load`. | `boolean` | No | `true` |
+| `concurrency` | Max simultaneous loads across different aliases. `1` mirrors startup preload and bounds memory under lazy request-time loads. CLI: `--load-concurrency`. | `number` | No | `1` |
+| `timeoutMs` | Per-load deadline in ms; on expiry the load is cancelled and the request gets `503 model_load_timeout`. `null` = unbounded. CLI: `--load-timeout`. | `number \| null` | No | `null` |
+| `cancelOnDisconnect` | When `true`, a client disconnecting mid-load cancels the load — but only once no other request is still waiting on that same load. CLI: `--no-cancel-load-on-disconnect`. | `boolean` | No | `true` |
 
 #### `OpenAIOptions`
 

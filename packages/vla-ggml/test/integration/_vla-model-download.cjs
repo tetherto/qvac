@@ -21,13 +21,20 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 
-// The Device Farm pre_test phase adb-pushes the shard's GGUF here (app-scoped
-// dirs reject adb writes on Android 11+). Host side: scripts/generate-prestage-block.js.
+// The Device Farm pre_test phase pushes the shard's GGUF here. Android uses adb
+// into /data/local/tmp (app-scoped dirs reject adb writes on Android 11+). iOS
+// uses pymobiledevice3 apps push into the app's Documents dir, exposed as
+// global.testDir. Host side: scripts/generate-prestage-block.js.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
 
 // Returns true when a non-empty copy landed; the caller re-verifies it against
 // urls.json (size + sha256) before trusting it, so a truncated push falls back
-// to the network download. No-op off Android.
+// to the network download. No-op off mobile pre-stage platforms.
 function copyPrestagedModel(modelFilename, destPath) {
   let os
   try {
@@ -35,9 +42,13 @@ function copyPrestagedModel(modelFilename, destPath) {
   } catch (_) {
     return false
   }
-  if (os.platform() !== 'android') return false
+  const platform = os.platform()
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return false
   try {
-    const src = path.join(PRESTAGED_MODEL_DIR, modelFilename)
+    const src = path.join(stagedDir, modelFilename)
     if (!fs.existsSync(src) || fs.statSync(src).size === 0) return false
     const dir = path.dirname(destPath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })

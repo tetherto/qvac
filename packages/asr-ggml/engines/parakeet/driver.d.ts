@@ -22,6 +22,12 @@ export interface ParakeetConfig {
     /** Random seed for reproducibility (-1 for random, default: -1). */
     seed?: number;
     /**
+     * Multilingual CTC language id (e.g. `"hi"`, `"ta"`). Required for GGUFs
+     * that advertise `parakeet.ctc.lang_*` ranges (Indic Conformer); ignored on
+     * monolingual CTC. Empty keeps full-vocab greedy decode.
+     */
+    language?: string;
+    /**
      * Open a long-lived streaming session at load time. Cross-append state is
      * preserved within one `run()` call, but not across separate calls.
      */

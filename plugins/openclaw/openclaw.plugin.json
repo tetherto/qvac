@@ -2,7 +2,7 @@
   "id": "qvac",
   "name": "QVAC",
   "description": "Local QVAC provider for OpenClaw",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "providers": ["qvac"],
   "modelSupport": {
     "modelPrefixes": ["qwen3.5-", "qwen3.6-", "gpt-oss-", "gemma4-"]
@@ -11,7 +11,6 @@
     "providers": {
       "qvac": {
         "baseUrl": "http://127.0.0.1:11434/v1",
-        "apiKey": "custom-local",
         "api": "openai-completions",
         "models": [
           {
@@ -19,7 +18,12 @@
             "name": "Qwen3.5 0.8B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -31,7 +35,12 @@
             "name": "Qwen3.5 2B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -43,7 +52,12 @@
             "name": "Qwen3.5 4B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -55,7 +69,12 @@
             "name": "Qwen3.5 9B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -67,7 +86,12 @@
             "name": "Qwen3.6 27B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -79,7 +103,12 @@
             "name": "Qwen3.6 35B A3B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -91,7 +120,12 @@
             "name": "GPT-OSS 20B",
             "reasoning": true,
             "input": ["text"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -103,7 +137,12 @@
             "name": "Gemma4 31B",
             "reasoning": true,
             "input": ["text", "image"],
-            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
             "contextWindow": 32768,
             "maxTokens": 8192,
             "compat": {
@@ -139,7 +178,10 @@
       },
       "apiKey": {
         "type": "string",
-        "description": "Optional API key marker for local OpenAI-compatible requests."
+        "minLength": 32,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9_][A-Za-z0-9_-]{31,127}$",
+        "description": "Optional base64url bearer key to materialize into the private QVAC key file."
       },
       "qvacCommand": {
         "type": "string",

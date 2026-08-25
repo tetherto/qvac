@@ -1,0 +1,95 @@
+name: Summarize AudioGen GGML Benchmarks
+
+# Shared by the manual orchestrator and the label-gated PR lane so a table
+# rendered on a PR is the same table a sweep produces.
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: "Repository to check out for the aggregator script"
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: "Ref to check out for the aggregator script"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # This job only needs a read-only checkout of the (public) repo to run the
+      # aggregator script, so the ambient GITHUB_TOKEN suffices. An empty `token:`
+      # is not a no-op — checkout fails with "Input required and not supplied" —
+      # so keep it set explicitly.
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ github.token }}
+
+      # No merge-multiple: same-platform runners emit identically named
+      # rtf-benchmark-*.json files, so per-artifact subdirectories preserve all
+      # rows for the recursive aggregator.
+      - name: Download desktop benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          pattern: rtf-results-audiogen-ggml-*
+          path: benchmark-artifacts/desktop
+
+      # Every Device Farm row uploads a performance-report.json, so keep each
+      # artifact isolated and let the aggregator recurse.
+      - name: Download mobile benchmark artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        continue-on-error: true
+        with:
+          pattern: perf-report-audiogen-ggml-*
+          path: benchmark-artifacts/mobile
+
+      # The mobile artifacts carry the shared extractor's per-workflow
+      # run_number, not a run id, so the Run column would mix two identifiers.
+      # Every artifact downloaded above belongs to this run, so pass its id.
+      - name: Generate consolidated benchmark report
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p benchmark-artifacts
+          node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
+            --dir benchmark-artifacts \
+            --manual-dir packages/audiogen-ggml/benchmarks/manual-results \
+            --run-id "$RUN_ID" \
+            --output benchmark-artifacts/audiogen-ggml-performance-findings.md \
+            --output-json benchmark-artifacts/audiogen-ggml-performance-findings.json
+
+      - name: Add summary
+        run: |
+          {
+            cat benchmark-artifacts/audiogen-ggml-performance-findings.md
+            echo ""
+            echo "### Backend coverage map"
+            echo ""
+            echo "| Backend | Coverage | How |"
+            echo "|---------|----------|-----|"
+            echo "| cpu | linux x64/arm64, macOS arm64/x64, win32 x64 | desktop integration matrix |"
+            echo "| vulkan | linux x64, win32 x64, Android (mobile) | qvac-*-gpu self-hosted runners + AWS Device Farm |"
+            echo "| metal | macOS arm64, iOS flagships | qvac-macos26-arm64-gpu + AWS Device Farm |"
+            echo "| mobile cpu | Android / iOS flagships | AWS Device Farm |"
+            echo "| cuda | not in the default audiogen-cpp cascade | drop JSON into packages/audiogen-ggml/benchmarks/manual-results/ |"
+            echo "| opencl | Adreno-only | drop JSON into packages/audiogen-ggml/benchmarks/manual-results/ |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated benchmark report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: audiogen-ggml-performance-findings
+          path: |
+            benchmark-artifacts/audiogen-ggml-performance-findings.md
+            benchmark-artifacts/audiogen-ggml-performance-findings.json
+          retention-days: 30

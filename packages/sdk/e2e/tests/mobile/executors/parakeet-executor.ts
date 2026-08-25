@@ -1,9 +1,5 @@
 import { transcribe } from '@qvac/sdk'
-import {
-  ValidationHelpers,
-  type TestResult,
-  type Expectation
-} from '@tetherto/qvac-test-suite/mobile'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { parakeetTests } from '../../parakeet-tests.js'
@@ -71,6 +67,7 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
   }
 
   private resolveResource(testId: string): string {
+    if (testId.startsWith('parakeet-indic-conformer-')) return 'parakeet-indic-conformer'
     if (testId.startsWith('parakeet-ctc-')) return 'parakeet-ctc'
     if (testId.startsWith('parakeet-sortformer-')) return 'parakeet-sortformer'
     return 'parakeet-tdt'

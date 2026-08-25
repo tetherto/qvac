@@ -2,3 +2,7 @@
 declare const __dirname: string
 declare function require(id: string): unknown
 declare const module: { exports: unknown }
+
+declare module 'bare-os' {
+  export function platform(): string
+}

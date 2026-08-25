@@ -79,7 +79,7 @@ async function testBatchTranslation() {
       srcVocab: path.join(modelDir, fileNames.srcVocabName),
       dstVocab: path.join(modelDir, fileNames.dstVocabName)
     },
-    params: { mode: 'full', dstLang, srcLang },
+    params: { dstLang, srcLang },
     config: {
       modelType: TranslationNmtcpp.ModelTypes.Bergamot
     },

@@ -20,11 +20,13 @@ import numpy as np
 import pytest
 
 from tetherto.qvac_sdk.vla import (
+    VlaEmbodimentSelector,
     VlaHparams,
     vla,
     vla_hparams,
     vla_pad_state,
     vla_preprocess_image,
+    vla_set_embodiment,
 )
 
 REFERENCE = json.loads(
@@ -194,3 +196,53 @@ async def test_vla_hparams_parses_response():
     assert hparams.num_cameras == 2
     assert backend == "Metal"
     assert transport.sent["handler"] == "vlaHparams"
+
+
+_GROOT_DROID_HPARAMS = {
+    "chunkSize": 40,
+    "actionDim": 32,
+    "maxActionDim": 132,
+    "maxStateDim": 64,
+    "tokenizerMaxLength": 0,
+    "visionImageSize": 224,
+    "numCameras": 4,
+    "stateInputMode": "continuous",
+    "imageInputMode": "patches",
+    "imagePatchElems": 262144,
+    "selectedEmbodimentTag": "oxe_droid_relative_eef_relative_joint",
+    "selectedEmbodimentCatId": 24,
+}
+
+
+async def test_vla_hparams_parses_groot_embodiment_fields():
+    transport = FakeTransport(
+        {
+            "type": "pluginInvoke",
+            "result": {"hparams": _GROOT_DROID_HPARAMS, "backendName": "CPU"},
+        }
+    )
+    hparams, _ = await vla_hparams(transport, model_id="m-1")
+    assert hparams.image_input_mode == "patches"
+    assert hparams.image_patch_elems == 262144
+    assert hparams.selected_embodiment_tag == "oxe_droid_relative_eef_relative_joint"
+    assert hparams.selected_embodiment_cat_id == 24
+
+
+async def test_vla_set_embodiment_sends_selector_and_parses_refreshed_hparams():
+    selectors: list[VlaEmbodimentSelector] = [
+        "oxe_droid_relative_eef_relative_joint",
+        24,
+        {"catId": 24, "numCameras": 4},
+    ]
+    for selector in selectors:
+        transport = FakeTransport(
+            {"type": "pluginInvoke", "result": {"hparams": _GROOT_DROID_HPARAMS}}
+        )
+        hparams = await vla_set_embodiment(
+            transport, model_id="m-1", embodiment=selector
+        )
+        assert transport.sent["handler"] == "vlaSetEmbodiment"
+        assert transport.sent["params"]["embodiment"] == selector
+        assert isinstance(hparams, VlaHparams)
+        assert hparams.selected_embodiment_cat_id == 24
+        assert hparams.num_cameras == 4

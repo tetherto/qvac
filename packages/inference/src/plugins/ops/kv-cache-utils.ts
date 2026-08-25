@@ -8,6 +8,7 @@ import {
   validateAndJoinPath
 } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
+import { PathTraversalError } from '@/errors/index'
 import { Buffer } from 'bare-buffer'
 import { markAutoCacheKey } from '@/plugins/ops/kv-cache-retention'
 
@@ -23,24 +24,30 @@ export function extractSystemPrompt(messages: CacheMessage[]): string | null {
   return systemMessage ? systemMessage.content : null
 }
 
-interface ToolLike {
-  name: string
+// Cache hash based on the system prompt + complete tool definitions.
+// Callers pass tools only when the tool block is written into the cache and
+// left there, so a different tool set gets its own cache instead of reusing a
+// prefix that holds the old block. Every prompt-affecting field participates,
+// not just the name: canonical serialization avoids cache misses caused only
+// by object-key insertion order, while tool-array order is preserved because
+// that is the order sent to the model.
+function canonicalizeHashInput(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeHashInput)
+  if (typeof value !== 'object' || value === null) return value
+
+  const canonical: Record<string, unknown> = {}
+  for (const key of Object.keys(value).sort()) {
+    canonical[key] = canonicalizeHashInput((value as Record<string, unknown>)[key])
+  }
+  return canonical
 }
 
-function getToolNamesForHash(tools: unknown): string[] {
-  if (!Array.isArray(tools)) return []
-  return (tools as ToolLike[])
-    .map((t) => t.name)
-    .filter((n) => typeof n === 'string')
-    .sort()
-}
-
-// Cache hash based on system prompt + tool names
-// Different tools = different cache (tools anchored in first message, protected from n_discarded)
 export function generateConfigHash(systemPrompt: string | null, tools?: unknown): string {
   const hash = crypto.createHash('sha-256')
-  const toolNames = getToolNamesForHash(tools)
-  hash.update(Buffer.from(JSON.stringify({ systemPrompt, toolNames }), 'utf8'))
+  const canonicalConfig = JSON.stringify(
+    canonicalizeHashInput({ systemPrompt, tools: Array.isArray(tools) ? tools : [] })
+  )
+  hash.update(Buffer.from(canonicalConfig, 'utf8'))
   return hash.digest('hex').substring(0, 16)
 }
 
@@ -127,12 +134,18 @@ export async function renameCacheFile(oldPath: string, newPath: string): Promise
   }
 }
 
-export async function pruneEmptyCacheDirectories(cacheFilePath: string): Promise<void> {
+export async function pruneEmptyCacheDirectories(
+  cacheFilePath: string,
+  activePaths: readonly string[] = []
+): Promise<void> {
   const cacheDir = getKVCacheDir()
   const cacheDirPrefix = `${cacheDir}${path.sep}`
   let currentDirectory = path.dirname(cacheFilePath)
 
   while (currentDirectory.startsWith(cacheDirPrefix)) {
+    // Keep a directory another in-flight turn still holds (its .bin isn't on disk yet).
+    const childPrefix = `${currentDirectory}${path.sep}`
+    if (activePaths.some((p) => p.startsWith(childPrefix))) return
     try {
       await fsPromises.rmdir(currentDirectory)
     } catch {
@@ -158,9 +171,24 @@ export async function deleteCache(
     return cacheDir
   }
 
+  // validateAndJoinPath sanitizes the key (strips traversal) and rejects
+  // escapes, so nested and other in-root keys resolve normally. A key that
+  // resolves to the cache root would wipe every cache — reject it BEFORE joining
+  // any modelId, so an empty key plus a modelId can't delete a real key dir
+  // under the root.
+  const cacheRoot = path.resolve(cacheDir)
   const kvCacheDir = validateAndJoinPath(cacheDir, options.kvCacheKey)
+  if (path.resolve(kvCacheDir) === cacheRoot) {
+    throw new PathTraversalError(options.kvCacheKey, cacheDir)
+  }
+  // Omitting modelId means "delete every model under the key"; a PROVIDED but
+  // empty/dot modelId collapses back to that same dir and would silently broaden
+  // the delete — reject it.
   const targetDir =
     options.modelId !== undefined ? validateAndJoinPath(kvCacheDir, options.modelId) : kvCacheDir
+  if (options.modelId !== undefined && path.resolve(targetDir) === path.resolve(kvCacheDir)) {
+    throw new PathTraversalError(options.modelId, kvCacheDir)
+  }
 
   await fsPromises.rm(targetDir, { recursive: true, force: true })
   return targetDir

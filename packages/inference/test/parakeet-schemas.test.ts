@@ -95,6 +95,11 @@ test('parakeetRuntimeConfigSchema: accepts backend loader directories', (t) => {
   t.is(result.openclCacheDir, '/tmp/qvac-opencl-cache')
 })
 
+test('parakeetRuntimeConfigSchema: accepts multilingual CTC language id', (t) => {
+  const result = parakeetRuntimeConfigSchema.parse({ language: 'hi' })
+  t.is(result.language, 'hi')
+})
+
 test('parakeetRuntimeConfigSchema: rejects negative streamingSpkCacheLen', (t) => {
   t.exception(() => parakeetRuntimeConfigSchema.parse({ streamingSpkCacheLen: -1 }))
 })

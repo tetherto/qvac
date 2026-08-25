@@ -10,12 +10,13 @@ and building the worst-case compute graph to size the model, KV/context and
 compute buffers, then iteratively reduces context and moves tensors off the GPU
 until the projection fits within a per-device free-memory margin.
 
-## Why a separate addon / worklet
+## Why a separate addon / process runner
 
 Probing device memory instantiates the GPU backend (Vulkan/Metal/CUDA), which
-can wedge driver state on some mobile GPUs. Running the preflight in its own
-short-lived worklet keeps any instability away from the inference worker. The
-call is a **single shot**: run it, read the plan, tear the worklet down.
+can wedge driver state on some GPUs. The root `fitParams()` API runs in-process
+for callers that accept that risk. The intended SDK integration invokes the
+same addon through a disposable Bare subprocess: run it once, read the plan,
+then tear the process down.
 
 ## API
 
@@ -34,7 +35,8 @@ const plan = fitParams({
 // plan = {
 //   status,       // 0 SUCCESS | 1 FAILURE (won't fit) | 2 ERROR (unknown)
 //   fits,         // status === SUCCESS
-//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' | 'no-backend-device'
+//   reason,       // 'fits' | 'does-not-fit' | 'model-unreadable' |
+//                 // 'no-backend-device' | 'unsupported-config'
 //   buftOverrides,// placement the projection depended on, [] when none
 //   nGpuLayers,   // fitted offload layer count
 //   nCtx,         // fitted context size
@@ -81,11 +83,10 @@ outcome (that is a valid `FAILURE` result) or for a missing model file (`ERROR`)
 it throws only on invalid arguments.
 
 Calls are **serialised process-wide**. `common/fit.h` documents `common_fit_params` as
-not thread safe because it mutates global llama logger state, and this addon's
-C++ statics are shared across every worklet in a process, so concurrent callers
-block rather than corrupt each other. Serialising also guarantees two backend
-registrations never overlap, which is why the backend setup above needs no
-reference counting.
+not thread safe because it mutates global llama logger state, so concurrent
+callers block rather than corrupt each other. Serialising also guarantees two
+backend registrations never overlap, which is why the backend setup above
+needs no reference counting.
 
 ### Fit semantics (from `common/fit.h`)
 
@@ -124,10 +125,10 @@ reference counting.
 ### Argument validation
 
 `modelPath` must be **absolute**, as `backendsDir` must. A relative path
-resolves against the process working directory, which nothing in a worklet
-controls — the same call would then name a different file, or no file, from one
-launch to the next. It is not required to exist: a missing model is the
-documented `ERROR` / `model-unreadable` outcome rather than a thrown error.
+resolves against the process working directory, so the same call could name a
+different file, or no file, from one launch to the next. It is not required to
+exist: a missing model is the documented `ERROR` / `model-unreadable` outcome
+rather than a thrown error.
 
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
@@ -177,15 +178,90 @@ The useful question is rarely "can this run at all" but "can this run *well
 enough*" — which means asking about offload, context, or both, and reading the
 plan rather than the flag.
 
-## SDK usage (intended)
+## Process isolation
 
-The SDK runs this preflight before handing a model to `@qvac/llm-llamacpp`:
+`@qvac/model-fit/process` provides the versioned request/response codec and
+resolves the package's private one-shot runner. The runner accepts one JSON
+request on stdin and writes one JSON response on stdout. It is intended for
+disposable Bare subprocesses because native backend discovery may abort the
+hosting process on some platforms.
 
-1. sample device resources,
-2. `fitParams(...)` in an isolated worklet → load plan + fit projection,
-3. **admit/deny** — only deny when it can *prove* the model won't fit; on
-   `ERROR`/unknown, proceed as today (advisory-only until the projection and
-   device identity are proven reliable).
+Applications should normally use the SDK supervisor instead of spawning the
+runner directly. The runner is not a mobile isolation mechanism: iOS and
+Android callers must treat fit admission as unknown unless the platform
+provides a proven process boundary.
+
+### What the parent observes
+
+A supervisor must key off the **stdout line**, not the exit code, because the
+same code can arrive with or without a response:
+
+| stdout | exit | meaning |
+|---|---|---|
+| one `completed` line | 0 | the projection ran; `parseFitProcessResponse` yields a `FitResult` |
+| one `invocation-error` line | 1 | the fit call itself threw, e.g. argument validation |
+| one `invocation-error` line | 2 | the request never reached the fitter: unparseable, oversized, or wrong-version |
+| no line, stderr diagnostic | 2 | the runner could not read the request or flush the response |
+| no line, no diagnostic | non-zero or a signal | the native fitter aborted the process — the case this boundary exists for |
+
+So exit 2 alone does not say whether a response exists, and exit 0 does not
+prove one was delivered: a parent that has already closed its read end gets exit
+0 and no output. Treat a missing or unparseable line as a failure whatever the
+status. Diagnostics go to stderr; stdout carries the protocol and nothing else.
+
+The runner has **no internal timeout**. It waits indefinitely for a complete
+request line, so a parent that opens the pipe and then stalls leaves the child
+alive forever. Imposing a deadline and killing the child is the supervisor's
+job, as is cancellation.
+
+The addon is loaded only once a request has parsed, so a rejected request costs
+a process spawn and nothing else — never backend registration. When it is
+loaded, the child pays for backend discovery on every spawn; on darwin that
+includes compiling the embedded Metal library, which is slow enough on a cold
+runner to dwarf the fit itself. Size the deadline for that, not for the
+projection.
+
+Protocol v1 remains the low-level `{ version: 1, config: FitConfig }` envelope.
+Protocol v2 carries the process-only raw load shape. The explicit load kind
+selects completion or embedding normalization; it is never inferred from a
+parameter key:
+
+```js
+const { encodeFitLlamaProcessRequest } = require('@qvac/model-fit/process')
+
+const line = encodeFitLlamaProcessRequest('embedding', {
+  modelPath: '/abs/path/model.gguf',
+  params: { device: 'cpu', 'ctx-size': '4096' }
+})
+// {"version":2,"loadKind":"embedding","config":{...}}\n
+```
+
+Raw-load normalization remains private to the disposable runner and native
+addon. The supported scope is desktop, local, single-file GGUF completion or
+embedding inference. Unsupported layouts and features return `ERROR` with
+`reason: 'unsupported-config'`.
+
+### Spawning on Windows
+
+The child's stdio must be created as **overlapped** pipes:
+
+```js
+spawn(bareExecutable, [resolveFitProcessRunnerPath()], {
+  stdio: ['overlapped', 'overlapped', 'overlapped']
+})
+```
+
+libuv hands a child synchronous stdio handles by default on Windows. The runner
+is itself a libuv program, so it falls back to emulating async reads on a worker
+thread and never observes the request: the child hangs with no output and no
+diagnostic until the supervisor's deadline fires. The flag is a no-op on other
+platforms, so it can be set unconditionally.
+
+## SDK integration
+
+SDK wiring is outside this package change. A later SDK change may invoke the
+v2 process request as an advisory signal; this package does not make admission
+decisions.
 
 ## Build
 
@@ -224,7 +300,7 @@ Edit `src/index.ts`, never the generated files.
 npm test                       # validation + enum tests (no model needed)
 FIT_MODEL_PATH=/abs/model.gguf npm test   # also runs the real fit projection
 npm run test:types             # typecheck + consumer narrowing test + drift check
-npm run lint                   # standard (JS) + eslint (TS)
+npm run lint                   # prettier + lunte (JS) + eslint (TS)
 ```
 
 ### Reading the outcome
@@ -290,7 +366,7 @@ is the failure this section exists to prevent.
 
 `common_fit_params` can terminate the process on inputs this addon accepts. These
 are aborts inside the fitter, not exceptions, so they cannot be caught and
-turned into a status — the calling worklet dies with the process.
+turned into a status — the calling process terminates.
 
 - **A large `nCtx` aborts.** `ggml_abort()` fires in
   `ggml_backend_sched_backend_id_from_cur` — "pre-allocated tensor (cache_k_l0)

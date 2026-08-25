@@ -51,6 +51,17 @@ test('Supertonic: explicit engine option routes to supertonic', (t) => {
   t.absent(model._s3genModelPath, 'no s3gen path on supertonic')
 })
 
+test('Supertonic: reload rejects an invalid output sample rate', async (t) => {
+  const model = createMockedSupertonicModel()
+  await model.load()
+
+  await t.exception(
+    model.reload({ outputSampleRate: 192001 }),
+    /outputSampleRate must be between 8000 and 192000/
+  )
+  await model.unload()
+})
+
 test('Supertonic: supertonicModel file path alone routes to supertonic engine', (t) => {
   const model = new TTSGgml({
     files: { supertonicModel: './models/super.gguf' },

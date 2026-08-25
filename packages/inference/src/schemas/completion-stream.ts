@@ -16,6 +16,8 @@ export { completionStatsSchema, type CompletionStats } from '@/schemas/completio
  * - `"harmony"`:  `<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"city":"Tokyo"}<|call|>`
  * - `"qwen35"`:   `<tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>`
  * - `"gemma4"`:   `<|tool_call>call:NAME{key:<|"|>val<|"|>,...}<tool_call|>`
+ * - `"dsml"`:     `<｜DSML｜tool_calls><｜DSML｜invoke name="NAME"><｜DSML｜parameter name="KEY" string="true">VALUE</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+ *                 (DeepSeek Markup Language, emitted by DeepSeek V3.2 / V4)
  */
 export const toolDialectSchema = z.enum([
   'hermes',
@@ -23,7 +25,8 @@ export const toolDialectSchema = z.enum([
   'json',
   'harmony',
   'qwen35',
-  'gemma4'
+  'gemma4',
+  'dsml'
 ])
 
 export const attachmentSchema = z.object({

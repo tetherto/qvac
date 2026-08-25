@@ -51,6 +51,17 @@ test('sortformer-streaming derives the canonical QVAC_TEST_GGUF env-key', (t) =>
   )
 })
 
+test('unified aliases resolve to the unified model config', (t) => {
+  t.is(canonicalModelType('rnnt'), 'unified', 'rnnt metadata name maps to unified')
+  t.is(canonicalModelType('parakeet-unified'), 'unified', 'model family alias maps to unified')
+  t.ok(MODEL_CONFIGS.unified, 'unified model config exists')
+  t.is(
+    testGgufEnvKey('rnnt'),
+    'QVAC_TEST_GGUF_UNIFIED',
+    'rnnt alias uses the unified environment key'
+  )
+})
+
 test('ensureGgufForType(sortformer-streaming) resolves via the canonical env-key override', async (t) => {
   const { modelsDir } = getTestPaths()
   fs.mkdirSync(modelsDir, { recursive: true })

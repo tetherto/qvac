@@ -2,7 +2,8 @@ import test from 'brittle'
 import { completionStatsSchema } from '@/schemas'
 import {
   normalizeCompletionStats,
-  withEmittedTokens
+  withEmittedTokens,
+  stoppedByLength
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import type { LlmStats } from '@/utils/addon-responses'
 
@@ -61,4 +62,40 @@ test('withEmittedTokens: records zero emission so inflated n_eval is not used fo
 
 test('withEmittedTokens: synthesizes stats when only the stream count exists', (t) => {
   t.alike(withEmittedTokens(undefined, 4), { emittedTokens: 4 })
+})
+
+test('stoppedByLength: context boundary is a length stop', (t) => {
+  t.is(
+    stoppedByLength({
+      cancelled: false,
+      effectivePredict: 1024,
+      generatedTokens: 984,
+      stoppedAtContextBoundary: true
+    }),
+    true
+  )
+})
+
+test('stoppedByLength: cancellation takes precedence over context exhaustion', (t) => {
+  t.is(
+    stoppedByLength({
+      cancelled: true,
+      effectivePredict: 1024,
+      generatedTokens: 984,
+      stoppedAtContextBoundary: true
+    }),
+    false
+  )
+})
+
+test('stoppedByLength: positive prediction budget exhaustion remains a length stop', (t) => {
+  t.is(
+    stoppedByLength({
+      cancelled: false,
+      effectivePredict: 8,
+      generatedTokens: 8,
+      stoppedAtContextBoundary: false
+    }),
+    true
+  )
 })

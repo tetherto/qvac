@@ -15,10 +15,9 @@
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 
-namespace tts_cpp::cosyvoice {
-class Engine;
-struct SynthesisResult;
-} // namespace tts_cpp::cosyvoice
+// Included rather than forward-declared: AnyInput holds a VoiceControls by
+// value, which needs the complete type.
+#include <tts-cpp/cosyvoice/engine.h>
 
 namespace tts_cpp::lavasr {
 class Enhancer;
@@ -42,6 +41,10 @@ public:
 
   struct AnyInput {
     std::string text;
+    // Per-call conditioning; all-empty means "use the constructor config".
+    // Parity with ParlerModel::AnyInput::desc.
+    tts_cpp::cosyvoice::VoiceControls controls;
+    bool hasControls = false;
     ChunkCallback chunkCallback;
   };
 
@@ -82,7 +85,10 @@ private:
     Output pcm;
     bool wasStreaming = false;
   };
-  SynthResult synthesize(const std::string& text, const ChunkCallback& onChunk);
+  SynthResult synthesize(
+      const std::string& text,
+      const tts_cpp::cosyvoice::VoiceControls& controls,
+      const ChunkCallback& onChunk);
   // Takes what actually reached the caller (see resolveEmittedAudio), not the
   // engine's native-rate SynthesisResult.
   void recordSynthesisStats(
@@ -131,6 +137,10 @@ private:
 // weights (see test_cosyvoice_config.cpp).
 bool streamingRequested(const CosyvoiceConfig& cfg, bool hasChunkCallback);
 
+// Config -> engine conditioning. Exposed for tests so the mapping cannot
+// silently drop a channel; the values themselves are validated by tts-cpp.
+tts_cpp::cosyvoice::VoiceControls toVoiceControls(const CosyvoiceConfig& cfg);
+
 // Batch-only output-rate conversion. The tts-cpp CosyVoice engine ignores
 // output_sample_rate, so the addon resamples the batch output itself. No-op
 // unless a non-native outputSampleRate was requested. Free function so it is
@@ -149,5 +159,10 @@ struct EmittedAudio {
 EmittedAudio resolveEmittedAudio(
     bool streaming, bool enhanced, int streamFinalRate,
     std::size_t streamedSamples, std::size_t batchSamples, int batchRate);
+
+// Maps the addon config onto tts-cpp's EngineOptions. Free function so the
+// option forwarding (GPU intent, OpenCL cache dir, streaming, backends dir) is
+// unit-testable without weights (see test_cosyvoice_config.cpp).
+tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg);
 
 } // namespace qvac::ttsggml::cosyvoice

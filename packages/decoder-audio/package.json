@@ -8,7 +8,8 @@
   "main": "index.js",
   "scripts": {
     "test:dts": "tsc index.d.ts --noEmit --esModuleInterop --skipLibCheck",
-    "test:unit": "brittle-bare test/unit/*.test.js",
+    "test:unit": "brittle-bare test/unit/*.test.js && npm run test:package",
+    "test:package": "node --test test/package/package-contract.test.js",
     "test": "npm run test:unit && npm run test:integration",
     "coverage:unit": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
     "coverage": "brittle-bare --coverage --cov-dir=coverage/unit test/unit/*.test.js && mkdir -p .nyc_output && cp coverage/unit/coverage-final.json .nyc_output/out.json && npx nyc report --reporter=html --report-dir=coverage/html",
@@ -38,9 +39,6 @@
   "devDependencies": {
     "@types/node": "^22.14.1",
     "bare-os": "^3.6.2",
-    "bare-url": "^2.1.6",
-    "bare-fs": "^4.5.1",
-    "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
     "brittle": "^3.13.1",
     "lunte": "^1.8.0",
@@ -53,7 +51,10 @@
     "@qvac/error": "^0.1.0",
     "@qvac/infer-base": "^0.6.0",
     "@qvac/logging": "^0.1.0",
-    "bare-ffmpeg": "^1.0.0-32"
+    "bare-ffmpeg": "^1.0.0-32",
+    "bare-fs": "^4.5.1",
+    "bare-path": "^3.0.0",
+    "bare-url": "^2.1.6"
   },
   "repository": {
     "type": "git",

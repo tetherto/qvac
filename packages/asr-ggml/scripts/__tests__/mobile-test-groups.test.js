@@ -12,6 +12,8 @@ const { WHISPER_TEST_MODEL_NAMES } = require('../generate-prestage-block')
 
 const integrationAutoPath = path.resolve(__dirname, '../../test/mobile/integration.auto.cjs')
 const EXPECTED_GROUPS = ['whisper-perf', 'parakeet-perf']
+const EXPECTED_WHISPER_RUNNER_COUNT = 13
+const EXPECTED_PARAKEET_RUNNER_COUNT = 23
 
 function sorted(values) {
   return [...values].sort()
@@ -36,8 +38,8 @@ function duplicateRunners(runners) {
 test('ASR mobile groups split runners into Whisper and Parakeet shards', () => {
   for (const platform of ['ios', 'android']) {
     assert.deepEqual(Object.keys(groups[platform]), EXPECTED_GROUPS)
-    assert.equal(groups[platform]['whisper-perf'].length, 13)
-    assert.equal(groups[platform]['parakeet-perf'].length, 23)
+    assert.equal(groups[platform]['whisper-perf'].length, EXPECTED_WHISPER_RUNNER_COUNT)
+    assert.equal(groups[platform]['parakeet-perf'].length, EXPECTED_PARAKEET_RUNNER_COUNT)
     assert.ok(groups[platform]['whisper-perf'].every((runner) => !runner.startsWith('runParakeet')))
     assert.ok(groups[platform]['parakeet-perf'].every((runner) => runner.startsWith('runParakeet')))
   }
@@ -70,9 +72,6 @@ test('every shard runner has an explicit model or model-free manifest entry', ()
       sorted(Object.keys(WHISPER_TEST_MODEL_NAMES)),
       sorted(groups[platform]['whisper-perf'])
     )
-    assert.deepEqual(
-      sorted(Object.keys(TEST_MODELS)),
-      sorted(groups[platform]['parakeet-perf'])
-    )
+    assert.deepEqual(sorted(Object.keys(TEST_MODELS)), sorted(groups[platform]['parakeet-perf']))
   }
 })

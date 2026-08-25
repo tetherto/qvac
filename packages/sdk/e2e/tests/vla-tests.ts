@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/qvac-test-suite'
 
 // SmolVLA-LIBERO inference always returns a chunkSize × actionDim Float32Array
 // of robot actions plus per-stage timings. These tests exercise the SDK's
@@ -395,6 +395,108 @@ export const vlaGrootRunSyntheticShape = createVlaTest(
   'vla-groot'
 )
 
+// ── GR00T N1.7-3B (multi-embodiment) ─────────────────────────────────────
+// Desktop-only against the `vla-groot-multi` resource (q5 profile of the
+// multi-embodiment GGUF — all 17 trained embodiment rows, default
+// `libero_sim`). Exercises the QVAC-23053 surface: the resolved-embodiment
+// hparams fields and runtime switching via `vlaSetEmbodiment()`.
+
+export const vlaGrootMultiHparamsShape = createVlaTest(
+  'vla-groot-multi-hparams-shape',
+  {},
+  {
+    validation: 'function',
+    fn: (result: unknown) => {
+      const r = result as { hparams?: Record<string, number | string>; backendName?: string | null }
+      if (!r.hparams) return { passed: false, output: 'missing hparams' }
+      if (r.hparams['imageInputMode'] !== 'patches') {
+        return {
+          passed: false,
+          output: `hparams.imageInputMode expected "patches" (got ${r.hparams['imageInputMode']})`
+        }
+      }
+      const tag = r.hparams['selectedEmbodimentTag']
+      if (typeof tag !== 'string' || tag.length === 0) {
+        return {
+          passed: false,
+          output: `multi-embodiment GGUF must report selectedEmbodimentTag (got ${tag})`
+        }
+      }
+      const catId = r.hparams['selectedEmbodimentCatId']
+      if (typeof catId !== 'number' || !Number.isInteger(catId) || catId < 0 || catId > 31) {
+        return {
+          passed: false,
+          output: `selectedEmbodimentCatId not an integer in 0..31 (got ${catId})`
+        }
+      }
+      return { passed: true }
+    }
+  },
+  300000,
+  undefined,
+  'vla-groot-multi'
+)
+
+// Runtime switch round-trip: switch to the 4-camera DROID row (cat_id 24 —
+// oracle-validated in vla-ggml PR #3427) via the `{ catId, numCameras }`
+// object selector, run inference with inputs rebuilt from the refreshed
+// hparams, reject an unknown tag without disturbing the active embodiment,
+// and switch back to the original row by plain cat_id — covering both
+// selector spellings.
+export const vlaGrootMultiSetEmbodiment = createVlaTest(
+  'vla-groot-multi-set-embodiment',
+  { switchCatId: 24, switchNumCameras: 4 },
+  {
+    validation: 'function',
+    fn: (result: unknown) => {
+      const r = result as {
+        switchedCatId?: number
+        switchedTag?: string
+        switchedNumCameras?: number
+        ranOnSwitched?: boolean
+        unknownTagRejected?: boolean
+        activeCatIdAfterReject?: number
+        restoredCatId?: number
+        initialCatId?: number
+      }
+      if (r.switchedCatId !== 24) {
+        return { passed: false, output: `expected switch to cat_id 24 (got ${r.switchedCatId})` }
+      }
+      if (typeof r.switchedTag !== 'string' || r.switchedTag.length === 0) {
+        return { passed: false, output: `switched hparams missing selectedEmbodimentTag` }
+      }
+      if (r.switchedNumCameras !== 4) {
+        return {
+          passed: false,
+          output: `numCameras must follow the switched embodiment, expected 4 (got ${r.switchedNumCameras})`
+        }
+      }
+      if (!r.ranOnSwitched) {
+        return { passed: false, output: 'inference on the switched embodiment did not succeed' }
+      }
+      if (!r.unknownTagRejected) {
+        return { passed: false, output: 'unknown embodiment tag was not rejected' }
+      }
+      if (r.activeCatIdAfterReject !== 24) {
+        return {
+          passed: false,
+          output: `rejected switch must leave the active embodiment in place (got cat_id ${r.activeCatIdAfterReject})`
+        }
+      }
+      if (r.restoredCatId !== r.initialCatId) {
+        return {
+          passed: false,
+          output: `switch back failed: restored cat_id ${r.restoredCatId} != initial ${r.initialCatId}`
+        }
+      }
+      return { passed: true }
+    }
+  },
+  300000,
+  undefined,
+  'vla-groot-multi'
+)
+
 export const vlaTests: TestDefinition[] = [
   vlaHparamsShape,
   vlaRunSyntheticShape,
@@ -405,5 +507,7 @@ export const vlaTests: TestDefinition[] = [
   vlaPi05RunStats,
   vlaPi05InvalidImgSize,
   vlaGrootHparamsShape,
-  vlaGrootRunSyntheticShape
+  vlaGrootRunSyntheticShape,
+  vlaGrootMultiHparamsShape,
+  vlaGrootMultiSetEmbodiment
 ]

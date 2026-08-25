@@ -34,12 +34,17 @@ const {
   selectFunctionalEntries,
   buildTsv,
   buildPrestageScript,
+  buildIosPrestageScript,
+  buildPlatformScript,
   buildFunctionalSelectionCode,
   buildFunctionalPrestageScript,
   buildPrestageBlock,
   buildFunctionalPrestageBlock,
   readOptionsFromEnv,
-  PRESTAGE_DIR
+  PRESTAGE_DIR,
+  IOS_MODELS_ROOT,
+  IOS_MODELS_PARENT,
+  IOS_MODELS_BASENAME
 } = require('../generate-prestage-block')
 
 const MANIFEST = {
@@ -309,6 +314,22 @@ test('functionalModelsByTest maps each functional runner to only its required st
       'cosyvoice3/merges.txt'
     ]
   )
+  // The gpu smoke runs every engine's GPU leg, so its prestage list must
+  // carry the CosyVoice3 artifacts too — the on-device registry fetch of the
+  // ~2.3 GB set is exactly the Device Farm flake this mapping prevents.
+  for (const target of [
+    'cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    'cosyvoice3/cosyvoice3-flow-f32.gguf',
+    'cosyvoice3/cosyvoice3-hift-f32.gguf',
+    'cosyvoice3/voice.gguf',
+    'cosyvoice3/vocab.json',
+    'cosyvoice3/merges.txt'
+  ]) {
+    assert.ok(
+      modelsByTest.runGpuSmokeTest.some((entry) => entry.targetName === target),
+      `runGpuSmokeTest prestage must include ${target}`
+    )
+  }
   assert.deepEqual(
     modelsByTest.runLavasrEnhancerTest.map((entry) => entry.targetName),
     [
@@ -348,7 +369,7 @@ test('functional prestage mappings cover every configured mobile shard runner', 
   assert.deepEqual(Object.keys(mappings).sort(), configured.sort())
 })
 
-test('selectFunctionalEntries resolves grep mappings and deduplicates shared targets', () => {
+test('selectFunctionalEntries regex-matches runner names and deduplicates shared targets', () => {
   const mappings = functionalModelsByTest(FUNCTIONAL_MANIFEST)
   const entries = selectFunctionalEntries(mappings, 'runAddonTest|runMultipleRunsTest')
 
@@ -356,12 +377,27 @@ test('selectFunctionalEntries resolves grep mappings and deduplicates shared tar
     entries.map((entry) => entry.targetName),
     ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf', 'supertonic.gguf']
   )
-  assert.throws(() => selectFunctionalEntries(mappings, ''), /grep is required/)
+
+  // The grep is a mocha --grep regex over runner NAMES: a partial pattern
+  // stages every runner it matches, not just an exact manifest key.
+  const chatterbox = selectFunctionalEntries(mappings, 'runChatterboxSpeed')
+  assert.deepEqual(
+    chatterbox.map((entry) => entry.targetName),
+    ['chatterbox-t3-turbo.gguf', 'chatterbox-s3gen.gguf']
+  )
+
+  // An empty grep is benign (no shard resolved -> stage nothing). A model-free
+  // but KNOWN runner (runParlerTest -> []) still matches its manifest key, so it
+  // stages nothing without erroring. A zero-match typo or an invalid regex is a
+  // test-groups <-> model-map drift and fails CLOSED: the workflow_call lanes
+  // never run validate-devices, so an under-staged run must surface here.
+  assert.deepEqual(selectFunctionalEntries(mappings, ''), [])
+  assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
   assert.throws(
     () => selectFunctionalEntries(mappings, 'runMissingTest'),
-    /Missing functional mapping/
+    /matched no known runner/
   )
-  assert.deepEqual(selectFunctionalEntries(mappings, 'runParlerTest'), [])
+  assert.throws(() => selectFunctionalEntries(mappings, '('), /invalid tests grep/)
 })
 
 test('functional mapping fails when any required manifest target is absent', () => {
@@ -386,8 +422,8 @@ test('functional prestage script reads the explicit shard grep and deduplicates 
   assertBashSyntax(script)
   assert.match(script, /cat \/tmp\/qvacShardGrep\.txt/)
   assert.doesNotMatch(script, /wdio\.config\.devicefarm\.js/)
-  assert.match(script, /functional shard grep is required/)
-  assert.match(script, /missing functional mapping/)
+  assert.match(script, /no functional shard grep/)
+  assert.match(script, /matched no known runner/)
   assert.match(script, /seen\.has\(m\.targetName\)/)
   assert.match(script, /adb push/)
 })
@@ -422,6 +458,27 @@ test('functional selector executes deduplication and accepts a zero-model Parler
     ].join('\n')
   )
 
+  // A partial regex stages every matching runner's models on device too.
+  const partial = run('runChatterboxSpeed')
+  assert.equal(partial.status, 0, partial.stderr)
+  assert.equal(
+    readFileSync(listPath, 'utf8'),
+    [
+      'chatterbox-t3-turbo.gguf\thttps://s3/cb-t3.gguf',
+      'chatterbox-s3gen.gguf\thttps://s3/cb-s3.gguf',
+      ''
+    ].join('\n')
+  )
+
+  // A typo that matches no known runner is drift and fails CLOSED on device
+  // (non-zero exit) so a validate-devices-less workflow_call run cannot silently
+  // ship under-staged.
+  const typo = run('runNopeTest')
+  assert.notEqual(typo.status, 0)
+  assert.match(typo.stderr, /matched no known runner/)
+
+  // A model-free but KNOWN runner (runParlerTest -> []) matches its manifest key,
+  // so it stages nothing without erroring.
   const parler = run('runParlerTest')
   assert.equal(parler.status, 0, parler.stderr)
   assert.equal(readFileSync(listPath, 'utf8'), '')
@@ -473,6 +530,93 @@ test('buildPrestageScript makes the per-target subdir on host and device', () =>
     script.includes('adb shell mkdir -p "$PRESTAGE_DIR/$(dirname "$TARGET")"'),
     'creates the device-side subdir so nested lavasr/ targets push cleanly'
   )
+})
+
+test('buildIosPrestageScript stages into the Documents/models container via pymobiledevice3', () => {
+  const script = buildIosPrestageScript('QkFTRTY0', 'q4')
+  assert.ok(script.includes(`MODELS_ROOT=${IOS_MODELS_ROOT}`), 'pins the iOS models root')
+  assert.ok(script.includes('unset SUDO_UID SUDO_GID'), 'works around the chown EPERM')
+  assert.ok(
+    script.includes('pymobiledevice3 apps push "$BID" "/tmp/prestage/$TARGET" "$MODELS_ROOT/$TARGET"'),
+    'pushes each target under Documents/models via AFC'
+  )
+  assert.ok(
+    script.includes('mkdir -p "/tmp/prestage/$(dirname "$TARGET")"'),
+    'creates the host-side subdir so nested lavasr/ + whisper/ targets download cleanly'
+  )
+  assert.ok(
+    /not found during afc operation\|failed to perform afc operation/.test(script),
+    'AFC error-token backstop covers the AfcFileNotFoundError phrasing older CLIs log on a still-zero exit'
+  )
+  assert.ok(/pymobiledevice3==10\.3\.1/.test(script), 'pins pymobiledevice3 to the fail-closed version')
+  assert.ok(!script.includes('adb '), 'iOS backend uses no adb')
+  assert.ok(!script.includes(PRESTAGE_DIR), 'iOS backend does not touch the Android prestage dir')
+})
+
+// Regression: AfcService._push_internal only makedirs() on the *directory*
+// push branch. A single-file push whose remote parent (Documents/models) is
+// missing raises AfcFileNotFoundError instead of creating it, so every
+// tts-ggml target used to hard-fail on a fresh container. The fix seeds the
+// device dir tree once via a directory push before the per-file loop.
+test('buildIosPrestageScript seeds the device dir tree with a directory push before staging files', () => {
+  const script = buildIosPrestageScript('QkFTRTY0', 'q4')
+  assert.ok(script.includes(`MODELS_PARENT=${IOS_MODELS_PARENT}`), 'pins the models root parent')
+  assert.ok(
+    script.includes(`SCAFFOLD_DIR=/tmp/prestage-scaffold/${IOS_MODELS_BASENAME}`),
+    'names a local scaffold dir whose basename matches the models root'
+  )
+  assert.ok(
+    script.includes('pymobiledevice3 apps push "$BID" "$SCAFFOLD_DIR" "$MODELS_PARENT"'),
+    'pushes the scaffold directory (not a file) so AFC takes the makedirs branch'
+  )
+
+  const seedIdx = script.indexOf('pymobiledevice3 apps push "$BID" "$SCAFFOLD_DIR" "$MODELS_PARENT"')
+  const firstFilePushIdx = script.indexOf(
+    'pymobiledevice3 apps push "$BID" "/tmp/prestage/$TARGET" "$MODELS_ROOT/$TARGET"'
+  )
+  assert.ok(seedIdx > -1 && firstFilePushIdx > -1 && seedIdx < firstFilePushIdx, 'seeds the tree before any per-file push')
+
+  assert.ok(
+    script.includes('printf \'%s\\n\' "$SEED_OUT"') &&
+      /SEED_RC.*-ne 0.*traceback\|afcexception/.test(script.replace(/\n/g, ' ')),
+    'fails hard on a non-zero exit or AFC error token from the seed push, mirroring the per-file guard'
+  )
+})
+
+test('buildIosPrestageScript derives scaffold subdirs from the selected targets, not a hardcoded list', () => {
+  const flatOnly = Buffer.from('supertonic.gguf\thttps://s3/s-q4.gguf\n', 'utf8').toString('base64')
+  const flatScript = buildIosPrestageScript(flatOnly, 'q4')
+  assert.ok(
+    !/mkdir -p "\$SCAFFOLD_DIR\/lavasr"/.test(flatScript) &&
+      !/mkdir -p "\$SCAFFOLD_DIR\/whisper"/.test(flatScript),
+    'does not hardcode lavasr/whisper subdirs — an engine-only manifest has none to seed'
+  )
+  assert.ok(
+    flatScript.includes('[ "$SUBDIR" != "." ] && mkdir -p "$SCAFFOLD_DIR/$SUBDIR"'),
+    'still seeds whatever nested subdir a future manifest target introduces'
+  )
+})
+
+test('buildPlatformScript selects the backend by platform and rejects unknown ones', () => {
+  assert.ok(buildPlatformScript('QkFTRTY0', 'q4', 'android').includes('adb push'))
+  assert.ok(buildPlatformScript('QkFTRTY0', 'q4', 'ios').includes('pymobiledevice3 apps push'))
+  assert.throws(() => buildPlatformScript('QkFTRTY0', 'q4', 'windows'), /unknown platform/)
+})
+
+test('buildPrestageBlock ios backend stages the lavasr GGUF under Documents/models', () => {
+  const block = buildPrestageBlock(
+    MANIFEST,
+    { variant: 'q4', enhancer: 'lavasr', denoiser: 'none' },
+    'ios'
+  )
+  const tsv = decodeBlockTsv(block)
+  assert.ok(tsv.includes('supertonic.gguf\thttps://s3/s-q4.gguf'), 'engine model still staged')
+  assert.ok(
+    tsv.includes('lavasr/lavasr-enhancer.gguf\thttps://s3/enh.gguf'),
+    'enhancer staged into the lavasr/ subdir (resolved on-device under models/lavasr)'
+  )
+  assert.ok(block.includes('pymobiledevice3 apps push'), 'emits the iOS AFC push backend')
+  assert.ok(!block.includes('adb push'), 'no adb in the iOS block')
 })
 
 test('buildPrestageBlock for an engine-only row stages no lavasr files', () => {

@@ -13,6 +13,7 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   transcribe: true,
   translate: true,
   diffusion: true,
+  audiogen: true,
   tts: true,
   ocr: true,
   vla: true,

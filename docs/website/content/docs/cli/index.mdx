@@ -9,8 +9,9 @@ schemaType: TechArticle
 
 QVAC CLI is provided through the `@qvac/cli` npm package. The CLI is installed globally so the `qvac` command is available on your `PATH`. At the moment, it provides the following functionality:
 - OpenAI-compatible HTTP server
-- SDK bundling
 - System requirements check
+- Interactive `qvac.config.json` generator
+- SDK bundling
 
 ## Usage
 
@@ -26,6 +27,10 @@ npm install -g @qvac/cli
 
 <Step>
 Create a `qvac.config.*` file in the root of your project and add the configuration required for the functionality you want to use. See [Configuration](/configuration) to learn how to do this.
+
+<Callout type="success">
+**Tip:** you can use the CLI to help with part of the configuration. See [Interactive config generator](#interactive-config-generator).
+</Callout>
 
 </Step>
 
@@ -53,6 +58,14 @@ QVAC CLI provides an HTTP server that is compatible with the [OpenAI REST API](h
 
 <Card href="/cli/http-server" title="HTTP server">
   Learn how to run a local HTTP server that exposes an OpenAI-compatible API.
+</Card>
+
+## Interactive config generator
+
+The `qvac configure` command assembles a valid `qvac.config.json` for you — search the models the SDK provides, pick by capability, and inject entries with sensible defaults, without hand-writing `serve.models` or memorizing model constant names. Runs interactively by default; also has a non-interactive mode (`--yes` / `--modality`) for scripting.
+
+<Card href="#qvac-configure" title="qvac configure">
+  See the reference for options, behavior notes, and examples.
 </Card>
 
 ## SDK bundling
@@ -95,10 +108,51 @@ Start an OpenAI-compatible REST API server.
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
 | `--model <alias>` | Model alias to preload (repeatable, must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
-| `--cors` | Enable CORS headers |
-| `--docs` | Mount the Swagger UI at `/docs` (auto-enables CORS so the UI's "Try it out" works across origins). Off by default. |
+| `--api-key-file <path>` | Read the Bearer token from a file instead of argv |
+| `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
+| `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
+| `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
 | `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
+| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS, so it requires a fixed `--port`. |
 | `-v, --verbose` | Detailed output |
+
+A non-loopback `--host` requires `--api-key` or `--api-key-file`; the server refuses to start otherwise. Use `--allow-unauthenticated` to override that and start with a warning instead.
+
+`--cors` does not enable CORS by itself. It only validates that at least one explicit origin was supplied by CLI or config; `--cors --docs` also fails without one because the docs defaults are not explicit origins. Independently, `--docs` trusts same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. Since those origins come from the configured port, `--docs --port 0` is rejected at startup instead of producing unusable `http://localhost:0` origins.
+
+Scripts that previously relied on wildcard CORS must name every trusted browser origin. They may keep `--cors` as a validation guard or drop it:
+
+```bash
+# Before: allowed every browser origin
+qvac serve openai --cors
+
+# After: optionally retain validation and repeat once per trusted origin
+qvac serve openai --cors \
+  --cors-origin https://app.example.com \
+  --cors-origin http://localhost:3000
+```
+
+### `qvac configure`
+
+Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go straight to [`qvac serve openai`](#qvac-serve-openai). It searches the models the SDK provides — by name or by capability (role, addon, quantization) — and on a wide terminal previews, for the highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename its alias, set config parameters (guided by the SDK's config schema — each field shows its type and description and is validated on entry, for model types the SDK exposes a schema for; currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C` aborts without writing. Existing entries are preserved; re-running is idempotent per model.
+
+```bash
+qvac configure                 # interactive
+qvac configure --yes           # non-interactive: write a chat + transcription starter
+qvac configure --modality chat --modality image
+```
+
+| Option | Description |
+| --- | --- |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only. |
+| `-y, --yes` | Non-interactive: write a sensible default starter (chat + transcription). |
+| `--modality <name>` | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
+| `--force` | Re-add a model that is already configured (overwrites its existing entry in place). |
+| `-q, --quiet` | Suppress output. |
+
+Single-artifact modalities (chat, embedding, transcription, image) are runnable as written. Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder — set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for non-TTY use `--yes` / `--modality`.
+
+See [HTTP server — Configuration](/cli/http-server#configuration) for the shape of the `serve.models` entries this command writes.
 
 ### `qvac openai spec`
 

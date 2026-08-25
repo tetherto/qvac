@@ -4,7 +4,7 @@ import { useServer } from '../helpers/server.js'
 import { assertStatusAndError } from '../helpers/http.js'
 
 describe('serve: routing', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({})
 
   it('GET /unknown returns 404', async () => {
     const res = await server().inject({ method: 'GET', url: '/unknown' })
@@ -18,18 +18,29 @@ describe('serve: routing', () => {
 })
 
 describe('serve: CORS enabled', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
-  it('OPTIONS /v1/models returns 204 with CORS headers', async () => {
-    const res = await server().inject({ method: 'OPTIONS', url: '/v1/models' })
+  it('allowlisted origin receives CORS headers', async () => {
+    const res = await server().inject({
+      method: 'OPTIONS',
+      url: '/v1/models',
+      headers: {
+        origin: 'https://trusted.example',
+        'access-control-request-method': 'GET'
+      }
+    })
     assert.equal(res.statusCode, 204)
-    assert.ok(res.headers['access-control-allow-origin'], 'expected access-control-allow-origin')
+    assert.equal(res.headers['access-control-allow-origin'], 'https://trusted.example')
     assert.match(String(res.headers['access-control-allow-methods']), /POST/)
   })
 
-  it('CORS headers present on regular GET', async () => {
-    const res = await server().inject({ method: 'GET', url: '/v1/models' })
-    assert.ok(res.headers['access-control-allow-origin'], 'expected access-control-allow-origin')
+  it('arbitrary origin does not receive CORS headers', async () => {
+    const res = await server().inject({
+      method: 'GET',
+      url: '/v1/models',
+      headers: { origin: 'https://attacker.example' }
+    })
+    assert.equal(res.headers['access-control-allow-origin'], undefined)
   })
 })
 

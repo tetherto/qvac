@@ -16,6 +16,7 @@ import { nowMs, generateProfileId } from '@/profiling/clock'
 import { getModelEntry, updateModelConfig } from '@/runtime/model-registry'
 import { generateShortHash, canonicalConfigString, transformConfigForReload } from '@/utils/index'
 import { buildDownloadProfilingFields } from '@/handlers/load-model/types'
+import { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
@@ -46,7 +47,7 @@ export async function handleLoadModel(
     return handleConfigReload(request)
   }
 
-  const { modelSrc, modelName, seed } = request
+  const { modelSrc, modelName, seed, fallbackSrc } = request
   const canonicalModelType = normalizeModelType(request.modelType)
 
   const profilingMeta = (request as Record<string, unknown>)[PROFILING_KEY] as
@@ -97,7 +98,7 @@ export async function handleLoadModel(
       }
     })
 
-    const primaryResolve = session.resolvePrimaryModelPath(modelSrc)
+    const primaryResolve = session.resolvePrimaryModelPath(modelSrc, fallbackSrc)
 
     let resolvedModelPath: string
     let pluginResolveResult:
@@ -215,6 +216,8 @@ export async function handleLoadModel(
         gauges: Object.keys(gauges).length > 0 ? gauges : undefined,
         tags: Object.keys(tags).length > 0 ? tags : undefined
       }
+      const backend = readBackendDiagnostics(loadResult)
+      if (backend) operationEvent.backend = backend
 
       ;(response as LoadModelResponse & { [OPERATION_EVENT_KEY]?: OperationEvent })[
         OPERATION_EVENT_KEY

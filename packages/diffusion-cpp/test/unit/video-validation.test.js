@@ -15,6 +15,7 @@ const FAKE_T5XXL = '/tmp/umt5_xxl_fp16.safetensors'
 const FAKE_VAE = '/tmp/wan_2.1_vae.safetensors'
 const FAKE_HIGH_NOISE = '/tmp/wan2.2_t2v_high_noise.safetensors'
 const FAKE_CLIP_VISION = '/tmp/clip_vision_h.safetensors'
+const FAKE_LTX_CONNECTORS = '/tmp/ltx-2-embeddings-connectors.safetensors'
 
 // Minimal valid PNG header (24 bytes — magic + IHDR width/height).
 const FAKE_PNG = new Uint8Array([
@@ -57,6 +58,29 @@ function makeWanModel({ files, config, logger } = {}) {
     config: config || { threads: 1 },
     logger: logger || makeQuiet()
   })
+}
+
+function makeLtxModel(config = { threads: 1 }) {
+  return new VideoStableDiffusion({
+    files: {
+      model: '/tmp/ltx-2.safetensors',
+      vae: '/tmp/ltx-2-vae.safetensors',
+      embeddingsConnectors: FAKE_LTX_CONNECTORS
+    },
+    config,
+    logger: makeQuiet()
+  })
+}
+
+function recordNativeDispatch(model) {
+  let calls = 0
+  model.addon = {
+    runJob: async () => {
+      calls += 1
+      throw new Error('native dispatch reached')
+    }
+  }
+  return () => calls
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -180,6 +204,26 @@ test('load | passes native-required path fields as strings', async (t) => {
   t.is(captured.embeddingsConnectorsPath, '')
 })
 
+test('load | forwards VAE fallback config to the native context', async (t) => {
+  const m = makeWanModel({ config: { threads: 1, vae_auto_cpu_fallback: true } })
+  let captured = null
+  m._createAddon = (configurationParams) => {
+    captured = configurationParams
+    return {
+      activate: async () => {},
+      unload: async () => {}
+    }
+  }
+
+  await m.load()
+
+  t.is(
+    captured.config.vae_auto_cpu_fallback,
+    true,
+    'vae_auto_cpu_fallback reaches native configuration'
+  )
+})
+
 test('load | passes the Wan 2.2 high-noise expert to the native context', async (t) => {
   const m = new VideoStableDiffusion({
     files: {
@@ -232,6 +276,136 @@ test('run | throws when mode is not a string', async (t) => {
 test('run | throws when mode is an unrecognised string', async (t) => {
   const m = makeWanModel()
   await t.exception.all(m.run({ mode: 'txt2img', prompt: 'hi' }), /'txt2vid' \| 'img2vid'/)
+})
+
+test('run | LTX IC-LoRA inputs are rejected for Wan models', async (t) => {
+  const m = makeWanModel()
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      reference_images: [FAKE_PNG],
+      lora: '/tmp/ltx-ic-lora.safetensors'
+    }),
+    /only supported by LTX video models/
+  )
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 'hi', lora: '/tmp/ltx-ic-lora.safetensors' }),
+    /only supported for LTX video models/
+  )
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 'hi', stg_scale: 1, stg_block: 29 }),
+    /only supported for LTX/
+  )
+})
+
+test('run | accepts validated LTX IC-LoRA inputs before dispatch', async (t) => {
+  const m = makeLtxModel()
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      reference_images: [FAKE_PNG],
+      reference_attention_strength: 0.8,
+      reference_downscale_factor: 1,
+      lora: '/tmp/ltx-ic-lora.safetensors',
+      lora_strength: 1.4,
+      stg_scale: 1,
+      stg_block: 29
+    }),
+    /native dispatch reached/
+  )
+  t.is(dispatches(), 1)
+})
+
+test('run | rejects LTX reference_images without LoRA before dispatch', async (t) => {
+  const m = makeLtxModel()
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 'hi', reference_images: [FAKE_PNG] }),
+    /reference_images requires params\.lora/
+  )
+  t.is(dispatches(), 0)
+})
+
+test('run | rejects empty LTX reference_images', async (t) => {
+  const m = makeLtxModel()
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      reference_images: [],
+      lora: '/tmp/ltx-ic-lora.safetensors'
+    }),
+    /reference_images must be a non-empty Array/
+  )
+})
+
+test('run | requires exactly one LTX reference sheet before dispatch', async (t) => {
+  const m = makeLtxModel()
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      reference_images: [FAKE_PNG, FAKE_PNG],
+      lora: '/tmp/ltx-ic-lora.safetensors'
+    }),
+    /exactly one composite reference sheet/
+  )
+  t.is(dispatches(), 0)
+})
+
+test('run | enforces the engine reference downscale contract before dispatch', async (t) => {
+  for (const factor of [0.5, 2, Number.NaN]) {
+    const m = makeLtxModel()
+    const dispatches = recordNativeDispatch(m)
+    await t.exception.all(
+      m.run({
+        mode: 'txt2vid',
+        prompt: 'hi',
+        reference_images: [FAKE_PNG],
+        lora: '/tmp/ltx-ic-lora.safetensors',
+        reference_downscale_factor: factor
+      }),
+      /reference_downscale_factor must be exactly 1/
+    )
+    t.is(dispatches(), 0)
+  }
+})
+
+test('run | rejects reference conditioning with img2vid before dispatch', async (t) => {
+  const m = makeLtxModel()
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({
+      mode: 'img2vid',
+      prompt: 'hi',
+      width: 768,
+      height: 512,
+      init_image: FAKE_PNG,
+      reference_images: [FAKE_PNG],
+      lora: '/tmp/ltx-ic-lora.safetensors'
+    }),
+    /cannot be combined with img2vid\/init_image/
+  )
+  t.is(dispatches(), 0)
+})
+
+test('run | rejects reference conditioning with VAE decode-only before dispatch', async (t) => {
+  const m = makeLtxModel({ threads: 1, vae_decode_only: true })
+  const dispatches = recordNativeDispatch(m)
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      reference_images: [FAKE_PNG],
+      lora: '/tmp/ltx-ic-lora.safetensors'
+    }),
+    /requires VAE encoder weights/
+  )
+  t.is(dispatches(), 0)
 })
 
 // ─────────────────────────────────────────────────────────────────────
@@ -735,28 +909,25 @@ test('run | identifies every MoE control that lacks a high-noise expert', async 
   )
 })
 
-// ─────────────────────────────────────────────────────────────────────
-//  run(): LoRA is not yet supported on the video path
-// ─────────────────────────────────────────────────────────────────────
-//
-// The native `SD_VID_GEN_HANDLERS` map has no "lora" entry and
-// `SdModel::processVideo` never touches `sd_vid_gen_params_t::loras`,
-// so we reject `params.lora` at the JS boundary to avoid silently
-// dropping the adapter. When LoRA-on-video is wired through native,
-// drop these tests and re-add the absolute-path validation tests.
-
-test('run | rejects params.lora (not supported on video path yet)', async (t) => {
-  const m = makeWanModel()
-  // The same loud TypeError fires regardless of input shape -- whether
-  // the value would have passed the old "non-empty absolute string"
-  // check or not. Cover all four old shapes so a future re-introduction
-  // of the validation can't bring back a silent-drop regression.
-  for (const lora of ['', 42, 'lora.safetensors', '/tmp/lora.safetensors']) {
-    await t.exception.all(
-      m.run({ mode: 'txt2vid', prompt: 'hi', lora }),
-      /params\.lora is not supported for video generation yet/
-    )
-  }
+test('run | validates LTX LoRA strength and STG controls', async (t) => {
+  const m = makeLtxModel()
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 'hi', lora_strength: 1.4 }),
+    /lora_strength requires params\.lora/
+  )
+  await t.exception.all(
+    m.run({
+      mode: 'txt2vid',
+      prompt: 'hi',
+      lora: '/tmp/lora.safetensors',
+      lora_strength: 11
+    }),
+    /lora_strength must be in \[0, 10\]/
+  )
+  await t.exception.all(
+    m.run({ mode: 'txt2vid', prompt: 'hi', stg_block: -1 }),
+    /stg_block must be a non-negative integer/
+  )
 })
 
 // ─────────────────────────────────────────────────────────────────────

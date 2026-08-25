@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.2.0",
+  "version": "0.2.4",
   "description": "Audio generation (music) addon for qvac",
   "addon": true,
   "engines": {
@@ -12,25 +12,36 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
+    "example:minimax": "bare examples/generate-music-minimax.js",
+    "example:cover": "bare examples/generate-cover.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
     "test:dts": "tsc --noEmit -p tsconfig.dts.json",
     "test:types": "npm run typecheck && npm run test:dts && npm run check:generated",
-    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js",
+    "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:node && npm run test:package",
+    "test:package": "npm run build:ts && brittle test/package/package-contract.test.js",
+    "test:node": "node --test scripts/__tests__/*.test.js",
     "test:integration": "npm run build:ts && brittle-bare test/integration/**/*.test.js",
+    "test:benchmark:rtf": "npm run build:ts && brittle-bare test/benchmark/rtf-benchmark.test.js",
+    "test:benchmark:rtf:matrix": "node scripts/run-rtf-benchmark-matrix.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
-    "lint:js": "prettier --check \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\" && lunte \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
+    "lint:js": "prettier --check \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" && lunte \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
-    "format": "prettier --write \"binding.js\" \"lib/*.js\" \"scripts/*.js\" \"test/**/*.js\"",
-    "download-models:registry": "node scripts/download-audiogen-ggml-models.js"
+    "format": "prettier --write \"binding.js\" \"examples/*.js\" \"lib/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\"",
+    "download-models:registry": "node scripts/download-audiogen-ggml-models.js --output ./models",
+    "download-models:registry:all": "node scripts/download-audiogen-ggml-models.js --variant all --output ./models"
   },
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
-    "./models": "./models.js"
+    "./models": "./models.js",
+    "./test/benchmark-runner": "./test/utils/benchmark-runner.js"
+  },
+  "bin": {
+    "qvac-audiogen-download-models": "scripts/download-audiogen-ggml-models.js"
   },
   "files": [
     "binding.js",
@@ -38,16 +49,26 @@
     "index.d.ts",
     "audiogen.js",
     "audiogen.d.ts",
+    "error.js",
+    "error.d.ts",
     "models.js",
     "models.d.ts",
     "lib",
     "prebuilds",
-    "test/integration",
     "test/utils/downloadModel.js",
     "test/utils/runAudioGen.js",
-    "test/mobile",
+    "test/utils/benchmark-runner.js",
+    "test/utils/benchmark-report.js",
+    "test/utils/benchmark-stats.js",
+    "test/utils/benchmark-validate.js",
+    "test/utils/device-env.js",
+    "test/utils/memory-usage.js",
+    "benchmarks/RTF-BENCHMARKS.md",
+    "examples/generate-music-minimax.js",
+    "scripts/download-audiogen-ggml-models.js",
     "README.md",
     "CHANGELOG.md",
+    "NOTICE",
     "LICENSE"
   ],
   "license": "Apache-2.0",
@@ -63,11 +84,11 @@
     "audiogen",
     "music-generation",
     "acestep",
+    "minimax-music3",
     "ggml"
   ],
   "devDependencies": {
-    "@qvac/registry-client": "^0.4.0",
-    "bare-process": "^4.2.2",
+    "@qvac/registry-client": "^0.6.1",
     "brittle": "^3.17.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -81,13 +102,14 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/error": "^0.1.0",
+    "@qvac/error": "^0.1.1",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-ffmpeg": "^1.4.0",
     "bare-fs": "^4.5.6",
     "bare-os": "^3.8.0",
-    "bare-path": "^3.0.0"
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2"
   },
   "types": "index.d.ts"
 }

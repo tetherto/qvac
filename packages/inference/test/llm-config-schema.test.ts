@@ -150,6 +150,34 @@ test('llmConfigSchema: explicit image_tile_mode overrides the default', (t) => {
   if (result.success) t.is(result.data.image_tile_mode, 'batched')
 })
 
+test('llmConfigBaseSchema: accepts valid image_no_upscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'on' }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'off' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid image_no_upscale values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: true }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ image_no_upscale: 'yes' }).success, false)
+})
+
+// Unset must stay unset. The addon reads absence as fabric's -1 sentinel, meaning
+// "use the model's own GGUF value"; a default here would force one rule on every
+// model and silently change preprocessing for existing callers.
+test('llmConfigBaseSchema: image_no_upscale is optional and has no default', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({}).success, true)
+  const result = llmConfigSchema.safeParse({})
+  t.is(result.success, true)
+  if (result.success) t.is(result.data.image_no_upscale, undefined)
+})
+
+// The regression this guards: load-model.ts validates modelConfig with
+// llmConfigBaseSchema.strict(), so a field present in the SDK copy of this schema but
+// missing here is rejected before it ever reaches the addon.
+test('loadBuiltinModelOptions: strict validation admits image_no_upscale', (t) => {
+  t.is(llmConfigBaseSchema.strict().safeParse({ image_no_upscale: 'on' }).success, true)
+})
+
 test('llmConfigBaseSchema: accepts mmproj-use-gpu boolean', (t) => {
   const enabled = llmConfigBaseSchema.safeParse({ 'mmproj-use-gpu': true })
   t.is(enabled.success, true)

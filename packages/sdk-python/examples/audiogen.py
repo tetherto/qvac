@@ -16,8 +16,6 @@ import base64
 import sys
 import wave
 
-from _common import print_progress
-
 from tetherto.qvac_sdk import (
     Client,
     generate_client_request_id,
@@ -32,6 +30,17 @@ from tetherto.qvac_sdk.models import (
     AUDIOGEN_VAE_BF16,
 )
 from tetherto.qvac_sdk.schemas import AudioGenStreamRequest
+
+
+def print_progress(p) -> None:
+    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    line = (
+        f"▸ Downloading {p.percentage:.0f}% "
+        f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
+    )
+    print(line, end="\r" if sys.stderr.isatty() else "\n", file=sys.stderr)
+    if p.percentage >= 100:
+        print(file=sys.stderr)
 
 
 def write_wav(

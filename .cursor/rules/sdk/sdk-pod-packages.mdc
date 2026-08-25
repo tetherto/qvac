@@ -32,7 +32,7 @@ Changelog / release `--package=` values use the **tag slug** (see `scripts/sdk/p
       -> @qvac/openclaw-plugin
 ```
 
-`@qvac/bare-sdk` and `packages/sdk-python` (`tetherto-qvac-sdk`) stay lockstep with `@qvac/sdk` via `qv-sdk-lockstep-sync` (not listed above). Use `/qv-agent-stack-sync` for plan / prepare-cascade / promote.
+`@qvac/sdk`, `@qvac/bare-sdk` and `packages/sdk-python` (`tetherto-qvac-sdk`) stay lockstep at the `@qvac/inference` version anchor via `qv-sdk-lockstep-sync` (not listed above). Use `/qv-agent-stack-sync` for plan / prepare-cascade / promote.
 
 ## Glob Patterns
 

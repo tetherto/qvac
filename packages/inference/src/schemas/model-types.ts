@@ -17,6 +17,7 @@ export const ModelType = {
   parakeetTranscription: 'parakeet-transcription',
   ggmlOcr: 'ggml-ocr',
   sdcppGeneration: 'sdcpp-generation',
+  audiogenGgml: 'audiogen-ggml',
   ggmlVla: 'ggml-vla',
   ggmlClassification: 'ggml-classification'
 } as const
@@ -32,6 +33,7 @@ const AliasKeys = {
   tts: 'tts',
   ocr: 'ocr',
   diffusion: 'diffusion',
+  audiogen: 'audiogen',
   vla: 'vla',
   classification: 'classification'
 } as const
@@ -51,6 +53,7 @@ export const ModelTypeAliases = {
   [AliasKeys.tts]: ModelType.ttsGgml,
   [AliasKeys.ocr]: ModelType.ggmlOcr,
   [AliasKeys.diffusion]: ModelType.sdcppGeneration,
+  [AliasKeys.audiogen]: ModelType.audiogenGgml,
   [AliasKeys.vla]: ModelType.ggmlVla,
   [AliasKeys.classification]: ModelType.ggmlClassification
 } as const
@@ -229,6 +232,16 @@ export const diffusionModelTypeSchema = modelTypeInputSchema
   .extract([AliasKeys.diffusion, ModelType.sdcppGeneration])
   .describe('Diffusion model type: "diffusion" (alias) or "sdcpp-generation" (canonical)')
 export type DiffusionModelTypeInput = z.infer<typeof diffusionModelTypeSchema>
+
+/**
+ * AudioGen model type schema.
+ * - Alias: `"audiogen"` → resolves to `"audiogen-ggml"`
+ * - Canonical: `"audiogen-ggml"`
+ */
+export const audioGenModelTypeSchema = modelTypeInputSchema
+  .extract([AliasKeys.audiogen, ModelType.audiogenGgml])
+  .describe('AudioGen model type: "audiogen" (alias) or "audiogen-ggml" (canonical)')
+export type AudioGenModelTypeInput = z.infer<typeof audioGenModelTypeSchema>
 
 /**
  * VLA (vision-language-action) model type schema.

@@ -18,10 +18,7 @@ import {
   type TTSConfigurationParams,
   type TTSOutputCallback,
 } from "./tts";
-import {
-  ERR_CODES,
-  QvacErrorAddonTTSGgml,
-} from "./lib/error";
+import * as errorModule from "./lib/error";
 import { splitTtsText } from "./lib/textChunker";
 import {
   accumulateTextStream,
@@ -30,6 +27,7 @@ import {
 } from "./lib/textStreamAccumulator";
 
 const { platform } = bareOs;
+const { ERR_CODES, QvacErrorAddonTTSGgml } = errorModule;
 
 const ENGINE_CHATTERBOX = "chatterbox";
 const ENGINE_SUPERTONIC = "supertonic";
@@ -39,6 +37,7 @@ const ENGINE_SUPERTONIC = "supertonic";
 // `files.cosyvoiceModelDir`) routes here.
 const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
+const ENGINE_AUDIO8 = "audio8";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -82,15 +81,6 @@ const COSYVOICE_DIALECTS = {
   tianjin: "天津话",
   yunnan: "云南话",
 } as const;
-const COSYVOICE_EMOTIONS = {
-  happy: "请非常开心地说一句话。",
-  sad: "请非常伤心地说一句话。",
-  angry: "请非常生气地说一句话。",
-} as const;
-const COSYVOICE_SPEEDS = {
-  slow: "请用尽可能慢地语速说一句话。",
-  fast: "请用尽可能快地语速说一句话。",
-} as const;
 const COSYVOICE_VOLUMES = {
   loud: "Please say a sentence as loudly as possible.",
   soft: "Please say a sentence in a very soft voice.",
@@ -101,17 +91,16 @@ const COSYVOICE_STYLES = {
 } as const;
 
 /**
- * Structured CosyVoice3 control. Exactly one field takes effect per synthesis,
- * resolved by precedence dialect > emotion > speed > volume > style. Pass a raw
- * string instead for an arbitrary instruction (advanced escape hatch).
+ * CosyVoice3 controls that have no canonical cross-engine vocabulary yet.
+ * Emotion and speaking rate are NOT here -- use the top-level `emotion` /
+ * `pace` options, which work the same way on every engine that supports them.
+ * Exactly one field takes effect per synthesis, resolved by precedence
+ * dialect > volume > style. Pass a raw string instead for an arbitrary
+ * instruction (advanced escape hatch).
  */
 interface CosyvoiceInstruct {
   /** Chinese dialect; renders "请用{dialect}表达。". */
   dialect?: keyof typeof COSYVOICE_DIALECTS;
-  /** Emotion. */
-  emotion?: keyof typeof COSYVOICE_EMOTIONS;
-  /** Speaking speed. */
-  speed?: keyof typeof COSYVOICE_SPEEDS;
   /** Loudness. */
   volume?: keyof typeof COSYVOICE_VOLUMES;
   /** Playful style preset. */
@@ -140,43 +129,63 @@ function cosyvoiceInstructValue(
 /**
  * Render a CosyVoice3 `instruct` option to the trained instruction string.
  * A raw string passes through (trimmed); the structured form emits exactly one
- * control by precedence dialect > emotion > speed > volume > style. Returns ""
- * for no instruction (zero-shot). An invalid structured key throws.
+ * control by precedence dialect > volume > style. Returns "" for no
+ * instruction. An invalid structured key throws.
  */
 function renderCosyvoiceInstruct(
   instruct: string | CosyvoiceInstruct | undefined,
 ): string {
-  if (instruct == null) return "";
+  // Only `undefined` means "omitted" (zero-shot). An explicit `null` is a
+  // malformed value, not an omission, so it is rejected below like any other
+  // non-object.
+  if (instruct === undefined) return "";
   if (typeof instruct === "string") return instruct.trim();
+  // A JS caller can pass values the type forbids (null, a number, an array, a
+  // Date, a class instance). Check defensively as `unknown`: require an ordinary
+  // object literal so exotic objects can't slip past the presence checks below
+  // and degrade to zero-shot, and so control fields are read from the object's
+  // own properties rather than an inherited prototype.
+  const control = instruct as unknown;
+  if (control === null || typeof control !== "object" || Array.isArray(control)) {
+    throw new Error(
+      "Invalid CosyVoice instruct: expected a string or a plain control " +
+        "object such as { dialect: 'cantonese' }.",
+    );
+  }
+  const proto = Object.getPrototypeOf(control) as object | null;
+  if (proto !== Object.prototype && proto !== null) {
+    throw new Error(
+      "Invalid CosyVoice instruct: expected a plain control object such as " +
+        "{ dialect: 'cantonese' }, not an instance of another type.",
+    );
+  }
   // Reject unknown structured keys (typos like `{ dialekt: 'cantonese' }`)
   // before the precedence chain, which would otherwise fall through to "".
-  const supportedControls = ["dialect", "emotion", "speed", "volume", "style"];
+  const supportedControls = ["dialect", "volume", "style"];
   const unknownKeys = Object.keys(instruct).filter(
     (key) => !supportedControls.includes(key),
   );
   if (unknownKeys.length > 0) {
+    const hint = unknownKeys.some((key) => key === "emotion" || key === "speed")
+      ? " Emotion and speaking rate moved to the top-level `emotion` / `pace` options."
+      : "";
     throw new Error(
       `Invalid CosyVoice instruct key(s): ${unknownKeys.join(", ")}. ` +
-        "Valid keys: dialect, emotion, speed, volume, style.",
+        `Valid keys: dialect, volume, style.${hint}`,
     );
   }
-  if (instruct.dialect) {
+  // Presence, not truthiness: a control that is set to a malformed value
+  // (`{ dialect: '' }`, `{ dialect: null }`) must raise via
+  // cosyvoiceInstructValue rather than fall through to zero-shot. `undefined`
+  // means the field was not set, so it is skipped. Precedence: dialect >
+  // volume > style.
+  if (instruct.dialect !== undefined) {
     return `请用${cosyvoiceInstructValue(COSYVOICE_DIALECTS, instruct.dialect, "dialect")}表达。`;
   }
-  if (instruct.emotion) {
-    return cosyvoiceInstructValue(
-      COSYVOICE_EMOTIONS,
-      instruct.emotion,
-      "emotion",
-    );
-  }
-  if (instruct.speed) {
-    return cosyvoiceInstructValue(COSYVOICE_SPEEDS, instruct.speed, "speed");
-  }
-  if (instruct.volume) {
+  if (instruct.volume !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_VOLUMES, instruct.volume, "volume");
   }
-  if (instruct.style) {
+  if (instruct.style !== undefined) {
     return cosyvoiceInstructValue(COSYVOICE_STYLES, instruct.style, "style");
   }
   return "";
@@ -190,6 +199,9 @@ const PARLER_RE =
 const PARLER_VARIANT_ORDER = ["mini", "large", "indic"];
 const PARLER_QUANT_ORDER = ["q8_0", "q6_k", "f16", "f32"];
 const PARLER_DESCRIPTION_KEYS = ["description", "voiceDescription"] as const;
+// What native Parler reads as template fields. `emotion` / `pace` stay listed
+// here because build_description() still renders them, even though they are
+// cross-engine options at the JS surface.
 const PARLER_TEMPLATE_KEYS = [
   "voice",
   "emotion",
@@ -200,18 +212,112 @@ const PARLER_TEMPLATE_KEYS = [
   "reverb",
   "quality",
 ] as const;
+// The subset that stays Parler-only now that emotion/pace are cross-engine.
+const PARLER_ONLY_TEMPLATE_KEYS = [
+  "voice",
+  "pitch",
+  "expressivity",
+  "noise",
+  "reverb",
+  "quality",
+] as const;
 const PARLER_FIELD_KEYS = [
   ...PARLER_DESCRIPTION_KEYS,
   ...PARLER_TEMPLATE_KEYS,
 ] as const;
+const PARLER_ONLY_KEYS = [
+  ...PARLER_DESCRIPTION_KEYS,
+  ...PARLER_ONLY_TEMPLATE_KEYS,
+] as const;
 type ParlerFieldKey = (typeof PARLER_FIELD_KEYS)[number];
 type ParlerDescFields = Partial<Record<ParlerFieldKey, string>>;
+// Everything legal on one job object: Parler's description/template surface
+// plus the cross-engine conditioning that Parler also renders.
+type ParlerJobSource = ParlerDescriptionFields & TTSConditioningFields;
+
+// Canonical cross-engine conditioning vocabulary. This is a MIRROR, not the
+// source of truth: tts-cpp owns it in include/tts-cpp/voice_controls.h, and
+// test/unit/voice-controls.test.js pins this copy against the native lists.
+const EMOTIONS = [
+  "command",
+  "anger",
+  "narration",
+  "conversation",
+  "disgust",
+  "fear",
+  "happy",
+  "neutral",
+  "proper noun",
+  "news",
+  "sad",
+  "surprise",
+] as const;
+const PACES = ["slow", "moderate", "fast"] as const;
+type Emotion = (typeof EMOTIONS)[number];
+type Pace = (typeof PACES)[number];
+const CONDITIONING_KEYS = ["emotion", "pace"] as const;
+type ConditioningKey = (typeof CONDITIONING_KEYS)[number];
+type ConditioningFields = Partial<Record<ConditioningKey, string>>;
+
+// Audio8 ships three GGUFs per quant tier, with the tier in the filename
+// (`audio8-lm-q8_0.gguf`); a bare `audio8-lm.gguf` matches too, as
+// forward-compat with a single-tier release.
+const AUDIO8_LM_RE = /^audio8-lm(-[a-z0-9_]+)?\.gguf$/i;
+const AUDIO8_DECODER_RE =
+  /^audio8-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
+const AUDIO8_ENCODER_RE =
+  /^audio8-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
+const AUDIO8_QUANT_ORDER = ["q8_0", "f16", "q4_0", "f32"];
+const AUDIO8_VOICE_KEYS = ["referenceAudio", "referenceText"] as const;
+type Audio8VoiceKey = (typeof AUDIO8_VOICE_KEYS)[number];
+type Audio8VoiceFieldsResolved = Partial<Record<Audio8VoiceKey, string>>;
+
+/** Per-call engine fields forwarded verbatim onto the native job object. */
+type JobFields = ParlerDescFields & Audio8VoiceFieldsResolved;
+
+/** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */
+const SAMPLING_ENGINES: readonly string[] = [ENGINE_PARLER, ENGINE_AUDIO8];
 
 type EngineType =
   | typeof ENGINE_CHATTERBOX
   | typeof ENGINE_SUPERTONIC
   | typeof ENGINE_COSYVOICE3
-  | typeof ENGINE_PARLER;
+  | typeof ENGINE_PARLER
+  | typeof ENGINE_AUDIO8;
+
+// Per-engine supported subsets, mirroring controls::supported_emotions() /
+// supported_paces(). An empty list means the engine has no such control.
+const ENGINE_EMOTIONS: Record<EngineType, readonly Emotion[]> = {
+  [ENGINE_PARLER]: EMOTIONS,
+  // Only the emotions Fun-CosyVoice3 has a trained instruction for; the rest,
+  // and the upstream spelling "angry", are rejected rather than paraphrased.
+  [ENGINE_COSYVOICE3]: ["anger", "happy", "neutral", "sad"],
+  [ENGINE_SUPERTONIC]: [],
+  [ENGINE_CHATTERBOX]: [],
+  [ENGINE_AUDIO8]: [],
+};
+
+const ENGINE_PACES: Record<EngineType, readonly Pace[]> = {
+  [ENGINE_PARLER]: PACES, // rendered into the training caption
+  [ENGINE_COSYVOICE3]: PACES, // slow/fast -> instruct; moderate -> none
+  [ENGINE_SUPERTONIC]: PACES, // mapped onto the duration multiplier
+  [ENGINE_CHATTERBOX]: [], // time-stretch only; use `speed`
+  [ENGINE_AUDIO8]: [], // no rate control at all
+};
+
+// Which channels an engine can change per call. Supertonic takes its pace
+// through EngineOptions when the engine is built, and tts-cpp exposes no
+// per-call surface for it, so it only moves at construction or reload().
+const ENGINE_PER_CALL_CONDITIONING: Record<
+  EngineType,
+  readonly ConditioningKey[]
+> = {
+  [ENGINE_PARLER]: CONDITIONING_KEYS,
+  [ENGINE_COSYVOICE3]: CONDITIONING_KEYS,
+  [ENGINE_SUPERTONIC]: [],
+  [ENGINE_CHATTERBOX]: [],
+  [ENGINE_AUDIO8]: [],
+};
 
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
@@ -243,6 +349,18 @@ interface TTSGgmlFiles {
   parlerModel?: string;
   parlerModelPath?: string;
   parler?: string;
+  /** Audio8 DualAR language model GGUF path. Overrides `modelDir`. */
+  audio8Lm?: string;
+  audio8LmPath?: string;
+  /** Audio8 codec synthesis half (codes to 44.1 kHz wav). Overrides `modelDir`. */
+  audio8CodecDecoder?: string;
+  audio8CodecDecoderPath?: string;
+  /**
+   * Audio8 codec analysis half (wav to codes). Only needed to clone a voice
+   * from a recording; a text-only deployment can leave it out.
+   */
+  audio8CodecEncoder?: string;
+  audio8CodecEncoderPath?: string;
   /**
    * CosyVoice3 model directory holding the sub-model GGUFs
    * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
@@ -257,6 +375,13 @@ interface TTSGgmlFiles {
   cosyvoiceFlowModelPath?: string;
   cosyvoiceHiftModel?: string;
   cosyvoiceHiftModelPath?: string;
+  /**
+   * CosyVoice3 voice-cloning add-on GGUFs, required only when
+   * `referenceAudio` is set: the speech_tokenizer_v3 speech tokenizer
+   * (`cosyvoice3-s3tok-*.gguf`) and the CAM++ speaker encoder
+   * (`cosyvoice3-campplus-*.gguf`). Auto-discovered under
+   * `cosyvoiceModelDir` by those name prefixes when unset.
+   */
   cosyvoiceS3tokModel?: string;
   cosyvoiceS3tokModelPath?: string;
   cosyvoiceCampplusModel?: string;
@@ -306,16 +431,18 @@ interface TTSGgmlRuntimeConfig {
   language?: string;
   /**
    * Route inference through a GPU backend (Metal / Vulkan / OpenCL) if
-   * available. Defaults to `false` for both engines. Honored on Apple,
-   * desktop, and Android, where tts-cpp selects the backend using its
-   * per-vendor allowlist.
+   * available. Defaults to `false`. Audio8 uses Vulkan on Linux and Windows;
+   * CosyVoice3 selects Metal on Apple, Vulkan on desktop Linux / Windows, and
+   * OpenCL/Adreno on Android (Mali / Xclipse decline to CPU); the other
+   * GPU-capable engines select a backend for the host platform.
    */
   useGPU?: boolean;
   /**
    * Desired output sample rate in Hz (8000-192000); omit to keep the engine's
-   * native rate. Resamples the native output (24 kHz Chatterbox and
-   * CosyVoice3, 44.1 kHz Supertonic), or the 48 kHz LavaSR-enhanced signal,
-   * before emitting. `TTSOutputChunk.sampleRate` reports the resulting rate.
+   * native rate. Resamples the native output (24 kHz for Chatterbox and
+   * CosyVoice3; 44.1 kHz for Supertonic, Parler, and Audio8), or the 48 kHz
+   * LavaSR-enhanced signal, before emitting. `TTSOutputChunk.sampleRate`
+   * reports the resulting rate.
    *
    * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
    * only accepted there when the LavaSR enhancer is active, because the
@@ -350,38 +477,93 @@ interface LavaSRDenoiserOptions {
 }
 
 /**
+ * Cross-engine conditioning. Accepted at construction and on `reload()` by
+ * every engine that supports them, and per call by Parler and CosyVoice3. A
+ * value outside the canonical vocabulary, outside the engine's supported
+ * subset, or on a channel the engine cannot change per call, throws naming the
+ * alternative -- nothing is silently degraded.
+ */
+interface TTSConditioningFields {
+  /** Speaking style. Parler: all 12. CosyVoice3: anger|happy|neutral|sad. */
+  emotion?: Emotion;
+  /**
+   * Speaking rate. Parler / CosyVoice3 / Supertonic. Supertonic conditions its
+   * engine at construction, so its pace only moves there or via `reload()`.
+   */
+  pace?: Pace;
+}
+
+/**
  * Parler voice-description inputs. Either a free-text `description` (alias
  * `voiceDescription`) or the template fields, rendered natively through
  * tts-cpp's build_description(); mixing the two at the same level is rejected.
  * Accepted at construction, on `reload()`, and per call (Parler only).
+ * `emotion` and `pace` moved to TTSConditioningFields -- Parler still renders
+ * both, but they are no longer Parler-only at the JS surface.
  */
 interface ParlerDescriptionFields {
   description?: string;
   voiceDescription?: string;
   /** Parler voice-template field; also Supertonic's baked voice id. */
   voice?: string;
-  emotion?: string;
   pitch?: string;
-  pace?: string;
   expressivity?: string;
   noise?: string;
   reverb?: string;
   quality?: string;
 }
 
-interface TTSGgmlOptions extends ParlerDescriptionFields {
+/**
+ * Voice cloning reference. Audio8's codec encoder turns `referenceAudio` into
+ * codes and they are prepended to the prompt as the speaker's own history, so
+ * no speaker encoder and no enrolment step are involved. `referenceText` is
+ * required alongside it there: the model conditions on it as the turn the
+ * recording answers, and a wrong one degrades the clone. Accepted at
+ * construction, on `reload()`, and per call (Audio8 only).
+ */
+interface Audio8VoiceFields {
+  /**
+   * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3:
+   * zero-shot / cross-lingual cloning reference (0.5-30 s hard limits,
+   * 5-15 s of clean speech recommended; multichannel input is downmixed to
+   * mono) — the native front-end tokenizes it (speech_tokenizer_v3),
+   * extracts the CAM++ speaker embedding and prompt mel at load, replacing
+   * the baked voice; requires the `cosyvoiceS3tokModel` +
+   * `cosyvoiceCampplusModel` files and fails the load (never silently falls
+   * back) when they are missing or the audio is unusable. Pair with
+   * `promptText` (the verbatim transcript) for zero-shot or omit it for
+   * cross-lingual. The reference is fixed at construction: `reload()`
+   * re-bakes the same recording (it is forwarded to the new addon instance)
+   * but cannot switch to a different one, so changing voices means a new
+   * instance. Audio8: the recording to clone, with `referenceText`
+   * alongside it.
+   */
+  referenceAudio?: string;
+  /** Audio8: what `referenceAudio` says. Required when cloning. */
+  referenceText?: string;
+}
+
+/** The Audio8 sampler knobs a `reload()` may carry. */
+interface Audio8SamplingFields {
+  greedy?: boolean;
+  temperature?: number;
+  topK?: number;
+  topP?: number;
+  maxFrames?: number;
+  seed?: number;
+  threads?: number;
+}
+
+interface TTSGgmlOptions
+  extends ParlerDescriptionFields,
+    Audio8VoiceFields,
+    TTSConditioningFields {
   files?: TTSGgmlFiles;
   config?: TTSGgmlRuntimeConfig;
   logger?: object;
   lazySessionLoading?: boolean;
   /** Explicit engine selection. Auto-detected from `files` when omitted. */
   engine?: EngineType;
-  /**
-   * Chatterbox: voice-cloning reference audio path (wav). CosyVoice3: reserved
-   * / not yet effective — zero-shot cloning needs the native S3 tokenizer +
-   * CAM++ (not ported yet), so the engine falls back to the baked voice.
-   */
-  referenceAudio?: string;
   /** Chatterbox: directory of baked voice-conditioning tensors. */
   voiceDir?: string;
   /** RNG seed for Chatterbox CFM/SineGen or Supertonic latent generation. */
@@ -389,6 +571,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
   /**
    * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
    * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
+   * Audio8: pass 99 to use Vulkan on Linux and Windows.
+   * CosyVoice3: pass 99 to offload on Metal (macOS / iOS), Vulkan (desktop
+   * Linux / Windows), or OpenCL/Adreno (Android); other hosts fall back to
+   * CPU by policy.
    */
   nGpuLayers?: number;
   /**
@@ -417,7 +603,12 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
    * latency.
    */
   streamFirstChunkTokens?: number;
-  /** CosyVoice3-only: left-context speech tokens carried into each streaming chunk. */
+  /**
+   * CosyVoice3-only: left-context speech tokens intended to be carried into each
+   * streaming chunk. Reserved / not yet effective — the pinned tts-cpp engine
+   * accepts the value but does not read it (true low-latency token2wav streaming
+   * is still reserved), so setting it currently has no effect.
+   */
   streamLeftContextTokens?: number;
   /**
    * Chatterbox-only CFM Euler step count. CosyVoice3: reserved / not yet
@@ -431,7 +622,15 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
    * model's baked rate. Omit it to retain the baked rate.
    */
   cfgRate?: number;
-  /** CosyVoice3: transcript of `referenceAudio` for zero-shot voice cloning (conditions the LM prompt). */
+  /**
+   * CosyVoice3: verbatim transcript of `referenceAudio`, selecting the
+   * cloning mode per the upstream frontends — set it for zero-shot (the LM
+   * is prompted with transcript + reference speech tokens; best fidelity in
+   * the reference's own language), omit it for cross-lingual (timbre-only
+   * conditioning; best when synthesizing a different language than the
+   * reference). Without `referenceAudio` it still overrides the baked
+   * voice's transcript metadata for the LM prompt.
+   */
   promptText?: string;
   /**
    * CosyVoice3: natural-language control (instruct2) — Chinese dialect, emotion,
@@ -491,14 +690,21 @@ interface TTSGgmlOptions extends ParlerDescriptionFields {
   /** Chatterbox MTL Cangjie TSV path for Chinese. */
   cangjieTsvPath?: string;
   /**
-   * Parler sampling / generation knobs; each unset defers to the GGUF's
-   * generation defaults (temperature 1.0, top-k 50, ~30 s max length).
+   * Parler and Audio8 sampling knobs; each unset defers to the engine's own
+   * defaults (Parler: temperature 1.0, top-k 50; Audio8: temperature 0.7,
+   * top-k 50, top-p 0.9). Audio8 filters by top-k/top-p on the raw logits and
+   * only then applies the temperature, following its reference.
    */
   temperature?: number;
   topK?: number;
   topP?: number;
-  /** Parler generation-length cap in decoder steps (~86/s); 0 = model default. */
+  /**
+   * Generation-length cap in decoder frames; 0 = engine default. Parler runs
+   * ~86 frames/s, Audio8 ~21.5.
+   */
   maxFrames?: number;
+  /** Audio8: take the argmax instead of sampling. */
+  greedy?: boolean;
   minNewTokens?: number;
   /** Parler prompt digit expansion (engine default: enabled). */
   normalizeNumbers?: boolean;
@@ -518,11 +724,37 @@ interface NormalizedFiles {
   cosyvoiceS3tokModel?: string;
   cosyvoiceCampplusModel?: string;
   parlerModel?: string;
+  audio8Lm?: string;
+  audio8CodecDecoder?: string;
+  audio8CodecEncoder?: string;
   voicesDir?: string;
   lavasrEnhancer?: string;
   lavasrDenoiser?: string;
   mecabDictDir?: string;
   cangjieTsvPath?: string;
+}
+
+/** The instance state reload() may overwrite, snapshotted so it can roll back. */
+interface ReloadableState {
+  language?: string;
+  useGPU?: boolean;
+  outputSampleRate: number | null;
+  emotion?: string;
+  pace?: string;
+  description?: string;
+  voice?: string;
+  pitch?: string;
+  expressivity?: string;
+  noise?: string;
+  reverb?: string;
+  quality?: string;
+  temperature?: number;
+  topK?: number;
+  topP?: number;
+  maxFrames?: number;
+  minNewTokens?: number;
+  normalizeNumbers?: boolean;
+  seed?: number;
 }
 
 interface InferenceState {
@@ -532,12 +764,12 @@ interface InferenceState {
 }
 
 interface TTSOutputChunk {
-  /** PCM audio payload. Kept as `ArrayBuffer` for public API compatibility. */
-  outputArray: ArrayBuffer;
+  /** Signed 16-bit mono PCM audio payload. */
+  outputArray: Int16Array;
   /**
-   * Output sample rate. The native engine rate (24000 for Chatterbox,
-   * 44100 for Supertonic and Parler), or 48000 when the LavaSR enhancer is
-   * active.
+   * Output sample rate. The native engine rate (24000 for Chatterbox and
+   * CosyVoice3; 44100 for Supertonic, Parler, and Audio8), or 48000 when the
+   * LavaSR enhancer is active.
    */
   sampleRate?: number;
 }
@@ -557,8 +789,17 @@ interface RuntimeStats {
   backendDevice?: number;
   /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other GPU. */
   backendId?: number;
+  /** LavaSR enhancer compute device. -1 = not loaded, 0 = CPU, 1 = GPU. */
+  enhancerBackendDevice?: number;
+  /** LavaSR enhancer backend code, using the same values as `backendId`. */
+  enhancerBackendId?: number;
   /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
   gpuUnsupported?: number;
+  /**
+   * Audio8 only: codec frames generated, on a fixed 46 ms grid. This is the
+   * unit its `tokensPerSecond` counts, in batch and in streaming alike.
+   */
+  generatedFrames?: number;
 }
 
 interface NativeStats {
@@ -578,14 +819,20 @@ interface SentenceStreamChunkMeta {
   isLast?: boolean;
 }
 
-interface SentenceStreamOptions extends ParlerDescriptionFields {
+interface SentenceStreamOptions
+  extends ParlerDescriptionFields,
+    Audio8VoiceFields,
+    TTSConditioningFields {
   /** BCP-47 locale for `Intl.Segmenter` when available. */
   locale?: string;
   /** Maximum graphemes per chunk; defaults to 300, or 120 for Korean. */
   maxChunkScalars?: number;
 }
 
-interface RunStreamingOptions extends ParlerDescriptionFields {
+interface RunStreamingOptions
+  extends ParlerDescriptionFields,
+    Audio8VoiceFields,
+    TTSConditioningFields {
   accumulateSentences?: boolean;
   sentenceDelimiter?: RegExp;
   sentenceDelimiterPreset?: SentenceDelimiterPreset;
@@ -600,13 +847,15 @@ type TextStreamInput =
   | Iterable<string>
   | AsyncIterable<string>;
 
-interface TTSRunInput extends ParlerDescriptionFields {
+interface TTSRunInput
+  extends ParlerDescriptionFields,
+    Audio8VoiceFields,
+    TTSConditioningFields {
   type?: string;
   input: string;
   streamOutput?: boolean;
   locale?: string;
   maxChunkScalars?: number;
-  outputSampleRate?: number;
   /**
    * Cancels non-streaming `run()`. An already-aborted signal rejects without
    * native dispatch. Ignored by all streaming paths.
@@ -623,6 +872,7 @@ interface StreamAccumulator {
   totalTime: number;
   audioDurationMs: number;
   totalSamples: number;
+  generatedFrames: number;
 }
 
 interface SentenceStreamContext {
@@ -632,9 +882,10 @@ interface SentenceStreamContext {
   chunkIdx: number;
   acc: StreamAccumulator;
   chunkResolver: ChunkResolver | null;
-  // Parler per-response description/template fields, replayed on every chunk's
-  // jobData so the native T5 cross-KV cache stays hot across the stream.
-  parlerFields?: ParlerDescFields;
+  // Per-response engine fields (Parler description/template, Audio8 voice),
+  // replayed on every chunk's jobData so the native caches they key -- the T5
+  // cross-KV, the encoded reference voice -- stay hot across the stream.
+  jobFields?: JobFields;
 }
 
 type ExclusiveRunner = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -743,13 +994,78 @@ function findParlerInDir(modelDir?: string): string | undefined {
   return path.join(modelDir, matches[0]);
 }
 
+/** Names of the entries that carry a value, for "wrong engine" messages. */
+function setOptionNames(
+  options: Record<string, string | number | boolean | undefined>,
+): string[] {
+  return Object.entries(options)
+    .filter(([, value]) => value != null)
+    .map(([name]) => name);
+}
+
+function readDirSafe(modelDir?: string): string[] {
+  if (!modelDir) return [];
+  try {
+    return fs.readdirSync(modelDir);
+  } catch {
+    return [];
+  }
+}
+
+function audio8QuantRank(name: string, pattern: RegExp): number {
+  const match = name.match(pattern);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  if (!match[1]) return 0;
+  const index = AUDIO8_QUANT_ORDER.indexOf(match[1].slice(1).toLowerCase());
+  return index === -1 ? AUDIO8_QUANT_ORDER.length + 1 : index + 1;
+}
+
+/**
+ * Find one Audio8 GGUF in `modelDir`, preferring the quant tier that reads
+ * best for its size (q8_0 > f16 > q4_0 > f32).
+ */
+function findAudio8InDir(
+  modelDir: string | undefined,
+  pattern: RegExp,
+): string | undefined {
+  if (!modelDir) return undefined;
+  const matches = readDirSafe(modelDir).filter((name) => pattern.test(name));
+  if (matches.length === 0) return undefined;
+  matches.sort(
+    (left, right) =>
+      audio8QuantRank(left, pattern) - audio8QuantRank(right, pattern),
+  );
+  return path.join(modelDir, matches[0]);
+}
+
+/**
+ * Collect the Audio8 voice-cloning properties present on `source` (a run
+ * input, streaming options, or constructor options). Returns undefined when
+ * none are set.
+ */
+function pickAudio8VoiceFields(
+  source: Audio8VoiceFields | null | undefined,
+): Audio8VoiceFieldsResolved | undefined {
+  if (source == null || typeof source !== "object") return undefined;
+  const out: Audio8VoiceFieldsResolved = {};
+  let any = false;
+  for (const key of AUDIO8_VOICE_KEYS) {
+    const value = source[key];
+    if (value != null && value !== "") {
+      out[key] = String(value);
+      any = true;
+    }
+  }
+  return any ? out : undefined;
+}
+
 /**
  * Collect the Parler description/template properties present on `source`
  * (a run input, streaming options, or constructor options). Returns undefined
  * when none are set.
  */
 function pickParlerDescFields(
-  source: ParlerDescriptionFields | null | undefined,
+  source: ParlerJobSource | null | undefined,
 ): ParlerDescFields | undefined {
   if (source == null || typeof source !== "object") return undefined;
   const out: ParlerDescFields = {};
@@ -785,6 +1101,150 @@ function assertParlerDescFieldsConsistent(
         `voice-template options (got ${templateKeys.join(", ")})`,
     );
   }
+}
+
+/** Which of `keys` are set on `source`. Used to name stray options in errors. */
+function keysPresent(
+  source: object | null | undefined,
+  keys: readonly string[],
+): string[] {
+  if (source == null || typeof source !== "object") return [];
+  const record = source as Record<string, unknown>;
+  return keys.filter((key) => record[key] != null && record[key] !== "");
+}
+
+/** Collect the cross-engine conditioning properties present on `source`. */
+function pickConditioningFields(
+  source: TTSConditioningFields | null | undefined,
+): ConditioningFields | undefined {
+  if (source == null || typeof source !== "object") return undefined;
+  const out: ConditioningFields = {};
+  let any = false;
+  for (const key of CONDITIONING_KEYS) {
+    const value: string | undefined = source[key];
+    if (value != null && value !== "") {
+      out[key] = value;
+      any = true;
+    }
+  }
+  return any ? out : undefined;
+}
+
+function assertCanonicalValue(
+  value: string,
+  canonical: readonly string[],
+  kind: string,
+): void {
+  if (canonical.includes(value.toLowerCase())) return;
+  throw new Error(
+    `tts-ggml: invalid ${kind} "${value}". ` +
+      `Valid ${kind}s: ${canonical.join(", ")}.`,
+  );
+}
+
+function supportedValues(engine: EngineType, kind: ConditioningKey) {
+  return kind === "emotion" ? ENGINE_EMOTIONS[engine] : ENGINE_PACES[engine];
+}
+
+function assertEngineSupports(
+  engine: EngineType,
+  kind: ConditioningKey,
+  value: string,
+): void {
+  const supported: readonly string[] = supportedValues(engine, kind);
+  if (supported.length === 0) {
+    const hint =
+      kind === "pace"
+        ? "; use `speed` (an exact multiplier) instead"
+        : "";
+    throw new Error(
+      `tts-ggml: the ${engine} engine does not support \`${kind}\`${hint}`,
+    );
+  }
+  if (supported.includes(value.toLowerCase())) return;
+  throw new Error(
+    `tts-ggml: ${kind} "${value}" is not supported by the ${engine} engine. ` +
+      `${engine} supports: ${supported.join(", ")}.`,
+  );
+}
+
+/**
+ * Validate emotion/pace against the canonical vocabulary first (so a typo reads
+ * clearly), then against what this engine actually supports.
+ */
+function validateConditioning(
+  engine: EngineType,
+  fields: ConditioningFields | undefined,
+): void {
+  if (!fields) return;
+  if (fields.emotion != null) {
+    assertCanonicalValue(fields.emotion, EMOTIONS, "emotion");
+    assertEngineSupports(engine, "emotion", fields.emotion);
+  }
+  if (fields.pace != null) {
+    assertCanonicalValue(fields.pace, PACES, "pace");
+    assertEngineSupports(engine, "pace", fields.pace);
+  }
+}
+
+/**
+ * Reject a channel the engine supports but cannot change per call, so it is
+ * never accepted here and then dropped on the way to the engine. Runs after
+ * validateConditioning so an engine with no such control keeps its own message.
+ */
+function assertPerCallConditioning(
+  engine: EngineType,
+  fields: ConditioningFields | undefined,
+  where: string,
+): void {
+  if (!fields) return;
+  const perCall = ENGINE_PER_CALL_CONDITIONING[engine];
+  const fixed = CONDITIONING_KEYS.filter(
+    (key) => fields[key] != null && !perCall.includes(key),
+  );
+  if (fixed.length === 0) return;
+  throw new Error(
+    `tts-ggml: ${where}: ${engine} applies ` +
+      `${fixed.map((key) => `\`${key}\``).join(", ")} when the engine is ` +
+      `built, so it cannot change per call; set it in the constructor or ` +
+      `reload({ ${fixed.join(", ")} })`,
+  );
+}
+
+// CosyVoice3 is trained on one instruction per synthesis. Only `pace: moderate`
+// resolves to no instruction, so it is the one value that never conflicts; every
+// emotion carries a trained instruction, `neutral` included.
+const COSYVOICE_DISENGAGED: Record<string, string> = {
+  pace: "moderate",
+};
+
+function engagedCosyvoiceControls(
+  fields: ConditioningFields | undefined,
+  instruct: string | undefined,
+): string[] {
+  const engaged: string[] = [];
+  for (const key of CONDITIONING_KEYS) {
+    const value = fields?.[key];
+    if (value != null && value.toLowerCase() !== COSYVOICE_DISENGAGED[key]) {
+      engaged.push(`${key}="${value}"`);
+    }
+  }
+  if (instruct != null && instruct !== "") engaged.push("instruct");
+  return engaged;
+}
+
+function assertSingleCosyvoiceControl(
+  fields: ConditioningFields | undefined,
+  instruct: string | undefined,
+  where: string,
+): void {
+  const engaged = engagedCosyvoiceControls(fields, instruct);
+  if (engaged.length <= 1) return;
+  throw new Error(
+    `tts-ggml: ${where}: conflicting conditioning controls ` +
+      `(${engaged.join(", ")}); cosyvoice3 is trained on one instruction per ` +
+      `synthesis -- set exactly one (pace="moderate" disengages a channel)`,
+  );
 }
 
 function normalizeGgmlFiles(
@@ -836,6 +1296,15 @@ function normalizeGgmlFiles(
       files.parlerModelPath,
       files.parler,
     ),
+    audio8Lm: firstNonEmpty(files.audio8Lm, files.audio8LmPath),
+    audio8CodecDecoder: firstNonEmpty(
+      files.audio8CodecDecoder,
+      files.audio8CodecDecoderPath,
+    ),
+    audio8CodecEncoder: firstNonEmpty(
+      files.audio8CodecEncoder,
+      files.audio8CodecEncoderPath,
+    ),
     voicesDir: firstNonEmpty(files.voicesDir),
     lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
     lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -858,14 +1327,15 @@ function detectEngineType(
     engine === ENGINE_CHATTERBOX ||
     engine === ENGINE_SUPERTONIC ||
     engine === ENGINE_COSYVOICE3 ||
-    engine === ENGINE_PARLER
+    engine === ENGINE_PARLER ||
+    engine === ENGINE_AUDIO8
   ) {
     return engine;
   }
   if (engine != null && engine !== "") {
     throw new Error(
       "tts-ggml: 'engine' option must be 'chatterbox', 'supertonic', " +
-        `'cosyvoice3' or 'parler' (got '${String(engine)}')`,
+        `'cosyvoice3', 'parler' or 'audio8' (got '${String(engine)}')`,
     );
   }
   // Explicit CosyVoice3 files/dir take precedence over shared-modelDir sniffing.
@@ -875,6 +1345,7 @@ function detectEngineType(
   if (files.t3Model || files.s3genModel) return ENGINE_CHATTERBOX;
   if (files.supertonicModel) return ENGINE_SUPERTONIC;
   if (files.parlerModel) return ENGINE_PARLER;
+  if (files.audio8Lm || files.audio8CodecDecoder) return ENGINE_AUDIO8;
   if (files.modelDir) {
     if (dirHasCosyvoice3(files.modelDir)) return ENGINE_COSYVOICE3;
     const hasChatterbox =
@@ -887,6 +1358,7 @@ function detectEngineType(
     if (hasChatterbox) return ENGINE_CHATTERBOX;
     if (hasSupertonic) return ENGINE_SUPERTONIC;
     if (findParlerInDir(files.modelDir)) return ENGINE_PARLER;
+    if (findAudio8InDir(files.modelDir, AUDIO8_LM_RE)) return ENGINE_AUDIO8;
   }
   return ENGINE_CHATTERBOX;
 }
@@ -1043,6 +1515,62 @@ function assertGpuIntentConsistent(
   );
 }
 
+const AUDIO8_NUMERIC_SAMPLING_FIELDS = [
+  "temperature",
+  "topK",
+  "topP",
+  "maxFrames",
+  "seed",
+  "threads",
+] as const;
+
+function assertAudio8SamplingFinite(
+  sampling: Audio8SamplingFields,
+  where: string,
+): void {
+  for (const field of AUDIO8_NUMERIC_SAMPLING_FIELDS) {
+    const value = sampling[field];
+    if (value === undefined || Number.isFinite(value)) continue;
+    throw new Error(
+      `tts-ggml: ${where}: ${field} must be a finite number`,
+    );
+  }
+}
+
+function assertNotNegative(
+  value: number | undefined,
+  name: string,
+  zeroMeans: string,
+  where: string,
+): void {
+  if (value === undefined || value >= 0) return;
+  throw new Error(
+    `tts-ggml: ${where}: ${name} must be >= 0 (0 = ${zeroMeans})`,
+  );
+}
+
+function assertAudio8TopP(value: number | undefined, where: string): void {
+  if (value === undefined || (value > 0 && value <= 1)) return;
+  throw new Error(`tts-ggml: ${where}: topP must be in (0, 1]`);
+}
+
+/**
+ * Mirrors Audio8Model::validateSampling, which stays the source of truth.
+ * Reload checks the merged knobs here because native only sees them when the
+ * instance is rebuilt: without this the refused value is already on the JS
+ * object by then, and the two would describe different samplers.
+ */
+function assertAudio8SamplingValid(
+  sampling: Audio8SamplingFields,
+  where: string,
+): void {
+  assertAudio8SamplingFinite(sampling, where);
+  assertNotNegative(sampling.temperature, "temperature", "greedy", where);
+  assertNotNegative(sampling.topK, "topK", "no top-k cutoff", where);
+  assertNotNegative(sampling.maxFrames, "maxFrames", "engine default", where);
+  assertAudio8TopP(sampling.topP, where);
+}
+
 function isAudioOutputEvent(data: unknown): data is NativeOutputChunk {
   return (
     data != null &&
@@ -1062,30 +1590,57 @@ function isStatsEvent(data: unknown): data is NativeStats {
   );
 }
 
+/**
+ * What `tokensPerSecond` counts. Audio8 paces on the codec frame grid and
+ * reports frames per second in batch synthesis; the text-paced engines report
+ * characters per second. Streaming has to keep the same unit as `run()` or the
+ * number silently changes meaning between the two entry points.
+ */
+function emptyStreamAccumulator(): StreamAccumulator {
+  return {
+    totalTime: 0,
+    audioDurationMs: 0,
+    totalSamples: 0,
+    generatedFrames: 0,
+  };
+}
+
+function streamedTokenCount(
+  chunks: string[],
+  accumulator: StreamAccumulator,
+  countsFrames: boolean,
+): number {
+  return countsFrames
+    ? accumulator.generatedFrames
+    : chunks.join("").length;
+}
+
 function computeSentenceStreamStats(
   chunks: string[],
   accumulator: StreamAccumulator,
+  countsFrames: boolean,
 ): RuntimeStats {
-  const totalCharacters = chunks.join("").length;
-  return {
-    ...accumulator,
+  const { generatedFrames, ...totals } = accumulator;
+  const produced = streamedTokenCount(chunks, accumulator, countsFrames);
+  const stats: RuntimeStats = {
+    ...totals,
     tokensPerSecond:
-      accumulator.totalTime > 0
-        ? totalCharacters / accumulator.totalTime
-        : 0,
+      accumulator.totalTime > 0 ? produced / accumulator.totalTime : 0,
     realTimeFactor:
       accumulator.audioDurationMs > 0
         ? (accumulator.totalTime * 1000) /
           accumulator.audioDurationMs
         : 0,
   };
+  if (countsFrames) stats.generatedFrames = generatedFrames;
+  return stats;
 }
 
 /**
- * GGML-backed TTS via the `tts-cpp` library. Wraps both
- * `tts_cpp::chatterbox::Engine` and `tts_cpp::supertonic::Engine` behind a
- * single engine-agnostic JavaScript surface. Engine type is auto-detected
- * from `files` or selected explicitly with `engine`.
+ * GGML-backed TTS via the `tts-cpp` library. Wraps the chatterbox,
+ * supertonic, parler, cosyvoice3 and audio8 engines behind a single
+ * engine-agnostic JavaScript surface. Engine type is auto-detected from
+ * `files` or selected explicitly with `engine`.
  *
  * Owns a persistent native engine: model weights and voice-conditioning
  * tensors are loaded once by `load()` and reused by `run()`, `runStream()`,
@@ -1099,6 +1654,7 @@ class TTSGgml {
   static readonly ENGINE_SUPERTONIC = ENGINE_SUPERTONIC;
   static readonly ENGINE_COSYVOICE3 = ENGINE_COSYVOICE3;
   static readonly ENGINE_PARLER = ENGINE_PARLER;
+  static readonly ENGINE_AUDIO8 = ENGINE_AUDIO8;
 
   opts: object;
   exclusiveRun: boolean;
@@ -1150,6 +1706,11 @@ class TTSGgml {
   private _openclCacheDir?: string;
   private _vulkanCacheDir?: string;
   private _parlerModelPath?: string;
+  private _audio8LmPath?: string;
+  private _audio8CodecDecoderPath?: string;
+  private _audio8CodecEncoderPath?: string;
+  private _referenceText?: string;
+  private _greedy?: boolean;
   private _description?: string;
   private _emotion?: string;
   private _pitch?: string;
@@ -1280,6 +1841,10 @@ class TTSGgml {
       );
       return;
     }
+    if (this._engineType === ENGINE_AUDIO8) {
+      this._resolveAudio8ModelPaths(files);
+      return;
+    }
     if (files.modelDir) {
       const resolved = resolveChatterboxModelDirPaths(files.modelDir);
       this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
@@ -1293,8 +1858,25 @@ class TTSGgml {
     }
   }
 
+  private _resolveAudio8ModelPaths(files: NormalizedFiles): void {
+    this._audio8LmPath = firstNonEmpty(
+      files.audio8Lm,
+      findAudio8InDir(files.modelDir, AUDIO8_LM_RE),
+    );
+    this._audio8CodecDecoderPath = firstNonEmpty(
+      files.audio8CodecDecoder,
+      findAudio8InDir(files.modelDir, AUDIO8_DECODER_RE),
+    );
+    this._audio8CodecEncoderPath = firstNonEmpty(
+      files.audio8CodecEncoder,
+      findAudio8InDir(files.modelDir, AUDIO8_ENCODER_RE),
+    );
+  }
+
   private _assignSynthesisOptions(options: TTSGgmlOptions): void {
     this._referenceAudio = options.referenceAudio;
+    this._referenceText = options.referenceText;
+    this._greedy = options.greedy;
     this._voiceDir = options.voiceDir;
     this._seed = options.seed;
     this._nGpuLayers = options.nGpuLayers;
@@ -1354,10 +1936,25 @@ class TTSGgml {
           "runStream() / runStreaming() / run({ streamOutput: true }) APIs.",
       );
     }
+    if (
+      this._engineType === ENGINE_AUDIO8 &&
+      (this._streamChunkTokens != null ||
+        this._streamFirstChunkTokens != null)
+    ) {
+      throw new Error(
+        "tts-ggml: streamChunkTokens / streamFirstChunkTokens are not " +
+          "supported by the audio8 engine, which synthesizes a whole " +
+          "utterance at a time. Use sentence-level streaming via " +
+          "runStream() / runStreaming() / run({ streamOutput: true }).",
+      );
+    }
     // Runs before the denoiser guard so a Parler description/template conflict
     // is reported ahead of the engine-agnostic streaming constraints.
     this._assertParlerOptionConsistency();
     this._assertCosyvoiceOptionConsistency();
+    this._assertCosyvoiceCloneConsistent();
+    this._assertAudio8OptionConsistency();
+    this._assertConditioningConsistency("constructor");
     if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
       throw new Error(
         "tts-ggml: the LavaSR denoiser is not yet supported with " +
@@ -1382,9 +1979,9 @@ class TTSGgml {
         pickParlerDescFields({
           description: this._description,
           voice: this._voice,
-          emotion: this._emotion,
+          emotion: this._emotion as Emotion | undefined,
           pitch: this._pitch,
-          pace: this._pace,
+          pace: this._pace as Pace | undefined,
           expressivity: this._expressivity,
           noise: this._noise,
           reverb: this._reverb,
@@ -1398,31 +1995,121 @@ class TTSGgml {
     if (this._description != null) {
       parlerOnly.push("description/voiceDescription");
     }
-    const parlerOnlyFields: Record<
-      string,
-      string | number | boolean | undefined
-    > = {
-      emotion: this._emotion,
-      pitch: this._pitch,
-      pace: this._pace,
-      expressivity: this._expressivity,
-      noise: this._noise,
-      reverb: this._reverb,
-      quality: this._quality,
-      temperature: this._temperature,
-      topK: this._topK,
-      topP: this._topP,
-      maxFrames: this._maxFrames,
-      minNewTokens: this._minNewTokens,
-      normalizeNumbers: this._normalizeNumbers,
-    };
-    for (const [key, value] of Object.entries(parlerOnlyFields)) {
-      if (value != null) parlerOnly.push(key);
-    }
+    // emotion / pace are absent because they are cross-engine, validated by
+    // _assertConditioningConsistency; temperature / topK / topP / maxFrames are
+    // absent because audio8 samples too, so SAMPLING_ENGINES decides them.
+    parlerOnly.push(
+      ...setOptionNames({
+        pitch: this._pitch,
+        expressivity: this._expressivity,
+        noise: this._noise,
+        reverb: this._reverb,
+        quality: this._quality,
+        minNewTokens: this._minNewTokens,
+        normalizeNumbers: this._normalizeNumbers,
+      }),
+    );
     if (parlerOnly.length > 0) {
       throw new Error(
         `tts-ggml: ${parlerOnly.join(", ")} are parler-only options ` +
           `(engine is ${this._engineType})`,
+      );
+    }
+    this._assertSamplerOptionSupport();
+  }
+
+  private _assertSamplerOptionSupport(): void {
+    if (SAMPLING_ENGINES.includes(this._engineType)) return;
+    const sampling = setOptionNames({
+      temperature: this._temperature,
+      topK: this._topK,
+      topP: this._topP,
+      maxFrames: this._maxFrames,
+    });
+    if (sampling.length === 0) return;
+    throw new Error(
+      `tts-ggml: ${sampling.join(", ")} are parler/audio8-only options ` +
+        `(engine is ${this._engineType})`,
+    );
+  }
+
+  private _assertAudio8OptionConsistency(): void {
+    if (this._engineType === ENGINE_AUDIO8) {
+      if (this._enhancerGgufPath || this._denoiserGgufPath) {
+        throw new Error(
+          "tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+            "the audio8 engine (native 44.1 kHz output needs no bandwidth " +
+            "extension). Drop lavasrEnhancer / lavasrDenoiser.",
+        );
+      }
+      this._assertAudio8VoiceConsistent(
+        {
+          referenceAudio: this._referenceAudio,
+          referenceText: this._referenceText,
+        },
+        "constructor",
+      );
+      return;
+    }
+    const audio8Only = setOptionNames({
+      referenceText: this._referenceText,
+      greedy: this._greedy,
+    });
+    if (audio8Only.length > 0) {
+      throw new Error(
+        `tts-ggml: ${audio8Only.join(", ")} are audio8-only options ` +
+          `(engine is ${this._engineType})`,
+      );
+    }
+  }
+
+  /**
+   * A recording without its transcript is accepted by the model but degrades
+   * the clone silently, and a transcript alone has nothing to attach to, so
+   * both halves have to arrive together.
+   */
+  private _assertAudio8VoiceConsistent(
+    voice: Audio8VoiceFields,
+    where: string,
+  ): void {
+    if (!voice.referenceAudio && !voice.referenceText) return;
+    if (!voice.referenceAudio) {
+      throw new Error(
+        `tts-ggml: ${where}: referenceText needs a referenceAudio to ` +
+          "transcribe",
+      );
+    }
+    if (!voice.referenceText) {
+      throw new Error(
+        `tts-ggml: ${where}: referenceAudio needs a referenceText saying ` +
+          "what the recording says",
+      );
+    }
+    if (!this._audio8CodecEncoderPath) {
+      throw new Error(
+        `tts-ggml: ${where}: voice cloning needs the audio8 codec encoder ` +
+          "GGUF (files.audio8CodecEncoder)",
+      );
+    }
+  }
+
+  /**
+   * `promptText` is deliberately not required: its absence selects
+   * cross-lingual mode. With a model dir present but no cloning GGUFs in it,
+   * the native load fail-closes instead.
+   */
+  private _assertCosyvoiceCloneConsistent(): void {
+    if (this._engineType !== ENGINE_COSYVOICE3) return;
+    if (!this._referenceAudio) return;
+    const haveExplicit =
+      this._cosyvoiceS3tokModelPath && this._cosyvoiceCampplusModelPath;
+    if (!haveExplicit && !this._cosyvoiceModelDir) {
+      throw new Error(
+        "tts-ggml: referenceAudio (CosyVoice3 voice cloning) needs the " +
+          "speech-tokenizer and speaker-encoder GGUFs: set " +
+          "files.cosyvoiceS3tokModel + files.cosyvoiceCampplusModel, or a " +
+          "files.cosyvoiceModelDir containing cosyvoice3-s3tok*.gguf and " +
+          "cosyvoice3-campplus*.gguf",
       );
     }
   }
@@ -1450,24 +2137,62 @@ class TTSGgml {
   }
 
   /**
-   * Extract + validate the per-call parler description/template fields from a
-   * run input or streaming options. Returns undefined when none are present.
-   * Parler-only; a per-call template cannot be merged with a constructor-level
-   * free-text description.
+   * Validate the cross-engine emotion/pace surface against this engine, and
+   * enforce CosyVoice3's one-instruction-per-synthesis rule.
+   */
+  private _assertConditioningConsistency(where: string): void {
+    const fields = pickConditioningFields({
+      emotion: this._emotion as Emotion | undefined,
+      pace: this._pace as Pace | undefined,
+    });
+    validateConditioning(this._engineType, fields);
+    if (this._engineType === ENGINE_COSYVOICE3) {
+      assertSingleCosyvoiceControl(fields, this._instruct, where);
+    }
+  }
+
+  /**
+   * The per-call surface of a non-Parler engine: only the cross-engine
+   * emotion/pace it declares support for, never Parler's template fields.
+   */
+  private _resolveConditioningJobFields(
+    source: ParlerJobSource | null | undefined,
+    where: string,
+  ): ParlerDescFields | undefined {
+    const parlerOnly = keysPresent(source, PARLER_ONLY_KEYS);
+    if (parlerOnly.length > 0) {
+      throw new Error(
+        `tts-ggml: ${where}: per-call description/voice-template options ` +
+          `are parler-only (engine is ${this._engineType}; got ` +
+          `${parlerOnly.join(", ")})`,
+      );
+    }
+    const fields = pickConditioningFields(source);
+    if (!fields) return undefined;
+    validateConditioning(this._engineType, fields);
+    assertPerCallConditioning(this._engineType, fields, where);
+    if (this._engineType === ENGINE_COSYVOICE3) {
+      // A per-call control replaces the constructor's, so only the per-call
+      // fields participate in the one-instruction count.
+      assertSingleCosyvoiceControl(fields, undefined, where);
+    }
+    return fields;
+  }
+
+  /**
+   * Parler's per-call surface: description/template fields, where a per-call
+   * template cannot be merged with a constructor-level free-text description.
    */
   private _resolveParlerJobFields(
-    source: ParlerDescriptionFields | null | undefined,
+    source: ParlerJobSource | null | undefined,
     where: string,
   ): ParlerDescFields | undefined {
     const fields = pickParlerDescFields(source);
     if (!fields) return undefined;
-    if (this._engineType !== ENGINE_PARLER) {
-      throw new Error(
-        `tts-ggml: ${where}: per-call description/voice-template options ` +
-          `are parler-only (engine is ${this._engineType})`,
-      );
-    }
     assertParlerDescFieldsConsistent(fields, where);
+    const conditioning = pickConditioningFields(source);
+    validateConditioning(this._engineType, conditioning);
+    assertPerCallConditioning(this._engineType, conditioning, where);
     const hasDescription = PARLER_DESCRIPTION_KEYS.some(
       (key) => fields[key] != null,
     );
@@ -1479,6 +2204,68 @@ class TTSGgml {
       );
     }
     return fields;
+  }
+
+  /**
+   * The voice a per-call override actually synthesizes with. Mirrors
+   * Audio8Model::resolveVoice: a per-call recording replaces both halves, so
+   * it cannot inherit the configured transcript, which describes a different
+   * recording; a per-call transcript alone corrects the configured one.
+   */
+  private _mergeAudio8Voice(
+    fields: Audio8VoiceFieldsResolved,
+  ): Audio8VoiceFields {
+    if (fields.referenceAudio) {
+      return {
+        referenceAudio: fields.referenceAudio,
+        referenceText: fields.referenceText,
+      };
+    }
+    return {
+      referenceAudio: this._referenceAudio,
+      referenceText: fields.referenceText ?? this._referenceText,
+    };
+  }
+
+  /**
+   * Extract + validate the per-call Audio8 voice fields from a run input or
+   * streaming options. Returns undefined when none are present.
+   */
+  private _resolveAudio8JobFields(
+    source: Audio8VoiceFields | null | undefined,
+    where: string,
+  ): Audio8VoiceFieldsResolved | undefined {
+    const fields = pickAudio8VoiceFields(source);
+    if (!fields) return undefined;
+    if (this._engineType !== ENGINE_AUDIO8) {
+      throw new Error(
+        `tts-ggml: ${where}: per-call referenceAudio/referenceText are ` +
+          `audio8-only (engine is ${this._engineType})`,
+      );
+    }
+    this._assertAudio8VoiceConsistent(
+      this._mergeAudio8Voice(fields),
+      where,
+    );
+    return fields;
+  }
+
+  /**
+   * The per-call fields of whichever engine is loaded, if any are set. Parler
+   * takes the full description/template surface, Audio8 its voice override,
+   * and every engine the cross-engine conditioning it supports.
+   */
+  private _resolveJobFields(
+    source: (ParlerJobSource & Audio8VoiceFields) | null | undefined,
+    where: string,
+  ): JobFields | undefined {
+    const engineFields =
+      this._engineType === ENGINE_PARLER
+        ? this._resolveParlerJobFields(source, where)
+        : this._resolveConditioningJobFields(source, where);
+    const audio8 = this._resolveAudio8JobFields(source, where);
+    if (!engineFields && !audio8) return undefined;
+    return { ...(engineFields ?? {}), ...(audio8 ?? {}) };
   }
 
   getEngineType(): EngineType {
@@ -1542,7 +2329,7 @@ class TTSGgml {
             "run with streamOutput: non-empty string `input` is required",
         });
       }
-      const parlerFields = this._resolveParlerJobFields(input, "run");
+      const jobFields = this._resolveJobFields(input, "run");
       const runStream = () =>
         this._runStreamOrchestrator(
           input.input,
@@ -1550,7 +2337,7 @@ class TTSGgml {
             locale: input.locale,
             maxChunkScalars: input.maxChunkScalars,
           },
-          parlerFields,
+          jobFields,
         );
       return this.exclusiveRun
         ? this._enqueueExclusiveTtsResponse(runStream)
@@ -1576,7 +2363,8 @@ class TTSGgml {
       streamOutput: true,
       locale: normalized.locale,
       maxChunkScalars: normalized.maxChunkScalars,
-      ...(pickParlerDescFields(normalized) ?? {}),
+      ...((pickParlerDescFields(normalized) ?? {}) as ParlerJobSource),
+      ...(pickAudio8VoiceFields(normalized) ?? {}),
     });
   }
 
@@ -1593,7 +2381,7 @@ class TTSGgml {
   ): Promise<
     QvacResponse<TTSOutputChunk & SentenceStreamChunkMeta>
   > {
-    const parlerFields = this._resolveParlerJobFields(
+    const jobFields = this._resolveJobFields(
       options,
       "runStreaming",
     );
@@ -1613,7 +2401,7 @@ class TTSGgml {
       });
     }
     const runStream = () =>
-      this._runTextStreamOrchestrator(normalized, parlerFields);
+      this._runTextStreamOrchestrator(normalized, jobFields);
     return this.exclusiveRun
       ? this._enqueueExclusiveTtsResponse(runStream)
       : runStream();
@@ -1736,7 +2524,7 @@ class TTSGgml {
 
   private _runTextStreamOrchestrator(
     source: AsyncIterable<string>,
-    parlerFields?: ParlerDescFields,
+    jobFields?: JobFields,
   ): QvacResponse<TTSOutputChunk & SentenceStreamChunkMeta> {
     const response = this._job.start() as QvacResponse<
       TTSOutputChunk & SentenceStreamChunkMeta
@@ -1746,9 +2534,9 @@ class TTSGgml {
       asyncTextSource: source,
       chunks: [],
       chunkIdx: 0,
-      acc: { totalTime: 0, audioDurationMs: 0, totalSamples: 0 },
+      acc: emptyStreamAccumulator(),
       chunkResolver: null,
-      parlerFields,
+      jobFields,
     };
     void this._sentenceStreamTextIterableDrive().catch(
       (error: unknown) => {
@@ -1781,7 +2569,7 @@ class TTSGgml {
         await this._requireAddon().runJob({
           type: "text",
           input: text,
-          ...(context.parlerFields ?? {}),
+          ...(context.jobFields ?? {}),
         });
         await done;
       }
@@ -1793,11 +2581,7 @@ class TTSGgml {
     }
     const current = this._sentenceStreamCtx;
     const chunks = current?.chunks || [];
-    const accumulator = current?.acc || {
-      totalTime: 0,
-      audioDurationMs: 0,
-      totalSamples: 0,
-    };
+    const accumulator = current?.acc || emptyStreamAccumulator();
     this._sentenceStreamCtx = null;
     this._endJobWithStats(
       chunks.length === 0
@@ -1808,14 +2592,26 @@ class TTSGgml {
             audioDurationMs: 0,
             totalSamples: 0,
           }
-        : computeSentenceStreamStats(chunks, accumulator),
+        : computeSentenceStreamStats(
+            chunks,
+            accumulator,
+            this._pacesOnFrames(),
+          ),
     );
+  }
+
+  /**
+   * Audio8 reports `tokensPerSecond` as codec frames per second, so the
+   * streaming aggregate has to count frames too rather than characters.
+   */
+  private _pacesOnFrames(): boolean {
+    return this._engineType === ENGINE_AUDIO8;
   }
 
   private _runStreamOrchestrator(
     text: string,
     options: SentenceStreamOptions,
-    parlerFields?: ParlerDescFields,
+    jobFields?: JobFields,
   ): QvacResponse<TTSOutputChunk & SentenceStreamChunkMeta> {
     const chunks = splitTtsText(String(text), {
       language: this._config.language,
@@ -1834,9 +2630,9 @@ class TTSGgml {
     this._sentenceStreamCtx = {
       chunks,
       chunkIdx: 0,
-      acc: { totalTime: 0, audioDurationMs: 0, totalSamples: 0 },
+      acc: emptyStreamAccumulator(),
       chunkResolver: null,
-      parlerFields,
+      jobFields,
     };
     void this._sentenceStreamDriveBody().catch((error: unknown) => {
       this._rejectActiveChunk(error);
@@ -1857,7 +2653,7 @@ class TTSGgml {
       await this._requireAddon().runJob({
         type: "text",
         input: context.chunks[index],
-        ...(context.parlerFields ?? {}),
+        ...(context.jobFields ?? {}),
       });
       await done;
     }
@@ -1895,6 +2691,9 @@ class TTSGgml {
     if (this._engineType === ENGINE_PARLER) {
       return this._buildParlerParams();
     }
+    if (this._engineType === ENGINE_AUDIO8) {
+      return this._buildAudio8Params();
+    }
     return this._buildChatterboxParams();
   }
 
@@ -1926,6 +2725,9 @@ class TTSGgml {
       parameters.promptText = String(this._promptText);
     }
     if (this._instruct) parameters.instruct = this._instruct;
+    // Canonical values; the native layer maps them to the trained instructions.
+    if (this._emotion != null) parameters.emotion = String(this._emotion);
+    if (this._pace != null) parameters.pace = String(this._pace);
     if (this._voice) parameters.voice = this._voice;
     this._assignCommonNativeParams(parameters);
     if (this._cfmSteps != null) parameters.cfmSteps = this._cfmSteps | 0;
@@ -1990,6 +2792,9 @@ class TTSGgml {
     if (this._voice) parameters.voice = this._voice;
     if (this._steps != null) parameters.steps = this._steps | 0;
     if (this._speed != null) parameters.speed = Number(this._speed);
+    // The native layer maps the step onto a multiplier relative to the GGUF's
+    // own default_speed, and rejects pace + speed together.
+    if (this._pace != null) parameters.pace = String(this._pace);
     if (this._noiseNpyPath) {
       parameters.noiseNpyPath = this._noiseNpyPath;
     }
@@ -2041,16 +2846,7 @@ class TTSGgml {
     if (this._quality != null) {
       parameters.quality = String(this._quality);
     }
-    if (this._seed != null) parameters.seed = this._seed | 0;
-    if (this._threads != null) parameters.threads = this._threads | 0;
-    if (this._temperature != null) {
-      parameters.temperature = Number(this._temperature);
-    }
-    if (this._topK != null) parameters.topK = this._topK | 0;
-    if (this._topP != null) parameters.topP = Number(this._topP);
-    if (this._maxFrames != null) {
-      parameters.maxFrames = this._maxFrames | 0;
-    }
+    this._assignSamplingParams(parameters);
     if (this._minNewTokens != null) {
       parameters.minNewTokens = this._minNewTokens | 0;
     }
@@ -2061,11 +2857,68 @@ class TTSGgml {
       parameters.streamFirstChunkTokens =
         this._streamFirstChunkTokens | 0;
     }
-    if (this._outputSampleRate != null) {
-      parameters.outputSampleRate = this._outputSampleRate | 0;
-    }
     if (this._normalizeNumbers != null) {
       parameters.normalizeNumbers = !!this._normalizeNumbers;
+    }
+    this._assignBackendParams(parameters);
+    return parameters;
+  }
+
+  private _buildAudio8Params(): TTSConfigurationParams {
+    // Backstop for callers that reach the params build by another route than
+    // the constructor or _applyAudio8Reload, both of which check first.
+    this._assertAudio8VoiceConsistent(
+      {
+        referenceAudio: this._referenceAudio,
+        referenceText: this._referenceText,
+      },
+      "reload",
+    );
+    const parameters: TTSConfigurationParams = {
+      engineType: ENGINE_AUDIO8,
+      audio8LmPath: this._audio8LmPath || "",
+      audio8CodecDecoderPath: this._audio8CodecDecoderPath || "",
+    };
+    if (this._audio8CodecEncoderPath) {
+      parameters.audio8CodecEncoderPath = this._audio8CodecEncoderPath;
+    }
+    if (this._referenceAudio != null) {
+      parameters.referenceAudio = this._referenceAudio;
+    }
+    if (this._referenceText != null) {
+      parameters.referenceText = this._referenceText;
+    }
+    if (this._greedy != null) parameters.greedy = !!this._greedy;
+    this._assignSamplingParams(parameters);
+    this._assignBackendParams(parameters);
+    return parameters;
+  }
+
+  /** The knobs every engine in SAMPLING_ENGINES reads. */
+  private _assignSamplingParams(
+    parameters: TTSConfigurationParams,
+  ): void {
+    if (this._temperature != null) {
+      parameters.temperature = Number(this._temperature);
+    }
+    if (this._topK != null) parameters.topK = this._topK | 0;
+    if (this._topP != null) parameters.topP = Number(this._topP);
+    if (this._maxFrames != null) {
+      parameters.maxFrames = this._maxFrames | 0;
+    }
+  }
+
+  /**
+   * Backend and output plumbing for the engines that take no `language`,
+   * where `_assignCommonNativeParams` would be the wrong shape.
+   */
+  private _assignBackendParams(
+    parameters: TTSConfigurationParams,
+  ): void {
+    if (this._seed != null) parameters.seed = this._seed | 0;
+    if (this._threads != null) parameters.threads = this._threads | 0;
+    if (this._outputSampleRate != null) {
+      parameters.outputSampleRate = this._outputSampleRate | 0;
     }
     if (this._nGpuLayers != null) {
       parameters.nGpuLayers = this._nGpuLayers | 0;
@@ -2077,7 +2930,6 @@ class TTSGgml {
     if (this._backendsDir) {
       parameters.backendsDir = this._backendsDir;
     }
-    return parameters;
   }
 
   private _assignCommonNativeParams(
@@ -2139,7 +2991,7 @@ class TTSGgml {
   private async _runInternal(
     input: TTSRunInput,
   ): Promise<QvacResponse<TTSOutputChunk>> {
-    const parlerFields = this._resolveParlerJobFields(input, "run");
+    const jobFields = this._resolveJobFields(input, "run");
     const response = this._job.start({
       signal: input?.signal,
     }) as QvacResponse<TTSOutputChunk>;
@@ -2148,7 +3000,7 @@ class TTSGgml {
       await this._requireAddon().runJob({
         type: input.type || "text",
         input: input.input,
-        ...(parlerFields ?? {}),
+        ...(jobFields ?? {}),
       });
     } catch (error) {
       this._job.fail(normalizeError(error));
@@ -2169,6 +3021,8 @@ class TTSGgml {
         : 0;
     accumulator.totalSamples +=
       typeof data.totalSamples === "number" ? data.totalSamples : 0;
+    accumulator.generatedFrames +=
+      typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
   }
 
   private _rejectActiveChunk(error: unknown): void {
@@ -2234,16 +3088,11 @@ class TTSGgml {
   ): TTSOutputChunk & SentenceStreamChunkMeta {
     const context = this._sentenceStreamCtx;
     if (!context) {
-      // Preserve the historical ArrayBuffer declaration without changing the
-      // native Int16Array payload or allocating a compatibility copy.
-      return data as unknown as TTSOutputChunk &
-        SentenceStreamChunkMeta;
+      return data;
     }
     const index = context.chunkIdx;
     const enriched: TTSOutputChunk & SentenceStreamChunkMeta = {
-      // Public declarations historically expose ArrayBuffer; native output is
-      // the more precise Int16Array representation at runtime.
-      outputArray: data.outputArray as unknown as ArrayBuffer,
+      outputArray: data.outputArray,
       chunkIndex: index,
       sentenceChunk: context.chunks[index] || "",
     };
@@ -2275,7 +3124,11 @@ class TTSGgml {
       context.chunkIdx >= context.chunks.length - 1
     ) {
       this._endJobWithStats(
-        computeSentenceStreamStats(context.chunks, context.acc),
+        computeSentenceStreamStats(
+          context.chunks,
+          context.acc,
+          this._pacesOnFrames(),
+        ),
       );
     }
   }
@@ -2295,15 +3148,57 @@ class TTSGgml {
     this._job.fail(reason);
   }
 
-  async reload(
-    newConfig: Record<string, unknown> = {},
-  ): Promise<void> {
-    this._getLogger().debug(
-      "Reloading addon with new configuration",
-      newConfig,
-    );
-    const runtimeConfig =
-      newConfig as Partial<TTSGgmlRuntimeConfig>;
+  /** Everything reload() may overwrite, so a rejected reload can undo itself. */
+  private _captureReloadableState(): ReloadableState {
+    return {
+      language: this._config.language,
+      useGPU: this._config.useGPU,
+      outputSampleRate: this._outputSampleRate,
+      emotion: this._emotion,
+      pace: this._pace,
+      description: this._description,
+      voice: this._voice,
+      pitch: this._pitch,
+      expressivity: this._expressivity,
+      noise: this._noise,
+      reverb: this._reverb,
+      quality: this._quality,
+      temperature: this._temperature,
+      topK: this._topK,
+      topP: this._topP,
+      maxFrames: this._maxFrames,
+      minNewTokens: this._minNewTokens,
+      normalizeNumbers: this._normalizeNumbers,
+      seed: this._seed,
+    };
+  }
+
+  private _restoreReloadableState(state: ReloadableState): void {
+    this._config.language = state.language;
+    this._config.useGPU = state.useGPU;
+    this._outputSampleRate = state.outputSampleRate;
+    this._emotion = state.emotion;
+    this._pace = state.pace;
+    this._description = state.description;
+    this._voice = state.voice;
+    this._pitch = state.pitch;
+    this._expressivity = state.expressivity;
+    this._noise = state.noise;
+    this._reverb = state.reverb;
+    this._quality = state.quality;
+    this._temperature = state.temperature;
+    this._topK = state.topK;
+    this._topP = state.topP;
+    this._maxFrames = state.maxFrames;
+    this._minNewTokens = state.minNewTokens;
+    this._normalizeNumbers = state.normalizeNumbers;
+    this._seed = state.seed;
+  }
+
+  private _applyReloadableRuntimeConfig(
+    newConfig: Record<string, unknown>,
+  ): void {
+    const runtimeConfig = newConfig as Partial<TTSGgmlRuntimeConfig>;
     if (runtimeConfig.language !== undefined) {
       this._config.language = runtimeConfig.language;
     }
@@ -2311,77 +3206,128 @@ class TTSGgml {
       this._config.useGPU = runtimeConfig.useGPU;
     }
     if (runtimeConfig.outputSampleRate !== undefined) {
-      this._outputSampleRate = runtimeConfig.outputSampleRate;
+      this._outputSampleRate = validateOutputSampleRate(
+        runtimeConfig.outputSampleRate,
+      );
     }
-    // Parler description/template + sampling knobs are reloadable; they rebuild
-    // the engine's default description / sampler. _buildParlerParams re-validates
-    // so a wrong-engine reload still throws.
-    if (this._engineType === ENGINE_PARLER) {
-      const parlerConfig = newConfig as Partial<ParlerDescriptionFields> & {
-        temperature?: number;
-        topK?: number;
-        topP?: number;
-        maxFrames?: number;
-        minNewTokens?: number;
-        normalizeNumbers?: boolean;
-        seed?: number;
-      };
-      if (
-        parlerConfig.description !== undefined ||
-        parlerConfig.voiceDescription !== undefined
-      ) {
-        this._description = firstNonEmpty(
-          parlerConfig.description,
-          parlerConfig.voiceDescription,
-        );
-      }
-      if (parlerConfig.voice !== undefined) {
-        this._voice = parlerConfig.voice;
-      }
-      if (parlerConfig.emotion !== undefined) {
-        this._emotion = parlerConfig.emotion;
-      }
-      if (parlerConfig.pitch !== undefined) {
-        this._pitch = parlerConfig.pitch;
-      }
-      if (parlerConfig.pace !== undefined) {
-        this._pace = parlerConfig.pace;
-      }
-      if (parlerConfig.expressivity !== undefined) {
-        this._expressivity = parlerConfig.expressivity;
-      }
-      if (parlerConfig.noise !== undefined) {
-        this._noise = parlerConfig.noise;
-      }
-      if (parlerConfig.reverb !== undefined) {
-        this._reverb = parlerConfig.reverb;
-      }
-      if (parlerConfig.quality !== undefined) {
-        this._quality = parlerConfig.quality;
-      }
-      if (parlerConfig.temperature !== undefined) {
-        this._temperature = parlerConfig.temperature;
-      }
-      if (parlerConfig.topK !== undefined) {
-        this._topK = parlerConfig.topK;
-      }
-      if (parlerConfig.topP !== undefined) {
-        this._topP = parlerConfig.topP;
-      }
-      if (parlerConfig.maxFrames !== undefined) {
-        this._maxFrames = parlerConfig.maxFrames;
-      }
-      if (parlerConfig.minNewTokens !== undefined) {
-        this._minNewTokens = parlerConfig.minNewTokens;
-      }
-      if (parlerConfig.normalizeNumbers !== undefined) {
-        this._normalizeNumbers = parlerConfig.normalizeNumbers;
-      }
-      if (parlerConfig.seed !== undefined) {
-        this._seed = parlerConfig.seed;
-      }
+    this._applyAudio8Reload(newConfig);
+  }
+
+  // Cross-engine conditioning is reloadable on every engine that supports it,
+  // so both families change emotion the same way.
+  private _applyReloadableConditioning(
+    newConfig: Record<string, unknown>,
+  ): void {
+    const conditioning = newConfig as Partial<TTSConditioningFields>;
+    if (
+      conditioning.emotion === undefined &&
+      conditioning.pace === undefined
+    ) {
+      return;
     }
-    const parameters = this._buildTtsParams();
+    if (conditioning.emotion !== undefined) {
+      this._emotion = conditioning.emotion;
+    }
+    if (conditioning.pace !== undefined) {
+      this._pace = conditioning.pace;
+    }
+    this._assertConditioningConsistency("reload");
+  }
+
+  // Parler description/template + sampling knobs are reloadable; they rebuild
+  // the engine's default description / sampler. _buildParlerParams re-validates
+  // so a wrong-engine reload still throws.
+  private _applyReloadableParlerConfig(
+    newConfig: Record<string, unknown>,
+  ): void {
+    if (this._engineType !== ENGINE_PARLER) return;
+    const parlerConfig = newConfig as Partial<ParlerDescriptionFields> & {
+      temperature?: number;
+      topK?: number;
+      topP?: number;
+      maxFrames?: number;
+      minNewTokens?: number;
+      normalizeNumbers?: boolean;
+      seed?: number;
+    };
+    if (
+      parlerConfig.description !== undefined ||
+      parlerConfig.voiceDescription !== undefined
+    ) {
+      this._description = firstNonEmpty(
+        parlerConfig.description,
+        parlerConfig.voiceDescription,
+      );
+    }
+    if (parlerConfig.voice !== undefined) {
+      this._voice = parlerConfig.voice;
+    }
+    if (parlerConfig.pitch !== undefined) {
+      this._pitch = parlerConfig.pitch;
+    }
+    if (parlerConfig.expressivity !== undefined) {
+      this._expressivity = parlerConfig.expressivity;
+    }
+    if (parlerConfig.noise !== undefined) {
+      this._noise = parlerConfig.noise;
+    }
+    if (parlerConfig.reverb !== undefined) {
+      this._reverb = parlerConfig.reverb;
+    }
+    if (parlerConfig.quality !== undefined) {
+      this._quality = parlerConfig.quality;
+    }
+    if (parlerConfig.temperature !== undefined) {
+      this._temperature = parlerConfig.temperature;
+    }
+    if (parlerConfig.topK !== undefined) {
+      this._topK = parlerConfig.topK;
+    }
+    if (parlerConfig.topP !== undefined) {
+      this._topP = parlerConfig.topP;
+    }
+    if (parlerConfig.maxFrames !== undefined) {
+      this._maxFrames = parlerConfig.maxFrames;
+    }
+    if (parlerConfig.minNewTokens !== undefined) {
+      this._minNewTokens = parlerConfig.minNewTokens;
+    }
+    if (parlerConfig.normalizeNumbers !== undefined) {
+      this._normalizeNumbers = parlerConfig.normalizeNumbers;
+    }
+    if (parlerConfig.seed !== undefined) {
+      this._seed = parlerConfig.seed;
+    }
+  }
+
+  /**
+   * Apply the new configuration and build the native parameters from it. A
+   * rejected value leaves the instance exactly as it was, so a later partial
+   * reload is not validated against state the caller never accepted.
+   */
+  private _applyReloadableConfig(
+    newConfig: Record<string, unknown>,
+  ): TTSConfigurationParams {
+    const snapshot = this._captureReloadableState();
+    try {
+      this._applyReloadableRuntimeConfig(newConfig);
+      this._applyReloadableConditioning(newConfig);
+      this._applyReloadableParlerConfig(newConfig);
+      return this._buildTtsParams();
+    } catch (error) {
+      this._restoreReloadableState(snapshot);
+      throw error;
+    }
+  }
+
+  async reload(
+    newConfig: Record<string, unknown> = {},
+  ): Promise<void> {
+    this._getLogger().debug(
+      "Reloading addon with new configuration",
+      newConfig,
+    );
+    const parameters = this._applyReloadableConfig(newConfig);
     await this.cancel();
     this._failAndClearActiveResponse("Model was reloaded");
     const existingAddon = this._optionalAddon();
@@ -2391,6 +3337,81 @@ class TTSGgml {
       this._addonOutputCallback.bind(this),
     );
     await this._requireAddon().activate();
+  }
+
+  /**
+   * The voice a reload lands on. Same rule as _mergeAudio8Voice and
+   * Audio8Model::resolveVoice: a new recording replaces both halves, because
+   * the configured transcript describes the recording being replaced. Reload
+   * reads `undefined` as "not supplied", so an explicit empty string reaches
+   * the guard instead of being ignored.
+   */
+  private _mergeAudio8ReloadVoice(
+    config: Audio8VoiceFields,
+  ): Audio8VoiceFields {
+    if (config.referenceAudio !== undefined) {
+      return {
+        referenceAudio: config.referenceAudio,
+        referenceText: config.referenceText,
+      };
+    }
+    return {
+      referenceAudio: this._referenceAudio,
+      referenceText:
+        config.referenceText !== undefined
+          ? config.referenceText
+          : this._referenceText,
+    };
+  }
+
+  /**
+   * The knobs a reload lands on, merged the same way as the voice so the
+   * whole set can be checked before any of it is written.
+   */
+  private _mergeAudio8ReloadSampling(
+    config: Audio8SamplingFields,
+  ): Audio8SamplingFields {
+    return {
+      greedy: config.greedy ?? this._greedy,
+      temperature: config.temperature ?? this._temperature,
+      topK: config.topK ?? this._topK,
+      topP: config.topP ?? this._topP,
+      maxFrames: config.maxFrames ?? this._maxFrames,
+      seed: config.seed ?? this._seed,
+      threads: config.threads ?? this._threads,
+    };
+  }
+
+  private _applyAudio8Sampling(config: Audio8SamplingFields): void {
+    if (config.greedy !== undefined) this._greedy = config.greedy;
+    if (config.temperature !== undefined) {
+      this._temperature = config.temperature;
+    }
+    if (config.topK !== undefined) this._topK = config.topK;
+    if (config.topP !== undefined) this._topP = config.topP;
+    if (config.maxFrames !== undefined) {
+      this._maxFrames = config.maxFrames;
+    }
+    if (config.seed !== undefined) this._seed = config.seed;
+    if (config.threads !== undefined) this._threads = config.threads;
+  }
+
+  /**
+   * Audio8 voice + sampling knobs are reloadable; they rebuild the engine's
+   * sampler and speaker history. Both merges are checked before either is
+   * written, so a rejected reload leaves the instance exactly as it was
+   * rather than half-moved onto the configuration that was refused.
+   */
+  private _applyAudio8Reload(newConfig: Record<string, unknown>): void {
+    if (this._engineType !== ENGINE_AUDIO8) return;
+    const config = newConfig as Audio8VoiceFields & Audio8SamplingFields;
+    const voice = this._mergeAudio8ReloadVoice(config);
+    const sampling = this._mergeAudio8ReloadSampling(config);
+    this._assertAudio8VoiceConsistent(voice, "reload");
+    assertAudio8SamplingValid(sampling, "reload");
+    this._referenceAudio = voice.referenceAudio;
+    this._referenceText = voice.referenceText;
+    this._applyAudio8Sampling(sampling);
   }
 
   static getModelKey(_params?: unknown): string {
@@ -2430,6 +3451,9 @@ type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the established class namespace API.
 namespace TTSGgml {
+  export import QvacErrorAddonTTSGgml =
+    errorModule.QvacErrorAddonTTSGgml;
+  export import ERR_CODES = errorModule.ERR_CODES;
   export type TTSGgmlFiles = NamespaceFiles;
   export type TTSGgmlRuntimeConfig = NamespaceRuntimeConfig;
   export type TTSGgmlOptions = NamespaceOptions;
@@ -2448,3 +3472,8 @@ namespace TTSGgml {
 }
 
 export = TTSGgml;
+
+(module as { exports: typeof TTSGgml }).exports.QvacErrorAddonTTSGgml =
+  errorModule.QvacErrorAddonTTSGgml;
+(module as { exports: typeof TTSGgml }).exports.ERR_CODES =
+  errorModule.ERR_CODES;

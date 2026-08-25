@@ -46,10 +46,9 @@ bool isFileInitialized(const std::filesystem::path& path) {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
-    common_params& commonParams, common_init_result_ptr llamaInit,
-    ToolsCompactController& tools)
-    : tools_(tools), llamaInit_(std::move(llamaInit)), params_(commonParams),
-      compactor_(rollbackState_, tools_), shifter_(compactor_, rollbackState_) {
+    common_params& commonParams, common_init_result_ptr llamaInit)
+    : llamaInit_(std::move(llamaInit)), params_(commonParams),
+      compactor_(rollbackState_), shifter_(compactor_, rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
@@ -58,10 +57,9 @@ TextLlmContext::TextLlmContext(
 
 TextLlmContext::TextLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
-    ToolsCompactController& tools, llama_seq_id seqId,
-    llama_pos perSeqCtxCeiling)
-    : tools_(tools), modelCtx_(shared), params_(commonParams),
-      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_, tools_),
+    llama_seq_id seqId, llama_pos perSeqCtxCeiling)
+    : modelCtx_(shared), params_(commonParams),
+      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_),
       shifter_(compactor_, rollbackState_) {
   seqId_ = seqId;
   initializeCommonState();
@@ -169,8 +167,7 @@ void TextLlmContext::initializeCommonState() {
           harmonyCallToken_,
           params_.use_jinja));
 
-  const std::string chatTemplate =
-      getChatTemplate(modelCtx_.model, params_, tools_.enabled());
+  const std::string chatTemplate = getChatTemplate(modelCtx_.model, params_);
   tmpls_ = common_chat_templates_init(modelCtx_.model, chatTemplate);
 
   smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
@@ -329,7 +326,6 @@ void TextLlmContext::tokenizeChat(
   bool addSpecial = false;
 
   if (nPast_ == 0 && !isCacheLoaded) {
-    tools_.reset();
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
@@ -350,6 +346,7 @@ void TextLlmContext::tokenizeChat(
   }
   std::string thinkingStartTag;
   std::string thinkingEndTag;
+  std::vector<std::string> thinkingEndTags;
   std::string generationPrompt;
   prompt = getPrompt(
       tmpls_.get(),
@@ -357,6 +354,7 @@ void TextLlmContext::tokenizeChat(
       &thinkingForcedOpen_,
       &thinkingStartTag,
       &thinkingEndTag,
+      &thinkingEndTags,
       &generationPrompt);
   thinkingForcedOpenText_ =
       thinkingForcedOpen_
@@ -368,7 +366,7 @@ void TextLlmContext::tokenizeChat(
           params_,
           modelCtx_.lctx,
           thinkingStartTag,
-          thinkingEndTag,
+          thinkingEndTags,
           generationPrompt)) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
@@ -395,19 +393,6 @@ void TextLlmContext::tokenizeChat(
 
   if (!prompt.empty()) {
     inputTokens = common_tokenize(modelCtx_.lctx, prompt, addSpecial, true);
-
-    if (tools_.enabled() && !tools.empty()) {
-      inputs.tools = {};
-      inputs.add_generation_prompt = false;
-      inputs.use_jinja = params_.use_jinja;
-      inputs.enable_thinking = params_.reasoning_budget != 0;
-      auto promptNoTools = getPrompt(tmpls_.get(), inputs);
-      auto tokensNoTools =
-          common_tokenize(modelCtx_.lctx, promptNoTools, addSpecial, true);
-      tools_.onTokenize(inputTokens.size(), tokensNoTools.size());
-    } else {
-      tools_.onTokenize(inputTokens.size(), 0);
-    }
   } else {
     std::string errorMsg = string_format(
         "[TextLlm] %s: formatted chat prompt is empty\n", __func__);
@@ -668,7 +653,6 @@ PrefillPlan TextLlmContext::preparePrefill(
         firstMsgTokens_,
         static_cast<llama_pos>(nTokens),
         shifter_.discardBudget(),
-        tools_,
         defaultContextSliderOps(),
         ceiling);
     switch (outcome.kind) {
@@ -732,7 +716,6 @@ void TextLlmContext::onPrefillComplete(
     }
     pendingBatchFirstMsg_ = false;
   }
-  tools_.onEvalComplete(nPast_, static_cast<llama_pos>(prefillTokenCount));
 
   // Reset per-inference reasoning detection state here (shared by the
   // single-prompt and continuous-batching paths).
@@ -779,7 +762,6 @@ void TextLlmContext::emitOutputPiece(
   if (text.empty()) {
     return;
   }
-  assistantOutput_ += text;
   if (outputCallback) {
     outputCallback(text);
   }
@@ -808,8 +790,6 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   unsigned generatedAfterAccept = 0;
 
   forcedTokens_.clear();
-  assistantOutput_.clear();
-  generationStarted_ = false;
   banEogAfterReasoningRecovery_ = false;
   generationStopReason_ = GenerationStopReason::None;
 
@@ -901,20 +881,16 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     // do NOT emit EOT since the rollback drops all sampled tokens.
     return {.finished = true};
   }
-  generationStarted_ = true;
 
   if (nPast_ + 1 > ctxCeiling() && shifter_.discardBudget() == 0) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
             "[TextLlm] generation overflow: context is full and nDiscarded "
-            "is 0 (nPast=%d, nCtx=%d, firstMsgTokens=%d, nPastBeforeTools=%d, "
-            "toolsCompact=%s)\n",
+            "is 0 (nPast=%d, nCtx=%d, firstMsgTokens=%d)\n",
             nPast_,
             ctxCeiling(),
-            firstMsgTokens_,
-            tools_.anchor(),
-            tools_.enabled() ? "true" : "false"));
+            firstMsgTokens_));
     return {
         .finished = true,
         .contextOverflow = true,
@@ -1121,14 +1097,6 @@ bool TextLlmContext::onGenerationFinished(
   if (shouldRollbackInterruptedReasoning()) {
     return rollbackCurrentRequest(outputCallback);
   }
-  if (generationStarted_) {
-    onGenerationCompletePolicy(assistantOutput_);
-    assistantOutput_.clear();
-    generationStarted_ = false;
-  }
-  // Compact after the tools-compact tail trim so that pass sees the
-  // pre-compaction `nPast_` (its offsets are computed against
-  // `assistantOutput_`).
   compactThinkSpan();
   // Generation completed; cancel cannot fire anymore so the
   // prefill-entry rollback checkpoint is no longer reachable. Drop
@@ -1194,8 +1162,6 @@ bool TextLlmContext::rollbackCurrentRequest(
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
   compactor_.clearSpan();
-  assistantOutput_.clear();
-  generationStarted_ = false;
   generationStopReason_ = stopReasonAfterRequestRollback(generationStopReason_);
   // The sampled tokens were accepted before rollback; clear sampler history so
   // the next clean request cannot inherit a request that "never happened".
@@ -1362,8 +1328,6 @@ void TextLlmContext::snapshotForRecurrentRollback() {
     rollbackState_.clearReasoningBoundary();
     rollbackState_.clearPostReasoning();
     compactor_.reset();
-    generationStarted_ = false;
-    assistantOutput_.clear();
     throw;
   }
 }
@@ -1414,8 +1378,6 @@ void TextLlmContext::compactThinkSpan() {
                 }
                 nPast_ = preRequestNPast_;
                 firstMsgTokens_ = preRequestFirstMsgTokens_;
-                generationStarted_ = false;
-                assistantOutput_.clear();
                 rollbackState_.reset();
                 compactor_.reset();
               },
@@ -1423,8 +1385,6 @@ void TextLlmContext::compactThinkSpan() {
               [this]() {
                 nPast_ = 0;
                 firstMsgTokens_ = 0;
-                generationStarted_ = false;
-                assistantOutput_.clear();
                 rollbackState_.reset();
                 compactor_.reset();
               },
@@ -1495,28 +1455,6 @@ void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   compactor_.setRemoveThinkingFromContext(value);
 }
 
-void TextLlmContext::validatePromptPolicy(
-    const std::vector<common_chat_msg>& chatMsgs,
-    const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-    bool hasKvCacheContext) const {
-  tools_.validatePrompt(chatMsgs, tools, layout, hasKvCacheContext);
-}
-
-void TextLlmContext::onGenerationCompletePolicy(
-    std::string_view assistantOutput) {
-  const auto decision =
-      tools_.onGenerationComplete(assistantOutput, nPast_, firstMsgTokens_);
-  if (decision.trim) {
-    // Safe here: dynamic tools are only supported by Qwen3, which does not
-    // use recurrent memory, so tail removal does not hit the recurrent
-    // rollback limitation.
-    removeLastNTokens(decision.tokensToRemoveFromTail);
-    if (decision.clampFirstMsgTokensToNPast && firstMsgTokens_ > nPast_) {
-      firstMsgTokens_ = nPast_;
-    }
-  }
-}
-
 bool TextLlmContext::loadCache(
     const std::string& cacheKey, llama_pos configuredNDiscarded) {
   shifter_.setDiscardBudget(configuredNDiscarded);
@@ -1555,7 +1493,6 @@ bool TextLlmContext::loadCache(
     }
     nPast_ = 0;
     firstMsgTokens_ = 0;
-    tools_.reset();
   });
 
   if (tokenCount <= 1) {
@@ -1723,8 +1660,6 @@ void TextLlmContext::resetStopFlag() { stopGeneration_.store(false); }
 
 void TextLlmContext::resetState(bool resetStats) {
   // Reset the n_past
-
-  tools_.reset();
   nPast_ = 0;
 
   // Reset the first msg token length
@@ -1742,8 +1677,6 @@ void TextLlmContext::resetState(bool resetStats) {
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
   forcedTokens_.clear();
-  assistantOutput_.clear();
-  generationStarted_ = false;
   banEogAfterReasoningRecovery_ = false;
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();

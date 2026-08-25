@@ -6,21 +6,22 @@ in [`examples/`](../examples/).
 
 ## Default fixture
 
-The CLI (`ocr-ggml-cli`) and the quickstart example (`examples/quickstart.js`)
-look for `samples/english.png` by default. The canonical version is the WHO
-poster used by upstream
+The CLI (`ocr-ggml-cli`) and the examples (`examples/quickstart.js`,
+`examples/doctr.js`, `examples/backend-device.js`) look for
+`samples/english.png` by default. It is the WHO poster used by upstream
 [`tetherto/easy-ocr-ggml`](https://github.com/tetherto/easy-ocr-ggml/tree/main/examples)
-— a copy can be obtained from there until we ship it with the package.
+and is **tracked in this repository**, so in a monorepo checkout the
+defaults just work:
 
 ```bash
-# Once you have english.png locally:
-cp /path/to/english.png samples/english.png
-
-# Then the defaults just work:
 bare ocr-ggml-cli \
     --detector /path/to/craft_mlt_25k.gguf \
     --recognizer /path/to/english_g2.gguf
 ```
+
+Note that `samples/` is **not published to npm** (it is not in the
+package.json `files` whitelist) — consumers of the published package
+should pass their own image.
 
 Override the fixture path any time with `--image PATH` or the
 `OCR_GGML_IMAGE` environment variable.

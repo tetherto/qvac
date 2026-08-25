@@ -140,6 +140,25 @@ sampling. Enabling gauges adds one CPU query and one query per GPU to each
 profiled operation's response path. If the worker resource collector is not
 initialized, the event omits the resource block.
 
+## Streaming transcription statistics
+
+Whisper and Parakeet duplex transcription sessions expose terminal engine
+statistics after their event iterator completes:
+
+```ts
+const session = await transcribeStream({ modelId })
+
+for await (const text of session) {
+  process.stdout.write(text)
+}
+
+const stats = await session.stats
+console.log(stats?.audioDuration, stats?.realTimeFactor)
+```
+
+`session.stats` resolves to `undefined` when the engine does not report
+statistics.
+
 ## Examples
 
 In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
@@ -166,6 +185,12 @@ Use the [Bun](https://bun.sh/) package manager:
 bun i
 ```
 
+`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
+
+```bash
+bun run sdk-source:workspace
+```
+
 ```bash
 bun run build  # or `watch` for hotreload
 ```
@@ -182,13 +207,12 @@ npm i path/to/sdk-0.3.0.tgz
 
 ## Testing
 
-The SDK test suite is organized into three buckets by runtime:
+The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime    | Location     | Command                                |
-| ----------------- | ---------- | ------------ | -------------------------------------- |
-| Unit              | Bun / Node | `test/unit/` | `bun run test:unit`                    |
-| Server (Bare)     | Bare       | `test/bare/` | `bun run test:bare`                    |
-| Client (consumer) | Node / RN  | `e2e/`       | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime    | Location | Command                                |
+| ----------------- | ---------- | -------- | -------------------------------------- |
+| Unit              | Bun / Node | `test/`  | `bun run test:unit`                    |
+| Client (consumer) | Node / RN  | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 

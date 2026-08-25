@@ -6,7 +6,7 @@ import { tinyPng } from '../helpers/fixtures.js'
 // Image routes resolve the model before per-param checks, so unknown models
 // surface model_not_found (404) rather than the per-param error.
 describe('serve: images generations validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
 
   it('missing model returns 400', async () => {
     const res = await server().inject({
@@ -37,7 +37,7 @@ describe('serve: images generations validation', () => {
 })
 
 describe('serve: images edits validation', () => {
-  const server = useServer({ cors: true })
+  const server = useServer({ cors: true, corsOrigins: ['https://trusted.example'] })
   const image = (): { name: string; filename: string; contentType: string; data: Buffer } => ({
     name: 'image',
     filename: 'tiny.png',

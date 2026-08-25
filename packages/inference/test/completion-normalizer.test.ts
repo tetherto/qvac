@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { createCompletionNormalizer } from '@/utils/completion-normalizer'
+import { createCompletionNormalizer, MAX_TOOL_FRAME_CHARS } from '@/utils/completion-normalizer'
 import type { CompletionEvent, NormalizerConfig, PluginCapabilities, Tool } from '@/schemas'
 
 const NONE_CAPS: PluginCapabilities = {
@@ -848,4 +848,255 @@ test('gemma4 thought frame: silently dropped (captureThinking=false)', (t) => {
   t.absent(contentJoined.includes('<|channel>thought'), 'open marker must not leak')
   t.absent(contentJoined.includes('<channel|>'), 'close marker must not leak')
   t.absent(contentJoined.includes('thinking here'), 'thought inner must be dropped')
+})
+
+function dsmlConfig(overrides?: Partial<NormalizerConfig>) {
+  return baseConfig({
+    capabilities: TEXT_PARSE_CAPS,
+    tools: [GET_WEATHER_TOOL],
+    toolDialect: 'dsml',
+    ...overrides
+  })
+}
+
+test('dsml streaming: tool frame emits toolCall mid-stream', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const text = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'dsml tool frame emits toolCall')
+  t.is((toolEvents[0] as { call: { name: string } }).call.name, 'get_weather')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
+  const contentJoined = texts(events, 'contentDelta').join('')
+  t.absent(contentJoined.includes('｜DSML｜'), 'raw DSML must not leak into content')
+})
+
+test('dsml streaming: content around the tool frame is preserved', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const events = [
+    ...pushAll(n, [
+      'Let me check. ',
+      `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`,
+      ' Done.'
+    ]),
+    ...n.finish()
+  ]
+  t.is(events.filter((e) => e.type === 'toolCall').length, 1)
+  t.is(texts(events, 'contentDelta').join(''), 'Let me check.  Done.')
+})
+
+test('dsml streaming: markers split across pushes still detected', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const events = [
+    ...pushAll(n, [
+      '<｜DSM',
+      'L｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Lima</｜DSML｜parameter></｜DSML｜invoke></｜DSML',
+      '｜tool_ca',
+      'lls>'
+    ]),
+    ...n.finish()
+  ]
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'dsml frame detected across split markers')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Lima' })
+  t.absent(texts(events, 'contentDelta').join('').includes('｜DSML｜'), 'no marker leak')
+})
+
+test('dsml streaming: one frame with multiple invokes emits one toolCall each', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig({ tools: [GET_WEATHER_TOOL, ECHO_TOOL] }))
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke>
+<｜DSML｜invoke name="echo"><｜DSML｜parameter name="msg" string="true">hi</｜DSML｜parameter></｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  const names = events
+    .filter((e) => e.type === 'toolCall')
+    .map((e) => (e as { call: { name: string } }).call.name)
+  t.alike(names, ['get_weather', 'echo'])
+})
+
+test('dsml streaming: malformed frame surfaces toolError', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const text = `<｜DSML｜tool_calls>get_weather(Tokyo)</｜DSML｜tool_calls>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  const errorEvents = events.filter((e) => e.type === 'toolError')
+  t.is(errorEvents.length, 1)
+  t.is((errorEvents[0] as { error: { code: string } }).error.code, 'PARSE_ERROR')
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+})
+
+test('dsml streaming: a malformed frame releases its raw payload into content exactly once', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const frame = `<｜DSML｜tool_calls>get_weather(Tokyo)</｜DSML｜tool_calls>`
+  const events = [...pushAll(n, ['Let me check. ', frame, ' Done.']), ...n.finish()]
+
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  t.is(events.filter((e) => e.type === 'toolError').length, 1)
+
+  const content = n.getAccumulated().contentText
+  t.is(content, `Let me check. ${frame} Done.`, 'released in place, surrounding content intact')
+  t.is(content.split('<｜DSML｜tool_calls>').length - 1, 1, 'payload is not duplicated')
+  t.is(texts(events, 'contentDelta').join(''), content, 'deltas and accumulated text agree')
+})
+
+test('dsml streaming: a frame still open at stream end releases its buffer into content', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const truncated = `<｜DSML｜tool_calls><｜DSML｜invoke name="get_weather">`
+  const events = [...pushAll(n, ['Checking. ', truncated]), ...n.finish()]
+
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  const errorEvents = events.filter((e) => e.type === 'toolError')
+  t.is(errorEvents.length, 1)
+  t.is((errorEvents[0] as { error: { code: string } }).error.code, 'PARSE_ERROR')
+
+  const content = n.getAccumulated().contentText
+  t.is(content, `Checking. ${truncated}`, 'an unterminated frame is not silently dropped')
+  t.is(texts(events, 'contentDelta').join(''), content, 'deltas and accumulated text agree')
+})
+
+test('dsml streaming: reasoning is captured and kept out of content', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig({ captureThinking: true }))
+  const text = `<think>the user wants weather</think><｜DSML｜tool_calls><｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  t.alike(texts(events, 'thinkingDelta'), ['the user wants weather'])
+  t.is(events.filter((e) => e.type === 'toolCall').length, 1)
+  t.is(texts(events, 'contentDelta').join(''), '')
+})
+
+test('dsml streaming: wrapper-less invoke is framed and emits toolCall mid-stream', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const events = pushAll(n, [
+    '<｜DSML｜invoke name="get_weather">',
+    '<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>',
+    '</｜DSML｜invoke>'
+  ])
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'wrapper-less invoke emits toolCall before finish')
+  t.is((toolEvents[0] as { call: { name: string } }).call.name, 'get_weather')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
+  t.is(texts(events, 'contentDelta').join(''), '', 'no markup leaks into contentDelta')
+  t.is(n.getAccumulated().contentText, '', 'no markup leaks into contentText')
+})
+
+test('dsml streaming: wrapped output is framed by the wrapper, not by its invokes', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig({ tools: [GET_WEATHER_TOOL, ECHO_TOOL] }))
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke>
+<｜DSML｜invoke name="echo"><｜DSML｜parameter name="msg" string="true">hi</｜DSML｜parameter></｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  const names = events
+    .filter((e) => e.type === 'toolCall')
+    .map((e) => (e as { call: { name: string } }).call.name)
+  t.alike(names, ['get_weather', 'echo'])
+  t.is(events.filter((e) => e.type === 'toolError').length, 0, 'no error from wrapped output')
+  t.is(n.getAccumulated().contentText, '', 'wrapper tags never reach content')
+})
+
+test('dsml streaming: a DSML tag that only shares the invoke prefix stays content', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const text = 'DeepSeek can emit <｜DSML｜invoke_result> and then keep writing.'
+  const events = [
+    ...pushAll(
+      n,
+      text.split(' ').map((w, i) => (i === 0 ? w : ` ${w}`))
+    ),
+    ...n.finish()
+  ]
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  t.is(events.filter((e) => e.type === 'toolError').length, 0, 'no spurious tool frame')
+  t.is(n.getAccumulated().contentText, text)
+  t.ok(texts(events, 'contentDelta').length > 1, 'content keeps streaming, not buffered to finish')
+})
+
+test('dsml streaming: an invoke tag without a separator stays content', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const text = '<｜DSML｜invokename="get_weather">'
+  const events = [...pushAll(n, [text]), ...n.finish()]
+  t.is(events.filter((e) => e.type === 'toolCall').length, 0)
+  t.is(events.filter((e) => e.type === 'toolError').length, 0)
+  t.is(n.getAccumulated().contentText, text)
+})
+
+test('dsml streaming: a newline before the invoke attributes still frames', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const events = [
+    ...pushAll(n, [
+      '<｜DSML｜invoke\nname="get_weather">',
+      '<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>',
+      '</｜DSML｜invoke>'
+    ]),
+    ...n.finish()
+  ]
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1)
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
+  t.is(n.getAccumulated().contentText, '', 'no markup leaks into content')
+})
+
+test('dsml streaming: a tab before the invoke attributes still frames', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const events = [
+    ...pushAll(n, [
+      '<｜DSML｜invoke\tname="get_weather">',
+      '<｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter>',
+      '</｜DSML｜invoke>'
+    ]),
+    ...n.finish()
+  ]
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1)
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
+  t.is(n.getAccumulated().contentText, '', 'no markup leaks into content')
+})
+
+test('dsml streaming: a frame that never closes is abandoned once it passes the cap', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const opener = '<｜DSML｜invoke name="get_weather">'
+  const filler = 'x'.repeat(MAX_TOOL_FRAME_CHARS)
+  const events = [
+    ...pushAll(n, [opener, filler]),
+    ...pushAll(n, [
+      `<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Tokyo</｜DSML｜parameter></｜DSML｜invoke>`
+    ]),
+    ...n.finish()
+  ]
+
+  const toolErrors = events.filter((e) => e.type === 'toolError')
+  t.is(toolErrors.length, 1, 'the runaway frame is reported once')
+  t.is((toolErrors[0] as { error: { code: string } }).error.code, 'PARSE_ERROR')
+
+  const content = n.getAccumulated().contentText
+  t.is(content, opener + filler, 'the buffer is released as content, not dropped')
+
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'a later well-formed frame still parses')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Tokyo' })
+})
+
+test('dsml streaming: a frame under the cap is still parsed normally', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const city = 'y'.repeat(MAX_TOOL_FRAME_CHARS - 200)
+  const events = [
+    ...pushAll(n, [
+      '<｜DSML｜invoke name="get_weather">',
+      `<｜DSML｜parameter name="city" string="true">${city}</｜DSML｜parameter>`,
+      '</｜DSML｜invoke>'
+    ]),
+    ...n.finish()
+  ]
+  t.is(events.filter((e) => e.type === 'toolError').length, 0)
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1)
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city })
+})
+
+test('dsml streaming: wrapper-less invoke pushed one character at a time', (t) => {
+  const n = createCompletionNormalizer(dsmlConfig())
+  const text = `<｜DSML｜invoke name="get_weather"><｜DSML｜parameter name="city" string="true">Lima</｜DSML｜parameter></｜DSML｜invoke>`
+  const events = [...pushAll(n, text.split('')), ...n.finish()]
+  const toolEvents = events.filter((e) => e.type === 'toolCall')
+  t.is(toolEvents.length, 1, 'frame detected across single-character pushes')
+  t.alike((toolEvents[0] as { call: { arguments: unknown } }).call.arguments, { city: 'Lima' })
+  t.is(n.getAccumulated().contentText, '', 'no marker leak')
 })

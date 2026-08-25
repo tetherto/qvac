@@ -103,7 +103,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -153,7 +153,7 @@ jobs:
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ (matrix.no_gpu != 'true' || matrix.no_gpu_whisper == 'false') && '-gpu' || '' }}-integration-tests
 
     env:
-      GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Job-wide GPU gate. Governs the parakeet suites (parakeet-gpu-smoke,
       # parakeet-multiple-transcriptions). The whisper-only GPU step overrides
       # it with matrix.no_gpu_whisper where the two parents differed.
@@ -249,7 +249,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install NPM dependencies
         working-directory: ${{ inputs.workdir }}
@@ -410,7 +410,7 @@ jobs:
         shell: bash
         run: npm run test:integration
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           # ggml backend .so/.dylib files load transitively from the prebuilds
           # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
@@ -423,7 +423,7 @@ jobs:
         shell: powershell
         run: npm run test:integration
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           INTEGRATION_TEST_TIMEOUT: '1800'
 
       # test:integration:gpu is WHISPER-only (test/integration/gpu.test.js), so
@@ -436,7 +436,7 @@ jobs:
         shell: bash
         run: npm run test:integration:gpu
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
@@ -448,7 +448,7 @@ jobs:
         shell: powershell
         run: npm run test:integration:gpu
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu_whisper || matrix.no_gpu || 'false' }}
           INTEGRATION_TEST_TIMEOUT: '1800'
 
@@ -458,7 +458,7 @@ jobs:
         shell: bash
         run: npm run test:stand-alone:gpu
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
 
       # RTF benchmark leg (run_rtf_benchmarks=true, set by
@@ -473,7 +473,7 @@ jobs:
         shell: bash
         run: node scripts/run-rtf-benchmark-matrix.js
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu || 'false' }}
           LD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/packages/asr-ggml/prebuilds/${{ matrix.platform }}-${{ matrix.arch }}
@@ -493,7 +493,7 @@ jobs:
         shell: powershell
         run: node scripts/run-rtf-benchmark-matrix.js
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_GPU: ${{ matrix.no_gpu || 'false' }}
           QVAC_ASR_GGML_BENCHMARK_DEVICE: ${{ matrix.runner || matrix.os }}
           QVAC_ASR_GGML_BENCHMARK_RUNNER: ${{ matrix.runner || matrix.os }}

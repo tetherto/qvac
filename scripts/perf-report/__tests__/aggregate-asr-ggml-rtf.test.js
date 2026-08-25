@@ -493,6 +493,25 @@ test("addon 'asr-ggml' mobile reports resolve the engine from the test tokens", 
   assert.equal(byEngine.get('parakeet').quant, 'q4_0')
 })
 
+test('unified mobile reports resolve as Parakeet performance rows', () => {
+  const report = {
+    addon: 'asr-ggml',
+    addon_type: 'asr-ggml',
+    device: { name: 'Pixel 9', platform: 'android' },
+    results: [
+      {
+        test: '[unified] [q8_0] [GPU] mobile-perf run 1',
+        execution_provider: 'gpu',
+        metrics: { real_time_factor: 0.04, wall_time_ms: 320 }
+      }
+    ]
+  }
+  const [record] = normalizeMobileRecords(report, '/x/Pixel_9/performance-report.json')
+  assert.equal(record.engine, 'parakeet')
+  assert.equal(record.model, 'unified')
+  assert.equal(record.quant, 'q8_0')
+})
+
 // --- manual records ----------------------------------------------------------
 
 test('flattened manual rows keep their engine and stddev', () => {

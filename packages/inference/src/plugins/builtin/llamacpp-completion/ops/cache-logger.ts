@@ -28,11 +28,9 @@ export function logCacheStatus(cacheKey: string, isReusing: boolean): void {
   logger.debug(`[kv-cache] [${cacheKey}] ${status} cache`)
 }
 
-export function logCacheInit(cacheKey: string, systemPrompt: string, toolCount: number): void {
+export function logCacheInit(cacheKey: string, systemPrompt: string): void {
   const promptLen = systemPrompt.length
-  logger.debug(
-    `[kv-cache] [${cacheKey}] Initializing cache (prompt: ${promptLen} chars, tools: ${toolCount})`
-  )
+  logger.debug(`[kv-cache] [${cacheKey}] Initializing cache (prompt: ${promptLen} chars)`)
 }
 
 export function logMessagesToAddon(

@@ -421,6 +421,21 @@ BertModelSetup setupParams(
 
     if (chosenBackend.first == BackendType::GPU) {
       result.resolvedBackendDevice = 1;
+
+      // Row-split needs a backend that provides split buffers, llama.cpp now
+      // rejects the load outright on backends without it. Degrade row -> layer
+      // to keep the model loadable.
+      if (splitMode == LLAMA_SPLIT_MODE_ROW &&
+          !backend_selection::gpuBackendSupportsRowSplit()) {
+        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+            GGML_LOG_LEVEL_WARN,
+            "[BertModel] split-mode 'row' is not supported by this GPU "
+            "backend (no split-buffer support), falling back to split-mode "
+            "'layer'\n",
+            nullptr);
+        splitMode = LLAMA_SPLIT_MODE_LAYER;
+      }
+
       params.split_mode = splitMode;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {

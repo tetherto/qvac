@@ -116,6 +116,12 @@ export const parakeetRuntimeConfigSchema = z.object({
   streamingEnergyVad: z.boolean().optional(),
   streamingLeftContextMs: z.number().int().nonnegative().optional(),
   streamingRightLookaheadMs: z.number().int().nonnegative().optional(),
+  /**
+   * Multilingual CTC language id (e.g. `"hi"`, `"ta"`). Required for Indic
+   * Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on
+   * monolingual CTC such as English `parakeet-ctc-0.6b`.
+   */
+  language: z.string().optional(),
 
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) =========
   // Auto-enabled when the loaded GGUF carries

@@ -2,57 +2,54 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
-const process = require('bare-process')
 const ASRGgml = require('../index.js')
 const binding = require('../binding.js')
+const { parseQuickstartArguments } = require('./quickstart-arguments.js')
 
-// Configure C++ logger to see logs
 const LOG_PRIORITIES = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
 binding.setLogger((priority, message) => {
   const priorityName = LOG_PRIORITIES[priority] || `UNKNOWN(${priority})`
   console.log(`[C++ ${priorityName}] ${message}`)
 })
 
-// Usage: node examples/quickstart.js [audioDir] [modelPath] [vadModelPath]
-// Defaults stream ./examples/sample.raw through a tiny model in ./examples
-
 async function main() {
-  const args = process.argv.slice(2)
-  const [, , vadModelPathArg, audioPathArg] = args
+  const { audioPath, modelPath, vadModelPath } = parseQuickstartArguments(Bare.argv.slice(2))
 
   const modelsDir = path.join(__dirname, '..', 'models')
-  const audioFilePath = audioPathArg || path.join(__dirname, 'samples', 'sample.raw')
-  const modelPath = vadModelPathArg || path.join(modelsDir, 'ggml-tiny.bin')
-  // ignore optional vadModelPathArg to keep API stable
+  const audioFilePath = audioPath || path.join(__dirname, 'samples', 'sample.raw')
+  const modelFilePath = modelPath || path.join(modelsDir, 'ggml-tiny.bin')
+  const vadModelFilePath = vadModelPath || path.join(modelsDir, 'ggml-silero-v5.1.2.bin')
 
-  if (!fs.existsSync(modelPath)) {
-    console.error(
-      `Model file not found at ${modelPath}. Download or provide a path as the second argument.`
-    )
-    process.exit(1)
-  }
   if (!fs.existsSync(audioFilePath)) {
+    console.error(`Audio file not found at ${audioFilePath}. Provide it as the first argument.`)
+    Bare.exit(1)
+    return
+  }
+  if (!fs.existsSync(modelFilePath)) {
+    console.error(`Model file not found at ${modelFilePath}. Provide it as the second argument.`)
+    Bare.exit(1)
+    return
+  }
+  if (!fs.existsSync(vadModelFilePath)) {
     console.error(
-      `Audio file not found at ${audioFilePath}. Provide a directory containing sample.raw as the first argument.`
+      `VAD model file not found at ${vadModelFilePath}. Provide it as the third argument.`
     )
-    process.exit(1)
+    Bare.exit(1)
+    return
   }
 
-  // Constructor arguments for ASRGgml
   const constructorArgs = {
     files: {
-      model: modelPath
+      model: modelFilePath,
+      vadModel: vadModelFilePath
     },
     enableStats: true
   }
 
-  // Configuration object (the engine discriminator lives in the config)
   const config = {
     engine: 'whisper',
     whisperConfig: {
       audio_format: 's16le',
-      // VAD tuning to avoid trimming the beginning
-      vad_model_path: path.join(modelsDir, 'ggml-silero-v5.1.2.bin'),
       vad_params: {
         threshold: 0.35,
         min_speech_duration_ms: 200,
@@ -65,11 +62,8 @@ async function main() {
     }
   }
 
-  // no onOutput override; keep internal handler intact
-
   const model = new ASRGgml({ ...constructorArgs, config })
 
-  // We'll attach streaming via response.onUpdate(), not model.onOutputReceived
   const streamingChunks = []
 
   await model.load()
@@ -78,7 +72,6 @@ async function main() {
   const bytesPerSecond = bitRate / 8
   const audioStream = fs.createReadStream(audioFilePath, { highWaterMark: bytesPerSecond })
 
-  // High-level run(): capture the response and attach onUpdate for streaming
   const response = await model.run(audioStream)
   response.onUpdate((outputArr) => {
     const items = Array.isArray(outputArr) ? outputArr : [outputArr]
@@ -109,12 +102,11 @@ async function main() {
     console.log('No transcription output received.')
   }
 
-  // Release logger to allow clean exit
   binding.releaseLogger()
 }
 
 main().catch((err) => {
   console.error(err)
   binding.releaseLogger()
-  process.exit(1)
+  Bare.exit(1)
 })

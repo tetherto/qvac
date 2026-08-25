@@ -26,6 +26,8 @@ export interface TranslationBinding {
     runJob(handle: object, data: TranslationJob): boolean;
     destroyInstance(handle: object): void;
 }
+/** Extract a human-readable message from an unknown thrown value. */
+export declare function errorMessage(err: unknown): string;
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */

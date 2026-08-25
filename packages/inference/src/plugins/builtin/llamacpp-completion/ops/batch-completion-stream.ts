@@ -5,7 +5,6 @@ import type {
   ResponseFormat,
   Tool
 } from '@/schemas/index'
-import { TOOLS_MODE } from '@/schemas/tools'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import type { Logger } from '@/logging/types'
@@ -19,7 +18,7 @@ import {
   type CompletionGenerationParams
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
-import { appendToolsToHistory, prependToolsToHistory } from '@/utils/tool-integration'
+import { prependToolsToHistory } from '@/utils/tool-integration'
 
 const logger = getEngineLogger()
 
@@ -51,6 +50,7 @@ type AddonBatchResponse = {
   stats?: LlmStats
   iterate(): AsyncIterable<unknown>
   await(): Promise<BatchModelResult[]>
+  cancel(): Promise<void>
 }
 
 type BatchModelEvent = { type: 'ids'; ids: string[] } | { type: 'token'; id: string; token: string }
@@ -69,7 +69,6 @@ type BatchModelStreamResult = {
 
 type BatchPromptRenderOptions = {
   toolsEnabled: boolean
-  toolsMode?: string | undefined
 }
 
 function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
@@ -104,10 +103,7 @@ function renderPromptHistory(
   let historyWithTools: Array<HistoryMessage | Tool> = prompt.history
 
   if (tools) {
-    historyWithTools =
-      options.toolsMode === TOOLS_MODE.dynamic
-        ? appendToolsToHistory(prompt.history, tools)
-        : prependToolsToHistory(prompt.history, tools)
+    historyWithTools = prependToolsToHistory(prompt.history, tools)
   }
 
   // Uses the same attachment expansion as single completion: each
@@ -160,29 +156,33 @@ export async function* batchCompletion(
   const model = getModel(modelId)
   const modelConfig = getModelConfig(modelId)
   const renderOptions: BatchPromptRenderOptions = {
-    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true,
-    toolsMode: (modelConfig as { toolsMode?: string }).toolsMode
+    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true
   }
 
-  const onAbort = () => {
-    const addon = model.addon
-    if (addon?.cancel) {
-      addon.cancel.call(addon).catch((err: unknown) => {
-        requestLogger.warn(
-          `[cancel] addon.cancel() rejected during batch abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
-        )
-      })
-    }
+  // Cancel via the batch response, mirroring completion(): the addon routes
+  // response.cancel() to cancelJob for this batch group only, so a concurrent
+  // peer batch or completion on the same model keeps decoding.
+  let activeResponse: { cancel(): Promise<void> } | null = null
+  const cancelActive = () => {
+    activeResponse?.cancel().catch((err: unknown) => {
+      requestLogger.warn(
+        `[cancel] batch response.cancel() rejected during abort for modelId=${modelId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    })
   }
+  const onAbort = () => cancelActive()
   signal.addEventListener('abort', onAbort, { once: true })
   if (signal.aborted) onAbort()
   scope.defer(() => {
     signal.removeEventListener('abort', onAbort)
+    activeResponse = null
   })
 
   const addonPrompts = prompts.map((prompt) => buildBatchPrompt(prompt, renderOptions))
   const modelStart = nowMs()
   const response = await runBatchModel(model, addonPrompts)
+  activeResponse = response
+  if (signal.aborted) cancelActive()
   const ids = response.ids
 
   yield { type: 'ids', ids }

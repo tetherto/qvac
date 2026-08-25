@@ -8,26 +8,48 @@
 // test/integration/models.manifest.json is staged. The device-side pickup lives
 // in test/integration/utils.js.
 //
-// Run `node scripts/generate-prestage-block.js` and paste the output under
-// `extra-pre-test-commands:` (indented), or wire it via a workflow step (see
-// integration-mobile-test-embed-llamacpp.yml).
+// Run `node scripts/generate-prestage-block.js [android|ios]` and paste the
+// output under `extra-pre-test-commands:` (indented), or wire it via a workflow
+// step (see integration-mobile-test-embed-llamacpp.yml).
 const fs = require('fs')
 const path = require('path')
 
 const manifestPath = path.resolve(__dirname, '../test/integration/models.manifest.json')
+const IOS_BUNDLE_ID = 'io.tether.test.qvac'
+
+// Optional PRESTAGE_URL_MAP: JSON of { <model>: <presigned-us-bucket-url> } to
+// pull staged models from the US bucket instead of HF. Absent => HF behaviour.
+function loadUrlOverrideMap() {
+  const mapPath = process.env.PRESTAGE_URL_MAP
+  if (!mapPath) return null
+  const raw = JSON.parse(fs.readFileSync(mapPath, 'utf8'))
+  return raw && typeof raw === 'object' ? raw : null
+}
 
 function modelsFromManifest(manifest) {
   if (!manifest || !manifest.models) {
     throw new Error('[prestage] integration model manifest has no models')
   }
+  const overrideMap = loadUrlOverrideMap()
   const models = []
   for (const [name, entry] of Object.entries(manifest.models)) {
     const url = entry && Array.isArray(entry.urls) ? entry.urls[0] : null
-    if (
-      typeof url !== 'string' ||
-      !url.startsWith('https://') ||
-      /\/resolve\/(?:main|master)\//.test(url)
-    ) {
+    const pinnedOk =
+      typeof url === 'string' &&
+      url.startsWith('https://') &&
+      !/\/resolve\/(?:main|master)\//.test(url)
+    // Prefer the presigned US-bucket URL (bypasses the HF-shape check), but keep
+    // the pinned URL as an on-device fallback so an expired/unreachable presigned
+    // URL doesn't fail the run.
+    if (overrideMap && typeof overrideMap[name] === 'string') {
+      models.push(
+        pinnedOk
+          ? { name, url: overrideMap[name], fallback: url }
+          : { name, url: overrideMap[name] }
+      )
+      continue
+    }
+    if (!pinnedOk) {
       throw new Error(`[prestage] ${name} has no usable pinned manifest URL`)
     }
     models.push({ name, url })
@@ -36,16 +58,20 @@ function modelsFromManifest(manifest) {
 }
 
 // Host script. POSIX-sh friendly; adb + curl are available in the pre_test phase.
-function buildScript(models) {
-  const stageCalls = models.map((m) => `stage "${m.name}" "${m.url}"`).join('\n')
+function buildAndroidScript(models) {
+  const stageCalls = models
+    .map((m) => `stage "${m.name}" "${m.url}" "${m.fallback || ''}"`)
+    .join('\n')
   return `set -e
 PRESTAGE_DIR=/data/local/tmp/prestaged-models
 adb shell mkdir -p "$PRESTAGE_DIR"
 mkdir -p /tmp/prestage
 stage() {
-  NAME="$1"; URL="$2"
+  NAME="$1"; URL="$2"; FALLBACK="$3"
   echo "[prestage] staging $NAME"
-  curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"
+  if curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then :;
+  elif [ -n "$FALLBACK" ] && curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$FALLBACK"; then echo "[prestage] $NAME: primary URL failed, used fallback";
+  else echo "[prestage] FATAL: download of $NAME failed"; exit 1; fi
   adb push "/tmp/prestage/$NAME" "$PRESTAGE_DIR/$NAME"
   adb shell test -s "$PRESTAGE_DIR/$NAME" || { echo "[prestage] FATAL: $NAME not present on device after push"; exit 1; }
   rm -f "/tmp/prestage/$NAME"
@@ -56,7 +82,45 @@ adb shell ls -la "$PRESTAGE_DIR" || true
 echo "[prestage] done"`
 }
 
+function buildIosScript(models) {
+  const stageCalls = models
+    .map((m) => `stage "${m.name}" "${m.url}" "${m.fallback || ''}"`)
+    .join('\n')
+  return `set -e
+export PATH="$HOME/.local/bin:$PATH"
+unset SUDO_UID SUDO_GID
+BID=${IOS_BUNDLE_ID}
+echo "[prestage] installing pymobiledevice3..."
+python3 -m pip install --quiet --upgrade pymobiledevice3==10.3.1 || pip3 install --quiet --upgrade pymobiledevice3==10.3.1 || python3 -m pip install --quiet --upgrade --break-system-packages pymobiledevice3==10.3.1 || { echo "[prestage] FATAL: pymobiledevice3 install failed"; exit 1; }
+pymobiledevice3 version >/dev/null 2>&1 || { echo "[prestage] FATAL: pymobiledevice3 not runnable"; exit 1; }
+mkdir -p /tmp/prestage
+stage() {
+  NAME="$1"; URL="$2"; FALLBACK="$3"
+  echo "[prestage] staging $NAME"
+  if curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$URL"; then :;
+  elif [ -n "$FALLBACK" ] && curl -fSL --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 --max-time 1800 -o "/tmp/prestage/$NAME" "$FALLBACK"; then echo "[prestage] $NAME: primary URL failed, used fallback";
+  else echo "[prestage] FATAL: download of $NAME failed"; exit 1; fi
+  if PUSH_OUT=$(pymobiledevice3 apps push "$BID" "/tmp/prestage/$NAME" "Documents/$NAME" 2>&1); then PUSH_RC=0; else PUSH_RC=$?; fi
+  printf '%s\\n' "$PUSH_OUT"
+  if [ "$PUSH_RC" -ne 0 ] || printf '%s' "$PUSH_OUT" | grep -qiE "traceback|afcexception|not found during afc operation|failed to perform afc operation|failed with status|perm_denied|object_not_found|not permitted"; then
+    echo "[prestage] FATAL: push of $NAME failed (rc=$PUSH_RC; see AFC error above)"; exit 1
+  fi
+  echo "[prestage] pushed $NAME -> Documents/$NAME"
+  rm -f "/tmp/prestage/$NAME"
+}
+${stageCalls}
+echo "[prestage] done"`
+}
+
+function buildScript(models, platform = 'android') {
+  const p = String(platform).toLowerCase()
+  if (p === 'ios') return buildIosScript(models)
+  if (p === 'android') return buildAndroidScript(models)
+  throw new Error(`[prestage] unknown platform "${platform}" (expected 'android' or 'ios')`)
+}
+
 function main() {
+  const platform = process.argv[2] || 'android'
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   const models = modelsFromManifest(manifest)
   if (models.length === 0) {
@@ -68,7 +132,7 @@ function main() {
   )
   // emit_extra_commands in generate-testspec.sh treats a lone "|" line as the
   // start of a YAML literal block whose body lines are indented by 2 spaces.
-  const body = buildScript(models)
+  const body = buildScript(models, platform)
     .split('\n')
     .map((l) => '  ' + l)
     .join('\n')
@@ -77,4 +141,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { modelsFromManifest, buildScript }
+module.exports = { modelsFromManifest, buildScript, IOS_BUNDLE_ID }

@@ -62,24 +62,66 @@ function setupCli(): void {
   program
     .command('doctor')
     .description('Validate that the host satisfies QVAC SDK system requirements')
+    .option('--deep', 'Start the installed SDK worker and verify its heartbeat')
     .option('--json', 'Output the report as JSON')
     .option('-q, --quiet', 'Suppress human-readable output (only set exit code)')
     .option('-v, --verbose', 'Detailed output')
-    .action(async (options: { json?: boolean; quiet?: boolean; verbose?: boolean }) => {
-      try {
-        const { runDoctor } = await import('./doctor/index.js')
-        const report = await runDoctor({
-          projectRoot: process.cwd(),
-          json: options.json,
-          quiet: options.quiet,
-          verbose: options.verbose
-        })
-        if (!report.ok) process.exit(1)
-      } catch (error: unknown) {
-        handleError(error)
-        process.exit(1)
+    .action(
+      async (options: { deep?: boolean; json?: boolean; quiet?: boolean; verbose?: boolean }) => {
+        try {
+          const { runDoctor } = await import('./doctor/index.js')
+          const report = await runDoctor({
+            projectRoot: process.cwd(),
+            deep: options.deep,
+            json: options.json,
+            quiet: options.quiet,
+            verbose: options.verbose
+          })
+          if (!report.ok) process.exit(1)
+        } catch (error: unknown) {
+          handleError(error)
+          process.exit(1)
+        }
       }
-    })
+    )
+
+  program
+    .command('configure')
+    .description('Interactively build a qvac.config.json (serve.models) for local models')
+    .option('-c, --config <path>', 'Config file to write (default: ./qvac.config.json)')
+    .option('-y, --yes', 'Non-interactive: write a sensible default starter (chat + transcription)')
+    .option(
+      '--modality <name>',
+      'Non-interactive: add a modality (repeatable) — chat|embedding|transcription|speech|image',
+      collect,
+      []
+    )
+    .option('--force', 'Re-add a model that is already configured, overwriting its existing entry')
+    .option('-q, --quiet', 'Suppress output')
+    .action(
+      async (options: {
+        config?: string
+        yes?: boolean
+        modality: string[]
+        force?: boolean
+        quiet?: boolean
+      }) => {
+        try {
+          const { runConfigure } = await import('./configure/index.js')
+          await runConfigure({
+            projectRoot: process.cwd(),
+            config: options.config,
+            yes: options.yes,
+            modality: options.modality.length > 0 ? options.modality : undefined,
+            force: options.force,
+            quiet: options.quiet
+          })
+        } catch (error: unknown) {
+          handleError(error)
+          process.exit(1)
+        }
+      }
+    )
 
   const verifyCmd = program
     .command('verify')
@@ -251,12 +293,31 @@ function setupCli(): void {
       []
     )
     .option('--api-key <key>', 'Require Bearer token authentication')
-    .option('--cors', 'Enable CORS headers')
+    .option(
+      '--api-key-file <path>',
+      'Read the Bearer token from a file instead of argv (keeps it out of the process list)'
+    )
+    .option('--allow-unauthenticated', 'Permit binding to a non-loopback host without an API key')
+    .option('--cors', 'Validate that explicit trusted CORS origins are configured')
+    .option('--cors-origin <origin>', 'Trusted CORS origin (repeatable)', collect, [])
     .option(
       '--public-base-url <url>',
       'Externally reachable origin (required for image response_format=url)'
     )
-    .option('--docs', 'Expose Swagger UI at /docs (JSON spec is always at /openapi.json)')
+    .option(
+      '--docs',
+      'Expose Swagger UI at /docs and add same-port loopback CORS origins; requires a fixed --port (JSON spec is always at /openapi.json)'
+    )
+    .option(
+      '--no-lazy-load',
+      'Disable lazy loading; a request for an unloaded model returns 503 model_not_loaded instead of loading it'
+    )
+    .option('--load-concurrency <n>', 'Max simultaneous model loads (default: 1)')
+    .option('--load-timeout <ms>', 'Per-load timeout in milliseconds (default: unbounded)')
+    .option(
+      '--no-cancel-load-on-disconnect',
+      'Keep loading a model even if the client that triggered the load disconnects'
+    )
     .option('-v, --verbose', 'Detailed output')
     .action(
       async (options: {
@@ -265,9 +326,16 @@ function setupCli(): void {
         host: string
         model: string[]
         apiKey?: string
+        apiKeyFile?: string
+        allowUnauthenticated?: boolean
         cors?: boolean
+        corsOrigin: string[]
         publicBaseUrl?: string
         docs?: boolean
+        lazyLoad?: boolean
+        loadConcurrency?: string
+        loadTimeout?: string
+        cancelLoadOnDisconnect?: boolean
         verbose?: boolean
       }) => {
         try {
@@ -279,9 +347,21 @@ function setupCli(): void {
             host: options.host,
             model: options.model.length > 0 ? options.model : undefined,
             apiKey: options.apiKey,
+            apiKeyFile: options.apiKeyFile,
+            allowUnauthenticated: options.allowUnauthenticated,
             cors: options.cors,
+            corsOrigins: options.corsOrigin.length > 0 ? options.corsOrigin : undefined,
             publicBaseUrl: options.publicBaseUrl,
             docs: options.docs,
+            // Only forward when explicitly disabled so config can still opt out.
+            lazyLoad: options.lazyLoad === false ? false : undefined,
+            loadConcurrency:
+              options.loadConcurrency !== undefined
+                ? parseInt(options.loadConcurrency, 10)
+                : undefined,
+            loadTimeoutMs:
+              options.loadTimeout !== undefined ? parseInt(options.loadTimeout, 10) : undefined,
+            cancelLoadOnDisconnect: options.cancelLoadOnDisconnect === false ? false : undefined,
             verbose: options.verbose
           })
         } catch (error: unknown) {

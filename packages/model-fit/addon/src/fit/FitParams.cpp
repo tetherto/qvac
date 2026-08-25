@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <iterator>
 #include <mutex>
 #include <stdexcept>
 
@@ -9,6 +10,9 @@
 #include <ggml-backend.h>
 #include <gguf.h>
 #include <llama.h>
+
+#include "fit/FitResultContext.hpp"
+#include "fit/LlamaLoadConfig.hpp"
 
 namespace model_fit {
 
@@ -258,11 +262,14 @@ FitResult runFit(const FitRequest& req) {
   // fitter is free to rewrite it, and a fitter that chooses NONE picks a
   // placement to match.
   if (req.hasSplitMode && req.splitMode == LLAMA_SPLIT_MODE_NONE) {
+    const bool explicitCpuPlacement = req.hasNGpuLayers &&
+                                      req.nGpuLayers == 0 && req.hasMainGpu &&
+                                      req.mainGpu == -1;
+
     // NONE means "put the whole model on one GPU". With no GPU registered
     // there is no such device, and llama rejects every index including the
-    // default 0 — so the mode itself is unsatisfiable here, whether or not the
-    // caller named a device.
-    if (out.nGpuDevices == 0) {
+    // default 0, except for the exact CPU-only sentinel configuration.
+    if (!explicitCpuPlacement && out.nGpuDevices == 0) {
       throw std::invalid_argument(
           "model-fit: splitMode NONE places the whole model on one GPU, but no "
           "GPU device is registered");
@@ -274,7 +281,8 @@ FitResult runFit(const FitRequest& req) {
     // GPU-class devices ggml registered. Bounding by that count rejects only
     // what llama could not accept, and leaves the narrower judgement to llama,
     // which knows its own list.
-    if (req.hasMainGpu && static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
+    if (!explicitCpuPlacement && req.hasMainGpu &&
+        static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
       throw std::invalid_argument(
           "model-fit: mainGpu " + std::to_string(req.mainGpu) +
           " is out of range (" + std::to_string(out.nGpuDevices) +
@@ -356,39 +364,7 @@ FitResult runFit(const FitRequest& req) {
 
   // `common_fit_params` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
-  if (req.hasNGpuLayers) {
-    mparams.n_gpu_layers = req.nGpuLayers;
-  }
-  // n_ctx is the documented exception: the fitter reduces it iff it is 0.
-  // A concrete request is therefore a hard constraint to fit around.
-  cparams.n_ctx = req.nCtx;
-  if (req.nBatch != 0) {
-    cparams.n_batch = req.nBatch;
-  }
-  if (req.nUbatch != 0) {
-    cparams.n_ubatch = req.nUbatch;
-  }
-
-  // Placement and KV sizing the caller has already decided. Setting a field
-  // takes it out of the fitter's reach (it only rewrites default-valued ones),
-  // which is how upstream expects an intended load to be expressed: pin what is
-  // decided, leave the rest to be filled in.
-  if (req.hasSplitMode) {
-    mparams.split_mode = static_cast<llama_split_mode>(req.splitMode);
-  }
-  if (req.hasMainGpu) {
-    mparams.main_gpu = req.mainGpu;
-  }
-  if (req.hasTypeK) {
-    cparams.type_k = static_cast<ggml_type>(req.typeK);
-  }
-  if (req.hasTypeV) {
-    cparams.type_v = static_cast<ggml_type>(req.typeV);
-  }
-  if (req.hasFlashAttnType) {
-    cparams.flash_attn_type =
-        static_cast<llama_flash_attn_type>(req.flashAttnType);
-  }
+  applyFitRequest(req, mparams, cparams);
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
   // library, not the caller.
@@ -448,13 +424,139 @@ FitResult runFit(const FitRequest& req) {
                                   : ""});
   }
 
-  // A fit that needed no reduction leaves n_ctx at the 0 it was handed, which
-  // means "the trained context" to llama but is not a plan a caller can use.
-  // Resolve it so every SUCCESS carries a concrete context.
-  if (out.fits && out.nCtx == 0) {
-    out.nCtx = trainedCtx;
+  // A fitted 0 means "the trained context", not a usable load plan.
+  detail::finalizeFitContext(out, trainedCtx);
+
+  return out;
+}
+
+FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
+  const std::lock_guard<std::mutex> fitLock(g_fitMutex);
+
+  if (req.modelPath.empty()) {
+    throw std::invalid_argument("model-fit: modelPath is required");
+  }
+  if (!std::filesystem::path(req.modelPath).is_absolute()) {
+    throw std::invalid_argument(
+        "model-fit: modelPath must be an absolute path, got '" + req.modelPath +
+        "'");
   }
 
+  FitResult out;
+  if (preBackendUnsupportedLlamaLoad(req.params).has_value()) {
+    out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
+    out.reason = FitReason::UnsupportedConfig;
+    return out;
+  }
+  const size_t maxDevices = llama_max_devices();
+  out.maxDevices = maxDevices;
+
+  registerBackends(req.backendsDir);
+  countDevices(out.nDevices, out.nGpuDevices);
+  if (out.nDevices == 0) {
+    out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
+    out.reason = FitReason::NoBackendDevice;
+    out.tensorSplit.assign(maxDevices, 0.0F);
+    return out;
+  }
+
+  if (std::FILE* file = std::fopen(req.modelPath.c_str(), "rb")) {
+    std::fclose(file);
+  } else {
+    out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
+    out.reason = FitReason::ModelUnreadable;
+    out.tensorSplit.assign(maxDevices, 0.0F);
+    return out;
+  }
+
+  const uint32_t trainedCtx = readTrainedContext(req.modelPath);
+  NormalizedLlamaLoad normalized = normalizeLlamaLoadConfig(
+      req.loadKind,
+      req.modelPath,
+      req.params,
+      readModelTraits(req.modelPath),
+      discoverBackendDevices());
+  LlamaFitExecution execution;
+  const bool supported =
+      withSupportedLlamaLoad(normalized, [&](common_params& params) {
+        // Embedding loads pin the context before the oversize check, so an
+        // oversized request is capped the way `embed-llamacpp` caps it rather
+        // than rejected. Completion keeps the reject.
+        if (req.loadKind == LlamaLoadKind::Embedding) {
+          applyEmbeddingContextPolicy(params, trainedCtx);
+        }
+        if (trainedCtx > 0 && params.n_ctx > 0 &&
+            static_cast<uint32_t>(params.n_ctx) > trainedCtx) {
+          throw std::invalid_argument(
+              "model-fit: ctx-size " + std::to_string(params.n_ctx) +
+              " exceeds the context length the model declares (" +
+              std::to_string(trainedCtx) + ")");
+        }
+
+        // No clamp at zero: fabric's `--ctx-size 0` handler encodes "do not
+        // reduce the context" by storing `UINT32_MAX` in the `int32_t`
+        // `fit_params_min_ctx` (common/arg.cpp:1455-1461, common/common.h:486),
+        // so the sentinel arrives here as -1. `std::max(-1, 0)` erased it and
+        // the `nCtxMin == 0` fallback below then turned the one configuration
+        // that forbids reduction into a 4096 floor. The addons pass the field
+        // through unclamped (LoadFitNormalization.cpp:101); do the same and let
+        // the signed-to-unsigned round trip restore the sentinel. The fallback
+        // still catches a genuine zero.
+        uint32_t nCtxMin =
+            req.nCtxMin == 0 ? static_cast<uint32_t>(params.fit_params_min_ctx)
+                             : req.nCtxMin;
+        if (nCtxMin == 0) {
+          nCtxMin = DEFAULT_N_CTX_MIN;
+        }
+        if (trainedCtx > 0 && req.nCtxMin == 0 && nCtxMin > trainedCtx) {
+          nCtxMin = trainedCtx;
+        } else if (trainedCtx > 0 && nCtxMin > trainedCtx) {
+          throw std::invalid_argument(
+              "model-fit: nCtxMin " + std::to_string(nCtxMin) +
+              " exceeds the context length the model declares (" +
+              std::to_string(trainedCtx) + ")");
+        }
+
+        execution = invokeLlamaFit(
+            req.modelPath, params, req.marginMiB, nCtxMin, common_fit_params);
+      });
+  if (!supported) {
+    out.status = static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR);
+    out.reason = FitReason::UnsupportedConfig;
+    out.tensorSplit.assign(maxDevices, 0.0F);
+    return out;
+  }
+  const common_params_fit_status status = execution.status;
+  llama_model_params& modelParams = execution.modelParams;
+  llama_context_params& contextParams = execution.contextParams;
+
+  out.status = static_cast<int>(status);
+  out.fits = status == COMMON_PARAMS_FIT_STATUS_SUCCESS;
+  out.reason = out.fits ? FitReason::Fits
+                        : (status == COMMON_PARAMS_FIT_STATUS_FAILURE
+                               ? FitReason::DoesNotFit
+                               : FitReason::ModelUnreadable);
+  out.nGpuLayers = modelParams.n_gpu_layers;
+  out.nCtx = contextParams.n_ctx;
+  out.nBatch = contextParams.n_batch;
+  out.nUbatch = contextParams.n_ubatch;
+  out.tensorSplit = std::move(execution.tensorSplit);
+  out.splitMode = static_cast<int32_t>(modelParams.split_mode);
+  out.mainGpu = modelParams.main_gpu;
+  out.typeK = static_cast<int32_t>(contextParams.type_k);
+  out.typeV = static_cast<int32_t>(contextParams.type_v);
+  out.flashAttnType = static_cast<int32_t>(contextParams.flash_attn_type);
+
+  for (const auto& override : execution.buftOverrides) {
+    if (override.pattern == nullptr) {
+      break;
+    }
+    out.buftOverrides.push_back(
+        {override.pattern,
+         override.buft == nullptr ? ""
+                                  : ggml_backend_buft_name(override.buft)});
+  }
+  detail::finalizeFitContext(out, trainedCtx);
   return out;
 }
 

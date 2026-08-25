@@ -32,7 +32,9 @@ function createOCRModel(
   const params = {
     pathDetector: detectorPath,
     pathRecognizer: recognizerPath,
-    langList: ocrConfig.langList || ['en'],
+    ...(ocrConfig.langList !== undefined
+      ? { langList: ocrConfig.langList }
+      : ocrConfig.pipelineType !== 'doctr' && { langList: ['en'] }),
     ...(ocrConfig.pipelineType !== undefined && {
       pipelineType: ocrConfig.pipelineType
     }),

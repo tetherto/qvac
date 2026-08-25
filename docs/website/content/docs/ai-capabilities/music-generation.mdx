@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), a GGML-backed ACE-Step 1.5 engine. Load the four model stages with `modelType: "audiogen"`, then call `audioGen()` with a caption and optional lyrics or musical controls.
+Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), a GGML-backed ACE-Step 1.5 engine. Load the four model stages with `modelType: "audiogen"`, then call `audioGen()` with a caption and optional lyrics or musical controls. You can also condition the timbre on a reference recording (`referenceAudio`) or re-render an existing song with a new caption (`taskType: "cover-nofsq"` with `sourceAudio`).
 
 `audioGen()` returns immediately with:
 
@@ -16,10 +16,13 @@ Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/t
 - `stats` — a promise resolving to timing statistics.
 
 <Callout type="info">
-  AudioGen is currently validated by the SDK end-to-end suite on desktop
-  Node.js/Bare. Its four-model pipeline has a large memory and download
-  footprint, so test your chosen model set and hardware before deploying to
-  other runtimes.
+  `@qvac/audiogen-ggml` 0.2.1 ships prebuilds for desktop (Linux, macOS,
+  Windows) and mobile (Android arm64, iOS arm64), with CPU inference
+  everywhere and GPU acceleration through Metal on Apple platforms and Vulkan
+  on Android (including ARM Mali devices). The SDK end-to-end suite currently
+  validates AudioGen on desktop Node.js/Bare; the four-model pipeline needs
+  roughly 3.3 GB on disk and several gigabytes of memory, so confirm the
+  headroom of your target devices before shipping to mobile.
 </Callout>
 
 ## Functions
@@ -138,6 +141,53 @@ Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical
 
 The SDK returns raw interleaved PCM rather than a WAV file. Use `bitsPerSample` when calculating sample counts or constructing a WAV header so consumers remain correct if the addon changes sample width. The complete example below includes a dependency-free WAV writer.
 
+### Sampling and DCW controls
+
+Advanced per-run controls map 1:1 to the ACE-Step engine and are only needed for reproducible quality comparisons; omit them to keep the engine defaults:
+
+| Field | Purpose |
+| --- | --- |
+| `lmTemperature`, `lmTopP`, `lmTopK`, `lmCfgScale` | LM sampling temperature (default 0.85), nucleus probability (default 0.9), top-k cutoff (`0` disables), and classifier-free guidance scale |
+| `lmPhase1` | Let the LM infer missing metadata before semantic-code generation |
+| `dcwEnabled`, `dcwScaler`, `dcwHighScaler` | Official Haar DCW correction during DiT sampling (enabled by default; low/high-frequency strengths default to 0.05 / 0.02) |
+
+## Reference audio and covers
+
+`referenceAudio` conditions the generated timbre without changing the text-to-music task. `taskType: "cover-nofsq"` re-renders `sourceAudio` with a new caption while keeping its structure, optionally combined with a timbre reference:
+
+```ts
+import { audioGen } from "@qvac/sdk";
+
+// Timbre reference only.
+const styled = audioGen({
+  modelId,
+  caption: "slow blues with warm electric guitar",
+  lyrics: "[Instrumental]",
+  referenceAudio: "/path/to/reference.mp3",
+});
+
+// Cover: keep the structure of the source song, change the arrangement.
+const cover = audioGen({
+  modelId,
+  caption: "orchestral arrangement with dramatic strings",
+  lyrics: "[Instrumental]",
+  taskType: "cover-nofsq",
+  sourceAudio: "/path/to/source.wav",
+  referenceAudio: "/path/to/reference.wav",
+  audioCoverStrength: 1,
+  coverNoiseStrength: 0.75,
+});
+```
+
+Both inputs accept either form:
+
+- A **file path** (string). The SDK decodes `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` files server-side to 48 kHz float PCM (down-mixed to mono and duplicated onto both channels). Any other extension is read as raw interleaved stereo 48 kHz Float32 LE PCM, matching `ffmpeg -f f32le -ar 48000 -ac 2`.
+- A **`Buffer` / `Uint8Array`** holding raw interleaved stereo 48 kHz Float32 LE PCM. The `AUDIOGEN_INPUT_SAMPLE_RATE` (48000) and `AUDIOGEN_INPUT_CHANNELS` (2) constants describe that layout.
+
+Inputs are capped at `AUDIOGEN_INPUT_MAX_SECONDS` (600 s) per clip. Malformed PCM — a byte length that is not whole stereo frames, non-finite samples, or a clip over the limit — fails the run with `INVALID_AUDIO_INPUT` before the engine is invoked; a missing file fails with `AUDIO_FILE_NOT_FOUND`.
+
+`sourceAudio` is required for cover tasks and is validated on the client before the request is sent. `audioCoverStrength` (0..1) is the fraction of DiT steps that keep the source context; the engine does not implement partial source context yet, so for `cover-nofsq` the SDK rejects any value other than `1` (omit it or pass `1`). `coverNoiseStrength` (0..1) blends the initial noise toward the source latent (`0` = pure noise, `1` ≈ source). The FSQ-roundtrip `cover` task is reserved by the engine but not implemented, so the SDK offers only `text2music` (default) and `cover-nofsq` (see `AUDIOGEN_TASK_TYPES`).
+
 ## Cancellation
 
 The request ID is available before generation starts, so a stop button can cancel exactly that run:
@@ -185,6 +235,15 @@ The generated Python client exposes the contract-level `audio_gen_stream()` meth
 </WrapCode>
 </Tab>
 </Tabs>
+
+The cover example takes an existing recording (any FFmpeg-decodable file), an optional timbre reference, and a new caption, and writes the `cover-nofsq` result as WAV:
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-cover.ts title="generate-cover.ts" lineNumbers
+```
+
+</WrapCode>
 
 <Callout type="success">
   **Tip:** see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python

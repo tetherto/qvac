@@ -52,7 +52,7 @@ async function main() {
 
   const model = new TranslationNmtcpp({
     files: { model: modelPath },
-    params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+    params: { srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
     config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
     logger
   })

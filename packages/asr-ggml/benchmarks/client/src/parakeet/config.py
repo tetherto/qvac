@@ -23,6 +23,10 @@ class Language(str, Enum):
     SPANISH = "spanish"
     ITALIAN = "italian"
     PORTUGUESE = "portuguese"
+    HINDI = "hindi"
+    GUJARATI = "gujarati"
+    KANNADA = "kannada"
+    TAMIL = "tamil"
     MANDARIN_CHINESE = "mandarin_chinese"
     RUSSIAN = "russian"
     JAPANESE = "japanese"
@@ -34,6 +38,7 @@ class ModelType(str, Enum):
     CTC = "ctc"
     EOU = "eou"
     SORTFORMER = "sortformer"
+    INDIC_CONFORMER = "indic-conformer"
 
 
 class ServerConfig(BaseModel):
@@ -69,7 +74,8 @@ class ModelConfig(BaseModel):
     path: str = Field("./models/parakeet-tdt-0.6b-v3.f16.gguf", description="Path to the .gguf model file")
     sample_rate: int = Field(16000, description="Audio sample rate")
     audio_format: str = Field("s16le", description="Audio format (s16le or f32le)")
-    model_type: ModelType = Field(ModelType.TDT, description="Model type (tdt, ctc, eou, sortformer)")
+    model_type: ModelType = Field(ModelType.TDT, description="Parakeet model type")
+    language: Optional[str] = Field(None, description="Model language identifier")
     max_threads: int = Field(4, gt=0, description="Max CPU threads for inference")
     use_gpu: bool = Field(False, description="Enable GPU acceleration")
     caption_enabled: bool = Field(False, description="Enable caption/subtitle mode")
@@ -78,7 +84,7 @@ class ModelConfig(BaseModel):
     streaming_chunk_size: int = Field(64000, description="Chunk size in bytes for streaming mode")
 
     @model_validator(mode='after')
-    def validate_paths(self):
+    def validate_model_config(self):
         abs_path = os.path.abspath(self.path)
         if not os.path.exists(self.path):
             raise ValueError(
@@ -86,6 +92,8 @@ class ModelConfig(BaseModel):
                 f"Absolute path: {abs_path}\n"
                 f"Please ensure the model file exists before running the benchmark."
             )
+        if self.model_type == ModelType.INDIC_CONFORMER and not self.language:
+            raise ValueError("Indic Conformer requires a model language identifier")
         return self
 
 

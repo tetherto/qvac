@@ -247,6 +247,7 @@ buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
   eopts.n_threads = cfg.maxThreads > 0 ? cfg.maxThreads : 0;
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
   eopts.verbose = false;
+  eopts.language = cfg.language;
   // Compose the backends-scan dir from the host prebuilds root plus the
   // cmake-bare per-target subdir (BACKENDS_SUBDIR). Empty -> ggml's default
   // compile-time search path.
@@ -395,17 +396,23 @@ std::filesystem::path ParakeetModel::resolveGgufPath() {
 void ParakeetModel::detectModelType() {
   if (!engine_)
     return;
-  // The engine reports `parakeet.model.type` from GGUF metadata, so callers
-  // don't pass modelType; keep cfg_.modelType only if it's unrecognised.
-  const std::string detected = engine_->model_type();
+  cfg_.modelType =
+      modelTypeFromMetadata(engine_->model_type(), cfg_.modelType);
+}
+
+ModelType ParakeetModel::modelTypeFromMetadata(
+    const std::string& detected, ModelType fallback) {
   if (detected == "ctc")
-    cfg_.modelType = ModelType::CTC;
-  else if (detected == "tdt")
-    cfg_.modelType = ModelType::TDT;
-  else if (detected == "eou")
-    cfg_.modelType = ModelType::EOU;
-  else if (detected == "sortformer")
-    cfg_.modelType = ModelType::SORTFORMER;
+    return ModelType::CTC;
+  if (detected == "tdt")
+    return ModelType::TDT;
+  if (detected == "eou")
+    return ModelType::EOU;
+  if (detected == "sortformer")
+    return ModelType::SORTFORMER;
+  if (detected == "rnnt")
+    return ModelType::RNNT;
+  return fallback;
 }
 
 void ParakeetModel::captureBackend() {

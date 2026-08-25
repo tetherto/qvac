@@ -63,13 +63,23 @@ Third-Party Model Licenses
 
   abot-world-0-5b-lf-dit-q8_0
     https://huggingface.co/acvlab/ABot-World-0-5B-LF
+  audio8-codec-decoder-f16
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  audio8-codec-encoder-f16
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
+  audio8-lm-f16
+    https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b
   bci-embedder
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
+  cosyvoice3-campplus-f32
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-flow-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-hift-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-llm-q8_0
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  cosyvoice3-s3tok-f16
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   craft_mlt_25k
     https://www.jaided.ai/easyocr/modelhub/
@@ -179,6 +189,8 @@ Third-Party Model Licenses
     https://huggingface.co/unsloth/Qwen3.6-27B-GGUF
   Qwen3.6-35B-A3B-GGUF
     https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF
+  Qwen3.8-27B-GGUF
+    https://huggingface.co/unsloth/Qwen3.8-27B-GGUF
   ru-base-ggml-model-f16
     https://huggingface.co/CheeLi03/whisper-base-rus-8
   ru-tiny-ggml-model-f16
@@ -199,6 +211,10 @@ Third-Party Model Licenses
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
   unlimited-ocr-gguf
     https://huggingface.co/vimalnakrani/unlimited-ocr-gguf
+  VisionPsy-Nano-460M-Flash-GGUFs
+    https://huggingface.co/qvac/VisionPsy-Nano-460M-Flash-GGUFs
+  VisionPsy-Nano-460M-GGUFs
+    https://huggingface.co/qvac/VisionPsy-Nano-460M-GGUFs
   voice-en
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   voice-zh-2
@@ -348,6 +364,12 @@ Third-Party Model Licenses
     https://huggingface.co/ChristianAzinn/gte-large-gguf
   gte-large-gguf
     https://huggingface.co/ChristianAzinn/gte-large-gguf
+  indic-conformer-ctc.f16
+    https://huggingface.co/ai4bharat/indic-conformer
+  indic-conformer-ctc.q4_0
+    https://huggingface.co/ai4bharat/indic-conformer
+  indic-conformer-ctc.q8_0
+    https://huggingface.co/ai4bharat/indic-conformer
   lavasr-denoiser-f16
     https://huggingface.co/spaces/YatharthS
   lavasr-enhancer-f16

@@ -6,6 +6,10 @@ require('./integration-runtime.cjs')
 
 /* global runIntegrationModule */
 
+async function runAbotWorldTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/abot-world.test.js', options)
+}
+
 async function runApiBehaviorTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/api-behavior.test.js', options)
 }
@@ -66,6 +70,10 @@ async function runGenerateVideoWanTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/generate-video-wan.test.js', options)
 }
 
+async function runGenerateVideoWan22Test (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/generate-video-wan22.test.js', options)
+}
+
 async function runInputValidationTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/input-validation.test.js', options)
 }
@@ -83,6 +91,7 @@ async function runModelLoadingTest (options = {}) { // eslint-disable-line no-un
 }
 
 module.exports = {
+  runAbotWorldTest,
   runApiBehaviorTest,
   runEsrganBackendDeviceTest,
   runGenerateImageEsrganUpscaleTest,
@@ -98,6 +107,7 @@ module.exports = {
   runGenerateImageTest,
   runGenerateVideoLtxTest,
   runGenerateVideoWanTest,
+  runGenerateVideoWan22Test,
   runInputValidationTest,
   runLoraBridgeTest,
   runMainGpuBackendTest,

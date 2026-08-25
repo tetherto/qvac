@@ -25,6 +25,26 @@ export function detectShardedModel(filename: string): ShardPatternInfo {
   return { isSharded: false }
 }
 
+export function getFirstShardPath(modelPath: string) {
+  const lastSeparator = Math.max(modelPath.lastIndexOf('/'), modelPath.lastIndexOf('\\'))
+  const directory = lastSeparator >= 0 ? modelPath.slice(0, lastSeparator + 1) : ''
+  const filename = lastSeparator >= 0 ? modelPath.slice(lastSeparator + 1) : modelPath
+  const shardInfo = detectShardedModel(filename)
+
+  if (
+    !shardInfo.isSharded ||
+    !shardInfo.baseFilename ||
+    !shardInfo.totalShards ||
+    !shardInfo.extension
+  ) {
+    return modelPath
+  }
+
+  const totalShards = shardInfo.totalShards.toString().padStart(5, '0')
+
+  return `${directory}${shardInfo.baseFilename}-00001-of-${totalShards}${shardInfo.extension}`
+}
+
 /**
  * Generate list of shard filenames for a sharded model
  * Accepts any shard in the group

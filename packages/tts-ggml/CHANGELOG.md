@@ -7,16 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-08-20
+
+### Changed
+
+- Move `@qvac/registry-client` from a runtime dependency to a `^0.6.1`
+  devDependency. Consumer installs no longer pull it (or a second `hyperdb`)
+  through this addon; `download-models:registry` still works in a full
+  package checkout.
+
+## [0.7.4] - 2026-08-19
+
+### Changed
+
+- Keep `@qvac/asr-ggml` as a development dependency for desktop WER checks
+  instead of shipping `@qvac/transcription-whispercpp` at runtime. Consumer
+  installs no longer pull an unused ASR native addon.
+
+## [0.7.3] - 2026-08-18
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-18, which brings in ggml-speech
+  2026-08-18. The update prevents unsupported wide OpenCL GEMV workgroups on
+  Adreno devices and hardens padded DIAG_MASK_INF launches and diagnostics.
+
+### Fixed
+
+- Declare the runtime dependencies used by published examples, integration tests,
+  mobile test support, and test utilities.
+
+## [0.7.2] - 2026-08-18
+
+### Fixed
+
+- **Consumer installs dedupe hyperdb again.** `@qvac/registry-client` (a
+  runtime dependency since 0.7.0, powering `download-models:registry`) is
+  bumped from `^0.4.0` to `^0.6.1` so its transitive `hyperdb` rides the
+  v6 line shared by the rest of the @qvac ecosystem. 0.7.0/0.7.1 installs
+  resolved two hyperdb copies (4.x + 6.x), violating the SDK pod check
+  single-copy invariant for shared P2P packages. The `QVACRegistryClient`
+  surface the download script uses is unchanged.
+
 ### Added
 
-<<<<<<< HEAD
+- **CosyVoice3 zero-shot / cross-lingual voice cloning.** Setting
+  `referenceAudio` now clones that recording's voice natively: the engine
+  tokenizes it (speech_tokenizer_v3), extracts the CAM++ speaker embedding
+  and prompt mel at `load()`, and replaces the baked default voice.
+  `promptText` selects the mode per the upstream frontends — the verbatim
+  transcript engages zero-shot, omitting it engages cross-lingual
+  (timbre-only conditioning for a different target language). Requires the
+  cloning add-on GGUFs (`cosyvoice3-s3tok-*.gguf` ~275 MB q8_0 / ~497 MB
+  f16, `cosyvoice3-campplus-*.gguf` ~28 MB), auto-discovered under
+  `files.cosyvoiceModelDir` or passed as `files.cosyvoiceS3tokModel` /
+  `files.cosyvoiceCampplusModel`; they are needed only when cloning. Every
+  bake failure (missing GGUFs, unreadable / non-finite audio, duration
+  outside 0.5-30 s) rejects the load — there is no silent fallback to the
+  baked voice. `instruct` composes with a cloned voice. Requires
+  `speech-cpp` >= 2026-08-14.
+
+## [0.7.1] - 2026-08-17
+
+### Added
+
+- **Audio8 OpenCL GPU offload (Android / Adreno).** `useGPU: true` /
+  `nGpuLayers > 0` now engages the OpenCL backend for Audio8 on Qualcomm Adreno
+  devices, which previously declined to CPU. Requires `speech-cpp` >=
+  2026-08-17. On an Adreno 740 codec synthesis is 4.7-5.1x faster than CPU; the
+  autoregressive loop is bound by host dispatch cost rather than by the GPU, so
+  the end-to-end figure ranges 1.1x-2.3x depending on CPU core placement. At
+  f32 the GPU reproduces the CPU code trajectory exactly, and the quantised
+  tiers score the same WER on either backend.
+
+## [0.7.0] - 2026-08-14
+
+### Added
+
+- **CosyVoice3 Vulkan GPU offload (Linux / Windows).** `useGPU: true` /
+  `nGpuLayers > 0` now engages tts-cpp's Vulkan backend for CosyVoice3 on
+  desktop hosts (previously a policy CPU fallback). Requires `tts-cpp` >=
+  2026-08-12#1, which admits desktop Vulkan to the engine's validated-backend
+  requirement with per-stage GPU parity gates (greedy LM trajectories are
+  bit-identical to CPU on Vulkan, including q8_0 weights). Android keeps the
+  Metal-or-OpenCL requirement, so Mali / Xclipse devices still decline to CPU.
+- **CosyVoice3 Metal GPU offload (macOS / iOS).** `useGPU: true` /
+  `nGpuLayers > 0` now engages tts-cpp's Metal backend for CosyVoice3 on Apple
+  hosts (previously Android OpenCL/Adreno only; Metal hosts fell back to CPU).
+  Requires `tts-cpp` >= 2026-08-12, which widens the engine's validated-backend
+  allowlist to Metal + OpenCL with per-stage GPU parity gates.
 - **Choosing a model guide.** README documents which specific GGUF / CosyVoice3
   directory to pick per use case (edge RTF, voice cloning, Indic, Chinese
   dialects, description-conditioned English), with a capability matrix and
   explicit guidance that Supertonic v1/v2 are not recommended for new
   integrations in favour of Supertonic 3.
-
-=======
 - **LavaSR enhancer and denoiser support for Parler.** The LavaSR post-processing
   stages were previously rejected for the Parler engine; supplying
   `files.lavasrEnhancer` (or `enhancer.enhancerPath`) now bandwidth-extends
@@ -32,20 +116,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Chatterbox uses, so streamed chunks are enhanced seam-free at the cost of
   ~0.34 s of look-ahead latency. The denoiser stays batch-only and is rejected
   with streaming, as it is for Chatterbox.
->>>>>>> main
 - **CosyVoice3 engine.** Adds the Fun-CosyVoice3-0.5B native C++/ggml TTS engine
   to `@qvac/tts-ggml`: Qwen2.5 LM → DiT conditional-flow-matching → CausalHiFT
-  vocoder (24 kHz), on CPU. Instruct2 control (dialect / emotion / speed /
-  volume / style) via the `instruct` option.
+  vocoder (24 kHz), on CPU with opt-in Android OpenCL/Adreno GPU offload.
+  Dialect / volume / style control via the `instruct` option; emotion and
+  speaking rate use the cross-engine `emotion` / `pace` options below.
 - **LavaSR enhancer + denoiser for CosyVoice3.** `files.lavasrEnhancer` /
   `enhancer` now bandwidth-extend CosyVoice3's native 24 kHz output to 48 kHz,
   on both batch synthesis and native chunk streaming (seam-free). The
   `files.lavasrDenoiser` / `denoiser` stage runs before it on the batch path.
   `enhancerBackendDevice` / `enhancerBackendId` are reported in runtime stats,
   matching the other engines.
+- **Audio8 engine.** Fifth engine family under the same
+  `TTSGgml` surface: a DualAR model (24-layer semantic transformer +
+  4-layer acoustic head over 8 codebooks) with a DAC-style codec, native
+  44.1 kHz, and CPU execution by default. Detection via `engine: 'audio8'`,
+  `files.audio8Lm` / `files.audio8CodecDecoder`, or a `modelDir` containing
+  `audio8-lm[-<quant>].gguf` (q8_0 > f16 > q4_0 > f32 within a role). It
+  ships as three GGUFs rather than one because they have different
+  lifetimes: the language model and the codec's synthesis half are needed
+  for every synthesis, the codec's analysis half only to enrol a voice, so
+  a text-only deployment can omit `files.audio8CodecEncoder` entirely.
+- **Audio8 voice cloning, fully in-process.** `referenceAudio` plus
+  `referenceText` (what the recording says) enrol a speaker; the codec's
+  analysis half encodes the recording to codes inside the addon, with no
+  Python side-car and no pre-baked profile. The transcript is required, not
+  optional — the model conditions on it as the turn the reference answers,
+  so a missing one degrades the clone silently. Both fields are also
+  accepted **per call** (`run({ input, referenceAudio, referenceText })`,
+  `runStream`/`runStreaming` options), and the engine caches the codes for
+  the most recent reference, so repeating one across calls skips the
+  encoder.
+- **Audio8 desktop Vulkan support.** `config.useGPU: true` or
+  `nGpuLayers: 99` now offloads the Audio8 language model and codec graphs to
+  Vulkan on Linux and Windows. Text-only synthesis and voice cloning use the
+  same selected backend; unavailable or unsupported GPU backends fall back to
+  CPU and report that through `response.stats.gpuUnsupported`.
+- **Audio8 sampling/generation knobs.** `temperature`, `topK`, `topP`,
+  `maxFrames`, `greedy`, `seed`, `threads`, `config.outputSampleRate`
+  (engine-side resample from the native 44.1 kHz), all optional with the
+  engine's own defaults. Sampling is repetition-aware: a token repeated
+  from the recent window is re-drawn under a narrower nucleus.
+  `temperature`/`topK`/`topP`/`maxFrames` are now shared with Parler rather
+  than Parler-only, so the "parler-only" rejection for those four names
+  reads "parler/audio8-only". `response.stats.tokensPerSecond` counts codec
+  frames per second on this engine, not characters per second.
+
+### Changed
+
+- **Unified emotion and pace across engines.** `emotion` and `pace` now mean the
+  same thing on every engine that supports them, and are set the same way: the
+  constructor and `reload()` on all of them, plus per call on Parler and
+  CosyVoice3. The vocabulary is owned by tts-cpp and each engine declares the
+  subset it supports, so an unsupported value throws naming that engine's set
+  instead of being silently ignored. Parler keeps all 12 emotions and its
+  existing behaviour is unchanged; CosyVoice3 gains `emotion` (anger, happy,
+  neutral, sad), `pace`, and the per-call / `reload()` channels it did not have
+  before; Supertonic gains `pace` (mapped onto its duration multiplier, relative
+  to the model's own default, so `moderate` is a no-op). Supertonic conditions
+  its engine at construction, so its `pace` belongs in the constructor or
+  `reload({ pace })` and a per-call one throws instead of being dropped.
+
+  `reload()` is atomic: a rejected configuration leaves the instance exactly as
+  it was, so a later partial reload is never validated against values the
+  caller never accepted.
+
+  Breaking for CosyVoice3 callers: `instruct: { emotion }` and
+  `instruct: { speed }` are removed in favour of the top-level `emotion` /
+  `pace`, and the emotion value is spelled `anger`, not `angry`. `instruct`
+  keeps `dialect` / `volume` / `style` and the raw-string escape hatch.
+  CosyVoice3 is trained on one instruction per synthesis, so engaging two
+  controls now throws instead of silently resolving by precedence.
+
+  `speed` is unchanged: it remains the exact rate multiplier on Chatterbox and
+  Supertonic.
+
+  The vocabulary itself is owned by `tts-cpp` `2026-08-10#1`, already the
+  package's floor.
 
 ### Fixed
 
+- **Audio8 Vulkan synthesis crash with quantized models.** Requires
+  `speech-cpp` >= `2026-08-12#1`, whose TTS feature keeps Metal-specific F32
+  output precision scoped to Metal so Vulkan selects a valid matrix
+  multiplication pipeline.
+- **Public TypeScript and CommonJS API.** Audio chunks are now declared as
+  their runtime `Int16Array` type, enhancer backend fields are included in
+  `RuntimeStats`, invalid reload sample rates are rejected, and the package
+  root exposes `QvacErrorAddonTTSGgml` and `ERR_CODES` to named import
+  discovery.
+- **Published registry downloader.** The model download command now ships its
+  implementation and runtime registry client dependency.
+- **Audio8 native reload raced synthesis.** The reload path wrote the model's
+  configuration from the reload task while a running job read the reference
+  voice out of it, and swapped the configuration and the engine under separate
+  locks, so a job could pair one call's voice with the other call's engine.
+  Synthesis now takes the engine and a configuration snapshot together under
+  one lock and resolves the voice against that snapshot, and the reload
+  publishes both in a single critical section.
+- **Audio8 in-place native reload could mislabel the output rate.** The emitted
+  sample rate is baked into the output handlers when the instance is created,
+  so a `binding.reload()` that moved `outputSampleRate` left every later chunk
+  tagged with the old rate. Such a reload is now rejected with an error that
+  says to recreate the instance. `TTSGgml.reload()` is unaffected: it already
+  recreates the instance, handlers included.
+- **Audio8 `tokensPerSecond` changed unit under sentence streaming.** Batch
+  synthesis reports codec frames per second, but `runStream()` / `runStreaming()`
+  recomputed the figure from character count. Streamed frames are now
+  aggregated and reported the same way batch does, and `generatedFrames` is
+  carried through to `response.stats`.
+- **Audio8 reload wrote sampling knobs before they were validated.** A value
+  native would refuse (`NaN`, a negative `temperature`, `topP` outside
+  `(0, 1]`) was already on the JS object by the time native saw it, leaving the
+  two describing different samplers. The merged knobs are now checked with the
+  merged voice, before either is written.
 - **LavaSR enhancer on ARM Mali Vulkan.** Bumps `tts-cpp` to `2026-08-06`
   so GPU-enabled LavaSR enhancement uses the validated Vulkan path on supported
   Mali devices, including the Valhall-safe small-matrix workaround, while
@@ -62,9 +246,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   denoiser GGUF failed to load, the engine stayed loaded behind it, so the model
   still reported itself as loaded and a retry became a no-op that silently
   synthesized unenhanced audio. It now unloads before rethrowing.
+- **CosyVoice3 dropped `openclCacheDir`.** The option was accepted by the JS
+  layer but never forwarded to the native engine, so the Android OpenCL/Adreno
+  GPU path recompiled its kernels on every process instead of reusing the
+  persistent cache. It now reaches `EngineOptions::opencl_cache_dir`.
+- **CosyVoice3 `instruct` accepted malformed values.** A set-but-empty or null
+  control (`{ dialect: '' }`, `{ dialect: null }`), an explicit `null`, an array,
+  a non-object, or a non-plain object (e.g. a `Date`) silently degraded to
+  zero-shot synthesis. These now throw: only `undefined` counts as omitted, the
+  value must be a plain object, and controls are validated by own-property
+  presence rather than truthiness.
 
 ### Changed
 
+- Removed the ignored per-call `TTSRunInput.outputSampleRate`; configure output
+  resampling on the model instead. Added the stable
+  `@qvac/tts-ggml/text-stream-accumulator` helper subpath while retaining the
+  existing deep path.
 - **Parler streaming accepts `config.outputSampleRate` when the enhancer is
   active.** Parler natively streams at 44.1 kHz and rejected a different output
   rate while streaming, because the engine has no seam-free per-chunk resampler.
@@ -77,6 +275,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-native rate; it is now accepted while streaming when the LavaSR enhancer
   is active, because the enhancer resamples inside its overlap-reprocess window
   without introducing chunk seams.
+- `tts-cpp` pin `2026-08-06` → `2026-08-07#1`, which ships the audio8 engine.
+  No existing engine changes shape. The `ggml-speech` floor moves from
+  `2026-08-04` to `2026-08-07` (Vulkan matmul src0 binding fix, OpenCL im2col
+  rewrite).
 
 ### Pull Requests
 
@@ -86,6 +288,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   test addon-cpp 1.3.3 across consumers
 - [#3692](https://github.com/tetherto/qvac/pull/3692) - consume the LavaSR ARM
   Mali Vulkan release
+- [#3723](https://github.com/tetherto/qvac/pull/3723) - add the Audio8 TTS
+  engine to @qvac/tts-ggml
 
 ## [0.6.2] - 2026-08-03
 

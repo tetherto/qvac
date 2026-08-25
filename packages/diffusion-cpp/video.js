@@ -328,6 +328,60 @@ class VideoStableDiffusion {
                 }
             }
         }
+        const hasReferenceConditioning = params.reference_images != null ||
+            params.reference_attention_strength != null ||
+            params.reference_downscale_factor != null;
+        if (hasReferenceConditioning && !isLtx) {
+            throw new Error('LTX IC-LoRA reference conditioning is only supported by LTX video models.');
+        }
+        if (params.reference_images != null && params.lora == null) {
+            throw new Error('reference_images requires params.lora.');
+        }
+        if (params.reference_images != null && mode === 'img2vid') {
+            throw new Error('LTX IC-LoRA reference conditioning cannot be combined with img2vid/init_image.');
+        }
+        if (params.reference_images != null && this._config.vae_decode_only === true) {
+            throw new Error('LTX IC-LoRA reference conditioning requires VAE encoder weights; vae_decode_only must be false.');
+        }
+        if (params.reference_images != null) {
+            if (!Array.isArray(params.reference_images) || params.reference_images.length === 0) {
+                throw new TypeError('reference_images must be a non-empty Array of Uint8Array');
+            }
+            if (params.reference_images.length !== 1) {
+                throw new Error('LTX Ingredients requires exactly one composite reference sheet. ' +
+                    'Combine multiple panels into one image before generation.');
+            }
+            for (let i = 0; i < params.reference_images.length; i += 1) {
+                let coerced;
+                try {
+                    coerced = coerceToUint8(`reference_images[${i}]`, params.reference_images[i]);
+                }
+                catch {
+                    throw new TypeError(`reference_images[${i}] must be a non-empty Uint8Array`);
+                }
+                if (coerced.length === 0) {
+                    throw new TypeError(`reference_images[${i}] must be a non-empty Uint8Array`);
+                }
+                params.reference_images[i] = coerced;
+            }
+        }
+        else if (hasReferenceConditioning) {
+            throw new Error('reference_attention_strength and reference_downscale_factor require reference_images.');
+        }
+        if (params.reference_attention_strength != null &&
+            (!Number.isFinite(params.reference_attention_strength) ||
+                params.reference_attention_strength < 0 ||
+                params.reference_attention_strength > 1)) {
+            throw new RangeError(`reference_attention_strength must be in [0, 1]. Got: ${params.reference_attention_strength}`);
+        }
+        if (params.reference_downscale_factor != null &&
+            (!Number.isFinite(params.reference_downscale_factor) || params.reference_downscale_factor !== 1)) {
+            throw new RangeError(`reference_downscale_factor must be exactly 1. Got: ${params.reference_downscale_factor}`);
+        }
+        if (params.vae_extra_tiling_args != null &&
+            typeof params.vae_extra_tiling_args !== 'string') {
+            throw new TypeError(`vae_extra_tiling_args must be a string. Got: ${typeof params.vae_extra_tiling_args}`);
+        }
         if (params.vace_strength != null &&
             (!Array.isArray(params.control_frames) || params.control_frames.length === 0)) {
             this.logger.warn('vace_strength was set but control_frames is not provided — ' +
@@ -347,9 +401,38 @@ class VideoStableDiffusion {
             }
         }
         if (params.lora != null) {
-            throw new Error('params.lora is not supported for video generation yet. ' +
-                'Video generation uses distinct diffusion and expert components ' +
-                'that do not yet support LoRA injection.');
+            if (!isLtx) {
+                throw new Error('params.lora is only supported for LTX video models.');
+            }
+            if (typeof params.lora !== 'string' || params.lora.length === 0) {
+                throw new TypeError('params.lora must be a non-empty string');
+            }
+            if (!path.isAbsolute(params.lora)) {
+                throw new TypeError(`params.lora must be an absolute path (got: ${params.lora})`);
+            }
+        }
+        if (params.lora_strength != null) {
+            if (params.lora == null) {
+                throw new Error('params.lora_strength requires params.lora.');
+            }
+            if (!Number.isFinite(params.lora_strength) ||
+                params.lora_strength < 0 ||
+                params.lora_strength > 10) {
+                throw new RangeError(`params.lora_strength must be in [0, 10]. Got: ${params.lora_strength}`);
+            }
+        }
+        if (params.stg_scale != null || params.stg_block != null) {
+            if (!isLtx) {
+                throw new Error('params.stg_scale and params.stg_block are only supported for LTX.');
+            }
+            if (params.stg_scale != null &&
+                (!Number.isFinite(params.stg_scale) || params.stg_scale < 0 || params.stg_scale > 10)) {
+                throw new RangeError(`params.stg_scale must be in [0, 10]. Got: ${params.stg_scale}`);
+            }
+            if (params.stg_block != null &&
+                (!Number.isInteger(params.stg_block) || params.stg_block < 0)) {
+                throw new RangeError(`params.stg_block must be a non-negative integer. Got: ${params.stg_block}`);
+            }
         }
         if (!this.addon) {
             throw new Error('Addon not initialized. Call load() first.');

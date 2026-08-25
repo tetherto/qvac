@@ -87,6 +87,15 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/acestep/AcestepModel.cpp
 )
 
+if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  target_sources(
+    ${audiogen-ggml}
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/minimax/MinimaxModel.cpp
+  )
+  target_compile_definitions(${audiogen-ggml} PRIVATE AUDIOGEN_HAS_MINIMAX=1)
+endif()
+
 target_include_directories(
   ${audiogen-ggml}
   PRIVATE

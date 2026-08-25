@@ -1,11 +1,6 @@
 #include "ContextSlider.hpp"
 
-#include "ToolsCompactController.hpp"
 #include "common/common.h"
-#include "inference-addon-cpp/Logger.hpp"
-#include "utils/LoggingMacros.hpp"
-
-using namespace qvac_lib_inference_addon_cpp::logger;
 
 namespace {
 class ContextSliderOps final : public IContextSliderOps {
@@ -34,8 +29,7 @@ public:
 ContextSlideOutcome trySlidePrefillImpl(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops,
-    llama_pos effectiveCtx) {
+    const IContextSliderOps& ops, llama_pos effectiveCtx) {
 
   // In batch mode the slot's usable window is the per-sequence cap, smaller
   // than the whole context; <= 0 means single-sequence, use the full context.
@@ -52,8 +46,7 @@ ContextSlideOutcome trySlidePrefillImpl(
     return {ContextSlideOutcome::Kind::NotNeeded, currentPos, 0};
   }
 
-  // Clamp discard so it never eats into tool tokens
-  llama_pos discard = tools.clampDiscard(nDiscarded, protectedPrefixPos);
+  const llama_pos discard = nDiscarded;
   llama_pos leftTokens = currentPos - protectedPrefixPos - discard;
 
   // Try partial slide
@@ -67,7 +60,6 @@ ContextSlideOutcome trySlidePrefillImpl(
     }
     ops.seqAdd(mem, seqId, protectedPrefixPos + discard, currentPos, -discard);
     llama_pos newNPast = currentPos - discard;
-    tools.onSlide(discard, protectedPrefixPos);
     return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
   }
 
@@ -83,8 +75,7 @@ const IContextSliderOps& defaultContextSliderOps() {
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
     llama_pos firstMsgTokens, llama_pos nTokensToAppend, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops,
-    llama_pos effectiveCtx) {
+    const IContextSliderOps& ops, llama_pos effectiveCtx) {
   return trySlidePrefillImpl(
       lctx,
       seqId,
@@ -92,7 +83,6 @@ ContextSlideOutcome trySlidePrefill(
       ContextUsage{firstMsgTokens, firstMsgTokens},
       ContextUsage{nTokensToAppend, nTokensToAppend},
       nDiscarded,
-      tools,
       ops,
       effectiveCtx);
 }
@@ -100,7 +90,7 @@ ContextSlideOutcome trySlidePrefill(
 ContextSlideOutcome trySlidePrefill(
     llama_context* lctx, llama_seq_id seqId, ContextUsage current,
     ContextUsage protectedPrefix, ContextUsage append, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops) {
+    const IContextSliderOps& ops) {
   constexpr llama_pos effectiveCtx = -1;
   return trySlidePrefillImpl(
       lctx,
@@ -109,7 +99,6 @@ ContextSlideOutcome trySlidePrefill(
       protectedPrefix,
       append,
       nDiscarded,
-      tools,
       ops,
       effectiveCtx);
 }
@@ -134,8 +123,8 @@ CompactRangeOutcome compactKvRange(
 ContextSlideOutcome trySlideGeneration(
     llama_context* lctx, llama_seq_id seqId, llama_pos nPast,
     llama_pos firstMsgTokens, llama_pos nDiscarded,
-    ToolsCompactController& tools, const IContextSliderOps& ops,
-    llama_pos effectiveCtx, llama_pos nCacheTokens) {
+    const IContextSliderOps& ops, llama_pos effectiveCtx,
+    llama_pos nCacheTokens) {
 
   const auto nCtx = effectiveCtx > 0 ? effectiveCtx : ops.nCtx(lctx);
   const llama_pos cacheTokens = nCacheTokens >= 0 ? nCacheTokens : nPast;
@@ -145,40 +134,7 @@ ContextSlideOutcome trySlideGeneration(
     return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
   }
 
-  // Clamp discard so it never eats into tool tokens
-  llama_pos discard = tools.clampDiscard(nDiscarded, firstMsgTokens);
-
-  // Handle degenerate boundary case
-  if (discard == 0 && tools.degenerateBoundary(firstMsgTokens)) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[ContextSlider] tools_compact anchor equals first message "
-            "boundary "
-            "(nPastBeforeTools=%d, firstMsgTokens=%d) while context is full; "
-            "resetting tool boundary before retry\n",
-            tools.anchor(),
-            firstMsgTokens));
-    tools.reset();
-    discard = tools.clampDiscard(nDiscarded, firstMsgTokens);
-  }
-
-  // If still cannot discard, return NotNeeded (caller handles overflow)
-  if (discard == 0) {
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "[ContextSlider] context is full but cannot discard tokens "
-            "(nPast=%d, nCtx=%d, nDiscarded=%d, firstMsgTokens=%d, "
-            "nPastBeforeTools=%d, toolsCompact=%s)\n",
-            nPast,
-            nCtx,
-            nDiscarded,
-            firstMsgTokens,
-            tools.anchor(),
-            tools.enabled() ? "true" : "false"));
-    return {ContextSlideOutcome::Kind::NotNeeded, nPast, 0};
-  }
+  const llama_pos discard = nDiscarded;
 
   // Perform the slide
   auto mem = ops.memory(lctx);
@@ -187,6 +143,5 @@ ContextSlideOutcome trySlideGeneration(
   }
   ops.seqAdd(mem, seqId, firstMsgTokens + discard, nPast, -discard);
   llama_pos newNPast = nPast - discard;
-  tools.onSlide(discard, firstMsgTokens);
   return {ContextSlideOutcome::Kind::Slid, newNPast, discard};
 }

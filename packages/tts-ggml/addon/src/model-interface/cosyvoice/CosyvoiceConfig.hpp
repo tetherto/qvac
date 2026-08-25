@@ -17,9 +17,11 @@ inline constexpr int kCosyvoiceNativeSampleRate = 24000;
  * Maps 1:1 into `tts_cpp::cosyvoice::EngineOptions` via
  * {@link CosyvoiceModel::load} and drives the real CosyVoice3 engine end to
  * end: Qwen2.5 LM (text -> speech tokens) -> DiT conditional-flow-matching
- * (tokens -> mel) -> CausalHiFT vocoder (mel -> 24 kHz PCM), on CPU. Some
- * fields below are plumbed for API stability but are not yet acted on by the
- * engine; those are flagged "reserved / not yet effective" individually.
+ * (tokens -> mel) -> CausalHiFT vocoder (mel -> 24 kHz PCM), on CPU or, when
+ * nGpuLayers/useGpu request it, tts-cpp's GPU path (Metal on Apple, Vulkan on
+ * desktop Linux/Windows, OpenCL/Adreno on Android). Some fields
+ * below are plumbed for API stability but are not yet acted on by the engine;
+ * those are flagged "reserved / not yet effective" individually.
  */
 struct CosyvoiceConfig {
   /**
@@ -33,14 +35,23 @@ struct CosyvoiceConfig {
   std::string llmModelPath;   // Qwen2.5 LM (text -> speech tokens)
   std::string flowModelPath;  // DiT conditional-flow-matching (tokens -> mel)
   std::string hiftModelPath;  // CausalHiFT vocoder (mel -> 24 kHz PCM)
-  std::string s3tokModelPath; // supervised S3 speech tokenizer (zero-shot)
-  std::string campplusModelPath; // CAM++ speaker encoder (zero-shot)
+  // Voice-cloning add-on GGUFs, needed only with referenceAudio (discovered
+  // under modelDir as cosyvoice3-s3tok*.gguf / cosyvoice3-campplus*.gguf
+  // when unset).
+  std::string s3tokModelPath;    // speech_tokenizer_v3 speech tokenizer
+  std::string campplusModelPath; // CAM++ speaker encoder
 
   /**
-   * Zero-shot voice cloning: reference wav + its transcript. RESERVED / not
-   * yet effective — the native path needs the S3 speech tokenizer + CAM++
-   * speaker encoder, which are not ported yet; the engine warns and falls back
-   * to the baked voice. Plumbed for API stability.
+   * Zero-shot / cross-lingual voice cloning. referenceAudio: recording of
+   * the target speaker (0.5-30 s hard limits; multichannel input is
+   * downmixed to mono); the engine tokenizes it, extracts the speaker
+   * embedding and prompt mel at load, replacing the baked voice, and THROWS
+   * when the cloning GGUFs are missing or the audio is unusable (no silent
+   * fallback). promptText selects the mode: the verbatim transcript =
+   * zero-shot, empty = cross-lingual (timbre only). Without referenceAudio,
+   * promptText still overrides the baked voice's transcript metadata. Each
+   * engine construction re-bakes whatever reference it is given, so a JS
+   * reload repeats the same bake rather than switching voices.
    */
   std::string referenceAudio;
   std::string promptText;
@@ -52,12 +63,19 @@ struct CosyvoiceConfig {
   std::string voice;
 
   /**
-   * Natural-language control instruction (CosyVoice3 instruct2): selects a
-   * Chinese dialect, emotion, speaking speed, volume, or style. The JS layer
-   * renders a structured `instruct` (e.g. { dialect: 'cantonese' }) into the
-   * trained instruction string ("请用广东话表达。") before it reaches here;
-   * the engine wraps it as "You are a helpful assistant. " + instruct +
-   * "<|endofprompt|>" and drops the LM prompt speech tokens. Empty = zero-shot.
+   * Canonical cross-engine conditioning (see tts-cpp/voice_controls.h). The
+   * engine maps these to the trained instructions; only "moderate" engages
+   * nothing, taking the zero-shot path.
+   */
+  std::string emotion;
+  std::string pace;
+
+  /**
+   * Raw instruction for the controls with no canonical vocabulary yet (dialect
+   * / volume / style). The JS layer renders a structured `instruct` (e.g.
+   * { dialect: 'cantonese' }) into the trained sentence ("请用广东话表达。")
+   * before it reaches here. CosyVoice3 takes one instruction per synthesis, so
+   * engaging this alongside emotion/pace throws.
    */
   std::string instruct;
 
@@ -71,13 +89,20 @@ struct CosyvoiceConfig {
   std::optional<int> seed;
   /** std::thread::hardware_concurrency() override. */
   std::optional<int> threads;
-  /** Layers to move to the GPU backend. Iteration 1 is CPU-only (ignored). */
+  /**
+   * Layers to move to the GPU backend. 0 keeps CPU; >0 selects tts-cpp's GPU
+   * path — Metal on Apple, Vulkan on desktop Linux/Windows, OpenCL/Adreno on
+   * Android — falling back to CPU where no allowlisted GPU device is usable.
+   * Forwarded to EngineOptions::n_gpu_layers.
+   */
   std::optional<int> nGpuLayers;
   /**
-   * Tri-state GPU intent (mirrors ChatterboxConfig::useGpu). Iteration 1 runs
-   * CPU-only, but the field is plumbed and conflict-checked so the option
-   * surface matches the sibling engines. Conflicts with nGpuLayers (true + 0,
-   * or false + !=0) are rejected by CosyvoiceModel::validateConfig.
+   * Tri-state GPU intent (mirrors ChatterboxConfig::useGpu). true offloads all
+   * layers, false pins CPU; the engine honors it on the Metal, desktop
+   * Vulkan, and OpenCL/Adreno GPU paths and falls back to CPU otherwise.
+   * Conflicts with
+   * nGpuLayers (true + 0, or false + !=0) are rejected by
+   * CosyvoiceModel::validateConfig.
    */
   std::optional<bool> useGpu;
   /**
@@ -106,11 +131,24 @@ struct CosyvoiceConfig {
   /** Smaller first chunk for low first-audio latency. 0 = same as
    * streamChunkTokens. */
   std::optional<int> streamFirstChunkTokens;
-  /** Left context carried into each chunk (bounds per-chunk cost). */
+  /**
+   * Left context intended to bound per-chunk cost. RESERVED / not yet effective
+   * — the pinned tts-cpp engine accepts but does not read
+   * stream_left_context_tokens; plumbed for API stability.
+   */
   std::optional<int> streamLeftContextTokens;
 
   /** Forwarded to `tts_cpp::cosyvoice::EngineOptions::backends_dir`. */
   std::string backendsDir;
+
+  /**
+   * Forwarded to `tts_cpp::cosyvoice::EngineOptions::opencl_cache_dir`: a
+   * writable directory for ggml-opencl's compiled program-binary cache. Only
+   * consumed on the Android OpenCL/Adreno GPU path (nGpuLayers/useGpu > 0);
+   * empty leaves ggml's default. Dropping it makes every process recompile the
+   * OpenCL kernels from scratch.
+   */
+  std::string openclCacheDir;
 
   // Bandwidth-extends the native 24 kHz output to 48 kHz, on both the batch
   // path and native chunk streaming. Empty disables enhancement.

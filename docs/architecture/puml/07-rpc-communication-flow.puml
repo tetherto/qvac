@@ -2,30 +2,44 @@
 title RPC Communication Flow
 
 participant "Client Application" as Client
-participant "RPC Layer" as RPC
-participant "Worker (Bare)" as Server
+participant "Host Adapter" as RPC
+participant "Worker Dispatch" as Dispatch
+participant "Worker Core (Bare)" as Server
 
 Client -> RPC : loadModel({ modelSrc, ... })
-RPC -> Server : JSON request
+RPC -> Dispatch : JSON request
+Dispatch -> Server : route loadModel
 
 note over Server : Download model (if needed)
-Server --> RPC : progress: { downloaded, total }
+Server --> Dispatch : progress: { downloaded, total }
+Dispatch --> RPC : progress frame
 RPC --> Client : progress: { downloaded, total }
 
 note over Server : Plugin.createModel -> load native addon
-Server -> RPC : response: { modelId }
+Server -> Dispatch : response: { modelId }
+Dispatch -> RPC : response frame
 RPC -> Client : response: { modelId }
 
 Client -> RPC : completion({ modelId, history })
-RPC -> Server : JSON request
+RPC -> Dispatch : JSON request
+Dispatch -> Server : route completionStream
 
 note over Server : Plugin handler (streaming)
 loop Token streaming
-    Server --> RPC : stream: token chunk
+    Server --> Dispatch : stream: token chunk
+    Dispatch --> RPC : stream frame
     RPC --> Client : stream: token chunk
 end
 
-Server -> RPC : final: { stats }
+Server -> Dispatch : final: { stats }
+Dispatch -> RPC : final frame
 RPC -> Client : final: { stats }
+
+note over RPC
+  Node/Bun/Electron: Unix socket or Windows named pipe
+  Expo: BareKit Worklet IPC
+  Python: loopback TCP
+  Bare direct: in-process adapter
+end note
 
 @enduml

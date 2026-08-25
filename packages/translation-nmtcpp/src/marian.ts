@@ -49,11 +49,20 @@ export interface TranslationBinding {
   destroyInstance(handle: object): void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved from package prebuilds.
-const binding = require("./binding") as TranslationBinding;
+// Resolved lazily so importing the package (e.g. for types, error codes, or
+// the model fetchers) never dlopens the native prebuild; the binding loads on
+// first native use instead.
+let bindingCache: TranslationBinding | null = null;
+function getBinding(): TranslationBinding {
+  if (bindingCache === null) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved from package prebuilds.
+    bindingCache = require("./binding") as TranslationBinding;
+  }
+  return bindingCache;
+}
 
 /** Extract a human-readable message from an unknown thrown value. */
-function errorMessage(err: unknown): string {
+export function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (err && typeof err === "object" && "message" in err) {
     const message = (err as { message?: unknown }).message;
@@ -79,12 +88,12 @@ export class TranslationInterface {
     outputCb: TranslationOutputCallback,
     transitionCb: TranslationLogger | null = null,
   ) {
-    this._handle = binding.createInstance(this, configurationParams, outputCb);
+    this._handle = getBinding().createInstance(this, configurationParams, outputCb);
 
     // Set up C++ → JS logger
     this._loggerInitialized = false;
     if (transitionCb && typeof transitionCb === "object") {
-      binding.setLogger((priority, message) => {
+      getBinding().setLogger((priority, message) => {
         // Must invoke logger methods on the logger object — QvacLogger relies
         // on `this` internally, so the call must not be detached.
         forwardTransitionLog(transitionCb, priority, message);
@@ -116,7 +125,7 @@ export class TranslationInterface {
   // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve rejected-promise (not sync-throw) semantics for callers.
   async loadWeights(weightsData: unknown) {
     try {
-      binding.loadWeights(this._handle as object, weightsData);
+      getBinding().loadWeights(this._handle as object, weightsData);
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
@@ -132,7 +141,7 @@ export class TranslationInterface {
   // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve rejected-promise (not sync-throw) semantics for callers.
   async activate() {
     try {
-      binding.activate(this._handle as object);
+      getBinding().activate(this._handle as object);
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_ACTIVATE,
@@ -147,7 +156,7 @@ export class TranslationInterface {
    */
   async cancel() {
     try {
-      await binding.cancel(this._handle as object);
+      await getBinding().cancel(this._handle as object);
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_CANCEL,
@@ -172,7 +181,7 @@ export class TranslationInterface {
       return "Unloaded";
     }
     try {
-      return binding.getActiveBackendName(this._handle);
+      return getBinding().getActiveBackendName(this._handle);
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_GET_BACKEND_NAME,
@@ -198,7 +207,7 @@ export class TranslationInterface {
       return "";
     }
     try {
-      return binding.getActiveBackendDescription(this._handle);
+      return getBinding().getActiveBackendDescription(this._handle);
     } catch {
       return "";
     }
@@ -214,7 +223,7 @@ export class TranslationInterface {
   // eslint-disable-next-line @typescript-eslint/require-await -- kept async to preserve rejected-promise (not sync-throw) semantics for callers.
   async runJob(data: TranslationJob) {
     try {
-      return binding.runJob(this._handle as object, data);
+      return getBinding().runJob(this._handle as object, data);
     } catch (err) {
       throw new QvacErrorAddonMarian({
         code: ERR_CODES.FAILED_TO_APPEND,
@@ -237,11 +246,11 @@ export class TranslationInterface {
     try {
       // Clean up logger before destroying instance
       if (this._loggerInitialized) {
-        binding.releaseLogger();
+        getBinding().releaseLogger();
         this._loggerInitialized = false;
       }
 
-      binding.destroyInstance(this._handle);
+      getBinding().destroyInstance(this._handle);
       this._handle = null;
     } catch (err) {
       throw new QvacErrorAddonMarian({

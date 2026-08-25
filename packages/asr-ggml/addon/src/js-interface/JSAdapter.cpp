@@ -170,6 +170,7 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readBool(jsObject, env, "captionEnabled", config.captionEnabled);
   readBool(jsObject, env, "timestampsEnabled", config.timestampsEnabled);
   readInt(jsObject, env, "seed", config.seed);
+  readString(jsObject, env, "language", config.language);
 
   // Streaming mode; unspecified fields keep ParakeetConfig's defaults.
   readBool(jsObject, env, "streaming", config.streaming);

@@ -18,6 +18,10 @@ struct MockDevice {
   std::string backend_name;
   std::string regName;
   enum ggml_backend_dev_type type;
+  /// Whether this device's backend registry exposes
+  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
+  /// SYCL does as of qvac-fabric v10069, so this defaults to false.
+  bool hasSplitBuffers = false;
 
   MockDevice(
       std::string&& desc, std::string&& backend,
@@ -25,6 +29,11 @@ struct MockDevice {
       : description(std::move(desc)), backend_name(std::move(backend)),
         regName(std::move(reg)), type(devType) {}
 };
+
+static MockDevice withSplitBuffers(MockDevice device) {
+  device.hasSplitBuffers = true;
+  return device;
+}
 
 static MockDevice createGPUDevice(std::string&& desc, std::string&& backend) {
   return {std::move(desc), std::move(backend), GGML_BACKEND_DEVICE_TYPE_GPU};
@@ -67,6 +76,7 @@ public:
         &MockBackendInterface::static_dev_description,
         &MockBackendInterface::static_dev_name,
         &MockBackendInterface::static_dev_type,
+        &MockBackendInterface::static_reg_get_proc_address,
         &MockBackendInterface::static_llamaLogCallback};
   }
 
@@ -133,6 +143,22 @@ private:
       return mock_dev->type;
     }
     return GGML_BACKEND_DEVICE_TYPE_CPU;
+  }
+
+  // `static_dev_backend_reg` hands back the device pointer as the registry
+  // handle, so recover the MockDevice from it to answer per-device.
+  static void*
+  static_reg_get_proc_address(ggml_backend_reg_t reg, const char* name) {
+    if (currentInstance == nullptr || reg == nullptr || name == nullptr) {
+      return nullptr;
+    }
+    MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
+    if (dev->hasSplitBuffers &&
+        std::string(name) == "ggml_backend_split_buffer_type") {
+      // Callers only test the address for presence, so any non-null will do.
+      return reinterpret_cast<void*>(dev);
+    }
+    return nullptr;
   }
 
   static void static_llamaLogCallback(
@@ -535,4 +561,75 @@ TEST_F(BackendSelectionTest, GpuCount_AccelAndCpuIgnored) {
   mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
   BackendInterface bckI = mockBackend.toBackendInterface();
   EXPECT_EQ(getEffectiveGpuDeviceCount(bckI), 1u);
+}
+
+// ---- gpuBackendSupportsRowSplit ----
+//
+// qvac-fabric builds a split buffer list for EVERY device it distributes over
+// and throws on the first one whose backend lacks split buffers, so the
+// predicate must require all of them rather than any one. `withSplitBuffers()`
+// marks a mock device as SYCL-like (registry exposes
+// `ggml_backend_split_buffer_type`); plain devices are Vulkan/Metal/OpenCL-like
+// and expose nothing, which is every backend shipped at qvac-fabric v10069.
+
+TEST_F(BackendSelectionTest, RowSplit_NoDevices_ReturnsFalse) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_OnlyCpu_ReturnsFalse) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_SingleGpuWithoutSplitBuffers_False) {
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_SingleGpuWithSplitBuffers_True) {
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_AllGpusWithSplitBuffers_True) {
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL1")));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
+}
+
+// The all-vs-any pin: one unsupported backend registered alongside a supported
+// one is enough for qvac-fabric to reject the load, so the answer is false.
+TEST_F(BackendSelectionTest, RowSplit_OneGpuMissingSplitBuffers_False) {
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+  mockBackend.addDevice(createGPUDevice("nvidia rtx 4090", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
+}
+
+// Same for an iGPU enumerated alongside a supported discrete GPU: it is still a
+// device qvac-fabric will try to build a split buffer for.
+TEST_F(BackendSelectionTest, RowSplit_IgpuMissingSplitBuffers_False) {
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+  mockBackend.addDevice(createIGPUDevice("intel uhd 770", VULKAN0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_FALSE(gpuBackendSupportsRowSplit(bckI));
+}
+
+TEST_F(BackendSelectionTest, RowSplit_AccelAndCpuIgnored_True) {
+  mockBackend.addDevice(
+      withSplitBuffers(createGPUDevice("intel arc a770", "SYCL0")));
+  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(gpuBackendSupportsRowSplit(bckI));
 }

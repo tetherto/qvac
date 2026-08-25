@@ -176,7 +176,7 @@ The library wraps `qvac-parakeet.cpp`'s engine in the QVAC addon framework so yo
 The ggml backend takes a single `.gguf` per checkpoint. The standard flow is "provision a Python venv, download `.nemo` from HuggingFace, convert to `.gguf` via the in-tree converter":
 
 ```bash
-npm run setup-models                       # venv + download + convert, all 5 models, q8_0
+npm run setup-models                       # venv + download + convert, all 6 models, q8_0
 npm run setup-models -- -t tdt             # just TDT
 npm run setup-models -- -t eou -q f16      # full-precision EOU
 ```
@@ -189,9 +189,9 @@ The three underlying scripts are also flag-driven if you want to run them separa
 
 ```
 setup-venv.sh      [--python <bin>] [--venv <path>] [--force] [--help]
-download-models.sh [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
+download-models.sh [--type ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all]
                    [--output <dir>] [--force] [--help]
-convert-nemo.sh    [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
+convert-nemo.sh    [--type ctc|tdt|unified|eou|sortformer|sortformer-streaming-v2.1|all]
                    [--quant f16|q8_0|q5_0|q4_0|f32]
                    [--python <bin>]
                    [--nemo-dir <dir>] [--output <dir>] [--force] [--help]
@@ -203,6 +203,7 @@ convert-nemo.sh    [--type ctc|tdt|eou|sortformer|sortformer-streaming-v2.1|all]
 |-------|-----------------------------------|
 | `ctc` | [`nvidia/parakeet-ctc-0.6b`](https://huggingface.co/nvidia/parakeet-ctc-0.6b) |
 | `tdt` | [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) |
+| `unified` | [`nvidia/parakeet-unified-en-0.6b`](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) |
 | `eou` | [`nvidia/parakeet_realtime_eou_120m-v1`](https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1) |
 | `sortformer` | [`nvidia/diar_sortformer_4spk-v1`](https://huggingface.co/nvidia/diar_sortformer_4spk-v1) |
 | `sortformer-streaming-v2.1` | [`nvidia/diar_streaming_sortformer_4spk-v2.1`](https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1) |

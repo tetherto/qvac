@@ -9,8 +9,35 @@
       "version>=": "1.4.4#3"
     },
     {
-      "name": "audiogen-cpp",
-      "version>=": "2026-08-04#1"
+      "name": "speech-cpp",
+      "version>=": "2026-08-24#2",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "metal"
+      ],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-24#2",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "vulkan",
+        "opencl"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-08-24#2",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "vulkan"
+      ],
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {
@@ -24,8 +51,13 @@
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [
         {
-          "name": "audiogen-cpp",
-          "features": ["vulkan"]
+          "name": "speech-cpp",
+          "version>=": "2026-08-24#2",
+          "default-features": false,
+          "features": [
+            "vulkan"
+          ],
+          "platform": "!(osx | ios)"
         }
       ]
     }

@@ -13,7 +13,11 @@ const { ensureModelPath } = require('./utils')
 // Built from cwd for the same reason as UNREACHABLE_BACKENDS_DIR below: it has
 // to clear the absoluteness check on every platform so these cases fail on the
 // argument they are actually probing.
-const UNREACHABLE_MODEL = path.join(process.cwd(), 'model-fit-validation-only', 'never-created.gguf')
+const UNREACHABLE_MODEL = path.join(
+  process.cwd(),
+  'model-fit-validation-only',
+  'never-created.gguf'
+)
 
 // Absolute on every platform, and never created. Built from cwd rather than
 // written as '/…' because win32 treats a rootless '/foo' as *relative* (no
@@ -26,7 +30,102 @@ test('fitParams rejects invalid config', async function (t) {
   await t.exception.all(() => fitParams(null), /config object is required/)
   await t.exception.all(() => fitParams({}), /modelPath must be a non-empty string/)
   await t.exception.all(() => fitParams({ modelPath: '' }), /modelPath must be a non-empty string/)
-  await t.exception.all(() => fitParams({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }), /nCtx must be a safe integer/)
+  await t.exception.all(
+    () => fitParams({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }),
+    /nCtx must be a safe integer/
+  )
+})
+
+test('native raw fitting validates load kind, params, and relationships', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+  // The raw load-config fitter lives on the private surface: `./binding.js` is
+  // a public export and deliberately carries `paramsFit` only.
+  const binding = require('../../binding-internal.js')
+
+  await t.exception.all(
+    () => binding.llamaConfigFit({ ...base, params: { device: 'cpu' } }),
+    /loadKind/
+  )
+  await t.exception.all(
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 1 }
+      }),
+    /values must be strings/
+  )
+  await t.exception.all(
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 'cpu', 'batch-size': '128', 'ubatch-size': '256' }
+      }),
+    /ubatch-size must not exceed batch-size/
+  )
+  await t.exception.all(
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 'cpu', 'ctx-size': '512' },
+        nCtxMin: 1024
+      }),
+    // The native message quotes its field names; the JS wrapper's does not, so
+    // the loose pattern used for `fitParams` never matched here.
+    /'nCtxMin' must not exceed concrete 'ctx-size'/
+  )
+})
+
+test('native raw fitting uses explicit completion and embedding load kinds', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const binding = require('../../binding-internal.js')
+  const completion = binding.llamaConfigFit({
+    loadKind: 'completion',
+    modelPath,
+    params: {
+      device: 'cpu',
+      'ctx-size': '512',
+      'batch-size': '128',
+      'ubatch-size': '64',
+      parallel: '1',
+      'gpu-layers': '0',
+      'no-mmap': 'true',
+      'swa-full': ''
+    },
+    nCtxMin: 512
+  })
+  const embedding = binding.llamaConfigFit({
+    loadKind: 'embedding',
+    modelPath,
+    params: {
+      device: 'cpu',
+      'ctx-size': '512',
+      'batch-size': '128',
+      'ubatch-size': '64'
+    },
+    nCtxMin: 512
+  })
+
+  t.not(completion.reason, 'unsupported-config', 'completion config reaches common_fit_params')
+  t.not(embedding.reason, 'unsupported-config', 'embedding config reaches common_fit_params')
+
+  // CPU placement is the zero-device list (`devices = {nullptr}`), not a pinned
+  // `n_gpu_layers` — the addons leave that field alone on their CPU path, and
+  // pinning it to 0 made `common_fit_params` abort when it needed to adjust it.
+  //
+  // These two are post-fit *outputs*, though, and the fitter rewrites what it
+  // needs while searching: on a host that registers a GPU but is handed a
+  // zero-device list it reports the host-memory plan as ngl 0 / main-gpu 0,
+  // where elsewhere it returns the values it was given. So assert what holds on
+  // every host — a CPU request never comes back offloading layers — and leave
+  // the exact input placement to `isCpuPlacement` in LlamaLoadConfig.test.cpp,
+  // which drives `normalizeLlamaLoadConfig` against a synthetic device list and
+  // therefore pins `devices == {nullptr}` and `main_gpu == -1` with no platform
+  // dependence at all.
+  t.is(completion.nGpuLayers, 0, 'an explicit gpu-layers is passed through')
+  t.ok(embedding.nGpuLayers <= 0, 'an embedding CPU config offloads no layers')
 })
 
 test('fitParams rejects values that would truncate or wrap in the binding', async function (t) {
@@ -34,7 +133,10 @@ test('fitParams rejects values that would truncate or wrap in the binding', asyn
 
   // Fractions truncate on the way to uint32_t/int32_t.
   await t.exception.all(() => fitParams({ ...base, nCtx: 4096.5 }), /nCtx must be a safe integer/)
-  await t.exception.all(() => fitParams({ ...base, marginMiB: 0.5 }), /marginMiB must be a safe integer/)
+  await t.exception.all(
+    () => fitParams({ ...base, marginMiB: 0.5 }),
+    /marginMiB must be a safe integer/
+  )
   await t.exception.all(() => fitParams({ ...base, nCtx: NaN }), /nCtx must be a safe integer/)
   await t.exception.all(() => fitParams({ ...base, nCtx: Infinity }), /nCtx must be a safe integer/)
 
@@ -45,11 +147,20 @@ test('fitParams rejects values that would truncate or wrap in the binding', asyn
 
   // Above the width of the target integer type.
   await t.exception.all(() => fitParams({ ...base, nCtx: 4294967296 }), /nCtx must be between/)
-  await t.exception.all(() => fitParams({ ...base, nGpuLayers: 2147483648 }), /nGpuLayers must be between/)
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 2147483648 }),
+    /nGpuLayers must be between/
+  )
 
   // Relationships the fitter would otherwise reinterpret or reject obscurely.
-  await t.exception.all(() => fitParams({ ...base, nBatch: 256, nUbatch: 512 }), /nUbatch must not exceed/)
-  await t.exception.all(() => fitParams({ ...base, nCtx: 512, nCtxMin: 1024 }), /nCtxMin must not exceed/)
+  await t.exception.all(
+    () => fitParams({ ...base, nBatch: 256, nUbatch: 512 }),
+    /nUbatch must not exceed/
+  )
+  await t.exception.all(
+    () => fitParams({ ...base, nCtx: 512, nCtxMin: 1024 }),
+    /nCtxMin must not exceed/
+  )
 })
 
 test('intended-load fields are bounded to their enum domains', async function (t) {
@@ -59,21 +170,87 @@ test('intended-load fields are bounded to their enum domains', async function (t
   // wrong bound: an out-of-range value would reach llama as a garbage enum.
   await t.exception.all(() => fitParams({ ...base, splitMode: 4 }), /splitMode must be between/)
   await t.exception.all(() => fitParams({ ...base, splitMode: -1 }), /splitMode must be between/)
-  await t.exception.all(() => fitParams({ ...base, flashAttnType: 2 }), /flashAttnType must be between/)
-  await t.exception.all(() => fitParams({ ...base, flashAttnType: -2 }), /flashAttnType must be between/)
-  await t.exception.all(() => fitParams({ ...base, mainGpu: -1 }), /mainGpu must be between/)
+  await t.exception.all(
+    () => fitParams({ ...base, flashAttnType: 2 }),
+    /flashAttnType must be between/
+  )
+  await t.exception.all(
+    () => fitParams({ ...base, flashAttnType: -2 }),
+    /flashAttnType must be between/
+  )
+  t.is(
+    fitParams({ ...base, nGpuLayers: 0, splitMode: 0, mainGpu: -1 }).status,
+    FIT_STATUS.ERROR,
+    'the CPU sentinel passes wrapper validation'
+  )
+  await t.exception.all(() => fitParams({ ...base, mainGpu: -2 }), /mainGpu must be between/)
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 1, splitMode: 0, mainGpu: -1 }),
+    /mainGpu -1 requires/
+  )
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 0, splitMode: 1, mainGpu: -1 }),
+    /mainGpu -1 requires/
+  )
   await t.exception.all(() => fitParams({ ...base, typeK: -1 }), /typeK must be between/)
   await t.exception.all(() => fitParams({ ...base, typeV: 1.5 }), /typeV must be a safe integer/)
 
   // The exact ggml_type ceiling lives natively, where it is compiled against
   // the same ggml.h rather than duplicated as a constant that drifts on a bump.
   const binding = require('../../binding.js')
-  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, typeK: 100000 }), /out of range/)
-  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 4 }), /out of range/)
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, typeK: 100000 }),
+    /out of range/
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 4 }),
+    /out of range/
+  )
+  t.is(
+    binding.paramsFit({
+      modelPath: UNREACHABLE_MODEL,
+      nGpuLayers: 0,
+      splitMode: 0,
+      mainGpu: -1
+    }).status,
+    FIT_STATUS.ERROR,
+    'the CPU sentinel passes native validation'
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, mainGpu: -2 }),
+    /out of range/
+  )
+  await t.exception.all(
+    () =>
+      binding.paramsFit({
+        modelPath: UNREACHABLE_MODEL,
+        nGpuLayers: 1,
+        splitMode: 0,
+        mainGpu: -1
+      }),
+    /mainGpu.*-1.*requires/
+  )
+})
+
+test('swaFull rejects non-boolean values at both public boundaries', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+  const binding = require('../../binding.js')
+
+  await t.exception.all(() => fitParams({ ...base, swaFull: 1 }), /swaFull must be a boolean/)
+  for (const swaFull of [null, 1, 'true', {}]) {
+    await t.exception.all(() => binding.paramsFit({ ...base, swaFull }), /swaFull.*boolean/)
+  }
+
+  t.is(binding.paramsFit(base).status, FIT_STATUS.ERROR, 'absent remains omitted')
+  t.is(
+    binding.paramsFit({ ...base, swaFull: undefined }).status,
+    FIT_STATUS.ERROR,
+    'undefined remains omitted'
+  )
 })
 
 test('a pinned intended-load field is returned unchanged', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // The upstream contract is that only default-valued parameters get rewritten,
   // so stating an intended load pins it: the projection has to fit *around* the
@@ -102,14 +279,39 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   t.is(res.mainGpu, 0, 'the pinned main GPU survives the fit')
 })
 
+test('an explicit CPU placement reaches the fitter and preserves its sentinel', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const res = fitParams({
+    modelPath,
+    nCtx: 512,
+    nGpuLayers: 0,
+    splitMode: 0,
+    mainGpu: -1
+  })
+
+  t.is(res.status, FIT_STATUS.SUCCESS, 'the CPU placement reaches common_fit_params')
+  t.is(res.nGpuLayers, 0, 'the CPU layer count survives the fit')
+  t.is(res.splitMode, 0, 'the CPU split mode survives the fit')
+  t.is(res.mainGpu, -1, 'the CPU sentinel survives the fit')
+})
+
 test('binding.paramsFit enforces the same constraints as the wrapper', async function (t) {
   // ./binding.js is a public export, so these checks cannot live only in the
   // JS wrapper — a caller can reach the native entry point directly.
   const binding = require('../../binding.js')
 
-  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, marginMiB: -1 }), /out of range/)
-  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nCtx: 4096.5 }), /must be an integer/)
-  await t.exception.all(() => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nBatch: 256, nUbatch: 512 }), /must not exceed/)
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, marginMiB: -1 }),
+    /out of range/
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nCtx: 4096.5 }),
+    /must be an integer/
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, nBatch: 256, nUbatch: 512 }),
+    /must not exceed/
+  )
 })
 
 test('FIT_STATUS enum matches common_params_fit_status', function (t) {
@@ -122,14 +324,17 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   // Use a caller-supplied model when provided (local runs against a real
   // model), otherwise download the tiny public GGUF so CI exercises the real
   // projection path on every platform.
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   t.ok(fs.existsSync(modelPath), `model exists at ${modelPath}`)
 
   // 2048 is what stories260K declares as its context length; asking for more is
   // now rejected outright, so this is the largest concrete request it accepts.
   const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
 
-  t.ok([FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status), 'status is a known code')
+  t.ok(
+    [FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status),
+    'status is a known code'
+  )
   t.is(typeof res.fits, 'boolean')
   t.is(typeof res.nGpuLayers, 'number')
   t.is(typeof res.nCtx, 'number')
@@ -140,11 +345,18 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   // about detection. nDevices is the real inventory: backends registered, the
   // fitter had a machine to measure, and the projection means something.
   t.ok(Array.isArray(res.buftOverrides), 'placement the projection depended on is reported')
-  t.ok(['fits', 'does-not-fit', 'model-unreadable', 'no-backend-device'].includes(res.reason), 'reason is a known code')
+  t.ok(
+    ['fits', 'does-not-fit', 'model-unreadable', 'no-backend-device'].includes(res.reason),
+    'reason is a known code'
+  )
   t.ok(res.nDevices >= 1, 'at least one backend device was actually registered')
   t.ok(res.nDevices <= res.maxDevices, 'detected devices within addressable bound')
   t.ok(res.nGpuDevices <= res.nDevices, 'accelerator count is a subset of all devices')
-  t.not(res.status, FIT_STATUS.ERROR, 'a registered device must not yield ERROR on a readable model')
+  t.not(
+    res.status,
+    FIT_STATUS.ERROR,
+    'a registered device must not yield ERROR on a readable model'
+  )
 
   if (res.fits) {
     t.ok(res.nCtx >= 512 && res.nCtx <= 2048, 'fitted context within [nCtxMin, requested]')
@@ -155,7 +367,7 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
 })
 
 test('the plan carries every parameter the fitter is free to rewrite', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
 
   // llama.h: "only parameters that have the same value as in
@@ -167,7 +379,17 @@ test('the plan carries every parameter the fitter is free to rewrite', async fun
   // have no way to tell. Assert presence field-by-field so that adding a new
   // mutable parameter without serialising it fails here rather than silently
   // shipping an unreproducible plan.
-  for (const field of ['nGpuLayers', 'nCtx', 'nBatch', 'nUbatch', 'splitMode', 'mainGpu', 'typeK', 'typeV', 'flashAttnType']) {
+  for (const field of [
+    'nGpuLayers',
+    'nCtx',
+    'nBatch',
+    'nUbatch',
+    'splitMode',
+    'mainGpu',
+    'typeK',
+    'typeV',
+    'flashAttnType'
+  ]) {
     t.is(typeof res[field], 'number', `${field} is serialised onto the plan`)
     t.ok(Number.isInteger(res[field]), `${field} is a concrete integer, not a placeholder`)
   }
@@ -190,7 +412,7 @@ test('the plan carries every parameter the fitter is free to rewrite', async fun
 })
 
 test('a context beyond what the model declares is rejected', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // This addon exposes no RoPE scaling knobs, so the only extension reachable
   // through it is the model's own — and a YaRN-extended model already reports
@@ -235,7 +457,7 @@ test('a context beyond what the model declares is rejected', async function (t) 
 })
 
 test('a context floor beyond what the model declares is rejected', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // The `nCtxMin <= nCtx` relationship check only applies when nCtx is
   // concrete. Left at 0 — the documented way to let the fitter choose — an
@@ -270,29 +492,32 @@ test('a context floor beyond what the model declares is rejected', async functio
 })
 
 test('a successful plan always carries a concrete context', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
-  // nCtx: 0 lets the fitter choose. llama encodes "use the trained context" as
-  // 0, so without resolution a SUCCESS could hand back nCtx: 0 — not a plan any
-  // caller can act on.
+  // Unresolved context metadata is not a usable load plan.
   const res = fitParams({ modelPath, nCtx: 0, marginMiB: 1024 })
 
   if (res.fits) {
     t.ok(res.nCtx > 0, 'a fitted plan never reports a context of zero')
   } else {
-    t.pass(`model did not fit on this runner (status ${res.status}); context resolution not exercised`)
+    t.pass(
+      `model did not fit on this runner (status ${res.status}); context resolution not exercised`
+    )
   }
 })
 
 test('a negative nGpuLayers is valid input meaning "all layers"', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // llama.h: "number of layers to store in VRAM, a negative value means all
   // layers". It is the llama default, and what upstream's own fit-params prints
   // back (`-ngl -1`), so it must not be rejected as out of range.
   const res = fitParams({ modelPath, nGpuLayers: -1, marginMiB: 1024 })
 
-  t.ok([FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status), 'accepted, not rejected')
+  t.ok(
+    [FIT_STATUS.SUCCESS, FIT_STATUS.FAILURE, FIT_STATUS.ERROR].includes(res.status),
+    'accepted, not rejected'
+  )
 
   // Deliberately not asserting the value comes back as -1. The fitter only
   // rewrites fields still holding their llama default, and -1 *is* the default
@@ -302,7 +527,7 @@ test('a negative nGpuLayers is valid input meaning "all layers"', async function
 })
 
 test('a non-default nGpuLayers is what actually pins the offload', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // 0 is non-default, so unlike -1 it is a real constraint the fitter honours.
   const res = fitParams({ modelPath, nGpuLayers: 0, marginMiB: 1024 })
@@ -311,7 +536,7 @@ test('a non-default nGpuLayers is what actually pins the offload', async functio
 })
 
 test('memory pressure moves the plan off the GPU rather than reporting FAILURE', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // `common_fit_params` fits to free *device* memory and, per common/fit.h,
   // "assumes system memory is unlimited". So an unmeetable device margin is satisfied by
@@ -344,7 +569,7 @@ test('memory pressure moves the plan off the GPU rather than reporting FAILURE',
 })
 
 test('pinned offload under pressure is the only way to get FAILURE', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // Unpinned, the fitter always has the host to fall back on, so it answers an
   // unmeetable margin with SUCCESS and zero offload (see the test above).
@@ -370,7 +595,7 @@ test('pinned offload under pressure is the only way to get FAILURE', async funct
 })
 
 test('a failed fit preserves the caller hard constraints', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   const res = fitParams({ modelPath, nGpuLayers: 5, nCtx: 1024, marginMiB: 10000000 })
 
@@ -387,7 +612,7 @@ test('a failed fit preserves the caller hard constraints', async function (t) {
 })
 
 test('an explicit context is not reduced even under memory pressure', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
   // Context is reduced iff it was passed as 0, so a concrete request must
   // survive pressure that would otherwise shrink it.
@@ -406,13 +631,16 @@ test('an explicit context is not reduced even under memory pressure', async func
 })
 
 test('fitParams reports the device inventory it fitted against', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
 
   // Guards the regression this addon shipped with: no backend registration at
   // all, which returns a confident verdict measured against an empty device
   // list. Zero devices is now ERROR, never SUCCESS.
-  t.ok(res.nDevices > 0 || res.status === FIT_STATUS.ERROR, 'zero devices can only ever report ERROR')
+  t.ok(
+    res.nDevices > 0 || res.status === FIT_STATUS.ERROR,
+    'zero devices can only ever report ERROR'
+  )
 
   // With no accelerator the fitter has nothing to decide, so n_gpu_layers stays
   // at the llama default rather than being rewritten to 0. Assert only that a
@@ -477,7 +705,7 @@ test('fitParams rejects a backendsDir it will not dlopen from', async function (
 // genuine "does not fit". Both rejections below are scoped to SPLIT_MODE_NONE,
 // the only mode under which llama reads the field.
 test('an unsatisfiable SPLIT_MODE_NONE placement is rejected', async function (t) {
-  const modelPath = process.env.FIT_MODEL_PATH || await ensureModelPath()
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const nGpuDevices = fitParams({ modelPath }).nGpuDevices
 
   if (nGpuDevices === 0) {
@@ -503,7 +731,9 @@ test('fitParams on a missing file reports ERROR (does not throw)', function (t) 
   // Absolute and non-existent. A rootless '/nonexistent/…' would be rejected as
   // relative on win32 before the file is ever opened, turning the outcome this
   // test asserts — ERROR, not a throw — into a throw on one platform only.
-  const res = fitParams({ modelPath: path.join(process.cwd(), 'nonexistent', 'does-not-exist.gguf') })
+  const res = fitParams({
+    modelPath: path.join(process.cwd(), 'nonexistent', 'does-not-exist.gguf')
+  })
   t.is(res.status, FIT_STATUS.ERROR, 'missing model yields ERROR status')
   t.is(res.fits, false)
 

@@ -187,7 +187,7 @@ jobs:
         uses: ./.github/actions/sanity-checks
         with:
           secret-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.PAT_TOKEN }}
+          pat-token: ${{ secrets.GITHUB_TOKEN }}
           run-integration: ${{ needs.context.outputs.run_verify == 'true' }}
           workdir: ${{ needs.context.outputs.workdir }}
 
@@ -208,29 +208,19 @@ jobs:
       ref: ${{ needs.context.outputs.ref }}
       workdir: ${{ needs.context.outputs.workdir }}
 
-  run-mobile-integration-tests:
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write # Allow commenting on PRs
-      id-token: write
-    needs:
-      - fork-approval
-      - context
-      - ci-router
-    if: needs.context.result == 'success' && needs.ci-router.outputs.run_mobile == 'true' 
-    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
-    secrets: inherit
-    with:
-      repository: ${{ needs.context.outputs.repository }}
-      ref: ${{ needs.context.outputs.ref }}
-      workdir: ${{ needs.context.outputs.workdir }}
+  # Mobile integration tests are no longer run on PRs. They run on demand via
+  # `integration-mobile-test-decoder-audio.yml` (workflow_dispatch), where the
+  # dispatcher must pick a specific device. The `run-mobile-addon-tests` label /
+  # ci-router `run_mobile` output are kept for a possible future revival but no
+  # longer trigger anything here. (Benchmark / weekend / on-merge mobile runs
+  # are unaffected — they call the mobile workflow directly.)
 
   merge-guard:
-    needs: [authorize, ci-router, sanity-checks, run-integration-tests, run-mobile-integration-tests]
+    # run-mobile-integration-tests removed — mobile is on-demand only now.
+    needs: [authorize, ci-router, sanity-checks, run-integration-tests]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
       build-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}
-      integration-tests-status: ${{ (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') && (needs.run-mobile-integration-tests.result == 'success' || needs.run-mobile-integration-tests.result == 'skipped') }}
+      integration-tests-status: ${{ needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped' }}

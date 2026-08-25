@@ -9,16 +9,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@qvac/transcription-whispercpp` (final release `0.12.1`) and
 `@qvac/transcription-parakeet` (final release `0.10.1`). Version numbering
 restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
-[`docs/WHISPER-CHANGELOG.md`](docs/WHISPER-CHANGELOG.md) and
-[`docs/PARAKEET-CHANGELOG.md`](docs/PARAKEET-CHANGELOG.md).
+[`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
+[`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
 ## [Unreleased]
+
+### Fixed
+
+- **Parakeet duplex streaming no longer drops the tail of the transcript when
+  the audio stream ends while the engine still has a buffered backlog.** 
+  `endStreaming()` joins the native worker only after it has drained all buffered
+  audio, but the drained segments are delivered to JS asynchronously (uv_async);
+  the parakeet driver then cleared the active job and emitted a synthetic `JobEnded`
+  *before* those queued `Output` events arrived, so `_addonOutputCallback`
+  discarded every one of them (`jobId === null`). Apps feeding audio faster
+  than realtime (e.g. the SDK's `transcribeStream` fed from a file, then `end()`)
+  lost most of the un-processed tail. `ParakeetStreamingProcessor` now queues a terminal
+  `RuntimeStats` object (real `audioDurationMs` / `totalSamples`) through the
+  **same FIFO output queue** as the drained segments after `finalize()` — exactly
+  how the whisper engine's `StreamingProcessor` already signals completion — and
+  the JS wrapper waits for that terminal event to flow through the normal
+  output-callback path, so every drained segment is delivered, in order, before
+  the job resolves. The synthetic `JobEnded` remains only as a fallback when no
+  native session existed (`cleaned: false`), and concurrent `endStreaming()`
+  calls join the in-flight teardown instead of falling through to it.
+
+## [0.3.3] - 2026-08-20
+
+### Changed
+
+- Bump `@qvac/registry-client` from `^0.4.0` to `^0.6.1` as a development
+  dependency so in-repo download and test tooling stays on the hyperdb v6 line.
+
+## [0.3.2] - 2026-08-18
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-18, which brings in ggml-speech
+  2026-08-18. The update prevents unsupported wide OpenCL GEMV workgroups on
+  Adreno devices and hardens padded DIAG_MASK_INF launches and diagnostics.
+
+### Fixed
+
+- Declare the Bare process and URL dependencies used by the published mobile
+  integration runtime.
+
+## [0.3.1] - 2026-08-17
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-17, which brings in
+  ggml-speech 2026-08-17. The engine sources for this package are unchanged; the
+  ggml update fixes an uncatchable abort in the OpenCL elementwise ops on a
+  non-contiguous input and speeds up pad, small-M matmul and argmax dispatches
+  on Adreno.
+
+### Added
+
+- Add NVIDIA `parakeet-unified-en-0.6b` RNN-T support for CPU and GPU
+  transcription, model staging, conversion, examples, and performance coverage.
+
+### Changed
+
+- Recognize the native engine's new `parakeet.model.type = "rnnt"` metadata as
+  standard Parakeet ASR.
+- Require `speech-cpp` 2026-08-17 for native Unified RNN-T inference.
+
+### Fixed
+
+- Publish a dependency-clean Whisper quickstart with positional audio, model,
+  and VAD model arguments.
+- Correct public documentation for Whisper VAD naming, engine-specific status
+  codes, the `speech-cpp` umbrella dependency, and backend device value types.
+
+## [0.3.0] - 2026-08-12
 
 ### Added
 
 - **Choosing a model guide.** README documents which specific Whisper `.bin` or
   Parakeet `.gguf` to pick per use case (default TDT, EOU, CTC, Sortformer
   offline vs streaming, Whisper turbo/small for language breadth / translation).
+- **`parakeetConfig.language`.** Optional multilingual CTC language id (e.g.
+  `"hi"`, `"ta"`) forwarded to `EngineOptions::language`. Required for Indic
+  Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on
+  monolingual CTC.
+
+### Changed
+
+- Update `parakeet-cpp` to `2026-08-10#2` for Indic Conformer CTC language
+  masking.
+
+### Pull Requests
+
+- [#3702](https://github.com/tetherto/qvac/pull/3702) - QVAC-23279 feat[asr-ggml]:
+  Indic Conformer CTC language support and fork registry pin
+- [#3674](https://github.com/tetherto/qvac/pull/3674) - QVAC-22512 doc: add speech
+  model choice guides for TTS and ASR
 
 ## [0.2.0] - 2026-08-06
 

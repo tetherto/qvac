@@ -41,6 +41,7 @@ from .vla import (  # noqa: F401
     vla_hparams,
     vla_pad_state,
     vla_preprocess_image,
+    vla_set_embodiment,
 )
 from .sessions import (  # noqa: F401
     DuplexSession,
@@ -116,6 +117,7 @@ _ERGONOMIC = [
     "vla_hparams",
     "vla_preprocess_image",
     "vla_pad_state",
+    "vla_set_embodiment",
     "transcribe_stream_session",
     "bci_transcribe_stream_session",
     "text_to_speech_stream_session",

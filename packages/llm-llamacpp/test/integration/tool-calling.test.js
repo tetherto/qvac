@@ -120,8 +120,53 @@ function clonePrompt() {
 function buildPrompt2(assistantOutput) {
   const prompt = clonePrompt()
   prompt.push({ role: 'assistant', content: assistantOutput })
-  prompt.push({ role: 'user', content: 'Search tv above $2000' })
+  prompt.push({ role: 'user', content: 'Search for TVs under $2000' })
   return prompt
+}
+
+function parseToolCalls(output, t) {
+  const toolCalls = []
+  const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/g
+  let match
+
+  while ((match = toolCallRegex.exec(output)) !== null) {
+    const raw = match[1].trim()
+    try {
+      toolCalls.push(JSON.parse(raw))
+    } catch (err) {
+      t.fail(`tool_call block contains malformed JSON: ${err.message}\n  raw: ${raw.slice(0, 200)}`)
+    }
+  }
+
+  return toolCalls
+}
+
+function assertDeclaredToolCalls(t, output, prompt, label) {
+  const declaredTools = new Map(
+    prompt.filter((item) => item.type === 'function').map((tool) => [tool.name, tool])
+  )
+  const toolCalls = parseToolCalls(output, t)
+
+  t.ok(toolCalls.length > 0, `${label}: output contains at least one valid tool_call block`)
+
+  for (const toolCall of toolCalls) {
+    const tool = declaredTools.get(toolCall.name)
+    t.ok(tool, `${label}: tool_call name "${toolCall.name}" is declared`)
+    if (!tool) continue
+
+    t.ok(
+      toolCall.arguments && typeof toolCall.arguments === 'object',
+      `${label}: tool_call "${toolCall.name}" has arguments`
+    )
+    if (!toolCall.arguments || typeof toolCall.arguments !== 'object') continue
+
+    for (const required of tool.parameters.required || []) {
+      t.ok(
+        required in toolCall.arguments,
+        `${label}: tool_call "${toolCall.name}" has required argument "${required}"`
+      )
+    }
+  }
 }
 
 async function collectResponse(response) {
@@ -207,9 +252,11 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
       // the loaded model so its TTFT/TPS reflect a warm follow-up
       // call. Keeping both rows in the report shows the cold-vs-warm
       // delta for the same model on the same device.
-      const firstRun = await runPrompt(model, clonePrompt())
+      const firstPrompt = clonePrompt()
+      const firstRun = await runPrompt(model, firstPrompt)
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
+      assertDeclaredToolCalls(t, firstRun.text, firstPrompt, `${label} prompt1`)
       const perfLabel1 = `[tools batch] [${modelVariant.id}] [${epTag}]`
       t.comment(
         recordPerformance(perfLabel1, firstRun.endTime - firstRun.startTime, {
@@ -221,9 +268,11 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
         })
       )
 
-      const secondRun = await runPrompt(model, buildPrompt2(firstRun.text))
+      const secondPrompt = buildPrompt2(firstRun.text)
+      const secondRun = await runPrompt(model, secondPrompt)
       t.ok(secondRun.text.length > 0, `${label} prompt2: generated text`)
       t.ok(secondRun.generatedTokens > 0, `${label} prompt2: generated tokens tracked`)
+      assertDeclaredToolCalls(t, secondRun.text, secondPrompt, `${label} prompt2`)
       const perfLabel2 = `[tools followup] [${modelVariant.id}] [${epTag}]`
       t.comment(
         recordPerformance(perfLabel2, secondRun.endTime - secondRun.startTime, {

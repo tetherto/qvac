@@ -1,4 +1,3 @@
-const TranscriptionWhispercpp = require('@qvac/transcription-whispercpp')
 const { Readable } = require('bare-stream')
 const path = require('bare-path')
 const os = require('bare-os')
@@ -13,29 +12,34 @@ function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
 }
 
+function loadAsrGgml() {
+  // Defer the native addon until WER actually runs. Requiring it at module
+  // load would dlopen asr-ggml during TTS tests that only import this helper.
+  return require('@qvac/asr-ggml')
+}
+
 async function loadWhisper(params = {}) {
   const defaultPath = path.join(getBaseDir(), 'models', 'whisper')
   const modelName = params.modelName || 'ggml-tiny.bin'
   const diskPath = params.diskPath || defaultPath
   console.log('>>> [WHISPER] Loading model from:', diskPath)
 
-  const constructorArgs = {
+  const ASRGgml = loadAsrGgml()
+  const whisperModel = new ASRGgml({
     files: {
       model: path.join(diskPath, modelName)
+    },
+    enableStats: true,
+    config: {
+      engine: 'whisper',
+      whisperConfig: {
+        audio_format: 's16le',
+        language: params.language || 'en',
+        temperature: 0.0
+      }
     }
-  }
-  const config = {
-    opts: { stats: true },
-    whisperConfig: {
-      audio_format: 's16le',
-      language: params.language || 'en',
-      translate: false,
-      temperature: 0.0
-    }
-  }
-
-  const whisperModel = new TranscriptionWhispercpp(constructorArgs, config)
-  await whisperModel._load()
+  })
+  await whisperModel.load()
   console.log('>>> [WHISPER] Model loaded')
 
   return whisperModel

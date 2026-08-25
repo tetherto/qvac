@@ -1,5 +1,5 @@
 import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
-import { BaseExecutor, type TestResult } from '@tetherto/qvac-test-suite'
+import { BaseExecutor, type TestResult } from '@qvac/qvac-test-suite'
 import {
   configRegistryDownloadSmoke,
   configRegistryDownloadRespectsCancel

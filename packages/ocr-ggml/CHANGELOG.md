@@ -4,6 +4,89 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.20.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Declared the runtime modules used by the published integration and mobile test files.
+
+## [0.19.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.18.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.17.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.16.0] - 2026-08-11
+
+### Added
+
+- `langList` is now optional for the language-agnostic DocTR pipeline
+  (`pipelineType: 'doctr'`). An explicitly provided list is still validated
+  and forwarded unchanged.
+- New runnable examples: `examples/doctr.js` and `examples/backend-device.js`.
+
+### Changed
+
+- Language validation is deferred to the native pipeline, which checks the
+  requested languages against its registry and the loaded recognizer's
+  character set — Latin-only lists such as `['fr']` with `latin_g2.gguf` now
+  load. Native language-validation failures still reject `load()` with
+  `ERR_CODES.UNSUPPORTED_LANGUAGE`, now carrying the native error message.
+- Other model-creation failures (e.g. a bad model file) reject `load()` with
+  `ERR_CODES.FAILED_TO_LOAD_WEIGHTS`, preserving the native error message.
+- Documentation refresh: `canvasSize`, `OCR_DOCTR_FUSED_CONV`, `backendIsGpu`
+  (all GPU backends incl. OpenCL), vendored model converter, registry-hosted
+  models via `@qvac/inference`, supported platforms, error codes, corrected
+  repository layout, and DocTR in the package description/keywords.
+
+### Fixed
+
+- `load()` no longer leaks the native instance and the C++ → JS logger bridge
+  when activation fails.
+- Removed unconditional native-loading console diagnostics from `binding.js`.
+- `bare-fs` and `bare-path` are now runtime dependencies (required at import
+  time by the published entrypoints).
+- Examples and the README read `RuntimeStats` from `response.stats` instead of
+  the `response.await()` result.
+
+### Pull Requests
+
+- [#3740](https://github.com/tetherto/qvac/pull/3740) - fix[api]: address
+  ocr-ggml package-review findings
+
+## [0.15.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0` (b10069 rebase; no
+  API change for this package).
+
+### Pull Requests
+
+- [#3621](https://github.com/tetherto/qvac/pull/3621) - Sync all addons with
+  fabric v10069.0.0
+
 ## [0.14.0] - 2026-08-06
 
 ### Changed

@@ -133,7 +133,8 @@ Implement here only for OpenCode-specific behavior:
 - Injecting `provider.qvac` into OpenCode's config.
 - Setting project `model` and `small_model` to `qvac/<model>` when `setDefaultModel` is true.
 - Spawning a real Node/Bun host process because OpenCode runs plugins inside a compiled binary whose `process.execPath` is not a JS runtime.
-- Returning quickly on `QVAC_LISTENING` so `opencode run` does not hit startup timeout while model download/preload continues behind the local proxy.
+- Returning quickly on the `QVAC_LISTENING` handshake so `opencode run` does not hit startup timeout while model download/preload continues behind the local proxy.
+- Validating that handshake and injecting the proxy's access token into OpenCode's provider options.
 - Proxy/shim behavior that only exists because OpenCode or `@ai-sdk/openai-compatible` currently disagrees with QVAC serve.
 - Plugin option parsing from defaults, project `qvac.json`, plugin tuple options, and `QVAC_*` env vars.
 
@@ -186,10 +187,15 @@ OpenCode-specific constraints shaped the plugin:
 
 - OpenCode plugins run inside OpenCode's compiled binary. `process.execPath` points at the editor/binary, not Node/Bun, so `@qvac/ai-sdk-provider` cannot spawn its managed supervisor directly from the plugin process.
 - The plugin therefore spawns a host child in a real Node/Bun runtime. The host imports `@qvac/ai-sdk-provider`, starts managed mode, and owns the local proxy.
-- The host prints `QVAC_LISTENING` as soon as the local proxy is listening, before model download/preload completes. The plugin can then inject the provider and return within OpenCode's startup budget.
+- The host emits `QVAC_LISTENING` as soon as the local proxy is listening, before model download/preload completes. The plugin can then inject the provider and return within OpenCode's startup budget (`listenTimeoutMs`), and requests that arrive early queue on the proxy's readiness promise.
 - The first user turn may be slow on a cold model because the proxy waits for the upstream serve/model to become ready.
+- The handshake travels on a dedicated pipe (fd 3), not the host's log stdout, so the credential it carries can never be mirrored into OpenCode's stderr or `QVAC_HOST_LOG`.
+- Two distinct credentials exist. The host mints a random proxy token before readiness and requires it (timing-safe) on every inbound proxy request, answering with serve's own `401 invalid_api_key` envelope otherwise; the real managed serve key never leaves the host and is substituted on the upstream hop, read per request from the provider's live getter so a recovered serve is not sent a stale key.
+- A missing, malformed, or late handshake fails startup closed: the plugin closes its readers, terminates the host, and injects no provider, so no unauthenticated gateway or orphaned serve is left behind.
 - Host logs are quiet by default so they do not corrupt OpenCode's TUI. `debug` / `QVAC_DEBUG=1` mirrors milestones and request traces to stderr.
 - Multiple OpenCode windows share a matching serve through provider managed-mode reuse.
+
+Known limitation: the host proxy is a raw `node:http` forwarder, so a failed upstream request surfaces as a proxy error and does not itself trigger `@qvac/ai-sdk-provider`'s recovery path, which only runs inside the provider's wrapped `fetch`. Reading the provider's live coordinates per request means recovery driven by another provider request is picked up immediately; making the proxy itself initiate recovery would require rebuilding it on `fetch`/`Response` streams.
 
 Current plugin shims:
 

@@ -11,9 +11,22 @@ import {
 
 import {
   TranslationInterface,
+  errorMessage,
   type TranslationConfigurationParams,
 } from "./marian";
 import { IndicProcessor } from "./third-party/indic-processor";
+
+/**
+ * Opus-MT-style target-language tokens prepended to the source text for
+ * specific Bergamot language pairs. The Firefox Translations en→pt model is a
+ * multi-variant export that expects an explicit `>>por<<` token selecting
+ * Portuguese output; without it the model can mistranslate or echo a variant
+ * token. The output side strips any echoed `>>xxx<<` token (see
+ * `_createStandardResponse`). Keyed by `"srcLang:dstLang"`.
+ */
+const BERGAMOT_TARGET_TOKEN_BY_PAIR: Record<string, string> = {
+  "en:pt": ">>por<<",
+};
 
 interface QvacResponseHandlers {
   cancelHandler: () => Promise<void>;
@@ -78,6 +91,7 @@ type TranslationNmtcppFiles = TranslationNmtcpp.TranslationNmtcppFiles;
 type TranslationNmtcppParams = TranslationNmtcpp.TranslationNmtcppParams;
 type TranslationNmtcppModelTypes = TranslationNmtcpp.TranslationNmtcppModelTypes;
 type InferenceClientState = TranslationNmtcpp.InferenceClientState;
+type TranslationResponse = TranslationNmtcpp.TranslationResponse;
 
 /**
  * Public instance surface of a translation model. Kept as an interface (public
@@ -90,15 +104,19 @@ interface TranslationNmtcpp {
    */
   getState(): InferenceClientState;
   /**
-   * Loads the model. If already loaded, unloads first.
+   * Loads the model. If already loaded, unloads first. Rejects after
+   * `destroy()` — destruction is permanent; create a new instance instead.
    */
   load(): Promise<void>;
   /**
-   * Runs inference on the given input. Serialized — only one job at a time.
+   * Runs inference on the given input. Serialized through completion — the
+   * next `run()`/`runBatch()` job starts only after the returned response
+   * has settled (finished, failed, or been cancelled).
    */
-  run(input: string): Promise<QvacResponse<string>>;
+  run(input: string): Promise<TranslationResponse>;
   /**
    * Translates multiple texts in a single batch for better performance.
+   * Serialized with `run()` through the same queue.
    */
   runBatch(texts: string[]): Promise<string[]>;
   /**
@@ -209,9 +227,16 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
   }
 
   /**
-   * Loads the model. If already loaded, unloads first.
+   * Loads the model. If already loaded, unloads first. Rejects after
+   * `destroy()` — destruction is permanent; create a new instance instead.
    */
   async load(): Promise<void> {
+    if (this.state.destroyed) {
+      throw new Error(
+        "Model has been destroyed. Create a new instance to load again.",
+      );
+    }
+
     if (this.state.configLoaded || this.state.weightsLoaded) {
       this.logger.info("Reload requested - unloading existing model first");
       await this.unload();
@@ -221,13 +246,25 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
   }
 
   /**
-   * Runs inference on the given input. Serialized — only one job at a time.
+   * Runs inference on the given input. Serialized through completion — the
+   * queue slot is held until the returned response settles, so a following
+   * `run()`/`runBatch()` cannot replace an in-flight job.
    * @param input - Text to translate
    */
-  async run(input: string): Promise<QvacResponse<string>> {
-    return this._run(() =>
-      this._runInternal(input),
-    ) as Promise<QvacResponse<string>>;
+  async run(input: string): Promise<TranslationResponse> {
+    return new Promise<TranslationResponse>((resolve, reject) => {
+      void this._run(async () => {
+        let response: TranslationResponse;
+        try {
+          response = await this._runInternal(input);
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(errorMessage(err)));
+          return;
+        }
+        resolve(response);
+        await (response.await() as Promise<unknown>).catch(() => {});
+      });
+    });
   }
 
   /**
@@ -326,6 +363,16 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
     }
   }
 
+  private _createAddon(
+    configurationParams: TranslationConfigurationParams,
+  ): TranslationInterface {
+    return new TranslationInterface(
+      configurationParams,
+      this._addonOutputCallback.bind(this),
+      this.logger,
+    );
+  }
+
   private async _load(): Promise<void> {
     const otherConfig: Record<string, unknown> = { ...this._config };
 
@@ -371,19 +418,31 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
 
     this._configureBergamotModel(configurationParams);
 
-    this.addon = new TranslationInterface(
-      configurationParams,
-      this._addonOutputCallback.bind(this),
-      this.logger,
-    );
-    await this.addon.activate();
+    this.addon = this._createAddon(configurationParams);
+    try {
+      await this.addon.activate();
+    } catch (err) {
+      // A failed activation must not leak the native instance or keep the
+      // global C++ → JS logger bridge registered; destroy() releases both.
+      try {
+        await this.addon.destroy();
+      } catch (cleanupErr) {
+        this.logger.warn(
+          "translation-nmtcpp: cleanup after failed activation failed: " +
+            errorMessage(cleanupErr),
+        );
+      }
+      this.addon = null;
+      throw err;
+    }
     this.state.configLoaded = true;
+    this.state.weightsLoaded = true;
   }
 
   /**
    * Handles IndicTrans model translation
    */
-  private async _runIndicTrans(input: string): Promise<QvacResponse<string>> {
+  private async _runIndicTrans(input: string): Promise<TranslationResponse> {
     const processor = new IndicProcessor();
     const [processedText] = processor.preprocessBatch(
       [input],
@@ -391,26 +450,34 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
       this._params.dstLang,
     );
 
-    await this.addon!.runJob({
-      type: "text",
-      input: processedText,
-    });
-
     const response = new QvacIndicTransResponse(processor, this._params.dstLang, {
       cancelHandler: () => this.addon!.cancel(),
     });
+    this._job.startWith(response);
 
-    return this._job.startWith(response) as QvacResponse<string>;
+    try {
+      await this.addon!.runJob({
+        type: "text",
+        input: processedText,
+      });
+    } catch (err) {
+      this._job.fail(err as Error);
+      throw err;
+    }
+
+    return response as unknown as TranslationResponse;
   }
 
   /**
-   * Prepares input text with language prefix if needed
+   * Prepends the Opus-MT-style target-language token when the active
+   * language pair requires one (see BERGAMOT_TARGET_TOKEN_BY_PAIR).
    */
   private _prepareInputText(input: string): string {
-    if (this._params.srcLang === "en" && this._params.dstLang === "pt") {
-      return `>>por<< ${input}`;
-    }
-    return input;
+    const targetToken =
+      BERGAMOT_TARGET_TOKEN_BY_PAIR[
+        `${this._params.srcLang}:${this._params.dstLang}`
+      ];
+    return targetToken ? `${targetToken} ${input}` : input;
   }
 
   /**
@@ -437,15 +504,25 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
    */
   private async _runStandardTranslation(
     input: string,
-  ): Promise<QvacResponse<string>> {
+  ): Promise<TranslationResponse> {
     const text = this._prepareInputText(input);
-    await this.addon!.runJob({ type: "text", input: text });
     const response = this._createStandardResponse();
+    this._job.startWith(response);
 
-    return this._job.startWith(response) as QvacResponse<string>;
+    try {
+      await this.addon!.runJob({ type: "text", input: text });
+    } catch (err) {
+      this._job.fail(err as Error);
+      throw err;
+    }
+
+    return response as unknown as TranslationResponse;
   }
 
-  private async _runInternal(input: string): Promise<QvacResponse<string>> {
+  private async _runInternal(input: string): Promise<TranslationResponse> {
+    if (!this.addon) {
+      throw new Error("Model not loaded. Call load() first.");
+    }
     if (this._modelType === TranslationNmtcpp.ModelTypes.IndicTrans) {
       return this._runIndicTrans(input);
     }
@@ -454,11 +531,17 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
 
   /**
    * Translates multiple texts in a single batch for better performance.
+   * Serialized with `run()` through the same exclusive queue — the batch
+   * holds the queue slot until its results are delivered.
    *
    * @param texts - Array of texts to translate
    * @returns Array of translated texts (same order as input)
    */
   async runBatch(texts: string[]): Promise<string[]> {
+    return this._run(() => this._runBatchInternal(texts)) as Promise<string[]>;
+  }
+
+  private async _runBatchInternal(texts: string[]): Promise<string[]> {
     if (!this.addon) {
       throw new Error("Model not loaded. Call load() first.");
     }
@@ -481,11 +564,9 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
       processedTexts = texts.map((text) => this._prepareInputText(text));
     }
 
-    await this.addon.runJob({ type: "sequences", input: processedTexts });
-
     const response = this._job.start();
 
-    return new Promise<string[]>((resolve, reject) => {
+    const resultPromise = new Promise<string[]>((resolve, reject) => {
       response
         .onFinish((result: string[][]) => {
           const [batchResults] = result;
@@ -505,6 +586,15 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
           reject(error);
         });
     });
+
+    try {
+      await this.addon.runJob({ type: "sequences", input: processedTexts });
+    } catch (err) {
+      // Fails the active response; resultPromise rejects via its onError.
+      this._job.fail(err as Error);
+    }
+
+    return resultPromise;
   }
 
   private _addonOutputCallback(
@@ -659,6 +749,16 @@ namespace TranslationNmtcpp {
     encodeTime?: number;
     TTFT?: number;
   }
+
+  /**
+   * Response returned by `run()`: the public `QvacResponse<string>` surface
+   * plus typed access to `stats`. `stats` is `{}` until the run finishes and
+   * is only populated when the model was constructed with `opts.stats = true`
+   * (narrow with e.g. `'TPS' in response.stats`).
+   */
+  export type TranslationResponse = Omit<QvacResponse<string>, never> & {
+    readonly stats: RuntimeStats | Record<string, never>;
+  };
 }
 
 export = TranslationNmtcpp;

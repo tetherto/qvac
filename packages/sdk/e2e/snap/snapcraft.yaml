@@ -15,6 +15,8 @@ apps:
     command: app/QVACSDKElectronE2E --no-sandbox
     extensions:
       - gnome
+    command-chain:
+      - bin/graphics-core22-wrapper
     # Keep runtime interfaces aligned with the production Workbench Snap so
     # Electron, the Bare worker, and native model backends run under the same
     # confinement contract.
@@ -22,6 +24,7 @@ apps:
       - audio-playback
       - audio-record
       - browser-support
+      - graphics-core22
       - hardware-observe
       - home
       - network
@@ -41,7 +44,34 @@ parts:
       - libasound2
       - libnss3
 
+  graphics-core22:
+    after:
+      - electron-app
+    source: https://github.com/canonical/gpu-snap.git
+    source-commit: d2b0948e6396ca0fe57da7748dadabbe06f6f7a4
+    plugin: dump
+    override-prime: |
+      craftctl default
+      ${CRAFT_PART_SRC}/bin/graphics-core22-cleanup mesa-core22 nvidia-core22
+      mkdir -p "${CRAFT_PRIME}/graphics"
+    prime:
+      - bin/graphics-core22-wrapper
+
 plugs:
+  graphics-core22:
+    interface: content
+    target: $SNAP/graphics
+    default-provider: mesa-core22
   shmem:
     interface: shared-memory
     private: true
+
+layout:
+  /usr/share/libdrm:
+    bind: $SNAP/graphics/libdrm
+  /usr/share/drirc.d:
+    symlink: $SNAP/graphics/drirc.d
+  /usr/share/X11/XErrorDB:
+    symlink: $SNAP/graphics/X11/XErrorDB
+  /usr/share/X11/locale:
+    symlink: $SNAP/graphics/X11/locale

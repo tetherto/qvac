@@ -178,53 +178,64 @@ export const whisperPlugin = definePlugin({
               request.requestId
             )
 
-        for await (const value of iterator) {
-          if (typeof value === 'object' && value !== null && 'type' in value) {
-            if (value.type === 'vad') {
-              yield {
-                type: 'transcribeStream' as const,
-                vad: {
-                  speaking: value.speaking,
-                  probability: value.probability
+        try {
+          let result = await iterator.next()
+          while (!result.done) {
+            const value = result.value
+            if (typeof value === 'object' && value !== null && 'type' in value) {
+              if (value.type === 'vad') {
+                yield {
+                  type: 'transcribeStream' as const,
+                  vad: {
+                    speaking: value.speaking,
+                    probability: value.probability
+                  }
                 }
-              }
-              continue
-            }
-            if (value.type === 'endOfTurn') {
-              // The shared ASR op normalizes addon engine sources to the
-              // stable engine-level Whisper/Parakeet variants.
-              if (value.source === 'parakeet') {
+                result = await iterator.next()
                 continue
               }
-              if (typeof value.silenceDurationMs !== 'number') {
+              if (value.type === 'endOfTurn') {
+                // The shared ASR op normalizes addon engine sources to the
+                // stable engine-level Whisper/Parakeet variants.
+                if (value.source !== 'parakeet' && typeof value.silenceDurationMs === 'number') {
+                  yield {
+                    type: 'transcribeStream' as const,
+                    endOfTurn: {
+                      source: 'whisper' as const,
+                      silenceDurationMs: value.silenceDurationMs
+                    }
+                  }
+                }
+                result = await iterator.next()
                 continue
               }
-              yield {
-                type: 'transcribeStream' as const,
-                endOfTurn: {
-                  source: 'whisper' as const,
-                  silenceDurationMs: value.silenceDurationMs
-                }
-              }
+              result = await iterator.next()
               continue
             }
-            continue
+            yield metadata
+              ? {
+                  type: 'transcribeStream' as const,
+                  segment: value as TranscribeSegment
+                }
+              : {
+                  type: 'transcribeStream' as const,
+                  text: value as string
+                }
+            result = await iterator.next()
           }
-          yield metadata
-            ? {
-                type: 'transcribeStream' as const,
-                segment: value as TranscribeSegment
-              }
-            : {
-                type: 'transcribeStream' as const,
-                text: value as string
-              }
-        }
 
-        yield {
-          type: 'transcribeStream' as const,
-          text: '',
-          done: true
+          const { modelExecutionMs, stats } = result.value
+          yield attachModelExecutionMs(
+            {
+              type: 'transcribeStream' as const,
+              text: '',
+              done: true,
+              ...(stats && { stats })
+            },
+            modelExecutionMs
+          )
+        } finally {
+          await iterator.return?.(undefined as never)
         }
       }
     })
