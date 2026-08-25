@@ -258,7 +258,10 @@ export async function measureTarget(
   const pack = tarStream.pack()
   const gzip = createGzip({ level: 9 })
   const compressedBytesPromise = countStreamBytes(gzip)
-  pack.pipe(gzip)
+  // tar-stream 3.2.1 ships first-party types that pipe into a streamx Writable.
+  // A node Gzip is compatible at runtime but cannot satisfy streamx's nominal
+  // private brand, so the destination type is taken from `pipe` itself.
+  pack.pipe(gzip as unknown as Parameters<Pack['pipe']>[0])
 
   try {
     for (const entry of entries) {
