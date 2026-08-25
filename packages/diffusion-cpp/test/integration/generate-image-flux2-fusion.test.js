@@ -151,11 +151,15 @@ safeTest(
       console.log(`\nGenerated in ${(genMs / 1000).toFixed(1)}s`)
 
       // ── Assertions ────────────────────────────────────────────────────────────
-      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      const diffusionTicks = progressTicks.filter((tick) => tick.total === STEPS)
+      t.ok(
+        diffusionTicks.length > 0,
+        `Received diffusion progress ticks (got ${diffusionTicks.length})`
+      )
       t.is(
-        progressTicks[progressTicks.length - 1].total,
+        diffusionTicks[diffusionTicks.length - 1].step,
         STEPS,
-        `Final progress tick reports ${STEPS} total steps`
+        `Diffusion progress reaches ${STEPS} total steps`
       )
 
       t.is(images.length, 1, 'Received exactly 1 image')

@@ -155,11 +155,15 @@ safeTest(
         })
         .await()
 
-      t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
+      const diffusionTicks = progressTicks.filter((tick) => tick.total === 2)
+      t.ok(
+        diffusionTicks.length > 0,
+        `Received diffusion progress ticks (got ${diffusionTicks.length})`
+      )
       t.is(
-        progressTicks[progressTicks.length - 1].total,
+        diffusionTicks[diffusionTicks.length - 1].step,
         2,
-        'Final progress tick reports 2 total steps'
+        'Diffusion progress reaches 2 total steps'
       )
 
       t.is(images.length, 1, 'Received exactly 1 image')
