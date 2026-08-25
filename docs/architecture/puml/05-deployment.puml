@@ -41,7 +41,7 @@ Deployment_Node(mobile, "Mobile", "React Native / Expo") {
 
 Deployment_Node(bare_direct, "Bare Runtime", "Direct execution, in-process") {
     Deployment_Node(bare_app, "Bare Application") {
-        Container(inference_bare, "@qvac/inference + Plugins", "TypeScript/C++", "In-process dispatch; no default addons")
+        Container(sdk_bare, "@qvac/sdk / @qvac/bare-sdk / @qvac/inference + Plugins", "TypeScript/C++", "In-process dispatch; bare-sdk and inference have no default addons")
     }
     ContainerDb(bare_store, "Local Storage", "Models cache + RAG DB")
 }
@@ -52,7 +52,7 @@ Rel(sdk_mobile, barekit, "Native Bridge", "in-process")
 Rel(subprocess_desktop, desktop_store, "Reads/Writes")
 Rel(py_worker, py_store, "Reads/Writes")
 Rel(barekit, mobile_store, "Reads/Writes")
-Rel(inference_bare, bare_store, "Reads/Writes")
+Rel(sdk_bare, bare_store, "Reads/Writes")
 Rel(pear_worker, pear_store, "Reads/Writes")
 
 @enduml
