@@ -1,7 +1,7 @@
 import { bciTranscribe, bciTranscribeStream } from '@qvac/sdk'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { bciTests } from '../../../bci-tests.js'
 

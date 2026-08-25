@@ -1,6 +1,6 @@
 # bare-sdk bare e2e suite
 
-A small, high-value suite that exercises `@qvac/bare-sdk` through its public entry point on the Bare runtime. The full `@qvac/qvac-test-suite` covers the Node (desktop) and React Native (mobile) RPC routes; this suite exists to cover the third route: the in-process `bare-client` transport that `@qvac/bare-sdk` resolves `#rpc` to.
+A small, high-value suite that exercises `@qvac/bare-sdk` through its public entry point on the Bare runtime. The full `@qvac/test-suite` covers the Node (desktop) and React Native (mobile) RPC routes; this suite exists to cover the third route: the in-process `bare-client` transport that `@qvac/bare-sdk` resolves `#rpc` to.
 
 Assertions use `brittle`, the de-facto test framework for the Bare runtime.
 

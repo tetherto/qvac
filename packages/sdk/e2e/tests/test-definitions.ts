@@ -1,5 +1,5 @@
 // Real SDK tests
-import type { TestDefinition } from '@qvac/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'

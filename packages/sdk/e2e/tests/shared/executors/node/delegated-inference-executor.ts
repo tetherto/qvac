@@ -8,7 +8,7 @@ import {
   getLoadedModelInfo,
   LLAMA_3_2_1B_INST_Q4_0
 } from '@qvac/sdk'
-import type { TestResult } from '@qvac/qvac-test-suite'
+import type { TestResult } from '@qvac/test-suite'
 import { DelegatedInferenceExecutor as SharedDelegatedInferenceExecutor } from '../delegated-inference-executor.js'
 import {
   delegatedE2ECompletion,

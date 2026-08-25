@@ -1,0 +1,58 @@
+name: Prepare SDK E2E test-suite
+description: Apply the centrally resolved @qvac/test-suite package to an SDK E2E checkout.
+
+# Sibling of sdk-e2e-prepare-inference, deliberately NOT a generalisation of it.
+# The inference path is release-critical and is left untouched; duplicating the
+# ~40 lines of glue here costs less than a shared abstraction that could regress
+# it. Keep the two in sync when either changes.
+
+inputs:
+  source:
+    description: "Test-suite source: branch, npm, or manifest"
+    required: true
+  dependency-spec:
+    description: "Resolved npm package spec; empty for branch/manifest"
+    required: false
+    default: ""
+  artifact-name:
+    description: "Branch tarball artifact name"
+    required: false
+    default: ""
+  project-directory:
+    description: "Directory whose package.json declares the test-suite dependency"
+    required: true
+  test-suite-directory:
+    description: "In-repo package directory, built in place when the consumer manifest links to it"
+    required: false
+    default: packages/test-suite
+  provenance:
+    description: "Human-readable immutable source identity"
+    required: true
+
+outputs:
+  dependency-spec:
+    description: "Dependency spec written to the consumer manifest"
+    value: ${{ steps.apply.outputs.dependency-spec }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download branch test-suite package
+      if: inputs.source == 'branch'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ runner.temp }}/sdk-e2e-test-suite/${{ github.run_id }}-${{ github.run_attempt }}
+
+    - name: Apply resolved test-suite dependency
+      id: apply
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        TEST_SUITE_SOURCE: ${{ inputs.source }}
+        TEST_SUITE_DEPENDENCY_SPEC: ${{ inputs.dependency-spec }}
+        TEST_SUITE_ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-test-suite/${{ github.run_id }}-${{ github.run_attempt }}
+        TEST_SUITE_PROVENANCE: ${{ inputs.provenance }}
+        PROJECT_DIRECTORY: ${{ inputs.project-directory }}
+        TEST_SUITE_DIRECTORY: ${{ inputs.test-suite-directory }}
+      run: node "$ACTION_PATH/prepare.mjs" apply

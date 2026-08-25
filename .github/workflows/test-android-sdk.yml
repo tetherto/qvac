@@ -87,6 +87,26 @@ on:
         required: false
         type: string
         default: ""
+      test-suite-source:
+        description: "Resolved test-suite source"
+        required: false
+        type: string
+        default: manifest
+      test-suite-dependency-spec:
+        description: "Resolved test-suite package spec for npm"
+        required: false
+        type: string
+        default: ""
+      test-suite-artifact-name:
+        description: "Branch test-suite tarball artifact"
+        required: false
+        type: string
+        default: ""
+      test-suite-provenance:
+        description: "Immutable test-suite source identity"
+        required: false
+        type: string
+        default: ""
       plugins:
         description: >-
           Optional comma-separated SDK plugin specifiers (e.g.
@@ -164,6 +184,7 @@ jobs:
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
 
   build:
     name: "[android] build"
@@ -193,7 +214,9 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/test-suite
             .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -308,6 +331,18 @@ jobs:
           artifact-name: ${{ inputs.inference-artifact-name }}
           project-directory: ${{ inputs.project-directory }}
           provenance: ${{ inputs.inference-provenance }}
+
+      # Rewrites the consumer manifest before the e2e `npm install
+      # --install-links` below, so the framework build this run selected is the
+      # one bundled into the mobile consumer.
+      - name: Apply resolved test-suite
+        uses: ./.github/actions/sdk-e2e-prepare-test-suite
+        with:
+          source: ${{ inputs.test-suite-source }}
+          dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+          artifact-name: ${{ inputs.test-suite-artifact-name }}
+          project-directory: ${{ inputs.working-directory }}
+          provenance: ${{ inputs.test-suite-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -715,8 +750,10 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            packages/test-suite
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -751,6 +788,18 @@ jobs:
           artifact-name: ${{ inputs.inference-artifact-name }}
           project-directory: ${{ inputs.project-directory }}
           provenance: ${{ inputs.inference-provenance }}
+
+      # Rewrites the consumer manifest before the e2e `npm install
+      # --install-links` below, so the framework build this run selected is the
+      # one bundled into the mobile consumer.
+      - name: Apply resolved test-suite
+        uses: ./.github/actions/sdk-e2e-prepare-test-suite
+        with:
+          source: ${{ inputs.test-suite-source }}
+          dependency-spec: ${{ inputs.test-suite-dependency-spec }}
+          artifact-name: ${{ inputs.test-suite-artifact-name }}
+          project-directory: ${{ inputs.working-directory }}
+          provenance: ${{ inputs.test-suite-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -1080,6 +1129,7 @@ jobs:
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
           device-pool-name: ${{ needs.device-farm.outputs.name }}
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
 
@@ -1107,6 +1157,7 @@ jobs:
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
+          test-suite-provenance: ${{ inputs.test-suite-provenance }}
           device-pool-name: ${{ needs.device-farm.outputs.name }}
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
           update-summary: "false"
