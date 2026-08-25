@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.9.0] - 2026-08-25
+
+### Added
+
+- ROCm/HIP compute backend (`libqvac-ggml-hip.so`, gfx1151 / Strix Halo) in the
+  linux-x64 prebuild, via the `qvac-fabric[hip-backend]` feature. It ships as a
+  `GGML_BACKEND_DL` module under `prebuilds/linux-x64/qvac__fabric/` alongside
+  Vulkan, so every consumer of the shared runtime can select it — previously the
+  feature was requested per-consumer by `@qvac/vla-ggml`, which no longer builds
+  its own ggml. The DL loader skips the module on non-AMD hosts, and the build is
+  fail-safe: no ROCm SDK at build time means a Vulkan/CPU-only prebuild.
+
+### Changed
+
+- `prebuilds-fabric.yml` sets `include-rocm: true` so the linux-x64 prebuild
+  cross-compiles the HIP backend, and `on-pr-fabric.yml`'s `cpp-lint` sets
+  `include-rocm-sdk: true` because `ggml-config.cmake` resolves
+  `find_dependency(hip/hipblas/rocblas)` at configure time. No AMD GPU is
+  required on either runner.
+
 ## [0.8.0] - 2026-08-24
 
 ### Changed
