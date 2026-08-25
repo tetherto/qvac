@@ -57,7 +57,7 @@ test('events within the same window are buffered, not dropped', (t) => {
 })
 
 test('flush is a no-op when buffer is empty', (t) => {
-  let time = T0
+  const time = T0
   const { written, batchSizes, throttle } = createTestThrottle(() => time)
 
   throttle.flush()
