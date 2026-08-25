@@ -12,6 +12,7 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "example": "bare examples/generate-music.js \"Upbeat pop rock with driving electric guitars and a catchy hook\"",
+    "example:minimax": "bare examples/generate-music-minimax.js",
     "example:cover": "bare examples/generate-cover.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:generated": "node scripts/check-generated.mjs",
@@ -63,9 +64,11 @@
     "test/utils/device-env.js",
     "test/utils/memory-usage.js",
     "benchmarks/RTF-BENCHMARKS.md",
+    "examples/generate-music-minimax.js",
     "scripts/download-audiogen-ggml-models.js",
     "README.md",
     "CHANGELOG.md",
+    "NOTICE",
     "LICENSE"
   ],
   "license": "Apache-2.0",
@@ -81,6 +84,7 @@
     "audiogen",
     "music-generation",
     "acestep",
+    "minimax-music3",
     "ggml"
   ],
   "devDependencies": {

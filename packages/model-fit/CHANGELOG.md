@@ -1,5 +1,103 @@
 # Changelog
 
+## [0.7.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Load-fit config normalization now uses the b10297 `load_mode` field, accepts
+  `load-mode` directly, and preserves legacy `no-mmap` behavior without relying
+  on the removed `common_params::use_mmap` member.
+
+## [0.6.0] - 2026-08-22
+
+### Added
+
+- Disposable-process protocol v2, carrying an explicit
+  `loadKind: 'completion' | 'embedding'` so the runner can select the matching
+  normalization policy internally. `encodeFitLlamaProcessRequest(loadKind,
+  config)` encodes it; `parseFitProcessResponse` answers both versions.
+  Protocol v1 is unchanged and still accepted.
+
+- Fit-relevant completion and embedding load normalization — backend selection,
+  context/batch settings, split policy, flash/KV defaults, SWA and CPU
+  placement — so a raw llama load config can be projected the way the addon
+  that will run it would resolve it. This duplicates `llm-llamacpp` and
+  `embed-llamacpp` for now; shared ownership can be revisited separately.
+
+- `FitLlamaResult` and `FitLlamaReason` in `./process`, adding the
+  `unsupported-config` outcome for a configuration the normalization cannot
+  represent (mobile, streaming, sharded, multimodal, finetune, LoRA, RoPE/YaRN,
+  unknown keys). The result is advisory and must never be used to deny a load.
+
+  Deliberately a separate type: `fitParams()` cannot produce that outcome, so
+  `FitResult` and `FitReason` are unchanged and existing low-level consumers
+  narrow nothing new. Every `FitResult` is assignable to `FitLlamaResult`.
+
+### Changed
+
+- Raw load-parameter normalization stays private to the disposable process
+  runner. `./binding.js`, which is a public export, now re-exports `paramsFit`
+  explicitly rather than the whole addon, and the runner reaches the load-config
+  fitter through the unexported `./binding-internal.js`. The package root
+  continues to expose only the existing low-level `fitParams()` API.
+
+- The C++ unit targets behind `BUILD_TESTING` now run in CI via
+  `cpp-tests-model-fit.yml` and the `test:cpp` scripts, and their translation
+  units are linted, so the normalization above is covered by the PR gate rather
+  than by a local step.
+
+### Fixed
+
+These are all divergences between what this package projected and what the load
+would actually do. Each was found by review of the normalization above and is
+fixed against the behaviour of `llm-llamacpp` / `embed-llamacpp`:
+
+- `llama_model_params::devices` is a NULL-terminated list, and neither list this
+  package built carried the terminator. The single-GPU list read one element
+  past its allocation on every fit; the CPU path passed an empty vector, which
+  is not the same as an empty list — `common_model_params_to_llama` forwards
+  only a non-empty one — so fabric fell back to default device selection,
+  enumerating every GPU and skipping the host-memory check that is the only real
+  constraint on a CPU load.
+
+- The CPU path no longer pins `n_gpu_layers` to 0. The addons leave the field
+  alone, and forcing it made `common_fit_params` abort when the projection
+  needed to adjust it.
+
+- An unset embedding context is pinned to the model's trained context, and an
+  oversized one is capped rather than rejected, matching
+  `embed-llamacpp`. Leaving it at 0 invited the fitter to report a reduced
+  context, and a correspondingly reduced memory figure, for a load that runs at
+  the full trained context.
+
+- `flash-attn` is recognised as enabled on `on` only, as `llm-llamacpp` does.
+  Accepting any truthy spelling fired the q8_0 KV auto-default where the real
+  load keeps f16, under-estimating KV memory by roughly 2x.
+
+- `ctx-size: '0'` no longer becomes a 4096 context floor. Fabric encodes "do not
+  reduce the context" as `UINT32_MAX` in a signed field, and clamping that at
+  zero inverted the one configuration that explicitly forbids reduction.
+
+- Conflicting key aliases (`gpu-layers`/`n-gpu-layers`,
+  `kv-offload`/`no-kv-offload`, `op-offload`/`no-op-offload`) are rejected
+  instead of resolved by hash-bucket order, which made the verdict depend on
+  internal hashing rather than on the request.
+
+- `no-host` is a valueless flag upstream, so `no-host: 'false'` now reports
+  `unsupported-config` instead of projecting the opposite weight placement.
+  `host`, `extra-bufts` and `no-extra-bufts` leave the supported set for the
+  same reason: qvac-fabric registers no such option, so no load can express
+  them.
+
+### Pull Requests
+
+- [#3930](https://github.com/tetherto/qvac/pull/3930) - QVAC-22630 feat[api]:
+  add config normalization to model-fit addon
+
 ## [0.5.0] - 2026-08-20
 
 ### Changed

@@ -2,6 +2,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
@@ -321,6 +322,7 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
   bool thinkingForcedOpen = true;
   std::string thinkingStartTag;
   std::string thinkingEndTag;
+  std::vector<std::string> thinkingEndTags;
   std::string generationPrompt;
   const std::string prompt = getPrompt(
       tmpls.get(),
@@ -328,11 +330,13 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
       &thinkingForcedOpen,
       &thinkingStartTag,
       &thinkingEndTag,
+      &thinkingEndTags,
       &generationPrompt);
 
   EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
   EXPECT_EQ(thinkingStartTag, "<think>");
   EXPECT_EQ(thinkingEndTag, "</think>");
+  EXPECT_EQ(thinkingEndTags, std::vector<std::string>{"</think>"});
   EXPECT_NE(generationPrompt.find("<|im_start|>assistant"), std::string::npos);
   EXPECT_FALSE(thinkingForcedOpen);
 }
