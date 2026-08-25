@@ -1,6 +1,6 @@
 {
   "name": "@qvac/model-fit",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
   "scripts": {
@@ -15,11 +15,14 @@
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/fit/FitParams.cpp",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/fit/FitParams.cpp addon/src/fit/LlamaLoadConfig.cpp",
     "test": "npm run build:ts && npm run test:process && npm run test:node && npm run test:integration:suite",
     "test:unit": "npm run build:ts && npm run test:process && npm run test:node",
     "test:node": "node --test test/node/process-path.test.cjs",
-    "test:process": "bare test/desktop/process.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
+    "test:cpp:run": "ctest --test-dir build --output-on-failure",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "test:process": "bare test/desktop/process.test.js && bare test/desktop/llama-config.test.js",
     "test:integration": "npm run build:ts && npm run test:process && npm run test:integration:suite",
     "test:integration:suite": "npm run test:integration:generate && bare test/integration/all.js --exit",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
@@ -32,6 +35,7 @@
   },
   "files": [
     "binding.js",
+    "binding-internal.js",
     "index.js",
     "index.d.ts",
     "process.js",

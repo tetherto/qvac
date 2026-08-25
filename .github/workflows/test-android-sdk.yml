@@ -67,6 +67,26 @@ on:
         required: false
         type: string
         default: ""
+      inference-source:
+        description: "Resolved inference source"
+        required: false
+        type: string
+        default: manifest
+      inference-dependency-spec:
+        description: "Resolved inference package spec for npm"
+        required: false
+        type: string
+        default: ""
+      inference-artifact-name:
+        description: "Branch inference tarball artifact"
+        required: false
+        type: string
+        default: ""
+      inference-provenance:
+        description: "Immutable inference source identity"
+        required: false
+        type: string
+        default: ""
       plugins:
         description: >-
           Optional comma-separated SDK plugin specifiers (e.g.
@@ -143,6 +163,7 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
 
   build:
     name: "[android] build"
@@ -170,7 +191,9 @@ jobs:
           ref: ${{ inputs.test-version || github.event.pull_request.head.sha || github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
-          sparse-checkout: ${{ inputs.project-directory }}
+          sparse-checkout: |
+            ${{ inputs.project-directory }}
+            .github/actions/sdk-e2e-prepare-inference
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -276,6 +299,15 @@ jobs:
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
           console.log(`.npmrc configured at ${target}`);
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -684,6 +716,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.project-directory }}
             .github/actions/sdk-e2e-fail-on-failures
+            .github/actions/sdk-e2e-prepare-inference
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
@@ -709,6 +742,15 @@ jobs:
           const npmrc = lines.join('\n');
           const target = path.join('${{ inputs.project-directory }}', '.npmrc');
           fs.writeFileSync(target, npmrc, 'utf8');
+
+      - name: Apply resolved inference
+        uses: ./.github/actions/sdk-e2e-prepare-inference
+        with:
+          source: ${{ inputs.inference-source }}
+          dependency-spec: ${{ inputs.inference-dependency-spec }}
+          artifact-name: ${{ inputs.inference-artifact-name }}
+          project-directory: ${{ inputs.project-directory }}
+          provenance: ${{ inputs.inference-provenance }}
 
       - name: Setup MQTT CA certificate
         shell: node {0}
@@ -1037,6 +1079,7 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
           device-pool-name: ${{ needs.device-farm.outputs.name }}
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
 
@@ -1063,6 +1106,7 @@ jobs:
           suite: ${{ inputs.suite }}
           filter: ${{ inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
+          inference-provenance: ${{ inputs.inference-provenance }}
           device-pool-name: ${{ needs.device-farm.outputs.name }}
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
           update-summary: "false"

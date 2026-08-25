@@ -140,7 +140,7 @@ Rows are **catalog entries**, not usable `model` objects:
   "quantization": "q4",
   "params": "600M",
   "size": 382156480,
-  "hint": "Not in serve.models — add it there to make it usable (a `qvac configure` command is planned)."
+  "hint": "Not in serve.models — run `qvac configure` (or add it there by hand) to make it usable."
 }
 ```
 

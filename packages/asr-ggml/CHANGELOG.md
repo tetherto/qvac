@@ -12,6 +12,28 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 [`docs/WHISPER-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/WHISPER-CHANGELOG.md) and
 [`docs/PARAKEET-CHANGELOG.md`](https://github.com/tetherto/qvac/blob/main/packages/asr-ggml/docs/PARAKEET-CHANGELOG.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **Parakeet duplex streaming no longer drops the tail of the transcript when
+  the audio stream ends while the engine still has a buffered backlog.** 
+  `endStreaming()` joins the native worker only after it has drained all buffered
+  audio, but the drained segments are delivered to JS asynchronously (uv_async);
+  the parakeet driver then cleared the active job and emitted a synthetic `JobEnded`
+  *before* those queued `Output` events arrived, so `_addonOutputCallback`
+  discarded every one of them (`jobId === null`). Apps feeding audio faster
+  than realtime (e.g. the SDK's `transcribeStream` fed from a file, then `end()`)
+  lost most of the un-processed tail. `ParakeetStreamingProcessor` now queues a terminal
+  `RuntimeStats` object (real `audioDurationMs` / `totalSamples`) through the
+  **same FIFO output queue** as the drained segments after `finalize()` — exactly
+  how the whisper engine's `StreamingProcessor` already signals completion — and
+  the JS wrapper waits for that terminal event to flow through the normal
+  output-callback path, so every drained segment is delivered, in order, before
+  the job resolves. The synthetic `JobEnded` remains only as a fallback when no
+  native session existed (`cleaned: false`), and concurrent `endStreaming()`
+  calls join the in-flight teardown instead of falling through to it.
+
 ## [0.3.3] - 2026-08-20
 
 ### Changed

@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "ReasoningUtils.hpp"
 #include "common/chat.h"
@@ -148,7 +149,9 @@ getChatTemplate(const ::llama_model* model, const common_params& params);
  * @p outThinkingStartTag (optional) receives the template-specific reasoning
  *    start tag, when the template exposes one.
  * @p outThinkingEndTag (optional) receives the template-specific reasoning
- *    end tag, when the template exposes one.
+ *    end tag used for forced close text, when the template exposes one.
+ * @p outThinkingEndTags (optional) receives all template-specific reasoning
+ *    end tags, any of which should stop reasoning-budget sampling.
  * @p outGenerationPrompt (optional) receives the assistant generation prompt
  *    already appended to the formatted prompt.
  */
@@ -158,6 +161,7 @@ std::string getPrompt(
     bool* outThinkingForcedOpen = nullptr,
     std::string* outThinkingStartTag = nullptr,
     std::string* outThinkingEndTag = nullptr,
+    std::vector<std::string>* outThinkingEndTags = nullptr,
     std::string* outGenerationPrompt = nullptr);
 
 /**
@@ -169,7 +173,8 @@ std::string getPrompt(
  */
 bool configureReasoningBudgetSampling(
     common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag, const std::string& thinkingEndTag,
+    const std::string& thinkingStartTag,
+    const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt);
 
 std::string getThinkingForcedOpenText(

@@ -36,6 +36,98 @@ test('fitParams rejects invalid config', async function (t) {
   )
 })
 
+test('native raw fitting validates load kind, params, and relationships', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+  // The raw load-config fitter lives on the private surface: `./binding.js` is
+  // a public export and deliberately carries `paramsFit` only.
+  const binding = require('../../binding-internal.js')
+
+  await t.exception.all(
+    () => binding.llamaConfigFit({ ...base, params: { device: 'cpu' } }),
+    /loadKind/
+  )
+  await t.exception.all(
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 1 }
+      }),
+    /values must be strings/
+  )
+  await t.exception.all(
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 'cpu', 'batch-size': '128', 'ubatch-size': '256' }
+      }),
+    /ubatch-size must not exceed batch-size/
+  )
+  await t.exception.all(
+    () =>
+      binding.llamaConfigFit({
+        loadKind: 'completion',
+        ...base,
+        params: { device: 'cpu', 'ctx-size': '512' },
+        nCtxMin: 1024
+      }),
+    // The native message quotes its field names; the JS wrapper's does not, so
+    // the loose pattern used for `fitParams` never matched here.
+    /'nCtxMin' must not exceed concrete 'ctx-size'/
+  )
+})
+
+test('native raw fitting uses explicit completion and embedding load kinds', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const binding = require('../../binding-internal.js')
+  const completion = binding.llamaConfigFit({
+    loadKind: 'completion',
+    modelPath,
+    params: {
+      device: 'cpu',
+      'ctx-size': '512',
+      'batch-size': '128',
+      'ubatch-size': '64',
+      parallel: '1',
+      'gpu-layers': '0',
+      'no-mmap': 'true',
+      'swa-full': ''
+    },
+    nCtxMin: 512
+  })
+  const embedding = binding.llamaConfigFit({
+    loadKind: 'embedding',
+    modelPath,
+    params: {
+      device: 'cpu',
+      'ctx-size': '512',
+      'batch-size': '128',
+      'ubatch-size': '64'
+    },
+    nCtxMin: 512
+  })
+
+  t.not(completion.reason, 'unsupported-config', 'completion config reaches common_fit_params')
+  t.not(embedding.reason, 'unsupported-config', 'embedding config reaches common_fit_params')
+
+  // CPU placement is the zero-device list (`devices = {nullptr}`), not a pinned
+  // `n_gpu_layers` — the addons leave that field alone on their CPU path, and
+  // pinning it to 0 made `common_fit_params` abort when it needed to adjust it.
+  //
+  // These two are post-fit *outputs*, though, and the fitter rewrites what it
+  // needs while searching: on a host that registers a GPU but is handed a
+  // zero-device list it reports the host-memory plan as ngl 0 / main-gpu 0,
+  // where elsewhere it returns the values it was given. So assert what holds on
+  // every host — a CPU request never comes back offloading layers — and leave
+  // the exact input placement to `isCpuPlacement` in LlamaLoadConfig.test.cpp,
+  // which drives `normalizeLlamaLoadConfig` against a synthetic device list and
+  // therefore pins `devices == {nullptr}` and `main_gpu == -1` with no platform
+  // dependence at all.
+  t.is(completion.nGpuLayers, 0, 'an explicit gpu-layers is passed through')
+  t.ok(embedding.nGpuLayers <= 0, 'an embedding CPU config offloads no layers')
+})
+
 test('fitParams rejects values that would truncate or wrap in the binding', async function (t) {
   const base = { modelPath: UNREACHABLE_MODEL }
 
@@ -86,7 +178,20 @@ test('intended-load fields are bounded to their enum domains', async function (t
     () => fitParams({ ...base, flashAttnType: -2 }),
     /flashAttnType must be between/
   )
-  await t.exception.all(() => fitParams({ ...base, mainGpu: -1 }), /mainGpu must be between/)
+  t.is(
+    fitParams({ ...base, nGpuLayers: 0, splitMode: 0, mainGpu: -1 }).status,
+    FIT_STATUS.ERROR,
+    'the CPU sentinel passes wrapper validation'
+  )
+  await t.exception.all(() => fitParams({ ...base, mainGpu: -2 }), /mainGpu must be between/)
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 1, splitMode: 0, mainGpu: -1 }),
+    /mainGpu -1 requires/
+  )
+  await t.exception.all(
+    () => fitParams({ ...base, nGpuLayers: 0, splitMode: 1, mainGpu: -1 }),
+    /mainGpu -1 requires/
+  )
   await t.exception.all(() => fitParams({ ...base, typeK: -1 }), /typeK must be between/)
   await t.exception.all(() => fitParams({ ...base, typeV: 1.5 }), /typeV must be a safe integer/)
 
@@ -100,6 +205,47 @@ test('intended-load fields are bounded to their enum domains', async function (t
   await t.exception.all(
     () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, splitMode: 4 }),
     /out of range/
+  )
+  t.is(
+    binding.paramsFit({
+      modelPath: UNREACHABLE_MODEL,
+      nGpuLayers: 0,
+      splitMode: 0,
+      mainGpu: -1
+    }).status,
+    FIT_STATUS.ERROR,
+    'the CPU sentinel passes native validation'
+  )
+  await t.exception.all(
+    () => binding.paramsFit({ modelPath: UNREACHABLE_MODEL, mainGpu: -2 }),
+    /out of range/
+  )
+  await t.exception.all(
+    () =>
+      binding.paramsFit({
+        modelPath: UNREACHABLE_MODEL,
+        nGpuLayers: 1,
+        splitMode: 0,
+        mainGpu: -1
+      }),
+    /mainGpu.*-1.*requires/
+  )
+})
+
+test('swaFull rejects non-boolean values at both public boundaries', async function (t) {
+  const base = { modelPath: UNREACHABLE_MODEL }
+  const binding = require('../../binding.js')
+
+  await t.exception.all(() => fitParams({ ...base, swaFull: 1 }), /swaFull must be a boolean/)
+  for (const swaFull of [null, 1, 'true', {}]) {
+    await t.exception.all(() => binding.paramsFit({ ...base, swaFull }), /swaFull.*boolean/)
+  }
+
+  t.is(binding.paramsFit(base).status, FIT_STATUS.ERROR, 'absent remains omitted')
+  t.is(
+    binding.paramsFit({ ...base, swaFull: undefined }).status,
+    FIT_STATUS.ERROR,
+    'undefined remains omitted'
   )
 })
 
@@ -131,6 +277,22 @@ test('a pinned intended-load field is returned unchanged', async function (t) {
   t.not(res.status, FIT_STATUS.ERROR, 'a pinned placement is accepted, not rejected')
   t.is(res.splitMode, 0, 'the pinned split mode survives the fit')
   t.is(res.mainGpu, 0, 'the pinned main GPU survives the fit')
+})
+
+test('an explicit CPU placement reaches the fitter and preserves its sentinel', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const res = fitParams({
+    modelPath,
+    nCtx: 512,
+    nGpuLayers: 0,
+    splitMode: 0,
+    mainGpu: -1
+  })
+
+  t.is(res.status, FIT_STATUS.SUCCESS, 'the CPU placement reaches common_fit_params')
+  t.is(res.nGpuLayers, 0, 'the CPU layer count survives the fit')
+  t.is(res.splitMode, 0, 'the CPU split mode survives the fit')
+  t.is(res.mainGpu, -1, 'the CPU sentinel survives the fit')
 })
 
 test('binding.paramsFit enforces the same constraints as the wrapper', async function (t) {
