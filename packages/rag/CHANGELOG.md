@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Validate `search` and `infer` queries before logging so a non-string or blank query throws `QvacErrorRAG { code: INVALID_INPUT }` instead of a raw `TypeError` (#3729).
+- Fix the npm/GPR publish pipeline for the TypeScript/ESM build: `dist/` is now compiled once and published as a prebuilt artifact. The previous flow ran the `prepare` (`tsc`) build during `npm publish` in a job without `node_modules`, which blocked the `0.7.0` release (#4056).
 
 ## [0.6.4]
 
