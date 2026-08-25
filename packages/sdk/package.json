@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -216,7 +216,7 @@
     "@qvac/bci-whispercpp": "^0.7.1",
     "@qvac/classification-ggml": "^0.20.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.17.0",
+    "@qvac/diffusion-cpp": "^0.18.0",
     "@qvac/embed-llamacpp": "^0.34.0",
     "@qvac/error": "^0.1.1",
     "@qvac/langdetect-text": "^0.1.2",

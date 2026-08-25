@@ -1,6 +1,6 @@
 ---
 title: SDK Release Notes — v0.18.x (latest)
-description: Lists all releases from v0.18.0 to v0.18.1.
+description: Lists all releases from v0.18.0 to v0.18.2.
 ---
 
 ## v0.18.0
@@ -229,6 +229,14 @@ VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
 TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
 ```
 
+## v0.18.2
+
+### @qvac/sdk
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.2
+
+QVAC SDK 0.18.2 raises the `@qvac/diffusion-cpp` dependency to `^0.18.0`. That is the addon-cpp / infer-base floor that `^0.17.0` cannot install. Video APIs are unchanged. This patch does not ship ABot-World or LTX Ingredients IC-LoRA; those stay on later addon minors (`0.19` and `0.20`) for the next SDK line.
+
 ## v0.18.1
 
 ### @qvac/sdk
@@ -257,3 +265,4 @@ The internal schema identifiers are unchanged.
 ##### CosyVoice3 companion cache folder
 
 CosyVoice3 companion files still download with the LLM, as in 0.18.0. The companion-set cache key for `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` changed, so the first load after upgrading fills a new cache folder. Later loads reuse that folder. Speech APIs and `pace` / `instruct` rules are unchanged.
+
