@@ -13,7 +13,7 @@ const { ADDONS, allNames, pluginsOf, withPlugins } = require('../addons.js')
 
 const SDK_DIR = join(__dirname, '..', '..', 'sdk')
 const SDK_MANIFEST = join(SDK_DIR, 'package.json')
-const BUNDLE_CONSTANTS = join(SDK_DIR, 'commands', 'bundle', 'constants.ts')
+const BUNDLE_CONSTANTS = join(SDK_DIR, 'src', 'commands', 'bundle', 'constants.ts')
 const BUILTIN_PLUGIN_RE = /^\s*'([\w-]+)':\s*\{\s*exportName/gm
 const MIN_PARSED_BUILTINS = 5
 
@@ -36,7 +36,7 @@ function assertSdkShipsAddon (deps, name) {
 function assertPluginIsBuiltin (builtins, name, plugin) {
   assert.ok(
     builtins.includes(plugin),
-    `plugin "${plugin}" of addons.js "${name}" is not an SDK built-in -- check BUILTIN_PLUGINS in packages/sdk/commands/bundle/constants.ts`
+    `plugin "${plugin}" of addons.js "${name}" is not an SDK built-in -- check BUILTIN_PLUGINS in packages/sdk/src/commands/bundle/constants.ts`
   )
 }
 
@@ -63,7 +63,7 @@ test('every declared plugin is a real SDK built-in plugin', () => {
   const builtins = builtinPlugins()
   assert.ok(
     builtins.length >= MIN_PARSED_BUILTINS,
-    `parsed only ${builtins.length} built-in plugins from packages/sdk/commands/bundle/constants.ts -- BUILTIN_PLUGIN_RE no longer matches how that file is formatted`
+    `parsed only ${builtins.length} built-in plugins from packages/sdk/src/commands/bundle/constants.ts -- BUILTIN_PLUGIN_RE no longer matches how that file is formatted`
   )
   allNames().forEach(name => assertPluginsAreBuiltin(builtins, name))
 })

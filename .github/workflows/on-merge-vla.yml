@@ -88,13 +88,19 @@ jobs:
     with:
       workdir: "packages/vla-ggml"
 
+  verify-generated:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: packages/vla-ggml
+
   # Publish to GitHub Package Registry (GPR) for non-release branches
   publish-gpr:
-    needs: [build, publish-logic]
+    needs: [build, publish-logic, verify-generated]
     if: >-
-      needs.publish-logic.outputs.publish_main == 'true' ||
-      needs.publish-logic.outputs.publish_feature == 'true' ||
-      needs.publish-logic.outputs.publish_tmp == 'true'
+      needs.verify-generated.result == 'success' &&
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')
     continue-on-error: true
     runs-on: ubuntu-latest
     environment: release
@@ -124,14 +130,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        working-directory: packages/vla-ggml
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: packages/vla-ggml
-        run: npm run build:ts
-
       - name: Publish to GitHub Package Registry
         id: publish
         uses: ./.github/actions/publish-library-to-gpr
@@ -143,12 +141,10 @@ jobs:
 
   # Publish to NPM for release branches
   publish-npm:
-    needs: [build, publish-logic, release-merge-guard]
+    needs: [build, publish-logic, release-merge-guard, verify-generated]
     if: >-
-      !cancelled() &&
-      needs.build.result == 'success' &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
+      needs.verify-generated.result == 'success' &&
+      (!cancelled() && needs.build.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -177,14 +173,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Install dependencies
-        working-directory: packages/vla-ggml
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: packages/vla-ggml
-        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag

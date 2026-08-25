@@ -185,7 +185,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true  # Don't block PR merges if tests fail
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger (workflow_dispatch, workflow_call, schedule). Re-adding it
+    # silently turns failed runs green.
     permissions:
       contents: read
       packages: read
@@ -446,7 +448,7 @@ jobs:
       # VLA reuses the LLAMACPP_EMBED Device Farm project + pool secrets
       # (see env-block comment above). The composite auto-detects
       # test-groups.json under <addon-workdir>/test/mobile/; VLA ships one
-      # (smolvla/pi05/groot), so the test specs come from it.
+      # (smolvla/groot), so the test specs come from it.
       - name: Upload to Device Farm
         id: upload
         uses: ./.github/actions/run-mobile-integration-tests/upload-to-devicefarm
