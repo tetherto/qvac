@@ -61,6 +61,15 @@ vcpkg_from_github(
     SHA512 91c39b0f072e9b087da4d297e5aeae809e2684f021287fa8c9ced8cb739ff3eee4feefb91d72d5fe2fcff69f418d079236e5096b1cc742fcc83a6d4cde54427b
 )
 
+# The pinned ggml revision contains the same OpenCL POOL_2D dispatch case twice.
+# Keep both OpenCL and Vulkan enabled on Android by removing the duplicate at
+# the port boundary until the upstream source is corrected.
+vcpkg_apply_patches(
+    SOURCE_PATH "${SOURCE_PATH}"
+    PATCHES
+        "${CMAKE_CURRENT_LIST_DIR}/patches/opencl-remove-duplicate-pool-case.patch"
+)
+
 # --- GPU feature flags ---
 set(GGML_METAL  OFF)
 set(GGML_VULKAN OFF)
