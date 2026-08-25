@@ -8720,40 +8720,49 @@
                       "type": "object",
                       "properties": {
                         "language": {
+                          "description": "Transcription language (ISO 639-1). Default `en`.",
                           "type": "string"
                         },
                         "n_threads": {
+                          "description": "Number of CPU threads. `0` = auto.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "temperature": {
+                          "description": "Sampling temperature. Default 0.0.",
                           "type": "number"
                         },
                         "suppress_nst": {
+                          "description": "Suppress non-speech tokens (NST).",
                           "type": "boolean"
                         },
                         "suppress_blank": {
                           "type": "boolean"
                         },
                         "duration_ms": {
+                          "description": "Maximum duration of audio to transcribe, in milliseconds.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "translate": {
+                          "description": "Translate the transcribed audio into English.",
                           "type": "boolean"
                         },
                         "no_timestamps": {
+                          "description": "Omit timestamps from the transcription output.",
                           "type": "boolean"
                         },
                         "single_segment": {
                           "type": "boolean"
                         },
                         "print_special": {
+                          "description": "Print special tokens in the output.",
                           "type": "boolean"
                         },
                         "print_progress": {
+                          "description": "Print progress updates during transcription.",
                           "type": "boolean"
                         },
                         "print_realtime": {
@@ -8763,14 +8772,17 @@
                           "type": "boolean"
                         },
                         "detect_language": {
+                          "description": "Automatically detect the spoken language.",
                           "type": "boolean"
                         },
                         "greedy_best_of": {
+                          "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "beam_search_beam_size": {
+                          "description": "Beam size for beam-search decoding; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
@@ -8782,6 +8794,7 @@
                       "type": "object",
                       "properties": {
                         "day_idx": {
+                          "description": "Session day index selecting day-specific projection matrices; `-1` enables mel passthrough (parity testing only).",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
@@ -8793,15 +8806,19 @@
                       "type": "object",
                       "properties": {
                         "model": {
+                          "description": "Optional whisper model path override (usually set via the loaded model files).",
                           "type": "string"
                         },
                         "use_gpu": {
+                          "description": "Enable GPU acceleration. Enabled by default; set false to force CPU.",
                           "type": "boolean"
                         },
                         "flash_attn": {
+                          "description": "Enable flash attention.",
                           "type": "boolean"
                         },
                         "gpu_device": {
+                          "description": "GPU device index to use.",
                           "type": "number"
                         }
                       },
@@ -8811,15 +8828,18 @@
                       "type": "object",
                       "properties": {
                         "caption_enabled": {
+                          "description": "Format output segments with caption markers. Default false.",
                           "type": "boolean"
                         }
                       },
                       "title": "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "backendsDir": {
+                      "description": "Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.",
                       "type": "string"
                     },
                     "embedderModelSrc": {
+                      "description": "BCI embedder model source (neural-signal embedder weights).",
                       "anyOf": [
                         {
                           "type": "string"
