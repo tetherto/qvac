@@ -79,14 +79,14 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bare runtime
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
@@ -104,7 +104,7 @@ jobs:
 
       - name: Overlay PR @qvac/fabric prebuilds
         if: ${{ inputs.fabric-overlay-artifact != '' }}
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@f74adc06b42f6dedea3cf893586ab902d8574839
         with:
           workdir: ${{ env.PKG_DIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -237,7 +237,7 @@ jobs:
 
       - name: Upload performance report
         if: always() && !cancelled()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: classification-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ env.PKG_DIR }}/test/results/performance-report.json

@@ -76,7 +76,7 @@ jobs:
           echo "workdir=$INPUT_WORKDIR"
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
       - name: Manual Workspace Cleanup
@@ -86,7 +86,7 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -140,7 +140,7 @@ jobs:
         uses: ./.github/actions/setup-rocm
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -165,7 +165,7 @@ jobs:
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
       - name: Get vcpkg cache (package-local)
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           # NOTE: don't include workspace-root 'vcpkg/ports/**' here — the
           # microsoft/vcpkg clone (pinned to 2025.12.12 above) drops ~4000
@@ -217,7 +217,7 @@ jobs:
       # groot.gguf locally for tighter f32 parity.
       - name: Configure AWS credentials via OIDC (GR00T parity)
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # 6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -331,7 +331,7 @@ jobs:
 
       - name: Archive Test Results
         if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: cpp-test-results-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |

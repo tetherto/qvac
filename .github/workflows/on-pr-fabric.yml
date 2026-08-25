@@ -46,7 +46,7 @@ jobs:
       run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
     steps:
       - name: Checkout ci-router composite (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/ci-router
@@ -66,7 +66,7 @@ jobs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
       - name: Checkout authorize-pr (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
@@ -92,7 +92,7 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/packages/fabric/vcpkg/cache,readwrite"
       PKG_DIR: packages/fabric
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
@@ -142,7 +142,7 @@ jobs:
       - name: Run JavaScript tests
         id: run_js_tests
         continue-on-error: true
-        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/run-lint-and-unit-tests@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
         with:
           gpr-token: ${{ secrets.GITHUB_TOKEN }}
           pat-token: ${{ secrets.GITHUB_TOKEN }}
@@ -204,12 +204,12 @@ jobs:
       fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
     steps:
       - name: Checkout repository (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
       - name: Detect fabric-stack PR
         id: detect
-        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@f74adc06b42f6dedea3cf893586ab902d8574839
 
   fabric-stack-matrix:
     needs: [detect-fabric-stack]
@@ -222,7 +222,7 @@ jobs:
       consumers: ${{ steps.set.outputs.consumers }}
     steps:
       - name: Checkout fabric-consumers manifest (PR head)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           sparse-checkout: .github/fabric-consumers.json
@@ -250,7 +250,7 @@ jobs:
       native_hash: ${{ steps.detect.outputs.native_hash }}
     steps:
       - name: Checkout composite source (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
       - name: Detect native file changes
@@ -277,7 +277,7 @@ jobs:
       reuse_hit: ${{ steps.reuse.outputs.reuse_hit }}
     steps:
       - name: Checkout prebuild-artifact-reuse composite (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/prebuild-artifact-reuse
@@ -328,7 +328,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout prebuild-artifact-save composite (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/prebuild-artifact-save
@@ -363,7 +363,7 @@ jobs:
           path: fabric-prebuilds-staging
 
       - name: Publish fabric-prebuilds for npm-runtime consumers
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: fabric-prebuilds
           path: fabric-prebuilds-staging
@@ -405,7 +405,7 @@ jobs:
       # Trusted base-branch checkout of only the prebuild-status scripts (never
       # PR head code), so publish logic is a single, unit-tested source.
       - name: Checkout prebuild-status scripts (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts/prebuild-status

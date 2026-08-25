@@ -78,14 +78,14 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -100,7 +100,7 @@ jobs:
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -114,7 +114,7 @@ jobs:
           rm -rf $VCPKG_ROOT/packages/*
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
@@ -136,7 +136,7 @@ jobs:
 
       - name: Overlay PR @qvac/fabric prebuilds
         if: ${{ inputs.fabric-overlay-artifact != '' }}
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@f74adc06b42f6dedea3cf893586ab902d8574839
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds

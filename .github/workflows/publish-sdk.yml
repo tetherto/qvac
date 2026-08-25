@@ -52,7 +52,7 @@ jobs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
       - name: Checkout authorize-pr (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
@@ -71,7 +71,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -101,7 +101,7 @@ jobs:
       READ_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -254,7 +254,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: dist
           path: ${{ env.WORKDIR }}/dist/
@@ -298,7 +298,7 @@ jobs:
       WORKDIR_BARE: packages/bare-sdk
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -322,7 +322,7 @@ jobs:
         run: bun run build
 
       - name: Upload bare-sdk dist artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: dist-bare-sdk
           path: ${{ env.WORKDIR_BARE }}/dist/
@@ -343,7 +343,7 @@ jobs:
       WORKDIR_INFERENCE: packages/inference
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -386,7 +386,7 @@ jobs:
         run: bun run build
 
       - name: Upload inference dist artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: dist-inference
           path: ${{ env.WORKDIR_INFERENCE }}/dist/
@@ -406,14 +406,14 @@ jobs:
         working-directory: packages/sdk-python
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # 7.0.0
         with:
           python-version: "3.10"
 
@@ -453,7 +453,7 @@ jobs:
         run: .venv/bin/twine check dist/*
 
       - name: Upload python dist artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: dist-sdk-python
           path: packages/sdk-python/dist/*
@@ -519,7 +519,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 
@@ -619,7 +619,7 @@ jobs:
       WORKDIR_BARE: packages/bare-sdk
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 
@@ -684,7 +684,7 @@ jobs:
       NPM_CONFIG_IGNORE_SCRIPTS: "true"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 
@@ -763,7 +763,7 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 
@@ -828,7 +828,7 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 
@@ -887,7 +887,7 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           persist-credentials: false
 

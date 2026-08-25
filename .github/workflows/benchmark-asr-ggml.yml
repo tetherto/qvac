@@ -386,7 +386,7 @@ jobs:
           df -h
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.inputs.repository || github.repository }}
           ref: ${{ github.event.inputs.ref || github.ref }}
@@ -399,7 +399,7 @@ jobs:
           sudo apt-get install -y ffmpeg build-essential cmake unzip curl
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # 7.0.0
         with:
           python-version: '3.12'
 
@@ -477,7 +477,7 @@ jobs:
 
       - name: Configure AWS credentials via OIDC (Arabic dataset)
         if: matrix.engine == 'whisper' && startsWith(github.event.inputs.dataset, 'arabic_')
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # 6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -543,7 +543,7 @@ jobs:
       # ---------------- parakeet-only model staging ----------------
       - name: Configure AWS credentials via OIDC (Parakeet GGUF)
         if: matrix.engine == 'parakeet'
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # 6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -1039,7 +1039,7 @@ jobs:
 
       - name: Upload benchmark results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: asr-accuracy-results-${{ matrix.model_variant }}
           path: ${{ env.WORKDIR }}/benchmarks/results
@@ -1054,7 +1054,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.event.inputs.repository || github.repository }}
           ref: ${{ github.event.inputs.ref || github.ref }}
@@ -1068,7 +1068,7 @@ jobs:
           merge-multiple: true
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # 7.0.0
         with:
           python-version: '3.12'
 
@@ -1094,7 +1094,7 @@ jobs:
           cat ../results/results_summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated summary
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: asr-accuracy-summary
           path: ${{ env.WORKDIR }}/benchmarks/results/results_summary.md
