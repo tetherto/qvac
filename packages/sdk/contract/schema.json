@@ -13083,28 +13083,34 @@
                   "type": "object",
                   "properties": {
                     "useGPU": {
+                      "description": "Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
                       "type": "boolean"
                     },
                     "inferenceSteps": {
+                      "description": "DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "shift": {
+                      "description": "Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
                       "type": "number",
                       "minimum": 0
                     },
                     "nGpuLayers": {
+                      "description": "GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "threads": {
+                      "description": "CPU thread count; `0` (default) lets the engine auto-pick.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
+                      "description": "Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
                       "type": "string",
                       "minLength": 1
                     },
@@ -13189,7 +13195,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "Text-encoder model source; turns the caption and lyrics into embeddings."
                     },
                     "lmModelSrc": {
                       "anyOf": [
@@ -13272,7 +13279,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "Language-model source; plans the song structure."
                     },
                     "ditModelSrc": {
                       "anyOf": [
@@ -13355,7 +13363,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "DiT model source; generates the audio latent (the quality-defining stage)."
                     },
                     "vaeModelSrc": {
                       "anyOf": [
@@ -13438,7 +13447,8 @@
                           "required": ["src"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc"
                         }
-                      ]
+                      ],
+                      "description": "VAE model source; decodes the latent into the output waveform."
                     }
                   },
                   "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],

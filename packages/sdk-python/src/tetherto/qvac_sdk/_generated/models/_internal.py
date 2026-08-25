@@ -10762,31 +10762,81 @@ class LoadModelSrcRequestAudiogenGgmlModelConfig(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+        ),
+    ] = None
     inference_steps: Annotated[
-        int | None, Field(alias="inferenceSteps", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="inferenceSteps",
+            description="DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
-    shift: Annotated[float | None, Field(ge=0.0)] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
+            ge=0.0,
+        ),
+    ] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
-    threads: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
-    backends_dir: Annotated[str | None, Field(alias="backendsDir", min_length=1)] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; `0` (default) lets the engine auto-pick.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            min_length=1,
+        ),
+    ] = None
     text_enc_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc,
-        Field(alias="textEncModelSrc"),
+        Field(
+            alias="textEncModelSrc",
+            description="Text-encoder model source; turns the caption and lyrics into embeddings.",
+        ),
     ]
     lm_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc,
-        Field(alias="lmModelSrc"),
+        Field(
+            alias="lmModelSrc",
+            description="Language-model source; plans the song structure.",
+        ),
     ]
     dit_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc,
-        Field(alias="ditModelSrc"),
+        Field(
+            alias="ditModelSrc",
+            description="DiT model source; generates the audio latent (the quality-defining stage).",
+        ),
     ]
     vae_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc,
-        Field(alias="vaeModelSrc"),
+        Field(
+            alias="vaeModelSrc",
+            description="VAE model source; decodes the latent into the output waveform.",
+        ),
     ]
 
 
