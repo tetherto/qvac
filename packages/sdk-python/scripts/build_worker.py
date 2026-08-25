@@ -64,7 +64,17 @@ def build(sdk: Path, *, force: bool) -> Path:
     # consumes, so tsc below fails on anything unreleased. The helper installs
     # the SDK against `file:../inference`, so it stands in for the plain install.
     if (sdk.parent / "inference").is_dir():
-        _run(["bun", "run", "sdk-source:workspace"], sdk)
+        # The helper rewrites the SDK manifest to `file:../inference` and does
+        # not put it back. Restore it once the install has happened: node_modules
+        # keeps the link, so tsc below still compiles against the workspace
+        # engine, and a dev running this is not left with a dirty manifest that
+        # could be committed. Same restore pr-checks-sdk-pod.yml does.
+        manifest = sdk / "package.json"
+        saved = manifest.read_text(encoding="utf-8")
+        try:
+            _run(["bun", "run", "sdk-source:workspace"], sdk)
+        finally:
+            manifest.write_text(saved, encoding="utf-8")
     else:
         _run(["bun", "install"], sdk)
     # bun/npm don't reliably set the exec bit on the prebuilt Bare binary, and
