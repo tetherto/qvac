@@ -33,7 +33,6 @@ const { recordPerformance } = require('./_perf-helper')
 const isMobile = os.platform() === 'ios' || os.platform() === 'android'
 const isDarwin = os.platform() === 'darwin'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-const wanDebug = proc.env && proc.env.WAN_DEBUG === '1'
 // Skip Wan tests on mobile, on any CPU-only runner (NO_GPU), and on macOS.
 // The Wan 14B I2V model OOMs the Mac mini M4 Metal GPU during diffusion compute
 // (kIOGPUCommandBufferCallbackErrorOutOfMemory), even at 256x256, so darwin is
@@ -215,7 +214,7 @@ test(
         diffusion_fa: true,
         offload_to_cpu: true,
         vae_tiling: true,
-        verbosity: Number((proc.env && proc.env.WAN_VERBOSITY) || 2)
+        verbosity: 2
       },
       logger: console,
       opts: { stats: true }
@@ -261,8 +260,6 @@ test(
             try {
               const tick = JSON.parse(data)
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
-                if (wanDebug)
-                  console.log(`[Wan T2V progress] step=${tick.step} total=${tick.total}`)
                 progressTicks.push(tick)
               }
             } catch (_) {
@@ -463,7 +460,7 @@ test(
       vae_tiling: true,
       // Keep diffusion on GPU, but route only oversized VAE graphs to CPU.
       vae_auto_cpu_fallback: true,
-      verbosity: Number((proc.env && proc.env.WAN_VERBOSITY) || 2)
+      verbosity: 2
     }
     t.is(i2vConfig.vae_auto_cpu_fallback, true, 'Wan I2V enables automatic VAE CPU fallback')
 
@@ -498,7 +495,6 @@ test(
       console.log('\n=== Generating I2V video ===')
       const tGen = Date.now()
 
-      if (wanDebug) console.log('[Wan I2V debug] calling model.run')
       const response = await model.run({
         mode: 'img2vid',
         prompt: I2V_SMOKE_PROMPT,
@@ -511,7 +507,6 @@ test(
         seed: I2V_SMOKE_SEED
       })
 
-      if (wanDebug) console.log('[Wan I2V debug] model.run returned response')
       await response
         .onUpdate((data) => {
           if (ttfbMs === null) ttfbMs = Date.now() - tGen
@@ -521,8 +516,6 @@ test(
             try {
               const tick = JSON.parse(data)
               if (typeof tick === 'object' && tick && 'step' in tick && 'total' in tick) {
-                if (wanDebug)
-                  console.log(`[Wan I2V progress] step=${tick.step} total=${tick.total}`)
                 progressTicks.push(tick)
               }
             } catch (_) {
