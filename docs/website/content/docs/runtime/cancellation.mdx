@@ -11,9 +11,11 @@ Every long-running SDK operation that goes through the request registry can be c
 The mental model is: **the primary path is `requestId`** — pass the run's `requestId` to `cancel()` to stop that exact call. **The `modelId` path is an escape hatch** — use it for model unload, app shutdown, admin sweeps, or for ops whose addons cannot interrupt mid-decode (`translate`, `textToSpeech`, `ocr`, `diffusion`, `upscale`).
 
 <Callout title="Coverage" type="info">
-**Targeted cancel by `requestId`** works for: `completion()`, `batchCompletion()`, `audioGen()`, `loadModel()`, `embed()`, `transcribe()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
+**Targeted cancel by `requestId` — only the cancelled call stops**: `completion()`, `batchCompletion()`, LLM `translate()`, `audioGen()`, `loadModel()`, `downloadAsset()`, and `rag*()` (`ragIngest`, `ragSaveEmbeddings`, `ragReindex`).
 
-**Broad cancel by `modelId`** additionally covers `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
+**Accepted by `requestId` but also aborts other in-flight calls on the same model**: `embed()`, `transcribe()`.
+
+**Broad cancel by `modelId`** additionally covers NMT `translate()`, `textToSpeech()`, `ocr()`, `diffusion()`, and `upscale()`. These accept `cancel({ modelId })` but their addons cannot interrupt mid-decode — the in-flight call stops yielding when `signal.aborted` flips on the next yield point, and the C++ work runs to completion in the background.
 
 **Duplex sessions** — `transcribeStream(...)` and `textToSpeechStream(...)` use `.destroy()` on the returned session.
 
@@ -75,7 +77,11 @@ Outcome on the consumer side:
 
 Other operations that go through `cancel({ requestId })` (`loadModel`, `downloadAsset`, `embed`, `transcribe`, `rag*`) all reject their returned promise with the same `InferenceCancelledError` (code `52419`) — the error class is reused across non-inference handlers, no new code was added.
 
-Only the targeted call is affected — other in-flight calls on the same `modelId` keep running. To cancel `translate`, `textToSpeech`, `ocr`, `diffusion`, or `upscale` — or to sweep every in-flight call on a model in one shot — use the broad-cancel form below.
+Only the cancelled call stops — other in-flight `completion()`, `batchCompletion()` and LLM `translate()` calls on the same `modelId` keep running. Use this form when you want a per-request stop button that doesn't disturb the rest of your workload.
+
+**Watch out** for `embed()` and `transcribe()`: a targeted cancel by `requestId` **also stops every other in-flight call on the same model**. If several requests share a model, expect them all to be aborted together.
+
+To cancel NMT `translate`, `textToSpeech`, `ocr`, `diffusion`, or `upscale` — or to sweep every in-flight call on a model in one shot — use the broad-cancel form below.
 
 ## Broad cancel by `modelId` (escape hatch)
 
@@ -182,6 +188,6 @@ The following script loads a model, starts a streaming `completion()`, cancels i
 - `InferenceCancelledError` (code `52419`) — expected on the `final` promise (and any aggregate promise) after a consumer-initiated cancel. Treat it as a normal outcome, not a failure. Carries `requestId` plus a `partial: { text?, toolCalls?, stats? }` payload with whatever was accumulated before the cancel point.
 - `RequestNotFoundError` (code `52418`) — registry lookup miss for the given `requestId`. Rare in practice because `cancel({ requestId })` against an already-terminated id is a no-op on the handler (returns `success: true, cancelled: 0`); consumer code that narrows by class will see this for other call sites that look up a request by id.
 - `RequestIdConflictError` (code `52417`) — two requests landed with the same `requestId`. Astronomically unlikely with UUIDv4; if you see it, report.
-- `RequestRejectedByPolicyError` (code `52420`) — the registry's concurrency policy rejected the request before it began (e.g. `oneAtATimePerModel` for `completion` — the second concurrent completion against the same model is admissibility-rejected). Carries `requestId`, `kind`, `modelId`, and a human-readable `reason`.
+- `RequestRejectedByPolicyError` (code `52420`) — the model's queue is full and your request was rejected before it started. On an LLM, `completion`, `batchCompletion`, and LLM `translate` share one queue: [`modelConfig.parallel`](/ai-capabilities/text-generation#concurrent-completions) running slots plus 64 waiters. A running `finetune` locks that queue, so readers pile up behind it and can hit the same cap. Launching a second `finetune` while one runs gives you `CompletionFailedError` (code `52406`) instead — branch on it if you need to tell "already training" from "queue full". To serve bigger bursts, raise `parallel` at load (and raise [`ctx_size`](/ai-capabilities/text-generation#concurrent-completions) proportionally), back-pressure at the app level, or catch and retry. Carries `requestId`, `kind`, `modelId`, and a `reason`.
 - `AsyncDisposeUnavailableError` (code `53503`) — the runtime is missing `Symbol.asyncDispose` (older Bare builds). Upgrade Bare.
 

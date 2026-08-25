@@ -140,6 +140,10 @@ Configuring one or more origins enables CORS. `--docs` also enables CORS for sam
 
 The `serve.models` field is a map of model aliases to model entries. Keys are the **model aliases** — the names that HTTP clients use in the `model` field of their requests. Values can be either a **string** (SDK model constant name, e.g., `"QWEN3_600M_INST_Q4"`) or a `ModelEntry` object:
 
+<Callout type="success">
+**Tip:** you can generate or extend `serve.models` interactively with [`qvac configure`](/cli#qvac-configure) instead of writing entries by hand.
+</Callout>
+
 | Field | Description | Type | Required |
 | --- | --- | --- | --- |
 | `model` | SDK model constant name. | `string` | Yes (unless using `src` + `type`) |
