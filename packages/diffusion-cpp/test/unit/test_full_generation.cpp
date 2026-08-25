@@ -105,12 +105,10 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   // sampler sequence ran to completion instead: some tick must report
   // step==total==10 (the configured step count).
   // Progress JSON shape: {"step":N,"total":M,"elapsed_ms":T}
-  const bool sawCompletedDenoise =
-      std::any_of(progressTicks.begin(), progressTicks.end(),
-                  [](const std::string& tick) {
-                    return tick.find("\"step\":10,\"total\":10") !=
-                        std::string::npos;
-                  });
+  const bool sawCompletedDenoise = std::any_of(
+      progressTicks.begin(), progressTicks.end(), [](const std::string& tick) {
+        return tick.find("\"step\":10,\"total\":10") != std::string::npos;
+      });
   EXPECT_TRUE(sawCompletedDenoise)
       << "Expected a completed sampler sequence tick (step=10,total=10); "
          "last tick: "
