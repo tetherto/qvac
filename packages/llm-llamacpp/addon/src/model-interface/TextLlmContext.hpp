@@ -181,7 +181,7 @@ public:
 
   // Testing seams: expose the owned `ReasoningBlockCompactor` and the
   // otherwise-private `compactThinkSpan()` entry point so driver-level
-  // unit tests can install an `IKvCacheOps` override and drive
+  // unit tests can install an `IReasoningRewindOps` override and drive
   // the end-of-generation compaction step directly. Production code
   // MUST NOT use these — production compaction fires from within
   // `onGenerationFinished` / the scheduler's slot cleanup.

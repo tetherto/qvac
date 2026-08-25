@@ -641,19 +641,16 @@ TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
       << "Newly constructed driver must report no user-visible perf snapshot";
 }
 
-// Pure-attention models do not need (and do not capture) a user-visible
-// perf snapshot in `compactThinkSpan`: the only purpose of the
-// snapshot is to freeze `n_p_eval` / `t_p_eval_ms` BEFORE the recurrent
-// replay decode inflates them, and pure-attention compaction is a pure
-// cache-edit (`seq_rm + seq_add`) with no replay. Capturing for pure-
-// attention also opens a one-token race against lazy GPU-side decode
-// telemetry, so the capture is now gated on
-// `needsRecurrentSnapshot_ && compactor_.hasOpenSpan()`. This test
-// pins the contract: a pure-attention inference must leave the
-// snapshot empty so `runtimeStats()` falls back to the live read.
+// Every model replays now, pure attention included, so every compaction runs
+// `restore + llama_decode` over the kept tokens. Those are batch decodes and
+// they land in `n_p_eval` / `t_p_eval_ms`, which would show up to the caller
+// as prompt tokens it never sent. So `compactThinkSpan` must freeze the
+// user-visible prompt counters before replaying, on every memory kind. This
+// test pins that: a pure-attention inference that compacted must leave a
+// snapshot behind.
 TEST_F(
     TextLlmContextCancelTest,
-    CompactThinkSpanLeavesPerfSnapshotEmptyForPureAttention) {
+    CompactThinkSpanCapturesPerfSnapshotForPureAttention) {
   auto model = loadTextModel(qwen3PureAttentionModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -671,10 +668,10 @@ TEST_F(
   EXPECT_TRUE(evalResult.rollbackOk);
   ASSERT_TRUE(driver.generateResponse([](const std::string&) {}).ok);
 
-  EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "Pure-attention compactThinkSpan must NOT capture a snapshot — "
-         "the live read in runtimeStats is already correct and capturing "
-         "early races against lazy GPU perf telemetry";
+  EXPECT_TRUE(driver.takeUserVisiblePerfSnapshot().has_value())
+      << "pure-attention compaction replays through llama_decode now, so the "
+         "prompt-side counters must be frozen before those batch decodes "
+         "inflate them";
 }
 
 // ============================================================================

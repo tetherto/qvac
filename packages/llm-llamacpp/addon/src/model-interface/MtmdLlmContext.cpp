@@ -445,6 +445,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // (captured by `compactThinkSpan` before its potential replay decode)
   // or a live `llama_perf_context()` value — never a stale one.
   userVisiblePerf_.reset();
+  lastGeneratedTokenCount_ = 0;
 
   mtmd::input_chunks chunks(mtmd_input_chunks_init());
 
@@ -899,6 +900,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
             ADDON_ID, toString(FailedToDecode), errorMsg);
       }
       ++current_.pos;
+      ++lastGeneratedTokenCount_;
       ++current_.cacheTokens;
       capturePendingThinkClose();
       flushPendingUtf8ToCallback(outputCallback);
@@ -930,6 +932,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     }
     ++current_.pos;
     ++current_.cacheTokens;
+    ++lastGeneratedTokenCount_;
     // Close-marker token (if any was sampled this iteration) is now
     // committed; capture the span end.
     capturePendingThinkClose();
@@ -1210,14 +1213,12 @@ void MtmdLlmContext::recordPostReasoningTokenIfActive(llama_token tokenId) {
 }
 
 void MtmdLlmContext::compactThinkSpan() {
-  // Freeze the user-visible perf counters before the compactor's
-  // recurrent path runs `restore + llama_decode` to replay the post-
-  // reasoning tail. Those replay decodes accumulate into `n_p_eval` /
-  // `t_p_eval_ms` and would otherwise inflate prompt / TTFT / ppTPS.
-  // Capture only when the recurrent replay path can actually fire;
-  // pure-attention compaction has no extra `llama_decode`.
-  if (needsRecurrentSnapshot_ && compactor_.hasOpenSpan() &&
-      !userVisiblePerf_.has_value()) {
+  // Freeze the user-visible perf counters before the compactor runs
+  // `restore + llama_decode` to replay the post-reasoning tail. Those replay
+  // decodes accumulate into llama's own counters and would otherwise show up
+  // as inflated prompt tokens / TTFT / ppTPS and a short generated-token
+  // count. Every model replays now, so this is no longer recurrent-only.
+  if (compactor_.hasOpenSpan() && !userVisiblePerf_.has_value()) {
     userVisiblePerf_ = llama_perf_context(modelCtx_.lctx);
   }
   const ReasoningBlockCompactor::Outcome outcome =

@@ -1344,22 +1344,30 @@ LlamaModel::batchRuntimeStatsLocked() const {
 
 qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::singleRuntimeStatsLocked() const {
-  // Prefer the per-inference snapshot taken at the start of
-  // `compactThinkSpan`. That snapshot is the user-visible cutoff, BEFORE
-  // any recurrent replay decode rolled extra `llama_decode` calls into
-  // `n_p_eval` / `t_p_eval_ms`. When no snapshot exists (pure-attention
-  // models, prefill-only requests, or `runtimeStats()` called between
-  // turns) we fall back to a live `llama_perf_context()` read — same as
-  // the legacy behaviour.
-  auto snapshot = state_->llmContext_->takeUserVisiblePerfSnapshot();
-  auto perfData =
-      snapshot.value_or(llama_perf_context(state_->llmContext_->getCtx()));
+  // Compaction replays the kept tokens through `llama_decode` after
+  // generation ends. Those are batch decodes, so they land in `n_p_eval` /
+  // `t_p_eval_ms` and would otherwise show up as prompt tokens the caller
+  // never sent. The snapshot taken at the start of `compactThinkSpan` is the
+  // user-visible cutoff for those prompt-side counters.
+  //
+  // The generation-side counters are read live instead. The snapshot is taken
+  // before the request is fully wound down, so it can miss the final decode,
+  // and replay never adds to `n_eval` anyway: it decodes in batches.
+  auto perfData = llama_perf_context(state_->llmContext_->getCtx());
+  if (auto snapshot = state_->llmContext_->takeUserVisiblePerfSnapshot()) {
+    perfData.n_p_eval = snapshot->n_p_eval;
+    perfData.t_p_eval_ms = snapshot->t_p_eval_ms;
+  }
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill =
       state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
   const double timeToFirstToken = wasPrefill ? 0.0 : perfData.t_p_eval_ms;
+  // Counted where the tokens are produced, not inferred from `n_eval`.
+  // See `LlmContext::lastGeneratedTokenCount`.
   const int64_t generatedTokens =
-      static_cast<int64_t>(wasPrefill ? 0 : perfData.n_eval);
+      wasPrefill ? 0
+                 : static_cast<int64_t>(
+                       state_->llmContext_->lastGeneratedTokenCount());
   const int64_t promptTokens =
       static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
   const double tokensPerSecond =

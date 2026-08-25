@@ -401,6 +401,25 @@ public:
   }
 
   /**
+   * Tokens the most recent single-prompt inference actually generated.
+   *
+   * llama's `n_eval` cannot answer this. It counts decodes whose batch held
+   * exactly one token (`llama-context.cpp`: `n_queued_tokens == 1`), so it
+   * measures batch shape, not meaning. Generation happens to decode one at a
+   * time, which is why the two used to agree, but reasoning compaction now
+   * replays the kept tokens as a batch and those land in `n_p_eval` instead.
+   * Counting where the tokens are produced keeps the stat honest regardless
+   * of how any later cache work is batched.
+   */
+  [[nodiscard]] virtual int32_t lastGeneratedTokenCount() const {
+    return lastGeneratedTokenCount_;
+  }
+
+protected:
+  int32_t lastGeneratedTokenCount_ = 0;
+
+public:
+  /**
    * Wall-clock milliseconds spent in the vision encoder (mtmd/CLIP ViT
    * forward + projection) during the most recent inference. 0 for
    * text-only contexts, which never run a vision encoder.
