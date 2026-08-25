@@ -198,7 +198,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.WORKER_PLUGINS_NOT_REGISTERED]: {
     name: 'WORKER_PLUGINS_NOT_REGISTERED',
     message: () =>
-      'No plugins registered in the worker. On Bare, register the plugins you need with `plugins([...])` (or `registerPlugin(...)`) before the first SDK call — import each from its subpath, e.g. `@qvac/sdk/llamacpp-completion/plugin`. For in-process Bare use `@qvac/inference`. See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare'
+      'No plugins registered in the worker. For in-process Bare use `@qvac/inference` and register plugins with `plugins([...])` (or `registerPlugin(...)`). See https://docs.qvac.tether.io/configuration/plugins#runtime-registration-on-bare'
   },
   [SDK_CLIENT_ERROR_CODES.BUNDLE_VERIFICATION_FAILED]: {
     name: 'BUNDLE_VERIFICATION_FAILED',

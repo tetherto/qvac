@@ -137,7 +137,7 @@ Run the quickstart script:
 QVAC_CONFIG_PATH=./qvac.config.json node quickstart.js
 ```
 
-Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a little setup — a `process` global and plugin registration — so see [Running on Bare](#running-on-bare) below.
+Or on [Bare](https://bare.pears.com) with `@qvac/inference` — see [Running on Bare](#running-on-bare).
 </Step>
 
 </Steps>
@@ -146,7 +146,7 @@ Or with the [Bare](https://bare.pears.com) runtime. Running on Bare needs a litt
 
 Follow these instructions to run any example in this documentation:
 - All examples are self-contained, runnable JavaScript scripts. Use the `qvac-examples` workspace created in this quickstart to store and run them as you explore this documentation.
-- Run each example with the indicated compatible JavaScript environment. QVAC supports multiple environments (Node.js, Bare, and Expo). The examples are written in Node style and run on Node.js or Bun directly; to run them on Bare, see [Running on Bare](#running-on-bare).
+- Run each example with the indicated compatible JavaScript environment. QVAC supports Node.js, Expo, and in-process Bare via `@qvac/inference`. The examples are written in Node style and run on Node.js or Bun directly; to run them on Bare, see [Running on Bare](#running-on-bare).
 - More examples can be found in the [SDK examples directory](https://github.com/tetherto/qvac/tree/main/packages/sdk/examples).
 - Some examples need companion files — sample audio, an image, or a config — that aren't part of the embedded code. These can be found in the same examples directory.
 - Some examples also provide a TypeScript version. If you want to run TS directly, install the required dev dependencies:
@@ -266,7 +266,7 @@ export default config;
 
 To run an example on Bare:
 
-1. Provide a `process` global. Install `bare-process` and set it before using the SDK:
+1. Provide a `process` global. Install `bare-process` and set it before using `@qvac/inference`:
    ```js
    import process from "bare-process";
    globalThis.process = process;

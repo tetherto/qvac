@@ -10,13 +10,13 @@
 > <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
-**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js and [Expo](https://expo.dev).
 
 See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.io/sdk/getting-started) for the comprehensive QVAC documentation.
 
 For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
 
-> **Running on Bare directly?** `@qvac/sdk` runs on Bare, but you must register the plugins you use explicitly before the first SDK call (Node and Expo do this automatically). For in-process Bare (Pear apps, bare-expo, direct Bare scripts) use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
+> **In-process Bare:** use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
 
 ## Supported environments and installation
 

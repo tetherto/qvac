@@ -16,7 +16,7 @@ Related Documents & Links
 QVAC SDK is a local-first, peer-to-peer AI platform for JavaScript, Bare, and Python applications. The architecture is split by responsibility:
 
 - **`@qvac/inference`** is the SDK core: a Bare-only in-process engine with plugin assembly, model loading, request lifecycle, P2P/delegation, registry access, RAG, logging, and profiling.
-- **`@qvac/sdk`** is the TypeScript convenience layer for Node.js, Bun, Electron, Expo/React Native, Pear, and direct Bare. It owns runtime integration, worker RPC, bundling, platform packaging, and the default all-plugin distribution.
+- **`@qvac/sdk`** is the TypeScript convenience layer for Node.js, Bun, Electron, Expo/React Native, and Pear. It owns runtime integration, worker RPC, bundling, platform packaging, and the default all-plugin distribution.
 - **`@qvac/bare-sdk`** is deprecated (last release 0.18.1). In-process Bare consumers should use `@qvac/inference`.
 - **`tetherto-qvac-sdk`** is the generated Python client. It is built from the SDK wire contract and runs against the same Bare worker as TypeScript hosts.
 
@@ -133,7 +133,7 @@ Deployment paths:
 - Node.js, Bun, and Electron run `@qvac/sdk` in the host process and spawn a Bare subprocess.
 - Expo/React Native starts the worker bundle inside a BareKit `Worklet`.
 - Pear uses a generated `qvac/worker.pear.entry.mjs` staged into the app.
-- Direct Bare runs in one process through `@qvac/inference`, or through the compatibility path exposed by `@qvac/sdk`.
+- Direct Bare runs in one process through `@qvac/inference`.
 - Python runs `tetherto-qvac-sdk` in the Python process and starts a Bare worker subprocess.
 
 Native addon packaging follows the deployment target: Node/Bun use installed prebuilds, Electron and Expo/RN package native addons with the app, and Bare/Pear builds include the addons selected by the authored or generated worker entry.
@@ -160,7 +160,7 @@ Worker-backed clients use the same JSON request/response envelopes over differen
 - Expo clients use `bare-rpc` over the BareKit worklet IPC bridge.
 - Python clients use `bare-rpc-python` over loopback TCP (`127.0.0.1:0`) because asyncio has no cross-platform Unix-socket/named-pipe server.
 
-In-process paths (`@qvac/inference` and direct Bare) bypass sockets and call the dispatch layer directly.
+In-process `@qvac/inference` bypasses sockets and calls the dispatch layer directly.
 
 ---
 

@@ -175,7 +175,7 @@ The Python SDK exposes plugin invocation through the same worker contract:
 
 The `plugins` array in `qvac.config.*` is **bundle-time** configuration — it controls which addons get packed into your worker. That is separate from **runtime registration**, which determines the plugins live in the worker process when an SDK call runs.
 
-On Node.js and Expo the SDK spawns a worker that auto-registers the full built-in set, so you never register manually. **Bare runs in-process with no spawned worker**, so nothing auto-registers — register the plugins you use before the first SDK call:
+On Node.js and Expo the SDK spawns a worker that auto-registers the full built-in set, so you never register manually. In-process Bare uses `@qvac/inference` with no spawned worker — register the plugins you use before the first call:
 
 ```js
 import { plugins } from "@qvac/inference";
@@ -187,7 +187,7 @@ const sdk = plugins([llmPlugin]); // or registerPlugin(llmPlugin) from "@qvac/in
 Calls made before any plugin is registered raise `PluginsNotRegisteredError`.
 
 <Callout type="info">
-For in-process Bare use [`@qvac/inference`](https://github.com/tetherto/qvac/tree/main/packages/inference). `@qvac/sdk` also runs on Bare; import the same plugins from `@qvac/sdk/<capability>/plugin` instead. `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
+In-process Bare uses [`@qvac/inference`](https://github.com/tetherto/qvac/tree/main/packages/inference). `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
 </Callout>
 
 ## Notes
