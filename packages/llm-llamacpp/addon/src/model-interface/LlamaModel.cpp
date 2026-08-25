@@ -79,6 +79,72 @@ LlamaModel::LlamaModel(
   setInitLoader(InitLoader::LOADER_TYPE::DELAYED);
 }
 
+namespace {
+
+// A model can survive init and still be unable to decode. Measured on a
+// 24 GiB M4 Pro: Gemma 4 31B Q4_K_M at ctx 1024 loads (Metal over-commits
+// past recommendedMaxWorkingSetSize), then every decode fails with
+// "failed to decode next token". Fabric's own warmup would not catch this
+// either: `common_init_from_params` discards the warmup decode status, and
+// LoadFitNormalization disables warmup outright. So run one strict BOS/EOS
+// decode here and fail the load, instead of handing out a handle that dies
+// on the first user request. The successful probe doubles as a warmup:
+// weights are faulted and Metal pipelines compiled before the first token.
+void probeDecodeOrThrow(
+    llama_context* lctx, llama_model* model, const std::string& error) {
+  const llama_vocab* vocab = llama_model_get_vocab(model);
+  std::vector<llama_token> tokens;
+  const llama_token bos = llama_vocab_bos(vocab);
+  const llama_token eos = llama_vocab_eos(vocab);
+  if (bos != LLAMA_TOKEN_NULL) {
+    tokens.push_back(bos);
+  }
+  if (eos != LLAMA_TOKEN_NULL) {
+    tokens.push_back(eos);
+  }
+  if (tokens.empty()) {
+    tokens.push_back(0);
+  }
+
+  int32_t status = 0;
+  if (llama_model_has_encoder(model)) {
+    status = llama_encode(
+        lctx,
+        llama_batch_get_one(
+            tokens.data(), static_cast<int32_t>(tokens.size())));
+    llama_token decoderStart = llama_model_decoder_start_token(model);
+    if (decoderStart == LLAMA_TOKEN_NULL) {
+      decoderStart = bos;
+    }
+    tokens.assign(1, decoderStart);
+  }
+  if (status == 0 && llama_model_has_decoder(model)) {
+    status = llama_decode(
+        lctx,
+        llama_batch_get_one(
+            tokens.data(), static_cast<int32_t>(tokens.size())));
+  }
+
+  // Leave no trace of the probe regardless of outcome.
+  llama_memory_clear(llama_get_memory(lctx), true);
+  llama_synchronize(lctx);
+  llama_perf_context_reset(lctx);
+
+  if (status != 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        error,
+        string_format(
+            "%s: model loaded but cannot decode (probe decode failed with "
+            "status %d); the resolved configuration does not fit this "
+            "device's usable memory\n",
+            __func__,
+            status));
+  }
+}
+
+} // namespace
+
 void LlamaModel::reload(
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   {
@@ -229,6 +295,15 @@ void LlamaModel::init(bool acquireLock) {
       std::string(constructionArgs_.projectionPath),
       params,
       std::move(llamaInit));
+
+  // Finetuning drives its own graph and never serves inference from this
+  // context, so the inference probe would only add noise there.
+  if (snap->llmContext_ && !params.training) {
+    probeDecodeOrThrow(
+        snap->llmContext_->getCtx(),
+        snap->llmContext_->getModel(),
+        errorWhenFailed);
+  }
 
   if (snap->llmContext_) {
     snap->cacheManager_.emplace(
