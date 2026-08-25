@@ -35,7 +35,6 @@ namespace utils {
 enum class RecurrentReasoningBoundaryDecision {
   Disabled,
   Capture,
-  UnsupportedMultiTokenClose,
 };
 
 [[nodiscard]] inline RecurrentReasoningBoundaryDecision
@@ -49,22 +48,12 @@ recurrentReasoningBoundaryDecision(
   if (!removeThinkingFromContext || !reasoningEnabled) {
     return RecurrentReasoningBoundaryDecision::Disabled;
   }
-  if (!closeMarkerSingleToken) {
-    return RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose;
-  }
+  // A multi-piece close used to be unsupported because replay could only seed
+  // the single token that tripped the close detector. It seeds the whole
+  // `cached_close_tag_tokens` sequence now, so marker length no longer
+  // decides whether compaction is possible.
+  (void)closeMarkerSingleToken;
   return RecurrentReasoningBoundaryDecision::Capture;
-}
-
-[[nodiscard]] inline const char* recurrentReasoningBoundaryFailureReason(
-    RecurrentReasoningBoundaryDecision decision) noexcept {
-  switch (decision) {
-  case RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose:
-    return "the reasoning close marker is not a single token";
-  case RecurrentReasoningBoundaryDecision::Disabled:
-  case RecurrentReasoningBoundaryDecision::Capture:
-    return "";
-  }
-  return "";
 }
 
 [[nodiscard]] inline bool shouldCaptureRecurrentReasoningBoundary(

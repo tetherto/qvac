@@ -105,6 +105,13 @@ void ReasoningBlockCompactor::recordCloseMarkerForReplay(llama_token id) {
   rollback_.appendPostReasoningToken(id);
 }
 
+void ReasoningBlockCompactor::recordCloseMarkerForReplay(
+    const std::vector<llama_token>& ids) {
+  for (const llama_token id : ids) {
+    recordCloseMarkerForReplay(id);
+  }
+}
+
 void ReasoningBlockCompactor::recordPreReasoningToken(llama_token id) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_) {
     return;

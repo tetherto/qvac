@@ -1370,10 +1370,10 @@ LlamaModel::singleRuntimeStatsLocked() const {
                        state_->llmContext_->lastGeneratedTokenCount());
   const int64_t promptTokens =
       static_cast<int64_t>(wasPrefill ? 0 : perfData.n_p_eval);
-  const double tokensPerSecond =
-      (!wasPrefill && perfData.t_eval_ms > 0)
-          ? kMillisInSecond / perfData.t_eval_ms * perfData.n_eval
-          : 0.0;
+  const double tokensPerSecond = (!wasPrefill && perfData.t_eval_ms > 0)
+                                     ? kMillisInSecond / perfData.t_eval_ms *
+                                           static_cast<double>(generatedTokens)
+                                     : 0.0;
   const double promptProcessingTPS =
       perfData.t_p_eval_ms > 0
           ? kMillisInSecond / perfData.t_p_eval_ms * perfData.n_p_eval

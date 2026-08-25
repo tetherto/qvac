@@ -118,15 +118,13 @@ TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
       /*closeMarkerSingleToken=*/true));
 }
 
-// Recurrent replay seeds `postReasoningTokens_` with the single sampled
-// token that flips `updateReasoningBuffer` out of `inside_reasoning`. If
-// the close tag tokenises to more than one piece, that seed captures
-// only the tail piece and the restored SSM state ends with an unbalanced
-// `<think>` opener. The policy MUST reject the boundary snapshot in that
-// case so `remove_thinking_from_context` hard-fails instead of leaving
-// reasoning tokens in cache or silently corrupting recurrent state.
-TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
+// A close marker that tokenises to several pieces used to be unsupported,
+// because replay could only seed the single token that tripped the close
+// detector, leaving the restored span with an unbalanced `<think>` opener.
+// Replay seeds the whole `cached_close_tag_tokens` sequence now, so marker
+// length no longer decides whether compaction is possible.
+TEST(ReasoningSnapshotPolicy, CapturesWhenCloseMarkerIsMultiToken) {
+  EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
       /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
@@ -139,7 +137,7 @@ TEST(ReasoningSnapshotPolicy, RejectsWhenCloseMarkerIsMultiToken) {
           /*reasoningEnabled=*/true,
           /*thinkingForcedOpen=*/true,
           /*closeMarkerSingleToken=*/false),
-      RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose);
+      RecurrentReasoningBoundaryDecision::Capture);
 }
 
 TEST(ReasoningSnapshotPolicy, RollsBackAnyInterruptedOpenReasoningSpan) {

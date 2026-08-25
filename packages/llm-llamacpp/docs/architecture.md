@@ -458,7 +458,7 @@ graph TB
 
 #### **Notable C++ modules**
 
-The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `KvCacheOps`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
+The diagram above lists the primary types, not every source file. Current LLM behavior also depends on `GenerationParamsApply`, `ReasoningBlockCompactor`, Qwen template/reasoning/tool helpers, and finetuning helpers under `addon/src/model-interface/` and `addon/src/utils/`.
 
 #### **BackendSelection (utils/BackendSelection.cpp)**
 

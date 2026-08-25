@@ -78,12 +78,13 @@ bool initializeReasoningState(
   if (closeTokens.size() == 1) {
     state.cached_close_tag_token = closeTokens[0];
   }
+  state.cached_close_tag_tokens = closeTokens;
 
-  // The recurrent replay seeds `postReasoningTokens_` with
-  // `cached_close_tag_token` (populated just above when
-  // `closeTokens.size() == 1`) so the SSM restores with a balanced
-  // `<think>...</think>` span; a multi-piece close would leave only
-  // a tail piece to seed, which cannot re-balance the opener.
+  // Replay seeds `cached_close_tag_tokens`, the whole sequence, so a
+  // multi-piece close still restores a balanced `<think>...</think>` span.
+  //
+  // `close_is_single_token` survives for EOS substitution only, which swaps a
+  // sampled EOS for one close token and so genuinely needs a single id.
   //
   // Gate on the tokenisation of the *canonical* close marker
   // (`closeTagForEosRecovery`, which strips the chat template's

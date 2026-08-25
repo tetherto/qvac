@@ -1113,19 +1113,6 @@ void MtmdLlmContext::configureReasoningTags(
   if (reasoningInitOk) {
     reasoningEnabled_ = true;
     compactor_.setReasoningEnabled(true);
-    const bool reasoningCompactionActive = params_.reasoning_budget != 0;
-    if (needsRecurrentSnapshot_ && removeThinkingFromContext_ &&
-        reasoningCompactionActive && !isPrefillOnlyRequest_ &&
-        !reasoningState_.close_is_single_token) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[MtmdLlm] recurrent reasoning compaction will hard-fail if "
-              "this request emits reasoning: remove_thinking_from_context is "
-              "enabled on a hybrid/recurrent model, but close marker '%s' "
-              "must tokenise to one token\n",
-              reasoningTags->close.c_str()));
-    }
     return;
   }
 
@@ -1169,9 +1156,6 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   // marker and visible tail, so the restored recurrent state still
   // sees a balanced compacted reasoning block.
   try {
-    if (decision != RecurrentReasoningBoundaryDecision::Capture) {
-      throwUnsupportedRecurrentReasoningCompaction("[MtmdLlm]", decision);
-    }
     compactor_.snapshotAtPrefillBoundary(
         modelCtx_.lctx, seqId_, current_.pos, "[MtmdLlm]");
   } catch (const qvac_errors::StatusError&) {
@@ -1684,7 +1668,7 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
       // string-buffer padding can defer the detector flip onto a
       // template-newline token.
       compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_token);
+          reasoningState_.cached_close_tag_tokens);
     }
   }
 

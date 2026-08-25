@@ -760,7 +760,9 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       break;
     }
     if (step.decodedInline) {
-      ++lastGeneratedTokenCount_;
+      // handleReasoningEOS counts the tokens it commits itself: it decodes the
+      // substituted close tag plus up to two newlines, so one increment here
+      // would undercount by up to two.
       continue;
     }
     if (step.finished) {
@@ -880,10 +882,9 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     // `inside_reasoning` from false to true is part of the pre-
     // reasoning span (template preamble + opener pieces). The
     // compactor's restored end-of-prefill snapshot does not contain
-    // any of those tokens, so the replay must carry them or the SSM
-    // would land in an unbalanced state on the next turn. No-op on
-    // pure-attention paths, when the feature is off, or before the
-    // boundary snapshot exists.
+    // any of those tokens, so the replay must carry them or the next turn
+    // would resume from an unbalanced state. Every model replays now, so this
+    // is a no-op only when the feature is off or before the boundary exists.
     if (!wasInside) {
       compactor_.recordPreReasoningToken(tokenId);
     }
@@ -922,7 +923,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       // on this branch. `recordCloseMarkerForReplay` additionally
       // no-ops on `LLAMA_TOKEN_NULL` and on non-recurrent paths.
       compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_token);
+          reasoningState_.cached_close_tag_tokens);
     }
   }
 
@@ -1124,19 +1125,6 @@ void TextLlmContext::configureReasoningTags(
   if (reasoningInitOk) {
     reasoningEnabled_ = true;
     compactor_.setReasoningEnabled(true);
-    const bool reasoningCompactionActive = params_.reasoning_budget != 0;
-    if (needsRecurrentSnapshot_ && removeThinkingFromContext_ &&
-        reasoningCompactionActive && !isPrefillOnlyRequest_ &&
-        !reasoningState_.close_is_single_token) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "[TextLlm] recurrent reasoning compaction will hard-fail if "
-              "this request emits reasoning: remove_thinking_from_context is "
-              "enabled on a hybrid/recurrent model, but close marker '%s' "
-              "must tokenise to one token\n",
-              reasoningTags->close.c_str()));
-    }
     return;
   }
 
@@ -1171,8 +1159,6 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
     break;
   case RecurrentReasoningBoundaryDecision::Disabled:
     return -1;
-  case RecurrentReasoningBoundaryDecision::UnsupportedMultiTokenClose:
-    throwUnsupportedRecurrentReasoningCompaction("[TextLlm]", decision);
   }
   // Snapshot at the END of prefill. For force-open templates the
   // restored prefix already contains the reasoning opener. For
@@ -1215,9 +1201,6 @@ void TextLlmContext::snapshotForRecurrentRollback() {
     return;
   }
   try {
-    if (decision != RecurrentReasoningBoundaryDecision::Capture) {
-      throwUnsupportedRecurrentReasoningCompaction("[TextLlm]", decision);
-    }
     compactor_.snapshotAtPrefillBoundary(
         modelCtx_.lctx, seqId_, nPast_, "[TextLlm]");
   } catch (const qvac_errors::StatusError&) {
@@ -1641,6 +1624,7 @@ bool TextLlmContext::handleReasoningEOS(
     return true;
   }
   ++nPast;
+  ++lastGeneratedTokenCount_;
 
   // Close marker just committed — record span end before injecting
   // the trailing newlines (they are excluded from the span).
@@ -1677,6 +1661,7 @@ bool TextLlmContext::handleReasoningEOS(
         break;
       }
       ++nPast;
+      ++lastGeneratedTokenCount_;
       recordPostReasoningTokenIfActive(reasoningState_.cached_newline_token);
 
       std::string newlineStr = common_token_to_piece(

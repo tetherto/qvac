@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <llama.h>
 
@@ -152,6 +153,11 @@ public:
   // admits us (both `close_is_single_token == true`); passing
   // `LLAMA_TOKEN_NULL` is silently dropped rather than seeded.
   void recordCloseMarkerForReplay(llama_token id);
+
+  // Sequence overload. The canonical close marker does not always tokenise to
+  // one piece; seeding every piece is what lets a multi-token marker restore a
+  // balanced span. Null ids are skipped, an empty span is a no-op.
+  void recordCloseMarkerForReplay(const std::vector<llama_token>& ids);
 
   // Seeds the replay buffer with a token that was sampled BEFORE the
   // reasoning open marker fired (either template preamble that the
