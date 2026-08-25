@@ -11,7 +11,6 @@
 #include "../addon/LlmErrors.hpp"
 #include "../utils/LoggingMacros.hpp"
 #include "../utils/ReasoningRollbackState.hpp"
-#include "KvCacheOps.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -51,7 +50,25 @@ void clearSeqOnFailure(::llama_context* ctx, llama_seq_id seqId) noexcept {
   }
 }
 
+class DefaultReasoningRewindOps final : public IReasoningRewindOps {
+public:
+  bool restoreBoundary(
+      utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
+      llama_seq_id seqId) const override {
+    return rollback.restoreReasoningBoundary(ctx, seqId);
+  }
+  bool replayPostReasoning(
+      utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
+      llama_seq_id seqId) const override {
+    return rollback.replayPostReasoning(ctx, seqId);
+  }
+};
 } // namespace
+
+const IReasoningRewindOps& defaultReasoningRewindOps() {
+  static const DefaultReasoningRewindOps ops;
+  return ops;
+}
 
 ReasoningBlockCompactor::ReasoningBlockCompactor(
     utils::ReasoningRollbackState& rollback)
@@ -64,13 +81,12 @@ void ReasoningBlockCompactor::setOpenSpan(llama_pos start) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_ || start < 0) {
     return;
   }
-  // Recurrent / hybrid compaction requires an end-of-prefill boundary
-  // snapshot to restore against. The policy and snapshot capture sites
-  // fail unsupported requests before this point, so this guard is only a
-  // defensive backstop for future callers that bypass those sites and
-  // would otherwise drive `compact()` into its no-boundary
-  // `FailedKvWiped` branch.
-  if (needsRecurrentSnapshot_ && !rollback_.hasReasoningBoundary()) {
+  // Compaction restores an end-of-prefill boundary and replays, on every
+  // model, so a boundary is required. The policy and capture sites fail
+  // unsupported requests before this point, so this guard is only a
+  // defensive backstop for future callers that bypass them and would
+  // otherwise drive `compact()` into its no-boundary `FailedKvWiped` branch.
+  if (!rollback_.hasReasoningBoundary()) {
     return;
   }
   if (thinkSpan_.has_value()) {
@@ -83,7 +99,7 @@ void ReasoningBlockCompactor::recordCloseMarkerForReplay(llama_token id) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_) {
     return;
   }
-  if (!needsRecurrentSnapshot_ || !rollback_.hasReasoningBoundary()) {
+  if (!rollback_.hasReasoningBoundary()) {
     return;
   }
   rollback_.appendPostReasoningToken(id);
@@ -93,7 +109,7 @@ void ReasoningBlockCompactor::recordPreReasoningToken(llama_token id) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_) {
     return;
   }
-  if (!needsRecurrentSnapshot_ || !rollback_.hasReasoningBoundary()) {
+  if (!rollback_.hasReasoningBoundary()) {
     return;
   }
   // Only meaningful before the reasoning open flip. Callers invoke this
@@ -126,23 +142,26 @@ void ReasoningBlockCompactor::onCloseCommitted(llama_pos pos) {
   if (thinkSpan_->second < 0) {
     thinkSpan_->second = pos;
   }
-  // Begin capturing post-reasoning tokens for replay against the
-  // restored SSM. Only meaningful when a recurrent boundary snapshot
-  // actually exists; pure-attention models leave the snapshot empty
-  // and skip the replay path entirely.
-  rollback_.startPostReasoningCapture(
-      needsRecurrentSnapshot_ && rollback_.hasReasoningBoundary());
+  // Begin capturing post-reasoning tokens for replay against the restored
+  // boundary. Every model replays now, so this is gated only on a boundary
+  // having been captured.
+  rollback_.startPostReasoningCapture(rollback_.hasReasoningBoundary());
 }
 
 void ReasoningBlockCompactor::snapshotAtPrefillBoundary(
     ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
     const char* labelTag) {
-  if (!needsRecurrentSnapshot_ || !removeThinkingFromContext_ ||
-      !reasoningEnabled_) {
+  if (!removeThinkingFromContext_ || !reasoningEnabled_) {
     return;
   }
   if (rollback_.hasReasoningBoundary()) {
-    return; // already snapshotted this inference
+    return; // already anchored this inference
+  }
+  if (!needsRecurrentSnapshot_) {
+    // Pure attention: the boundary is just a position. Rewinding to it is a
+    // tail trim, so there is no state to serialize and nothing that can fail.
+    rollback_.captureReasoningBoundaryPosition(pos);
+    return;
   }
   if (!rollback_.captureReasoningBoundary(ctx, seqId, pos)) {
     QLOG_IF(
@@ -176,9 +195,6 @@ void ReasoningBlockCompactor::snapshotAtPrefillBoundary(
 ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
     const char* labelTag) {
-  const IKvCacheOps& kvCacheOps = kvCacheOpsOverride_ != nullptr
-                                      ? *kvCacheOpsOverride_
-                                      : defaultKvCacheOps();
   // RAII-style cleanup so every early return drops the per-inference
   // rollback buffers and span. The original sites in `TextLlmContext`
   // and `MtmdLlmContext` had identical guards; centralised here so
@@ -191,6 +207,10 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
       self->rollback_.clearPostReasoning();
     }
   } guard{this};
+
+  const IReasoningRewindOps& rewindOps = rewindOpsOverride_ != nullptr
+                                             ? *rewindOpsOverride_
+                                             : defaultReasoningRewindOps();
 
   Outcome out;
   if (!removeThinkingFromContext_ || !thinkSpan_.has_value()) {
@@ -210,6 +230,10 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     if (start >= pos) {
       return out;
     }
+    // Pure attention can still handle this: rewinding to the boundary and
+    // replaying the pre-reasoning tokens drops the unfinished span outright,
+    // and there is no answer to preserve because generation never left it.
+    // Recurrent replay has no balanced state to land in, so it hard-fails.
     if (needsRecurrentSnapshot_) {
       QLOG_IF(
           Priority::WARNING,
@@ -300,14 +324,12 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   }
   const llama_pos end = openEnded ? pos : std::min(recordedEnd, pos);
 
-  // Defence-in-depth: `setOpenSpan` already refuses the recurrent+
-  // no-boundary path, and `snapshotAtPrefillBoundary` throws on
-  // capture underflow, so `thinkSpan_.has_value()` implies a boundary
-  // exists. If a future caller ever seeds a span bypassing those
-  // sites, fail hard rather than leave the reasoning span in cache —
-  // interior `seq_rm` on recurrent memory leaves the SSM state
-  // inconsistent and there is no snapshot to roll back to.
-  if (needsRecurrentSnapshot_ && !rollback_.hasReasoningBoundary()) {
+  // Defence-in-depth: `setOpenSpan` refuses a span with no boundary and
+  // `snapshotAtPrefillBoundary` anchors one for every model, so
+  // `thinkSpan_.has_value()` implies a boundary exists. If a future caller
+  // ever seeds a span bypassing those sites, fail hard rather than leave the
+  // reasoning span in cache: there is nothing to rewind to.
+  if (!rollback_.hasReasoningBoundary()) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
@@ -331,105 +353,6 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
         "%s ReasoningBlockCompactor::compact: no reasoning "
         "boundary snapshot available on hybrid/recurrent path "
         "(start=%d, end=%d, pos=%d, seqId=%d)",
-        labelTag,
-        start,
-        end,
-        pos,
-        seqId);
-    return out;
-  }
-
-  // Pure-attention path: the SSM is uninvolved, so the seq_rm + seq_add
-  // primitive is sufficient. `remove_thinking_from_context` is default-
-  // on, so any `seq_rm + seq_add` rejection means the requested cleanup
-  // did not happen — hard-fail rather than deliver an answer with the
-  // reasoning span still resident in cache.
-  if (!needsRecurrentSnapshot_) {
-    const CompactRangeOutcome rangeOutcome =
-        compactKvRange(ctx, seqId, start, end, pos, kvCacheOps);
-    out.kind = attentionOutcomeFor(rangeOutcome.kind);
-    if (out.kind == Outcome::Kind::CompactedAttention) {
-      out.newPos = rangeOutcome.newNPast;
-      out.discarded = rangeOutcome.discarded;
-      ++thinkingBlockDiscards_;
-      QLOG_IF(
-          Priority::DEBUG,
-          string_format(
-              "%s thinking-block compaction: dropped %d tokens "
-              "[%d, %d), newPos=%d\n",
-              labelTag,
-              rangeOutcome.discarded,
-              start,
-              end,
-              out.newPos));
-      return out;
-    }
-    // Not a rejection: the primitive declined the range and left the cache
-    // as it found it. See `attentionOutcomeFor`.
-    if (out.kind == Outcome::Kind::NoOp) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "%s thinking-block compaction: primitive declined span "
-              "[%d, %d) as out of range (pos=%d, seqId=%d); cache "
-              "untouched\n",
-              labelTag,
-              start,
-              end,
-              pos,
-              seqId));
-      return out;
-    }
-    // The removal ran and the shift did not, so the hole is in the middle and
-    // a tail trim cannot reach it. Wipe and send the caller down the
-    // reset-to-zero recovery rather than claim the cache is intact.
-    if (out.kind == Outcome::Kind::FailedKvWiped) {
-      QLOG_IF(
-          Priority::WARNING,
-          string_format(
-              "%s thinking-block compaction failed: seq_rm removed span "
-              "[%d, %d) but the paired shift did not land (pos=%d, "
-              "observed nPast=%d, seqId=%d); wiping sequence and "
-              "hard-failing so no cache header describes memory that is "
-              "not there\n",
-              labelTag,
-              start,
-              end,
-              pos,
-              rangeOutcome.newNPast,
-              seqId));
-      clearSeqOnFailure(ctx, seqId);
-      out.failureMessage = string_format(
-          "%s ReasoningBlockCompactor::compact: pure-attention shift did "
-          "not land for span [%d, %d) (pos=%d, observed nPast=%d, "
-          "seqId=%d)",
-          labelTag,
-          start,
-          end,
-          pos,
-          rangeOutcome.newNPast,
-          seqId);
-      return out;
-    }
-    // Rejected before anything was written, so attention KV still matches
-    // `pos` and no wipe is needed. `FailedKvIntact` tells the caller to roll
-    // back `[preRequestCursor, pos)` on its own driver before rethrowing.
-    QLOG_IF(
-        Priority::WARNING,
-        string_format(
-            "%s thinking-block compaction failed: seq_rm + seq_add "
-            "rejected range [%d, %d) (pos=%d, seqId=%d); hard-failing "
-            "the request so the reasoning span does not remain in "
-            "cache\n",
-            labelTag,
-            start,
-            end,
-            pos,
-            seqId));
-    out.failureMessage = string_format(
-        "%s ReasoningBlockCompactor::compact: pure-attention "
-        "seq_rm + seq_add rejected span [%d, %d) (pos=%d, "
-        "seqId=%d)",
         labelTag,
         start,
         end,
@@ -464,7 +387,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   const llama_pos snapshotPos = rollback_.reasoningBoundaryNPast();
   rollback_.clipPostReasoningTokens(static_cast<size_t>(pos - end));
 
-  if (!rollback_.restoreReasoningBoundary(ctx, seqId)) {
+  if (!rewindOps.restoreBoundary(rollback_, ctx, seqId)) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
@@ -489,7 +412,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     out.kind = Outcome::Kind::FailedKvWiped;
     out.failureMessage = string_format(
         "%s ReasoningBlockCompactor::compact: full-state restore "
-        "underflowed on hybrid/recurrent compaction; sequence "
+        "underflowed during compaction; sequence "
         "cleared (snapshotPos=%d, spanStart=%d, spanEnd=%d, "
         "seqId=%d)",
         labelTag,
@@ -501,7 +424,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   }
 
   const size_t replayCount = rollback_.postReasoningTokenCount();
-  if (!rollback_.replayPostReasoning(ctx, seqId)) {
+  if (!rewindOps.replayPostReasoning(rollback_, ctx, seqId)) {
     QLOG_IF(
         Priority::WARNING,
         string_format(
@@ -521,7 +444,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
     out.kind = Outcome::Kind::FailedKvWiped;
     out.failureMessage = string_format(
         "%s ReasoningBlockCompactor::compact: post-reasoning "
-        "replay rejected on hybrid/recurrent compaction; sequence "
+        "replay rejected during compaction; sequence "
         "cleared (snapshotPos=%d, replayCount=%zu, seqId=%d)",
         labelTag,
         snapshotPos,
@@ -531,7 +454,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   }
 
   const llama_pos newPos = snapshotPos + static_cast<llama_pos>(replayCount);
-  out.kind = Outcome::Kind::CompactedRecurrent;
+  out.kind = Outcome::Kind::Compacted;
   out.newPos = newPos;
   out.discarded = pos - newPos;
   out.replayedTokens = replayCount;

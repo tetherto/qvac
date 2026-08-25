@@ -8,9 +8,28 @@
 #include <llama.h>
 
 #include "../utils/ReasoningRollbackState.hpp"
-#include "KvCacheOps.hpp"
 
 namespace qvac_lib_inference_addon_llama {
+
+/// The two cache operations reasoning compaction performs, behind an
+/// indirection so unit tests can drive `compact()` without a real
+/// `llama_context`. Production forwards both straight to
+/// `ReasoningRollbackState`.
+struct IReasoningRewindOps {
+  virtual ~IReasoningRewindOps() = default;
+  /// Rewind the sequence to the end-of-prefill boundary. A tail trim on
+  /// pure attention, a full-state reload on recurrent / hybrid.
+  virtual bool restoreBoundary(
+      utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
+      llama_seq_id seqId) const = 0;
+  /// Re-decode the kept tokens after the restored boundary.
+  virtual bool replayPostReasoning(
+      utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
+      llama_seq_id seqId) const = 0;
+};
+
+/// Returns the default implementation, which forwards to `rollback`.
+const IReasoningRewindOps& defaultReasoningRewindOps();
 
 // Per-inference reasoning-block compaction lifecycle, shared between
 // `TextLlmContext` and `MtmdLlmContext`. Owns:
@@ -18,26 +37,19 @@ namespace qvac_lib_inference_addon_llama {
 //   * the open/close span (`<think>...</think>`) tracking,
 //   * the end-of-prefill snapshot capture (delegated to
 //     `ReasoningRollbackState` after a feature-gate check),
-//   * the pure-attention `seq_rm + seq_add` compaction path and the
-//     recurrent / hybrid full-state restore + replay path,
+//   * the restore-boundary-then-replay compaction path,
 //   * the `thinkingBlockDiscards` runtime stats counter.
 //
-// Failure contract (uniform across paths, per PR #2813 review):
-// when `remove_thinking_from_context` is enabled/defaulted-on,
-// ANY inability to remove the reasoning span from cache is a hard
-// failure. `snapshotAtPrefillBoundary` throws on capture underflow;
-// `compact()` returns `Outcome::Kind::FailedKvIntact` on pure-
-// attention `seq_rm + seq_add` rejection (live KV was left untouched)
-// and `Outcome::Kind::FailedKvWiped` on a pure-attention shift that did
-// not land after the removal already ran, hybrid restore underflow,
-// hybrid replay rejection, recurrent partial-resident spans, recurrent
-// open spans without a captured close marker, or the defensive
-// no-boundary branch (sequence memory was best-effort cleared).
-// Callers must run the live-KV recovery documented on the outcome kind
-// (roll back `[preRequestCursor, currentCursor)` or reset positional
-// accounting to zero) before rethrowing `qvac_errors::StatusError` so
-// no saveCache path can persist a header that misrepresents live memory
-// or leaves the reasoning span in cache.
+// Failure contract: when `remove_thinking_from_context` is
+// enabled/defaulted-on, ANY inability to remove the reasoning span from
+// cache is a hard failure. `snapshotAtPrefillBoundary` throws on capture
+// underflow. `compact()` reports every other failure as
+// `Outcome::Kind::FailedKvWiped`: compaction rewinds the sequence before
+// it replays, so by the time anything can fail the cache has already been
+// written to and only a wipe leaves it coherent. Callers must reset
+// positional accounting to zero before rethrowing
+// `qvac_errors::StatusError`, so no saveCache path can persist a header
+// that misrepresents live memory or leaves the reasoning span in cache.
 //
 // State is per-inference. Call `reset()` at the start of each
 // `evalMessageWithTools`. Feature flags (`removeThinkingFromContext`,
@@ -191,20 +203,7 @@ public:
   // can't leave stale state behind.
   //
   // Failure contract:
-  //   * Pure-attention `seq_rm + seq_add` rejection: `compact()`
-  //     returns `Outcome::Kind::FailedKvIntact`. The primitive refuses
-  //     before it writes anything, so live KV still matches the
-  //     caller's cursor; no seq wipe is performed. The caller MUST roll
-  //     back the live cache to its pre-request cursor (e.g. via
-  //     `removeLastNTokens(nPast - preRequestNPast)`) before rethrowing
-  //     so both driver metadata and live KV stay coherent for the next
-  //     request on the same driver.
-  //   * Pure-attention shift that did not land, caught by the
-  //     `seq_pos_max` readback in `compactKvRange`: live KV has a hole
-  //     in the middle by then, so the tail trim above cannot repair it.
-  //     `compact()` wipes the sequence and returns
-  //     `Outcome::Kind::FailedKvWiped` instead.
-  //   * Hybrid `restoreReasoningBoundary` / `replayPostReasoning`
+  //   * `restoreReasoningBoundary` / `replayPostReasoning`
   //     failure, a defensive missing-boundary hit, a recurrent
   //     partial-resident reasoning span left after a tail trim, or a
   //     recurrent open reasoning span with no captured close marker:
@@ -228,11 +227,9 @@ public:
       // Feature off, no span captured, degenerate span, or the live cursor is
       // already before the reasoning span when compaction runs.
       NoOp,
-      CompactedAttention,
-      CompactedRecurrent,
-      // Compaction failed but live KV was left untouched; caller must
-      // roll back `[preRequestCursor, currentCursor)` before rethrowing.
-      FailedKvIntact,
+      // Reasoning span dropped: the sequence was rewound to the
+      // end-of-prefill boundary and the answer replayed after it.
+      Compacted,
       // Compaction failed and live KV was best-effort wiped; caller
       // must reset positional accounting to zero before rethrowing.
       FailedKvWiped,
@@ -257,49 +254,15 @@ public:
     std::string failureMessage;
   };
 
-  // How a `compactKvRange` result becomes a compactor outcome on the
-  // pure-attention path.
-  //
-  // Each kind maps to the recovery its damage needs, and the three non-success
-  // kinds need three different ones.
-  //
-  // `NoOp` must not become `FailedKvIntact`: the cache was never touched, so
-  // the whole-request rollback that outcome triggers would drop the answer for
-  // nothing. `MemoryInconsistent` must not either, for the opposite reason:
-  // `seq_rm` has already run, so the "live KV matches the caller's cursor"
-  // premise is false and a tail trim cannot reach a hole in the middle.
-  //
-  // Kept a pure function because `compact()`'s guards clamp every span before
-  // it calls in, so the `NoOp` branch is unreachable through `compact()` and
-  // only a direct test can pin it.
-  [[nodiscard]] static constexpr Outcome::Kind
-  attentionOutcomeFor(CompactRangeOutcome::Kind rangeKind) {
-    switch (rangeKind) {
-    case CompactRangeOutcome::Kind::Compacted:
-      return Outcome::Kind::CompactedAttention;
-    case CompactRangeOutcome::Kind::NoOp:
-      return Outcome::Kind::NoOp;
-    case CompactRangeOutcome::Kind::MemoryOperationFailed:
-      return Outcome::Kind::FailedKvIntact;
-    case CompactRangeOutcome::Kind::MemoryInconsistent:
-      return Outcome::Kind::FailedKvWiped;
-    }
-    return Outcome::Kind::FailedKvWiped;
-  }
-
   [[nodiscard]] Outcome compact(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);
 
-  // Testing seam: install a non-owning `IKvCacheOps` override
-  // that replaces the default singleton (real `llama_memory_seq_rm` /
-  // `llama_memory_seq_add`) inside `compact()`. Set to `nullptr` to
-  // clear. Persists across `reset()` because it is a test wiring
-  // concern, not per-inference state. Production code MUST NOT call
-  // this — the override lets unit and driver-level tests exercise
-  // the `FailedKvIntact` branch without a real `llama_context`.
-  void setKvCacheOpsForTesting(const IKvCacheOps* ops) noexcept {
-    kvCacheOpsOverride_ = ops;
+  // Testing seam: install a non-owning `IReasoningRewindOps` override that
+  // replaces the default forwarding implementation inside `compact()`. Set to
+  // `nullptr` to restore the default.
+  void setRewindOpsForTesting(const IReasoningRewindOps* ops) noexcept {
+    rewindOpsOverride_ = ops;
   }
 
   // ---- Stats ----
@@ -319,6 +282,8 @@ public:
 
 private:
   utils::ReasoningRollbackState& rollback_;
+  // Null in production, where `defaultReasoningRewindOps()` is used.
+  const IReasoningRewindOps* rewindOpsOverride_ = nullptr;
 
   std::optional<std::pair<llama_pos, llama_pos>> thinkSpan_;
   bool pendingThinkCloseCapture_ = false;
@@ -330,13 +295,6 @@ private:
   bool needsRecurrentSnapshot_ = false;
 
   int32_t thinkingBlockDiscards_ = 0;
-
-  // Non-owning override for the KV primitives used by `compact()`.
-  // Null in production (falls back to `defaultKvCacheOps()`);
-  // tests install a fake via `setKvCacheOpsForTesting` so the
-  // `FailedKvIntact` branch can be triggered without a real
-  // `llama_context`.
-  const IKvCacheOps* kvCacheOpsOverride_ = nullptr;
 };
 
 } // namespace qvac_lib_inference_addon_llama

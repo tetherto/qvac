@@ -41,6 +41,14 @@ bool ReasoningRollbackState::captureReasoningBoundary(
   return true;
 }
 
+void ReasoningRollbackState::captureReasoningBoundaryPosition(llama_pos nPast) {
+  if (!reasoningBoundary_.empty()) {
+    // Already anchored this inference; match `captureReasoningBoundary`.
+    return;
+  }
+  reasoningBoundary_.adoptPositionOnly(nPast);
+}
+
 bool ReasoningRollbackState::restoreReasoningBoundary(
     ::llama_context* ctx, llama_seq_id seqId) {
   if (reasoningBoundary_.empty()) {

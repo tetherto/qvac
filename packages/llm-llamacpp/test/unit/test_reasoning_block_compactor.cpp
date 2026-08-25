@@ -6,9 +6,8 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
-#include "model-interface/KvCacheOps.hpp"
 #include "model-interface/ReasoningBlockCompactor.hpp"
-#include "test_kv_cache_ops_fake.hpp"
+#include "test_reasoning_rewind_fake.hpp"
 #include "utils/ReasoningRollbackState.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 
@@ -97,7 +96,9 @@ TEST(ReasoningSnapshotPolicy, CapturesGeneratedOpenRecurrentReasoning) {
 }
 
 TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
-  EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
+  // Memory kind no longer gates the boundary: pure attention anchors one too,
+  // it is just a position rather than a state payload.
+  EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
       /*needsRecurrentSnapshot=*/false,
       /*removeThinkingFromContext=*/true,
       /*reasoningEnabled=*/true,
@@ -336,41 +337,6 @@ struct CompactorFixture {
 };
 
 } // namespace
-
-// `compact()`'s guards clamp every span before it calls in, so a primitive
-// `NoOp` is unreachable through `compact()`: `setOpenSpan` refuses
-// `start < 0`, the degenerate check catches `end <= start`, and
-// `end = std::min(recordedEnd, pos)` caps the rest. Hence the pure function,
-// so the branch a future caller could reach is still pinned.
-TEST(ReasoningBlockCompactorOutcomeMapping, NoOpDoesNotBecomeTheWipePath) {
-  EXPECT_EQ(
-      ReasoningBlockCompactor::attentionOutcomeFor(
-          CompactRangeOutcome::Kind::NoOp),
-      ReasoningBlockCompactor::Outcome::Kind::NoOp)
-      << "the cache was untouched, so FailedKvIntact would roll the whole "
-         "request back, answer included, for a range never modified";
-}
-
-TEST(ReasoningBlockCompactorOutcomeMapping, FailuresKeepTheKvIntactContract) {
-  EXPECT_EQ(
-      ReasoningBlockCompactor::attentionOutcomeFor(
-          CompactRangeOutcome::Kind::MemoryOperationFailed),
-      ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
-  EXPECT_EQ(
-      ReasoningBlockCompactor::attentionOutcomeFor(
-          CompactRangeOutcome::Kind::Compacted),
-      ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
-}
-
-TEST(ReasoningBlockCompactorOutcomeMapping, MutatedCacheDoesNotClaimKvIntact) {
-  EXPECT_EQ(
-      ReasoningBlockCompactor::attentionOutcomeFor(
-          CompactRangeOutcome::Kind::MemoryInconsistent),
-      ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
-      << "the removal already ran, so FailedKvIntact would promise a cache "
-         "matching the caller's cursor and send it down a tail trim that "
-         "cannot reach a hole in the middle";
-}
 
 TEST(ReasoningBlockCompactor, DefaultsRemoveThinkingOff) {
   CompactorFixture fx;
@@ -640,6 +606,7 @@ TEST(ReasoningBlockCompactorCloseCommit, IsNoOpWithoutPriorRequest) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/10);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
   ASSERT_FALSE(fx.compactor.hasPendingCloseCapture());
@@ -654,6 +621,7 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/10);
   ASSERT_TRUE(fx.compactor.hasOpenSpan());
 
@@ -673,11 +641,9 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
 // (PR #2813). `snapshotAtPrefillBoundary` still throws
 // `qvac_errors::StatusError` on boundary-capture failure (recovery
 // happens one level up in `snapshotForRecurrentRollback`), but
-// `compact()` reports failures via `Outcome::Kind::FailedKvIntact` /
-// `Outcome::Kind::FailedKvWiped` so callers can choose the correct
-// live-KV recovery (pre-request rollback vs full reset) before
-// rethrowing. In every failure path `thinkingBlockDiscards` never
-// bumps for the failed drop.
+// `compact()` reports failures via `Outcome::Kind::FailedKvWiped` so callers
+// reset positional accounting to zero before rethrowing. In every failure
+// path `thinkingBlockDiscards` never bumps for the failed drop.
 //
 // Coverage:
 //   * Boundary-capture failure (`snapshotAtPrefillBoundary` on
@@ -793,14 +759,13 @@ TEST(
 
 // Defensive no-boundary regression: `ReasoningSnapshotPolicy` still
 // hard-fails multi-token close-marker templates before generation and
-// `snapshotAtPrefillBoundary` throws on capture underflow, but if a
-// future caller bypasses those sites and reaches the compactor with
-// recurrent memory but no boundary snapshot, `setOpenSpan` must still
-// refuse to record a span so `compact()` does not wipe the sequence
-// through its defensive no-boundary branch.
+// `snapshotAtPrefillBoundary` anchors a boundary for every model, but if a
+// future caller bypasses it and reaches the compactor with no boundary,
+// `setOpenSpan` must still refuse to record a span so `compact()` does not
+// wipe the sequence through its defensive no-boundary branch.
 TEST(
     ReasoningBlockCompactorFailureStats,
-    RecurrentNoBoundarySpanSkipsCompactionAsDefensiveNoOp) {
+    NoBoundarySpanSkipsCompactionAsDefensiveNoOp) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
@@ -809,8 +774,8 @@ TEST(
 
   fx.compactor.setOpenSpan(/*start=*/15);
   EXPECT_FALSE(fx.compactor.hasOpenSpan())
-      << "recurrent + no boundary must not record a span — otherwise "
-         "compact() will hit its defensive branch and wipe the sequence";
+      << "no boundary must not record a span — otherwise compact() will hit "
+         "its defensive branch and wipe the sequence";
 
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/20);
@@ -819,7 +784,7 @@ TEST(
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::NoOp)
-      << "recurrent no-boundary defensive path must be a clean no-op, "
+      << "the no-boundary defensive path must be a clean no-op, "
          "not FailedKvWiped";
   EXPECT_TRUE(outcome.failureMessage.empty());
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
@@ -852,18 +817,17 @@ TEST(ReasoningBlockCompactorFailureStats, NoOpOutcomesDoNotThrow) {
 
 namespace {
 
-// `compactKvRange` on the pure-attention path is the only production call
-// site routed through the injectable ops, so the shared `FakeKvCacheOps`
-// covers every case here. Local names below say how each one is configured:
-// `accepting` is the defaults, `rejecting` is `rejectSeqRm()`, and the
-// cannot-shift case is `denyShift()`.
-using qvac_test::FakeKvCacheOps;
+// Compaction rewinds to the end-of-prefill boundary and replays, so the
+// shared `FakeReasoningRewindOps` covers every case here. Local names say how
+// each one is configured: `accepting` is the defaults, `rejecting` fails the
+// restore, and the replay-failing cases use `failReplay()`.
+using qvac_test::FakeReasoningRewindOps;
 
 } // namespace
 
 TEST(
     ReasoningBlockCompactorOpenSpan,
-    PureAttentionCompactsResidentOpenSpanWithoutClose) {
+    ResidentOpenSpanRewindsToBoundaryWithoutClose) {
   // Generation can end after `<think>` but before `</think>` due to
   // n_predict, antiprompt, or context limits. If `[start, pos)` is still
   // resident, pure-attention compaction must remove that open span rather
@@ -873,22 +837,23 @@ TEST(
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false);
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  FakeKvCacheOps accepting;
-  accepting.withResidentTokens(/*pos=*/20);
-  fx.compactor.setKvCacheOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
-  EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
-  EXPECT_EQ(outcome.newPos, 15);
-  EXPECT_EQ(outcome.discarded, 5);
-  EXPECT_EQ(accepting.seqRmCalls(), 1);
-  EXPECT_EQ(accepting.seqAddCalls(), 1);
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  EXPECT_EQ(outcome.newPos, 10)
+      << "an unfinished span rewinds to the prefill boundary; nothing was "
+         "captured to replay because generation never left the think block";
+  EXPECT_EQ(outcome.discarded, 10);
+  EXPECT_EQ(accepting.restoreCalls(), 1);
+  EXPECT_EQ(accepting.replayCalls(), 1);
   EXPECT_EQ(fx.compactor.blockDiscards(), 1);
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
@@ -909,25 +874,25 @@ TEST(
   fx.compactor.setOpenSpan(/*start=*/15);
   ASSERT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  FakeKvCacheOps accepting;
-  fx.compactor.setKvCacheOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
       << "recurrent open-ended reasoning span must hard-fail instead of "
          "leaking resident reasoning tokens";
   EXPECT_NE(
       outcome.failureMessage.find("open reasoning span"), std::string::npos);
-  EXPECT_EQ(accepting.seqRmCalls(), 0);
-  EXPECT_EQ(accepting.seqAddCalls(), 0);
+  EXPECT_EQ(accepting.restoreCalls(), 0);
+  EXPECT_EQ(accepting.replayCalls(), 0);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
 // Pure-attention `seq_rm + seq_add` rejection MUST surface as
-// `FailedKvIntact` (not `FailedKvWiped`) so the caller can roll back
+// `FailedKvWiped` so the caller resets to zero rather than rolling back
 // `[preRequestCursor, currentCursor)` on live KV instead of resetting
 // to zero. Regression coverage for the single-prompt hardening in
 // `TextLlmContext::compactThinkSpan` / `MtmdLlmContext::compactThinkSpan`
@@ -935,40 +900,40 @@ TEST(
 // zero on this failure, leaving driver metadata and live KV out of
 // sync for the next request on the same driver.
 TEST(
-    ReasoningBlockCompactorFailureStats,
-    PureAttentionSeqRmRejectionReportsFailedKvIntact) {
+    ReasoningBlockCompactorFailureStats, RestoreRejectionReportsFailedKvWiped) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
   // Pure-attention path: no recurrent snapshot needed. This is the
-  // configuration that must produce `FailedKvIntact` on rejection.
+  // A rejected restore leaves the sequence in a state nothing describes.
   fx.compactor.setNeedsRecurrentSnapshot(false);
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/20);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  FakeKvCacheOps rejecting;
-  rejecting.rejectSeqRm();
-  fx.compactor.setKvCacheOpsForTesting(&rejecting);
+  FakeReasoningRewindOps rejecting;
+  rejecting.failRestore();
+  fx.compactor.setRewindOpsForTesting(&rejecting);
   // `ctx` is passed through untouched by the fake ops; safe to pass
   // nullptr because `memory` does not inspect it.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
+      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped);
   EXPECT_FALSE(outcome.failureMessage.empty())
       << "failureMessage must be populated so caller can rethrow with "
          "matching diagnostic context";
-  EXPECT_EQ(rejecting.seqRmCalls(), 1)
+  EXPECT_EQ(rejecting.restoreCalls(), 1)
       << "compactor must attempt the pure-attention primitive exactly once";
-  EXPECT_EQ(rejecting.seqAddCalls(), 0)
+  EXPECT_EQ(rejecting.replayCalls(), 0)
       << "seq_rm rejection must short-circuit before seq_add fires — "
-         "otherwise the `FailedKvIntact` invariant (live KV unchanged) is "
-         "violated";
+         "replaying on top of a failed restore would decode the answer into "
+         "positions nothing describes";
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "failed drops must not bump the runtime discard counter";
 
@@ -978,73 +943,37 @@ TEST(
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
-// Live KV has a hole in the middle by then and how far it moved is not
-// knowable, so the compactor must wipe and send the caller down the
-// reset-to-zero recovery rather than claim KV is intact.
-TEST(
-    ReasoningBlockCompactorFailureStats,
-    PureAttentionShiftThatDidNotLandWipesInsteadOfClaimingKvIntact) {
+// A replay that fails part way has advanced the sequence an unknown amount
+// past the restored boundary, so the compactor must wipe and send the caller
+// down the reset-to-zero recovery.
+TEST(ReasoningBlockCompactorFailureStats, ReplayRejectionReportsFailedKvWiped) {
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false);
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/20);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
   // `seqRm` succeeds but the cells stay put, so the readback disagrees.
-  FakeKvCacheOps stuck;
-  stuck.withResidentTokens(/*pos=*/25).ignoreSeqRmEffect();
-  fx.compactor.setKvCacheOpsForTesting(&stuck);
+  FakeReasoningRewindOps stuck;
+  stuck.failReplay();
+  fx.compactor.setRewindOpsForTesting(&stuck);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
-      << "a mutated cache must not be reported as KV-intact";
-  EXPECT_NE(outcome.failureMessage.find("did not land"), std::string::npos);
-  EXPECT_EQ(stuck.seqRmCalls(), 1);
-  EXPECT_EQ(stuck.seqAddCalls(), 1);
-  EXPECT_EQ(stuck.seqPosMaxCalls(), 1);
+      << "a partly-advanced replay must not be reported as KV-intact";
+  EXPECT_NE(outcome.failureMessage.find("replay"), std::string::npos);
+  EXPECT_EQ(stuck.restoreCalls(), 1);
+  EXPECT_EQ(stuck.replayCalls(), 1);
+  EXPECT_EQ(stuck.replayCalls(), 1);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "a failed drop must not bump the runtime discard counter";
-  EXPECT_FALSE(fx.compactor.hasOpenSpan());
-}
-
-// `seq_add` GGML_ASSERTs on a module that cannot shift, and `seq_rm` runs
-// first, so the abort would land with the hole already punched. Nothing is
-// written, so this stays `FailedKvIntact` and the caller rolls its tail back.
-TEST(
-    ReasoningBlockCompactorFailureStats,
-    PureAttentionUnshiftableMemoryReportsFailedKvIntactWithoutSeqRm) {
-  CompactorFixture fx;
-  fx.compactor.setRemoveThinkingFromContext(true);
-  fx.compactor.setReasoningEnabled(true);
-  fx.compactor.setNeedsRecurrentSnapshot(false);
-
-  fx.compactor.setOpenSpan(/*start=*/15);
-  fx.compactor.requestCloseCapture();
-  fx.compactor.onCloseCommitted(/*pos=*/20);
-  ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
-
-  FakeKvCacheOps unshiftable;
-  unshiftable.denyShift();
-  fx.compactor.setKvCacheOpsForTesting(&unshiftable);
-  const auto outcome = fx.compactor.compact(
-      /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/25, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
-
-  EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvIntact);
-  EXPECT_FALSE(outcome.failureMessage.empty());
-  EXPECT_EQ(unshiftable.canShiftCalls(), 1);
-  EXPECT_EQ(unshiftable.seqRmCalls(), 0)
-      << "a hole must never be opened when the shift that closes it would "
-         "abort the process";
-  EXPECT_EQ(unshiftable.seqAddCalls(), 0);
-  EXPECT_EQ(fx.compactor.blockDiscards(), 0);
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
 }
 
@@ -1063,7 +992,7 @@ TEST(
 //      * Pure-attention: honor the default-on strict-cleanup
 //        contract by dropping the resident remainder via a
 //        clamped `[start, pos)` `seq_rm + seq_add`; reports
-//        `CompactedAttention`.
+//        `Compacted`.
 //      * Recurrent / hybrid: hard-fail — replay is anchored at a
 //        captured post-reasoning tail we can no longer reconcile
 //        against a shorter live cache without leaving resident
@@ -1084,24 +1013,25 @@ TEST(
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false); // pure-attention
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  FakeKvCacheOps accepting;
-  fx.compactor.setKvCacheOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   // `pos = 10 <= start = 15`: reasoning span already gone from cache;
   // NoOp is the correct — not a leak — outcome.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/10, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::NoOp);
-  EXPECT_EQ(accepting.seqRmCalls(), 0)
+  EXPECT_EQ(accepting.restoreCalls(), 0)
       << "when the span is already trimmed away, no KV primitive must "
          "fire";
-  EXPECT_EQ(accepting.seqAddCalls(), 0);
+  EXPECT_EQ(accepting.replayCalls(), 0);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "NoOp on whole-span-trimmed must not be counted as a discard";
 
@@ -1111,7 +1041,7 @@ TEST(
 
 TEST(
     ReasoningBlockCompactorTailTrimInteraction,
-    PartialResidentSpanCompactsOnPureAttention) {
+    PartialResidentSpanRewindsToBoundary) {
   // `start < pos < end`: the tail-eraser stopped inside the reasoning
   // span, so `[start, pos)` is still resident. Under the default-on
   // `remove_thinking_from_context` contract the compactor must not
@@ -1122,29 +1052,27 @@ TEST(
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false); // pure-attention
 
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
   fx.compactor.setOpenSpan(/*start=*/15);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  FakeKvCacheOps accepting;
-  accepting.withResidentTokens(/*pos=*/20);
-  fx.compactor.setKvCacheOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   // `pos = 20`, recordedEnd = 25 → effectiveEnd clamped to 20, so the
   // compactor drops `[15, 20)` — 5 tokens.
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
-  EXPECT_EQ(
-      outcome.kind, ReasoningBlockCompactor::Outcome::Kind::CompactedAttention);
-  EXPECT_EQ(outcome.newPos, 15)
-      << "after clamped seq_rm, newPos falls to the reasoning span start";
-  EXPECT_EQ(outcome.discarded, 5)
-      << "discard length must equal the resident remainder `pos - start`";
-  EXPECT_EQ(accepting.seqRmCalls(), 1)
+  EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
+  EXPECT_EQ(outcome.newPos, 10)
+      << "the clamped span rewinds to the prefill boundary and replays";
+  EXPECT_EQ(outcome.discarded, 10);
+  EXPECT_EQ(accepting.restoreCalls(), 1)
       << "clamped partial cleanup must issue the pure-attention seq_rm";
-  EXPECT_EQ(accepting.seqAddCalls(), 1)
+  EXPECT_EQ(accepting.replayCalls(), 1)
       << "successful seq_rm must be followed by its paired seq_add";
   EXPECT_EQ(fx.compactor.blockDiscards(), 1)
       << "clamped partial drop is still a real discard and must be counted";
@@ -1179,20 +1107,20 @@ TEST(
   fx.compactor.onCloseCommitted(/*pos=*/25);
   ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
 
-  FakeKvCacheOps accepting;
-  fx.compactor.setKvCacheOpsForTesting(&accepting);
+  FakeReasoningRewindOps accepting;
+  fx.compactor.setRewindOpsForTesting(&accepting);
   const auto outcome = fx.compactor.compact(
       /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/20, "[Test]");
-  fx.compactor.setKvCacheOpsForTesting(nullptr);
+  fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::FailedKvWiped)
       << "recurrent partial-resident span must hard-fail instead of "
          "leaking resident reasoning tokens";
   EXPECT_NE(outcome.failureMessage.find("partial-resident"), std::string::npos);
-  EXPECT_EQ(accepting.seqRmCalls(), 0)
+  EXPECT_EQ(accepting.restoreCalls(), 0)
       << "recurrent partial-resident hard-fail must not use partial KV "
          "removal primitives";
-  EXPECT_EQ(accepting.seqAddCalls(), 0);
+  EXPECT_EQ(accepting.replayCalls(), 0);
   EXPECT_EQ(fx.compactor.blockDiscards(), 0)
       << "recurrent hard-fail bail must not be counted as a successful discard";
 

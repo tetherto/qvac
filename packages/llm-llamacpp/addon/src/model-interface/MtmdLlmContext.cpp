@@ -976,13 +976,7 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   //     `snapshotForRecurrentRollback` wrapper here restores the
   //     pre-prompt checkpoint (or wipes the sequence on restore
   //     underflow), resets local positional accounting, and re-throws.
-  //   - Pure-attention `seq_rm + seq_add` rejection: primitive is
-  //     all-or-nothing so live KV is unchanged; the compactor returns
-  //     `FailedKvIntact` and `compactThinkSpan` drops
-  //     `[preRequestUsage_.pos, current_.pos)` from live memory via
-  //     `removeLastNTokens`, restores the pre-request cursor +
-  //     protected prefix, and throws.
-  //   - Hybrid restore/replay failure: the compactor best-effort
+  //   - Restore/replay failure: the compactor best-effort
   //     wipes the sequence memory and returns `FailedKvWiped`;
   //     `compactThinkSpan` zeroes positional / protected-prefix
   //     bookkeeping to match the cleared sequence and throws, so the
@@ -1243,17 +1237,6 @@ void MtmdLlmContext::compactThinkSpan() {
               [this](const ReasoningBlockCompactor::Outcome& result) {
                 current_.pos = result.newPos;
                 refreshCurrentCacheTokensFromMemory();
-              },
-          .onFailedKvIntact =
-              [this]() {
-                const llama_pos delta = current_.pos - preRequestUsage_.pos;
-                if (delta > 0) {
-                  removeLastNTokens(delta);
-                  current_ = preRequestUsage_;
-                  refreshCurrentCacheTokensFromMemory();
-                }
-                rollbackState_.reset();
-                compactor_.reset();
               },
           .onFailedKvWiped =
               [this]() {

@@ -1278,16 +1278,6 @@ void TextLlmContext::compactThinkSpan() {
               [this](const ReasoningBlockCompactor::Outcome& compacted) {
                 nPast_ = compacted.newPos;
               },
-          .onFailedKvIntact =
-              [this]() {
-                const llama_pos delta = nPast_ - preRequestNPast_;
-                if (delta > 0) {
-                  removeLastNTokens(delta);
-                }
-                nPast_ = preRequestNPast_;
-                rollbackState_.reset();
-                compactor_.reset();
-              },
           .onFailedKvWiped =
               [this]() {
                 nPast_ = 0;
@@ -1336,13 +1326,7 @@ void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   //     `snapshotForRecurrentRollback` wrapper catches, restores the
   //     pre-prompt checkpoint (or wipes the sequence and resets
   //     positional accounting on restore underflow), and rethrows.
-  //   - Pure-attention `seq_rm + seq_add` rejection — the compactor
-  //     returns `Outcome::Kind::FailedKvIntact`. The primitive is
-  //     all-or-nothing so live KV is unchanged; `compactThinkSpan`
-  //     drops `[preRequestNPast_, nPast_)` from live memory via
-  //     `removeLastNTokens`, restores `nPast_` to the pre-request
-  //     cursor, resets per-inference reasoning bookkeeping, and throws.
-  //   - Hybrid restore/replay failure — the compactor best-effort
+  //   - Restore/replay failure — the compactor best-effort
   //     wipes the sequence memory and returns
   //     `Outcome::Kind::FailedKvWiped`. `compactThinkSpan` resets
   //     positional bookkeeping to zero to match the cleared

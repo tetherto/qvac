@@ -61,6 +61,11 @@ public:
   // capture failure (the snapshot is cleared in that case).
   bool captureReasoningBoundary(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos nPast);
+  // Position-only variant for memory that can drop a partial tail, which is
+  // every pure-attention model. Restoring it trims back to `nPast` instead of
+  // reloading state, so compaction never needs `seq_add` and the deferred
+  // K-shift it schedules. Always succeeds: there is nothing to serialize.
+  void captureReasoningBoundaryPosition(llama_pos nPast);
   // No-op when no snapshot is held. Returns false only when a held
   // snapshot fails to restore.
   bool restoreReasoningBoundary(::llama_context* ctx, llama_seq_id seqId);

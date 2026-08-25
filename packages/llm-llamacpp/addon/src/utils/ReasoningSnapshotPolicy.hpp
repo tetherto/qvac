@@ -40,11 +40,13 @@ enum class RecurrentReasoningBoundaryDecision {
 
 [[nodiscard]] inline RecurrentReasoningBoundaryDecision
 recurrentReasoningBoundaryDecision(
-    bool needsRecurrentSnapshot, bool removeThinkingFromContext,
+    bool /*needsRecurrentSnapshot*/, bool removeThinkingFromContext,
     bool reasoningEnabled, bool /*thinkingForcedOpen*/,
     bool closeMarkerSingleToken) noexcept {
-  if (!needsRecurrentSnapshot || !removeThinkingFromContext ||
-      !reasoningEnabled) {
+  // Every model anchors a boundary now: compaction rewinds to it and replays
+  // rather than shifting, so memory kind no longer decides whether one is
+  // needed, only whether the anchor is a state payload or just a position.
+  if (!removeThinkingFromContext || !reasoningEnabled) {
     return RecurrentReasoningBoundaryDecision::Disabled;
   }
   if (!closeMarkerSingleToken) {
