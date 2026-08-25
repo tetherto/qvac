@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add desktop CPU support for MiniMax-Music3 through local LM and synthesis
+  GGUF files, with engine-specific validation, progress, cancellation, runtime
+  statistics, and a skippable model-backed integration regression.
+- Add desktop GPU support for MiniMax-Music3 via `config.useGPU`: the model
+  pair runs on the first usable ggml GPU backend (CUDA, Vulkan, Metal) with
+  CPU fallback, and `stats.backendDevice`/`backendId` report the backend
+  actually in use.
+
+### Fixed
+
+- MiniMax-Music3 produced tonal noise instead of music, and a cancellation
+  issued right at generation start could stall until the first progress
+  event. Both are fixed by requiring `speech-cpp` `2026-08-24#2`.
+- `cancel()` no longer hangs forever when the job it targets fails before
+  the native engine starts; it now settles as soon as the run settles.
+
 ## [0.2.4] - 2026-08-20
 
 ### Changed

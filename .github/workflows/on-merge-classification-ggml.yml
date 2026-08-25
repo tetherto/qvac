@@ -84,14 +84,18 @@ jobs:
       ref: ${{ github.sha }}
       workdir: "packages/classification-ggml"
 
+  verify-generated:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-generated-wrappers.yml
+    with:
+      workdir: packages/classification-ggml
+
   publish-gpr:
-    needs: [publish-logic, prebuild]
-    if: |
-      !cancelled() &&
-      needs.prebuild.result == 'success' &&
-      (needs.publish-logic.outputs.publish_main == 'true' ||
-       needs.publish-logic.outputs.publish_feature == 'true' ||
-       needs.publish-logic.outputs.publish_tmp == 'true')
+    needs: [publish-logic, prebuild, verify-generated]
+    if: >-
+      needs.verify-generated.result == 'success' &&
+      (!cancelled() && needs.prebuild.result == 'success' && (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -115,14 +119,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        working-directory: packages/classification-ggml
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: packages/classification-ggml
-        run: npm run build:ts
-
       - name: Publish to GitHub Packages
         uses: ./.github/actions/publish-library-to-gpr
         with:
@@ -133,12 +129,10 @@ jobs:
           name-suffix: "-mono"
 
   publish-release-npm:
-    needs: [publish-logic, release-merge-guard, prebuild]
-    if: |
-      !cancelled() &&
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      needs.release-merge-guard.result == 'success' &&
-      needs.prebuild.result == 'success'
+    needs: [publish-logic, release-merge-guard, prebuild, verify-generated]
+    if: >-
+      needs.verify-generated.result == 'success' &&
+      (!cancelled() && needs.publish-logic.outputs.publish_release == 'true' && needs.release-merge-guard.result == 'success' && needs.prebuild.result == 'success')
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -173,14 +167,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
-
-      - name: Install dependencies
-        working-directory: packages/classification-ggml
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: Build TypeScript wrapper
-        working-directory: packages/classification-ggml
-        run: npm run build:ts
 
       - name: Determine dist-tag
         id: dist-tag
