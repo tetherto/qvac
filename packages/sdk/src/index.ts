@@ -29,6 +29,7 @@ export {
   getModelInfo,
   getLoadedModelInfo,
   getSystemResources,
+  assessModelFit,
   loggingStream,
   subscribeServerLogs,
   type ServerLogHandler,
