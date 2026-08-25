@@ -5,6 +5,8 @@ import tarStream, { type Pack } from 'tar-stream'
 import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
 import { listBarePrebuildFiles } from '@/commands/verify/prebuilds'
 
+type PackSink = Parameters<Pack['pipe']>[0]
+
 export const RESOURCE_COLLECTOR_PACKAGES = ['bare-cpu-info', 'bare-gpu-info'] as const
 export const RESOURCE_COLLECTOR_SIZE_BUDGETS = {
   compressedBytes: 2 * 1024 * 1024,
@@ -258,10 +260,11 @@ export async function measureTarget(
   const pack = tarStream.pack()
   const gzip = createGzip({ level: 9 })
   const compressedBytesPromise = countStreamBytes(gzip)
-  // tar-stream 3.2.1 ships first-party types that pipe into a streamx Writable.
-  // A node Gzip is compatible at runtime but cannot satisfy streamx's nominal
-  // private brand, so the destination type is taken from `pipe` itself.
-  pack.pipe(gzip as unknown as Parameters<Pack['pipe']>[0])
+  // tar-stream 3.2.1's types make `pipe` take a streamx Writable, whose nominal
+  // private brand a node Gzip cannot satisfy even though the two interoperate at
+  // runtime. Read the sink type off `pipe` rather than importing it from streamx,
+  // which no package here declares, so it follows tar-stream if that type widens.
+  pack.pipe(gzip as unknown as PackSink)
 
   try {
     for (const entry of entries) {
