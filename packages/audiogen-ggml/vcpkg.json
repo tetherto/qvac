@@ -10,7 +10,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-18#2",
+      "version>=": "2026-08-24#2",
       "default-features": false,
       "features": [
         "audiogen",
@@ -20,7 +20,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-18#2",
+      "version>=": "2026-08-24#2",
       "default-features": false,
       "features": [
         "audiogen",
@@ -31,7 +31,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-18#2",
+      "version>=": "2026-08-24#2",
       "default-features": false,
       "features": [
         "audiogen",
@@ -52,7 +52,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-08-18#2",
+          "version>=": "2026-08-24#2",
           "default-features": false,
           "features": [
             "vulkan"

@@ -85,8 +85,18 @@ runs:
 
     - name: Check for errors
       shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
       run: |
         count=0
+        # Inlined rather than added as its own step: this action checks out the
+        # PR head over its own definition, so changing its step count breaks the
+        # composite post-step indices ("Index was out of range"). Must stay
+        # after run-lint-and-unit-tests, which installs the typescript it needs.
+        if ! (cd "$WORKDIR" && npm run check:generated --if-present); then
+          echo "::error::Step - Generated wrappers do not match src (run 'npm run build:ts' and commit the result)"
+          count=$((count + 1))
+        fi
         if [ "${{ steps.run_tests.outcome }}" = "failure" ]; then
           echo "::error::Step - Lint or unit tests failed"
           count=$((count + 1))
