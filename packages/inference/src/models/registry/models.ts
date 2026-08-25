@@ -16998,7 +16998,7 @@ export const models = [
     quantization: 'q8_0',
     params: '0.5B',
     companionSet: {
-      setKey: '377f9721d0592b7c',
+      setKey: 'b75e001ce19bae4c',
       primaryKey: 'modelPath',
       files: [
         {
