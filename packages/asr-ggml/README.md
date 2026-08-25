@@ -525,12 +525,20 @@ Two things the CUDA build has to work around, both handled in
   `-stdlib=libc++` the Linux triplets set, so enabling the CUDA language used
   to fail its ABI check. `vcpkg-overlays/toolchains/linux-clang.cmake` pins
   `CMAKE_CUDA_HOST_COMPILER` to `clang++` to match.
-- `ggml-config.cmake` hides `CUDA::cudart_static` and
-  `CUDA::cublas{,Lt}_static` behind `if (GGML_STATIC)`, but `GGML_STATIC` also
-  means `add_link_options(-static)` in ggml's own build and so must stay off
-  for a shared bare module. The addon therefore links the CUDA runtime
-  explicitly; without it the module loads and dies on
-  `undefined symbol: __cudaRegisterFatBinary`.
+- `ggml-config.cmake` only puts a CUDA runtime in `ggml::ggml-cuda`'s interface
+  under `if (GGML_STATIC)`, and `GGML_STATIC` also means
+  `add_link_options(-static)` in ggml's own build, so it must stay off for a
+  shared bare module. The addon therefore links the CUDA runtime explicitly;
+  without it the module loads and dies on
+  `undefined symbol: __cudaRegisterFatBinary`. It links the *dynamic* runtime
+  (`CUDA::cudart` / `cublas` / `cublasLt`), matching `diffusion-cpp`, so that
+  loading both addons into one process (`packages/ggml-coload-smoke`) cannot
+  end up with two CUDA runtime instances.
+
+A CUDA-enabled build therefore needs `libcuda.so.1` plus the CUDA runtime
+(`libcudart` / `libcublas` / `libcublasLt`) present at load time, and will fail
+to load without them. That does not affect the published prebuilds, which are
+built without `ASR_CUDA` and carry no CUDA dependency at all.
 
 Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.

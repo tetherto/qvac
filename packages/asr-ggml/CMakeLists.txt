@@ -177,21 +177,24 @@ target_link_libraries(
     ggml::ggml
 )
 
-# ggml-config.cmake gates CUDA::cudart_static and CUDA::cublas{,Lt}_static
-# behind `if (GGML_STATIC)`, but GGML_STATIC also means `add_link_options(-static)`
-# in ggml's own build, so a shared bare module must leave it OFF. The result is a
-# ggml::ggml-cuda whose interface carries only CUDA::cuda_driver: the module links
-# libcuda.so.1 and then dies at load with `undefined symbol:
-# __cudaRegisterFatBinary`. ggml conflates link mode with CUDA runtime flavour, so
-# the consumer has to name the runtime itself.
+# ggml-config.cmake only adds a CUDA runtime to ggml::ggml-cuda's interface under
+# `if (GGML_STATIC)`, and GGML_STATIC also means `add_link_options(-static)` in
+# ggml's own build, so a shared bare module must leave it OFF. The interface is
+# then left with just CUDA::cuda_driver and the module dies at load with
+# `undefined symbol: __cudaRegisterFatBinary`, so the consumer names the runtime.
+#
+# Dynamic, matching packages/diffusion-cpp for the same problem: both addons can
+# be loaded into one process (packages/ggml-coload-smoke), and mixing a static
+# CUDA runtime here with a dynamic one there would put two runtime instances in
+# that process.
 if(ASR_CUDA)
   find_package(CUDAToolkit REQUIRED)
   target_link_libraries(
     ${asr-ggml}
     PRIVATE
-      CUDA::cudart_static
-      CUDA::cublas_static
-      CUDA::cublasLt_static
+      CUDA::cudart
+      CUDA::cublas
+      CUDA::cublasLt
   )
 endif()
 

@@ -36,13 +36,15 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
     `g++`, which rejects the `-stdlib=libc++` the Linux triplets put in
     `VCPKG_CXX_FLAGS` / `VCPKG_LINKER_FLAGS`, so `enable_language(CUDA)` failed
     its ABI check for every consumer of these triplets.
-  - The addon links `CUDA::cudart_static` and `CUDA::cublas{,Lt}_static`
-    itself. `ggml-config.cmake` gates them behind `if (GGML_STATIC)`, but
-    `GGML_STATIC` also means `add_link_options(-static)` in ggml's own build
-    and so cannot be enabled for a shared bare module, leaving
-    `ggml::ggml-cuda` with no CUDA runtime in its interface. Without this the
-    module linked `libcuda.so.1` and then aborted at load with
-    `undefined symbol: __cudaRegisterFatBinary`.
+  - The addon links `CUDA::cudart` / `cublas` / `cublasLt` itself.
+    `ggml-config.cmake` only adds a CUDA runtime to `ggml::ggml-cuda`'s
+    interface under `if (GGML_STATIC)`, but `GGML_STATIC` also means
+    `add_link_options(-static)` in ggml's own build and so cannot be enabled
+    for a shared bare module. Without this the module linked `libcuda.so.1`
+    and then aborted at load with
+    `undefined symbol: __cudaRegisterFatBinary`. The dynamic runtime matches
+    `diffusion-cpp`, so loading both addons into one process
+    (`packages/ggml-coload-smoke`) cannot produce two CUDA runtime instances.
 
 ### Changed
 

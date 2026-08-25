@@ -14,7 +14,7 @@ const CUDA_CMAKE_OPTION = 'ASR_CUDA'
 const CUDA_MANIFEST_FEATURE = 'cuda'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
-const CUDA_RUNTIME_LIBRARIES = ['cudart_static', 'cublas_static', 'cublasLt_static']
+const CUDA_RUNTIME_LIBRARIES = ['cudart', 'cublas', 'cublasLt']
 const GPU_TEST_FILES = [
   'test/integration/gpu.test.js',
   'test/integration/parakeet-gpu-smoke.test.js'
