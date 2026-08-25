@@ -8,6 +8,8 @@ export interface QvacFileSystem {
   renameSync(from: string, to: string): void
   readdirSync(path: string): string[]
   unlinkSync(path: string): void
+  rmdirSync(path: string): void
+  statSync(path: string): { mtimeMs: number }
   openSync(path: string, flags: string): number
   closeSync(fd: number): void
   fsyncSync(fd: number): void

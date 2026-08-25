@@ -1,7 +1,13 @@
 import test from 'brittle'
 import env from 'bare-env'
 import { z } from 'zod'
-import { ERR_CODES, QvacErrorRAG, TurboVecAdapter, type TurboVecIndexProvider } from '@qvac/rag'
+import {
+  ERR_CODES,
+  HyperDBAdapter,
+  QvacErrorRAG,
+  TurboVecAdapter,
+  type TurboVecIndexProvider
+} from '@qvac/rag'
 import { clearPlugins, registerPlugin } from '@/plugins'
 import {
   closeRagInstance,
@@ -27,7 +33,7 @@ async function cleanupWorkspace(workspace: string) {
   await deleteWorkspace(workspace)
 }
 
-test('TurboVec workspace failure releases Corestore for retry', async (t) => {
+test('TurboVec workspace failure leaves the workspace unpinned', async (t) => {
   const workspace = workspaceName('missing')
   const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   clearPlugins()
@@ -46,10 +52,7 @@ test('TurboVec workspace failure releases Corestore for retry', async (t) => {
 
     env[TURBOVEC_ROLLOUT_ENV] = '0'
     const adapter = await getRagDbAdapter(workspace)
-    t.ok(
-      !(adapter instanceof TurboVecAdapter),
-      'the same Corestore path can be reopened after failure'
-    )
+    t.ok(adapter instanceof HyperDBAdapter)
   } finally {
     restoreEnv(originalFlag)
     clearPlugins()
@@ -94,5 +97,61 @@ test('TurboVec workspace consumes a registered plugin provider', async (t) => {
     restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
+  }
+})
+
+test('RAG workspace keeps its pinned adapter when the rollout flag changes', async (t) => {
+  const turboWorkspace = workspaceName('pinned-turbo')
+  const hyperdbWorkspace = workspaceName('pinned-hyperdb')
+  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
+  const provider = {
+    create() {
+      throw new Error('not used for an empty workspace')
+    },
+    load() {
+      throw new Error('not used for an empty workspace')
+    }
+  } as TurboVecIndexProvider
+
+  clearPlugins()
+  registerPlugin({
+    modelType: 'test-turbovec-pin',
+    displayName: 'TurboVec Pin Test',
+    addonPackage: '@qvac/test-addon',
+    loadConfigSchema: z.object({}),
+    createModel() {
+      return {
+        model: { load: async function () {} }
+      }
+    },
+    handlers: {},
+    capabilities: {
+      turbovecIndexProvider: provider
+    }
+  })
+
+  try {
+    env[TURBOVEC_ROLLOUT_ENV] = '1'
+    const turboAdapter = await getRagDbAdapter(turboWorkspace)
+    t.ok(turboAdapter instanceof TurboVecAdapter)
+    await closeRagInstance(turboWorkspace)
+
+    env[TURBOVEC_ROLLOUT_ENV] = '0'
+    const reopenedTurboAdapter = await getRagDbAdapter(turboWorkspace)
+    t.ok(reopenedTurboAdapter instanceof TurboVecAdapter)
+    await closeRagInstance(turboWorkspace)
+
+    const hyperdbAdapter = await getRagDbAdapter(hyperdbWorkspace)
+    t.ok(hyperdbAdapter instanceof HyperDBAdapter)
+    await closeRagInstance(hyperdbWorkspace)
+
+    env[TURBOVEC_ROLLOUT_ENV] = '1'
+    const reopenedHyperdbAdapter = await getRagDbAdapter(hyperdbWorkspace)
+    t.ok(reopenedHyperdbAdapter instanceof HyperDBAdapter)
+  } finally {
+    restoreEnv(originalFlag)
+    clearPlugins()
+    await cleanupWorkspace(turboWorkspace)
+    await cleanupWorkspace(hyperdbWorkspace)
   }
 })
