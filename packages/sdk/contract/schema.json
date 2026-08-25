@@ -9312,37 +9312,47 @@
                       "type": "object",
                       "properties": {
                         "mode": {
+                          "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                           "type": "string",
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"
                         },
                         "beamsize": {
+                          "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
                         "lengthpenalty": {
+                          "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
                         "maxlength": {
+                          "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
                         "repetitionpenalty": {
+                          "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
                         "norepeatngramsize": {
+                          "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "temperature": {
+                          "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
                         "topk": {
+                          "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "topp": {
+                          "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
                         "engine": {
                           "type": "string",
-                          "const": "Bergamot"
+                          "const": "Bergamot",
+                          "description": "Translation backend: Bergamot — fast bilingual models keyed by ISO 639-1 codes."
                         },
                         "from": {
                           "type": "string",
@@ -9402,6 +9412,7 @@
                             "tr",
                             "vi"
                           ],
+                          "description": "Source language (ISO 639-1, e.g. `en`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom"
                         },
                         "to": {
@@ -9462,9 +9473,11 @@
                             "tr",
                             "vi"
                           ],
+                          "description": "Target language (ISO 639-1, e.g. `de`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"
                         },
                         "srcVocabSrc": {
+                          "description": "Source-language vocabulary file source (required for Bergamot).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9548,6 +9561,7 @@
                           ]
                         },
                         "dstVocabSrc": {
+                          "description": "Target-language vocabulary file source (required for Bergamot).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9631,38 +9645,49 @@
                           ]
                         },
                         "normalize": {
+                          "description": "Input normalization: 1 = on (default), 0 = off.",
                           "type": "number"
                         },
                         "pivotModel": {
+                          "description": "Optional second-stage model for pivot translation (translate via an intermediate language).",
                           "type": "object",
                           "properties": {
                             "mode": {
+                              "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                               "type": "string",
                               "enum": ["full"],
                               "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
                             },
                             "beamsize": {
+                              "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                               "type": "number"
                             },
                             "lengthpenalty": {
+                              "description": "Length-normalization strength (≥0). Default 1.0.",
                               "type": "number"
                             },
                             "maxlength": {
+                              "description": "Maximum generated tokens (>0). Default 512.",
                               "type": "number"
                             },
                             "repetitionpenalty": {
+                              "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                               "type": "number"
                             },
                             "norepeatngramsize": {
+                              "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                               "type": "number"
                             },
                             "temperature": {
+                              "description": "Sampling temperature (0–2). Default 0.3.",
                               "type": "number"
                             },
                             "topk": {
+                              "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                               "type": "number"
                             },
                             "topp": {
+                              "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                               "type": "number"
                             },
                             "modelSrc": {
@@ -9746,9 +9771,11 @@
                                   "required": ["src"],
                                   "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc"
                                 }
-                              ]
+                              ],
+                              "description": "Second-stage (pivot) translation model source."
                             },
                             "srcVocabSrc": {
+                              "description": "Pivot model source-language vocabulary file source.",
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -9832,6 +9859,7 @@
                               ]
                             },
                             "dstVocabSrc": {
+                              "description": "Pivot model target-language vocabulary file source.",
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -9915,6 +9943,7 @@
                               ]
                             },
                             "normalize": {
+                              "description": "Pivot model input normalization: 1 = on (default), 0 = off.",
                               "type": "number"
                             }
                           },
@@ -9929,37 +9958,47 @@
                       "type": "object",
                       "properties": {
                         "mode": {
+                          "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                           "type": "string",
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"
                         },
                         "beamsize": {
+                          "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
                         "lengthpenalty": {
+                          "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
                         "maxlength": {
+                          "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
                         "repetitionpenalty": {
+                          "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
                         "norepeatngramsize": {
+                          "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "temperature": {
+                          "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
                         "topk": {
+                          "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "topp": {
+                          "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
                         "engine": {
                           "type": "string",
-                          "const": "IndicTrans"
+                          "const": "IndicTrans",
+                          "description": "Translation backend: IndicTrans2 — keyed by ISO 15924 codes; full generation-parameter support."
                         },
                         "from": {
                           "type": "string",
@@ -9991,6 +10030,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
+                          "description": "Source language (ISO 15924, e.g. `hin_Deva`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom"
                         },
                         "to": {
@@ -10023,6 +10063,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
+                          "description": "Target language (ISO 15924, e.g. `eng_Latn`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"
                         }
                       },

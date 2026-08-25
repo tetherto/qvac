@@ -8143,74 +8143,159 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode | None,
         Field(
-            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
+            description="Generation mode; currently only `'full'` is supported. Default `'full'`.",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode",
         ),
     ] = None
-    beamsize: float | None = None
-    lengthpenalty: float | None = None
-    maxlength: float | None = None
-    repetitionpenalty: float | None = None
-    norepeatngramsize: float | None = None
-    temperature: float | None = None
-    topk: float | None = None
-    topp: float | None = None
+    beamsize: Annotated[
+        float | None,
+        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
+    ] = None
+    lengthpenalty: Annotated[
+        float | None,
+        Field(description="Length-normalization strength (≥0). Default 1.0."),
+    ] = None
+    maxlength: Annotated[
+        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
+    ] = None
+    repetitionpenalty: Annotated[
+        float | None,
+        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
+    ] = None
+    norepeatngramsize: Annotated[
+        float | None,
+        Field(
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
+    ] = None
+    topk: Annotated[
+        float | None,
+        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+    ] = None
+    topp: Annotated[
+        float | None,
+        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+    ] = None
     model_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc,
-        Field(alias="modelSrc"),
+        Field(
+            alias="modelSrc",
+            description="Second-stage (pivot) translation model source.",
+        ),
     ]
     src_vocab_src: Annotated[
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc
         | None,
-        Field(alias="srcVocabSrc"),
+        Field(
+            alias="srcVocabSrc",
+            description="Pivot model source-language vocabulary file source.",
+        ),
     ] = None
     dst_vocab_src: Annotated[
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc
         | None,
-        Field(alias="dstVocabSrc"),
+        Field(
+            alias="dstVocabSrc",
+            description="Pivot model target-language vocabulary file source.",
+        ),
     ] = None
-    normalize: float | None = None
+    normalize: Annotated[
+        float | None,
+        Field(
+            description="Pivot model input normalization: 1 = on (default), 0 = off."
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode | None,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"),
+        Field(
+            description="Generation mode; currently only `'full'` is supported. Default `'full'`.",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode",
+        ),
     ] = None
-    beamsize: float | None = None
-    lengthpenalty: float | None = None
-    maxlength: float | None = None
-    repetitionpenalty: float | None = None
-    norepeatngramsize: float | None = None
-    temperature: float | None = None
-    topk: float | None = None
-    topp: float | None = None
-    engine: Literal["Bergamot"] = "Bergamot"
+    beamsize: Annotated[
+        float | None,
+        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
+    ] = None
+    lengthpenalty: Annotated[
+        float | None,
+        Field(description="Length-normalization strength (≥0). Default 1.0."),
+    ] = None
+    maxlength: Annotated[
+        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
+    ] = None
+    repetitionpenalty: Annotated[
+        float | None,
+        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
+    ] = None
+    norepeatngramsize: Annotated[
+        float | None,
+        Field(
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
+    ] = None
+    topk: Annotated[
+        float | None,
+        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+    ] = None
+    topp: Annotated[
+        float | None,
+        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+    ] = None
+    engine: Annotated[
+        Literal["Bergamot"],
+        Field(
+            description="Translation backend: Bergamot — fast bilingual models keyed by ISO 639-1 codes."
+        ),
+    ] = "Bergamot"
     from_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom,
         Field(
             alias="from",
+            description="Source language (ISO 639-1, e.g. `en`).",
             title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom",
         ),
     ]
     to: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"),
+        Field(
+            description="Target language (ISO 639-1, e.g. `de`).",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo",
+        ),
     ]
     src_vocab_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc | None,
-        Field(alias="srcVocabSrc"),
+        Field(
+            alias="srcVocabSrc",
+            description="Source-language vocabulary file source (required for Bergamot).",
+        ),
     ] = None
     dst_vocab_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc | None,
-        Field(alias="dstVocabSrc"),
+        Field(
+            alias="dstVocabSrc",
+            description="Target-language vocabulary file source (required for Bergamot).",
+        ),
     ] = None
-    normalize: float | None = None
+    normalize: Annotated[
+        float | None,
+        Field(description="Input normalization: 1 = on (default), 0 = off."),
+    ] = None
     pivot_model: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel | None,
         Field(
             alias="pivotModel",
+            description="Optional second-stage model for pivot translation (translate via an intermediate language).",
             title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel",
         ),
     ] = None
@@ -8281,27 +8366,63 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(Enum):
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode | None,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"),
+        Field(
+            description="Generation mode; currently only `'full'` is supported. Default `'full'`.",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode",
+        ),
     ] = None
-    beamsize: float | None = None
-    lengthpenalty: float | None = None
-    maxlength: float | None = None
-    repetitionpenalty: float | None = None
-    norepeatngramsize: float | None = None
-    temperature: float | None = None
-    topk: float | None = None
-    topp: float | None = None
-    engine: Literal["IndicTrans"] = "IndicTrans"
+    beamsize: Annotated[
+        float | None,
+        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
+    ] = None
+    lengthpenalty: Annotated[
+        float | None,
+        Field(description="Length-normalization strength (≥0). Default 1.0."),
+    ] = None
+    maxlength: Annotated[
+        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
+    ] = None
+    repetitionpenalty: Annotated[
+        float | None,
+        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
+    ] = None
+    norepeatngramsize: Annotated[
+        float | None,
+        Field(
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
+    ] = None
+    topk: Annotated[
+        float | None,
+        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+    ] = None
+    topp: Annotated[
+        float | None,
+        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+    ] = None
+    engine: Annotated[
+        Literal["IndicTrans"],
+        Field(
+            description="Translation backend: IndicTrans2 — keyed by ISO 15924 codes; full generation-parameter support."
+        ),
+    ] = "IndicTrans"
     from_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom,
         Field(
             alias="from",
+            description="Source language (ISO 15924, e.g. `hin_Deva`).",
             title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom",
         ),
     ]
     to: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"),
+        Field(
+            description="Target language (ISO 15924, e.g. `eng_Latn`).",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo",
+        ),
     ]
 
 
