@@ -59,11 +59,19 @@ export function isBuiltInModelType(modelType: unknown): boolean {
 }
 import { reloadConfigRequestSchema } from './reload-config'
 
+const MODEL_SRC_DESCRIPTION =
+  'The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.'
+
 const loadModelCommonFields = {
-  modelSrc: modelSrcInputSchema,
+  modelSrc: modelSrcInputSchema.describe(MODEL_SRC_DESCRIPTION),
   seed: z.boolean().optional(),
   delegate: delegateSchema,
-  fallbackSrc: z.string().optional()
+  fallbackSrc: z
+    .string()
+    .optional()
+    .describe(
+      'Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.'
+    )
 }
 
 const loadModelRequestCommonFields = {
@@ -208,7 +216,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
       ...loadModelCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: audioGenModelTypeSchema,
       modelConfig: audioGenConfigSchema
     })
@@ -223,7 +231,7 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
   z
     .object({
       ...loadModelCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: classificationModelTypeSchema,
       modelConfig: classificationConfigSchema.strict().optional()
     })
@@ -433,7 +441,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
       ...loadModelRequestCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: audioGenModelTypeSchema,
       modelConfig: audioGenConfigSchema
     })
@@ -472,7 +480,7 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
       ...loadModelRequestCommonFields,
-      modelSrc: modelSrcInputSchema.optional(),
+      modelSrc: modelSrcInputSchema.optional().describe(MODEL_SRC_DESCRIPTION),
       modelType: classificationModelTypeSchema,
       modelConfig: classificationConfigSchema.strict().optional()
     })
@@ -523,7 +531,7 @@ export const loadModelOptionsToRequestSchema = misplacedLoadModelConfigGuard.pip
 
 const commonModelConfigSchema = z.object({
   type: z.literal('loadModel'),
-  modelSrc: z.string(),
+  modelSrc: z.string().describe(MODEL_SRC_DESCRIPTION),
   modelName: z.string().optional(),
   withProgress: z.boolean().optional(),
   seed: z.boolean().optional(),

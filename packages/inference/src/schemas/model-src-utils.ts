@@ -11,17 +11,41 @@ import { resolveCanonicalEngine } from '@/schemas/engine-addon-map'
 const addonSchema = z.union([modelTypeInputSchema, z.literal('vad')])
 
 export const modelDescriptorSchema = z.object({
-  src: z.string(),
-  name: z.string().optional(),
-  modelId: z.string().optional(),
-  registryPath: z.string().optional(),
-  registrySource: z.string().optional(),
-  blobCoreKey: z.string().optional(),
-  blobIndex: z.number().optional(),
-  engine: z.string().optional(),
-  expectedSize: z.number().optional(),
-  sha256Checksum: z.string().optional(),
-  addon: addonSchema.optional()
+  src: z
+    .string()
+    .describe(
+      'Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.'
+    ),
+  name: z
+    .string()
+    .optional()
+    .describe('Display name for this model instance; overrides the name derived from the source.'),
+  modelId: z
+    .string()
+    .optional()
+    .describe('Unique identifier used to reference the model in QVAC calls.'),
+  registryPath: z
+    .string()
+    .optional()
+    .describe('Registry-relative path to the model (set for registry-backed models).'),
+  registrySource: z
+    .string()
+    .optional()
+    .describe('Registry source identifier, e.g. `huggingface`.'),
+  blobCoreKey: z.string().optional().describe('Hyperdrive blob core key for the model file.'),
+  blobIndex: z
+    .number()
+    .optional()
+    .describe('Internal: index of this shard within its Hyperdrive blob core, for sharded models.'),
+  engine: z
+    .string()
+    .optional()
+    .describe('Canonical inference engine identifier, e.g. `llamacpp-completion`.'),
+  expectedSize: z.number().optional().describe('Expected total size of the model file in bytes.'),
+  sha256Checksum: z.string().optional().describe('Expected SHA-256 checksum of the model file.'),
+  addon: addonSchema
+    .optional()
+    .describe('Inference addon / capability category this model belongs to.')
 })
 
 export const modelSrcInputSchema = z.union([z.string(), modelDescriptorSchema])

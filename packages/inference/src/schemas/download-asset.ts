@@ -4,7 +4,9 @@ import type { ModelProgressUpdate } from '@/schemas/load-model'
 import { modelSrcInputSchema, modelInputToSrcSchema } from '@/schemas/model-src-utils'
 
 const downloadAssetOptionsBaseSchema = z.object({
-  assetSrc: modelSrcInputSchema,
+  assetSrc: modelSrcInputSchema.describe(
+    'The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.'
+  ),
   seed: z.boolean().optional()
 })
 
@@ -39,7 +41,11 @@ export const downloadAssetOptionsToRequestSchema = downloadAssetOptionsBaseSchem
 export const downloadAssetRequestSchema = z
   .object({
     type: z.literal('downloadAsset'),
-    assetSrc: z.string(),
+    assetSrc: z
+      .string()
+      .describe(
+        'The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.'
+      ),
     withProgress: z.boolean().optional(),
     seed: z.boolean().optional(),
     requestId: z
