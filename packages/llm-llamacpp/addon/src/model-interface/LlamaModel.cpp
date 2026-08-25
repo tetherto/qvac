@@ -1350,9 +1350,14 @@ LlamaModel::singleRuntimeStatsLocked() const {
   // never sent. The snapshot taken at the start of `compactThinkSpan` is the
   // user-visible cutoff for those prompt-side counters.
   //
-  // The generation-side counters are read live instead. The snapshot is taken
-  // before the request is fully wound down, so it can miss the final decode,
-  // and replay never adds to `n_eval` anyway: it decodes in batches.
+  // The generation-side counters are read live instead: the snapshot is taken
+  // before the request is fully wound down, so it can miss the final decode.
+  // `generatedTokens` is counted at the commit site so it is unaffected, but
+  // `t_eval_ms` is not exact here. A replay of exactly one token (forced-open
+  // template that ended right after `</think>`) decodes with
+  // `n_queued_tokens == 1` and so lands in `t_eval_ms`, understating TPS for
+  // that request. Reading the snapshot instead would drop the final decode
+  // from every request, which is the wider error of the two.
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
   if (auto snapshot = state_->llmContext_->takeUserVisiblePerfSnapshot()) {
     perfData.n_p_eval = snapshot->n_p_eval;

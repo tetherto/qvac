@@ -359,16 +359,19 @@ TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenReasoningDisabled) {
   EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
 }
 
-TEST(ReasoningBlockCompactorReplaySeed, NoOpForPureAttentionModels) {
-  // The replay buffer is consumed only on the recurrent / hybrid
-  // compact path. Pure-attention models anchor a position instead and
-  // never replay tokens, so seeding the buffer would be dead state.
+TEST(ReasoningBlockCompactorReplaySeed, SeedsForPureAttentionModels) {
+  // Pure attention replays too now: its boundary is a bare position rather
+  // than a state payload, but the replay buffer is consumed either way, so
+  // the seed must land. This asserted the opposite while pure attention
+  // still compacted through `seq_rm` + `seq_add`.
   CompactorFixture fx;
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/8);
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false);
   fx.compactor.recordCloseMarkerForReplay(42);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
+  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 1u);
+  EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 42);
 }
 
 TEST(ReasoningBlockCompactorReplaySeed, NoOpWhenBoundaryNotCaptured) {
@@ -451,16 +454,18 @@ TEST(ReasoningBlockCompactorReplaySeed, PreReasoningNoOpWhenReasoningDisabled) {
 }
 
 TEST(
-    ReasoningBlockCompactorReplaySeed, PreReasoningNoOpForPureAttentionModels) {
-  // Pure attention anchors a position at compact time and never
-  // consumes the replay buffer, so pre-reasoning seeding would be dead
-  // state exactly like the close-marker seed path.
+    ReasoningBlockCompactorReplaySeed,
+    PreReasoningSeedsForPureAttentionModels) {
+  // Same reason as the close-marker seed above: the pre-reasoning prefix is
+  // replayed on every memory kind now, so pure attention must seed it.
   CompactorFixture fx;
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/8);
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
   fx.compactor.setNeedsRecurrentSnapshot(false);
   fx.compactor.recordPreReasoningToken(198);
-  EXPECT_EQ(fx.rollback.postReasoningTokenCount(), 0u);
+  ASSERT_EQ(fx.rollback.postReasoningTokenCount(), 1u);
+  EXPECT_EQ(fx.rollback.postReasoningTokens()[0], 198);
 }
 
 TEST(
@@ -613,6 +618,28 @@ TEST(ReasoningBlockCompactorCloseCommit, IsNoOpWithoutPriorRequest) {
   // so the commit is dropped and the span end stays unset.
   fx.compactor.onCloseCommitted(/*pos=*/42);
   EXPECT_FALSE(fx.compactor.hasCapturedCloseSpanForTesting());
+}
+
+// Single-block policy, close side. `setOpenSpan` already ignores a second
+// opener; without the mirror in `recordCloseMarkerForReplay` a second
+// `</think>` appends its marker BEHIND the captured answer and bumps the seed
+// count, which raises `clipPostReasoningTokens`' cap so the stray marker
+// survives into the replay and `Outcome::discarded` goes negative.
+TEST(ReasoningBlockCompactorReplaySeed, IgnoresCloseMarkerAfterSpanClosed) {
+  CompactorFixture fx;
+  fx.compactor.setRemoveThinkingFromContext(true);
+  fx.compactor.setReasoningEnabled(true);
+  fx.rollback.seedReasoningBoundaryForTesting(/*nPast=*/10);
+  fx.compactor.setOpenSpan(/*start=*/10);
+  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/42);
+  fx.compactor.requestCloseCapture();
+  fx.compactor.onCloseCommitted(/*pos=*/20);
+  ASSERT_TRUE(fx.compactor.hasCapturedCloseSpanForTesting());
+  ASSERT_EQ(fx.rollback.seededPostReasoningCount(), 1u);
+
+  // Second `<think>...</think>` in the same inference.
+  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/42);
+  EXPECT_EQ(fx.rollback.seededPostReasoningCount(), 1u);
 }
 
 TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {

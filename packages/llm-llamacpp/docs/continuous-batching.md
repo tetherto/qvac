@@ -286,7 +286,7 @@ Lifecycle methods in call order:
 |--------|------|--------------|
 | `loadCache` | At admission | Loads KV cache from disk if `cacheKey` is set |
 | `preparePrefill` | At admission | Tokenizes chat messages, returns pending tokens |
-| `onPrefillComplete` | When prefill finishes | Records `nPast`, triggers context-shift check |
+| `onPrefillComplete` | When prefill finishes | Records `nPast`, snapshots the reasoning-rollback boundary |
 | `onLogitsReady` | Each generation step | Samples next token, runs antiprompt/stop checks |
 | `onGenerationFinished` | Natural EOG | Flushes UTF-8 buffer |
 | `onCancel` | User cancel or decode error | Flushes UTF-8 buffer; called before KV clear |

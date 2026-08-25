@@ -1649,6 +1649,14 @@ bool TextLlmContext::handleReasoningEOS(
   // Inject 2 newlines after closing tag
   if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
     for (int i = 0; i < 2; i++) {
+      // The generation guard only proved room for ONE more token and the
+      // close tag above just took it. Nothing evicts to make room any more,
+      // so stop here rather than decode into a cell that does not exist; the
+      // next `onLogitsReady` reports `contextOverflow`. Without this the
+      // ERROR below fires on an ordinary full-context boundary.
+      if (contextWindowFull(nPast, ctxCeiling())) {
+        break;
+      }
       common_batch_clear(batch);
       common_batch_add(
           batch, reasoningState_.cached_newline_token, nPast, {seqId_}, true);

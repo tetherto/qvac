@@ -112,8 +112,8 @@ function verifyReasoningTags(t, response, testName) {
 // forced `</think>` — the only legitimate empty answer is when the forced
 // close-marker tokens themselves exhausted the n_predict budget. That case
 // is detected via `stats.stopReason === 'predictionLimit'` rather than by
-// comparing `generatedTokens` to n_predict: generatedTokens is raw n_eval,
-// which the recovery's inline decodes inflate, so it can reach n_predict
+// comparing `generatedTokens` to n_predict: the recovery commits the close
+// tag plus up to two newlines, all counted, so the stat can reach n_predict
 // while the logical generation loop still had budget.
 function verifyContinuedAfterReasoning(t, response, testName, opts = {}) {
   const thinkCloseIndex = response.indexOf('</think>')

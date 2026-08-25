@@ -338,7 +338,16 @@ bool MultiRequestBatcher::completeMediaBarrier(
 void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   for (auto& slot : slots_ | views::filter(Request::isOptGenerationIdle)) {
     const int logitIdx = lastLogitIndices_[slot->seqId];
-    slot->generatedTokens.push_back(samplerFn(slot->seqId, logitIdx));
+    const llama_token sampled = samplerFn(slot->seqId, logitIdx);
+    // A driver that stops without producing a token returns
+    // `LLAMA_TOKEN_NULL` (see `SequenceStepResult::token`), which the MTMD
+    // context-overflow return does. It is never fed, so recording it would
+    // put an invalid id in the feed queue and overstate `generatedTokens`
+    // by one.
+    if (sampled == LLAMA_TOKEN_NULL) {
+      continue;
+    }
+    slot->generatedTokens.push_back(sampled);
     slot->hasUnfedSample = true;
     // Stamp the observed token times: first sample fixes firstTokenAt (TTFT
     // boundary), every sample advances lastTokenAt (observed-TPS window end).

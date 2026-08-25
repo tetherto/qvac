@@ -61,6 +61,13 @@ void ReasoningRollbackState::recordPostReasoningToken(llama_token id) {
   if (!capturingPostReasoning_ || id == LLAMA_TOKEN_NULL) {
     return;
   }
+  // Called once per generated answer token. Seed a capacity on first use so
+  // a long answer does not walk the vector up from zero one realloc at a
+  // time; geometric growth covers it from there.
+  if (postReasoningTokens_.capacity() == 0) {
+    constexpr size_t kInitialReplayCapacity = 128;
+    postReasoningTokens_.reserve(kInitialReplayCapacity);
+  }
   postReasoningTokens_.push_back(id);
 }
 

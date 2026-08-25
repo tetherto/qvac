@@ -102,6 +102,14 @@ void ReasoningBlockCompactor::recordCloseMarkerForReplay(llama_token id) {
   if (!rollback_.hasReasoningBoundary()) {
     return;
   }
+  // Single-block policy, close side. `setOpenSpan` already ignores a second
+  // opener; without the mirror here a second `</think>` appends its marker at
+  // the TAIL, behind the captured answer rather than in the structural head,
+  // and the bumped seed count raises `clipPostReasoningTokens`' cap so the
+  // stray marker survives into the replay.
+  if (hasCapturedCloseSpan()) {
+    return;
+  }
   rollback_.appendPostReasoningToken(id);
 }
 

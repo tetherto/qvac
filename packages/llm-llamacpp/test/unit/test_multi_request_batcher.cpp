@@ -845,6 +845,35 @@ TEST_F(MultiRequestBatcherTest, NoSampleWhenChunkDoesNotFinishPrefill) {
   EXPECT_EQ(sampleCount, 1);
 }
 
+/// A driver that stops without producing a token returns
+/// `LLAMA_TOKEN_NULL` (the MTMD context-overflow return does exactly that).
+/// `generatedTokens` doubles as the feed queue and as the runtime-stats
+/// count, so recording that null would both queue an invalid id and report
+/// one generated token more than reached the cache.
+TEST_F(MultiRequestBatcherTest, NullSampleIsNotRecorded) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  batcher.sampleAndAppendIdle([](uint32_t, int) { return LLAMA_TOKEN_NULL; });
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_TRUE(req->generatedTokens.empty());
+}
+
 TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
   const unsigned kMaxChunkSize = 8;
   const unsigned kMaxTokensPerSeq = 3;

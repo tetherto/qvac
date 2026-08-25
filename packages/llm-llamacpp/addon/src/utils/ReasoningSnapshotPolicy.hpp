@@ -19,19 +19,16 @@ namespace utils {
 // opener in the restored prefix; generated-opener templates seed every
 // sampled token up to the open-detection flip into `postReasoningTokens_`
 // alongside the close marker, so the restored prefix no longer has to
-// contain `<think>`. The one remaining hard-requirement is:
-//   * `closeMarkerSingleToken` — the reasoning close tag tokenises to a
-//     single token. The replay path seeds `postReasoningTokens_` with the
-//     single sampled token that triggers the close-detection flip in
-//     `updateReasoningBuffer`; a multi-piece close would leave the SSM
-//     with an unbalanced `<think>` opener followed by only the tail piece.
+// contain `<think>`. There is no hard requirement left: the replay seeds the
+// whole `cached_close_tag_tokens` sequence, so a close marker that tokenises
+// to several pieces still restores a balanced `<think>...</think>` span and
+// marker length no longer decides whether compaction is possible.
 //
-// When `remove_thinking_from_context` is enabled for recurrent / hybrid
-// memory and reasoning is active, unsupported templates must hard-fail
-// instead of silently preserving reasoning in cache. `Disabled` means the
-// policy is irrelevant for this request (pure attention, feature off, or no
-// active reasoning channel); the `Unsupported*` state means callers
-// should surface a StatusError after any required rollback.
+// Every memory kind anchors a boundary now; only the anchor's form differs, a
+// state payload for recurrent / hybrid and a bare position for pure
+// attention. `Disabled` means the policy is irrelevant for this request
+// (feature off, or no active reasoning channel) and `Capture` means take the
+// boundary. There is no unsupported state to surface.
 enum class RecurrentReasoningBoundaryDecision {
   Disabled,
   Capture,

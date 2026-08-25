@@ -457,8 +457,8 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
       static_cast<llama_pos>(mtmd_helper_get_n_tokens(chunksPtr));
   const llama_pos nPositions = mtmd_helper_get_n_pos(chunksPtr);
   const llama_pos ceiling = ctxCeiling();
-  if (contextWindowFull(nTokens, ceiling) ||
-      contextWindowFull(nPositions, ceiling)) {
+  if (exceedsContextWindow(nTokens, ceiling, isPrefillOnlyRequest_) ||
+      exceedsContextWindow(nPositions, ceiling, isPrefillOnlyRequest_)) {
     std::string errorMsg = string_format(
         "[MtmdLlm] context overflow at prefill step (%d tokens, %d positions, "
         "max %d)\n",
@@ -471,8 +471,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // Cached conversation plus this prompt: the context is full, and there is
   // nothing to evict any more, so the request cannot proceed. Both measures
   // are checked because M-RoPE media occupies more KV cells than positions.
-  if (contextWindowFull(current_.pos + nPositions, ceiling) ||
-      contextWindowFull(current_.cacheTokens + nTokens, ceiling)) {
+  if (exceedsContextWindow(
+          current_.pos + nPositions, ceiling, isPrefillOnlyRequest_) ||
+      exceedsContextWindow(
+          current_.cacheTokens + nTokens, ceiling, isPrefillOnlyRequest_)) {
     std::string errorMsg = string_format(
         "[MtmdLlm] context overflow at prefill step: cached %d positions / %d "
         "KV cells plus %d positions / %d KV cells of prompt exceed the max "
@@ -841,7 +843,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
         // `</think>` vocab entry, so seeding `tokenId` would replay a
         // padding piece and leave the SSM unbalanced on the next turn.
         compactor_.recordCloseMarkerForReplay(
-            reasoningState_.cached_close_tag_token);
+            reasoningState_.cached_close_tag_tokens);
       }
     }
 

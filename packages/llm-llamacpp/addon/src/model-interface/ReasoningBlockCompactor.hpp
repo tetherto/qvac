@@ -220,13 +220,13 @@ public:
   //     before rethrowing, so no saveCache path can write a header
   //     that misrepresents live memory.
   //
-  // Callers surface either failure to the outside world by throwing
+  // Callers surface that failure to the outside world by throwing
   // `qvac_errors::StatusError(FailedToDecode, outcome.failureMessage)`
   // (or an equivalent) once the local rollback above has run.
   //
   // When `remove_thinking_from_context` is enabled, there is no soft-failure
   // return: any inability to remove the reasoning span from cache surfaces to
-  // the caller as one of the two `Failed*` outcomes above, and the caller is
+  // the caller as the `FailedKvWiped` outcome above, and the caller is
   // required to surface it as an exception.
   struct Outcome {
     enum class Kind {
@@ -241,9 +241,10 @@ public:
       FailedKvWiped,
     };
     Kind kind = Kind::NoOp;
-    // New cache position the caller should adopt. Unset for `NoOp` and
-    // for the two `Failed*` outcomes (the caller derives the recovery
-    // cursor from its own `preRequestCursor` / zero, respectively).
+    // New cache position the caller should adopt. Unset for `NoOp` and for
+    // `FailedKvWiped`, whose recovery cursor is always zero: compaction
+    // rewinds before it replays, so a failure leaves nothing to roll back to
+    // but an empty sequence.
     llama_pos newPos = 0;
     // Tokens dropped from the cache. `pos - newPos` for the attention
     // path; `pos - newPos` minus the residue for the recurrent path
