@@ -9573,38 +9573,91 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
-    lang_list: Annotated[list[str] | None, Field(alias="langList")] = None
+    lang_list: Annotated[
+        list[str] | None,
+        Field(
+            alias="langList",
+            description="Languages handled by the recognizer, e.g. `['en']` or `['en', 'fr']`. Required for `easyocr`; ignored by the language-agnostic `doctr` pipeline.",
+        ),
+    ] = None
     pipeline_type: Annotated[
         LoadModelSrcRequestGgmlOcrModelConfigPipelineType | None,
         Field(
             alias="pipelineType",
+            description="OCR pipeline: `'easyocr'` (CRAFT detector + CRNN recognizer, default) or `'doctr'` (DBNet detector + doctr recognizer, language-agnostic).",
             title="LoadModelSrcRequestGgmlOcrModelConfigPipelineType",
         ),
     ] = None
-    mag_ratio: Annotated[float | None, Field(alias="magRatio")] = None
-    canvas_size: Annotated[float | None, Field(alias="canvasSize")] = None
-    default_rotation_angles: Annotated[
-        list[float] | None, Field(alias="defaultRotationAngles")
+    mag_ratio: Annotated[
+        float | None,
+        Field(
+            alias="magRatio",
+            description="Detection magnification ratio (easyocr only). Default 1.5.",
+        ),
     ] = None
-    contrast_retry: Annotated[bool | None, Field(alias="contrastRetry")] = None
+    canvas_size: Annotated[
+        float | None,
+        Field(
+            alias="canvasSize",
+            description="Detection canvas cap (long side, px) applied after `magRatio` scaling; lower it on memory-constrained targets. Default 2560. easyocr only.",
+        ),
+    ] = None
+    default_rotation_angles: Annotated[
+        list[float] | None,
+        Field(
+            alias="defaultRotationAngles",
+            description="Rotation angles tried when the primary pass is low-confidence (easyocr only). Default [90, 270].",
+        ),
+    ] = None
+    contrast_retry: Annotated[
+        bool | None,
+        Field(
+            alias="contrastRetry",
+            description="Retry low-confidence boxes with contrast adjustment (easyocr only). Default false.",
+        ),
+    ] = None
     low_confidence_threshold: Annotated[
-        float | None, Field(alias="lowConfidenceThreshold")
+        float | None,
+        Field(
+            alias="lowConfidenceThreshold",
+            description="Confidence threshold below which contrast-retry kicks in (easyocr only). Default 0.4.",
+        ),
     ] = None
     recognizer_batch_size: Annotated[
-        float | None, Field(alias="recognizerBatchSize")
+        float | None,
+        Field(
+            alias="recognizerBatchSize",
+            description="Recognizer batch size (easyocr only). Default 32.",
+        ),
     ] = None
-    n_threads: Annotated[float | None, Field(alias="nThreads")] = None
+    n_threads: Annotated[
+        float | None,
+        Field(
+            alias="nThreads",
+            description="GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
+        ),
+    ] = None
     backend_device: Annotated[
         LoadModelSrcRequestGgmlOcrModelConfigBackendDevice | None,
         Field(
             alias="backendDevice",
+            description="ggml backend device: `'cpu'` (default), `'vulkan'`, `'metal'`, or `'opencl'`. Falls back to CPU when the requested GPU device is unavailable.",
             title="LoadModelSrcRequestGgmlOcrModelConfigBackendDevice",
         ),
     ] = None
-    gpu_device: Annotated[float | None, Field(alias="gpuDevice")] = None
+    gpu_device: Annotated[
+        float | None,
+        Field(
+            alias="gpuDevice",
+            description="0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
+        ),
+    ] = None
     detector_model_src: Annotated[
         str | LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc | None,
-        Field(alias="detectorModelSrc"),
+        Field(
+            alias="detectorModelSrc",
+            description="Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.",
+        ),
     ] = None
 
 
