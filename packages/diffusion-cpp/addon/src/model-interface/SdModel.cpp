@@ -99,12 +99,12 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   // must not inflate denoiseMs.
   bool isDenoise = false;
   if (!ctx.denoiseTotals.empty()) {
-    isDenoise = std::find(
-                    ctx.denoiseTotals.begin(), ctx.denoiseTotals.end(),
-                    steps) != ctx.denoiseTotals.end();
+    isDenoise =
+        std::find(ctx.denoiseTotals.begin(), ctx.denoiseTotals.end(), steps) !=
+        ctx.denoiseTotals.end();
   } else if (ctx.denoiseTotalBound > 0) {
     isDenoise = steps > 0 && steps <= ctx.denoiseTotalBound &&
-        (ctx.denoiseSequences < ctx.maxDenoiseSequences || step != 0);
+                (ctx.denoiseSequences < ctx.maxDenoiseSequences || step != 0);
   }
   if (isDenoise) {
     if (ctx.denoiseTicks == 0)
@@ -707,10 +707,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       // CLI default (false -> ref_index_mode=fixed) is what produces visible
       // fusion: both refs share a RoPE slot and their features blend in
       // attention. Setting true tends to make one ref dominate.
-      refImageArgs = std::string("ref_index_mode=") +
+      refImageArgs =
+          std::string("ref_index_mode=") +
           (gen.increaseRefIndex ? "increase" : "fixed") +
-          ",resize_before_vae=" +
-          (gen.autoResizeRefImage ? "true" : "false");
+          ",resize_before_vae=" + (gen.autoResizeRefImage ? "true" : "false");
       genParams.ref_image_args = refImageArgs.c_str();
       // Fall through to the generate_image() call below.
     } else {
@@ -761,10 +761,10 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
         genParams.ref_images = &initImg;
         genParams.ref_images_count = 1;
-        refImageArgs = std::string("ref_index_mode=") +
+        refImageArgs =
+            std::string("ref_index_mode=") +
             (gen.increaseRefIndex ? "increase" : "fixed") +
-            ",resize_before_vae=" +
-            (gen.autoResizeRefImage ? "true" : "false");
+            ",resize_before_vae=" + (gen.autoResizeRefImage ? "true" : "false");
         genParams.ref_image_args = refImageArgs.c_str();
       } else {
         // SDEdit path -- the vcpkg version of generate_image() rounds
@@ -872,8 +872,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
     if (cancelRequested_.load()) {
       throw sd_errors::makeCancelledError();
     }
-    throw StatusError(
-        general_error::InternalError, "generate_image() failed");
+    throw StatusError(general_error::InternalError, "generate_image() failed");
   }
 
   int outputCount = 0;
