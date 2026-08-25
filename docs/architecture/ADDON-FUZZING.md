@@ -352,7 +352,7 @@ rest come from vcpkg is what would put two Abseils in one link.
 `ports/abseil/` in `qvac-registry-vcpkg`, at version `20260526.0`. It replaces the
 previous onnxruntime-pinned port (`version-string: "onnxruntime"`, Abseil
 `20240722.0`) **at HEAD only**: both old entries stay in `versions/a-/abseil.json`,
-so `ocr-onnx` keeps resolving what it resolves today from its pinned baseline. The
+so anything on an older baseline keeps resolving what it resolves today. The
 manifest asks for `abseil[asan]` with `"version>=": "20260526.0"`, so the floor is
 stated where the dependency is declared rather than left to the baseline.
 
