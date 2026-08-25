@@ -22,7 +22,7 @@
     "test:mobile:generate": "npm run generate:benchmark-shards && bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js && node scripts/validate-mobile-manifest.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js batchHandler.js addonLogging.js index.d.ts addon.d.ts batchHandler.d.ts addonLogging.d.ts",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js addon.js batchHandler.js addonLogging.js index.d.ts addon.d.ts batchHandler.d.ts addonLogging.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
     "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
     "test:dts": "tsc -p tsconfig.dts.json",
