@@ -148,8 +148,14 @@ void AcestepModel::reload() {
 
 void AcestepModel::cancel() const {
   cancelRequested_.store(true);
-  std::lock_guard lk(engineMu_);
-  if (engine_)
+  // generate() loads the engine under engineMu_ on first use, holding it for
+  // the whole multi-gigabyte load. Blocking here would hold the cancel until
+  // that finished, so a Stop pressed while the models are loading only reached
+  // the engine minutes later. The flag above is the guaranteed path -- the
+  // progress callback returns it on every checkpoint -- so a contended mutex
+  // can be skipped rather than waited on.
+  std::unique_lock lk(engineMu_, std::try_to_lock);
+  if (lk.owns_lock() && engine_)
     engine_->cancel();
 }
 

@@ -169,8 +169,11 @@ void MinimaxModel::reload(MinimaxConfig config) {
 
 void MinimaxModel::cancel() const {
   cancelRequested_.store(true);
-  std::lock_guard lock(engineMutex_);
-  if (engine_)
+  // Same reasoning as AcestepModel::cancel(): engineMutex_ is held for the
+  // whole load, and the atomic flag is the guaranteed cancellation path, so a
+  // contended mutex is skipped rather than waited on.
+  std::unique_lock lock(engineMutex_, std::try_to_lock);
+  if (lock.owns_lock() && engine_)
     engine_->cancel();
 }
 
