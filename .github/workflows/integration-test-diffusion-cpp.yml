@@ -377,17 +377,67 @@ jobs:
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs || '3' }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs || '0' }}
 
+      - name: Enable temporary Windows native diagnostics
+        if: ${{ matrix.platform == 'win32' }}
+        shell: powershell
+        run: |
+          $dumpDir = Join-Path $env:RUNNER_TEMP 'qvac-native-dumps'
+          New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+          foreach ($exe in @('bare.exe', 'node.exe')) {
+            $key = "HKCU\Software\Microsoft\Windows\Windows Error Reporting\LocalDumps\$exe"
+            reg.exe ADD $key /v DumpFolder /t REG_EXPAND_SZ /d $dumpDir /f | Out-Null
+            reg.exe ADD $key /v DumpType /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe ADD $key /v DumpCount /t REG_DWORD /d 3 /f | Out-Null
+          }
+          "QVAC_NATIVE_DUMP_DIR=$dumpDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Windows native crash dumps enabled at $dumpDir"
+
       - name: Run integration test (Windows)
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
-          npm run test:integration:generate
-          bare test/integration/all.js --exit | Tee-Object test-output.log
+          $ErrorActionPreference = 'Continue'
+          npm run test:integration:generate 2>&1 | Tee-Object test-output.log
+          $generateExit = $LASTEXITCODE
+          if ($generateExit -ne 0) { exit $generateExit }
+          bare test/integration/all.js --exit 2>&1 | Tee-Object test-output.log -Append
+          $testExit = $LASTEXITCODE
+          Write-Host "Windows integration test exit code: $testExit"
+          exit $testExit
         shell: powershell
         env:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs || '3' }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs || '0' }}
+          WAN_DEBUG: '1'
+          WAN_VERBOSITY: '3'
+
+      - name: Collect temporary Windows native diagnostics
+        if: ${{ always() && matrix.platform == 'win32' }}
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $eventPath = Join-Path $env:RUNNER_TEMP 'qvac-application-events.txt'
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = (Get-Date).AddMinutes(-15) } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -match 'Application Error|Windows Error Reporting|\.NET Runtime' } |
+            Format-List TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+            Out-File -FilePath $eventPath -Encoding utf8
+          Write-Host "Collected application events at $eventPath"
+          if ($env:QVAC_NATIVE_DUMP_DIR -and (Test-Path $env:QVAC_NATIVE_DUMP_DIR)) {
+            Get-ChildItem -Force $env:QVAC_NATIVE_DUMP_DIR | Format-Table Name, Length, LastWriteTime
+          }
+
+      - name: Upload temporary Windows native diagnostics
+        if: ${{ always() && matrix.platform == 'win32' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: windows-native-diagnostics-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            ${{ env.WORKDIR }}/test-output.log
+            ${{ runner.temp }}/qvac-native-dumps
+            ${{ runner.temp }}/qvac-application-events.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Generate HTML performance report
         if: always() && !cancelled()
