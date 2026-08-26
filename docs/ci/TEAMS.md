@@ -37,7 +37,7 @@ Pods are smaller, package-scoped groupings inside the umbrella teams. They drive
 | Pod | Owned paths | Metadata |
 |---|---|---|
 | DevOps | `.github/workflows/`, `.github/actions/`, `.github/scripts/`, `scripts/` | [`.github/teams/devops.json`](../../.github/teams/devops.json) |
-| SDK | `packages/sdk/`, `packages/cli/`, `packages/rag/`, `packages/logging/`, `packages/error/` | [`.github/teams/sdk.json`](../../.github/teams/sdk.json) |
+| SDK | `packages/sdk/`, `packages/cli/`, `packages/rag/`, `packages/logging/`, `packages/error/`, `packages/test-suite/` | [`.github/teams/sdk.json`](../../.github/teams/sdk.json) |
 
 ---
 
