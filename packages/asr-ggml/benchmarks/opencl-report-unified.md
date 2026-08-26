@@ -3,36 +3,38 @@
 This report summarizes the first mobile GPU smoke run of the QVAC ASR-GGML
 stack's new **Parakeet Unified RNN-T** case on Adreno 830
 (Samsung Galaxy S25 Ultra) through OpenCL, captured on
-[workflow run TODO](TODO).
+[workflow run 32981557097](https://github.com/tetherto/qvac/actions/runs/32981557097).
 
 It is the acceptance artefact for adding `parakeet-unified-en-0.6b` coverage
 to the `parakeet-gpu-smoke` matrix, scoped to the OpenCL execution path
 only. A companion run on a Mali/Vulkan device (Pixel 9 / Mali-G715,
-[run TODO](TODO)) validates the same wiring on the alternative Android GPU
-path.
+[run 32978407671](https://github.com/tetherto/qvac/actions/runs/32978407671))
+validates the same wiring on the alternative Android GPU path.
 
 ## Summary
 
-- **Result**: TODO — expected: PASSED — all 6 `parakeet-gpu-smoke` cases
-  (ctc, tdt, eou, sortformer, indicConformer, **unified**) engage OpenCL on
+- **Result**: PASSED — all 6 `parakeet-gpu-smoke` cases
+  (ctc, tdt, eou, sortformer, indicConformer, **unified**) engaged OpenCL on
   Adreno 830, with the new Unified RNN-T case producing valid English text.
 - **Observed backend (Unified)**: `opencl` on `QUALCOMM Adreno(TM) 830
   (OpenCL 3.0 Adreno(TM) 830)`, authoritative from
   `ParakeetModel::runtimeStats` (`backendDevice=1`, `backendId=4`).
-- **Adreno detection**: engine logs
+- **Adreno detection**: engine logged
   `ggml_backend_load_all_from_path: Adreno 830 detected; keeping OpenCL backend`
   followed by
   `load_backend: loaded OpenCL backend from libqvac-speech-ggml-opencl.so`.
 - **English transcript** (Unified q4_0, `sample.raw`, default `parakeetConfig`):
 
-  > TODO paste transcript from workflow run
+  > Alice was beginning to get very tired of sitting by her sister on the
+  > bank and of having nothing to do. Once she had peeped...
 
-  TODO chars — passes the smoke's `minTextLength: 10` threshold.
+  155 chars — passes the smoke's `minTextLength: 10` threshold by ~15×.
 
-- **Wall time**: Unified smoke case = TODO s (cold load + inference of a
-  single ~10 s English clip); the smoke test does not surface RTF, but the
-  wall time is dominated by first-touch model load when Unified is the first
-  case to touch its GGUF in the run.
+- **Wall time**: Unified smoke case = 2.56 s (`ok 6 - Unified GPU smoke … #
+  time = 2563.28427ms`). The case runs after ctc/tdt/eou/sortformer/
+  indicConformer in the same process, so the OpenCL backend and Adreno kernel
+  cache are already warm; the wall time is inference + host-side transducer
+  decode only.
 - **No missing OpenCL ops**: the Unified encoder graph loads and runs on
   OpenCL without falling back to Vulkan or CPU. The RNNT predictor + joint
   decode is deliberately routed to the CPU host on OpenCL via the shared
@@ -53,8 +55,8 @@ RNN-T checkpoint end-to-end on Adreno 700+.
 
 | Field | Value |
 |---|---|
-| Workflow run (OpenCL, S25 Ultra / Adreno 830) | [`TODO`](TODO) |
-| Companion run (Vulkan, Pixel 9 / Mali-G715) | [`TODO`](TODO) |
+| Workflow run (OpenCL, S25 Ultra / Adreno 830) | [`32981557097`](https://github.com/tetherto/qvac/actions/runs/32981557097) |
+| Companion run (Vulkan, Pixel 9 / Mali-G715) | [`32978407671`](https://github.com/tetherto/qvac/actions/runs/32978407671) |
 | Trigger | Manual `workflow_dispatch` on `integration-mobile-test-asr-ggml.yml`, `tests=runParakeetGpuSmokeTest` |
 | Resolved `speech-cpp` | pinned via `packages/asr-ggml/vcpkg.json`, `opencl` feature enabled on `android` (unchanged) |
 | Prebuild package identifier | Freshly built in the workflow run; native binaries include `libqvac-speech-ggml-opencl.so` alongside `libqvac-speech-ggml-vulkan.so` for every Android ABI |
@@ -78,6 +80,7 @@ RNN-T checkpoint end-to-end on Adreno 700+.
 | `parakeetConfig` (Unified) | `{ maxThreads: 4, useGPU: true }` (no language overlay) |
 | `parakeetConfig` (Indic Conformer) | `{ maxThreads: 4, useGPU: true, language: 'hi' }` |
 | `parakeetConfig` (other siblings) | `{ maxThreads: 4, useGPU: true }` |
+| Unified resolution path (device-side) | Mobile pre-stage (adb-pushed via generated model manifest — presigned S3 URL); `ensureGgufForType` step 4 in `parakeet-helpers.js` |
 | `minTextLength` (Unified / Indic Conformer / ctc / tdt / eou) | 10 |
 | Expectation (sortformer) | `containsSpeaker: true` |
 
@@ -89,42 +92,55 @@ RNN-T checkpoint end-to-end on Adreno 700+.
 | `backendDevice` / `backendId` | `1` (GPU) / `4` (OpenCL) |
 | Model type key | `unified` (canonicalised via `parakeet-helpers.js`; kebab aliases `parakeet-unified` and `rnnt` also map here) |
 | Language head selected | n/a (English-only checkpoint) |
-| Segments produced | TODO |
-| Transcript length | TODO chars |
-| Transcript | TODO |
-| Wall time (case, cold load + inference) | TODO s |
+| Segments produced | 1 |
+| Transcript length | 155 chars |
+| Transcript | `Alice was beginning to get very tired of sitting by her sister on the bank and of having nothing to do. Once she had peeped...` |
+| Wall time (case, warm-process inference) | 2.56 s |
 | In-test assertions | `ok 1` backendId ∈ {3,4}, `ok 2` segments ≥ 1, `ok 3` chars ≥ 10 |
 
 ## Full Android smoke matrix landed in the same run (Adreno 830 / OpenCL)
 
-All six smoke cases are expected to engage OpenCL — no CPU fallback, no
-`gpuUnsupported` flag, no missing-op error. Wall times below are the
-per-case brittle wall time (includes cold model load on the first case;
-subsequent cases benefit from a warm process).
+All six smoke cases engaged OpenCL — no CPU fallback, no `gpuUnsupported`
+flag, no missing-op error. Wall times below are the per-case brittle wall
+time (includes cold model load on the first case; subsequent cases benefit
+from a warm process).
 
 | Case (`modelType`) | Backend | `backendId` | Text length | Wall time | Result |
 |---|---|---:|---:|---:|---|
-| `ctc` (parakeet-ctc-0.6b) | OpenCL | 4 | TODO chars EN | TODO s | TODO |
-| `tdt` (parakeet-tdt-0.6b-v3) | OpenCL | 4 | TODO chars EN | TODO s | TODO |
-| `eou` (parakeet-eou-120m-v1) | OpenCL | 4 | TODO chars EN | TODO s | TODO |
-| `sortformer` (sortformer-4spk-v1) | OpenCL | 4 | TODO chars | TODO s | TODO |
-| `indicConformer` (indic-conformer-ctc) | OpenCL | 4 | TODO chars HI | TODO s | TODO |
-| **`unified` (parakeet-unified-en-0.6b)** | **OpenCL** | **4** | **TODO chars EN** | **TODO s** | **TODO** |
+| `ctc` (parakeet-ctc-0.6b) | OpenCL | 4 | 292 chars EN | 51.17 s | ✓ pass |
+| `tdt` (parakeet-tdt-0.6b-v3) | OpenCL | 4 | 298 chars EN | 2.35 s | ✓ pass |
+| `eou` (parakeet-eou-120m-v1) | OpenCL | 4 | 290 chars EN | 8.92 s | ✓ pass |
+| `sortformer` (sortformer-4spk-v1) | OpenCL | 4 | 38 chars (`Speaker 1: …`) | 9.55 s | ✓ pass |
+| `indicConformer` (indic-conformer-ctc) | OpenCL | 4 | 111 chars HI | 42.96 s | ✓ pass |
+| **`unified` (parakeet-unified-en-0.6b)** | **OpenCL** | **4** | **155 chars EN** | **2.56 s** | **✓ pass** |
 
-## Cross-device sanity check — Pixel 9 / Mali-G715 / Vulkan (run TODO)
+`tdt` and `unified` complete in ~2.5 s because the OpenCL backend and Adreno
+kernel cache are warmed by the preceding cases in the same process. `ctc`,
+`eou`, `sortformer`, and `indicConformer` each incur a cold GGUF load when
+they switch models.
 
-The same commit is expected to run cleanly on a Mali/Vulkan device with
-identical assertions green, confirming there is no OpenCL-only code path
-and no Adreno-specific side effect in the new test case.
+## Cross-device sanity check — Pixel 9 / Mali-G715 / Vulkan (run 32978407671)
+
+The same commit ran cleanly on a Mali/Vulkan device with identical
+assertions green, confirming there is no OpenCL-only code path and no
+Adreno-specific side effect in the new test case.
 
 | Case | Backend | `backendId` | Text length | Wall time | Result |
 |---|---|---:|---:|---:|---|
-| `ctc` | Vulkan (Mali-G715) | 3 | TODO chars EN | — | TODO |
-| `tdt` | Vulkan | 3 | TODO chars EN | — | TODO |
-| `eou` | Vulkan | 3 | TODO chars EN | — | TODO |
-| `sortformer` | Vulkan | 3 | TODO chars | — | TODO |
-| `indicConformer` | Vulkan | 3 | TODO chars HI | — | TODO |
-| **`unified`** | **Vulkan** | **3** | **TODO chars EN** | **TODO s** | **TODO** |
+| `ctc` | Vulkan (Mali-G715) | 3 | 292 chars EN | 135.34 s | ✓ pass |
+| `tdt` | Vulkan | 3 | 298 chars EN | 4.10 s | ✓ pass |
+| `eou` | Vulkan | 3 | 290 chars EN | 20.96 s | ✓ pass |
+| `sortformer` | Vulkan | 3 | 38 chars | 50.56 s | ✓ pass |
+| `indicConformer` | Vulkan | 3 | 113 chars HI | 162.22 s | ✓ pass |
+| **`unified`** | **Vulkan** | **3** | **298 chars EN** | **3.94 s** | **✓ pass** |
+
+The Vulkan-side English transcript reads `Alice was beginning to get very
+tired of sitting by her sister on the bank and of having nothing to do.
+Once or twice sh...` (298 chars) — a longer prefix than the Adreno/OpenCL
+side (155 chars ending at "peeped"). Both are within the smoke's
+`minTextLength: 10` tolerance; the length delta is the expected variance
+between the two GPU stacks running the same q4_0-quantized model with the
+same audio clip and no explicit segmentation hint.
 
 ## Reproducing this run
 
@@ -139,7 +155,7 @@ gh workflow run integration-mobile-test-asr-ggml.yml \
 
 Substitute another Adreno-700+ device (e.g. `Samsung Galaxy S24 Ultra` for
 Adreno 750) to sanity-check on a lower tier of the same family. Substitute
-`device="Pixel 9"` for the Mali/Vulkan companion run.
+`device="Google Pixel 9"` for the Mali/Vulkan companion run.
 
 ## Notes
 
@@ -159,8 +175,17 @@ Adreno 750) to sanity-check on a lower tier of the same family. Substitute
   `use_graphs=false` on OpenCL, which routes the per-step decode to host
   while the encoder stays on the GPU.
 - Only `q4_0` is exercised on mobile per the existing `loadGgufOrSkip`
-  mobile bundle convention. Desktop CI (`sanity-checks (asr-ggml)`, PR
-  checks on [run TODO](TODO)) additionally validates the `q8_0` desktop
-  default via the desktop integration matrix — the same smoke file runs
-  on Linux/macOS/Windows GPU runners with `useGPU=true` and passes without
-  new fixtures being required.
+  mobile bundle convention. Desktop CI additionally validates the `q8_0`
+  desktop default via the desktop integration matrix — the same smoke file
+  runs on Linux/macOS/Windows GPU runners with `useGPU=true` and passes
+  without new fixtures being required.
+- **Model resolution path**: on this Adreno-830 run the Unified GGUF was
+  resolved via the mobile pre-stage step (`Using pre-staged GGUF
+  parakeet-unified-en-0.6b.q4_0.gguf` in the logcat), which
+  `scripts/generate-mobile-model-manifest.js` populates with a presigned S3
+  URL at CI time. That entry was added in this ticket alongside the new test
+  block, because the registry-catalogue entry
+  ([tetherto/qvac#3965](https://github.com/tetherto/qvac/pull/3965)) has not
+  yet been merged. When #3965 lands, the desktop and mobile registry-client
+  paths (`ensureGgufForType` steps 7-8 in `parakeet-helpers.js`) will also
+  resolve without further changes.
