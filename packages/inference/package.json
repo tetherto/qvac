@@ -1,6 +1,6 @@
 {
   "name": "@qvac/inference",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Bare-only in-process core of the QVAC SDK. Runs inference directly on the Bare runtime with explicit plugin assembly and no RPC, worker, or subprocess layer.",
   "license": "Apache-2.0",
   "repository": {
@@ -190,7 +190,7 @@
     "@qvac/bci-whispercpp": "^0.7.1",
     "@qvac/classification-ggml": "^0.20.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.17.0",
+    "@qvac/diffusion-cpp": "^0.18.0",
     "@qvac/embed-llamacpp": "^0.34.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.45.0",
@@ -246,7 +246,7 @@
     "@qvac/bci-whispercpp": "^0.7.1",
     "@qvac/classification-ggml": "^0.20.0",
     "@qvac/decoder-audio": "^0.5.0",
-    "@qvac/diffusion-cpp": "^0.17.0",
+    "@qvac/diffusion-cpp": "^0.18.0",
     "@qvac/embed-llamacpp": "^0.34.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.45.0",

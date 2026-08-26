@@ -666,7 +666,7 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/diagnostics@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/diffusion-cpp@0.17.0
+  @qvac/diffusion-cpp@0.18.0
     https://github.com/tetherto/qvac
   @qvac/embed-llamacpp@0.34.0
     https://github.com/tetherto/qvac
