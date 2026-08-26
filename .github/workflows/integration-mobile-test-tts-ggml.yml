@@ -120,7 +120,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
@@ -131,7 +131,7 @@ jobs:
       # stale validation. Data only — nothing here is executed; the composite
       # action stays on the trusted workflow ref checked out above.
       - name: Checkout validation data (matches the built ref)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -196,14 +196,14 @@ jobs:
 
     steps:
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -237,7 +237,7 @@ jobs:
       # us-west-2 so the presigned model URLs target the US bucket region.
       - name: Configure AWS credentials via OIDC
         if: ${{ matrix.platform == 'Android' || inputs.run_rtf_benchmarks }}
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # 6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2

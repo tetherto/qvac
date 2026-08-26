@@ -127,14 +127,14 @@ jobs:
       ENFORCE: ${{ github.event.inputs.enforce || 'false' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           # Read-only audit: no git operations after checkout (comments go through
           # the github-script token), so don't leave the token in .git/config.
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # 7.0.0
         with:
           python-version: "3.x"
 
@@ -232,7 +232,7 @@ jobs:
         if: always() && hashFiles('zizmor.sarif') != ''
         # Artifact upload is diagnostic-only; a hiccup must not block the merge.
         continue-on-error: true
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: zizmor-sarif
           path: zizmor.sarif
@@ -247,7 +247,7 @@ jobs:
         # A failed comment (transient API error, or a fork's read-only token) must
         # not block the merge in shadow mode.
         continue-on-error: true
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # 9.0.0
         env:
           # Pass dynamic values through env (read via process.env) instead of
           # interpolating ${{ }} into the script body — the latter is exactly the
@@ -375,7 +375,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           # Full history so a PR / push can be diffed against its base for the
           # changed-file set.
@@ -427,7 +427,7 @@ jobs:
         # mode. "Publish agent findings" and "Report agent outcome" downgrade any
         # failure to a warning.
         continue-on-error: true
-        uses: anthropics/claude-code-action@44423bdec74b97d67543eb16c110546762c110b2 # v1.0.181
+        uses: anthropics/claude-code-action@24dcd50c0568f0fc9e9211213a4fd2d9eb15c4e0 # v1.0.200
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Pass the workflow token so the action never tries to mint a Claude
@@ -474,7 +474,7 @@ jobs:
         if: always() && steps.collect.outputs.count != '0'
         # A transient API error while commenting must not block the merge.
         continue-on-error: true
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # 9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -530,7 +530,7 @@ jobs:
         if: always() && hashFiles('workflow-security-agent-report.md') != ''
         # Diagnostic-only artifact; a hiccup must not block the merge.
         continue-on-error: true
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: workflow-security-agent-report
           path: workflow-security-agent-report.md

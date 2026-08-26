@@ -128,7 +128,7 @@ jobs:
       # default branch, never from a caller-selected ref. (Consequence: the
       # validate-devices action is only available here once this PR is merged.)
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.event.repository.default_branch }}
@@ -144,7 +144,7 @@ jobs:
       # branch that renames/adds runners or shards would pass stale default-branch
       # validation and could run zero tests.
       - name: Checkout validation data (matches the built ref)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -204,7 +204,7 @@ jobs:
 
     steps:
       - name: Checkout composite action source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ github.repository }}
           # Always pull the trusted composite actions from the default branch —
@@ -220,7 +220,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout addon repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
@@ -274,7 +274,7 @@ jobs:
 
       - name: Configure AWS credentials for Android model pre-stage
         if: matrix.platform == 'Android'
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # 6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1

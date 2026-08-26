@@ -248,15 +248,15 @@ jobs:
 
     steps:
       - name: Setup LLVM
-        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+        uses: tetherto/qvac/.github/actions/setup-llvm@7e6e4c1c5894abf7475122e0ac2b47b16121dccd
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
 
@@ -319,7 +319,7 @@ jobs:
 
       - name: Restore vcpkg cache
         id: cache-vcpkg
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json', 'packages/translation-nmtcpp/vcpkg-overlays/**') }}
@@ -389,7 +389,7 @@ jobs:
 
       - name: Upload vcpkg configure logs on failure
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: vcpkg-buildtrees-logs
           path: |
@@ -400,13 +400,13 @@ jobs:
 
       - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
         name: Save vcpkg cache
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: ${{ env.PKG_DIR }}/vcpkg/cache
           key: vcpkg-nmtcpp-v1-linux-x64-benchmark-${{ hashFiles('packages/translation-nmtcpp/vcpkg.json', 'packages/translation-nmtcpp/vcpkg-configuration.json', 'packages/translation-nmtcpp/vcpkg-overlays/**') }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: qvac-addon-build-${{ inputs.translators }}
           path: |
@@ -461,12 +461,12 @@ jobs:
         run: git config --global core.longpaths true
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           submodules: recursive
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 20
 
@@ -502,7 +502,7 @@ jobs:
 
       - name: Set up Python
         if: runner.environment == 'github-hosted'
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # 7.0.0
         with:
           python-version: '3.10'
           cache: pip
@@ -590,7 +590,7 @@ jobs:
 
       - name: Configure AWS credentials via OIDC
         if: contains(format(',{0},', inputs.translators), ',qvac,')
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # 6.2.3
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -705,7 +705,7 @@ jobs:
         continue-on-error: true
 
       - name: Cache datasets
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           key: datasets-${{ needs.setup.outputs.datasets_cache_key }}
           path: ${{ env.PKG_DIR }}/benchmarks/quality_eval/data
@@ -914,7 +914,7 @@ jobs:
           PYTHONUNBUFFERED: 1
 
       - name: Upload evaluation results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: always()
         with:
           name: results-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}${{ inputs.use_pivot && '-pivot' || '' }}-${{ matrix.platform.id }}
@@ -922,7 +922,7 @@ jobs:
           retention-days: 30
 
       - name: Upload evaluation logs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         if: failure()
         with:
           name: logs-${{ matrix.pair }}-${{ inputs.translators }}-${{ steps.metrics.outputs.metrics }}-${{ inputs.hyperparams }}-${{ matrix.platform.id }}
@@ -1047,7 +1047,7 @@ jobs:
           echo "- Metrics: chrF++=\`${{ inputs.metric_chrfpp }}\`, COMET=\`${{ inputs.metric_comet }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload consolidated results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: consolidated-results-${{ inputs.translators }}
           path: all-results
@@ -1061,13 +1061,13 @@ jobs:
 
     steps:
       - name: Checkout summarizer
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: |
             scripts/perf-report/summarize-nmt-quality.js
 
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
 
@@ -1103,7 +1103,7 @@ jobs:
         run: cat nmt-benchmark-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload unified summary
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: nmtcpp-benchmark-summary-${{ inputs.translators }}
           path: |
