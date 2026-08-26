@@ -21,6 +21,314 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
+class AssessModelFitRequestModelsItemModelEngine(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    ggml_ocr = "ggml-ocr"
+    parakeet_transcription = "parakeet-transcription"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    onnx_vad = "onnx-vad"
+
+
+class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
+    name: Annotated[str, Field(description="Catalog name of the model entry.")]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ]
+    engine: Annotated[
+        AssessModelFitRequestModelsItemModelEngine,
+        Field(
+            description="Canonical inference engine identifier.",
+            title="AssessModelFitRequestModelsItemModelEngine",
+        ),
+    ]
+    expected_size: Annotated[
+        float,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ]
+
+
+class AssessModelFitRequestModelsItemArtifactsItemEngine(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    ggml_ocr = "ggml-ocr"
+    parakeet_transcription = "parakeet-transcription"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    onnx_vad = "onnx-vad"
+
+
+class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
+    name: Annotated[str, Field(description="Catalog name of the model entry.")]
+    sha256_checksum: Annotated[
+        str,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ]
+    engine: Annotated[
+        AssessModelFitRequestModelsItemArtifactsItemEngine,
+        Field(
+            description="Canonical inference engine identifier.",
+            title="AssessModelFitRequestModelsItemArtifactsItemEngine",
+        ),
+    ]
+    expected_size: Annotated[
+        float,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ]
+
+
+class AssessModelFitRequestModelsItemWorkloadFixed(GeneratedBaseModel):
+    kind: Literal["fixed"] = "fixed"
+
+
+class AssessModelFitRequestModelsItemWorkloadLlm(GeneratedBaseModel):
+    kind: Literal["llm"] = "llm"
+    context_tokens: Annotated[
+        int,
+        Field(
+            alias="contextTokens",
+            description="Context window the caller intends to use, in tokens.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class AssessModelFitRequestModelsItemWorkloadAudio(GeneratedBaseModel):
+    kind: Literal["audio"] = "audio"
+    window_ms: Annotated[
+        float,
+        Field(
+            alias="windowMs",
+            description="Audio window handed to the engine per call, in milliseconds.",
+            gt=0.0,
+        ),
+    ]
+    streaming: Annotated[
+        bool, Field(description="Whether the caller streams continuously.")
+    ]
+    batch: Annotated[
+        int | None,
+        Field(description="Concurrent windows per call.", gt=0, le=9007199254740991),
+    ] = None
+
+
+class AssessModelFitRequestModelsItem(GeneratedBaseModel):
+    model: Annotated[
+        AssessModelFitRequestModelsItemModel,
+        Field(
+            description="Catalog model constant to assess.",
+            title="AssessModelFitRequestModelsItemModel",
+        ),
+    ]
+    artifacts: Annotated[
+        list[AssessModelFitRequestModelsItemArtifactsItem] | None,
+        Field(description="Additional catalog constants this load also requires."),
+    ] = None
+    workload: Annotated[
+        AssessModelFitRequestModelsItemWorkloadFixed
+        | AssessModelFitRequestModelsItemWorkloadLlm
+        | AssessModelFitRequestModelsItemWorkloadAudio,
+        Field(description="Workload the caller intends to run."),
+    ]
+
+
+class AssessModelFitRequestExecution(Enum):
+    sequential = "sequential"
+    concurrent = "concurrent"
+
+
+class AssessModelFitRequest(GeneratedBaseModel):
+    models: Annotated[
+        list[AssessModelFitRequestModelsItem],
+        Field(
+            description="Candidates to assess together under one memory budget.",
+            min_length=1,
+        ),
+    ]
+    execution: Annotated[
+        AssessModelFitRequestExecution | None,
+        Field(
+            description="Declared co-residency assumption for aggregation. Not a scheduling instruction: the SDK does not serialize, reserve, or enforce anything.",
+            title="AssessModelFitRequestExecution",
+        ),
+    ] = "sequential"
+    policy: Annotated[
+        Literal["interactive-v1"],
+        Field(
+            description="Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile."
+        ),
+    ] = "interactive-v1"
+    type: Literal["assessModelFit"] = "assessModelFit"
+
+
+class AssessModelFitResponseVerdict(Enum):
+    likely_fits = "likely-fits"
+    likely_too_large = "likely-too-large"
+    unknown = "unknown"
+
+
+class AssessModelFitResponseExecution(Enum):
+    sequential = "sequential"
+    concurrent = "concurrent"
+
+
+class AssessModelFitResponseBudget(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total_bytes: Annotated[
+        float,
+        Field(
+            alias="totalBytes", description="Total system RAM reported by the sample."
+        ),
+    ]
+    used_bytes: Annotated[
+        float, Field(alias="usedBytes", description="System RAM in use at sample time.")
+    ]
+    reserved_bytes: Annotated[
+        float,
+        Field(alias="reservedBytes", description="Headroom withheld by the policy."),
+    ]
+    available_after_reserve_bytes: Annotated[
+        float,
+        Field(
+            alias="availableAfterReserveBytes",
+            description="Budget the estimate is compared against: total − used − reserved.",
+        ),
+    ]
+
+
+class AssessModelFitResponseEstimate(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    lower_bound_bytes: Annotated[float, Field(alias="lowerBoundBytes")]
+    upper_bound_bytes: Annotated[float, Field(alias="upperBoundBytes")]
+
+
+class AssessModelFitResponseModelsItemVerdict(Enum):
+    likely_fits = "likely-fits"
+    likely_too_large = "likely-too-large"
+    unknown = "unknown"
+
+
+class AssessModelFitResponseModelsItemEstimate(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    lower_bound_bytes: Annotated[float, Field(alias="lowerBoundBytes")]
+    upper_bound_bytes: Annotated[float, Field(alias="upperBoundBytes")]
+
+
+class AssessModelFitResponseModelsItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(description="Catalog name of the assessed model.")]
+    verdict: Annotated[
+        AssessModelFitResponseModelsItemVerdict,
+        Field(title="AssessModelFitResponseModelsItemVerdict"),
+    ]
+    estimate: Annotated[
+        AssessModelFitResponseModelsItemEstimate | None,
+        Field(
+            description="Absent when this model assessed as `unknown`.",
+            title="AssessModelFitResponseModelsItemEstimate",
+        ),
+    ] = None
+    estimator_version: Annotated[
+        str | None,
+        Field(
+            alias="estimatorVersion",
+            description="Estimator that produced the bounds, e.g. `llm-v1`.",
+        ),
+    ] = None
+    reasons: Annotated[list[str], Field(description="Why this model got this verdict.")]
+
+
+class AssessModelFitResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    verdict: Annotated[
+        AssessModelFitResponseVerdict,
+        Field(
+            description="Combined verdict across every candidate.",
+            title="AssessModelFitResponseVerdict",
+        ),
+    ]
+    basis: Annotated[
+        Literal["system-memory"],
+        Field(
+            description="The only evidence used. GPU/VRAM metrics are deliberately excluded — they are `unverified`-scoped by design."
+        ),
+    ] = "system-memory"
+    execution: Annotated[
+        AssessModelFitResponseExecution,
+        Field(
+            description="The declared execution mode this result assumed.",
+            title="AssessModelFitResponseExecution",
+        ),
+    ]
+    budget: Annotated[
+        AssessModelFitResponseBudget | None,
+        Field(
+            description="Absent when memory evidence was unusable.",
+            title="AssessModelFitResponseBudget",
+        ),
+    ] = None
+    estimate: Annotated[
+        AssessModelFitResponseEstimate | None,
+        Field(
+            description="Absent when the combined verdict is `unknown`.",
+            title="AssessModelFitResponseEstimate",
+        ),
+    ] = None
+    models: Annotated[
+        list[AssessModelFitResponseModelsItem],
+        Field(description="Per-candidate verdicts, in input order."),
+    ]
+    reasons: Annotated[
+        list[str], Field(description="Why the combined verdict came out this way.")
+    ]
+    assumptions: Annotated[
+        list[str],
+        Field(
+            description="Everything the result took for granted, including estimator defaults."
+        ),
+    ]
+    type: Literal["assessModelFit"] = "assessModelFit"
+
+
 class AudioGenStreamRequestTaskType(Enum):
     text2music = "text2music"
     cover_nofsq = "cover-nofsq"
@@ -13095,7 +13403,8 @@ class Response_1(
 
 class Response(
     RootModel[
-        AudioGenStreamResponse
+        AssessModelFitResponse
+        | AudioGenStreamResponse
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
@@ -13139,7 +13448,8 @@ class Response(
     ]
 ):
     root: Annotated[
-        AudioGenStreamResponse
+        AssessModelFitResponse
+        | AudioGenStreamResponse
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
@@ -13195,7 +13505,8 @@ class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
 
 class Request(
     RootModel[
-        AudioGenStreamRequest
+        AssessModelFitRequest
+        | AudioGenStreamRequest
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
@@ -13235,7 +13546,8 @@ class Request(
     ]
 ):
     root: Annotated[
-        AudioGenStreamRequest
+        AssessModelFitRequest
+        | AudioGenStreamRequest
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
