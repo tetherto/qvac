@@ -2,7 +2,7 @@
   "default-registry": {
     "kind": "git",
     "reference": "sdcpp-wan-vae-pr3923",
-    "baseline": "33fcb9702285cb11d6f96bafa41d30ee52c444cb",
+    "baseline": "56ba04452c93a255d05ba16b0fd90e86b5b4bda7",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
