@@ -76,11 +76,26 @@ test('HyperDBStorage preserves durable rows when an existing-ID vector write fai
   const successfulDocument = await snapshot.get<DocumentRecord>('@rag/documents', {
     id: 'successful-id'
   })
+  const workspaceState = await snapshot.get<{ revision: number }>('@rag/workspaceState', {
+    key: 'workspace'
+  })
+  const mutations = await snapshot
+    .find<{ revision: number; documentIds: string[] }>('@rag/mutations')
+    .toArray()
   await snapshot.close()
 
   t.is(existingDocument?.content, 'Durable original content', 'The durable document is preserved')
   t.alike(existingVector?.vector, [1, 0], 'The durable vector is preserved')
   t.ok(successfulDocument, 'The successful document is committed')
+  t.is(workspaceState?.revision, 2, 'Only committed save transactions advance the workspace')
+  t.alike(
+    mutations.map((mutation) => [mutation.revision, mutation.documentIds]),
+    [
+      [1, ['existing-id']],
+      [2, ['successful-id']]
+    ],
+    'Mutation rows describe only the document and vector rows committed with them'
+  )
 
   await adapter.close()
   await store.close()

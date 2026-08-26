@@ -12,7 +12,8 @@ import {
   type TurboVecIndex,
   type TurboVecIndexProvider
 } from '../../src/adapters/database/TurboVecAdapter.js'
-import type { HyperDBInstance } from '../../src/adapters/database/db-types.js'
+import { HyperDBAdapter } from '../../src/adapters/database/HyperDBAdapter.js'
+import type { HyperDBInstance, HyperDBTransaction } from '../../src/adapters/database/db-types.js'
 import dbSpec from '../../src/adapters/database/hyperspec/hyperdb/index.js'
 import { ERR_CODES, QvacErrorRAG } from '../../src/errors.js'
 
@@ -37,7 +38,7 @@ const unavailableIndexProvider: TurboVecIndexProvider = {
 
 // Counts provider calls so a test can tell a checkpoint load from a rebuild.
 function countingIndexProvider() {
-  const calls = { create: 0, load: 0 }
+  const calls = { create: 0, load: 0, loadedPaths: [] as string[] }
   const provider: TurboVecIndexProvider = {
     create(options) {
       calls.create++
@@ -45,6 +46,7 @@ function countingIndexProvider() {
     },
     load(snapshotPath) {
       calls.load++
+      calls.loadedPaths.push(snapshotPath)
       return IdMapIndex.load(snapshotPath)
     }
   }
@@ -75,10 +77,57 @@ function controllableAddFailureProvider() {
   return { provider, control }
 }
 
+function searchCountingIndexProvider() {
+  const calls = { search: 0 }
+  function wrap(index: TurboVecIndex) {
+    const search = index.search.bind(index)
+    index.search = (queries, k) => {
+      calls.search++
+      return search(queries, k)
+    }
+    return index
+  }
+  const provider: TurboVecIndexProvider = {
+    create(options) {
+      return wrap(new IdMapIndex(options))
+    },
+    load(snapshotPath) {
+      return wrap(IdMapIndex.load(snapshotPath))
+    }
+  }
+  return { provider, calls }
+}
+
 function vector(dimension: number, index: number): number[] {
   const value = Array<number>(dimension).fill(0)
   value[index] = 1
   return value
+}
+
+function checkpointWorkspaceDir(adapter: TurboVecAdapter): string {
+  const directory = (
+    adapter as unknown as {
+      checkpointWorkspaceDir: string | null
+    }
+  ).checkpointWorkspaceDir
+  if (!directory) throw new Error('checkpoint workspace directory is not initialized')
+  return directory
+}
+
+function installForeignWriter(lockDir: string, displacedLockDir: string) {
+  fs.renameSync(lockDir, displacedLockDir)
+  fs.mkdirSync(lockDir)
+  fs.writeFileSync(
+    path.join(lockDir, 'owner.json'),
+    `${JSON.stringify({ owner: 'competitor', updatedAt: Date.now() })}\n`
+  )
+}
+
+function removeTestWriterLocks(lockDir: string, displacedLockDir: string) {
+  fs.unlinkSync(path.join(lockDir, 'owner.json'))
+  fs.rmdirSync(lockDir)
+  fs.unlinkSync(path.join(displacedLockDir, 'owner.json'))
+  fs.rmdirSync(displacedLockDir)
 }
 
 test('TurboVecAdapter requires an index provider', (t) => {
@@ -89,6 +138,58 @@ test('TurboVecAdapter requires an index provider', (t) => {
     t.ok(error instanceof QvacErrorRAG)
     if (error instanceof QvacErrorRAG) {
       t.is(error.code, ERR_CODES.DEPENDENCY_REQUIRED)
+    }
+  }
+})
+
+test('TurboVecAdapter rejects invalid lock timing configuration', (t) => {
+  const invalidConfigurations: Array<{
+    input: Partial<TurboVecAdapterInput>
+    message: string
+  }> = [
+    { input: { lockStaleMs: 0 }, message: 'lockStaleMs must be a finite positive number' },
+    { input: { lockStaleMs: -1 }, message: 'lockStaleMs must be a finite positive number' },
+    { input: { lockStaleMs: Number.NaN }, message: 'lockStaleMs must be a finite positive number' },
+    {
+      input: { lockStaleMs: Number.POSITIVE_INFINITY },
+      message: 'lockStaleMs must be a finite positive number'
+    },
+    {
+      input: { lockHeartbeatMs: 0 },
+      message: 'lockHeartbeatMs must be a finite positive number'
+    },
+    {
+      input: { lockHeartbeatMs: -1 },
+      message: 'lockHeartbeatMs must be a finite positive number'
+    },
+    {
+      input: { lockHeartbeatMs: Number.NaN },
+      message: 'lockHeartbeatMs must be a finite positive number'
+    },
+    {
+      input: { lockHeartbeatMs: Number.POSITIVE_INFINITY },
+      message: 'lockHeartbeatMs must be a finite positive number'
+    },
+    {
+      input: { lockStaleMs: 100, lockHeartbeatMs: 100 },
+      message: 'lockHeartbeatMs must be less than lockStaleMs'
+    },
+    {
+      input: { lockStaleMs: 100, lockHeartbeatMs: 101 },
+      message: 'lockHeartbeatMs must be less than lockStaleMs'
+    }
+  ]
+
+  for (const { input, message } of invalidConfigurations) {
+    try {
+      new TurboVecAdapter({ indexProvider, ...input })
+      t.fail(`constructor should reject ${JSON.stringify(input)}`)
+    } catch (error) {
+      t.ok(error instanceof QvacErrorRAG)
+      if (error instanceof QvacErrorRAG) {
+        t.is(error.code, ERR_CODES.INVALID_PARAMS)
+      }
+      t.ok(String(error).includes(message))
     }
   }
 })
@@ -292,22 +393,225 @@ test('TurboVecAdapter recovers a stale writer lock after a crash', async (t) => 
   const tmpDir = await tmp()
   const store = new Corestore(path.join(tmpDir, 'store'))
   const checkpointDir = path.join(tmpDir, 'index')
-  const lockDir = path.join(checkpointDir, 'writer.lock')
-  fs.mkdirSync(checkpointDir, { recursive: true })
-  fs.writeFileSync(lockDir, 'crashed-writer\n')
+  const probe = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-stale-lock',
+    indexProvider,
+    checkpointDir
+  })
+  await probe.ready()
+  const lockDir = path.join(checkpointWorkspaceDir(probe), 'writer.lock')
+  await probe.close()
+  fs.mkdirSync(lockDir)
+  fs.writeFileSync(
+    path.join(lockDir, 'owner.json'),
+    `${JSON.stringify({ owner: 'crashed-writer', updatedAt: 1 })}\n`
+  )
 
   const adapter = new TurboVecAdapter({
     store,
     dbName: 'turbovec-stale-lock',
     indexProvider,
     checkpointDir,
-    lockStaleMs: 0
+    lockStaleMs: 1_000,
+    lockHeartbeatMs: 100
   })
   await adapter.ready()
   t.ok(fs.existsSync(lockDir), 'stale lock is replaced by the active writer lock')
 
   await adapter.close()
   t.is(fs.existsSync(lockDir), false, 'active writer lock is removed on close')
+  await store.close()
+})
+
+test('TurboVecAdapter refuses a live lock after a heartbeat update', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const lockTiming = { lockStaleMs: 10_000, lockHeartbeatMs: 5_000 }
+  const first = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-live-heartbeat-lock',
+    indexProvider,
+    checkpointDir,
+    ...lockTiming
+  })
+  await first.ready()
+
+  const lockDir = path.join(checkpointWorkspaceDir(first), 'writer.lock')
+  const ownerPath = path.join(lockDir, 'owner.json')
+  const initial = JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { updatedAt: number }
+  const heartbeatAt = initial.updatedAt + 50_000
+  const internals = first as unknown as {
+    _writeLockRecord: (lockPath: string) => void
+  }
+  const dateNow = Date.now
+  Date.now = () => heartbeatAt
+  internals._writeLockRecord(lockDir)
+  const heartbeat = JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { updatedAt: number }
+  t.is(heartbeat.updatedAt, heartbeatAt, 'the heartbeat advances the lock timestamp')
+
+  Date.now = () => heartbeatAt + lockTiming.lockStaleMs - 1
+  const second = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-live-heartbeat-lock',
+    indexProvider,
+    checkpointDir,
+    ...lockTiming
+  })
+  try {
+    await second.ready()
+    t.fail('a lock refreshed within the stale timeout must remain protected')
+  } catch (error) {
+    t.ok(String(error).includes('already locked'))
+  } finally {
+    Date.now = dateNow
+  }
+
+  await first.close()
+  await store.close()
+})
+
+test('TurboVecAdapter recovers after a temporary owner-record read failure', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const counting = searchCountingIndexProvider()
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-temporary-owner-read',
+    indexProvider: counting.provider,
+    checkpointDir: path.join(tmpDir, 'index')
+  })
+  await adapter.ready()
+
+  const ownerPath = path.join(checkpointWorkspaceDir(adapter), 'writer.lock', 'owner.json')
+  const originalOwner = fs.readFileSync(ownerPath, 'utf8')
+  const fileSystem = fs as unknown as {
+    readFileSync(filePath: string, encoding: 'utf8'): string
+  }
+  const readFileSync = fileSystem.readFileSync
+  let failOwnerRead = true
+  fileSystem.readFileSync = (filePath, encoding) => {
+    if (filePath === ownerPath && failOwnerRead) {
+      failOwnerRead = false
+      throw new Error('injected temporary owner-record read failure')
+    }
+    return readFileSync(filePath, encoding)
+  }
+  try {
+    await adapter.saveEmbeddings([
+      {
+        id: 'denied-during-read-failure',
+        content: 'must not be written while ownership is uncertain',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 0)
+      }
+    ])
+    t.fail('a write must fail while lock ownership cannot be read')
+  } catch (error) {
+    t.ok(String(error).includes('ownership could not be confirmed'))
+  } finally {
+    fileSystem.readFileSync = readFileSync
+  }
+  t.is(await adapter.getConfig(), null, 'the failed ownership check persists no write state')
+  t.is(fs.readFileSync(ownerPath, 'utf8'), originalOwner, 'the owner record remains unchanged')
+
+  await adapter.saveEmbeddings([
+    {
+      id: 'recovered-after-read-failure',
+      content: 'write succeeds after owner record reads recover',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  const results = await adapter.search('recovered', vector(8, 1), { topK: 1 })
+  t.is(results[0]?.id, 'recovered-after-read-failure')
+  t.is(counting.calls.search, 1, 'the recovered adapter uses its native index')
+
+  await adapter.close()
+  await store.close()
+})
+
+test('TurboVecAdapter recovers writes and native search after temporary invalid owner JSON', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const dbName = 'turbovec-temporary-invalid-owner'
+  const counting = searchCountingIndexProvider()
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName,
+    indexProvider: counting.provider,
+    checkpointDir: path.join(tmpDir, 'index')
+  })
+  const hyperdb = new HyperDBAdapter({ store, dbName })
+  await adapter.ready()
+  await hyperdb.ready()
+  await adapter.saveEmbeddings([
+    {
+      id: 'baseline',
+      content: 'baseline native document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'external-update',
+      content: 'external update visible during lock uncertainty',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+
+  const ownerPath = path.join(checkpointWorkspaceDir(adapter), 'writer.lock', 'owner.json')
+  const originalOwner = fs.readFileSync(ownerPath, 'utf8')
+  fs.writeFileSync(ownerPath, '{invalid owner json\n')
+  try {
+    try {
+      await adapter.saveEmbeddings([
+        {
+          id: 'denied-during-invalid-json',
+          content: 'must not be written while ownership is uncertain',
+          embeddingModelId: 'test-model',
+          embedding: vector(8, 2)
+        }
+      ])
+      t.fail('a write must fail while the owner record is invalid')
+    } catch (error) {
+      t.ok(String(error).includes('ownership could not be confirmed'))
+    }
+
+    const denied = await hyperdb.search('denied', vector(8, 2), { topK: 3 })
+    t.is(
+      denied.find((result) => result.id === 'denied-during-invalid-json'),
+      undefined,
+      'the failed ownership check leaves shared documents unchanged'
+    )
+    const fallback = await adapter.search('external', vector(8, 1), { topK: 1 })
+    t.is(
+      fallback[0]?.id,
+      'external-update',
+      'search safely scans HyperDB while ownership is uncertain'
+    )
+    t.is(counting.calls.search, 0, 'the uncertain refresh does not use a stale native index')
+  } finally {
+    fs.writeFileSync(ownerPath, originalOwner)
+  }
+
+  await adapter.saveEmbeddings([
+    {
+      id: 'recovered-after-invalid-json',
+      content: 'write succeeds after the valid owner record returns',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 2)
+    }
+  ])
+  const recovered = await adapter.search('recovered', vector(8, 2), { topK: 1 })
+  t.is(recovered[0]?.id, 'recovered-after-invalid-json')
+  t.ok(counting.calls.search > 0, 'native search resumes without reconstructing the adapter')
+
+  await hyperdb.close()
+  await adapter.close()
   await store.close()
 })
 
@@ -446,6 +750,290 @@ test('TurboVecAdapter does not write JS IVF data', async (t) => {
   await store.close()
 })
 
+test('HyperDBAdapter mutations refresh a live TurboVecAdapter', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const dbName = 'hyperdb-turbovec-interoperability'
+  const hyperdb = new HyperDBAdapter({ store, dbName })
+  await hyperdb.ready()
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'plain-seed',
+      content: 'plain adapter seed',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const initialSnapshot = hyperdb.db!.snapshot()
+  const initialState = await initialSnapshot.get<{ revision: number }>('@rag/workspaceState', {
+    key: 'workspace'
+  })
+  const initialMutations = await initialSnapshot
+    .find<{ revision: number; operation: string }>('@rag/mutations')
+    .toArray()
+  await initialSnapshot.close()
+  t.is(initialState?.revision, 1, 'the plain adapter initializes shared workspace state')
+  t.alike(
+    initialMutations.map((mutation) => [mutation.revision, mutation.operation]),
+    [[1, 'upsert']],
+    'the plain adapter starts the shared mutation journal'
+  )
+
+  const turbovec = new TurboVecAdapter({
+    store,
+    dbName,
+    indexProvider,
+    checkpointDir: path.join(tmpDir, 'index')
+  })
+  await turbovec.ready()
+
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'plain-added',
+      content: 'plain adapter added this document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  const afterPlainSave = await turbovec.search('added', vector(8, 1), { topK: 1 })
+  t.is(afterPlainSave[0]?.id, 'plain-added', 'the first search replays the plain adapter save')
+
+  await turbovec.saveEmbeddings([
+    {
+      id: 'turbovec-middle',
+      content: 'turbovec journal entry between plain writes',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 2)
+    }
+  ])
+  await hyperdb.deleteEmbeddings(['plain-added'])
+
+  const afterPlainDelete = await turbovec.search('added', vector(8, 1), { topK: 3 })
+  t.is(
+    afterPlainDelete.find((result) => result.id === 'plain-added'),
+    undefined,
+    'the first search replays the plain adapter delete'
+  )
+
+  const finalSnapshot = hyperdb.db!.snapshot()
+  const finalState = await finalSnapshot.get<{ revision: number }>('@rag/workspaceState', {
+    key: 'workspace'
+  })
+  const finalMutations = await finalSnapshot.find<{ revision: number }>('@rag/mutations').toArray()
+  await finalSnapshot.close()
+  t.is(finalState?.revision, 4, 'both adapters advance one shared revision')
+  t.alike(
+    finalMutations.map((mutation) => mutation.revision),
+    [1, 2, 3, 4],
+    'mixed adapter writes keep a continuous journal'
+  )
+
+  await turbovec.close()
+  await hyperdb.close()
+  await store.close()
+})
+
+test('TurboVecAdapter serializes concurrent writers on one database', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const dbName = 'turbovec-concurrent-writers'
+  const turbovec = new TurboVecAdapter({ store, dbName, indexProvider })
+  const hyperdb = new HyperDBAdapter({ store, dbName })
+  await turbovec.ready()
+  await hyperdb.ready()
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'seed',
+      content: 'seed the shared config before concurrent writes',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const [turboResults, plainResults] = await Promise.all([
+    turbovec.saveEmbeddings([
+      {
+        id: 'turbovec-doc',
+        content: 'saved by the turbovec adapter',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 1)
+      }
+    ]),
+    hyperdb.saveEmbeddings([
+      {
+        id: 'plain-doc',
+        content: 'saved by the plain adapter',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 2)
+      }
+    ])
+  ])
+  t.is(
+    turboResults[0]?.status,
+    'fulfilled',
+    'the turbovec save commits despite a concurrent writer'
+  )
+  t.is(plainResults[0]?.status, 'fulfilled', 'the plain save commits despite a concurrent writer')
+
+  const snapshot = hyperdb.db!.snapshot()
+  const state = await snapshot.get<{ revision: number }>('@rag/workspaceState', {
+    key: 'workspace'
+  })
+  const mutations = await snapshot
+    .find<{ revision: number; documentIds: string[] }>('@rag/mutations')
+    .toArray()
+  await snapshot.close()
+  t.is(state?.revision, 3, 'concurrent saves allocate distinct revisions')
+  t.alike(
+    mutations.map((mutation) => mutation.revision),
+    [1, 2, 3],
+    'no journal record is overwritten by a concurrent writer'
+  )
+  t.alike(
+    mutations
+      .flatMap((mutation) => mutation.documentIds)
+      .slice()
+      .sort(),
+    ['plain-doc', 'seed', 'turbovec-doc'],
+    'each journal record keeps its own document ids'
+  )
+
+  const results = await turbovec.search('saved', vector(8, 2), { topK: 3 })
+  t.ok(
+    results.some((result) => result.id === 'plain-doc'),
+    'the concurrent external save is visible to turbovec search'
+  )
+
+  await turbovec.close()
+  await hyperdb.close()
+  await store.close()
+})
+
+test('TurboVecAdapter replays an external revision before its local commit', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const dbName = 'turbovec-local-after-external'
+  const turbovec = new TurboVecAdapter({
+    store,
+    dbName,
+    indexProvider,
+    checkpointDir: path.join(tmpDir, 'index')
+  })
+  await turbovec.ready()
+  await turbovec.saveEmbeddings([
+    {
+      id: 'revision-one',
+      content: 'initial turbovec document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const hyperdb = new HyperDBAdapter({ store, dbName })
+  await hyperdb.ready()
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'external-revision-two',
+      content: 'external document before local commit',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  t.is(turbovec.revision, 1, 'the live native index has not refreshed revision two')
+
+  const localSave = await turbovec.saveEmbeddings([
+    {
+      id: 'local-revision-three',
+      content: 'local document after external commit',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 2)
+    }
+  ])
+  t.is(localSave[0]?.status, 'fulfilled')
+  t.is(turbovec.revision, 3, 'the local callback replays through its committed revision')
+
+  const results = await turbovec.search('external', vector(8, 1), { topK: 3 })
+  t.ok(
+    results.some((result) => result.id === 'external-revision-two'),
+    'the first search includes the previously skipped external mutation'
+  )
+  t.ok(
+    results.some((result) => result.id === 'local-revision-three'),
+    'the first search also includes the local mutation'
+  )
+
+  await turbovec.close()
+  await hyperdb.close()
+  await store.close()
+})
+
+test('TurboVecAdapter evicts caches for external updates and deletes', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const dbName = 'turbovec-external-cache-invalidation'
+  const hyperdb = new HyperDBAdapter({ store, dbName })
+  await hyperdb.ready()
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'externally-updated',
+      content: 'old cached content',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    },
+    {
+      id: 'vector-competitor',
+      content: 'unchanged competitor',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 2)
+    }
+  ])
+
+  const turbovec = new TurboVecAdapter({
+    store,
+    dbName,
+    indexProvider,
+    checkpointDir: path.join(tmpDir, 'index')
+  })
+  await turbovec.ready()
+  const cached = await turbovec.search('old', vector(8, 0), { topK: 2 })
+  t.is(cached[0]?.id, 'externally-updated', 'the old document is cached before replacement')
+
+  await hyperdb.saveEmbeddings([
+    {
+      id: 'externally-updated',
+      content: 'updated external content',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 2)
+    }
+  ])
+  const updated = await turbovec.search('updated', vector(8, 2), { topK: 1 })
+  t.is(updated[0]?.id, 'externally-updated', 'the new vector changes first-search ranking')
+  t.is(updated[0]?.content, 'updated external content', 'the first search returns new content')
+
+  await hyperdb.deleteEmbeddings(['externally-updated'])
+  const afterDelete = await turbovec.search('updated', vector(8, 2), { topK: 2 })
+  t.is(
+    afterDelete.find((result) => result.id === 'externally-updated'),
+    undefined,
+    'the first search removes the externally deleted document'
+  )
+  const storage = (
+    turbovec as unknown as {
+      storage: {
+        documentCache: { get(key: string): string | undefined }
+        vectorCache: { get(key: string): number[] | undefined }
+      }
+    }
+  ).storage
+  t.is(storage.documentCache.get('externally-updated'), undefined)
+  t.is(storage.vectorCache.get('externally-updated'), undefined)
+
+  await turbovec.close()
+  await hyperdb.close()
+  await store.close()
+})
+
 test('TurboVecAdapter replays mutations committed after the last checkpoint', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(path.join(tmpDir, 'store'))
@@ -527,6 +1115,7 @@ test('TurboVecAdapter rebuilds from HyperDB when the checkpoint is corrupt', asy
   })
 
   await first.ready()
+  const workspaceDir = checkpointWorkspaceDir(first)
   await first.saveEmbeddings([
     {
       id: 'alpha',
@@ -545,7 +1134,7 @@ test('TurboVecAdapter rebuilds from HyperDB when the checkpoint is corrupt', asy
   const revisionBeforeCorruption = first.revision
   await first.close()
 
-  fs.writeFileSync(path.join(checkpointDir, 'manifest.json'), 'not a manifest\n')
+  fs.writeFileSync(path.join(workspaceDir, 'manifest.json'), 'not a manifest\n')
 
   const counting = countingIndexProvider()
   const reopened = new TurboVecAdapter({
@@ -566,6 +1155,199 @@ test('TurboVecAdapter rebuilds from HyperDB when the checkpoint is corrupt', asy
     undefined,
     'deleted documents stay out of the rebuilt index'
   )
+
+  await reopened.close()
+  await store.close()
+})
+
+test('TurboVecAdapter isolates checkpoints for databases sharing one root', async (t) => {
+  const tmpDir = await tmp()
+  const firstStore = new Corestore(path.join(tmpDir, 'first-store'))
+  const secondStore = new Corestore(path.join(tmpDir, 'second-store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const dbName = 'checkpoint-shared-name'
+  const first = new TurboVecAdapter({
+    store: firstStore,
+    dbName,
+    indexProvider,
+    checkpointDir
+  })
+  const second = new TurboVecAdapter({
+    store: secondStore,
+    dbName,
+    indexProvider,
+    checkpointDir
+  })
+  await first.ready()
+  await second.ready()
+  const firstWorkspace = checkpointWorkspaceDir(first)
+  const secondWorkspace = checkpointWorkspaceDir(second)
+  t.not(firstWorkspace, secondWorkspace, 'database cores receive separate checkpoint namespaces')
+
+  await first.saveEmbeddings([
+    {
+      id: 'first-document',
+      content: 'first database document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+  await second.saveEmbeddings([
+    {
+      id: 'second-document',
+      content: 'second database document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  t.is(first.revision, 1)
+  t.is(second.revision, 1, 'both databases have the same checkpoint revision')
+  t.is(await first.checkpoint(), true)
+  const firstManifest = JSON.parse(
+    fs.readFileSync(path.join(firstWorkspace, 'manifest.json'), 'utf8')
+  ) as { snapshot: string }
+  const firstSnapshot = path.join(firstWorkspace, firstManifest.snapshot)
+
+  t.is(await second.checkpoint(), true)
+  const secondManifest = JSON.parse(
+    fs.readFileSync(path.join(secondWorkspace, 'manifest.json'), 'utf8')
+  ) as { snapshot: string }
+  const secondSnapshot = path.join(secondWorkspace, secondManifest.snapshot)
+  t.ok(fs.existsSync(firstSnapshot), 'the second database does not delete the first snapshot')
+
+  await first.reindex()
+  t.is(await first.checkpoint(), true)
+  t.ok(fs.existsSync(secondSnapshot), 'the first database does not delete the second snapshot')
+
+  await first.close()
+  await second.close()
+
+  const firstCounting = countingIndexProvider()
+  const reopenedFirst = new TurboVecAdapter({
+    store: firstStore,
+    dbName,
+    indexProvider: firstCounting.provider,
+    checkpointDir
+  })
+  await reopenedFirst.ready()
+  t.is(firstCounting.calls.load, 1, 'the first database loads one checkpoint')
+  t.ok(
+    firstCounting.calls.loadedPaths[0]?.startsWith(firstWorkspace),
+    'the first database loads only from its namespace'
+  )
+  t.is((await reopenedFirst.search('first', vector(8, 0), { topK: 1 }))[0]?.id, 'first-document')
+  await reopenedFirst.close()
+
+  const secondCounting = countingIndexProvider()
+  const reopenedSecond = new TurboVecAdapter({
+    store: secondStore,
+    dbName,
+    indexProvider: secondCounting.provider,
+    checkpointDir
+  })
+  await reopenedSecond.ready()
+  t.is(secondCounting.calls.load, 1, 'the second database loads one checkpoint')
+  t.ok(
+    secondCounting.calls.loadedPaths[0]?.startsWith(secondWorkspace),
+    'the second database loads only from its namespace'
+  )
+  t.is((await reopenedSecond.search('second', vector(8, 1), { topK: 1 }))[0]?.id, 'second-document')
+
+  await reopenedSecond.close()
+  await firstStore.close()
+  await secondStore.close()
+})
+
+test('TurboVecAdapter rebuilds when checkpoint vector count mismatches', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const first = new TurboVecAdapter({
+    store,
+    dbName: 'checkpoint-count-mismatch',
+    indexProvider,
+    checkpointDir
+  })
+  await first.ready()
+  const workspaceDir = checkpointWorkspaceDir(first)
+  await first.saveEmbeddings([
+    {
+      id: 'counted-document',
+      content: 'checkpoint count recovery document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+  t.is(await first.checkpoint(), true)
+  await first.close()
+
+  const manifestPath = path.join(workspaceDir, 'manifest.json')
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+    vectorCount: number
+  }
+  manifest.vectorCount++
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+
+  const counting = countingIndexProvider()
+  const reopened = new TurboVecAdapter({
+    store,
+    dbName: 'checkpoint-count-mismatch',
+    indexProvider: counting.provider,
+    checkpointDir
+  })
+  await reopened.ready()
+  t.is(counting.calls.load, 1, 'the snapshot is checked against the manifest count')
+  t.ok(counting.calls.create >= 1, 'a count mismatch triggers a HyperDB rebuild')
+  t.is(
+    (await reopened.search('counted', vector(8, 0), { topK: 1 }))[0]?.id,
+    'counted-document',
+    'the rebuilt index returns the database document'
+  )
+
+  await reopened.close()
+  await store.close()
+})
+
+test('TurboVecAdapter rejects checkpoints without database identity', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const first = new TurboVecAdapter({
+    store,
+    dbName: 'missing-checkpoint-identity',
+    indexProvider,
+    checkpointDir
+  })
+  await first.ready()
+  const workspaceDir = checkpointWorkspaceDir(first)
+  await first.saveEmbeddings([
+    {
+      id: 'legacy-document',
+      content: 'legacy checkpoint recovery document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+  t.is(await first.checkpoint(), true)
+  await first.close()
+
+  const manifestPath = path.join(workspaceDir, 'manifest.json')
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
+  delete manifest.databaseIdentity
+  delete manifest.vectorCount
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`)
+
+  const counting = countingIndexProvider()
+  const reopened = new TurboVecAdapter({
+    store,
+    dbName: 'missing-checkpoint-identity',
+    indexProvider: counting.provider,
+    checkpointDir
+  })
+  await reopened.ready()
+  t.is(counting.calls.load, 0, 'the unbound snapshot is not loaded')
+  t.ok(counting.calls.create >= 1, 'the incomplete checkpoint is replaced by a database rebuild')
+  t.is((await reopened.search('legacy', vector(8, 0), { topK: 1 }))[0]?.id, 'legacy-document')
 
   await reopened.close()
   await store.close()
@@ -746,6 +1528,102 @@ test('TurboVecAdapter first search refreshes a lagging adapter', async (t) => {
   await store.close()
 })
 
+test('TurboVecAdapter uses native candidates when queued refresh advances farther', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const first = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-search-refresh-advance',
+    indexProvider,
+    checkpointDir: path.join(tmpDir, 'first-index')
+  })
+  await first.ready()
+  await first.saveEmbeddings([
+    {
+      id: 'baseline',
+      content: 'baseline document',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const counting = searchCountingIndexProvider()
+  const lagging = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-search-refresh-advance',
+    indexProvider: counting.provider,
+    checkpointDir: path.join(tmpDir, 'lagging-index')
+  })
+  await lagging.ready()
+  await first.saveEmbeddings([
+    {
+      id: 'visible-match',
+      content: 'visible before search starts',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  t.is(lagging.revision, 1)
+  t.is(first.revision, 2)
+
+  const internals = lagging as unknown as {
+    _enqueue: <T>(operation: () => Promise<T>) => Promise<T>
+    _scheduleRefresh: () => Promise<void>
+    _searchAllDocuments: () => Promise<never>
+  }
+  let releaseQueuedOperation!: () => void
+  const queuedOperationRelease = new Promise<void>((resolve) => {
+    releaseQueuedOperation = resolve
+  })
+  let markQueuedOperationStarted!: () => void
+  const queuedOperationStarted = new Promise<void>((resolve) => {
+    markQueuedOperationStarted = resolve
+  })
+  const queuedOperation = internals._enqueue(async () => {
+    markQueuedOperationStarted()
+    await queuedOperationRelease
+    await first.saveEmbeddings([
+      {
+        id: 'advanced-match',
+        content: 'committed while refresh is queued',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 2)
+      }
+    ])
+  })
+  await queuedOperationStarted
+
+  let markRefreshScheduled!: () => void
+  const refreshScheduled = new Promise<void>((resolve) => {
+    markRefreshScheduled = resolve
+  })
+  const scheduleRefresh = internals._scheduleRefresh.bind(lagging)
+  internals._scheduleRefresh = () => {
+    markRefreshScheduled()
+    return scheduleRefresh()
+  }
+  let fullScanCalls = 0
+  internals._searchAllDocuments = () => {
+    fullScanCalls++
+    return Promise.reject(new Error('unexpected full-corpus fallback'))
+  }
+
+  const search = lagging.search('advanced', vector(8, 2), { topK: 1 })
+  await refreshScheduled
+  releaseQueuedOperation()
+  await queuedOperation
+  const results = await search
+
+  t.is(lagging.revision, 3, 'the queued refresh advances beyond the initially visible revision')
+  t.is(results[0]?.id, 'advanced-match')
+  t.is(counting.calls.search, 1, 'the advanced native index supplies candidates')
+  t.is(fullScanCalls, 0, 'search does not fall back to a full HyperDB scan')
+
+  await lagging.close()
+  await first.close()
+  await store.close()
+})
+
 test('TurboVecAdapter first search refreshes after a visible revision rollback', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(path.join(tmpDir, 'store'))
@@ -920,7 +1798,7 @@ test('TurboVecAdapter updates writer heartbeat records atomically', async (t) =>
   })
   await adapter.ready()
 
-  const lockDir = path.join(checkpointDir, 'writer.lock')
+  const lockDir = path.join(checkpointWorkspaceDir(adapter), 'writer.lock')
   const ownerPath = path.join(lockDir, 'owner.json')
   const before = fs.readFileSync(ownerPath, 'utf8')
   const internals = adapter as unknown as {
@@ -970,6 +1848,168 @@ test('TurboVecAdapter updates writer heartbeat records atomically', async (t) =>
   await store.close()
 })
 
+test('TurboVecAdapter rejects a save when lock ownership changes before flush', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-pre-flush-lock-loss',
+    indexProvider,
+    checkpointDir
+  })
+  await adapter.ready()
+  await adapter.saveEmbeddings([
+    {
+      id: 'baseline',
+      content: 'baseline before pre-flush lock loss',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const workspaceDir = checkpointWorkspaceDir(adapter)
+  const lockDir = path.join(workspaceDir, 'writer.lock')
+  const displacedLockDir = path.join(workspaceDir, 'writer.lock.pre-flush')
+  const database = (
+    adapter as unknown as {
+      storage: { db: HyperDBInstance }
+    }
+  ).storage.db
+  const exclusiveTransaction = database.exclusiveTransaction.bind(database)
+  database.exclusiveTransaction = async function () {
+    const tx = await exclusiveTransaction()
+    const insert = tx.insert.bind(tx)
+    tx.insert = async function (collection: string, record: object) {
+      await insert(collection, record)
+      if (collection === '@rag/workspaceState' && !fs.existsSync(displacedLockDir)) {
+        installForeignWriter(lockDir, displacedLockDir)
+      }
+    }
+    return tx as HyperDBTransaction
+  }
+
+  const result = await adapter.saveEmbeddings([
+    {
+      id: 'must-not-commit',
+      content: 'lock lost before transaction flush',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  database.exclusiveTransaction = exclusiveTransaction
+  t.is(result[0]?.status, 'rejected', 'the admitted save does not report fulfilled')
+  t.ok(result[0]?.error?.includes('lock ownership was lost'))
+
+  const snapshot = database.snapshot()
+  const document = await snapshot.get('@rag/documents', { id: 'must-not-commit' })
+  const state = await snapshot.get<{ revision: number }>('@rag/workspaceState', {
+    key: 'workspace'
+  })
+  await snapshot.close()
+  t.is(document, null, 'the pre-flush ownership check prevents the document commit')
+  t.is(state?.revision, 1, 'the pre-flush ownership check prevents revision advancement')
+  try {
+    await adapter.saveEmbeddings([
+      {
+        id: 'fenced-after-pre-flush',
+        content: 'a foreign owner permanently fences this adapter',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 2)
+      }
+    ])
+    t.fail('the fenced adapter must reject later writes')
+  } catch (error) {
+    t.ok(String(error).includes('lock ownership was lost'))
+  }
+
+  await adapter.close()
+  t.is(
+    JSON.parse(fs.readFileSync(path.join(lockDir, 'owner.json'), 'utf8')).owner,
+    'competitor',
+    'close preserves the valid foreign owner'
+  )
+  removeTestWriterLocks(lockDir, displacedLockDir)
+  await store.close()
+})
+
+test('TurboVecAdapter reports an uncertain save after post-commit lock loss', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-post-commit-lock-loss',
+    indexProvider,
+    checkpointDir
+  })
+  await adapter.ready()
+  await adapter.saveEmbeddings([
+    {
+      id: 'baseline',
+      content: 'baseline before post-commit lock loss',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const workspaceDir = checkpointWorkspaceDir(adapter)
+  const lockDir = path.join(workspaceDir, 'writer.lock')
+  const displacedLockDir = path.join(workspaceDir, 'writer.lock.post-commit')
+  const database = (
+    adapter as unknown as {
+      storage: { db: HyperDBInstance }
+    }
+  ).storage.db
+  const exclusiveTransaction = database.exclusiveTransaction.bind(database)
+  database.exclusiveTransaction = async function () {
+    const tx = await exclusiveTransaction()
+    const flush = tx.flush.bind(tx)
+    tx.flush = async function () {
+      await flush()
+      installForeignWriter(lockDir, displacedLockDir)
+    }
+    return tx as HyperDBTransaction
+  }
+
+  const result = await adapter.saveEmbeddings([
+    {
+      id: 'committed-before-lock-loss',
+      content: 'database commit completed before ownership was lost',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 1)
+    }
+  ])
+  database.exclusiveTransaction = exclusiveTransaction
+  t.is(result[0]?.status, 'rejected', 'post-commit ownership loss is not reported fulfilled')
+  t.ok(result[0]?.error?.includes('commit succeeded but post-commit processing failed'))
+  t.ok(result[0]?.error?.includes('lock ownership was lost'))
+
+  const snapshot = database.snapshot()
+  const document = await snapshot.get('@rag/documents', { id: 'committed-before-lock-loss' })
+  const state = await snapshot.get<{ revision: number }>('@rag/workspaceState', {
+    key: 'workspace'
+  })
+  await snapshot.close()
+  t.ok(document, 'the rejected result communicates uncertainty because the DB commit exists')
+  t.is(state?.revision, 2, 'the committed revision remains durable')
+  const internals = adapter as unknown as {
+    needsRecovery: boolean
+    writerFenced: boolean
+  }
+  t.is(internals.needsRecovery, true, 'post-commit ownership loss forces index recovery')
+  t.is(internals.writerFenced, true, 'the valid foreign owner fences the adapter')
+
+  await adapter.close()
+  t.is(
+    JSON.parse(fs.readFileSync(path.join(lockDir, 'owner.json'), 'utf8')).owner,
+    'competitor',
+    'close preserves the valid foreign owner'
+  )
+  removeTestWriterLocks(lockDir, displacedLockDir)
+  await store.close()
+})
+
 test('TurboVecAdapter fences a checkpoint after writer lock loss', async (t) => {
   const tmpDir = await tmp()
   const store = new Corestore(path.join(tmpDir, 'store'))
@@ -991,8 +2031,9 @@ test('TurboVecAdapter fences a checkpoint after writer lock loss', async (t) => 
     }
   ])
 
-  const lockDir = path.join(checkpointDir, 'writer.lock')
-  const stolenLockDir = path.join(checkpointDir, 'writer.lock.stolen')
+  const workspaceDir = checkpointWorkspaceDir(adapter)
+  const lockDir = path.join(workspaceDir, 'writer.lock')
+  const stolenLockDir = path.join(workspaceDir, 'writer.lock.stolen')
   const internals = adapter as unknown as {
     index: TurboVecIndex
   }
@@ -1013,7 +2054,7 @@ test('TurboVecAdapter fences a checkpoint after writer lock loss', async (t) => 
   } catch (error) {
     t.ok(String(error).includes('lock ownership was lost'))
   }
-  t.is(fs.existsSync(path.join(checkpointDir, 'manifest.json')), false)
+  t.is(fs.existsSync(path.join(workspaceDir, 'manifest.json')), false)
   try {
     await adapter.saveEmbeddings([
       {
@@ -1038,5 +2079,77 @@ test('TurboVecAdapter fences a checkpoint after writer lock loss', async (t) => 
   fs.rmdirSync(lockDir)
   fs.unlinkSync(path.join(stolenLockDir, 'owner.json'))
   fs.rmdirSync(stolenLockDir)
+  await store.close()
+})
+
+test('TurboVecAdapter recovers after the competing writer releases the lock', async (t) => {
+  const tmpDir = await tmp()
+  const store = new Corestore(path.join(tmpDir, 'store'))
+  const checkpointDir = path.join(tmpDir, 'index')
+  const adapter = new TurboVecAdapter({
+    store,
+    dbName: 'turbovec-fence-recovery',
+    indexProvider,
+    checkpointDir
+  })
+  await adapter.ready()
+  await adapter.saveEmbeddings([
+    {
+      id: 'before-fence',
+      content: 'saved before the fence',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 0)
+    }
+  ])
+
+  const workspaceDir = checkpointWorkspaceDir(adapter)
+  const lockDir = path.join(workspaceDir, 'writer.lock')
+  const displacedLockDir = path.join(workspaceDir, 'writer.lock.displaced')
+  installForeignWriter(lockDir, displacedLockDir)
+
+  try {
+    await adapter.saveEmbeddings([
+      {
+        id: 'while-fenced',
+        content: 'rejected while a competitor owns the lock',
+        embeddingModelId: 'test-model',
+        embedding: vector(8, 1)
+      }
+    ])
+    t.fail('a save must reject while a live competitor owns the lock')
+  } catch (error) {
+    t.ok(String(error).includes('lock ownership was lost'))
+  }
+  const internals = adapter as unknown as { writerFenced: boolean }
+  t.is(internals.writerFenced, true, 'the live foreign owner fences the adapter')
+
+  const fencedSearch = await adapter.search('before', vector(8, 0), { topK: 1 })
+  t.is(fencedSearch[0]?.id, 'before-fence', 'a fenced adapter still serves searches')
+  t.is(internals.writerFenced, true, 'a search cannot displace a live foreign owner')
+
+  removeTestWriterLocks(lockDir, displacedLockDir)
+
+  const recovered = await adapter.saveEmbeddings([
+    {
+      id: 'after-recovery',
+      content: 'saved after the writer lock came back',
+      embeddingModelId: 'test-model',
+      embedding: vector(8, 2)
+    }
+  ])
+  t.is(recovered[0]?.status, 'fulfilled', 'the adapter writes again after re-acquiring the lock')
+  t.is(internals.writerFenced, false, 'recovery clears the fence')
+
+  const results = await adapter.search('after', vector(8, 2), { topK: 3 })
+  t.ok(
+    results.some((result) => result.id === 'after-recovery'),
+    'writes after recovery are searchable'
+  )
+  t.ok(
+    results.every((result) => result.id !== 'while-fenced'),
+    'the fenced save never committed'
+  )
+
+  await adapter.close()
   await store.close()
 })

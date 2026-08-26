@@ -8,6 +8,7 @@ export interface ReplicationStream {
 }
 
 export interface Hypercore {
+  readonly key: Uint8Array
   replicate(isInitiator: boolean): ReplicationStream
 }
 

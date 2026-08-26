@@ -20,6 +20,24 @@ import type {
   SaveEmbeddingsResult
 } from '../../types.js'
 
+const UINT32_MAX = 0xffffffff
+const WORKSPACE_STATE_KEY = 'workspace'
+
+const workspaceWriteTails = new Map<string, Promise<void>>()
+let anonymousWorkspaceCount = 0
+
+function workspaceWriteKey(core: Hypercore | null): string {
+  if (!core?.key?.length) return `anonymous-workspace-${++anonymousWorkspaceCount}`
+  let hex = ''
+  for (const byte of core.key) hex += byte.toString(16).padStart(2, '0')
+  return hex
+}
+
+export const UPSERT_MUTATION_OPERATION = 'upsert'
+export const DELETE_MUTATION_OPERATION = 'delete'
+export type WorkspaceMutationOperation =
+  typeof UPSERT_MUTATION_OPERATION | typeof DELETE_MUTATION_OPERATION
+
 export interface HyperDBStorageInput {
   store?: object
   db?: HyperDBInstance
@@ -30,6 +48,8 @@ export interface HyperDBStorageInput {
   documentsTable?: string
   vectorsTable?: string
   configTable?: string
+  workspaceStateTable?: string
+  mutationsTable?: string
   logger?: LoggerInterface
 }
 
@@ -59,15 +79,30 @@ export interface DocumentRecord {
   content: string
 }
 
+export interface WorkspaceStateRecord {
+  key: string
+  revision: number
+  updatedAt: Date
+}
+
+export interface MutationRecord {
+  revision: number
+  operation: WorkspaceMutationOperation
+  documentIds: string[]
+  createdAt: Date
+}
+
 export interface SavePipelineHooks<TDoc extends PreparedDocument, TWrite> {
   prepare?(doc: EmbeddedDoc, contentHash: string): TDoc
   write(tx: HyperDBTransaction, docs: TDoc[], now: Date): Promise<TWrite>
-  committed?(docs: TDoc[], writeResult: TWrite): void
+  beforeFlush?(): void | Promise<void>
+  committed?(docs: TDoc[], writeResult: TWrite, revision: number): void | Promise<void>
 }
 
 export interface DeletePipelineHooks<TWrite> {
   write?(tx: HyperDBTransaction, ids: string[], now: Date): Promise<TWrite>
-  committed?(ids: string[], writeResult: TWrite): void
+  beforeFlush?(): void | Promise<void>
+  committed?(ids: string[], writeResult: TWrite, revision: number): void | Promise<void>
 }
 
 export class HyperDBStorage {
@@ -80,10 +115,13 @@ export class HyperDBStorage {
   readonly documentsTable: string
   readonly vectorsTable: string
   readonly configTable: string
+  readonly workspaceStateTable: string
+  readonly mutationsTable: string
   readonly logger: LoggerInterface
   readonly documentCache: LRUCache<string, string>
   readonly vectorCache: LRUCache<string, number[]>
   hypercore: Hypercore | null = null
+  private workspaceKey = ''
 
   constructor(config: HyperDBStorageInput = {}) {
     this.store = (config.store as Corestore | undefined) || null
@@ -95,6 +133,8 @@ export class HyperDBStorage {
     this.documentsTable = config.documentsTable || '@rag/documents'
     this.vectorsTable = config.vectorsTable || '@rag/vectors'
     this.configTable = config.configTable || '@rag/config'
+    this.workspaceStateTable = config.workspaceStateTable || '@rag/workspaceState'
+    this.mutationsTable = config.mutationsTable || '@rag/mutations'
     this.logger = config.logger || new QvacLogger()
     this.documentCache = createLRUCache(this.CACHE_SIZE)
     this.vectorCache = createLRUCache(this.CACHE_SIZE)
@@ -104,6 +144,7 @@ export class HyperDBStorage {
     if (this.db) {
       await this.db.ready()
       this.hypercore = this.db.core
+      this.workspaceKey = workspaceWriteKey(this.hypercore)
       return
     }
     if (!this.hypercore) {
@@ -118,6 +159,7 @@ export class HyperDBStorage {
     }
     this.db = HyperDB.bee(this.hypercore, dbSpec, { autoUpdate: true })
     await this.db.ready()
+    this.workspaceKey = workspaceWriteKey(this.hypercore)
   }
 
   async close(): Promise<void> {
@@ -272,43 +314,59 @@ export class HyperDBStorage {
       // A partial attempt is discarded without flushing. Retry only complete
       // documents so durable rows stay intact and hooks share the final commit.
       while (pendingDocs.length > 0) {
-        const tx = await this.db!.exclusiveTransaction()
-        const now = new Date()
-        try {
-          const { written, failed } = await this.insertDocumentsAndVectors(tx, pendingDocs, now)
-          if (failed.length > 0) {
+        await this._withWorkspaceWriteLock(async () => {
+          const tx = await this.db!.exclusiveTransaction()
+          const now = new Date()
+          let flushed = false
+          try {
+            const { written, failed } = await this.insertDocumentsAndVectors(tx, pendingDocs, now)
+            if (failed.length > 0) {
+              batchResults.push(
+                ...failed.map((failure) => ({
+                  id: failure.id,
+                  status: 'rejected' as const,
+                  error: failure.error
+                }))
+              )
+              pendingDocs = written
+              return
+            }
+
+            const writeResult = await hooks.write(tx, written, now)
+            const revision = await this.appendMutation(
+              tx,
+              UPSERT_MUTATION_OPERATION,
+              written.map((doc) => doc.id),
+              now
+            )
+            await hooks.beforeFlush?.()
+            await tx.flush()
+            flushed = true
+
+            this.cacheDocuments(written)
+            await hooks.committed?.(written, writeResult, revision)
             batchResults.push(
-              ...failed.map((failure) => ({
-                id: failure.id,
+              ...written.map((doc) => ({ id: doc.id, status: 'fulfilled' as const }))
+            )
+            pendingDocs = []
+          } catch (error) {
+            const failure =
+              error instanceof Error && error.message ? error.message : 'Batch insertion failed'
+            const message = flushed
+              ? `HyperDB commit succeeded but post-commit processing failed: ${failure}`
+              : failure
+            batchResults.push(
+              ...pendingDocs.map((doc) => ({
+                id: doc.id,
                 status: 'rejected' as const,
-                error: failure.error
+                error: message
               }))
             )
-            pendingDocs = written
-            continue
+            pendingDocs = []
+          } finally {
+            await tx.close()
           }
-
-          const writeResult = await hooks.write(tx, written, now)
-          await tx.flush()
-
-          this.cacheDocuments(written)
-          hooks.committed?.(written, writeResult)
-          batchResults.push(...written.map((doc) => ({ id: doc.id, status: 'fulfilled' as const })))
-          pendingDocs = []
-        } catch (error) {
-          const message =
-            error instanceof Error && error.message ? error.message : 'Batch insertion failed'
-          batchResults.push(
-            ...pendingDocs.map((doc) => ({
-              id: doc.id,
-              status: 'rejected' as const,
-              error: message
-            }))
-          )
-          pendingDocs = []
-        } finally {
-          await tx.close()
-        }
+        })
       }
       results.push(...batchResults)
 
@@ -324,25 +382,52 @@ export class HyperDBStorage {
     ids: string[],
     hooks: DeletePipelineHooks<TWrite> = {}
   ): Promise<void> {
-    const tx = await this.db!.exclusiveTransaction()
-    try {
-      const now = new Date()
-      await this.deleteDocumentsAndVectors(tx, ids)
-      const writeResult = (await hooks.write?.(tx, ids, now)) as TWrite
-      await tx.flush()
+    await this._withWorkspaceWriteLock(async () => {
+      const tx = await this.db!.exclusiveTransaction()
+      let flushed = false
+      try {
+        const now = new Date()
+        await this.deleteDocumentsAndVectors(tx, ids)
+        const writeResult = (await hooks.write?.(tx, ids, now)) as TWrite
+        const revision = await this.appendMutation(tx, DELETE_MUTATION_OPERATION, ids, now)
+        await hooks.beforeFlush?.()
+        await tx.flush()
+        flushed = true
 
-      this.evictDocuments(ids)
-      hooks.committed?.(ids, writeResult)
-    } catch (error) {
-      this.logger.error('Delete embeddings failed:', error)
-      throw new QvacErrorRAG({
-        code: ERR_CODES.DB_OPERATION_FAILED,
-        adds: error instanceof Error ? error.message : String(error),
-        cause: error instanceof Error ? error : undefined
-      })
-    } finally {
-      await tx.close()
-    }
+        this.evictDocuments(ids)
+        await hooks.committed?.(ids, writeResult, revision)
+      } catch (error) {
+        this.logger.error('Delete embeddings failed:', error)
+        const failure = error instanceof Error ? error.message : String(error)
+        throw new QvacErrorRAG({
+          code: ERR_CODES.DB_OPERATION_FAILED,
+          adds: flushed
+            ? `HyperDB commit succeeded but post-commit processing failed: ${failure}`
+            : failure,
+          cause: error instanceof Error ? error : undefined
+        })
+      } finally {
+        await tx.close()
+      }
+    })
+  }
+
+  // Runs `task` after every earlier journal write on the same hypercore has
+  // settled. Committed hooks run inside this lock, so they must not start
+  // another save or delete on the same database.
+  private _withWorkspaceWriteLock<T>(task: () => Promise<T>): Promise<T> {
+    const key = this.workspaceKey
+    const tail = workspaceWriteTails.get(key) || Promise.resolve()
+    const run = tail.then(task, task)
+    const settled = run.then(
+      () => undefined,
+      () => undefined
+    )
+    workspaceWriteTails.set(key, settled)
+    void settled.then(() => {
+      if (workspaceWriteTails.get(key) === settled) workspaceWriteTails.delete(key)
+    })
+    return run
   }
 
   async deleteDocumentsAndVectors(tx: HyperDBTransaction, ids: string[]): Promise<void> {
@@ -354,11 +439,23 @@ export class HyperDBStorage {
     )
   }
 
+  async readCurrentRevision(reader: HyperDBReader): Promise<number> {
+    const state = await reader.get<WorkspaceStateRecord>(this.workspaceStateTable, {
+      key: WORKSPACE_STATE_KEY
+    })
+    return state?.revision || 0
+  }
+
   evictDocuments(ids: string[]): void {
     for (const id of ids) {
       this.documentCache.delete(id)
       this.vectorCache.delete(id)
     }
+  }
+
+  clearCaches(): void {
+    this.documentCache.clear()
+    this.vectorCache.clear()
   }
 
   // Scan the whole table or a key range. Range results arrive in key order.
@@ -386,6 +483,36 @@ export class HyperDBStorage {
       ids,
       (record: DocumentRecord) => record.content
     )
+  }
+
+  private async appendMutation(
+    tx: HyperDBTransaction,
+    operation: WorkspaceMutationOperation,
+    documentIds: string[],
+    now: Date
+  ): Promise<number> {
+    const state = await tx.get<WorkspaceStateRecord>(this.workspaceStateTable, {
+      key: WORKSPACE_STATE_KEY
+    })
+    const revision = (state?.revision || 0) + 1
+    if (revision > UINT32_MAX) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: 'RAG workspace revision exhausted uint32 range'
+      })
+    }
+    await tx.insert(this.mutationsTable, {
+      revision,
+      operation,
+      documentIds,
+      createdAt: now
+    })
+    await tx.insert(this.workspaceStateTable, {
+      key: WORKSPACE_STATE_KEY,
+      revision,
+      updatedAt: now
+    })
+    return revision
   }
 
   private async insertDocumentsAndVectors<TDoc extends PreparedDocument>(

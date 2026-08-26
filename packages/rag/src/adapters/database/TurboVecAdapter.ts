@@ -5,13 +5,16 @@ import path from '#path'
 import qvacCrypto from '#crypto'
 import { BaseDBAdapter } from './BaseDBAdapter.js'
 import {
+  DELETE_MUTATION_OPERATION,
   HyperDBStorage,
+  UPSERT_MUTATION_OPERATION,
   type DocumentRecord,
   type HyperDBStorageInput,
+  type MutationRecord,
   type PreparedDocument,
   type VectorRecord
 } from './HyperDBStorage.js'
-import type { HyperDBReader, HyperDBTransaction } from './db-types.js'
+import type { HyperDBTransaction } from './db-types.js'
 import { QvacErrorRAG, ERR_CODES } from '../../errors.js'
 import { scoreDocuments } from '../../utils/helper.js'
 import type {
@@ -26,12 +29,8 @@ import type {
 } from '../../types.js'
 
 const UINT64_MAX = 0xffffffffffffffffn
-const UINT32_MAX = 0xffffffff
 const ID_MAPPING_VERSION = 1
 const MANIFEST_VERSION = 1
-const WORKSPACE_STATE_KEY = 'workspace'
-const UPSERT_OPERATION = 'upsert'
-const DELETE_OPERATION = 'delete'
 const DEFAULT_LOCK_STALE_MS = 30_000
 const DEFAULT_LOCK_HEARTBEAT_MS = 10_000
 
@@ -61,19 +60,6 @@ export interface TurboVecIndexProvider {
   load(path: string): TurboVecIndex
 }
 
-interface WorkspaceStateRecord {
-  key: string
-  revision: number
-  updatedAt: Date
-}
-
-interface MutationRecord {
-  revision: number
-  operation: string
-  documentIds: string[]
-  createdAt: Date
-}
-
 interface NativeIdRecord {
   nativeId: string
   documentId: string
@@ -83,7 +69,9 @@ interface NativeIdRecord {
 
 interface CheckpointManifest {
   version: number
+  databaseIdentity: string
   revision: number
+  vectorCount: number
   dimension: number
   storage: TurboVecIndexStorage
   mappingVersion: number
@@ -97,13 +85,14 @@ interface NativeId {
 
 interface SavedBatch {
   nativeIds: NativeId[]
-  revision: number
 }
 
 interface LockRecord {
   owner: string
   updatedAt: number
 }
+
+type LockRecordReadResult = { state: 'valid'; record: LockRecord } | { state: 'uncertain' }
 
 interface TimerHandle {
   unref?(): void
@@ -125,8 +114,6 @@ export interface TurboVecAdapterInput extends HyperDBStorageInput {
   checkpointEveryMutations?: number
   lockStaleMs?: number
   lockHeartbeatMs?: number
-  workspaceStateTable?: string
-  mutationsTable?: string
   nativeIdsTable?: string
   logger?: LoggerInterface
 }
@@ -139,7 +126,6 @@ export class TurboVecAdapter extends BaseDBAdapter {
   readonly checkpointEveryMutations: number
   readonly lockStaleMs: number
   readonly lockHeartbeatMs: number
-  readonly workspaceStateTable: string
   readonly mutationsTable: string
   readonly nativeIdsTable: string
 
@@ -162,6 +148,8 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private readonly indexProvider: TurboVecIndexProvider
   private readonly storage: HyperDBStorage
   private isClosingIndex = false
+  private databaseIdentity: string | null = null
+  private checkpointWorkspaceDir: string | null = null
 
   constructor(config: TurboVecAdapterInput) {
     super(config as unknown as Record<string, unknown>)
@@ -171,6 +159,26 @@ export class TurboVecAdapter extends BaseDBAdapter {
         adds: 'TurboVecAdapter requires a vector index provider'
       })
     }
+    const lockStaleMs = config.lockStaleMs ?? DEFAULT_LOCK_STALE_MS
+    const lockHeartbeatMs = config.lockHeartbeatMs ?? DEFAULT_LOCK_HEARTBEAT_MS
+    if (!Number.isFinite(lockStaleMs) || lockStaleMs <= 0) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_PARAMS,
+        adds: 'lockStaleMs must be a finite positive number'
+      })
+    }
+    if (!Number.isFinite(lockHeartbeatMs) || lockHeartbeatMs <= 0) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_PARAMS,
+        adds: 'lockHeartbeatMs must be a finite positive number'
+      })
+    }
+    if (lockHeartbeatMs >= lockStaleMs) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.INVALID_PARAMS,
+        adds: 'lockHeartbeatMs must be less than lockStaleMs'
+      })
+    }
     this.storage = new HyperDBStorage(config)
     this.indexProvider = config.indexProvider
     this.checkpointDir = config.checkpointDir
@@ -178,10 +186,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
     this.fallbackStorage = config.fallbackStorage || 'q8'
     this.candidateMultiplier = config.candidateMultiplier || 10
     this.checkpointEveryMutations = config.checkpointEveryMutations || 1000
-    this.lockStaleMs = config.lockStaleMs ?? DEFAULT_LOCK_STALE_MS
-    this.lockHeartbeatMs = config.lockHeartbeatMs ?? DEFAULT_LOCK_HEARTBEAT_MS
-    this.workspaceStateTable = config.workspaceStateTable || '@rag/workspaceState'
-    this.mutationsTable = config.mutationsTable || '@rag/mutations'
+    this.lockStaleMs = lockStaleMs
+    this.lockHeartbeatMs = lockHeartbeatMs
+    this.mutationsTable = this.storage.mutationsTable
     this.nativeIdsTable = config.nativeIdsTable || '@rag/nativeIds'
     this.lockOwner = qvacCrypto
       .createHash('sha256')
@@ -249,12 +256,12 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
 
     const visibleRevision = await this.storage.withSnapshot((snapshot) =>
-      this._readCurrentRevision(snapshot)
+      this.storage.readCurrentRevision(snapshot)
     )
+    if (this.writerFenced) this._tryRecoverFromFence()
     if (
-      visibleRevision !== this.indexRevision &&
+      (visibleRevision !== this.indexRevision || this.needsRecovery) &&
       this.index &&
-      !this.needsRecovery &&
       !this.writerFenced
     ) {
       try {
@@ -268,7 +275,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       !this.index ||
       this.index.length === 0 ||
       this.needsRecovery ||
-      visibleRevision !== this.indexRevision
+      this.indexRevision < visibleRevision
     ) {
       return this._searchAllDocuments(query, queryVector, topK, signal)
     }
@@ -319,15 +326,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
         await Promise.all(
           docs.map((doc, index) => this._ensureNativeIdRecord(tx, doc.id, nativeIds[index], now))
         )
-        const revision = await this._appendMutation(
-          tx,
-          UPSERT_OPERATION,
-          docs.map((doc) => doc.id),
-          now
-        )
-        return { nativeIds, revision }
+        return { nativeIds }
       },
-      committed: (docs, { nativeIds, revision }) =>
+      beforeFlush: () => this._assertPreFlushOwnership(),
+      committed: (docs, { nativeIds }, revision) =>
         this._applySavedDocuments(docs, nativeIds, revision)
     })
   }
@@ -340,19 +342,19 @@ export class TurboVecAdapter extends BaseDBAdapter {
       throw new QvacErrorRAG({ code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED })
     }
 
-    await this.storage.deleteEmbeddings<number>(ids, {
-      write: (tx, deletedIds, now) => this._appendMutation(tx, DELETE_OPERATION, deletedIds, now),
-      committed: (deletedIds, revision) => this._applyDeletedDocuments(deletedIds, revision)
+    await this.storage.deleteEmbeddings<void>(ids, {
+      beforeFlush: () => this._assertPreFlushOwnership(),
+      committed: (deletedIds, _writeResult, revision) =>
+        this._applyDeletedDocuments(deletedIds, revision)
     })
     return true
   }
 
-  private _applySavedDocuments(
+  private async _applySavedDocuments(
     docs: PreparedDocument[],
     nativeIds: NativeId[],
     revision: number
-  ): void {
-    if (this.needsRecovery) return
+  ): Promise<void> {
     try {
       this._assertWriterOwnership()
       this._ensureIndex(docs[0].dimension)
@@ -361,6 +363,25 @@ export class TurboVecAdapter extends BaseDBAdapter {
           this._assertRuntimeMapping(nativeIds[index].value, docs[index].id)
         }
         this.indexRevision = revision
+        return
+      }
+      if (this.needsRecovery) {
+        throw new QvacErrorRAG({
+          code: ERR_CODES.DB_OPERATION_FAILED,
+          adds: 'TurboVec index requires recovery before applying committed saves'
+        })
+      }
+      if (revision !== this.indexRevision + 1) {
+        if (
+          revision <= this.indexRevision ||
+          !(await this._replayMutations(this.indexRevision, revision))
+        ) {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.DB_OPERATION_FAILED,
+            adds: `TurboVec could not replay the committed revision gap ${this.indexRevision + 1}-${revision}`
+          })
+        }
+        this._assertWriterOwnership()
         return
       }
       const ids = new BigUint64Array(docs.length)
@@ -379,15 +400,34 @@ export class TurboVecAdapter extends BaseDBAdapter {
     } catch (error) {
       this.needsRecovery = true
       this.logger.error('TurboVec update failed after HyperDB commit; rebuild required:', error)
+      throw this._postCommitSyncError('save', error)
     }
   }
 
-  private _applyDeletedDocuments(ids: string[], revision: number): void {
-    if (this.needsRecovery) return
+  private async _applyDeletedDocuments(ids: string[], revision: number): Promise<void> {
     try {
       this._assertWriterOwnership()
       if (!this.index) {
         this.indexRevision = revision
+        return
+      }
+      if (this.needsRecovery) {
+        throw new QvacErrorRAG({
+          code: ERR_CODES.DB_OPERATION_FAILED,
+          adds: 'TurboVec index requires recovery before applying committed deletes'
+        })
+      }
+      if (revision !== this.indexRevision + 1) {
+        if (
+          revision <= this.indexRevision ||
+          !(await this._replayMutations(this.indexRevision, revision))
+        ) {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.DB_OPERATION_FAILED,
+            adds: `TurboVec could not replay the committed revision gap ${this.indexRevision + 1}-${revision}`
+          })
+        }
+        this._assertWriterOwnership()
         return
       }
       for (const id of ids) this.index.remove(this._nativeIdForDocument(id).value)
@@ -396,7 +436,24 @@ export class TurboVecAdapter extends BaseDBAdapter {
     } catch (error) {
       this.needsRecovery = true
       this.logger.error('TurboVec delete failed after HyperDB commit; rebuild required:', error)
+      throw this._postCommitSyncError('delete', error)
     }
+  }
+
+  private _postCommitSyncError(operation: string, error: unknown): QvacErrorRAG {
+    const failure = error instanceof Error ? error.message : String(error)
+    return new QvacErrorRAG({
+      code: ERR_CODES.DB_OPERATION_FAILED,
+      adds: `TurboVec ${operation} committed to HyperDB but native index synchronization failed: ${failure}`,
+      cause: error instanceof Error ? error : undefined
+    })
+  }
+
+  private _assertPreFlushOwnership(): void {
+    // The filesystem lock and HyperDB cannot participate in one atomic commit.
+    // Check immediately before flush, then check again in the committed callback;
+    // ownership lost during flush is reported as an uncertain post-commit result.
+    this._assertWriterOwnership()
   }
 
   override reindex(opts: ReindexOpts = {}): Promise<ReindexResult> {
@@ -431,6 +488,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   override async _open(): Promise<void> {
     await this.storage.open()
     try {
+      this._initializeCheckpointWorkspace()
       this._acquireLock()
       const config = await this.getConfig()
       if (config) {
@@ -487,6 +545,26 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
   }
 
+  private _initializeCheckpointWorkspace(): void {
+    if (!this.checkpointDir) return
+    const databaseKey = this.storage.hypercore?.key
+    if (!databaseKey || databaseKey.length === 0) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: 'Cannot identify the HyperDB core for TurboVec checkpoints'
+      })
+    }
+    const identity = qvacCrypto.createHash('sha256').update(databaseKey).digest('hex')
+    if (typeof identity !== 'string') {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: 'SHA-256 implementation did not return a database identity'
+      })
+    }
+    this.databaseIdentity = identity
+    this.checkpointWorkspaceDir = path.join(this.checkpointDir, `database-${identity}`)
+  }
+
   private _closingError(): QvacErrorRAG {
     return new QvacErrorRAG({
       code: ERR_CODES.DB_ADAPTER_NOT_INITIALIZED,
@@ -499,7 +577,14 @@ export class TurboVecAdapter extends BaseDBAdapter {
       return Promise.reject(this._closingError())
     }
     if (this.writerFenced) {
-      return Promise.reject(this._lockLostError())
+      if (!this._tryRecoverFromFence()) {
+        return Promise.reject(this._lockLostError())
+      }
+      // Queue a refresh ahead of the recovered operation so its committed
+      // callback finds a current index instead of the fenced one.
+      void this._scheduleRefresh().catch((error) => {
+        this.logger.warn('TurboVec index recovery after re-acquiring the lock failed:', error)
+      })
     }
     const guardedOperation = () => {
       this._assertWriterOwnership()
@@ -516,7 +601,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private _scheduleRefresh(): Promise<void> {
     if (this.refreshPromise) return this.refreshPromise
     if (this.isClosingIndex) return Promise.reject(this._closingError())
-    if (this.writerFenced) return Promise.reject(this._lockLostError())
+    if (this.writerFenced && !this._tryRecoverFromFence()) {
+      return Promise.reject(this._lockLostError())
+    }
 
     const refresh = this._enqueue(() => this._refreshIndex())
     this.refreshPromise = refresh
@@ -550,36 +637,6 @@ export class TurboVecAdapter extends BaseDBAdapter {
     })
   }
 
-  private async _appendMutation(
-    tx: HyperDBTransaction,
-    operation: string,
-    documentIds: string[],
-    now: Date
-  ): Promise<number> {
-    const state = await tx.get<WorkspaceStateRecord>(this.workspaceStateTable, {
-      key: WORKSPACE_STATE_KEY
-    })
-    const revision = (state?.revision || 0) + 1
-    if (revision > UINT32_MAX) {
-      throw new QvacErrorRAG({
-        code: ERR_CODES.DB_OPERATION_FAILED,
-        adds: 'RAG workspace revision exhausted uint32 range'
-      })
-    }
-    await tx.insert(this.mutationsTable, {
-      revision,
-      operation,
-      documentIds,
-      createdAt: now
-    })
-    await tx.insert(this.workspaceStateTable, {
-      key: WORKSPACE_STATE_KEY,
-      revision,
-      updatedAt: now
-    })
-    return revision
-  }
-
   private async _ensureNativeIdRecord(
     tx: HyperDBTransaction,
     documentId: string,
@@ -608,7 +665,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (this.indexUnavailable) return
 
     const [config, currentRevision] = await this.storage.withSnapshot((snapshot) =>
-      Promise.all([this.storage.readConfig(snapshot), this._readCurrentRevision(snapshot)])
+      Promise.all([this.storage.readConfig(snapshot), this.storage.readCurrentRevision(snapshot)])
     )
     if (!config) return
 
@@ -630,25 +687,34 @@ export class TurboVecAdapter extends BaseDBAdapter {
   private async _recoverIndex(dimension: number): Promise<void> {
     if (this.indexUnavailable) return
 
-    const currentRevision = await this.storage.withSnapshot((snapshot) =>
-      this._readCurrentRevision(snapshot)
+    const { currentRevision, currentVectorCount } = await this.storage.withSnapshot(
+      async (snapshot) => {
+        const [currentRevision, vectors] = await Promise.all([
+          this.storage.readCurrentRevision(snapshot),
+          this.storage.findEntries<VectorRecord>(snapshot, this.storage.vectorsTable)
+        ])
+        return { currentRevision, currentVectorCount: vectors.length }
+      }
     )
-    if (this.checkpointDir) {
+    if (this.checkpointWorkspaceDir) {
       try {
         const manifest = this._readManifest()
         if (
           manifest &&
+          manifest.databaseIdentity === this.databaseIdentity &&
           manifest.dimension === dimension &&
           manifest.mappingVersion === ID_MAPPING_VERSION &&
           manifest.revision <= currentRevision &&
           (manifest.storage === this.preferredStorage || manifest.storage === this.fallbackStorage)
         ) {
-          const loaded = this.indexProvider.load(path.join(this.checkpointDir, manifest.snapshot))
-          if (loaded.dim !== dimension) {
+          const loaded = this.indexProvider.load(
+            path.join(this.checkpointWorkspaceDir, manifest.snapshot)
+          )
+          if (loaded.dim !== dimension || loaded.length !== manifest.vectorCount) {
             loaded.dispose()
             throw new QvacErrorRAG({
               code: ERR_CODES.DB_OPERATION_FAILED,
-              adds: 'TurboVec checkpoint dimension does not match its manifest'
+              adds: 'TurboVec checkpoint does not match its manifest'
             })
           }
           this.index?.dispose()
@@ -657,11 +723,14 @@ export class TurboVecAdapter extends BaseDBAdapter {
           this.indexRevision = manifest.revision
           await this._loadRuntimeMappings()
           if (
-            currentRevision === manifest.revision ||
+            (currentRevision === manifest.revision &&
+              currentVectorCount === manifest.vectorCount) ||
             (await this._replayMutations(manifest.revision, currentRevision))
           ) {
-            this.needsRecovery = false
-            return
+            if (this.index.length === currentVectorCount) {
+              this.needsRecovery = false
+              return
+            }
           }
         }
       } catch (error) {
@@ -681,7 +750,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       this.index = null
       this.idToDocument.clear()
       this.indexRevision = await this.storage.withSnapshot((snapshot) =>
-        this._readCurrentRevision(snapshot)
+        this.storage.readCurrentRevision(snapshot)
       )
       this.needsRecovery = false
       return 0
@@ -689,9 +758,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
     const [vectors, currentRevision] = await this.storage.withSnapshot((snapshot) =>
       Promise.all([
         this.storage.findEntries<VectorRecord>(snapshot, this.storage.vectorsTable),
-        this._readCurrentRevision(snapshot)
+        this.storage.readCurrentRevision(snapshot)
       ])
     )
+    this.storage.clearCaches()
     const nextMappings = new Map<bigint, string>()
     const nativeIdsByDocument = new Map<string, NativeId>()
     const batchSize = Math.max(1, this.BATCH_SIZE)
@@ -765,13 +835,17 @@ export class TurboVecAdapter extends BaseDBAdapter {
         const documentIds = new Set<string>()
         for (const mutation of mutations) {
           if (mutation.revision !== expectedRevision) return false
-          if (mutation.operation !== DELETE_OPERATION && mutation.operation !== UPSERT_OPERATION) {
+          if (
+            mutation.operation !== DELETE_MUTATION_OPERATION &&
+            mutation.operation !== UPSERT_MUTATION_OPERATION
+          ) {
             return false
           }
           for (const documentId of mutation.documentIds) documentIds.add(documentId)
           expectedRevision++
         }
 
+        this.storage.evictDocuments(Array.from(documentIds))
         const replayDocuments = await Promise.all(
           Array.from(documentIds, async (documentId) => {
             const nativeId = this._nativeIdForDocument(documentId)
@@ -782,14 +856,17 @@ export class TurboVecAdapter extends BaseDBAdapter {
           })
         )
         const nextMappings = new Map(this.idToDocument)
+        const nativeIdsByDocument = new Map<string, NativeId>()
         for (const replay of replayDocuments) {
           if (replay.vector) {
             this._assertMapping(nextMappings, replay.nativeId.value, replay.documentId)
+            nativeIdsByDocument.set(replay.documentId, replay.nativeId)
           }
         }
 
         // All HyperDB reads complete before the live index is touched. The
         // synchronous section below cannot be observed halfway through by a search.
+        await this._persistMissingMappings(nativeIdsByDocument, nextMappings)
         this._assertWriterOwnership()
         for (const replay of replayDocuments) {
           if (this.index!.contains(replay.nativeId.value)) {
@@ -965,18 +1042,11 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
   }
 
-  private async _readCurrentRevision(reader: HyperDBReader): Promise<number> {
-    const state = await reader.get<WorkspaceStateRecord>(this.workspaceStateTable, {
-      key: WORKSPACE_STATE_KEY
-    })
-    return state?.revision || 0
-  }
-
   private _markDirty(): void {
     this.dirty = true
     this.mutationsSinceCheckpoint++
     if (
-      this.checkpointDir &&
+      this.checkpointWorkspaceDir &&
       this.mutationsSinceCheckpoint >= this.checkpointEveryMutations &&
       !this.checkpointScheduled
     ) {
@@ -993,7 +1063,8 @@ export class TurboVecAdapter extends BaseDBAdapter {
 
   private async _checkpoint(): Promise<boolean> {
     if (
-      !this.checkpointDir ||
+      !this.checkpointWorkspaceDir ||
+      !this.databaseIdentity ||
       !this.index ||
       !this.dirty ||
       !this.activeStorage ||
@@ -1002,10 +1073,10 @@ export class TurboVecAdapter extends BaseDBAdapter {
       return false
     }
     this._assertWriterOwnership()
-    fs.mkdirSync(this.checkpointDir, { recursive: true })
+    fs.mkdirSync(this.checkpointWorkspaceDir, { recursive: true })
     const checkpointId = `${this.lockOwner.slice(0, 12)}-${Date.now()}`
     const snapshot = `index-${this.indexRevision}-${checkpointId}.tvim`
-    const snapshotPath = path.join(this.checkpointDir, snapshot)
+    const snapshotPath = path.join(this.checkpointWorkspaceDir, snapshot)
     const temporarySnapshot = `${snapshotPath}.tmp`
     const manifestPath = this._manifestPath()
     const temporaryManifest = `${manifestPath}.tmp-${checkpointId}`
@@ -1017,7 +1088,9 @@ export class TurboVecAdapter extends BaseDBAdapter {
 
       const manifest: CheckpointManifest = {
         version: MANIFEST_VERSION,
+        databaseIdentity: this.databaseIdentity,
         revision: this.indexRevision,
+        vectorCount: this.index.length,
         dimension: this.index.dim,
         storage: this.activeStorage,
         mappingVersion: ID_MAPPING_VERSION,
@@ -1057,25 +1130,31 @@ export class TurboVecAdapter extends BaseDBAdapter {
     if (
       parsed.version !== MANIFEST_VERSION ||
       !Number.isInteger(parsed.revision) ||
+      !Number.isInteger(parsed.vectorCount) ||
+      parsed.vectorCount < 0 ||
       !Number.isInteger(parsed.dimension) ||
+      typeof parsed.databaseIdentity !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(parsed.databaseIdentity) ||
+      parsed.databaseIdentity !== this.databaseIdentity ||
       typeof parsed.snapshot !== 'string' ||
+      !/^index-\d+-[a-f0-9]{12}-\d+\.tvim$/.test(parsed.snapshot) ||
       typeof parsed.storage !== 'string' ||
       parsed.mappingVersion !== ID_MAPPING_VERSION
     ) {
       return null
     }
-    if (!fs.existsSync(path.join(this.checkpointDir!, parsed.snapshot))) return null
+    if (!fs.existsSync(path.join(this.checkpointWorkspaceDir!, parsed.snapshot))) return null
     return parsed
   }
 
   private _manifestPath(): string {
-    return path.join(this.checkpointDir!, 'manifest.json')
+    return path.join(this.checkpointWorkspaceDir!, 'manifest.json')
   }
 
   private _syncCheckpointDirectory(): boolean {
     let directoryFd: number | null = null
     try {
-      directoryFd = fs.openSync(this.checkpointDir!, 'r')
+      directoryFd = fs.openSync(this.checkpointWorkspaceDir!, 'r')
       fs.fsyncSync(directoryFd)
       return true
     } catch (error) {
@@ -1110,18 +1189,19 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private _removeOldSnapshots(current: string): void {
-    for (const entry of fs.readdirSync(this.checkpointDir!)) {
+    for (const entry of fs.readdirSync(this.checkpointWorkspaceDir!)) {
       if (entry.startsWith('index-') && entry.endsWith('.tvim') && entry !== current) {
         this._assertWriterOwnership()
-        fs.unlinkSync(path.join(this.checkpointDir!, entry))
+        fs.unlinkSync(path.join(this.checkpointWorkspaceDir!, entry))
       }
     }
   }
 
   private _acquireLock(): void {
-    if (!this.checkpointDir) return
-    fs.mkdirSync(this.checkpointDir, { recursive: true })
-    const lockPath = path.join(this.checkpointDir, 'writer.lock')
+    if (!this.checkpointWorkspaceDir) return
+    fs.mkdirSync(this.checkpointDir!, { recursive: true })
+    fs.mkdirSync(this.checkpointWorkspaceDir, { recursive: true })
+    const lockPath = path.join(this.checkpointWorkspaceDir, 'writer.lock')
     let lastError: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -1167,10 +1247,11 @@ export class TurboVecAdapter extends BaseDBAdapter {
       timerRuntime.clearInterval(this.lockHeartbeat)
       this.lockHeartbeat = null
     }
-    if (!this.checkpointDir || !this.ownsLock) return
-    const lockPath = path.join(this.checkpointDir, 'writer.lock')
+    if (!this.checkpointWorkspaceDir || !this.ownsLock) return
+    const lockPath = path.join(this.checkpointWorkspaceDir, 'writer.lock')
     this.ownsLock = false
-    if (this._readLockRecord(lockPath)?.owner === this.lockOwner) {
+    const result = this._readLockRecord(lockPath)
+    if (result.state === 'valid' && result.record.owner === this.lockOwner) {
       this._removeLockArtifact(lockPath)
     }
   }
@@ -1211,21 +1292,23 @@ export class TurboVecAdapter extends BaseDBAdapter {
     }
   }
 
-  private _readLockRecord(lockPath: string): LockRecord | null {
+  private _readLockRecord(lockPath: string): LockRecordReadResult {
     try {
       const parsed = JSON.parse(
         fs.readFileSync(path.join(lockPath, 'owner.json'), 'utf8')
       ) as LockRecord
-      if (typeof parsed.owner !== 'string' || !Number.isFinite(parsed.updatedAt)) return null
-      return parsed
+      if (typeof parsed.owner !== 'string' || !Number.isFinite(parsed.updatedAt)) {
+        return { state: 'uncertain' }
+      }
+      return { state: 'valid', record: parsed }
     } catch {
-      return null
+      return { state: 'uncertain' }
     }
   }
 
   private _readLockTimestamp(lockPath: string): number {
-    const record = this._readLockRecord(lockPath)
-    if (record) return record.updatedAt
+    const result = this._readLockRecord(lockPath)
+    if (result.state === 'valid') return result.record.updatedAt
     try {
       return fs.statSync(lockPath).mtimeMs
     } catch {
@@ -1247,13 +1330,17 @@ export class TurboVecAdapter extends BaseDBAdapter {
   }
 
   private _assertWriterOwnership(): void {
-    if (!this.checkpointDir) return
-    const lockPath = path.join(this.checkpointDir, 'writer.lock')
-    if (
-      this.writerFenced ||
-      !this.ownsLock ||
-      this._readLockRecord(lockPath)?.owner !== this.lockOwner
-    ) {
+    if (!this.checkpointWorkspaceDir) return
+    const lockPath = path.join(this.checkpointWorkspaceDir, 'writer.lock')
+    if (this.writerFenced || !this.ownsLock) {
+      this._fenceWriter()
+      throw this._lockLostError()
+    }
+    const result = this._readLockRecord(lockPath)
+    if (result.state === 'uncertain') {
+      throw this._lockUncertainError()
+    }
+    if (result.record.owner !== this.lockOwner) {
       this._fenceWriter()
       throw this._lockLostError()
     }
@@ -1269,10 +1356,29 @@ export class TurboVecAdapter extends BaseDBAdapter {
     this.needsRecovery = true
   }
 
+  private _tryRecoverFromFence(): boolean {
+    if (this.isClosingIndex || !this.writerFenced) return !this.writerFenced
+    try {
+      this._acquireLock()
+    } catch {
+      return false
+    }
+    this.writerFenced = false
+    this.logger.warn('TurboVec writer lock was re-acquired; recovering the fenced index')
+    return true
+  }
+
   private _lockLostError(): QvacErrorRAG {
     return new QvacErrorRAG({
       code: ERR_CODES.DB_OPERATION_FAILED,
       adds: 'TurboVec writer lock ownership was lost'
+    })
+  }
+
+  private _lockUncertainError(): QvacErrorRAG {
+    return new QvacErrorRAG({
+      code: ERR_CODES.DB_OPERATION_FAILED,
+      adds: 'TurboVec writer lock ownership could not be confirmed'
     })
   }
 }
