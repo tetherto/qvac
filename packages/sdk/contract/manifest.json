@@ -1,6 +1,12 @@
 {
   "methods": [
     {
+      "name": "assessModelFit",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/assessModelFit.request",
+      "responseSchema": "schema.json#/$defs/assessModelFit.response"
+    },
+    {
       "name": "audioGenStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/audioGenStream.request",
