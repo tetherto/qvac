@@ -43,11 +43,9 @@ libFuzzer).
 ## Scope
 
 Scope is **every QVAC native addon** — all packages whose `package.json`
-declares `"addon": true` — **except the ONNX Runtime addons** (`onnx`,
-`ocr-onnx`), which are out of scope for this effort. The in-scope addons are
-C++20 Bare addons built with CMake + vcpkg on the centrally-pinned
-**clang-22 / libc++** toolchain, linked against `ggml` / `llama.cpp` /
-`whisper.cpp` / `stable-diffusion.cpp`.
+declares `"addon": true`. The in-scope addons are C++20 Bare addons built with
+CMake + vcpkg on the centrally-pinned **clang-22 / libc++** toolchain, linked
+against `ggml` / `llama.cpp` / `whisper.cpp` / `stable-diffusion.cpp`.
 
 ### Addon inventory
 
@@ -66,9 +64,6 @@ C++20 Bare addons built with CMake + vcpkg on the centrally-pinned
 | `transcription-parakeet` | parakeet | speech-to-text | ✅ |
 | `diffusion-cpp` | stable-diffusion.cpp | image / video generation | ✅ |
 | `fabric` | shared ggml + llama.cpp runtime host | infra (no direct input parsing) | ❌ |
-
-The ONNX Runtime addons (`onnx`, `ocr-onnx`) are intentionally excluded from
-this effort and are not listed above.
 
 Fuzzing targets **pure parse/transform functions** that consume
 attacker-influenceable bytes. It deliberately does **not** target full
@@ -357,7 +352,7 @@ rest come from vcpkg is what would put two Abseils in one link.
 `ports/abseil/` in `qvac-registry-vcpkg`, at version `20260526.0`. It replaces the
 previous onnxruntime-pinned port (`version-string: "onnxruntime"`, Abseil
 `20240722.0`) **at HEAD only**: both old entries stay in `versions/a-/abseil.json`,
-so `ocr-onnx` keeps resolving what it resolves today from its pinned baseline. The
+so anything on an older baseline keeps resolving what it resolves today. The
 manifest asks for `abseil[asan]` with `"version>=": "20260526.0"`, so the floor is
 stated where the dependency is declared rather than left to the baseline.
 
@@ -429,9 +424,9 @@ headers carry no stability promise. A FuzzTest bump should re-check the closure
 above (`rg '#include "(re2|util)/' fuzztest-src/fuzztest/`) before bumping the
 port.
 
-Nothing else resolves `re2` from this registry: `packages/onnx` and
-`packages/translation-nmtcpp` both route it to the Microsoft registry through
-their `vcpkg-configuration.json` allowlists.
+Nothing else resolves `re2` from this registry: `packages/translation-nmtcpp`
+routes it to the Microsoft registry through its `vcpkg-configuration.json`
+allowlist.
 
 ### The `fuzztest` registry port
 
