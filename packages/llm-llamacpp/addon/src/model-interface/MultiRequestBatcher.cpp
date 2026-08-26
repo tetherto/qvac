@@ -90,12 +90,17 @@ unsigned Request::remainingToFeed() const {
   if (!isPrefillComplete()) {
     // Text feeding stops at the head media barrier; the segment past it
     // only unblocks once the scheduler completes the barrier.
-    const size_t feedLimit =
-        pendingMediaBarriers.empty()
-            ? pendingPrefillTokens.size()
-            : std::min(
-                  pendingPrefillTokens.size(),
-                  pendingMediaBarriers.front().afterTextTokens);
+    size_t feedLimit = pendingMediaBarriers.empty()
+                           ? pendingPrefillTokens.size()
+                           : std::min(
+                                 pendingPrefillTokens.size(),
+                                 pendingMediaBarriers.front().afterTextTokens);
+    // ...and at the reasoning boundary, so a force-open template's opener is
+    // decoded only AFTER the driver has snapshotted the state before it.
+    if (prefillBoundaryPauseAt.has_value() &&
+        prefillFedCount < *prefillBoundaryPauseAt) {
+      feedLimit = std::min(feedLimit, *prefillBoundaryPauseAt);
+    }
     return feedLimit > prefillFedCount
                ? static_cast<unsigned>(feedLimit - prefillFedCount)
                : 0u;
@@ -180,6 +185,14 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
   slots_[seqId].emplace(
       seqId, std::move(plan), maxTokensPerSequence_, initialPos);
   return AddStatus::Ok;
+}
+
+void MultiRequestBatcher::setPrefillBoundaryPause(
+    uint32_t seqId, size_t index) {
+  if (!isValid(seqId)) {
+    return;
+  }
+  slots_[seqId]->prefillBoundaryPauseAt = index;
 }
 
 std::optional<uint32_t> MultiRequestBatcher::firstFreeSeqId() const {
@@ -284,14 +297,26 @@ void finishPrefillIfComplete(
 
 void advanceReqPrefill(
     Request& req, llama_pos chunk,
-    const MultiRequestBatcher::PrefillCompleteFn& onPrefillComplete) {
+    const MultiRequestBatcher::PrefillCompleteFn& onPrefillComplete,
+    const MultiRequestBatcher::PrefillBoundaryPauseFn& onBoundaryPause) {
   req.prefillFedCount += static_cast<size_t>(chunk);
+  // Fires before `finishPrefillIfComplete` so a boundary that coincides with
+  // the end of prefill still anchors before the request is handed on. Cleared
+  // first so a throw out of the callback cannot fire it twice.
+  if (req.prefillBoundaryPauseAt.has_value() &&
+      req.prefillFedCount >= *req.prefillBoundaryPauseAt) {
+    req.prefillBoundaryPauseAt.reset();
+    if (onBoundaryPause) {
+      onBoundaryPause(req.seqId, req.currentPos);
+    }
+  }
   finishPrefillIfComplete(req, onPrefillComplete);
 }
 } // namespace
 
 void MultiRequestBatcher::advance(
-    unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete) {
+    unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete,
+    const PrefillBoundaryPauseFn& onBoundaryPause) {
   const llama_pos chunk = static_cast<llama_pos>(chunkSize);
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
@@ -300,7 +325,7 @@ void MultiRequestBatcher::advance(
       req.stopReason = StopReason::ContextOverflow;
     }
     if (!req.isPrefillComplete()) {
-      advanceReqPrefill(req, chunk, onPrefillComplete);
+      advanceReqPrefill(req, chunk, onPrefillComplete, onBoundaryPause);
     } else {
       req.hasUnfedSample = false;
     }

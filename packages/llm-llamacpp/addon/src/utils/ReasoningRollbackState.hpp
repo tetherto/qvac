@@ -152,13 +152,17 @@ public:
   void seedPrefillEntryForTesting(llama_pos nPast) noexcept;
 
 private:
+  // Shared first-use reserve for `postReasoningTokens_`. Both writers run once
+  // per generated token, so neither should walk the vector up from zero.
+  void reserveReplayCapacity();
+
   RecurrentStateSnapshot prefillEntry_;
   RecurrentStateSnapshot reasoningBoundary_;
   std::vector<llama_token> postReasoningTokens_;
-  // Count of structural tokens at the head of `postReasoningTokens_`
-  // that must survive `clipPostReasoningTokens`. Incremented by
-  // `appendPostReasoningToken`; reset to zero whenever the buffer is
-  // cleared.
+  // Count of pre-reasoning preamble tokens at the head of
+  // `postReasoningTokens_` that must survive `clipPostReasoningTokens`.
+  // Incremented by `appendPostReasoningToken`; reset to zero whenever the
+  // buffer is cleared. No structural marker is ever seeded here.
   size_t seededPostReasoningCount_ = 0;
   bool capturingPostReasoning_ = false;
 };

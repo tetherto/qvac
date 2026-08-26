@@ -64,17 +64,26 @@ void ReasoningRollbackState::recordPostReasoningToken(llama_token id) {
   // Called once per generated answer token. Seed a capacity on first use so
   // a long answer does not walk the vector up from zero one realloc at a
   // time; geometric growth covers it from there.
+  reserveReplayCapacity();
+  postReasoningTokens_.push_back(id);
+}
+
+void ReasoningRollbackState::reserveReplayCapacity() {
   if (postReasoningTokens_.capacity() == 0) {
     constexpr size_t kInitialReplayCapacity = 128;
     postReasoningTokens_.reserve(kInitialReplayCapacity);
   }
-  postReasoningTokens_.push_back(id);
 }
 
 void ReasoningRollbackState::appendPostReasoningToken(llama_token id) {
   if (id == LLAMA_TOKEN_NULL) {
     return;
   }
+  // Runs once per generated token until the reasoning span opens, so it wants
+  // the same initial reserve as the captured-tail path. It cannot be capped:
+  // every seeded token is pre-reasoning preamble that `compact()` must replay,
+  // and dropping one would leave `newPos` short of live KV.
+  reserveReplayCapacity();
   postReasoningTokens_.push_back(id);
   ++seededPostReasoningCount_;
 }

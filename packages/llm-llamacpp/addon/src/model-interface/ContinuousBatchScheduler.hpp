@@ -515,6 +515,8 @@ private:
   void serviceNextMediaSegmentLocked(std::unique_lock<std::mutex>* lock);
   void failSlotLocked(uint32_t seqId, std::exception_ptr error);
   [[nodiscard]] MultiRequestBatcher::PrefillCompleteFn prefillCompleteFn();
+  [[nodiscard]] MultiRequestBatcher::PrefillBoundaryPauseFn
+  prefillBoundaryPauseFn();
   /// Extract finished requests and run the full per-slot drain (terminal
   /// driver hook with output flushing, stats, cache save, KV clear). A
   /// cache-save throw is contained per slot: it fails only that slot's
@@ -642,7 +644,10 @@ private:
   std::vector<uint64_t> pendingGroupCancels_;
   bool clearRequested_ = false;
   /// Set while a step has dropped `mutex_` around work that owns a slot; see
-  /// `TeardownDeferGuard`. Worker-thread only, so it needs no atomicity: the
+  /// `TeardownDeferGuard`. Written only by the worker and only while `mutex_`
+  /// is held (the guard is declared before `StepUnlockGuard`, so it flips
+  /// before the release and back after the reacquire); `cancel`, `clear`,
+  /// `cancelGroupQueued` and `submitLocked` read it under the same lock. So it
   /// only writer is the thread holding `mutex_` when the window opens.
   bool teardownDeferred_ = false;
   /// Live tagged groups, so a cancel can find a group that holds no slot yet.

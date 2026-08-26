@@ -212,6 +212,31 @@ public:
         "SequenceDriver::evalMediaSegment: driver stages no media segments");
   }
 
+  /// Token index within this prefill where feeding must pause so the driver
+  /// can anchor its reasoning-compaction boundary on a real decode stop.
+  /// `-1` means no pause is needed.
+  ///
+  /// A full-state snapshot only describes the moment it was taken, so a
+  /// force-open template (whose rendered prompt ends with `<think>\n`) has to
+  /// be stopped BEFORE those tokens or the restored prefix still opens a
+  /// reasoning block. The single-prompt prefill loop caps its own chunk; the
+  /// batch path has to be told, because its chunk size is global across slots.
+  /// `0` means the boundary sits before the first decoded token, so the
+  /// scheduler fires `onPrefillBoundaryPause` once at admission instead.
+  [[nodiscard]] virtual llama_pos
+  prefillBoundaryPauseIndex(llama_pos prefillLen) const {
+    (void)prefillLen;
+    return -1;
+  }
+
+  /// Fired when prefill has decoded exactly up to the index reported above,
+  /// with the absolute cursor at that point. The batch path does not advance
+  /// the driver's own cursor until `onPrefillComplete`, so the position is
+  /// passed rather than read back.
+  virtual void onPrefillBoundaryPause(llama_pos currentPos) {
+    (void)currentPos;
+  }
+
   /// Notify the driver that the scheduler has finished prefill-decoding
   /// `prefillTokenCount` tokens up to absolute position `currentPos`.
   virtual void

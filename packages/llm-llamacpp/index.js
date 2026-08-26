@@ -110,33 +110,51 @@ function normalizeGenerationParams(generationParams) {
     // fires for JavaScript callers and for objects built up dynamically. Those
     // used to be dropped in silence: a near miss like `n_predict` for `predict`
     // ran with the load-time default and looked like the override had applied.
-    const unknownKeys = Object.keys(generationParams).filter((key) => !GENERATION_PARAM_KEYS.has(key));
+    //
+    // `Reflect.ownKeys`, not `Object.keys`: the addon reads each parameter with
+    // a named get that walks the prototype chain, so a non-enumerable own key
+    // would pass an `Object.keys` check and still be applied. Symbol keys are
+    // skipped because a named get cannot reach them.
+    const source = generationParams;
+    const unknownKeys = Reflect.ownKeys(source).filter((key) => typeof key === "string" && !GENERATION_PARAM_KEYS.has(key));
     if (unknownKeys.length > 0) {
         throw new TypeError(`generationParams has unknown ${unknownKeys.length === 1 ? "key" : "keys"}: ` +
             `${unknownKeys.join(", ")}. Valid keys are ` +
             `${[...GENERATION_PARAM_KEYS].join(", ")}`);
     }
-    if (generationParams.remove_thinking_from_context !== undefined &&
-        typeof generationParams.remove_thinking_from_context !== "boolean") {
+    // Hand the addon a null-prototype copy carrying only own known keys. Both
+    // halves matter: copying own keys only means a polluted `Object.prototype`
+    // cannot smuggle a value past the check above, and the null prototype means
+    // the addon's named get has nowhere else to look.
+    const params = Object.create(null);
+    for (const key of GENERATION_PARAM_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(source, key))
+            continue;
+        const value = source[key];
+        if (value !== undefined)
+            params[key] = value;
+    }
+    const sanitized = params;
+    if (sanitized.remove_thinking_from_context !== undefined &&
+        typeof sanitized.remove_thinking_from_context !== "boolean") {
         throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
     }
-    const hasGrammar = typeof generationParams.grammar === "string" && generationParams.grammar.length > 0;
-    const hasJsonSchema = generationParams.json_schema !== undefined &&
-        generationParams.json_schema !== null &&
-        !(typeof generationParams.json_schema === "string" && generationParams.json_schema.length === 0);
+    const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
+    const hasJsonSchema = sanitized.json_schema !== undefined &&
+        sanitized.json_schema !== null &&
+        !(typeof sanitized.json_schema === "string" && sanitized.json_schema.length === 0);
     if (hasGrammar && hasJsonSchema) {
         throw new TypeError("generationParams.grammar and generationParams.json_schema are mutually exclusive");
     }
     if (!hasJsonSchema)
-        return generationParams;
+        return sanitized;
     let jsonSchemaString;
-    if (typeof generationParams.json_schema === "string") {
-        jsonSchemaString = generationParams.json_schema;
+    if (typeof sanitized.json_schema === "string") {
+        jsonSchemaString = sanitized.json_schema;
     }
-    else if (typeof generationParams.json_schema === "object" &&
-        !Array.isArray(generationParams.json_schema)) {
+    else if (typeof sanitized.json_schema === "object" && !Array.isArray(sanitized.json_schema)) {
         try {
-            jsonSchemaString = JSON.stringify(generationParams.json_schema);
+            jsonSchemaString = JSON.stringify(sanitized.json_schema);
         }
         catch (err) {
             throw new TypeError("generationParams.json_schema is not JSON-serializable: " + err.message);
@@ -145,7 +163,8 @@ function normalizeGenerationParams(generationParams) {
     else {
         throw new TypeError("generationParams.json_schema must be a JSON Schema object or a JSON Schema string");
     }
-    return { ...generationParams, json_schema: jsonSchemaString };
+    params.json_schema = jsonSchemaString;
+    return sanitized;
 }
 const VALIDATION_TYPES = ["none", "split", "dataset"];
 const DEFAULT_VALIDATION_FRACTION = 0.05;

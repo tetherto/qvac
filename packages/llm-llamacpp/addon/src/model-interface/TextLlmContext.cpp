@@ -1121,11 +1121,10 @@ void TextLlmContext::configureReasoningTags(
 llama_pos
 TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
   // Prefill-only (cache-warm) requests never enter generation and
-  // cannot emit reasoning tokens, so the hard-fail contract for an
-  // unsupported multi-token recurrent close marker does not apply.
-  // Short-circuit to the "no boundary" sentinel before consulting the
-  // policy so a cache warm on a model that would only fail at decode
-  // time still succeeds.
+  // cannot emit reasoning tokens, so there is no reasoning span to anchor
+  // a boundary for. Short-circuit to the "no boundary" sentinel before
+  // consulting the policy so a cache warm still succeeds on a model whose
+  // boundary capture would only be exercised at decode time.
   if (isPrefillOnlyRequest_) {
     return -1;
   }
@@ -1191,8 +1190,12 @@ void TextLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
-  // The full-state path must anchor where the decode actually stopped,
-  // which the prefill loop arranges via `computeRecurrentSnapshotBoundary`.
+  // The full-state path must anchor where the decode actually stopped, which
+  // both prefill drivers arrange: the single-prompt loop caps its own chunk at
+  // `computeRecurrentSnapshotBoundary`, and the batch path pauses on
+  // `prefillBoundaryPauseIndex` and calls `onPrefillBoundaryPause`, which
+  // captures directly. Reaching here on the full-state path therefore means
+  // the decode already stopped at the right place, so `nPast_` IS the anchor.
   // A pure-attention anchor is a bare position and nothing has to have
   // stopped there, so subtract the forced-open opener here: this is the
   // only capture site that path reaches.
@@ -1203,6 +1206,27 @@ void TextLlmContext::snapshotForRecurrentRollback() {
                 nPast_,
                 thinkingForcedOpen_,
                 reasoningState_.forcedOpenTokenCount);
+  captureReasoningBoundaryAt(anchorPos);
+}
+
+llama_pos
+TextLlmContext::prefillBoundaryPauseIndex(llama_pos prefillLen) const {
+  // Only the full-state path needs the decode to stop at the boundary; a
+  // pure-attention anchor is recorded after prefill with the opener already
+  // subtracted, so pausing the batch for it would split a chunk for nothing.
+  // `computeRecurrentSnapshotBoundary` applies both that gate and the
+  // prefill-only / feature gates, and returns -1 when no pause is wanted.
+  return computeRecurrentSnapshotBoundary(prefillLen);
+}
+
+void TextLlmContext::onPrefillBoundaryPause(llama_pos currentPos) {
+  // The batch path leaves `nPast_` at the admission cursor until
+  // `onPrefillComplete`, so the anchor comes from the caller. The gates were
+  // already applied when `prefillBoundaryPauseIndex` produced this stop.
+  captureReasoningBoundaryAt(currentPos);
+}
+
+void TextLlmContext::captureReasoningBoundaryAt(llama_pos anchorPos) {
   try {
     compactor_.snapshotAtPrefillBoundary(
         modelCtx_.lctx, seqId_, anchorPos, "[TextLlm]");
@@ -1291,23 +1315,19 @@ TextLlmContext::takeUserVisiblePerfSnapshot() {
 
 void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   // Recurrent / hybrid SSM models (Qwen3.5, Qwen3-Next, Jamba, ...) are
-  // supported via the snapshot + replay path in `compactThinkSpan` when
-  // the close marker is a single token: a full-state snapshot is
-  // captured at end-of-prefill, restored at end-of-generation, and the
-  // generated pre-reasoning prefix (when any), close marker, and
-  // post-reasoning tail are replayed through `llama_decode` so both KV
-  // halves stay consistent.
+  // supported via the snapshot + replay path in `compactThinkSpan`: a
+  // full-state snapshot is captured at the reasoning boundary, restored at
+  // end-of-generation, and the generated pre-reasoning prefix (when any) plus
+  // the post-reasoning tail are replayed through `llama_decode` so both KV
+  // halves stay consistent. Close-marker length decides nothing: no structural
+  // marker is replayed, so a marker that tokenises to several pieces is
+  // supported like any other.
   //
   // Uniform hard-fail contract (PR #2813): when the feature is on,
   // ANY inability to remove the reasoning span from cache surfaces to
   // the caller as `qvac_errors::StatusError`, thrown from
   // `compactThinkSpan` after local rollback so both driver metadata
   // and live KV agree on the recovery cursor:
-  //   - Unsupported recurrent template shape (multi-token close
-  //     marker) — thrown from
-  //     `snapshotForRecurrentRollback`; the wrapper restores the
-  //     pre-prompt checkpoint (or wipes the sequence and resets
-  //     positional accounting on restore underflow), and rethrows.
   //   - Prefill-boundary snapshot capture failure — thrown from
   //     `ReasoningBlockCompactor::snapshotAtPrefillBoundary`; the
   //     `snapshotForRecurrentRollback` wrapper catches, restores the

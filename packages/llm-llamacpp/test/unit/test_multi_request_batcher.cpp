@@ -1,6 +1,8 @@
 #include <chrono>
 #include <map>
 #include <set>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
@@ -1344,4 +1346,117 @@ TEST_F(MultiRequestBatcherTest, SamplingStampsObservedTokenTimes) {
   EXPECT_GE(*req->lastTokenAt, firstStamp)
       << "lastTokenAt must advance with every sample";
   EXPECT_EQ(req->generatedTokens.size(), 2u);
+}
+
+/// Regression: a force-open template ends its rendered prompt with the
+/// reasoning opener, and a recurrent / hybrid driver has to snapshot its full
+/// state BEFORE those tokens decode. The single-prompt prefill loop caps its
+/// own chunk for that; the batch path cannot, because the chunk is global
+/// across slots, so the stop rides on the request instead. Without it the
+/// whole prompt including the opener lands in one chunk, the snapshot is taken
+/// after it, and compaction rewinds to a prefix that still opens a `<think>`
+/// block the next cached turn resumes inside.
+TEST(MultiRequestBatcherPrefillBoundary, PauseSplitsTheChunkAtTheIndex) {
+  constexpr unsigned maxChunkSize = 32;
+  // Room for `initialPos` (a cache-loaded prefix) plus this prefill.
+  constexpr unsigned maxTokensPerSeq = 200;
+  constexpr size_t batchSize = 1;
+  constexpr int32_t batchCapacity = 64;
+  constexpr llama_pos initialPos = 100;
+  constexpr size_t pauseAt = 4;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  constexpr uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequestAt(seqId, {1, 2, 3, 4, 5, 6}, initialPos),
+      MultiRequestBatcher::AddStatus::Ok);
+  batcher.setPrefillBoundaryPause(seqId, pauseAt);
+
+  int pauseFired = 0;
+  llama_pos pausePos = -1;
+  const auto onPause = [&](uint32_t /*seqId*/, llama_pos currentPos) {
+    pauseFired++;
+    pausePos = currentPos;
+  };
+  int completeFired = 0;
+  const auto onComplete = [&](uint32_t /*seqId*/,
+                              llama_pos /*pos*/,
+                              size_t /*count*/) { completeFired++; };
+
+  auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, pauseAt)
+      << "feeding must stop at the boundary, not consume the whole prefill";
+  batcher.advance(result.chunkSize, onComplete, onPause);
+
+  EXPECT_EQ(pauseFired, 1);
+  EXPECT_EQ(pausePos, initialPos + static_cast<llama_pos>(pauseAt))
+      << "the anchor is the absolute cursor after the pre-opener tokens";
+  EXPECT_EQ(completeFired, 0) << "prefill still has the opener left to feed";
+
+  // The remaining tokens flow in the next step, and the pause is spent.
+  result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 2u);
+  batcher.advance(result.chunkSize, onComplete, onPause);
+
+  EXPECT_EQ(pauseFired, 1) << "the pause splits at most one chunk";
+  EXPECT_EQ(completeFired, 1);
+  EXPECT_TRUE(batcher.requestAt(seqId)->isPrefillComplete());
+}
+
+/// A boundary that lands exactly on the end of prefill must still anchor
+/// before the request is handed on, or `onPrefillComplete` would run first and
+/// take the end-of-prefill snapshot the pause exists to pre-empt.
+TEST(MultiRequestBatcherPrefillBoundary, PauseFiresBeforePrefillComplete) {
+  constexpr unsigned maxChunkSize = 32;
+  constexpr unsigned maxTokensPerSeq = 100;
+  constexpr size_t batchSize = 1;
+  constexpr int32_t batchCapacity = 64;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  constexpr uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequestAt(seqId, {1, 2, 3}, /*initialPos=*/0),
+      MultiRequestBatcher::AddStatus::Ok);
+  batcher.setPrefillBoundaryPause(seqId, 3);
+
+  std::vector<std::string> order;
+  const auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 3u);
+  batcher.advance(
+      result.chunkSize,
+      [&](uint32_t, llama_pos, size_t) { order.emplace_back("complete"); },
+      [&](uint32_t, llama_pos) { order.emplace_back("pause"); });
+
+  ASSERT_EQ(order.size(), 2u);
+  EXPECT_EQ(order[0], "pause");
+  EXPECT_EQ(order[1], "complete");
+}
+
+/// No pause set is the common case and must not change feeding at all.
+TEST(MultiRequestBatcherPrefillBoundary, NoPauseFeedsTheWholePrefill) {
+  constexpr unsigned maxChunkSize = 32;
+  constexpr unsigned maxTokensPerSeq = 100;
+  constexpr size_t batchSize = 1;
+  constexpr int32_t batchCapacity = 64;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  constexpr uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequestAt(seqId, {1, 2, 3, 4, 5, 6}, /*initialPos=*/0),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  int pauseFired = 0;
+  const auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.chunkSize, 6u);
+  batcher.advance(
+      result.chunkSize, {}, [&](uint32_t, llama_pos) { pauseFired++; });
+
+  EXPECT_EQ(pauseFired, 0);
+  EXPECT_TRUE(batcher.requestAt(seqId)->isPrefillComplete());
 }

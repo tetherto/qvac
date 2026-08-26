@@ -82,6 +82,48 @@ test('the error lists the keys a caller can use', async (t) => {
   t.ok(/Valid keys are .*\bpredict\b/.test(err.message), 'the message must name `predict`')
 })
 
+// The addon reads each param with a named get, which walks the prototype
+// chain. So an own-enumerable-keys check alone leaves two ways past it: a
+// non-enumerable own key, and anything reachable through the prototype,
+// including a polluted `Object.prototype`.
+test('generationParams validation cannot be bypassed through the prototype chain', async (t) => {
+  const forwarded = (model) => model.addon.runJob.lastArgs[0][0].generationParams
+
+  const nonEnumerable = {}
+  Object.defineProperty(nonEnumerable, 'n_predict', { value: 24, enumerable: false })
+  const nonEnumerableModel = createModel()
+  await t.exception.all(
+    () =>
+      nonEnumerableModel.run([{ role: 'user', content: 'a' }], {
+        generationParams: nonEnumerable
+      }),
+    /unknown key: n_predict/,
+    'a non-enumerable own key must still be rejected'
+  )
+  t.is(nonEnumerableModel.addon.runJob.called, false, 'it must not reach native admission')
+
+  // An inherited known key is not a caller intent this API exposes; honouring
+  // it would let a polluted prototype set sampler config.
+  const inheritedModel = createModel()
+  await inheritedModel.run([{ role: 'user', content: 'a' }], {
+    generationParams: Object.create({ predict: 999 })
+  })
+  t.is(forwarded(inheritedModel).predict, undefined, 'an inherited key must not be forwarded')
+
+  const pollutedModel = createModel()
+  Object.prototype.grammar = 'root ::= "pwned"' // eslint-disable-line no-extend-native
+  t.teardown(() => {
+    delete Object.prototype.grammar
+  })
+  await pollutedModel.run([{ role: 'user', content: 'a' }], {
+    generationParams: { temp: 0 }
+  })
+  const params = forwarded(pollutedModel)
+  t.is(params.temp, 0, "the caller's own key still arrives")
+  t.is(params.grammar, undefined, 'a polluted prototype must not reach the addon')
+  t.is(Object.getPrototypeOf(params), null, 'the forwarded object has nowhere else to look')
+})
+
 test('every documented generationParams key is accepted', async (t) => {
   const model = createModel()
 

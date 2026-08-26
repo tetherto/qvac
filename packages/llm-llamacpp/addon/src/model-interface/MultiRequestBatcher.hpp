@@ -37,6 +37,11 @@ struct Request {
   std::vector<MediaBarrier> pendingMediaBarriers;
   size_t prefillTokenCount = 0;
   size_t prefillFedCount = 0;
+  /// Text-token index where feeding pauses so the driver can anchor its
+  /// reasoning-compaction boundary on a real decode stop
+  /// (`SequenceDriver::prefillBoundaryPauseIndex`). Cleared once fired, so it
+  /// splits at most one chunk. `std::nullopt` means no pause.
+  std::optional<size_t> prefillBoundaryPauseAt;
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
   bool hasUnfedSample = false;
@@ -128,6 +133,11 @@ public:
 
   [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
+  /// Ask an admitted slot to pause prefill once it has fed `index` text
+  /// tokens, so its driver can anchor a reasoning boundary on a real decode
+  /// stop. No-op for an unknown seqId.
+  void setPrefillBoundaryPause(uint32_t seqId, size_t index);
+
   /// `logitIdx` is always >=0: sampleAndAppendIdle only fires for slots
   /// whose chunk consumed all unfed tokens, i.e. exactly when fillBatch set
   /// logits[idx]=1. Pass to llama_get_logits_ith(ctx, idx).
@@ -152,6 +162,10 @@ public:
   using KvClearFn = std::function<void(uint32_t seqId)>;
   using PrefillCompleteFn = std::function<void(
       uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount)>;
+  /// Fired when a slot's prefill has fed exactly `prefillBoundaryPauseAt`
+  /// tokens, with the absolute cursor at that point.
+  using PrefillBoundaryPauseFn =
+      std::function<void(uint32_t seqId, llama_pos currentPos)>;
 
   struct FillResult {
     unsigned chunkSize;
@@ -169,8 +183,9 @@ public:
   /// by the next sampleAndAppendIdle() call.
   [[nodiscard]] FillResult fillBatch(LlamaBatch& batch);
 
-  void
-  advance(unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
+  void advance(
+      unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {},
+      const PrefillBoundaryPauseFn& onBoundaryPause = {});
 
   /// A slot blocked on its head media barrier, ready for the scheduler
   /// to run `SequenceDriver::evalMediaSegment(mediaIndex, currentPos)`.

@@ -394,6 +394,23 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
             ")");
   }
   const uint32_t seqId = *maybeSeqId;
+  // The batcher frees its slot in `extractFinished`, which runs BEFORE
+  // `drainFinishedLocked` finalizes that seqId, and that finalize holds a
+  // reference into `slots_` across an unlock window. Re-admitting here would
+  // `emplace` over the `SlotState` it is still using. Treat a scheduler slot
+  // that has not been freed yet as occupied.
+  if (slots_[seqId].has_value()) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        "ContinuousBatchScheduler::submit: failed to add to batch "
+        "(MultiRequestBatcher::AddStatus=" +
+            std::to_string(
+                static_cast<int>(
+                    MultiRequestBatcher::AddStatus::ErrNoFreeSlot)) +
+            ")");
+  }
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
       tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
@@ -426,6 +443,22 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // Hybrid / recurrent full-state disk snapshot for cancel rollback
   // (their memory rejects partial `seq_rm`). No-op for pure-attention.
   driver->snapshotPreRequestRollbackAnchor();
+
+  // Where this prefill has to stop so the driver can anchor its reasoning
+  // boundary BEFORE a force-open template's `<think>` opener. The
+  // single-prompt loop caps its own chunk; here the chunk is global across
+  // slots, so the stop is carried on the request instead. `-1` means none, and
+  // an index at the end of prefill is already covered by `onPrefillComplete`.
+  const auto prefillTextTokens = static_cast<llama_pos>(plan.tokens.size());
+  const llama_pos boundaryPauseIndex =
+      driver->prefillBoundaryPauseIndex(prefillTextTokens);
+  if (boundaryPauseIndex == 0) {
+    // The whole prefill is the opener, so there is no chunk to split: the
+    // boundary is the admission cursor. Anchored here, before the size checks
+    // and admission below, so a capture failure unwinds through the same
+    // `cacheGuard` path as every other throw in this region.
+    driver->onPrefillBoundaryPause(driver->getNPast());
+  }
 
   const auto promptSize = static_cast<unsigned>(driver->getNPast()) +
                           static_cast<unsigned>(plan.totalPositions());
@@ -494,6 +527,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         "ContinuousBatchScheduler::submit: failed to add to batch "
         "(MultiRequestBatcher::AddStatus=" +
             std::to_string(static_cast<int>(status)) + ")");
+  }
+  if (boundaryPauseIndex > 0 && boundaryPauseIndex < prefillTextTokens) {
+    batcher_.setPrefillBoundaryPause(
+        seqId, static_cast<size_t>(boundaryPauseIndex));
   }
   const uint64_t admissionId = nextAdmissionId_++;
   // Counted before the slot is installed so a group is never briefly seen as
@@ -624,6 +661,27 @@ ContinuousBatchScheduler::prefillCompleteFn() {
           batcher_.markFinished(seqId);
         }
       };
+}
+
+MultiRequestBatcher::PrefillBoundaryPauseFn
+ContinuousBatchScheduler::prefillBoundaryPauseFn() {
+  // Throws the same way `prefillCompleteFn` does, and for the same reason:
+  // the capture site is `snapshotAtPrefillBoundary` under the uniform
+  // hard-fail contract. `workerLoop`'s catch routes the group through
+  // `failGroupLocked` -> `cancelSlotLocked(Skip)`.
+  return [this](uint32_t seqId, llama_pos currentPos) {
+    auto& slot = slots_[seqId];
+    if (!slot.has_value() || !slot->driver) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InternalError),
+          "ContinuousBatchScheduler::step: missing sequence driver for "
+          "prefill-boundary seqId " +
+              std::to_string(seqId));
+    }
+    slot->driver->onPrefillBoundaryPause(currentPos);
+  };
 }
 
 void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
@@ -894,7 +952,8 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       decodeTokens,
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
-  batcher_.advance(fillResult.chunkSize, prefillCompleteFn());
+  batcher_.advance(
+      fillResult.chunkSize, prefillCompleteFn(), prefillBoundaryPauseFn());
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
@@ -1094,7 +1153,12 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId, uint64_t admissionId) {
   // an unrelated successor) -- do nothing rather than touch that slot.
   const bool owned = slotOwnedByLocked(seqId, admissionId);
   if (owned) {
-    if (workerStarted_ && !stopping_) {
+    // `teardownDeferred_` means a step released `mutex_` while still holding a
+    // slot reference (see `TeardownDeferGuard`). Freeing that slot here would
+    // destroy the driver mid-finalize, so record instead, even during
+    // shutdown, where `~ContinuousBatchScheduler` joins and then clears every
+    // slot anyway.
+    if ((workerStarted_ && !stopping_) || teardownDeferred_) {
       // Notified while mutex_ is held so the wakeup cannot slip between the
       // worker's predicate check and its wait.
       recordPendingSlotCancel(seqId, admissionId);
@@ -1121,7 +1185,9 @@ bool ContinuousBatchScheduler::cancelGroupQueued(const uint64_t groupTag) {
   if (!taggedGroups_.contains(groupTag)) {
     return false;
   }
-  if (workerStarted_ && !stopping_) {
+  // See the note in `cancel`: settling a group frees its slots, so it must
+  // defer while a step owns one across an unlock window.
+  if ((workerStarted_ && !stopping_) || teardownDeferred_) {
     // Notified while mutex_ is held so the wakeup cannot slip between the
     // worker's predicate check and its wait.
     recordPendingGroupCancel(groupTag);
@@ -1323,7 +1389,9 @@ void ContinuousBatchScheduler::requestCancelAll() {
 
 void ContinuousBatchScheduler::clear() {
   std::scoped_lock lock(mutex_);
-  if (workerStarted_ && !stopping_) {
+  // See the note in `cancel`: `clearLocked` frees every slot, so it must defer
+  // while a step owns one across an unlock window.
+  if ((workerStarted_ && !stopping_) || teardownDeferred_) {
     clearRequested_ = true;
     workCv_.notify_all();
   } else {

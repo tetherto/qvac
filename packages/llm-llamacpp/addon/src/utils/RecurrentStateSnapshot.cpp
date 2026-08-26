@@ -78,7 +78,9 @@ bool replayTokensThroughDecoderImpl(
 
   const int32_t total = static_cast<int32_t>(tokens.size());
 
-  llama_batch batch = llama_batch_init(chunkSize, 0, 1);
+  // A replay is usually a short answer tail, so allocate for the work rather
+  // than for the context's full logical batch capacity.
+  llama_batch batch = llama_batch_init(std::min(chunkSize, total), 0, 1);
   bool ok = true;
   for (int32_t offset = 0; offset < total && ok; offset += chunkSize) {
     const int32_t end = std::min(offset + chunkSize, total);

@@ -155,6 +155,13 @@ public:
   void
   onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
 
+  /// `SequenceDriver` prefill-pause hooks. The batch path cannot cap its own
+  /// chunk at the reasoning boundary (the chunk is global across slots), so it
+  /// asks for the stop index and reports back when it lands there.
+  [[nodiscard]] llama_pos
+  prefillBoundaryPauseIndex(llama_pos prefillLen) const override;
+  void onPrefillBoundaryPause(llama_pos currentPos) override;
+
   void syncPosition(llama_pos currentPos) override;
 
   SequenceStepResult onLogitsReady(
@@ -278,6 +285,11 @@ private:
   // whose header no longer matches live memory.
   void snapshotForRecurrentRollback();
 
+  /// Capture + hard-fail rollback shared by `snapshotForRecurrentRollback`
+  /// (anchor derived from `nPast_`) and `onPrefillBoundaryPause` (anchor
+  /// supplied by the batcher, which has not advanced `nPast_` yet).
+  void captureReasoningBoundaryAt(llama_pos anchorPos);
+
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
   CommonSamplerPtr smpl_;
@@ -361,10 +373,10 @@ private:
   // (prefill-only) request. Captured in `preparePrefill` from the
   // scheduler / single-prompt caller and consulted by the recurrent
   // reasoning snapshot path: prefill-only requests never enter
-  // generation and cannot emit reasoning tokens, so the hard-fail
-  // contract for unsupported multi-token recurrent close markers does
-  // not apply. Prevents cache-warm calls from failing on models that
-  // would only fail at generation time.
+  // generation and cannot emit reasoning tokens, so there is no
+  // reasoning boundary to anchor. Prevents cache-warm calls from
+  // failing on models whose boundary capture would only be exercised
+  // at generation time.
   bool isPrefillOnlyRequest_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
