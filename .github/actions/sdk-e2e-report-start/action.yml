@@ -26,6 +26,10 @@ inputs:
     description: "Exclude-suite filter passed to the run"
     required: false
     default: ""
+  inference-provenance:
+    description: "Immutable inference source identity"
+    required: false
+    default: ""
 
 outputs:
   comment-ids:
@@ -46,6 +50,7 @@ runs:
         SUITE: ${{ inputs.suite }}
         FILTER: ${{ inputs.filter }}
         EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+        INFERENCE_PROVENANCE: ${{ inputs.inference-provenance }}
       with:
         script: |
           const family = process.env.FAMILY;
@@ -53,6 +58,7 @@ runs:
           const suite = process.env.SUITE || '';
           const filter = process.env.FILTER || '';
           const excludeSuite = process.env.EXCLUDE_SUITE || '';
+          const inferenceProvenance = process.env.INFERENCE_PROVENANCE || '';
 
           const pr = context.payload.pull_request?.number;
           if (!pr) {
@@ -68,6 +74,7 @@ runs:
           const fmt = (v) => (v && v.length > 0 ? `\`${v}\`` : '`(none)`');
           const configLine =
             `**Config:** suite=${fmt(suite)} · filter=${fmt(filter)} · exclude=${fmt(excludeSuite)}`;
+          const inferenceLine = `**Inference:** ${fmt(inferenceProvenance)}`;
 
           const marker = (p) => `<!-- sdk-e2e-report:pr=${pr}:family=${family}:platform=${p} -->`;
 
@@ -120,6 +127,7 @@ runs:
               `### QVAC E2E — \`${platform}\` — running`,
               `[View run](${runUrl})`,
               configLine,
+              inferenceLine,
             ].join('\n');
 
             const created = await github.rest.issues.createComment({

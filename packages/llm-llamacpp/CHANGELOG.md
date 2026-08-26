@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.47.0] - 2026-08-24
+
+### Added
+
+- Load configuration now accepts `load_mode` (`none`, `mmap`, `mlock`, `mmap+mlock`, `dio`) so callers can select the qvac-fabric model loading path explicitly.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with chat-template, sampling and load-mode API changes).
+- Load-fit normalization now validates load modes locally so fabric-thrown exceptions do not cross the native boundary on Windows.
+
+### Fixed
+
+- Reasoning-budget stop detection now preserves every template-provided thinking
+  end tag, so Qwen3-Coder and DeepSeek tool-call openers can end reasoning
+  without forced-close text corrupting the tool call.
+
+## [0.46.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
 ## [0.45.0] - 2026-08-18
 
 ### Changed
