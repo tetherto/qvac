@@ -349,6 +349,64 @@ safeTest(
   }
 )
 
+// Turn 1 is cut off by `n_predict` while still inside the reasoning span, so
+// nothing ever closed the block. Compaction has to drop the opener along with
+// the body: if the rewind left it in cache, the next cached turn would carry
+// on inside a reasoning block and emit a `</think>` it never opened.
+//
+// Qwen3-0.6B renders a generated-opener template, so the opener is a sampled
+// token seeded into the replay buffer rather than prompt text. Qwen3.5 covers
+// the force-open half of this on the hybrid path, in the multi-turn tests
+// below.
+safeTest(
+  'Qwen3 interrupted reasoning span leaves no opener for the next cached turn',
+  {
+    skip: isDarwinX64 || isWindowsX64,
+    timeout: 900_000
+  },
+  async (t) => {
+    const sessionPath = path.join(os.tmpdir(), `qvac-forced-open-${Date.now()}.bin`)
+    t.teardown(() => {
+      try {
+        require('bare-fs').unlinkSync(sessionPath)
+      } catch {}
+    })
+
+    const { inference } = await setupReasoningModel(t, false)
+
+    const messages1 = createInitialMessages()
+    // 24 tokens is not enough to finish a thinking block, so turn 1 stops
+    // inside the span.
+    const t1 = await runCompletionWithStats(inference, messages1, {
+      cacheKey: sessionPath,
+      generationParams: { predict: 24, remove_thinking_from_context: true }
+    })
+    t.is(t1.stats.stopReason, 'predictionLimit', 'turn 1 should stop inside the reasoning span')
+    t.ok(!t1.response.includes('</think>'), 'turn 1 should not have closed its reasoning block')
+    t.comment(`turn 1 (len=${t1.response.length}) stats: ${JSON.stringify(t1.stats)}`)
+
+    const t2 = await runCompletionWithStats(
+      inference,
+      createFollowUpMessages(messages1, stripReasoningForPrompt(t1.response)),
+      {
+        cacheKey: sessionPath,
+        generationParams: { remove_thinking_from_context: true }
+      }
+    )
+    t.comment(`turn 2 (len=${t2.response.length}): ${t2.response.slice(0, 300)}`)
+
+    t.ok(t2.response.length > 0, 'turn 2 should produce a response')
+
+    const openIndex = t2.response.indexOf('<think>')
+    const closeIndex = t2.response.indexOf('</think>')
+    t.ok(
+      closeIndex === -1 || (openIndex !== -1 && openIndex < closeIndex),
+      'turn 2 must not resume inside reasoning: any </think> needs its own <think> first ' +
+        `(open=${openIndex}, close=${closeIndex})`
+    )
+  }
+)
+
 // Explicit-true path: passing `remove_thinking_from_context: true`
 // reaffirms the default and pins the compaction plumbing regardless
 // of any future default change. Complements the "defaults on" test

@@ -832,18 +832,10 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       }
       if (wasInside && !nowInside) {
         // Defer end capture — the close-marker token has not yet been
-        // committed to the cache.
+        // committed to the cache. Nothing structural is seeded: the
+        // compacted cache keeps the preamble and the visible answer and
+        // no `<think>` for a `</think>` to balance.
         compactor_.requestCloseCapture();
-        // Seed the *canonical* close vocab token, not the sampled
-        // `tokenId` that tripped the detector. See the matching
-        // comment in TextLlmContext::onLogitsReady: on templates whose
-        // close carries surrounding whitespace padding (Qwen3's
-        // `"\n</think>\n\n"` being the canonical case) the string-
-        // search flip fires on the last padding token, not on the
-        // `</think>` vocab entry, so seeding `tokenId` would replay a
-        // padding piece and leave the SSM unbalanced on the next turn.
-        compactor_.recordCloseMarkerForReplay(
-            reasoningState_.cached_close_tag_tokens);
       }
     }
 
@@ -879,12 +871,6 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
       reasoningState_.inside_reasoning = false;
       compactor_.requestCloseCapture();
-      // EOS-substitution: the original EOS already hit
-      // `recordPostReasoningTokenIfActive` above with capture off, and
-      // the substituted close-tag token never does. Seed the replay
-      // buffer here so the SSM state restores with a balanced
-      // `<think>...</think>` span.
-      compactor_.recordCloseMarkerForReplay(tokenId);
 
       if (outputCallback) {
         std::string completeChars = utf8Buffer_.addToken(tokenStr);
@@ -1149,17 +1135,28 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
-  // Multimodal prefill decodes chunks (images + text) one at a time
-  // via `mtmd_helper_eval_chunk_single`, so the recurrent rollback
-  // anchor is the completed prefill state. For force-open templates
-  // this leaves the opener in the restored prefix. For generated-
-  // opener templates the decode loop seeds every sampled token up to
-  // the open-detection flip into the replay buffer before the close
-  // marker and visible tail, so the restored recurrent state still
-  // sees a balanced compacted reasoning block.
+  // Pure attention anchors on a bare position, so a force-open template
+  // simply subtracts its opener and the rewind lands before the reasoning
+  // block, matching the text path.
+  //
+  // The full-state path cannot do that here. Multimodal prefill decodes
+  // whole chunks through `mtmd_helper_eval_chunk_single`, and the opener
+  // is the tail of the last text chunk, so there is no decode stop before
+  // it to snapshot at. A recurrent or hybrid vision model on a force-open
+  // template therefore keeps the opener in the restored prefix. That
+  // combination has no supported model today; splitting an mtmd chunk to
+  // fix it would mean hand-decoding text the helper owns, including the
+  // M-RoPE positions it computes for the Qwen VL family.
+  const llama_pos anchorPos =
+      needsRecurrentSnapshot_
+          ? current_.pos
+          : qvac_lib_inference_addon_llama::utils::reasoningBoundaryTokenIndex(
+                current_.pos,
+                thinkingForcedOpen_,
+                reasoningState_.forcedOpenTokenCount);
   try {
     compactor_.snapshotAtPrefillBoundary(
-        modelCtx_.lctx, seqId_, current_.pos, "[MtmdLlm]");
+        modelCtx_.lctx, seqId_, anchorPos, "[MtmdLlm]");
   } catch (const qvac_errors::StatusError&) {
     // Boundary capture failed. Under the hard-fail contract, roll
     // back to the pre-prompt checkpoint (if we still have one) so no
@@ -1664,13 +1661,6 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     }
     if (wasInside && !nowInside) {
       compactor_.requestCloseCapture();
-      // Canonical close token, not the sampled `tokenId` — see the
-      // matching comment on the earlier normal-close site in this
-      // file (and the fuller rationale in TextLlmContext) for why
-      // string-buffer padding can defer the detector flip onto a
-      // template-newline token.
-      compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_tokens);
     }
   }
 
@@ -1682,7 +1672,6 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
     reasoningState_.inside_reasoning = false;
     compactor_.requestCloseCapture();
-    compactor_.recordCloseMarkerForReplay(tokenId);
     if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
       forcedTokens_.push_back(reasoningState_.cached_newline_token);
       forcedTokens_.push_back(reasoningState_.cached_newline_token);

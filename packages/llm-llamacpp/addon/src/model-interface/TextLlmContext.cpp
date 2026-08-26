@@ -484,14 +484,22 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     }
   }
 
-  // Snapshot boundary for the recurrent-rollback path. -1 disables
-  // the snapshot (pure-attention memory, feature off, no reasoning
-  // channel, or degenerate prompt where the boundary would fall
-  // outside the prefill range). When set, we cap each batch chunk so
-  // it never crosses the boundary, then take the snapshot exactly
-  // once when prefill has consumed up to that index.
+  // Snapshot boundary for the reasoning-rollback path. -1 disables
+  // the snapshot (feature off, no reasoning channel, or a degenerate
+  // prompt where the boundary would fall outside the prefill range).
+  // When set, we cap each batch chunk so it never crosses the boundary,
+  // then take the snapshot exactly once when prefill has consumed up to
+  // that index. Force-open templates put the boundary before the
+  // opener, so the chunk cap splits the last batch there.
   const llama_pos snapBoundary = computeRecurrentSnapshotBoundary(nTokens);
   bool snapshotTaken = false;
+  if (snapBoundary == 0) {
+    // Whole prefill is the forced opener: the boundary sits before the
+    // first decoded token, so the in-loop fire below (which only runs
+    // after a chunk) can never reach it.
+    snapshotForRecurrentRollback();
+    snapshotTaken = true;
+  }
 
   llama_pos count = nPast_;
   llama_pos tokenIndex = 0;
@@ -899,31 +907,10 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     }
     if (wasInside && !nowInside) {
       // Defer end capture — the close-marker token has not yet been
-      // committed to the cache.
+      // committed to the cache. Nothing structural is seeded here: the
+      // compacted cache carries the preamble and the visible answer, so
+      // there is no `<think>` left for a `</think>` to balance.
       compactor_.requestCloseCapture();
-      // Seed the recurrent replay buffer with the *canonical* close
-      // vocab token, not the sampled `tokenId` that triggered the
-      // detector flip.
-      //
-      // `updateReasoningBuffer` runs `find(state.tags.close)` against
-      // the streamed text buffer, and `state.tags.close` for chat
-      // templates like Qwen3's carries the surrounding whitespace
-      // padding (e.g. `"\n</think>\n\n"`). The flip therefore fires on
-      // the last piece that completes the padded string — typically a
-      // template newline token — while the actual `</think>` vocab
-      // entry was emitted 1–3 tokens earlier. Seeding that trailing
-      // padding token would drive the recurrent replay through a
-      // padding piece with no matching `</think>`, leaving the SSM
-      // in an unbalanced `<think>...` state on the next turn.
-      //
-      // `cached_close_tag_token` is populated from tokenising the
-      // stripped canonical close (`</think>`) at reasoning init and is
-      // non-null whenever the recurrent-capture policy admits us
-      // (both `close_is_single_token == true`), so it is always safe
-      // on this branch. `recordCloseMarkerForReplay` additionally
-      // no-ops on `LLAMA_TOKEN_NULL` and on non-recurrent paths.
-      compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_tokens);
     }
   }
 
@@ -942,12 +929,6 @@ SequenceStepResult TextLlmContext::onLogitsReady(
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
       reasoningState_.inside_reasoning = false;
       compactor_.requestCloseCapture();
-      // EOS-substitution: original EOS reached
-      // `recordPostReasoningTokenIfActive` above while capture was
-      // still inactive, and the substituted close-tag token never
-      // does. Seed the replay buffer here for the same reason as the
-      // normal-close path.
-      compactor_.recordCloseMarkerForReplay(tokenId);
       if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
@@ -1160,21 +1141,31 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
   case RecurrentReasoningBoundaryDecision::Disabled:
     return -1;
   }
-  // Snapshot at the END of prefill. For force-open templates the
-  // restored prefix already contains the reasoning opener. For
-  // generated-opener templates the restored prefix does NOT contain
-  // `<think>`, so the decode loop seeds every sampled token up to the
-  // open-detection flip into the replay buffer before the close marker
-  // and visible tail. That gives the recurrent state the same compacted
-  // structural shape (`preamble + <think> + </think> + answer`) without
-  // replaying the reasoning body.
-  //
-  // Pure-attention models keep the existing `seq_rm` path, unaffected.
-  const llama_pos boundary = prefillLen;
-  // Degenerate templates whose entire prefill IS the forced opener
-  // give a boundary of 0; snapshotting at nPast_ == 0 is a valid
-  // empty-sequence snapshot. Boundaries outside `[0, prefillLen]`
-  // would corrupt the chunk-cap logic — disable in that case.
+  // Only the full-state path needs a mid-prefill stop. A pure-attention
+  // anchor is a bare position, so it is recorded from
+  // `snapshotForRecurrentRollback` after prefill with the opener already
+  // subtracted; capping a chunk for it would split a batch for nothing.
+  if (!needsRecurrentSnapshot_) {
+    return -1;
+  }
+  // A full-state snapshot only describes the moment it was taken, so the
+  // anchor has to be a decode stop. Force-open templates end their prompt
+  // with `<think>\n`: stop before those tokens, or the restored prefix
+  // still opens a reasoning block and the next cached turn resumes inside
+  // it. Generated-opener templates have nothing to subtract, their opener
+  // is sampled after prefill and `compact()` clips it out of the replay.
+  const llama_pos boundary =
+      qvac_lib_inference_addon_llama::utils::reasoningBoundaryTokenIndex(
+          prefillLen,
+          thinkingForcedOpen_,
+          reasoningState_.forcedOpenTokenCount);
+  // Boundaries outside `[0, prefillLen]` would corrupt the chunk-cap
+  // logic. That happens when a cache hit left part of the opener behind
+  // and this prefill is shorter than the opener: there is no decode stop
+  // to anchor on, so fall back to the end-of-prefill capture in
+  // `snapshotForRecurrentRollback`. Compaction still drops the reasoning
+  // body; only the opener residue survives, which beats refusing to
+  // compact and leaving the whole span in cache.
   if (boundary < 0 || boundary > prefillLen) {
     return -1;
   }
@@ -1200,9 +1191,21 @@ void TextLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
+  // The full-state path must anchor where the decode actually stopped,
+  // which the prefill loop arranges via `computeRecurrentSnapshotBoundary`.
+  // A pure-attention anchor is a bare position and nothing has to have
+  // stopped there, so subtract the forced-open opener here: this is the
+  // only capture site that path reaches.
+  const llama_pos anchorPos =
+      needsRecurrentSnapshot_
+          ? nPast_
+          : qvac_lib_inference_addon_llama::utils::reasoningBoundaryTokenIndex(
+                nPast_,
+                thinkingForcedOpen_,
+                reasoningState_.forcedOpenTokenCount);
   try {
     compactor_.snapshotAtPrefillBoundary(
-        modelCtx_.lctx, seqId_, nPast_, "[TextLlm]");
+        modelCtx_.lctx, seqId_, anchorPos, "[TextLlm]");
   } catch (const qvac_errors::StatusError&) {
     // Boundary capture failed. Live memory currently holds the fully
     // decoded prompt (including the forced-open reasoning marker),
@@ -1643,7 +1646,6 @@ bool TextLlmContext::handleReasoningEOS(
   // `end < 0` — observable as multi-turn reasoning blocks no longer
   // being compacted when the model emits EOS instead of `</think>`.
   compactor_.requestCloseCapture();
-  compactor_.recordCloseMarkerForReplay(tokenId);
   compactor_.onCloseCommitted(nPast);
 
   // Inject 2 newlines after closing tag

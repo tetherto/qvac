@@ -95,31 +95,6 @@ void ReasoningBlockCompactor::setOpenSpan(llama_pos start) {
   thinkSpan_ = std::make_pair(start, static_cast<llama_pos>(-1));
 }
 
-void ReasoningBlockCompactor::recordCloseMarkerForReplay(llama_token id) {
-  if (!removeThinkingFromContext_ || !reasoningEnabled_) {
-    return;
-  }
-  if (!rollback_.hasReasoningBoundary()) {
-    return;
-  }
-  // Single-block policy, close side. `setOpenSpan` already ignores a second
-  // opener; without the mirror here a second `</think>` appends its marker at
-  // the TAIL, behind the captured answer rather than in the structural head,
-  // and the bumped seed count raises `clipPostReasoningTokens`' cap so the
-  // stray marker survives into the replay.
-  if (hasCapturedCloseSpan()) {
-    return;
-  }
-  rollback_.appendPostReasoningToken(id);
-}
-
-void ReasoningBlockCompactor::recordCloseMarkerForReplay(
-    const std::vector<llama_token>& ids) {
-  for (const llama_token id : ids) {
-    recordCloseMarkerForReplay(id);
-  }
-}
-
 void ReasoningBlockCompactor::recordPreReasoningToken(llama_token id) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_) {
     return;
@@ -138,11 +113,10 @@ void ReasoningBlockCompactor::recordPreReasoningToken(llama_token id) {
   if (thinkSpan_.has_value()) {
     return;
   }
-  // Same primitive as the close marker: append to the seeded prefix
-  // so `clipPostReasoningTokens` will preserve these tokens across a
-  // tail trim. Order in `postReasoningTokens_` is
-  // `[pre-reasoning..., close, captured tail...]`, matching the
-  // desired replay sequence after the boundary snapshot is restored.
+  // Append to the seeded prefix so `clipPostReasoningTokens` will
+  // preserve these tokens across a tail trim. Order in
+  // `postReasoningTokens_` is `[pre-reasoning..., captured tail...]`,
+  // matching the desired replay sequence after the boundary is restored.
   rollback_.appendPostReasoningToken(id);
 }
 
@@ -388,28 +362,32 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   //      starting at `snapshot.nPast`, so the new tokens occupy the
   //      cells immediately after the restored prefix.
   //
-  // The kept prefix is `[0, snapshot.nPast)`. For forced-open
-  // templates, that includes the opener residue documented by the
-  // snapshot-at-end-of-prefill strategy.
+  // The kept prefix is `[0, snapshot.nPast)`. For forced-open templates
+  // the boundary is anchored before the opener
+  // (`utils::reasoningBoundaryTokenIndex`), so no `<think>` residue
+  // survives the rewind on any model kind.
   //
   // `pos - end` is the captured post-reasoning tail length (the live
   // cache holds tokens at positions `[end, pos)`). The replay buffer
-  // additionally holds a seeded close marker at its head, which
-  // `clipPostReasoningTokens` preserves regardless of the cap; passing
-  // the captured-tail length here drops any captured tokens that a
-  // tail trim has since removed from the live cache,
-  // without touching the structural prefix.
+  // additionally holds the seeded pre-reasoning prefix at its head,
+  // which `clipPostReasoningTokens` preserves regardless of the cap;
+  // passing the captured-tail length here drops any captured tokens
+  // that a tail trim has since removed from the live cache, without
+  // touching that prefix.
   const llama_pos snapshotPos = rollback_.reasoningBoundaryNPast();
-  if (openEnded) {
-    // No close marker was ever captured, so the seeded prefix ends with the
-    // pieces that OPEN the block, and those live inside `[start, pos)`, the
-    // range being dropped. Replaying them would rebuild a `<think>` the next
-    // turn resumes from with nothing to close it. Keep only what sat before
-    // the span. The recurrent path hard-failed above, so this is the
-    // pure-attention case.
-    const llama_pos keep = start > snapshotPos ? start - snapshotPos : 0;
-    rollback_.clipSeededPrefix(static_cast<size_t>(keep));
-  }
+  // On a generated-opener template the seeded prefix ends with the pieces
+  // that OPEN the block: `recordPreReasoningToken` runs before
+  // `updateReasoningBuffer` flips, so the token completing `<think>` is
+  // seeded like any other pre-reasoning token. Those pieces live inside
+  // `[start, pos)`, the range being dropped, and replaying them would
+  // rebuild a `<think>` the next turn resumes from with nothing to close
+  // it. Keep only what sat before the span, on both the open-ended and
+  // the closed path — the compacted cache is `preamble + answer` with no
+  // reasoning scaffold of either kind, on every model. Forced-open
+  // templates seed nothing and anchor at `start`, so this is a no-op
+  // there.
+  const llama_pos keep = start > snapshotPos ? start - snapshotPos : 0;
+  rollback_.clipSeededPrefix(static_cast<size_t>(keep));
   rollback_.clipPostReasoningTokens(static_cast<size_t>(pos - end));
 
   if (!rewindOps.restoreBoundary(rollback_, ctx, seqId)) {

@@ -127,52 +127,24 @@ public:
     rollback_.recordPostReasoningToken(id);
   }
 
-  // Seeds the replay buffer with the reasoning close-marker token id.
-  // Called from the close-detection sites BEFORE
-  // `capturePendingThinkClose()` / `onCloseCommitted()` flip capture on,
-  // so the close marker lands at the head of the replay sequence ahead
-  // of any subsequent tokens recorded through `recordPostReasoningToken`.
-  // Gated on the recurrent-snapshot feature and an existing boundary
-  // snapshot — pure-attention models neither restore nor replay.
-  // Without this, the restored SSM state would contain either the
-  // force-opened opener or the replayed generated opener with no
-  // matching close marker before the answer tail, which is an
-  // unbalanced (out-of-distribution) recurrent state for hybrid models
-  // on the next turn.
-  //
-  // Callers MUST pass the *canonical* single-vocab close token
-  // (`reasoningState_.cached_close_tag_token`), not the sampled token
-  // that tripped the string-search detector flip in
-  // `updateReasoningBuffer`. Chat templates whose close carries
-  // surrounding whitespace padding (e.g. Qwen3's `"\n</think>\n\n"`)
-  // defer the flip onto a trailing padding piece — seeding that
-  // padding token would drive the recurrent replay through a newline
-  // with no matching `</think>`, defeating the balancing invariant
-  // this method exists to preserve. `cached_close_tag_token` is
-  // populated (non-null) whenever the recurrent-capture policy
-  // admits us (both `close_is_single_token == true`); passing
-  // `LLAMA_TOKEN_NULL` is silently dropped rather than seeded.
-  void recordCloseMarkerForReplay(llama_token id);
-
-  // Sequence overload. The canonical close marker does not always tokenise to
-  // one piece; seeding every piece is what lets a multi-token marker restore a
-  // balanced span. Null ids are skipped, an empty span is a no-op.
-  void recordCloseMarkerForReplay(const std::vector<llama_token>& ids);
-
   // Seeds the replay buffer with a token that was sampled BEFORE the
   // reasoning open marker fired (either template preamble that the
   // model emits before `<think>`, or one of the tokens that make up
   // the opener itself). Called for every sampled token while reasoning
-  // is not yet open, so on the recurrent / hybrid path the restored
-  // end-of-prefill snapshot can replay `[pre-reasoning tokens...,
-  // close token, captured tail...]` and land in a balanced
-  // `<think>...</think>` state without ever advancing the SSM through
-  // the discarded reasoning span.
+  // is not yet open, so the restored boundary can replay
+  // `[pre-reasoning tokens..., captured tail...]` and land on the
+  // preamble followed by the visible answer without ever advancing
+  // through the discarded reasoning span.
   //
-  // Gated identically to `recordCloseMarkerForReplay`: no-op on pure-
-  // attention paths, on features-off requests, and before the
-  // end-of-prefill boundary snapshot has been captured (nothing to
-  // restore against, so seeding would be pointless bookkeeping).
+  // No structural `<think>` / `</think>` marker is ever replayed: the
+  // boundary is anchored before the span on every model kind, so there
+  // is no open block for a close marker to balance. The opener pieces
+  // that reach this method on generated-opener templates are dropped by
+  // `compact()`'s `clipSeededPrefix` before the replay runs.
+  //
+  // No-op on features-off requests and before the boundary has been
+  // captured (nothing to restore against, so seeding would be pointless
+  // bookkeeping).
   // Additionally no-op once an open span has been recorded (i.e.
   // after the reasoning open flip) so callers can safely invoke this
   // for every token where `reasoningState_.inside_reasoning == false`

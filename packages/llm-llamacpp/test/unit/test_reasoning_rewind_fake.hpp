@@ -12,6 +12,8 @@
 // Call counts let a test pin ordering: a failed restore must not be followed
 // by a replay, otherwise the reported outcome would understate the damage.
 
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "model-interface/ReasoningBlockCompactor.hpp"
@@ -31,8 +33,13 @@ public:
   }
 
   bool replayPostReasoning(
-      RollbackState&, ::llama_context*, llama_seq_id) const override {
+      RollbackState& rollback, ::llama_context*, llama_seq_id) const override {
     ++replayCalls_;
+    // `compact()` clears the replay buffer through its RAII guard before
+    // returning, so a test can only see the replayed sequence from here.
+    replayed_.assign(
+        rollback.postReasoningTokens().begin(),
+        rollback.postReasoningTokens().end());
     return !failReplay_;
   }
 
@@ -48,11 +55,16 @@ public:
   int restoreCalls() const { return restoreCalls_; }
   int replayCalls() const { return replayCalls_; }
 
+  // The buffer as it stood when replay ran, so tests can pin the exact
+  // compacted-cache shape rather than just its length.
+  const std::vector<llama_token>& replayedTokens() const { return replayed_; }
+
 private:
   bool failRestore_ = false;
   bool failReplay_ = false;
   mutable int restoreCalls_ = 0;
   mutable int replayCalls_ = 0;
+  mutable std::vector<llama_token> replayed_;
 };
 
 } // namespace qvac_test

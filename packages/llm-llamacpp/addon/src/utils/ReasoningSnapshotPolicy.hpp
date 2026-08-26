@@ -13,16 +13,12 @@ namespace utils {
   return isRecurrent || isHybrid || isDeepSeekV4;
 }
 
-// Recurrent / hybrid compaction restores an end-of-prefill snapshot and
-// replays the post-reasoning tail. `thinkingForcedOpen` is retained as an
-// input for call-site symmetry only. Force-open templates already have the
-// opener in the restored prefix; generated-opener templates seed every
-// sampled token up to the open-detection flip into `postReasoningTokens_`
-// alongside the close marker, so the restored prefix no longer has to
-// contain `<think>`. There is no hard requirement left: the replay seeds the
-// whole `cached_close_tag_tokens` sequence, so a close marker that tokenises
-// to several pieces still restores a balanced `<think>...</think>` span and
-// marker length no longer decides whether compaction is possible.
+// Compaction rewinds to a boundary anchored before the reasoning span and
+// replays the tokens that sit outside it. `thinkingForcedOpen` is retained as
+// an input for call-site symmetry only: it decides where the boundary lands
+// (see `reasoningBoundaryTokenIndex`), not whether one is taken. Marker
+// length does not decide anything either, because no structural marker is
+// replayed at all.
 //
 // Every memory kind anchors a boundary now; only the anchor's form differs, a
 // state payload for recurrent / hybrid and a bare position for pure
@@ -33,6 +29,30 @@ enum class RecurrentReasoningBoundaryDecision {
   Disabled,
   Capture,
 };
+
+// Where the compaction boundary belongs, given the end of prefill.
+//
+// A force-open template ends its rendered prompt with the reasoning opener
+// (`<think>\n`), so those tokens are already decoded when prefill finishes.
+// Anchoring at the end of prefill would keep them: the rewind restores a
+// prefix that still opens a reasoning block, and the next cached turn resumes
+// inside it with nothing to close it. Anchor before the opener instead, so
+// every model kind rewinds to the same pre-reasoning cache.
+//
+// `prefillEnd` is a token index for the chunked text prefill and a position
+// for the multimodal one; both measure the same distance from the start of
+// the decode, so the same subtraction applies. Clamped at 0 for the
+// degenerate template whose entire rendered prompt IS the opener.
+[[nodiscard]] inline llama_pos reasoningBoundaryTokenIndex(
+    llama_pos prefillEnd, bool thinkingForcedOpen,
+    int forcedOpenTokenCount) noexcept {
+  if (!thinkingForcedOpen || forcedOpenTokenCount <= 0) {
+    return prefillEnd;
+  }
+  const llama_pos anchored =
+      prefillEnd - static_cast<llama_pos>(forcedOpenTokenCount);
+  return anchored > 0 ? anchored : 0;
+}
 
 [[nodiscard]] inline RecurrentReasoningBoundaryDecision
 recurrentReasoningBoundaryDecision(
@@ -46,9 +66,9 @@ recurrentReasoningBoundaryDecision(
     return RecurrentReasoningBoundaryDecision::Disabled;
   }
   // A multi-piece close used to be unsupported because replay could only seed
-  // the single token that tripped the close detector. It seeds the whole
-  // `cached_close_tag_tokens` sequence now, so marker length no longer
-  // decides whether compaction is possible.
+  // the single token that tripped the close detector. Nothing structural is
+  // replayed now, so marker length no longer decides whether compaction is
+  // possible.
   (void)closeMarkerSingleToken;
   return RecurrentReasoningBoundaryDecision::Capture;
 }
