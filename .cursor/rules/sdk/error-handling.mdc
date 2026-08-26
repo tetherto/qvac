@@ -115,13 +115,6 @@ Located in `@/utils/errors-client`
 - `RPCConnectionFailedError` - Connection failed
 - `UnknownRequestTypeError` - Unknown request type
 
-#### Provider/Delegation (50,400-50,599)
-- `ProviderStartFailedError` - Provider start failed
-- `ProviderStopFailedError` - Provider stop failed
-- `DelegateNoFinalResponseError` - No final response
-- `DelegateProviderError` - Delegated provider error
-- `DelegateConnectionFailedError` - Connection failed
-
 #### Build/Bundle (50,600-50,799)
 - `SDKNotFoundInNodeModulesError` - SDK not found
 - `WorkerFileNotFoundError` - Worker file not found
@@ -153,7 +146,6 @@ Located in `@/utils/errors-server`
 - `ModelAlreadyRegisteredError` - Already registered
 - `ModelNotFoundError` - Model not found
 - `ModelNotLoadedError` - Model not loaded
-- `ModelIsDelegatedError` - Model is delegated
 - `UnknownModelTypeError` - Unknown type
 
 #### Model Loading (52,200-52,399)
@@ -229,10 +221,6 @@ Three classes are wired today: `RequestIdConflictError`, `RequestNotFoundError`,
 - `FFmpegNotAvailableError` - FFmpeg not available
 - `AudioPlayerFailedError` - Audio player failed
 - `InvalidAudioChunkError` - Invalid audio chunk
-
-#### RPC/Delegation (Server-side) (53,700-53,899)
-- `DelegateNoFinalResponseError` - No final response
-- `DelegateConnectionFailedError` - Connection failed
 
 ## Adding New Error Types
 
@@ -335,7 +323,7 @@ try {
 - **50,001-52,000**: Client-side errors (2,000 codes)
   - 50,001-50,199: Response Validation
   - 50,200-50,399: RPC Communication
-  - 50,400-50,599: Provider/Delegation
+  - 50,400-50,599: Reserved for future use
   - 50,600-50,799: Build/Bundle
   - 50,800-52,000: Client-side Operation Wrappers (1,200 codes for future growth)
 
@@ -348,7 +336,7 @@ try {
   - 53,200-53,349: Cache Operations
   - 53,350-53,499: Config Operations
   - 53,500-53,699: System/Runtime
-  - 53,700-53,899: RPC/Delegation (Server-side)
+  - 53,700-53,899: RPC (Server-side)
   - 53,900-54,000: Reserved for future use
 
 ## Key Principles
