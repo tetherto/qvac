@@ -12,6 +12,9 @@ import { ValidationHelpers, type TestResult } from '@qvac/qvac-test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLoadModeMmap,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
   modelLoadOcrDoctr,
@@ -28,6 +31,9 @@ import {
 
 const modelLoadTests = [
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLoadModeMmap,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
   modelLoadOcrDoctr,
@@ -47,6 +53,9 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
 
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
+    [modelLoadLlmLoadModeNone.testId]: this.loadLlmWithLoadMode.bind(this),
+    [modelLoadLlmLoadModeMmap.testId]: this.loadLlmWithLoadMode.bind(this),
+    [modelLoadLlmLegacyNoMmapRejected.testId]: this.rejectLegacyNoMmap.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
     [modelLoadOcr.testId]: this.loadOcr.bind(this),
     [modelLoadOcrDoctr.testId]: this.loadOcrDoctr.bind(this),
@@ -259,6 +268,38 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         output:
           'Should have thrown ModelTypeRequiredError for plain-string modelSrc without modelType'
       }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+      return ValidationHelpers.validate(errorMsg, expectation)
+    }
+  }
+
+  async loadLlmWithLoadMode(
+    params: typeof modelLoadLlmLoadModeNone.params,
+    expectation: typeof modelLoadLlmLoadModeNone.expectation
+  ): Promise<TestResult> {
+    const { loadMode } = params as { loadMode: 'none' | 'mmap' }
+    const modelId = await loadModel({
+      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+      modelType: 'llamacpp-completion',
+      modelConfig: { verbosity: 0, ctx_size: 2048, load_mode: loadMode }
+    })
+    await unloadModel({ modelId })
+    return ValidationHelpers.validate(modelId, expectation)
+  }
+
+  async rejectLegacyNoMmap(
+    params: typeof modelLoadLlmLegacyNoMmapRejected.params,
+    expectation: typeof modelLoadLlmLegacyNoMmapRejected.expectation
+  ): Promise<TestResult> {
+    const { noMmap } = params as { noMmap: boolean }
+    try {
+      await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: { no_mmap: noMmap }
+      } as unknown as Parameters<typeof loadModel>[0])
+      return { passed: false, output: 'Legacy no_mmap should have been rejected' }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
       return ValidationHelpers.validate(errorMsg, expectation)

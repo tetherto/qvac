@@ -6556,6 +6556,14 @@ class Predict(RootModel[int]):
     ]
 
 
+class LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode(Enum):
+    none = "none"
+    mmap = "mmap"
+    mlock = "mlock"
+    mmap_mlock = "mmap+mlock"
+    dio = "dio"
+
+
 class LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity(Enum):
     number_0 = 0
     number_1 = 1
@@ -6705,9 +6713,12 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
         ),
     ] = None
-    no_mmap: Annotated[
-        bool | None,
-        Field(description="Disable memory-mapped model loading. Default false."),
+    load_mode: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode | None,
+        Field(
+            description="Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`).",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode",
+        ),
     ] = None
     verbosity: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigVerbosity | None,

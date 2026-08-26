@@ -56,6 +56,39 @@ export const modelLoadLlm: TestDefinition = {
   }
 }
 
+export const modelLoadLlmLoadModeNone: TestDefinition = {
+  testId: 'model-load-llm-load-mode-none',
+  params: { loadMode: 'none' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
+export const modelLoadLlmLoadModeMmap: TestDefinition = {
+  testId: 'model-load-llm-load-mode-mmap',
+  params: { loadMode: 'mmap' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
+export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
+  testId: 'model-load-llm-legacy-no-mmap-rejected',
+  params: { noMmap: true },
+  expectation: { validation: 'throws-error', errorContains: 'no_mmap' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 5000
+  }
+}
+
 export const modelLoadEmbedding: TestDefinition = {
   testId: 'model-load-embedding',
   params: {},
@@ -216,6 +249,9 @@ export const modelLifecycleNmt: TestDefinition = {
 export const tests = [
   // Model tests (first section)
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLoadModeMmap,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
   modelLoadOcrDoctr,
