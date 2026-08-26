@@ -57,9 +57,15 @@ struct ProgressCtx {
   //     sequence starts (video MoE with the moe_boundary sentinel, where the
   //     per-expert step split is engine-derived and unknown here).
   // ESRGAN upscaling runs after generate_*() returns and never ticks here.
+  // Both modes additionally gate on sequence starts: a sequence opens only
+  // on a step==0 tick while fewer than maxDenoiseSequences starts have been
+  // accepted, and closes on its step==total tick — so a later phase whose
+  // total collides with a sampler total is not counted once the expected
+  // sampler sequences are done.
   std::vector<int> denoiseTotals; // exact sampler totals to match
   int denoiseTotalBound = 0;      // bounded-mode fallback (0 = off)
-  int maxDenoiseSequences = 1;    // bounded-mode cap on sequence starts
+  int maxDenoiseSequences = 1;    // cap on accepted sequence starts
+  int openDenoiseSequences = 0;   // accepted starts not yet completed
   std::chrono::steady_clock::time_point denoiseFirstTime;
   std::chrono::steady_clock::time_point denoiseLastTime;
   int denoiseSequences = 0;
@@ -94,17 +100,37 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
   auto& ctx = g_progressCtx;
   ++ctx.observedTicks;
 
-  // Attribute the tick to the denoise window by its reported total (see the
-  // ProgressCtx comment): encoder / VAE sequences carry unrelated totals and
-  // must not inflate denoiseMs.
-  bool isDenoise = false;
+  // Attribute the tick to the denoise window (see the ProgressCtx comment).
+  // Three gates: the total must look like a sampler total (exact match, or
+  // within the bounded-mode bound); a sequence may only open on a step==0
+  // start while fewer than maxDenoiseSequences starts have been accepted;
+  // and non-start ticks count only while an accepted sequence is still open
+  // (a step==total tick completes it). Together these keep a later encoder /
+  // VAE sequence whose total collides with a sampler total from opening —
+  // or extending — the denoise window once the expected sampler sequences
+  // have started and completed.
+  bool totalMatches = false;
   if (!ctx.denoiseTotals.empty()) {
-    isDenoise =
+    totalMatches =
         std::find(ctx.denoiseTotals.begin(), ctx.denoiseTotals.end(), steps) !=
         ctx.denoiseTotals.end();
   } else if (ctx.denoiseTotalBound > 0) {
-    isDenoise = steps > 0 && steps <= ctx.denoiseTotalBound &&
-                (ctx.denoiseSequences < ctx.maxDenoiseSequences || step != 0);
+    totalMatches = steps > 0 && steps <= ctx.denoiseTotalBound;
+  }
+  bool isDenoise = false;
+  if (totalMatches) {
+    if (step == 0) {
+      if (ctx.denoiseSequences < ctx.maxDenoiseSequences) {
+        ++ctx.openDenoiseSequences;
+        isDenoise = true;
+      }
+    } else if (ctx.openDenoiseSequences > 0) {
+      isDenoise = true;
+      if (step == steps) {
+        --ctx.openDenoiseSequences; // completed: later same-total sequences
+                                    // must not reopen the denoise window
+      }
+    }
   }
   if (isDenoise) {
     if (ctx.denoiseTicks == 0)
@@ -464,6 +490,7 @@ std::any SdModel::process(const std::any& input) {
   g_progressCtx.denoiseTotals.clear();
   g_progressCtx.denoiseTotalBound = 0;
   g_progressCtx.maxDenoiseSequences = 1;
+  g_progressCtx.openDenoiseSequences = 0;
   g_progressCtx.denoiseSequences = 0;
   g_progressCtx.denoiseTicks = 0;
   g_progressCtx.denoiseSteps = 0;
@@ -839,6 +866,9 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // decoding all final latents; each sampler sequence reports total ==
   // gen.steps, which encoder/VAE sequences never do.
   g_progressCtx.denoiseTotals = {gen.steps};
+  // One sampler sequence per batch item; the sequence-start gate must admit
+  // all of them.
+  g_progressCtx.maxDenoiseSequences = std::max(1, gen.batchCount);
   // img2img (SDEdit) slices the sigma schedule by strength, so its sampler
   // sequence reports t_enc + 1 steps (t_enc = steps * strength, clamped to
   // steps - 1 — mirrors the engine). Match that total too; the FLUX
@@ -1306,6 +1336,7 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   if (hasHighNoiseExpert && vid.highNoiseSteps > 0) {
     g_progressCtx.denoiseTotals = {
         vid.highNoiseSteps, vid.sampleSteps - vid.highNoiseSteps};
+    g_progressCtx.maxDenoiseSequences = 2; // one sequence per expert
   } else if (hasHighNoiseExpert) {
     g_progressCtx.denoiseTotalBound = vid.sampleSteps;
     g_progressCtx.maxDenoiseSequences =

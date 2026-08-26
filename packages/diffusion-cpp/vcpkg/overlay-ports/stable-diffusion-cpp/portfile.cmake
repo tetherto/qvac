@@ -15,8 +15,8 @@
 #
 # Pulls from the tetherto/qvac-ext-stable-diffusion.cpp GitHub branch
 # 2026-08-11 (REF = tip of the open engine PR stack sd.cpp#32+#35,
-# i.e. branch qvac-23767-vae-fallback-params; tree-identical to the
-# validated commit 9c013c8).
+# i.e. branch qvac-23767-vae-fallback-params, incl. the review
+# follow-up hardening 97b9033).
 #
 # 4027059 is the 2026-08-11 tip after merging PR #29 (MiniMax-H3). Relative
 # to the 2026-07-03 line this brings the rebased upstream API: bool-returning
@@ -32,8 +32,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF f1c8b80662ce43985f3f876fa3c5abf45453fd5d
-    SHA512 280e4e8b7bfe0f8adf4bf030577b14e91fe3ac69d86c10740f970b2c09f214b31e26cb3922a5bd7a0cde57f7a57b7c6810b8419fce352aa76ebcb9d4362814c5
+    REF 97b90330a6c297186e4b064031e15bfd5ce42759
+    SHA512 dc0008001fcc857b66183ba2c12fc9ec135739fcefc47a23bdcec2a5b0a118cf329e4cfe9d5763883d814e5e3b9811878ee13556f24f93aefc37d2d16cf52859
 )
 
 # Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*
