@@ -21,7 +21,6 @@ Legend:
 | langdetect-text | Language detection library providing an interface for detecting the language of given text | Addon |
 | llm-llamacpp | Native C++ addon for running Large Language Models (LLMs) via `qvac-fabric-llm.cpp` | Addon |
 | ocr-ggml | Optical Character Recognition (OCR) addon (EasyOCR pipeline) on the GGML backend | Addon |
-| onnx | Bare addon for ONNX Runtime session management | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
 | transcription-parakeet | Speech-to-text (ASR) and Sortformer speaker-diarization addon using NVIDIA Parakeet models | Addon |
 | transcription-whispercpp | Whisper-based audio transcription addon via `qvac-ext-lib-whisper.cpp` | Addon |
@@ -42,3 +41,4 @@ Legend:
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 | qvac-ci | CI utilities for the QVAC monorepo | Tool |
 | registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
+| test-suite | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving e2e suites across desktop, Electron, Snap, Android, and iOS consumers | Tool |

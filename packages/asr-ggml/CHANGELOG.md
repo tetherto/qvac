@@ -14,6 +14,61 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- **CUDA GPU backend for both engines on Linux / Windows (NVIDIA).** The
+  addon already resolved and reported CUDA at runtime (`BackendId.CUDA`, `2`),
+  but no build ever compiled the backend in. `asr-ggml[cuda]` now forwards to
+  `speech-cpp[cuda]` → `ggml-speech[cuda]` (`GGML_CUDA=ON`), gated behind the
+  new `ASR_CUDA` CMake option and the `npm run build:cuda` /
+  `build:native:cuda` scripts. It is opt-in rather than default because it
+  needs `nvcc` on the build host, which the published prebuilds do not carry;
+  only the NVIDIA driver is needed at runtime. CUDA is compiled alongside
+  Vulkan, and ggml registers CUDA first, so a `use_gpu` / `useGPU` request
+  prefers CUDA and falls back to Vulkan when no supported device is present.
+  Apple and Android are excluded (`supports: !(osx | ios | android)`).
+
+  Enabling it also required two build fixes, both of which made the CUDA path
+  unbuildable before now:
+
+  - On Linux the `ASR_CUDA` block exports `CUDAHOSTCXX=clang++` for the vcpkg
+    child process. `nvcc` otherwise defaults to `g++`, which rejects the
+    `-stdlib=libc++` the Linux triplets put in `VCPKG_CXX_FLAGS` /
+    `VCPKG_LINKER_FLAGS`, so `enable_language(CUDA)` failed its ABI check.
+    Deliberately not set in `vcpkg-overlays/toolchains/linux-clang.cmake`: that
+    file's contents feed the vcpkg ABI hash of every package on the Linux
+    triplets, so editing it invalidates the binary cache for non-CUDA builds
+    too and forces every port to rebuild from source.
+  - The addon links `CUDA::cudart` / `cublas` / `cublasLt` itself.
+    `ggml-config.cmake` only adds a CUDA runtime to `ggml::ggml-cuda`'s
+    interface under `if (GGML_STATIC)`, but `GGML_STATIC` also means
+    `add_link_options(-static)` in ggml's own build and so cannot be enabled
+    for a shared bare module. Without this the module linked `libcuda.so.1`
+    and then aborted at load with
+    `undefined symbol: __cudaRegisterFatBinary`. The dynamic runtime matches
+    `diffusion-cpp`, so loading both addons into one process
+    (`packages/ggml-coload-smoke`) cannot produce two CUDA runtime instances.
+
+### Changed
+
+- **The GPU integration tests accept CUDA as a desktop backend.**
+  `gpu.test.js` and `parakeet-gpu-smoke.test.js` asserted
+  `backendId === 3` (Vulkan) on Linux / Windows, which was written when Vulkan
+  was the only GPU backend wired there. Both now accept CUDA (`2`) or Vulkan
+  (`3`), because a CUDA-enabled build compiles both in and ggml registers CUDA
+  first.
+- Raise the `speech-cpp` floor to 2026-08-26, including the new opt-in `cuda`
+  feature's own floor, which brings in ggml-speech
+  2026-08-26. Sortformer finalization is now deterministic: every non-cancelled
+  finalize ends with exactly one synthetic terminator, where before a real
+  trailing segment could carry the final flag instead. The speaker spans this
+  package emits are unchanged, because it keys off the terminator's negative
+  speaker id rather than the flag. Indic Conformer multilingual CTC also runs on
+  Vulkan now. The Whisper engine sources are unchanged. On the ggml side the
+  update adds Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch guards for
+  the `conv_transpose_1d`, `im2col` and `pad` paths, and Adreno OpenCL launch
+  validation with GEMV work-group limits.
+
 ### Fixed
 
 - **Parakeet duplex streaming no longer drops the tail of the transcript when

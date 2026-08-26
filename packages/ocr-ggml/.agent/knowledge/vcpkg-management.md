@@ -279,22 +279,6 @@ Triplets that genuinely differ from the shared defaults stay in the package's ow
 - **parakeet / tts-onnx**: a `x64-linux.cmake` variant that adds `-Wno-array-bounds`,
   plus their macOS/iOS triplets. Local linux triplets chainload the shared
   toolchain via `${CMAKE_CURRENT_LIST_DIR}/../../../../vcpkg-overlays/toolchains/linux-clang.cmake`.
-- **onnx**: keeps `vcpkg-override-triplets/triplets/` (apple/unix/android), layered
-  ahead of the shared folder.
-
-#### ONNX Packages — Release-Only Triplets
-
-Location: `packages/onnx/vcpkg-override-triplets/triplets/` and the local
-`vcpkg/triplets/` of `tts-onnx`, `transcription-parakeet`.
-
-These local triplets set `VCPKG_BUILD_TYPE release` to halve build time and disk
-usage, and platform-specific deployment targets (e.g., iOS 13.3):
-
-```cmake
-set(VCPKG_BUILD_TYPE release)
-set(VCPKG_LIBRARY_LINKAGE static)
-```
-
 ## Overlay Ports
 
 Overlay ports let a package override a registry port with a local version. They are declared in `vcpkg-configuration.json`:
