@@ -1,4 +1,3 @@
-import { destroySwarm } from '@/p2p/swarm'
 import { initEnv } from '@/runtime/env'
 import { closeAllRagInstances } from '@/rag/index'
 import { cleanupDownloads } from '@/handlers/load-model/download-manager'
@@ -72,7 +71,6 @@ async function runCleanup(): Promise<void> {
   destroyResourceCollector()
   clearRegistries()
   await Promise.allSettled([
-    destroySwarm(),
     closeAllRagInstances(),
     cleanupDownloads(),
     unloadAllModels(),

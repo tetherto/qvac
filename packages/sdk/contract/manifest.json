@@ -163,12 +163,6 @@
       "responseSchema": "schema.json#/$defs/pluginInvokeStream.response"
     },
     {
-      "name": "provide",
-      "callShape": "request-reply",
-      "requestSchema": "schema.json#/$defs/provide.request",
-      "responseSchema": "schema.json#/$defs/provide.response"
-    },
-    {
       "name": "rag",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/rag.request",
@@ -189,12 +183,6 @@
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/state.request",
       "responseSchema": "schema.json#/$defs/state.response"
-    },
-    {
-      "name": "stopProvide",
-      "callShape": "request-reply",
-      "requestSchema": "schema.json#/$defs/stopProvide.request",
-      "responseSchema": "schema.json#/$defs/stopProvide.response"
     },
     {
       "name": "suspend",
