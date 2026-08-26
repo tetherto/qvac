@@ -42,6 +42,7 @@ const { createWav } = require('./wav-helper')
 const { setLogger, releaseLogger } = require('../addonLogging')
 
 const AUDIO8_SAMPLE_RATE = 44100
+const DEFAULT_LANGUAGE = 'en'
 
 const argv = global.Bare ? global.Bare.argv : process.argv
 const textArg = argv[2]
@@ -73,7 +74,10 @@ function buildModel() {
     engine: TTSGgml.ENGINE_AUDIO8,
     files: { modelDir },
     ...voice,
-    config: { useGPU: proc.env.QVAC_TTS_AUDIO8_GPU === '1' },
+    config: {
+      language: DEFAULT_LANGUAGE,
+      useGPU: proc.env.QVAC_TTS_AUDIO8_GPU === '1'
+    },
     logger: console,
     opts: { stats: true }
   })
