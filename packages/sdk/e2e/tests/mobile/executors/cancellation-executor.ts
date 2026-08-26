@@ -1,4 +1,4 @@
-import { type Expectation, type TestResult } from '@qvac/qvac-test-suite'
+import { type Expectation, type TestResult } from '@qvac/test-suite'
 import {
   CancellationExecutor,
   type TranscribeCancelParams

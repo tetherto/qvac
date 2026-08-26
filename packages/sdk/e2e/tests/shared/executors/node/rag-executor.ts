@@ -1,7 +1,7 @@
 import { ragIngest } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { ragTests } from '../../../rag-tests.js'
 
