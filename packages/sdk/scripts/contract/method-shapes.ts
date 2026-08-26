@@ -44,7 +44,9 @@ export const methodShapes = {
   translate: 'stream',
   unloadModel: 'reply',
   upscaleStream: 'stream',
-  videoStream: 'stream'
+  videoStream: 'stream',
+  worldSceneStream: 'stream',
+  worldStepStream: 'stream'
 } as const
 
 export type MethodName = keyof typeof methodShapes

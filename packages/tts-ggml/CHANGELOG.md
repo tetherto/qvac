@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CUDA GPU acceleration on linux x64: the prebuild now bundles the CUDA
+  backend alongside Vulkan as runtime-loaded modules, and `useGPU: true`
+  prefers CUDA on NVIDIA hosts (all five engines). CUDA engages where the
+  NVIDIA driver and CUDA 13 runtime libraries (cudart, cuBLAS) are present;
+  on every other host the CUDA module is skipped and the addon behaves as
+  before (Vulkan or CPU). `TTS_CPP_GPU_BACKEND` pins the backend on
+  dual-backend hosts.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
+  2026-08-26. The engine gains CUDA paths for Chatterbox, Supertonic, Parler-TTS,
+  CosyVoice3 and Audio8, built into the linux-x64 prebuild via the new `cuda`
+  feature. On the ggml
+  side the update adds Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch
+  guards for the `conv_transpose_1d`, `im2col` and `pad` paths, the CUDA
+  transpose-copy strided-destination fix, and Adreno
+  OpenCL launch validation with GEMV work-group limits.
+
 ## [0.7.5] - 2026-08-20
 
 ### Changed
