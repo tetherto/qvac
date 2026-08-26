@@ -80,6 +80,24 @@ function promptToAddonMessages(prompt, runOptions) {
     });
     return promptMessages;
 }
+// Every key the addon binding reads. Mirrors GENERATION_PARAM_HANDLERS in
+// `addon/src/handlers/GenerationParamHandlers.cpp`, which pulls each key it
+// knows by name and ignores the rest of the object. Keep the two in sync when
+// a param is added.
+const GENERATION_PARAM_KEYS = new Set([
+    "temp",
+    "top_p",
+    "top_k",
+    "predict",
+    "seed",
+    "frequency_penalty",
+    "presence_penalty",
+    "repeat_penalty",
+    "grammar",
+    "json_schema",
+    "reasoning_budget",
+    "remove_thinking_from_context",
+]);
 // Normalizes the per-request `generationParams.json_schema` field. The
 // addon binding expects a string; callers commonly pass a plain object
 // (a JSON Schema literal) for ergonomics, so we stringify it here. Also
@@ -88,6 +106,16 @@ function promptToAddonMessages(prompt, runOptions) {
 function normalizeGenerationParams(generationParams) {
     if (generationParams === undefined)
         return undefined;
+    // TypeScript rejects an unknown key on an object literal, so this only ever
+    // fires for JavaScript callers and for objects built up dynamically. Those
+    // used to be dropped in silence: a near miss like `n_predict` for `predict`
+    // ran with the load-time default and looked like the override had applied.
+    const unknownKeys = Object.keys(generationParams).filter((key) => !GENERATION_PARAM_KEYS.has(key));
+    if (unknownKeys.length > 0) {
+        throw new TypeError(`generationParams has unknown ${unknownKeys.length === 1 ? "key" : "keys"}: ` +
+            `${unknownKeys.join(", ")}. Valid keys are ` +
+            `${[...GENERATION_PARAM_KEYS].join(", ")}`);
+    }
     if (generationParams.remove_thinking_from_context !== undefined &&
         typeof generationParams.remove_thinking_from_context !== "boolean") {
         throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
