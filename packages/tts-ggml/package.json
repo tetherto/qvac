@@ -94,6 +94,7 @@
       "types": "./index.d.ts",
       "default": "./index.js"
     },
+    "./binding.js": "./binding.js",
     "./text-chunker": {
       "types": "./lib/textChunker.d.ts",
       "default": "./lib/textChunker.js"
