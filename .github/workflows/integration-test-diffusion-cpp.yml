@@ -53,7 +53,7 @@ jobs:
   pin-model-manifest:
     if: github.event_name == 'workflow_dispatch' && inputs.pin_model_manifest
     timeout-minutes: 360
-    runs-on: ${{ 'qvac-ubuntu2404-x64-gpu' }}
+    runs-on: ${{ 'qvac-ubuntu2404-x64' }}
     environment: release
     permissions:
       contents: read
