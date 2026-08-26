@@ -37,6 +37,7 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
+    "./binding.js": "./binding.js",
     "./models": "./models.js",
     "./test/benchmark-runner": "./test/utils/benchmark-runner.js"
   },
