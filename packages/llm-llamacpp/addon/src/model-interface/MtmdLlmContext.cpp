@@ -733,9 +733,8 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   //
   // NOTE: do NOT reset `rollbackState_`'s reasoning-boundary snapshot
   // or post-reasoning buffers here — they were just populated by
-  // `evalMessageWithTools` (via `snapshotForRecurrentRollback` at
-  // end-of-prefill) and wiping them
-  // would render the recurrent-rollback path dead. They are cleared
+  // `evalMessageWithTools` (via `snapshotForRecurrentRollback`) and wiping
+  // them would render the recurrent-rollback path dead. They are cleared
   // at the START of each inference in `evalMessageWithTools` and by
   // `compactThinkSpan`'s RAII guard.
   reasoningState_.inside_reasoning = false;
@@ -820,7 +819,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       // seed every pre-reasoning sampled token into the recurrent
       // replay buffer BEFORE running the detector so a generated
       // opener template still lands in a balanced state after the
-      // end-of-prefill snapshot is restored.
+      // boundary snapshot is restored.
       if (!wasInside) {
         compactor_.recordPreReasoningToken(tokenId);
       }
@@ -960,16 +959,15 @@ MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   // reasoning span from cache surfaces as `qvac_errors::StatusError`,
   // thrown from `compactThinkSpan` after local rollback so both
   // driver metadata and live KV agree on the recovery cursor:
-  //   - Prefill-boundary snapshot capture failure: thrown from
-  //     `ReasoningBlockCompactor::snapshotAtPrefillBoundary`; the
+  //   - Boundary snapshot capture failure: thrown from
+  //     `ReasoningBlockCompactor::snapshotAtReasoningBoundary`; the
   //     `snapshotForRecurrentRollback` wrapper here restores the
   //     pre-prompt checkpoint (or wipes the sequence on restore
   //     underflow), resets local positional accounting, and re-throws.
   //   - Restore/replay failure: the compactor best-effort
   //     wipes the sequence memory and returns `FailedKvWiped`;
-  //     `compactThinkSpan` zeroes positional / protected-prefix
-  //     bookkeeping to match the cleared sequence and throws, so the
-  //     turn's answer is NOT delivered.
+  //     `compactThinkSpan` zeroes positional bookkeeping to match the
+  //     cleared sequence and throws.
   //
   // In every case the current turn's answer is NOT delivered; the
   // caller (single-prompt JS wrapper or the batch scheduler worker-
@@ -1132,18 +1130,15 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
-  // Pure attention anchors on a bare position, so a force-open template
-  // simply subtracts its opener and the rewind lands before the reasoning
-  // block, matching the text path.
+  // Pure attention anchors on a bare position, so it subtracts the opener
+  // and the rewind lands before the reasoning block, like the text path.
   //
-  // The full-state path cannot do that here. Multimodal prefill decodes
-  // whole chunks through `mtmd_helper_eval_chunk_single`, and the opener
-  // is the tail of the last text chunk, so there is no decode stop before
-  // it to snapshot at. A recurrent or hybrid vision model on a force-open
-  // template therefore keeps the opener in the restored prefix. That
-  // combination has no supported model today; splitting an mtmd chunk to
-  // fix it would mean hand-decoding text the helper owns, including the
-  // M-RoPE positions it computes for the Qwen VL family.
+  // The full-state path cannot here: multimodal prefill decodes whole chunks
+  // through `mtmd_helper_eval_chunk_single` and the opener is the tail of the
+  // last text chunk, so there is no decode stop to snapshot at. A recurrent or
+  // hybrid vision model on a force-open template therefore keeps the opener.
+  // No supported model is all three, and splitting an mtmd chunk would mean
+  // hand-decoding text the helper owns, M-RoPE positions included.
   const llama_pos anchorPos =
       needsRecurrentSnapshot_
           ? current_.pos
@@ -1152,7 +1147,7 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
                 thinkingForcedOpen_,
                 reasoningState_.forcedOpenTokenCount);
   try {
-    compactor_.snapshotAtPrefillBoundary(
+    compactor_.snapshotAtReasoningBoundary(
         modelCtx_.lctx, seqId_, anchorPos, "[MtmdLlm]");
   } catch (const qvac_errors::StatusError&) {
     // Boundary capture failed. Under the hard-fail contract, roll
@@ -1557,7 +1552,7 @@ void MtmdLlmContext::onPrefillComplete(
   // Trailing text advances positions and KV cells 1:1; media cells were
   // already accounted by evalMediaSegment.
   advanceTextSpan(currentPos);
-  // Unified end-of-prefill snapshot point for recurrent / hybrid
+  // Unified boundary snapshot point for recurrent / hybrid
   // generation requests. Both single-prompt prefill and the continuous
   // scheduler now route through the same compactor lifecycle; the
   // capture is idempotent and a no-op when gates are off or this is a

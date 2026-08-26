@@ -594,10 +594,10 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
 
 // Multimodal hybrid (Qwen3.5) compaction. `MtmdLlmContext` shares the
 // `ReasoningBlockCompactor` with `TextLlmContext` but applies its own
-// post-compact bookkeeping (`current_.pos` / `cacheTokens` / protected-
-// prefix). This pins the end-to-end multimodal compaction path:
+// post-compact bookkeeping (`current_.pos` / `cacheTokens`). This pins the
+// end-to-end multimodal compaction path:
 //   * a reasoning-capable hybrid multimodal model produces a `<think>` block,
-//   * end-of-prefill recurrent snapshot + restore + post-reasoning replay
+//   * recurrent boundary snapshot + restore + post-reasoning replay
 //     succeeds for the multimodal context,
 //   * `thinkingBlockDiscards` increments. Under the uniform hard-fail
 //     contract (PR #2813) any compaction failure would throw

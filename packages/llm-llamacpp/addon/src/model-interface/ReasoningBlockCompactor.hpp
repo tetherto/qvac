@@ -18,8 +18,9 @@ namespace qvac_lib_inference_addon_llama {
 /// `ReasoningRollbackState`.
 struct IReasoningRewindOps {
   virtual ~IReasoningRewindOps() = default;
-  /// Rewind the sequence to the end-of-prefill boundary. A tail trim on
-  /// pure attention, a full-state reload on recurrent / hybrid.
+  /// Rewind the sequence to the reasoning boundary, which sits before the
+  /// span. A tail trim on pure attention, a full-state reload on recurrent /
+  /// hybrid.
   virtual bool restoreBoundary(
       utils::ReasoningRollbackState& rollback, ::llama_context* ctx,
       llama_seq_id seqId) const = 0;
@@ -36,14 +37,14 @@ const IReasoningRewindOps& defaultReasoningRewindOps();
 // `TextLlmContext` and `MtmdLlmContext`. Owns:
 //
 //   * the open/close span (`<think>...</think>`) tracking,
-//   * the end-of-prefill snapshot capture (delegated to
+//   * the reasoning-boundary snapshot capture (delegated to
 //     `ReasoningRollbackState` after a feature-gate check),
 //   * the restore-boundary-then-replay compaction path,
 //   * the `thinkingBlockDiscards` runtime stats counter.
 //
 // Failure contract: when `remove_thinking_from_context` is
 // enabled/defaulted-on, ANY inability to remove the reasoning span from
-// cache is a hard failure. `snapshotAtPrefillBoundary` throws on capture
+// cache is a hard failure. `snapshotAtReasoningBoundary` throws on capture
 // underflow. `compact()` reports every other failure as
 // `Outcome::Kind::FailedKvWiped`: compaction rewinds the sequence before
 // it replays, so by the time anything can fail the cache has already been
@@ -164,7 +165,7 @@ public:
   // recognised). Throws `qvac_errors::StatusError` on capture
   // underflow (see the class-level "Failure contract" comment).
   // `labelTag` is "[TextLlm]" / "[MtmdLlm]" for logs.
-  void snapshotAtPrefillBoundary(
+  void snapshotAtReasoningBoundary(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
       const char* labelTag);
 
@@ -205,8 +206,8 @@ public:
       // Feature off, no span captured, degenerate span, or the live cursor is
       // already before the reasoning span when compaction runs.
       NoOp,
-      // Reasoning span dropped: the sequence was rewound to the
-      // end-of-prefill boundary and the answer replayed after it.
+      // Reasoning span dropped: the sequence was rewound to the reasoning
+      // boundary and the answer replayed after it.
       Compacted,
       // Compaction failed and live KV was best-effort wiped; caller
       // must reset positional accounting to zero before rethrowing.

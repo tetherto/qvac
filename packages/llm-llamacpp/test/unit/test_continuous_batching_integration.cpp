@@ -761,7 +761,7 @@ TEST_F(
 }
 
 /// Regression: Qwen3.5 is a hybrid SSM family; on the continuous-batching
-/// path the end-of-prefill recurrent snapshot must be taken inside
+/// path the recurrent boundary snapshot must be taken inside
 /// `TextLlmContext::onPrefillComplete` (not only inside the single-prompt
 /// `evalMessageWithTools` prefill loop). Without the snapshot,
 /// `compactThinkSpan` aborts early for hybrid models and
@@ -823,7 +823,7 @@ TEST_F(
       test_common::getStatValue(stats, "thinkingBlockDiscards");
 
   EXPECT_GE(thinkingDiscards, 1.0)
-      << "scheduler path must take the end-of-prefill recurrent snapshot "
+      << "scheduler path must take the recurrent boundary snapshot "
          "so `compactThinkSpan` can fire on the hybrid; got "
       << thinkingDiscards << " discards. outputs[0]=" << outputs[0]
       << " outputs[1]=" << outputs[1];

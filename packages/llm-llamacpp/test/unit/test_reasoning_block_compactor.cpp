@@ -76,7 +76,7 @@ TEST(ReasoningSnapshotPolicy, CapturesGeneratedOpenRecurrentReasoning) {
   // Generated-opener recurrent turns are now supported: the caller
   // seeds the sampled opener token span (including any preamble)
   // into the replay buffer alongside the close marker, so the
-  // restored end-of-prefill prefix no longer needs to contain
+  // restored boundary prefix no longer needs to contain
   // `<think>`. The policy must return `Capture` so the boundary
   // snapshot is taken and the seed-and-replay path can fire.
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
@@ -550,7 +550,7 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
 //
 // Any inability to remove the reasoning span from cache is a hard
 // failure under the default-on `remove_thinking_from_context` contract
-// (PR #2813). `snapshotAtPrefillBoundary` still throws
+// (PR #2813). `snapshotAtReasoningBoundary` still throws
 // `qvac_errors::StatusError` on boundary-capture failure (recovery
 // happens one level up in `snapshotForRecurrentRollback`), but
 // `compact()` reports failures via `Outcome::Kind::FailedKvWiped` so callers
@@ -558,7 +558,7 @@ TEST(ReasoningBlockCompactorCloseCommit, RecordsSpanEndAfterRequest) {
 // path `thinkingBlockDiscards` never bumps for the failed drop.
 //
 // Coverage:
-//   * Boundary-capture failure (`snapshotAtPrefillBoundary` on
+//   * Boundary-capture failure (`snapshotAtReasoningBoundary` on
 //     `ctx == nullptr`, which short-reads inside
 //     `captureReasoningBoundary`).
 //   * Hybrid restore failure (`compact()` on `ctx == nullptr` with a
@@ -586,7 +586,7 @@ TEST(
   ASSERT_FALSE(fx.rollback.hasReasoningBoundary());
   EXPECT_THROW(
       {
-        fx.compactor.snapshotAtPrefillBoundary(
+        fx.compactor.snapshotAtReasoningBoundary(
             /*ctx=*/nullptr, /*seqId=*/0, /*pos=*/10, "[Test]");
       },
       qvac_errors::StatusError);
@@ -635,7 +635,7 @@ TEST(
   // The `ResetGuard` in `compact()` runs on the failure path too,
   // so per-inference state (span, boundary snapshot, replay buffer)
   // must be fully cleared. Without this the next inference's
-  // `snapshotAtPrefillBoundary` no-ops on the stale boundary and the
+  // `snapshotAtReasoningBoundary` no-ops on the stale boundary and the
   // driver would replay stale post-reasoning tokens.
   EXPECT_FALSE(fx.compactor.hasOpenSpan());
   EXPECT_FALSE(fx.rollback.hasReasoningBoundary());
@@ -669,7 +669,7 @@ TEST(
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
 }
 
-// Defensive no-boundary regression: `snapshotAtPrefillBoundary` anchors a
+// Defensive no-boundary regression: `snapshotAtReasoningBoundary` anchors a
 // boundary for every model kind, so the compactor should never see a span
 // without one. If a future caller bypasses it and reaches the compactor
 // with no boundary,
@@ -729,7 +729,7 @@ TEST(ReasoningBlockCompactorFailureStats, NoOpOutcomesDoNotThrow) {
 
 namespace {
 
-// Compaction rewinds to the end-of-prefill boundary and replays, so the
+// Compaction rewinds to the reasoning boundary and replays, so the
 // shared `FakeReasoningRewindOps` covers every case here. Local names say how
 // each one is configured: `accepting` is the defaults, `rejecting` fails the
 // restore, and the replay-failing cases use `failReplay()`.

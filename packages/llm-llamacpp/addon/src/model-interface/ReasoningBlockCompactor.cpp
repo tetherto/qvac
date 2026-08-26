@@ -81,8 +81,8 @@ void ReasoningBlockCompactor::setOpenSpan(llama_pos start) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_ || start < 0) {
     return;
   }
-  // Compaction restores an end-of-prefill boundary and replays, on every
-  // model, so a boundary is required. The policy and capture sites fail
+  // Compaction restores the reasoning boundary and replays, on every model,
+  // so a boundary is required. The policy and capture sites fail
   // unsupported requests before this point, so this guard is only a
   // defensive backstop for future callers that bypass them and would
   // otherwise drive `compact()` into its no-boundary `FailedKvWiped` branch.
@@ -137,7 +137,7 @@ void ReasoningBlockCompactor::onCloseCommitted(llama_pos pos) {
   rollback_.startPostReasoningCapture(rollback_.hasReasoningBoundary());
 }
 
-void ReasoningBlockCompactor::snapshotAtPrefillBoundary(
+void ReasoningBlockCompactor::snapshotAtReasoningBoundary(
     ::llama_context* ctx, llama_seq_id seqId, llama_pos pos,
     const char* labelTag) {
   if (!removeThinkingFromContext_ || !reasoningEnabled_) {
@@ -173,7 +173,7 @@ void ReasoningBlockCompactor::snapshotAtPrefillBoundary(
         errors::ADDON_ID,
         errors::toString(errors::FailedToDecode),
         string_format(
-            "%s ReasoningBlockCompactor::snapshotAtPrefillBoundary: "
+            "%s ReasoningBlockCompactor::snapshotAtReasoningBoundary: "
             "captureReasoningBoundary underflowed (pos=%d, seqId=%d)",
             labelTag,
             pos,
@@ -314,7 +314,7 @@ ReasoningBlockCompactor::Outcome ReasoningBlockCompactor::compact(
   const llama_pos end = openEnded ? pos : std::min(recordedEnd, pos);
 
   // Defence-in-depth: `setOpenSpan` refuses a span with no boundary and
-  // `snapshotAtPrefillBoundary` anchors one for every model, so
+  // `snapshotAtReasoningBoundary` anchors one for every model, so
   // `thinkSpan_.has_value()` implies a boundary exists. If a future caller
   // ever seeds a span bypassing those sites, fail hard rather than leave the
   // reasoning span in cache: there is nothing to rewind to.

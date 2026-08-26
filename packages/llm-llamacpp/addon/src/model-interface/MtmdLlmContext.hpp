@@ -312,7 +312,7 @@ private:
   // models.
   void recordPostReasoningTokenIfActive(llama_token tokenId);
 
-  // Snapshot the full sequence state at end-of-prefill on memory
+  // Snapshot the full sequence state at the reasoning boundary on memory
   // modules that don't support partial-tail erasure. No-op unless
   // recurrent snapshot compaction is relevant for this request. When
   // `remove_thinking_from_context` is enabled on a recurrent / hybrid
@@ -321,7 +321,7 @@ private:
   void snapshotForRecurrentRollback();
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory,
-  // restores the end-of-prefill snapshot to drop any partially decoded
+  // restores the reasoning-boundary snapshot to drop any partially decoded
   // generation (including an in-flight reasoning span) from both
   // attention KV and recurrent state. On pure-attention models or when
   // no snapshot is available, only flushes the UTF-8 buffer. Used by
@@ -412,7 +412,7 @@ private:
   bool removeThinkingFromContext_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
-  // prefill-entry snapshot (cancel during prefill), the end-of-prefill
+  // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
   // snapshot (compaction + cancel during generation), and the
   // post-reasoning token replay buffer. Inactive on pure-attention
   // models.

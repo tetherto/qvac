@@ -1447,7 +1447,7 @@ TEST(MultiRequestBatcherPrefillBoundary, PauseSplitsTheChunkAtTheIndex) {
 
 /// A boundary that lands exactly on the end of prefill must still anchor
 /// before the request is handed on, or `onPrefillComplete` would run first and
-/// take the end-of-prefill snapshot the pause exists to pre-empt.
+/// take the boundary snapshot the pause exists to pre-empt.
 TEST(MultiRequestBatcherPrefillBoundary, PauseFiresBeforePrefillComplete) {
   constexpr unsigned maxChunkSize = 32;
   constexpr unsigned maxTokensPerSeq = 100;

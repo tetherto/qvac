@@ -551,9 +551,8 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       stopGeneration_.store(false);
       return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
     }
-    // Cap the current chunk at the snapshot boundary so recurrent /
-    // hybrid models can capture the exact end-of-prefill state before
-    // generation starts.
+    // Cap the current chunk at the snapshot boundary so recurrent / hybrid
+    // models capture the exact state there, before the opener decodes.
     const llama_pos chunkEnd =
         (!snapshotTaken && snapBoundary > tokenIndex && snapBoundary < nTokens)
             ? snapBoundary
@@ -665,7 +664,7 @@ void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
 void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {
   nPast_ = currentPos;
-  // Unified end-of-prefill snapshot point for recurrent / hybrid
+  // Unified boundary snapshot point for recurrent / hybrid
   // generation requests. Both prefill drivers — the single-prompt loop
   // in `evalMessageWithTools` and `ContinuousBatchScheduler::stepLocked`
   // — funnel through here once the final prefill chunk is decoded, so
@@ -889,7 +888,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     // end-of-prefill and up to and including the token that flips
     // `inside_reasoning` from false to true is part of the pre-
     // reasoning span (template preamble + opener pieces). The
-    // compactor's restored end-of-prefill snapshot does not contain
+    // compactor's restored boundary snapshot does not contain
     // any of those tokens, so the replay must carry them or the next turn
     // would resume from an unbalanced state. Every model replays now, so this
     // is a no-op only when the feature is off or before the boundary exists.
@@ -1158,16 +1157,12 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
           prefillLen,
           thinkingForcedOpen_,
           reasoningState_.forcedOpenTokenCount);
-  // `reasoningBoundaryTokenIndex` clamps at 0, so a prefill shorter than
-  // the opener anchors at index 0 rather than underflowing: the decode
-  // stops before this prefill feeds anything and the snapshot is the
-  // admission cursor. That is the cache-hit case where part of the opener
-  // is already resident, and the resident fragment then survives the
-  // rewind, since a full-state snapshot cannot be taken at a point the
-  // decode has already passed. Compaction still drops the reasoning body,
-  // only the fragment stays. Pure attention does not have this hole: its
-  // anchor is an absolute position, so it subtracts the opener from
-  // `nPast_` and the rewind trims into the cached region.
+  // The boundary clamps at 0, so a prefill shorter than the opener anchors
+  // at the admission cursor instead of underflowing. That is the cache hit
+  // that left part of the opener resident, and the fragment survives the
+  // rewind: a full-state snapshot cannot be taken at a point the decode has
+  // passed. The reasoning body is still dropped. Pure attention has no such
+  // hole, its anchor is absolute so the rewind trims into the cached region.
   //
   // The guard below is defence in depth for a boundary the helper cannot
   // produce today.
@@ -1234,7 +1229,7 @@ void TextLlmContext::onPrefillBoundaryPause(llama_pos currentPos) {
 
 void TextLlmContext::captureReasoningBoundaryAt(llama_pos anchorPos) {
   try {
-    compactor_.snapshotAtPrefillBoundary(
+    compactor_.snapshotAtReasoningBoundary(
         modelCtx_.lctx, seqId_, anchorPos, "[TextLlm]");
   } catch (const qvac_errors::StatusError&) {
     // Boundary capture failed. Live memory currently holds the fully
@@ -1334,8 +1329,8 @@ void TextLlmContext::setRemoveThinkingFromContext(bool value) {
   // the caller as `qvac_errors::StatusError`, thrown from
   // `compactThinkSpan` after local rollback so both driver metadata
   // and live KV agree on the recovery cursor:
-  //   - Prefill-boundary snapshot capture failure — thrown from
-  //     `ReasoningBlockCompactor::snapshotAtPrefillBoundary`; the
+  //   - Boundary snapshot capture failure — thrown from
+  //     `ReasoningBlockCompactor::snapshotAtReasoningBoundary`; the
   //     `snapshotForRecurrentRollback` wrapper catches, restores the
   //     pre-prompt checkpoint (or wipes the sequence and resets
   //     positional accounting on restore underflow), and rethrows.

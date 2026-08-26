@@ -1,8 +1,7 @@
 #pragma once
 
 // Configurable `IReasoningRewindOps` fake, so compactor tests can drive
-// `compact()` without a real llama context. Replaces the `IKvCacheOps` fakes
-// that existed while compaction still shifted the cache.
+// `compact()` without a real llama context.
 //
 // Defaults succeed, which is the successful-drop case. `failRestore()` and
 // `failReplay()` drive the two halves of the failure contract. Both failures

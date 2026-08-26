@@ -47,7 +47,7 @@ struct GenerationParams {
   // compaction. Contexts default off except the Qwen3 family, which defaults
   // on. `false` keeps the reasoning block in cache; `true` enables
   // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
-  // models. Every model rewinds to the end-of-prefill boundary and replays;
+  // models. Every model rewinds to the reasoning boundary and replays;
   // `TextLlmContext::needsRecurrentSnapshot_` documents what differs between
   // them. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
@@ -172,26 +172,19 @@ struct LlmModelContext {
 /// KV cells than its positional span. See `getCacheTokens` below.
 ///
 /// Slots 1 and 3 are retired: they carried the first-message counters the
-/// removed sliding-context feature protected. The layout keeps its four-field
-/// width so a file written by either build still loads. This build's readers
-/// ignore them; they are written only so an older build downgraded onto the
-/// same cache directory fails closed.
+/// removed sliding-context feature protected. The four-field width stays so a
+/// file written by either build still loads, and this build's readers ignore
+/// them.
 ///
-/// A build that still slides reads slot 1 as its protected-prefix boundary
-/// and evicts `[slot1, slot1 + n_discarded)`. Writing 0 there would point
-/// that eviction at position 0 and silently drop the system prompt and tool
-/// definitions. Writing the full cursor instead makes its `leftTokens =
-/// currentPos - protectedPrefixPos - discard` go negative, so it refuses the
-/// slide and reports a context overflow with the cache intact. A visible
-/// error beats silently losing the guardrail text.
+/// They are not written as 0. A build that still slides reads slot 1 as its
+/// protected-prefix boundary and would evict from position 0, silently
+/// dropping the system prompt and tool definitions. Mirroring the live cursor
+/// instead drives its `leftTokens` negative, so it refuses the slide and
+/// reports a context overflow with the cache intact.
 ///
-/// That refusal covers the PREFILL slide only: `trySlidePrefillImpl` was the
-/// only caller carrying the `leftTokens >= 0` guard. The generation slide had
-/// none, so on a downgraded build it still runs: `seq_rm` over an empty range
-/// past the cursor succeeds, the paired `seq_add` is inverted and moves
-/// nothing, and it reports a slide that leaves that build's cursor
-/// `n_discarded` behind live KV. Mirroring is the better of the two values we
-/// can write, not a guarantee for every slide site.
+/// That refusal covers the prefill slide only, the generation slide carried no
+/// such guard, so mirroring is the better of the two values we can write, not
+/// a guarantee at every slide site.
 enum class SessionMetadataField : uint8_t {
   NPast = 0,
   RetiredFirstMsgTokens = 1,

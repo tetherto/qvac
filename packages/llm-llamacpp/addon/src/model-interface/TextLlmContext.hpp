@@ -362,8 +362,8 @@ private:
   // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
   // For these we use the snapshot + replay path: snapshot the full
   // DeepSeek V4 has the same checkpoint requirement despite not reporting
-  // either predicate. We snapshot the full sequence state at end-of-prefill,
-  // restore at end-of-generation,
+  // either predicate. We snapshot the full sequence state at the reasoning
+  // boundary, restore at end-of-generation,
   // then batched-replay the captured post-reasoning tokens. Pure-attention
   // models replay too; they anchor a position instead of a state payload,
   // because rewinding positionally indexed cells is a tail trim.
@@ -380,7 +380,7 @@ private:
   bool isPrefillOnlyRequest_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
-  // prefill-entry snapshot (cancel during prefill), the end-of-prefill
+  // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
   // snapshot (compaction + cancel during generation), and the
   // post-reasoning token replay buffer. Populated on every model now; on
   // pure attention the boundary is a position rather than a state payload.

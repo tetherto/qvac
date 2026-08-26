@@ -407,11 +407,11 @@ TEST_F(
 }
 
 // `onCancel` on a hybrid driver with `remove_thinking_from_context: true`:
-// after prefill (which takes the prefill-entry AND end-of-prefill
+// after prefill (which takes the prefill-entry AND reasoning-boundary
 // snapshots), calling `onCancel` directly must restore the
 // PREFILL-ENTRY snapshot — i.e. roll the cache back to the cursor that
 // existed BEFORE this request's prompt was submitted, matching the
-// "request never happened" cancel semantics. The end-of-prefill
+// "request never happened" cancel semantics. The reasoning-boundary
 // snapshot is reserved for normal thinking-block compaction and must
 // NOT be used for cancel.
 TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
@@ -450,7 +450,7 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
 
   EXPECT_EQ(driver.getNPast(), preRequestNPast)
       << "onCancel on hybrid must restore to the PRE-REQUEST cursor, not "
-         "the end-of-prefill cursor — cancel semantics is 'request never "
+         "the post-prefill cursor — cancel semantics is 'request never "
          "happened'";
   // `seq_pos_max` after a full pre-request restore: either -1 (sequence
   // is now empty) or `preRequestNPast - 1` if there were prior turns.

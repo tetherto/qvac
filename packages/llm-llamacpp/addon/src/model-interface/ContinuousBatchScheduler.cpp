@@ -666,7 +666,7 @@ ContinuousBatchScheduler::prefillCompleteFn() {
 MultiRequestBatcher::PrefillBoundaryPauseFn
 ContinuousBatchScheduler::prefillBoundaryPauseFn() {
   // Throws the same way `prefillCompleteFn` does, and for the same reason:
-  // the capture site is `snapshotAtPrefillBoundary` under the uniform
+  // the capture site is `snapshotAtReasoningBoundary` under the uniform
   // hard-fail contract. `workerLoop`'s catch routes the group through
   // `failGroupLocked` -> `cancelSlotLocked(Skip)`.
   return [this](uint32_t seqId, llama_pos currentPos) {
@@ -846,18 +846,15 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     // paths already sync via `sampleAndAppendIdle` and this call is a
     // no-op for them.
     slot.driver->syncPosition(req.currentPos);
-    // `finalizeTerminalDriver` runs the driver's `onGenerationFinished`, and
-    // for a reasoning turn that means `compactThinkSpan()` rewinding and
-    // REPLAYING the kept tokens through `llama_decode`. That is the same
-    // blocking work the main decode step drops the lock for; holding it here
-    // stalls every co-tenant slot and blocks a cross-thread `cancel()` for
-    // the length of the replay.
+    // `finalizeTerminalDriver` can run a real `llama_decode`: a reasoning
+    // turn rewinds and replays through `compactThinkSpan()`. Holding the lock
+    // for that stalls every co-tenant slot and blocks a cross-thread
+    // `cancel()`.
     //
-    // Unlike the decode window, this one holds `slot` across the unlock, so
-    // deferred teardown must not reconcile inside it. See
+    // Unlike the decode window this one holds `slot` across the unlock, so
+    // deferred teardown must not reconcile inside it, see
     // `TeardownDeferGuard`. Declaration order matters: the unlock guard is
-    // destroyed first, so it reacquires and skips the reconcile while the
-    // defer guard is still live.
+    // destroyed first, so it reacquires while the defer guard is still live.
     bool rollbackOk = false;
     {
       TeardownDeferGuard deferTeardown(*this);

@@ -16,17 +16,18 @@ namespace utils {
 //
 //   * a prefill-entry full-state snapshot, restored on cancellation
 //     that fires before prefill finishes;
-//   * an end-of-prefill full-state snapshot, restored both by
-//     thinking-block compaction and by cancellation during generation;
+//   * a reasoning-boundary full-state snapshot, anchored before the span
+//     and restored both by thinking-block compaction and by cancellation
+//     during generation;
 //   * the post-reasoning token capture buffer used to replay the
-//     visible answer after restoring the end-of-prefill snapshot.
+//     visible answer after restoring that snapshot.
 //
 // Failure handling stays in the caller: `capture*` and `restore*`
 // return false when the underlying llama.cpp call short-reads, and the
 // caller decides how to surface that. Under the uniform
 // `remove_thinking_from_context` hard-fail contract (PR #2813), the
-// end-of-prefill reasoning-boundary capture site
-// (`ReasoningBlockCompactor::snapshotAtPrefillBoundary`) throws
+// reasoning-boundary capture site
+// (`ReasoningBlockCompactor::snapshotAtReasoningBoundary`) throws
 // `qvac_errors::StatusError` on underflow, and hybrid restore/replay
 // failures inside `compact()` also throw. Auxiliary cancel-path
 // captures (`capturePrefillEntry`) log a warning and continue.
