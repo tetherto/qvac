@@ -350,11 +350,6 @@ jobs:
             cd "$WS/$P_PATH"
             if [ -f "$WS/.npmrc" ]; then cp "$WS/.npmrc" .npmrc; fi
 
-            if [ "$PKG" = "sdk" ]; then
-              run "npm install (peer resolution)" sdk_npm_install_check
-              run "npm install cleanup" rm -rf node_modules package-lock.json
-            fi
-
             # Disallowed dependencies: no git URLs or dev/tmp versions on public
             # npm deps. @tetherto/* GPR mono prerelease pins (e.g. inference-mono
             # 0.16.0-tmp.runid-*) are allowed — coordinated SDK+inference PRs
@@ -403,6 +398,11 @@ jobs:
 
               # Per-source setup (no-op if the script is absent).
               run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
+
+              # Peer-resolution drift against this source's resolved @qvac/inference.
+              if [ "$PKG" = "sdk" ]; then
+                run "npm install (peer resolution) $src" sdk_npm_install_check
+              fi
 
               run "format $src" npm run --if-present format
               run "lint $src" npm run --if-present lint
