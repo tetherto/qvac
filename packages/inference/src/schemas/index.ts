@@ -90,3 +90,4 @@ export {
 } from '@/schemas/model-types'
 export * from '@/schemas/plugin'
 export * from '@/schemas/registry'
+export * from '@/schemas/model-resource-profile'
