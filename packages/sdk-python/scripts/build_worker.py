@@ -48,10 +48,8 @@ def _run(cmd: list[str], cwd: Path) -> None:
 def links_workspace_inference(sdk: Path) -> bool:
     """Whether the sibling engine can be linked into this SDK checkout.
 
-    QVAC_POC_SDK_DIR can point at an older checkout that has `packages/inference`
-    but not the `sdk-source:workspace` script that links it, so the directory
-    alone is not enough. Anything not declaring both the dependency and the
-    script takes a plain install.
+    The directory alone is not enough: QVAC_POC_SDK_DIR can point at a checkout
+    with `packages/inference` but no script to link it.
     """
     if not (sdk.parent / "inference").is_dir():
         return False
@@ -78,17 +76,11 @@ def build(sdk: Path, *, force: bool) -> Path:
     # steps directly so a build here doesn't depend on the SDK's lint passing
     # (the SDK has its own lint CI). `bun install` pulls the addon prebuilds.
     #
-    # The SDK sources its surface from @qvac/inference, declared as a registry
-    # dependency. In the monorepo, compile against the sibling engine at this
-    # commit instead: the published release lags the engine API the SDK already
-    # consumes, so tsc below fails on anything unreleased. The helper installs
-    # the SDK against `file:../inference`, so it stands in for the plain install.
+    # Compile against the sibling engine where there is one: the published
+    # release lags the engine API the SDK source already consumes.
     if links_workspace_inference(sdk):
-        # The helper rewrites the SDK manifest to `file:../inference` and does
-        # not put it back. Restore it once the install has happened: node_modules
-        # keeps the link, so tsc below still compiles against the workspace
-        # engine, and a dev running this is not left with a dirty manifest that
-        # could be committed. Same restore pr-checks-sdk-pod.yml does.
+        # The helper rewrites the manifest and leaves it rewritten. Restoring is
+        # safe: node_modules keeps the link, so tsc still gets the workspace engine.
         manifest = sdk / "package.json"
         saved = manifest.read_text(encoding="utf-8")
         try:
