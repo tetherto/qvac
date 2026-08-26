@@ -4,7 +4,6 @@ import {
   HyperDBAdapter,
   QvacErrorRAG,
   TurboVecAdapter,
-  type BaseDBAdapter,
   type EmbeddingFunction,
   type TurboVecIndexProvider
 } from '@qvac/rag'
@@ -26,6 +25,7 @@ const WORKSPACE_MARKER_FILE = '.qvac-rag-workspace.json'
 const WORKSPACE_MARKER_VERSION = 1
 
 type RagAdapterType = 'hyperdb' | 'turbovec'
+type RagDbAdapter = HyperDBAdapter | TurboVecAdapter
 
 interface RagWorkspaceMarker {
   version: number
@@ -35,7 +35,7 @@ interface RagWorkspaceMarker {
 // Workspace-based RAG storage
 interface RagWorkspaceEntry {
   corestore: Corestore
-  dbAdapter: BaseDBAdapter
+  dbAdapter: RagDbAdapter
   rag?: RAG
   modelId?: string
 }
@@ -220,7 +220,7 @@ async function openWorkspaceEntry(key: string) {
     (workspaceExisted ? detectExistingAdapterType(key) : getRequestedAdapterType())
   const corestore = new Corestore(storePath)
 
-  let dbAdapter: BaseDBAdapter | undefined
+  let dbAdapter: RagDbAdapter | undefined
   try {
     dbAdapter = createRagDbAdapter(corestore, key, adapterType, marker.adapterType !== null)
     if (!marker.present) await writeWorkspaceAdapterType(storePath, adapterType)
