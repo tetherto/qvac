@@ -365,3 +365,35 @@ test(
     }
   }
 )
+
+// Unified is standard RNN-T (English) that reuses the TDT predictor+joint
+// code path in parakeet-cpp. On Adreno OpenCL the transducer decode is
+// routed to host via the same use_graphs=false guard TDT uses (two
+// known ggml-opencl gaps: no ARGMAX kernel, and dropped in-place
+// aliased ggml_cpy writes on the LSTM persistent state); the encoder
+// still runs on the GPU so stats.backendId stays 4 (OpenCL). No new
+// fixture — Unified is English-only, so sample.raw is used and no
+// language overlay is passed.
+test(
+  'Unified GPU smoke — useGPU=true must engage the GPU backend on GPU-capable platforms',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'unified')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found — skipping')
+        return
+      }
+      await runGpuModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
