@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Export `AUDIOGEN_BACKEND_NAMES`, `audiogenBackendName()` and the
+  `AudiogenBackendName` type, so a consumer can name a `stats.backendId`
+  without copying the code table out of this README.
 - Add desktop CPU support for MiniMax-Music3 through local LM and synthesis
   GGUF files, with engine-specific validation, progress, cancellation, runtime
   statistics, and a skippable model-backed integration regression.
