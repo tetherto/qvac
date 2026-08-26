@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import subprocess
 import sys
@@ -44,6 +45,25 @@ def _run(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def links_workspace_inference(sdk: Path) -> bool:
+    """Whether the sibling engine can be linked into this SDK checkout.
+
+    `packages/inference` predates the `sdk-source:workspace` script by nine days,
+    and QVAC_POC_SDK_DIR may point at a checkout from that window or older, so the
+    directory alone does not mean the script is there to run. Require the SDK to
+    declare both the dependency and the script; anything else takes a plain install.
+    """
+    if not (sdk.parent / "inference").is_dir():
+        return False
+    try:
+        pkg = json.loads((sdk / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return "@qvac/inference" in pkg.get("dependencies", {}) and (
+        "sdk-source:workspace" in pkg.get("scripts", {})
+    )
+
+
 def build(sdk: Path, *, force: bool) -> Path:
     worker = worker_path(sdk)
     if worker.exists() and not force:
@@ -63,7 +83,7 @@ def build(sdk: Path, *, force: bool) -> Path:
     # commit instead: the published release lags the engine API the SDK already
     # consumes, so tsc below fails on anything unreleased. The helper installs
     # the SDK against `file:../inference`, so it stands in for the plain install.
-    if (sdk.parent / "inference").is_dir():
+    if links_workspace_inference(sdk):
         # The helper rewrites the SDK manifest to `file:../inference` and does
         # not put it back. Restore it once the install has happened: node_modules
         # keeps the link, so tsc below still compiles against the workspace
