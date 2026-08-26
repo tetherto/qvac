@@ -21,7 +21,6 @@ import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
   ModelTypeMismatchError,
-  ModelIsDelegatedError,
   ModelNotFoundError,
   ModelLoadFailedError,
   PluginLoadConfigValidationFailedError,
@@ -252,10 +251,6 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
     const entry = getModelEntry(modelId)
     if (!entry) {
       throw new ModelNotFoundError(modelId)
-    }
-
-    if (entry.isDelegated) {
-      throw new ModelIsDelegatedError(modelId)
     }
 
     const storedModelType = entry.local.modelType

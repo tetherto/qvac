@@ -1,20 +1,8 @@
 import test from 'brittle'
-import { OPERATION_EVENT_KEY, PROFILING_KEY } from '@/schemas'
-import { createDelegatedProfilingMeta, profileReplyHandler } from '@/profiling'
+import { OPERATION_EVENT_KEY } from '@/schemas'
+import { profileReplyHandler } from '@/profiling'
 import type { ProfilingEvent } from '@/profiling/types'
 import { initializeResourceCollector, destroyResourceCollector } from '@/resources/instance'
-
-test('delegated profiling metadata forwards resource opt-in explicitly', (t) => {
-  const defaultMeta = createDelegatedProfilingMeta('default')
-  const optedInMeta = createDelegatedProfilingMeta('opted-in', {
-    includeResources: true
-  })
-
-  t.is(defaultMeta.includeResources, false)
-  t.is(defaultMeta.resourceOrigin, 'provider')
-  t.is(optedInMeta.includeResources, true)
-  t.is(optedInMeta.resourceOrigin, 'provider')
-})
 
 test('operation profiling: resource gauges sample only when requested', async (t) => {
   let sampleCalls = 0
@@ -104,24 +92,6 @@ test('operation profiling: resource gauges sample only when requested', async (t
   t.is(operationEvent?.resources?.cpu.status, 'supported')
   t.is(operationEvent?.resources?.memory.usedBytes.status, 'supported')
   t.is(operationEvent?.resources?.gpus.status, 'failed')
-  t.is(operationEvent?.resources?.origin, 'local')
-
-  const providerProfiled = await profileReplyHandler(
-    {
-      op: 'resourceTest',
-      request: {
-        [PROFILING_KEY]: createDelegatedProfilingMeta('provider-profile', {
-          includeResources: true
-        })
-      }
-    },
-    async () => ({ ok: true })
-  )
-  const providerOperation = (providerProfiled as { [OPERATION_EVENT_KEY]?: ProfilingEvent })[
-    OPERATION_EVENT_KEY
-  ]
-  t.is(sampleCalls, 2, 'delegated resource opt-in samples once')
-  t.is(providerOperation?.resources?.origin, 'provider')
 
   destroyResourceCollector()
 })

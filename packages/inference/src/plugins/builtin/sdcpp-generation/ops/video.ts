@@ -74,7 +74,7 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
   }
 
   const entry = getModelEntry(modelId)
-  const modelType = entry && !entry.isDelegated ? entry.local.modelType : ModelType.sdcppGeneration
+  const modelType = entry ? entry.local.modelType : ModelType.sdcppGeneration
   throw new ModelOperationNotSupportedError(modelId, modelType, 'video', ['diffusion'], [])
 }
 
@@ -91,10 +91,7 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   if (!moeCapableVideoModels.has(model)) parseVideoRequest(singleExpertVideoRequestSchema, request)
   validateProviderPaths(request)
   const modelEntry = getModelEntry(request.modelId)
-  const modelConfig =
-    modelEntry && !modelEntry.isDelegated
-      ? sdcppConfigSchema.safeParse(modelEntry.local.config)
-      : null
+  const modelConfig = modelEntry ? sdcppConfigSchema.safeParse(modelEntry.local.config) : null
   const loraApplyMode = modelConfig?.success ? (modelConfig.data.lora_apply_mode ?? 'auto') : 'auto'
   if (request.lora !== undefined && loraApplyMode !== 'at_runtime') {
     requestLogger.warn(

@@ -77,7 +77,36 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
     ]
   })
 
-  Hyperschema.toDisk(schema)
+  rag.register({
+    name: 'workspaceState',
+    fields: [
+      { name: 'key', type: 'string', required: true },
+      { name: 'revision', type: 'uint32', required: true },
+      { name: 'updatedAt', type: 'date', required: true }
+    ]
+  })
+
+  rag.register({
+    name: 'mutations',
+    fields: [
+      { name: 'revision', type: 'uint32', required: true },
+      { name: 'operation', type: 'string', required: true },
+      { name: 'documentIds', type: 'json', required: true },
+      { name: 'createdAt', type: 'date', required: true }
+    ]
+  })
+
+  rag.register({
+    name: 'nativeIds',
+    fields: [
+      { name: 'nativeId', type: 'string', required: true },
+      { name: 'documentId', type: 'string', required: true },
+      { name: 'mappingVersion', type: 'uint32', required: true },
+      { name: 'createdAt', type: 'date', required: true }
+    ]
+  })
+
+  Hyperschema.toDisk(schema, { esm: false })
 
   console.log('✅ RAG HyperDB schema generated successfully!')
 }
@@ -93,6 +122,9 @@ function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR
   dbNs.collections.register({ name: 'centroids', schema: '@rag/centroids', key: ['id'] })
   dbNs.collections.register({ name: 'ivfBuckets', schema: '@rag/ivfBuckets', key: ['centroidId'] })
   dbNs.collections.register({ name: 'config', schema: '@rag/config', key: ['key'] })
+  dbNs.collections.register({ name: 'workspaceState', schema: '@rag/workspaceState', key: ['key'] })
+  dbNs.collections.register({ name: 'mutations', schema: '@rag/mutations', key: ['revision'] })
+  dbNs.collections.register({ name: 'nativeIds', schema: '@rag/nativeIds', key: ['nativeId'] })
 
   // Register indexes
   dbNs.indexes.register({
@@ -101,7 +133,7 @@ function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR
     key: ['contentHash']
   })
 
-  HyperDB.toDisk(db)
+  HyperDB.toDisk(db, { esm: false })
   removeUnusedRuntimeImport(path.join(dbDir, 'index.js'))
 
   console.log('✅ RAG HyperDB specification built successfully!')
@@ -113,6 +145,7 @@ function buildRAGDatabase(schemaDir: string = SCHEMA_DIR, dbDir: string = DB_DIR
 // so the generated spec lints cleanly.
 function removeUnusedRuntimeImport(indexPath: string) {
   const content = fs.readFileSync(indexPath, 'utf8')
+  if (content.includes('c.')) return
   const updated = content.replace(
     "const { IndexEncoder, c, b4a } = require('hyperdb/runtime')",
     "const { IndexEncoder, b4a } = require('hyperdb/runtime')"

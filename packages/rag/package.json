@@ -29,6 +29,20 @@
       "node": "./dist/shims/fetch.js",
       "react-native": "./dist/shims/fetch.js",
       "default": "./dist/shims/fetch.js"
+    },
+    "#fs": {
+      "types": "./src/shims/fs.ts",
+      "bare": "bare-fs",
+      "node": "node:fs",
+      "react-native": "./dist/shims/fs.js",
+      "default": "./dist/shims/fs.js"
+    },
+    "#path": {
+      "types": "./src/shims/path.ts",
+      "bare": "bare-path",
+      "node": "node:path",
+      "react-native": "./dist/shims/path.js",
+      "default": "./dist/shims/path.js"
     }
   },
   "scripts": {
@@ -59,15 +73,13 @@
     "NOTICE"
   ],
   "devDependencies": {
-    "@qvac/embed-llamacpp": "^0.14.0",
-    "@qvac/llm-llamacpp": "^0.16.0",
+    "@qvac/embed-llamacpp": "^0.36.0",
+    "@qvac/llm-llamacpp": "^0.47.0",
     "@qvac/registry-client": "^0.6.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-abort-controller": "^1.1.2",
     "bare-console": "*",
-    "bare-fs": "^4.1.6",
-    "bare-path": "^3.0.0",
     "brittle": "^3.14.0",
     "corestore": "^7.4.7",
     "lunte": "^1.8.1",
@@ -81,6 +93,8 @@
     "@qvac/logging": "^0.1.1",
     "bare-crypto": "^1.13.4",
     "bare-fetch": "^3.0.1",
+    "bare-fs": "^4.7.0",
+    "bare-path": "^3.0.0",
     "hyperdb": "^6.7.0",
     "hyperdht": "^6.23.0",
     "hyperschema": "^1.13.0",
