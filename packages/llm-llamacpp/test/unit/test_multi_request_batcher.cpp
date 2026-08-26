@@ -910,6 +910,8 @@ TEST_F(MultiRequestBatcherTest, FinishingSampleIsNotRecorded) {
   mocked_llama_decode(*batch);
   batcher.advance(genResult.chunkSize);
 
+  const auto rateWindowEnd = req->lastTokenAt;
+
   // Second sample is terminal: the driver marks the slot finished from inside
   // the sampler, exactly as the scheduler's lambda does on an EOG.
   batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
@@ -920,6 +922,44 @@ TEST_F(MultiRequestBatcherTest, FinishingSampleIsNotRecorded) {
   ASSERT_NE(req, nullptr);
   EXPECT_EQ(req->generatedTokens.size(), 1u)
       << "the terminal sample never reached the cache but was still counted";
+  EXPECT_EQ(req->lastTokenAt, rateWindowEnd)
+      << "the rate window must not stretch over a token the count excludes";
+}
+
+/// `predict: 1` makes the first sample the terminal one. `onLogitsReady`
+/// streams it before the slot is marked finished, so the caller does get
+/// output and TTFT has to be stamped from the same token. Only the count
+/// leaves it out, which is why the two stamps part ways here.
+TEST_F(MultiRequestBatcherTest, TerminalFirstSampleStillStampsTtft) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
+    batcher.markFinished(sid);
+    return 41;
+  });
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_TRUE(req->generatedTokens.empty())
+      << "the terminal sample is still not queued or counted";
+  EXPECT_TRUE(req->firstTokenAt.has_value())
+      << "a streamed terminal token must still fix TTFT";
+  EXPECT_FALSE(req->lastTokenAt.has_value())
+      << "one uncounted token gives no honest rate window";
 }
 
 TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {

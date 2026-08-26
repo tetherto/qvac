@@ -839,6 +839,17 @@ TEST(ReasoningBlockCompactorBoundary, ForcedOpenAnchorsBeforeTheOpener) {
           /*thinkingForcedOpen=*/true,
           /*forcedOpenTokenCount=*/2),
       0);
+  // A cache hit left part of the opener resident, so this prefill is shorter
+  // than the opener. The anchor clamps to 0 instead of underflowing, which on
+  // the full-state path means the snapshot lands on the admission cursor and
+  // the resident fragment survives. See
+  // `TextLlmContext::computeRecurrentSnapshotBoundary`.
+  EXPECT_EQ(
+      reasoningBoundaryTokenIndex(
+          /*prefillEnd=*/1,
+          /*thinkingForcedOpen=*/true,
+          /*forcedOpenTokenCount=*/5),
+      0);
 }
 
 TEST(

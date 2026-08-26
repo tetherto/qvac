@@ -1573,12 +1573,17 @@ ObservedRequestStats computeObservedStats(
   observed.promptTokens = req.isPrefillComplete()
                               ? static_cast<int64_t>(req.prefillTokenCount)
                               : static_cast<int64_t>(req.prefillFedCount);
-  if (!req.firstTokenAt.has_value() || !req.lastTokenAt.has_value()) {
+  if (!req.firstTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist
   }
   observed.ttftMs =
       std::chrono::duration<double, std::milli>(*req.firstTokenAt - enqueuedAt)
           .count();
+  // A request whose only token also ended it has a TTFT but no rate window,
+  // because `lastTokenAt` tracks counted tokens.
+  if (!req.lastTokenAt.has_value()) {
+    return observed;
+  }
   const double genWindowMs = std::chrono::duration<double, std::milli>(
                                  *req.lastTokenAt - *req.firstTokenAt)
                                  .count();

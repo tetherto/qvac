@@ -1158,13 +1158,19 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
           prefillLen,
           thinkingForcedOpen_,
           reasoningState_.forcedOpenTokenCount);
-  // Boundaries outside `[0, prefillLen]` would corrupt the chunk-cap
-  // logic. That happens when a cache hit left part of the opener behind
-  // and this prefill is shorter than the opener: there is no decode stop
-  // to anchor on, so fall back to the end-of-prefill capture in
-  // `snapshotForRecurrentRollback`. Compaction still drops the reasoning
-  // body; only the opener residue survives, which beats refusing to
-  // compact and leaving the whole span in cache.
+  // `reasoningBoundaryTokenIndex` clamps at 0, so a prefill shorter than
+  // the opener anchors at index 0 rather than underflowing: the decode
+  // stops before this prefill feeds anything and the snapshot is the
+  // admission cursor. That is the cache-hit case where part of the opener
+  // is already resident, and the resident fragment then survives the
+  // rewind, since a full-state snapshot cannot be taken at a point the
+  // decode has already passed. Compaction still drops the reasoning body,
+  // only the fragment stays. Pure attention does not have this hole: its
+  // anchor is an absolute position, so it subtracts the opener from
+  // `nPast_` and the rewind trims into the cached region.
+  //
+  // The guard below is defence in depth for a boundary the helper cannot
+  // produce today.
   if (boundary < 0 || boundary > prefillLen) {
     return -1;
   }

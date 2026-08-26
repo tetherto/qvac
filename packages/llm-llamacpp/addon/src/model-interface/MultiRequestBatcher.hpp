@@ -48,7 +48,9 @@ struct Request {
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
   /// Observed wall-clock stamps for the per-request end-to-end stats: fixed by
-  /// the first sampled token, advanced by every sample (see
+  /// the first sampled token, including one that ends the sequence, since the
+  /// caller sees that token too. `lastTokenAt` advances only for a sample that
+  /// is counted, so the rate window matches `generatedTokens` (see
   /// sampleAndAppendIdle). Batch-shared decode makes an isolated per-request
   /// compute rate unmeasurable; these give the observed timeline instead.
   std::optional<std::chrono::steady_clock::time_point> firstTokenAt,

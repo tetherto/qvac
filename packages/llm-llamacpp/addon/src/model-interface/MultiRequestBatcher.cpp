@@ -378,17 +378,27 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
     // A driver can also stop without producing a token at all and return
     // `LLAMA_TOKEN_NULL` (see `SequenceStepResult::token`); the MTMD
     // context-overflow return does. That id must never enter the feed queue.
-    if (sampled == LLAMA_TOKEN_NULL || slot->isFinished()) {
+    if (sampled == LLAMA_TOKEN_NULL) {
       continue;
     }
-    slot->generatedTokens.push_back(sampled);
-    slot->hasUnfedSample = true;
-    // Stamp the observed token times: first sample fixes firstTokenAt (TTFT
-    // boundary), every sample advances lastTokenAt (observed-TPS window end).
+    // TTFT measures the token the caller SEES, and `samplerFn` has already
+    // streamed this one out of `onLogitsReady` even when it also ended the
+    // sequence. So the stamp goes before the terminal filter below: a
+    // `predict: 1` request produces exactly one token, and stamping after
+    // would return that output while reporting TTFT 0.
     const auto now = std::chrono::steady_clock::now();
     if (!slot->firstTokenAt.has_value()) {
       slot->firstTokenAt = now;
     }
+    if (slot->isFinished()) {
+      continue;
+    }
+    slot->generatedTokens.push_back(sampled);
+    slot->hasUnfedSample = true;
+    // Closes the observed-TPS window, so it advances only for tokens that
+    // are counted. The terminal sample above is not one of them, and ending
+    // the window on it would stretch the window over one more gap than the
+    // count has.
     slot->lastTokenAt = now;
   }
 }

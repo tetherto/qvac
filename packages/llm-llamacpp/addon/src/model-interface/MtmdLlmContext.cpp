@@ -1771,8 +1771,10 @@ bool MtmdLlmContext::onCancel(
 /// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
 /// exactly as `CacheManager` does. `cacheTokens` matters on its own here: for
 /// M-RoPE media the KV-cell count diverges from the positional span
-/// (`current_.pos` vs `current_.cacheTokens`). Slots 1 and 3 are unused and
-/// written as 0; the width stays at four so cache files remain compatible.
+/// (`current_.pos` vs `current_.cacheTokens`). Slots 1 and 3 are retired, and
+/// `SessionMetadata::capture` mirrors the live cursors into them rather than
+/// writing 0, so a build that still slides fails closed instead of evicting
+/// from position 0. The width stays at four so cache files remain compatible.
 static_assert(
     SESSION_METADATA_FIELD_COUNT == 4,
     "MTMD cache (de)serialization must persist all four session-metadata "
