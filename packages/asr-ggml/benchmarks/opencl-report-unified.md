@@ -42,7 +42,7 @@ validates the same wiring on the alternative Android GPU path.
   ggml-opencl lacks an `ARGMAX` kernel and drops in-place aliased
   `ggml_cpy` writes on the LSTM persistent state (documented at
   `parakeet_tdt.h:64`, `parakeet_tdt.cpp:322`, and `parakeet_tdt.cpp:641-646`
-  under QVAC-20556). Encoder still runs on the GPU so `stats.backendId`
+  landed as `6130fb056`). Encoder still runs on the GPU so `stats.backendId`
   stays `4` (OpenCL). No `qvac-ext-ggml` speech kernel additions were
   needed. No changes to `qvac-ext-whisper.cpp`.
 
@@ -171,7 +171,7 @@ Adreno 750) to sanity-check on a lower tier of the same family. Substitute
   reuses `tdt_prepare_runtime` / `tdt_step_decode` with an `is_rnnt` branch).
   The transducer's two OpenCL-hostile ops (`ARGMAX` — not implemented in
   ggml-opencl; in-place aliased `ggml_cpy` on the LSTM persistent state —
-  dropped by ggml-opencl per QVAC-20556) are already worked around by
+  dropped by ggml-opencl per `6130fb056`) are already worked around by
   `use_graphs=false` on OpenCL, which routes the per-step decode to host
   while the encoder stays on the GPU.
 - Only `q4_0` is exercised on mobile per the existing `loadGgufOrSkip`
