@@ -1,10 +1,13 @@
 import { AudioGen } from '@qvac/audiogen-ggml'
 import {
   audioGenStatsSchema,
+  type AudioGenStats,
   type AudioGenStreamRequest,
   type AudioGenStreamResponse
 } from '@/schemas/audio-gen'
+import { graphicsDriverSchema, type InferenceBackendDiagnostics } from '@/schemas/index'
 import { getEngineLogger } from '@/logging/index'
+import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { resolveAudioGenPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { getModel } from '@/runtime/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
@@ -144,11 +147,44 @@ export async function* audioGenStream(
   }
 
   const stats = audioGenStatsSchema.parse(await response.await())
-  yield {
+  const diagnostics = buildBackendDiagnostics(stats)
+  const terminal: AudioGenStreamResponse = {
     type: 'audioGenStream',
     done: true,
     stopReason: 'completed',
-    stats
+    stats,
+    ...(diagnostics && { diagnostics })
+  }
+  yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
+}
+
+/**
+ * `@qvac/audiogen-ggml` documents its resolved-backend numbering in its README
+ * and CHANGELOG: `backendDevice` 0 = CPU / 1 = GPU, `backendId` 1 = Metal,
+ * 2 = CUDA, 3 = Vulkan, 4 = OpenCL, 99 = other.
+ */
+const AUDIOGEN_GPU_BACKEND_NAMES: Record<number, string> = {
+  1: 'metal',
+  2: 'cuda',
+  3: 'vulkan',
+  4: 'opencl',
+  99: 'other-gpu'
+}
+
+/** An unrecognized GPU id yields no diagnostics rather than a guessed backend name. */
+function buildBackendDiagnostics(stats: AudioGenStats): InferenceBackendDiagnostics | undefined {
+  if (stats.backendDevice === undefined) return undefined
+  if (stats.backendDevice !== 1) return { selectedBackend: 'cpu', selectedDevice: 'cpu' }
+
+  const selectedBackend =
+    stats.backendId === undefined ? undefined : AUDIOGEN_GPU_BACKEND_NAMES[stats.backendId]
+  if (selectedBackend === undefined) return undefined
+
+  const graphicsApi = graphicsDriverSchema.safeParse(selectedBackend)
+  return {
+    selectedBackend,
+    selectedDevice: 'gpu',
+    ...(graphicsApi.success && { graphicsApi: graphicsApi.data })
   }
 }
 
