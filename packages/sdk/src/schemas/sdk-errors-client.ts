@@ -26,13 +26,6 @@ export const SDK_CLIENT_ERROR_CODES = {
   WORKER_CRASHED: 50205,
   WORKER_SHUTDOWN: 50206,
 
-  // Provider/Delegation Errors (50,400-50,599)
-  PROVIDER_START_FAILED: 50400,
-  PROVIDER_STOP_FAILED: 50401,
-  DELEGATE_NO_FINAL_RESPONSE: 50402,
-  DELEGATE_PROVIDER_ERROR: 50403,
-  DELEGATE_CONNECTION_FAILED: 50404,
-
   // Build/Bundle Errors (50,600-50,799)
   SDK_NOT_FOUND_IN_NODE_MODULES: 50600,
   WORKER_FILE_NOT_FOUND: 50601,
@@ -131,28 +124,6 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
     name: 'WORKER_SHUTDOWN',
     message: () => `SDK is shutting down — in-flight RPC call aborted`
-  },
-
-  // Provider/Delegation Errors (50,400-50,599)
-  [SDK_CLIENT_ERROR_CODES.PROVIDER_START_FAILED]: {
-    name: 'PROVIDER_START_FAILED',
-    message: (details?: string) => `Failed to start provider${details ? `: ${details}` : ''}`
-  },
-  [SDK_CLIENT_ERROR_CODES.PROVIDER_STOP_FAILED]: {
-    name: 'PROVIDER_STOP_FAILED',
-    message: (details?: string) => `Failed to stop provider${details ? `: ${details}` : ''}`
-  },
-  [SDK_CLIENT_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE]: {
-    name: 'DELEGATE_NO_FINAL_RESPONSE',
-    message: 'No final response received from delegated provider'
-  },
-  [SDK_CLIENT_ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
-    name: 'DELEGATE_PROVIDER_ERROR',
-    message: (details: string) => `Delegated provider error: ${details}`
-  },
-  [SDK_CLIENT_ERROR_CODES.DELEGATE_CONNECTION_FAILED]: {
-    name: 'DELEGATE_CONNECTION_FAILED',
-    message: (details: string) => `Failed to connect to delegated provider: ${details}`
   },
 
   // Build/Bundle Errors (50,600-50,799)

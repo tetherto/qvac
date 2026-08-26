@@ -283,7 +283,6 @@ async function runLoadModel(
       isReactNativeRuntime() &&
       canonicalModelType === ModelType.sdcppGeneration &&
       modelConfig?.mode === 'video' &&
-      resolvedOptions['delegate'] === undefined &&
       !warnedLocalVideoModelLoad
     ) {
       warnedLocalVideoModelLoad = true
@@ -291,8 +290,7 @@ async function runLoadModel(
         'QVAC video generation works on React Native, but loading the video ' +
         'model on-device will usually fail or take several minutes — the video ' +
         'diffusion models currently shipped by QVAC are too large to load ' +
-        'on typical mobile devices. Pass a `delegate` to `loadModel(...)` to ' +
-        'run generation on a desktop peer instead.'
+        'on typical mobile devices.'
       logger.warn(message)
     }
   }

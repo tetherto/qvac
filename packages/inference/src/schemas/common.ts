@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { perCallProfilingSchema } from '@/schemas/profiling'
-import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/delegate'
+import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
 import {
   completionOrchestrateRequestSchema,
   completionOrchestrateResponseSchema,
@@ -37,12 +37,6 @@ import {
 } from '@/schemas/bci'
 import { embedRequestSchema, embedResponseSchema } from '@/schemas/embed'
 import { cancelRequestSchema, cancelResponseSchema } from '@/schemas/cancel'
-import {
-  provideRequestSchema,
-  provideResponseSchema,
-  stopProvideRequestSchema,
-  stopProvideResponseSchema
-} from '@/schemas/provide'
 import { translateRequestSchema, translateResponseSchema } from '@/schemas/translate'
 import { loggingStreamRequestSchema, loggingStreamResponseSchema } from '@/schemas/logging-stream'
 import {
@@ -121,8 +115,6 @@ export const requestSchema = z.union([
   ttsRequestSchema,
   textToSpeechStreamRequestSchema,
   cancelRequestSchema,
-  provideRequestSchema,
-  stopProvideRequestSchema,
   ragRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
@@ -164,8 +156,6 @@ export const responseSchema = z.discriminatedUnion('type', [
   ttsResponseSchema,
   textToSpeechStreamResponseSchema,
   cancelResponseSchema,
-  provideResponseSchema,
-  stopProvideResponseSchema,
   errorResponseSchema,
   ragResponseSchema,
   ragProgressUpdateSchema,

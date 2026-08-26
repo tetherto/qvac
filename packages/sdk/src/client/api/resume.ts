@@ -16,9 +16,6 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * Behavior of in-flight operations from before the previous `suspend()`:
  *   - P2P / Hyperdrive downloads: continue automatically once their underlying
  *     swarm/corestore is restored
- *   - Delegated reply RPCs: auto-recover once the swarm reconnects
- *     (subject to delegate `timeout`)
- *   - Delegated stream RPCs: not recovered — re-issue after `resume()` works normally.
  *
  * @throws {RPCError} When one or more resources fail to resume. On partial
  *   failure the runtime stays `"suspended"` (operations remain blocked) so

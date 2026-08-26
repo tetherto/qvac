@@ -11,7 +11,7 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 ## Why this exists
 
-`@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, the plugin system, and the P2P/delegation stack, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.1).
+`@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, and the plugin system, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.1).
 
 `@qvac/inference` ships no plugins by default and no addon dependencies. You install only the addon packages your app registers, so the resulting binary scales with the engines you actually assemble.
 
@@ -128,10 +128,6 @@ const myPlugin = definePlugin({
 
 registerPlugin(myPlugin)
 ```
-
-## Delegation (P2P)
-
-`@qvac/inference` includes the QVAC provider and delegation stack: start a provider with `startQVACProvider()` and run models on a remote peer by passing `delegate: { providerPublicKey }` to `loadModel`. Delegation talks peer-to-peer over Hyperswarm — it is independent of the in-process engine.
 
 ## License
 
