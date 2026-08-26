@@ -138,12 +138,17 @@ jobs:
           fi
           echo "OK: @qvac/inference, @qvac/sdk, @qvac/bare-sdk, and tetherto-qvac-sdk all at $INF_VER (verified at ${REF})"
 
+      # pull_request_target checks out base.sha, then bun install resolves
+      # @qvac/inference from npm. That cannot typecheck main's SDK source
+      # (workspace-link is SDK Pod Checks). Keep lockstep verify; skip compile.
       - name: Setup Bun
+        if: github.event_name != 'pull_request_target'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
           bun-version: latest
 
       - name: Configure scoped registry for @tetherto and @qvac packages
+        if: github.event_name != 'pull_request_target'
         env:
           GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -177,6 +182,7 @@ jobs:
           EOF
 
       - name: Install dependencies
+        if: github.event_name != 'pull_request_target'
         run: bun install
         working-directory: ${{ env.WORKDIR }}
 
@@ -191,6 +197,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
 
       - name: Modify package name for branch-based builds
+        if: github.event_name != 'pull_request_target'
         working-directory: ${{ env.WORKDIR }}
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
@@ -250,10 +257,12 @@ jobs:
           fi
 
       - name: Build (includes lint, typecheck, compile)
+        if: github.event_name != 'pull_request_target'
         run: bun run build
         working-directory: ${{ env.WORKDIR }}
 
       - name: Upload build artifacts
+        if: github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: dist
@@ -261,6 +270,7 @@ jobs:
           retention-days: 30
 
       - name: Determine version and tag
+        if: github.event_name != 'pull_request_target'
         id: version
         working-directory: ${{ env.WORKDIR }}
         run: |
@@ -291,6 +301,7 @@ jobs:
   build-bare-sdk:
     name: Build @qvac/bare-sdk (from sdk dist)
     needs: [build]
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -331,6 +342,7 @@ jobs:
   build-inference:
     name: Build @qvac/inference
     needs: [build]
+    if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
