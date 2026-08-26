@@ -24,7 +24,6 @@
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
-#include "test_reasoning_rewind_fake.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 
 // Tests for the cancel-rollback paths introduced alongside

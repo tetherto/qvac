@@ -1172,12 +1172,12 @@ TEST(
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
   EXPECT_EQ(outcome.newPos, 10)
-      << "the clamped span rewinds to the prefill boundary and replays";
+      << "the clamped span rewinds to the reasoning boundary and replays";
   EXPECT_EQ(outcome.discarded, 10);
   EXPECT_EQ(accepting.restoreCalls(), 1)
-      << "clamped partial cleanup must issue the pure-attention seq_rm";
+      << "clamped partial cleanup must restore the pure-attention boundary";
   EXPECT_EQ(accepting.replayCalls(), 1)
-      << "successful seq_rm must be followed by its paired seq_add";
+      << "a restored boundary must be followed by its replay";
   EXPECT_EQ(fx.compactor.blockDiscards(), 1)
       << "clamped partial drop is still a real discard and must be counted";
 

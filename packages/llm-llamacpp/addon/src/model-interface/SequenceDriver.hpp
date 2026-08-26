@@ -123,7 +123,7 @@ struct PrefillPlan {
 }
 
 /// Whether a slot at `pos` has no room for another token. The generation-time
-/// half of the rule above, named so the five sites testing it cannot drift
+/// half of the rule above, named so the four guards testing it cannot drift
 /// apart again: a slot that will generate needs one free cell, so
 /// `pos == ceiling` is already full.
 [[nodiscard]] inline bool contextWindowFull(llama_pos pos, llama_pos ceiling) {
