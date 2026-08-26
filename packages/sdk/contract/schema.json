@@ -83,9 +83,6 @@
           "$ref": "#/$defs/pluginInvokeStream.request"
         },
         {
-          "$ref": "#/$defs/provide.request"
-        },
-        {
           "$ref": "#/$defs/rag.request"
         },
         {
@@ -93,9 +90,6 @@
         },
         {
           "$ref": "#/$defs/state.request"
-        },
-        {
-          "$ref": "#/$defs/stopProvide.request"
         },
         {
           "$ref": "#/$defs/suspend.request"
@@ -215,9 +209,6 @@
           "$ref": "#/$defs/pluginInvokeStream.response"
         },
         {
-          "$ref": "#/$defs/provide.response"
-        },
-        {
           "$ref": "#/$defs/rag.response"
         },
         {
@@ -228,9 +219,6 @@
         },
         {
           "$ref": "#/$defs/state.response"
-        },
-        {
-          "$ref": "#/$defs/stopProvide.response"
         },
         {
           "$ref": "#/$defs/suspend.response"
@@ -1192,18 +1180,18 @@
                 "type": {
                   "type": "string",
                   "const": "filePath",
-                  "description": "Local neural `.bin` file path."
+                  "description": "Neural `.bin` file path."
                 },
                 "value": {
                   "type": "string",
-                  "description": "Path to a BCI neural `.bin` recording on the provider."
+                  "description": "Path to a BCI neural `.bin` recording."
                 }
               },
               "required": ["type", "value"],
               "title": "BciTranscribeRequestNeuralDataFilePath"
             }
           ],
-          "description": "Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path."
+          "description": "Fixed wire shape for BCI neural input: either inline base64 neural bytes or a `.bin` file path."
         },
         "type": {
           "type": "string",
@@ -4096,82 +4084,42 @@
           "const": "getLoadedModelInfo"
         },
         "info": {
-          "oneOf": [
-            {
-              "type": "object",
-              "properties": {
-                "modelId": {
-                  "type": "string"
-                },
-                "isDelegated": {
-                  "type": "boolean",
-                  "const": false
-                },
-                "modelType": {
-                  "type": "string"
-                },
-                "handlers": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "displayName": {
-                  "type": "string"
-                },
-                "addonPackage": {
-                  "type": "string"
-                },
-                "loadedAt": {},
-                "name": {
-                  "type": "string"
-                },
-                "path": {
-                  "type": "string"
-                },
-                "toolDialect": {
-                  "type": "string",
-                  "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
-                  "title": "LocalLoadedModelInfoToolDialect"
-                }
-              },
-              "required": ["modelId", "isDelegated", "modelType", "handlers", "loadedAt"],
-              "additionalProperties": false,
-              "title": "LocalLoadedModelInfo"
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string"
             },
-            {
-              "type": "object",
-              "properties": {
-                "modelId": {
-                  "type": "string"
-                },
-                "isDelegated": {
-                  "type": "boolean",
-                  "const": true
-                },
-                "handlers": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "providerInfo": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "additionalProperties": false,
-                  "title": "DelegatedLoadedModelInfoProviderInfo"
-                }
-              },
-              "required": ["modelId", "isDelegated", "handlers", "providerInfo"],
-              "additionalProperties": false,
-              "title": "DelegatedLoadedModelInfo"
+            "modelType": {
+              "type": "string"
+            },
+            "handlers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "addonPackage": {
+              "type": "string"
+            },
+            "loadedAt": {},
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "toolDialect": {
+              "type": "string",
+              "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
+              "title": "LoadedModelInfoToolDialect"
             }
-          ]
+          },
+          "required": ["modelId", "modelType", "handlers", "loadedAt"],
+          "additionalProperties": false,
+          "title": "LoadedModelInfo"
         }
       },
       "required": ["type", "info"],
@@ -7942,28 +7890,6 @@
         "type": {
           "type": "string",
           "const": "heartbeat"
-        },
-        "delegate": {
-          "type": "object",
-          "properties": {
-            "providerPublicKey": {
-              "type": "string",
-              "pattern": "^[0-9a-fA-F]{64}$",
-              "description": "Hex-encoded public key of the remote provider to delegate to."
-            },
-            "timeout": {
-              "description": "Per-call timeout in milliseconds for the delegated request.",
-              "type": "number",
-              "minimum": 100
-            },
-            "healthCheckTimeout": {
-              "description": "Timeout in milliseconds for the health-check probe before delegating.",
-              "type": "number",
-              "minimum": 100
-            }
-          },
-          "required": ["providerPublicKey"],
-          "title": "HeartbeatRequestDelegate"
         }
       },
       "required": ["type"]
@@ -8007,38 +7933,6 @@
                 },
                 "seed": {
                   "type": "boolean"
-                },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestLlamacppCompletionDelegate"
                 },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
@@ -8330,38 +8224,6 @@
                 },
                 "seed": {
                   "type": "boolean"
-                },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestWhispercppTranscriptionDelegate"
                 },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
@@ -8670,38 +8532,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestBciWhispercppTranscriptionDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -8931,38 +8761,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestParakeetTranscriptionDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -9111,38 +8909,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestLlamacppEmbeddingDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -9262,38 +9028,6 @@
                 },
                 "seed": {
                   "type": "boolean"
-                },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestNmtcppTranslationDelegate"
                 },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
@@ -10056,38 +9790,6 @@
                 },
                 "seed": {
                   "type": "boolean"
-                },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestTtsGgmlDelegate"
                 },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
@@ -11685,38 +11387,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestGgmlOcrDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -11886,38 +11556,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestSdcppGenerationDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -11936,7 +11574,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -13036,38 +12674,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestAudiogenGgmlDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -13471,38 +13077,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestGgmlVlaDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -13599,38 +13173,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelSrcRequestGgmlClassificationDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -13685,38 +13227,6 @@
                 "seed": {
                   "type": "boolean"
                 },
-                "delegate": {
-                  "type": "object",
-                  "properties": {
-                    "providerPublicKey": {
-                      "type": "string",
-                      "pattern": "^[0-9a-fA-F]{64}$",
-                      "description": "Hex-encoded public key of the remote provider to delegate to."
-                    },
-                    "timeout": {
-                      "description": "Per-call timeout in milliseconds for the delegated request.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "healthCheckTimeout": {
-                      "description": "Timeout in milliseconds for the health-check probe before delegating.",
-                      "type": "number",
-                      "minimum": 100
-                    },
-                    "fallbackToLocal": {
-                      "default": false,
-                      "description": "When `true`, fall back to local execution if the delegated provider is unreachable.",
-                      "type": "boolean"
-                    },
-                    "forceNewConnection": {
-                      "default": false,
-                      "description": "When `true`, skip any cached delegation connection and open a fresh one.",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": ["providerPublicKey"],
-                  "title": "LoadModelCustomPluginRequestDelegate"
-                },
                 "fallbackSrc": {
                   "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
                   "type": "string"
@@ -13759,9 +13269,6 @@
               "not": {}
             },
             "withProgress": {
-              "not": {}
-            },
-            "delegate": {
               "not": {}
             },
             "seed": {
@@ -14861,58 +14368,6 @@
       "required": ["type", "result"],
       "additionalProperties": false
     },
-    "provide.request": {
-      "title": "ProvideRequest",
-      "type": "object",
-      "properties": {
-        "firewall": {
-          "type": "object",
-          "properties": {
-            "mode": {
-              "default": "allow",
-              "type": "string",
-              "enum": ["allow", "deny"],
-              "title": "ProvideRequestFirewallMode"
-            },
-            "publicKeys": {
-              "default": [],
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "title": "ProvideRequestFirewall"
-        },
-        "type": {
-          "type": "string",
-          "const": "provide"
-        }
-      },
-      "required": ["type"],
-      "additionalProperties": false
-    },
-    "provide.response": {
-      "title": "ProvideResponse",
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "provide"
-        },
-        "success": {
-          "type": "boolean"
-        },
-        "error": {
-          "type": "string"
-        },
-        "publicKey": {
-          "type": "string"
-        }
-      },
-      "required": ["type", "success"],
-      "additionalProperties": false
-    },
     "rag.request": {
       "title": "RagRequest",
       "oneOf": [
@@ -15684,36 +15139,6 @@
         }
       },
       "required": ["type", "state"],
-      "additionalProperties": false
-    },
-    "stopProvide.request": {
-      "title": "StopProvideRequest",
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "stopProvide"
-        }
-      },
-      "required": ["type"],
-      "additionalProperties": false
-    },
-    "stopProvide.response": {
-      "title": "StopProvideResponse",
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "stopProvide"
-        },
-        "success": {
-          "type": "boolean"
-        },
-        "error": {
-          "type": "string"
-        }
-      },
-      "required": ["type", "success"],
       "additionalProperties": false
     },
     "suspend.request": {
@@ -16645,9 +16070,6 @@
         },
         "hasActiveModels": {
           "type": "boolean"
-        },
-        "hasActiveProviders": {
-          "type": "boolean"
         }
       },
       "required": ["type", "success"],
@@ -16760,7 +16182,7 @@
       "properties": {
         "modelId": {
           "type": "string",
-          "description": "The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices."
+          "description": "The identifier of the loaded video model to use for generation. On React Native, the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices."
         },
         "requestId": {
           "description": "Stable identifier for this in-flight video generation. Optional — falls back to a generated id when the field is missing.",
@@ -16776,7 +16198,7 @@
           "type": "string"
         },
         "lora": {
-          "description": "LTX video only. Worker-local absolute path to a LoRA adapter. Under delegated inference the file must already exist on the provider.",
+          "description": "LTX video only. Worker-local absolute path to a LoRA adapter.",
           "type": "string",
           "minLength": 1,
           "pattern": "^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)"

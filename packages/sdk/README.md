@@ -131,8 +131,8 @@ const profile = profiler.exportJSON()
 The sample uses the same status, provenance, and scope semantics as
 `getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
 clock as the profiling event's `ts`, so the two timestamps are comparable.
-`resources.origin` is `local` for the current worker and `provider` for a
-delegated provider's worker. Samples are delivered to `profiler.onRecord`; they
+`resources.origin` records that the sample was taken on the `local` worker.
+Samples are delivered to `profiler.onRecord`; they
 are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
 gauges in `summary` mode still incurs the sampling cost without retaining them.
 Disabling profiling or omitting `includeResourceGauges` performs no resource
