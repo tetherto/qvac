@@ -121,8 +121,8 @@ TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
 // A close marker that tokenises to several pieces used to be unsupported,
 // because replay could only seed the single token that tripped the close
 // detector, leaving the restored span with an unbalanced `<think>` opener.
-// Replay seeds the whole `cached_close_tag_tokens` sequence now, so marker
-// length no longer decides whether compaction is possible.
+// No structural marker is replayed at all now, so marker length no longer
+// decides whether compaction is possible.
 TEST(ReasoningSnapshotPolicy, CapturesWhenCloseMarkerIsMultiToken) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
       /*needsRecurrentSnapshot=*/true,
@@ -213,7 +213,7 @@ TEST(ReasoningRollbackStateAppend, PreservesOrderWithCapturedTokens) {
   // `recordPostReasoningToken`. The replay must concatenate them in
   // [close-marker, ...post-close] order so the SSM advance is balanced.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
   rollback.startPostReasoningCapture(true);
   rollback.recordPostReasoningToken(/*newline=*/198);
   rollback.recordPostReasoningToken(/*answer=*/2500);
@@ -234,16 +234,14 @@ TEST(ReasoningRollbackStateAppend, ResetClearsBuffer) {
   EXPECT_EQ(rollback.seededPostReasoningCount(), 0u);
 }
 
-TEST(
-    ReasoningRollbackStateClip,
-    PreservesSeededCloseMarkerWithEmptyCapturedTail) {
+TEST(ReasoningRollbackStateClip, PreservesSeededPreambleWithEmptyCapturedTail) {
   // `compact()` passes `pos - end` as the captured-tail cap. When no
   // post-close tokens were sampled (e.g. EOS hit immediately after
-  // `</think>`), that cap is zero. The seeded close marker MUST
-  // survive — dropping it would replay an unbalanced
-  // `<think>\n` + answer-tail recurrent state on the next turn.
+  // `</think>`), that cap is zero. The seeded pre-reasoning preamble MUST
+  // survive: it sits before the span, so dropping it would replay fewer
+  // tokens than the rewind removed and leave `newPos` short of live KV.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
   ASSERT_EQ(rollback.seededPostReasoningCount(), 1u);
 
   rollback.clipPostReasoningTokens(/*maxCapturedTail=*/0);
@@ -251,13 +249,13 @@ TEST(
   EXPECT_EQ(rollback.postReasoningTokens()[0], 100);
 }
 
-TEST(ReasoningRollbackStateClip, PreservesMultipleSeededStructuralTokens) {
-  // Future callers may seed more than one structural token before
-  // capture flips on. Clipping with an empty live tail must preserve
-  // the entire seeded prefix, not just the first token.
+TEST(ReasoningRollbackStateClip, PreservesMultipleSeededPreambleTokens) {
+  // A generated-opener template can sample several preamble tokens before
+  // the span opens and capture flips on. Clipping with an empty live tail
+  // must preserve the entire seeded prefix, not just the first token.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
-  rollback.appendPostReasoningToken(/*structuralNewline=*/198);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/198);
   rollback.startPostReasoningCapture(true);
   rollback.recordPostReasoningToken(/*capturedTail=*/2500);
   ASSERT_EQ(rollback.seededPostReasoningCount(), 2u);
@@ -275,7 +273,7 @@ TEST(ReasoningRollbackStateClip, KeepsSeededPrefixAndCapsCapturedTail) {
   // is the captured-tail length (2), not the total. The close marker
   // stays; only the last captured token is dropped.
   ReasoningRollbackState rollback;
-  rollback.appendPostReasoningToken(/*closeMarker=*/100);
+  rollback.appendPostReasoningToken(/*preamble=*/100);
   rollback.startPostReasoningCapture(true);
   rollback.recordPostReasoningToken(/*t0=*/198);
   rollback.recordPostReasoningToken(/*t1=*/2500);
@@ -671,10 +669,10 @@ TEST(
   EXPECT_EQ(fx.compactor.blockDiscards(), 0);
 }
 
-// Defensive no-boundary regression: `ReasoningSnapshotPolicy` still
-// hard-fails multi-token close-marker templates before generation and
-// `snapshotAtPrefillBoundary` anchors a boundary for every model, but if a
-// future caller bypasses it and reaches the compactor with no boundary,
+// Defensive no-boundary regression: `snapshotAtPrefillBoundary` anchors a
+// boundary for every model kind, so the compactor should never see a span
+// without one. If a future caller bypasses it and reaches the compactor
+// with no boundary,
 // `setOpenSpan` must still refuse to record a span so `compact()` does not
 // wipe the sequence through its defensive no-boundary branch.
 TEST(

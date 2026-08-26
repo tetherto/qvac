@@ -78,13 +78,11 @@ bool initializeReasoningState(
   if (closeTokens.size() == 1) {
     state.cached_close_tag_token = closeTokens[0];
   }
-  state.cached_close_tag_tokens = closeTokens;
 
-  // Replay seeds `cached_close_tag_tokens`, the whole sequence, so a
-  // multi-piece close still restores a balanced `<think>...</think>` span.
-  //
-  // `close_is_single_token` survives for EOS substitution only, which swaps a
+  // `close_is_single_token` exists for EOS substitution only, which swaps a
   // sampled EOS for one close token and so genuinely needs a single id.
+  // Compaction never consults it: it rewinds to a boundary anchored before the
+  // span and replays no structural marker, so marker length decides nothing.
   //
   // Gate on the tokenisation of the *canonical* close marker
   // (`closeTagForEosRecovery`, which strips the chat template's

@@ -184,6 +184,14 @@ struct LlmModelContext {
 /// currentPos - protectedPrefixPos - discard` go negative, so it refuses the
 /// slide and reports a context overflow with the cache intact. A visible
 /// error beats silently losing the guardrail text.
+///
+/// That refusal covers the PREFILL slide only: `trySlidePrefillImpl` was the
+/// only caller carrying the `leftTokens >= 0` guard. The generation slide had
+/// none, so on a downgraded build it still runs: `seq_rm` over an empty range
+/// past the cursor succeeds, the paired `seq_add` is inverted and moves
+/// nothing, and it reports a slide that leaves that build's cursor
+/// `n_discarded` behind live KV. Mirroring is the better of the two values we
+/// can write, not a guarantee for every slide site.
 enum class SessionMetadataField : uint8_t {
   NPast = 0,
   RetiredFirstMsgTokens = 1,
@@ -195,9 +203,10 @@ enum class SessionMetadataField : uint8_t {
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
 
 /// The wire form of the contract above. Every `saveCache` / `loadCache` goes
-/// through this so the `{nPast, 0, cacheTokens, 0}` layout has one home: a
-/// writer that forgot a retired slot makes an older, still-sliding build evict
-/// from position 0 instead of protecting the first message, and that is silent.
+/// through this so the `{nPast, nPast, cacheTokens, cacheTokens}` layout has
+/// one home: a writer that left a retired slot at 0 makes an older,
+/// still-sliding build evict from position 0 instead of protecting the first
+/// message, and that is silent.
 struct SessionMetadata {
   std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
 

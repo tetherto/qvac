@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "common/common.h"
 
@@ -43,16 +42,11 @@ struct ReasoningState {
   // Cached close-marker id when the marker tokenises to a single
   // token (enables EOS-inside-reasoning replacement).
   llama_token cached_close_tag_token = LLAMA_TOKEN_NULL;
-  // Every token of the canonical close marker, in order. The replay path
-  // seeds all of them so a marker that tokenises to several pieces still
-  // restores a balanced `<think>...</think>` span. Empty when reasoning is
-  // not configured.
-  std::vector<llama_token> cached_close_tag_tokens;
   llama_token cached_newline_token = LLAMA_TOKEN_NULL;
   // True iff `tags.close` tokenises to a single token under the active vocab.
-  // Only EOS-inside-reasoning substitution needs this now: it swaps a sampled
-  // EOS for the close marker, which is a single-token operation. The replay
-  // path handles any length via `cached_close_tag_tokens`.
+  // Only EOS-inside-reasoning substitution needs this: it swaps a sampled EOS
+  // for the close marker, which is a single-token operation. Compaction does
+  // not consult it, because no structural marker is replayed.
   bool close_is_single_token = false;
   bool inside_reasoning = false;
   std::string recent_output_buffer;

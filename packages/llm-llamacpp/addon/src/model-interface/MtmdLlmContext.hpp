@@ -402,8 +402,7 @@ private:
   // batch path and `evalMessageWithTools` on the single-prompt path,
   // then consulted by `snapshotForRecurrentRollback`: prefill-only
   // requests never enter generation and cannot emit reasoning tokens,
-  // so the hard-fail contract for unsupported multi-token recurrent
-  // close markers does not apply. See
+  // so there is no reasoning boundary to anchor. See
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
 

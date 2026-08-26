@@ -632,8 +632,10 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   current_.pos = nPastLocal;
   refreshCurrentCacheTokensFromMemory();
 
-  // Snapshot sequence state for the recurrent-rollback path. No-op
-  // when the memory module supports shift or the feature is off.
+  // Anchor the reasoning boundary for this request. No-op when the
+  // feature is off or this request has no active reasoning channel; see
+  // `recurrentReasoningBoundaryDecision`. Deliberately not gated on
+  // `llama_memory_can_shift` (see the note at the top of this file).
   snapshotForRecurrentRollback();
 
   return {};
@@ -947,21 +949,17 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
 std::function<void()>
 MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
   // Hybrid / fully-recurrent models (Qwen3.5, Qwen3-Next, Jamba, ...)
-  // are supported via the snapshot + replay path in `compactThinkSpan`
-  // when the close marker is a single token. Generated pre-reasoning
-  // tokens are seeded into the replay buffer before the close marker,
-  // so templates no longer have to force-open reasoning during prefill.
+  // are supported via the snapshot + replay path in `compactThinkSpan`.
+  // Generated pre-reasoning tokens are seeded into the replay buffer, so
+  // templates no longer have to force-open reasoning during prefill, and
+  // close-marker length decides nothing because no structural marker is
+  // replayed.
   //
   // Uniform hard-fail contract (PR #2813): when
   // `remove_thinking_from_context` is on, ANY inability to remove the
   // reasoning span from cache surfaces as `qvac_errors::StatusError`,
   // thrown from `compactThinkSpan` after local rollback so both
   // driver metadata and live KV agree on the recovery cursor:
-  //   - Unsupported recurrent template shape (multi-token close
-  //     marker): thrown from
-  //     `snapshotForRecurrentRollback`; the wrapper restores the
-  //     pre-prompt checkpoint (or wipes the sequence on restore
-  //     underflow), resets local positional accounting, and re-throws.
   //   - Prefill-boundary snapshot capture failure: thrown from
   //     `ReasoningBlockCompactor::snapshotAtPrefillBoundary`; the
   //     `snapshotForRecurrentRollback` wrapper here restores the
@@ -1118,11 +1116,10 @@ void MtmdLlmContext::setOpenThinkSpan(llama_pos start) {
 
 void MtmdLlmContext::snapshotForRecurrentRollback() {
   // Prefill-only (cache-warm) requests never enter generation and
-  // cannot emit reasoning tokens, so the hard-fail contract for an
-  // unsupported multi-token recurrent close marker does not apply.
-  // Skip the boundary capture entirely before consulting the policy so
-  // a cache warm on a model that would only fail at decode time still
-  // succeeds.
+  // cannot emit reasoning tokens, so there is no reasoning span to anchor
+  // a boundary for. Skip the boundary capture entirely before consulting
+  // the policy so a cache warm still succeeds on a model whose boundary
+  // capture would only be exercised at decode time.
   if (isPrefillOnlyRequest_) {
     return;
   }

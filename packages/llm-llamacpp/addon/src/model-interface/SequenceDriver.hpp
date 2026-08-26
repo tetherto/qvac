@@ -34,6 +34,10 @@ static_assert(static_cast<uint8_t>(GenerationStopReason::PredictionLimit) == 3);
 static_assert(static_cast<uint8_t>(GenerationStopReason::SequenceLimit) == 4);
 static_assert(static_cast<uint8_t>(GenerationStopReason::ContextOverflow) == 5);
 
+// `SequenceLimit` has no producer left: a batched slot that fills its window
+// now reports `ContextOverflow`. The enumerator stays for ordinal stability
+// (see the static_asserts above) and the branch below stays as defence in
+// depth, so a future producer classifies rather than silently falls through.
 [[nodiscard]] constexpr bool
 isKnownReasoningTruncation(GenerationStopReason reason) {
   return reason == GenerationStopReason::PredictionLimit ||

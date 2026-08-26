@@ -118,6 +118,9 @@ TEST(ContinuousBatchFinalize, ContextOverflowPropagatesContextOverflow) {
   EXPECT_EQ(driver.terminalReason, GenerationStopReason::ContextOverflow);
 }
 
+// `SequenceLimit` is unreachable in production (nothing produces it since the
+// batched full-window stop became `ContextOverflow`); it is pinned here so the
+// classifier keeps covering it if a producer ever returns.
 TEST(GenerationStopReason, IdentifiesReasoningTruncations) {
   EXPECT_TRUE(
       isKnownReasoningTruncation(GenerationStopReason::PredictionLimit));
