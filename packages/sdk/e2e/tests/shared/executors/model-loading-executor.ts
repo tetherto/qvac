@@ -279,13 +279,22 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     expectation: typeof modelLoadLlmLoadModeNone.expectation
   ): Promise<TestResult> {
     const { loadMode } = params as { loadMode: 'none' | 'mmap' }
-    const modelId = await loadModel({
-      modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, load_mode: loadMode }
-    })
-    await unloadModel({ modelId })
-    return ValidationHelpers.validate(modelId, expectation)
+    // Registered under its own dep so cleanup goes through ResourceManager.evict()
+    // rather than a bare unloadModel: 'none' loads a private copy of the whole
+    // model instead of mapping it, and evict() is what applies the mobile
+    // unloadSettleMs pause that keeps the next load off still-resident pages.
+    const dep = `llm-load-mode-${loadMode}`
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: { verbosity: 0, ctx_size: 2048, load_mode: loadMode }
+      })
+      this.resources.register(dep, modelId)
+      return ValidationHelpers.validate(modelId, expectation)
+    } finally {
+      await this.resources.evict(dep)
+    }
   }
 
   async rejectLegacyNoMmap(
@@ -293,12 +302,17 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     expectation: typeof modelLoadLlmLegacyNoMmapRejected.expectation
   ): Promise<TestResult> {
     const { noMmap } = params as { noMmap: boolean }
+    const dep = 'llm-legacy-no-mmap'
     try {
-      await loadModel({
+      const modelId = await loadModel({
         modelSrc: LLAMA_3_2_1B_INST_Q4_0,
         modelType: 'llamacpp-completion',
         modelConfig: { no_mmap: noMmap }
       } as unknown as Parameters<typeof loadModel>[0])
+      // Unexpected: validation let the retired key through. Register it so the
+      // failure path still releases the model instead of leaking it.
+      this.resources.register(dep, modelId)
+      await this.resources.evict(dep)
       return { passed: false, output: 'Legacy no_mmap should have been rejected' }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
