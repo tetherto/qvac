@@ -15,6 +15,19 @@ endif()
 
 if(ASR_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
+
+  # nvcc defaults its host compiler to g++, which rejects the -stdlib=libc++ the
+  # linux triplets put in VCPKG_CXX_FLAGS / VCPKG_LINKER_FLAGS, so
+  # enable_language(CUDA) fails its ABI check inside the ggml-speech port build.
+  # Export CUDAHOSTCXX for the vcpkg child process instead of setting
+  # CMAKE_CUDA_HOST_COMPILER in vcpkg-overlays/toolchains/linux-clang.cmake: that
+  # file's contents feed the vcpkg ABI hash of every package on the linux
+  # triplets, so editing it invalidates the binary cache for non-CUDA builds too
+  # and forces every port to rebuild from source. Windows and macOS keep their
+  # default host compiler (MSVC / clang), which already matches the triplet.
+  if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
+    set(ENV{CUDAHOSTCXX} "clang++")
+  endif()
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)

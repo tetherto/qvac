@@ -518,13 +518,18 @@ lands on CUDA when a supported device is present and falls back to Vulkan
 otherwise. Both engines report the winner through `getBackendInfo()` as
 `backendId: 2` (`BackendId.CUDA`).
 
-Two things the CUDA build has to work around, both handled in
-`CMakeLists.txt` / the shared clang toolchain:
+Two things the CUDA build has to work around, both handled in `CMakeLists.txt`:
 
 - `nvcc` defaults its host compiler to `g++`, which rejects the
   `-stdlib=libc++` the Linux triplets set, so enabling the CUDA language used
-  to fail its ABI check. `vcpkg-overlays/toolchains/linux-clang.cmake` pins
-  `CMAKE_CUDA_HOST_COMPILER` to `clang++` to match.
+  to fail its ABI check. On Linux the `ASR_CUDA` block exports
+  `CUDAHOSTCXX=clang++` for the vcpkg child process (override it by setting
+  `CUDAHOSTCXX` yourself). It is deliberately *not* set in
+  `vcpkg-overlays/toolchains/linux-clang.cmake`: that file's contents feed the
+  vcpkg ABI hash of every package on the Linux triplets, so editing it
+  invalidates the binary cache for non-CUDA builds too and forces every port to
+  rebuild from source. Windows and macOS keep their default host compiler
+  (MSVC / clang), which already matches the triplet.
 - `ggml-config.cmake` only puts a CUDA runtime in `ggml::ggml-cuda`'s interface
   under `if (GGML_STATIC)`, and `GGML_STATIC` also means
   `add_link_options(-static)` in ggml's own build, so it must stay off for a

@@ -31,11 +31,14 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   Enabling it also required two build fixes, both of which made the CUDA path
   unbuildable before now:
 
-  - `vcpkg-overlays/toolchains/linux-clang.cmake` pins
-    `CMAKE_CUDA_HOST_COMPILER` to `clang++`. `nvcc` otherwise defaults to
-    `g++`, which rejects the `-stdlib=libc++` the Linux triplets put in
-    `VCPKG_CXX_FLAGS` / `VCPKG_LINKER_FLAGS`, so `enable_language(CUDA)` failed
-    its ABI check for every consumer of these triplets.
+  - On Linux the `ASR_CUDA` block exports `CUDAHOSTCXX=clang++` for the vcpkg
+    child process. `nvcc` otherwise defaults to `g++`, which rejects the
+    `-stdlib=libc++` the Linux triplets put in `VCPKG_CXX_FLAGS` /
+    `VCPKG_LINKER_FLAGS`, so `enable_language(CUDA)` failed its ABI check.
+    Deliberately not set in `vcpkg-overlays/toolchains/linux-clang.cmake`: that
+    file's contents feed the vcpkg ABI hash of every package on the Linux
+    triplets, so editing it invalidates the binary cache for non-CUDA builds
+    too and forces every port to rebuild from source.
   - The addon links `CUDA::cudart` / `cublas` / `cublasLt` itself.
     `ggml-config.cmake` only adds a CUDA runtime to `ggml::ggml-cuda`'s
     interface under `if (GGML_STATIC)`, but `GGML_STATIC` also means

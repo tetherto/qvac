@@ -82,6 +82,14 @@ test('the CUDA build links the CUDA runtime ggml-config leaves out', () => {
   )
 })
 
+test('the CUDA build steers nvcc at clang without touching shared vcpkg files', () => {
+  assert.match(
+    cmakeSource,
+    new RegExp(`if\\(${CUDA_CMAKE_OPTION}\\)[\\s\\S]*?set\\(ENV\\{CUDAHOSTCXX\\}`)
+  )
+  assert.match(cmakeSource, /NOT DEFINED ENV\{CUDAHOSTCXX\}/)
+})
+
 test('the GPU integration tests accept CUDA as a desktop backend', () => {
   GPU_TEST_FILES.forEach((file) => {
     const source = fs.readFileSync(path.join(packageRoot, file), 'utf8')
