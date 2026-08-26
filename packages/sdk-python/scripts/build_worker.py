@@ -48,10 +48,10 @@ def _run(cmd: list[str], cwd: Path) -> None:
 def links_workspace_inference(sdk: Path) -> bool:
     """Whether the sibling engine can be linked into this SDK checkout.
 
-    `packages/inference` predates the `sdk-source:workspace` script by nine days,
-    and QVAC_POC_SDK_DIR may point at a checkout from that window or older, so the
-    directory alone does not mean the script is there to run. Require the SDK to
-    declare both the dependency and the script; anything else takes a plain install.
+    QVAC_POC_SDK_DIR can point at an older checkout that has `packages/inference`
+    but not the `sdk-source:workspace` script that links it, so the directory
+    alone is not enough. Anything not declaring both the dependency and the
+    script takes a plain install.
     """
     if not (sdk.parent / "inference").is_dir():
         return False
