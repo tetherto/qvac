@@ -2,7 +2,6 @@ import {
   PROFILING_KEY,
   type ProfilingRequestMeta,
   type ServerBreakdown,
-  type DelegationBreakdown,
   type OperationEvent
 } from '@qvac/inference/surface'
 import { nowMs } from '@qvac/inference/surface'
@@ -34,7 +33,6 @@ function buildServerBreakdown(ctx: ServerProfilingContext): ServerBreakdown {
 
 export interface ProfilingInjectionOptions {
   ctx?: ServerProfilingContext
-  delegation?: DelegationBreakdown
   operation?: OperationEvent
 }
 
@@ -42,25 +40,19 @@ export function injectProfilingIntoString(
   jsonString: string,
   options: ProfilingInjectionOptions
 ): string {
-  const { ctx, delegation, operation } = options
+  const { ctx, operation } = options
   const includeServer = ctx?.meta.includeServer ?? false
 
-  const hasContent = includeServer || !!delegation || !!operation
+  const hasContent = includeServer || !!operation
   if (!hasContent || !jsonString.endsWith('}')) {
     return jsonString
   }
 
-  const id = ctx?.meta.id ?? delegation?.profileId ?? operation?.profileId ?? ''
+  const id = ctx?.meta.id ?? operation?.profileId ?? ''
   const profilingMeta: Record<string, unknown> = { id }
 
   if (includeServer && ctx) {
     profilingMeta['server'] = buildServerBreakdown(ctx)
-  }
-
-  if (delegation) {
-    const { profileId: _unused, ...delegationWithoutId } = delegation
-    void _unused
-    profilingMeta['delegation'] = delegationWithoutId
   }
 
   if (operation) {

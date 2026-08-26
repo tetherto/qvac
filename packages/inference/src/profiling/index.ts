@@ -122,7 +122,6 @@ export { recordEvent, clearAggregator } from '@/profiling/aggregator'
 export { exportJSON, exportTable, exportSummary } from '@/profiling/exporters'
 export {
   createProfilingMeta,
-  createDelegatedProfilingMeta,
   createProfilingDisabledMeta,
   injectProfilingMetaIntoObject,
   extractProfilingMeta,
@@ -132,7 +131,6 @@ export {
   recordPhase,
   recordFailure,
   recordServerBreakdownPhases,
-  recordDelegationBreakdownPhases,
   type BaseTimings,
   type BaseEvent
 } from '@/profiling/events'
@@ -143,18 +141,3 @@ export {
   buildOperationEvent,
   type OperationMetricsConfig
 } from '@/profiling/operation-metrics'
-export {
-  shouldProfileDelegation,
-  createDelegationTimings,
-  createDelegationStreamTimings,
-  recordDelegationEvents,
-  recordDelegationStreamEvents,
-  cacheDelegationConnectionTime,
-  flushServerConnectionEvent,
-  consumeBreakdownConnectionTime,
-  clearPeerConnectionTracking,
-  resetDelegationConnectionTracking,
-  type DelegationTimings,
-  type DelegationStreamTimings,
-  type DelegatedHandlerOptions
-} from '@/profiling/delegation-profiler'
