@@ -93,7 +93,7 @@ RNN-T checkpoint end-to-end on Adreno 700+.
 | Transcript length | TODO chars |
 | Transcript | TODO |
 | Wall time (case, cold load + inference) | TODO s |
-| In-test assertions | `ok 1` backendId ∈ {1,3,4} per platform, `ok 2` segments ≥ 1, `ok 3` chars ≥ 10 |
+| In-test assertions | `ok 1` backendId ∈ {3,4}, `ok 2` segments ≥ 1, `ok 3` chars ≥ 10 |
 
 ## Full Android smoke matrix landed in the same run (Adreno 830 / OpenCL)
 
@@ -144,11 +144,12 @@ Adreno 750) to sanity-check on a lower tier of the same family. Substitute
 ## Notes
 
 - No `qvac-ext-ggml` speech kernels were added or modified for this change;
-  every encoder op used by the FastConformer graph (`MUL_MAT` Q8_0, `ADD`,
-  `MUL`, `SCALE`, `NORM`, `SILU`/`RELU`/`SIGMOID`, `SOFT_MAX`/`SOFT_MAX_EXT`,
-  `IM2COL`, `CPY`, `CONT`, `PERMUTE`, `RESHAPE`, `VIEW`, `TRANSPOSE`,
-  `CONCAT`) is already present in `qvac-ext-ggml/src/ggml-opencl/` and
-  matched by the `supports_op` dispatch in `ggml-opencl.cpp:3773-4049`.
+  every encoder op used by the FastConformer graph (`MUL_MAT` — both
+  `Q4_0` mobile default and `Q8_0` desktop — plus `ADD`, `MUL`, `SCALE`,
+  `NORM`, `SILU`/`RELU`/`SIGMOID`, `SOFT_MAX`/`SOFT_MAX_EXT`, `IM2COL`,
+  `CPY`, `CONT`, `PERMUTE`, `RESHAPE`, `VIEW`, `TRANSPOSE`, `CONCAT`)
+  is already present in `qvac-ext-ggml/src/ggml-opencl/` and matched by
+  the `supports_op` dispatch in `ggml-opencl.cpp:3773-4049`.
 - No `qvac-ext-whisper.cpp` changes — Unified is wired through the same
   `parakeet_tdt.cpp` predictor+joint code path as TDT (`ParakeetModelType::RNNT`
   reuses `tdt_prepare_runtime` / `tdt_step_decode` with an `is_rnnt` branch).
