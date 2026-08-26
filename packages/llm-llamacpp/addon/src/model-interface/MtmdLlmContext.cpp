@@ -1163,11 +1163,8 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
     return;
   }
   const auto decision = recurrentReasoningBoundaryDecision(
-      needsRecurrentSnapshot_,
       removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0,
-      thinkingForcedOpen_,
-      reasoningState_.close_is_single_token);
+      reasoningEnabled_ && params_.reasoning_budget != 0);
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
@@ -1200,11 +1197,8 @@ size_t MtmdLlmContext::forcedOpenTailTokens() const {
     return 0;
   }
   const auto decision = recurrentReasoningBoundaryDecision(
-      needsRecurrentSnapshot_,
       removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0,
-      thinkingForcedOpen_,
-      reasoningState_.close_is_single_token);
+      reasoningEnabled_ && params_.reasoning_budget != 0);
   return decision == RecurrentReasoningBoundaryDecision::Disabled
              ? 0
              : openerTokens;

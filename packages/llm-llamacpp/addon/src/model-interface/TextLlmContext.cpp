@@ -682,11 +682,8 @@ size_t TextLlmContext::forcedOpenTailTokens() const {
     return 0;
   }
   const auto decision = recurrentReasoningBoundaryDecision(
-      needsRecurrentSnapshot_,
       removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0,
-      thinkingForcedOpen_,
-      reasoningState_.close_is_single_token);
+      reasoningEnabled_ && params_.reasoning_budget != 0);
   return decision == RecurrentReasoningBoundaryDecision::Disabled
              ? 0
              : openerTokens;
@@ -1161,11 +1158,8 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
     return -1;
   }
   const auto decision = recurrentReasoningBoundaryDecision(
-      needsRecurrentSnapshot_,
       removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0,
-      thinkingForcedOpen_,
-      reasoningState_.close_is_single_token);
+      reasoningEnabled_ && params_.reasoning_budget != 0);
   switch (decision) {
   case RecurrentReasoningBoundaryDecision::Capture:
     break;
@@ -1216,11 +1210,8 @@ void TextLlmContext::snapshotForRecurrentRollback() {
     return;
   }
   const auto decision = recurrentReasoningBoundaryDecision(
-      needsRecurrentSnapshot_,
       removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0,
-      thinkingForcedOpen_,
-      reasoningState_.close_is_single_token);
+      reasoningEnabled_ && params_.reasoning_budget != 0);
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }

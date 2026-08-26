@@ -54,35 +54,22 @@ enum class RecurrentReasoningBoundaryDecision {
   return anchored > 0 ? anchored : 0;
 }
 
+// Only the feature gates decide now. Memory kind used to, back when pure
+// attention shifted instead of rewinding, and close-marker length used to,
+// back when replay had to seed the marker; neither is an input any more, so
+// neither is a parameter.
 [[nodiscard]] inline RecurrentReasoningBoundaryDecision
 recurrentReasoningBoundaryDecision(
-    bool /*needsRecurrentSnapshot*/, bool removeThinkingFromContext,
-    bool reasoningEnabled, bool /*thinkingForcedOpen*/,
-    bool closeMarkerSingleToken) noexcept {
-  // Every model anchors a boundary now: compaction rewinds to it and replays
-  // rather than shifting, so memory kind no longer decides whether one is
-  // needed, only whether the anchor is a state payload or just a position.
-  if (!removeThinkingFromContext || !reasoningEnabled) {
-    return RecurrentReasoningBoundaryDecision::Disabled;
-  }
-  // A multi-piece close used to be unsupported because replay could only seed
-  // the single token that tripped the close detector. Nothing structural is
-  // replayed now, so marker length no longer decides whether compaction is
-  // possible.
-  (void)closeMarkerSingleToken;
-  return RecurrentReasoningBoundaryDecision::Capture;
+    bool removeThinkingFromContext, bool reasoningEnabled) noexcept {
+  return (removeThinkingFromContext && reasoningEnabled)
+             ? RecurrentReasoningBoundaryDecision::Capture
+             : RecurrentReasoningBoundaryDecision::Disabled;
 }
 
 [[nodiscard]] inline bool shouldCaptureRecurrentReasoningBoundary(
-    bool needsRecurrentSnapshot, bool removeThinkingFromContext,
-    bool reasoningEnabled, bool thinkingForcedOpen,
-    bool closeMarkerSingleToken) noexcept {
+    bool removeThinkingFromContext, bool reasoningEnabled) noexcept {
   return recurrentReasoningBoundaryDecision(
-             needsRecurrentSnapshot,
-             removeThinkingFromContext,
-             reasoningEnabled,
-             thinkingForcedOpen,
-             closeMarkerSingleToken) ==
+             removeThinkingFromContext, reasoningEnabled) ==
          RecurrentReasoningBoundaryDecision::Capture;
 }
 

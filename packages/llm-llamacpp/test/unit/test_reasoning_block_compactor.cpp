@@ -57,18 +57,12 @@ TEST(ReasoningSnapshotPolicy, RoutesDeepSeekV4ToFullStateSnapshots) {
 
 TEST(ReasoningSnapshotPolicy, CapturesOnlyForForcedOpenRecurrentReasoning) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_EQ(
       recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
           /*removeThinkingFromContext=*/true,
-          /*reasoningEnabled=*/true,
-          /*thinkingForcedOpen=*/true,
-          /*closeMarkerSingleToken=*/true),
+          /*reasoningEnabled=*/true),
       RecurrentReasoningBoundaryDecision::Capture);
 }
 
@@ -80,18 +74,12 @@ TEST(ReasoningSnapshotPolicy, CapturesGeneratedOpenRecurrentReasoning) {
   // `<think>`. The policy must return `Capture` so the boundary
   // snapshot is taken and the seed-and-replay path can fire.
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/false,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_EQ(
       recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
           /*removeThinkingFromContext=*/true,
-          /*reasoningEnabled=*/true,
-          /*thinkingForcedOpen=*/false,
-          /*closeMarkerSingleToken=*/true),
+          /*reasoningEnabled=*/true),
       RecurrentReasoningBoundaryDecision::Capture);
 }
 
@@ -99,23 +87,14 @@ TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
   // Memory kind no longer gates the boundary: pure attention anchors one too,
   // it is just a position rather than a state payload.
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/false,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/false,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/true));
   EXPECT_FALSE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/false,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/true));
+      /*reasoningEnabled=*/false));
 }
 
 // A close marker that tokenises to several pieces used to be unsupported,
@@ -125,18 +104,12 @@ TEST(ReasoningSnapshotPolicy, SkipsWhenFeatureOrReasoningGateIsClosed) {
 // decides whether compaction is possible.
 TEST(ReasoningSnapshotPolicy, CapturesWhenCloseMarkerIsMultiToken) {
   EXPECT_TRUE(shouldCaptureRecurrentReasoningBoundary(
-      /*needsRecurrentSnapshot=*/true,
       /*removeThinkingFromContext=*/true,
-      /*reasoningEnabled=*/true,
-      /*thinkingForcedOpen=*/true,
-      /*closeMarkerSingleToken=*/false));
+      /*reasoningEnabled=*/true));
   EXPECT_EQ(
       recurrentReasoningBoundaryDecision(
-          /*needsRecurrentSnapshot=*/true,
           /*removeThinkingFromContext=*/true,
-          /*reasoningEnabled=*/true,
-          /*thinkingForcedOpen=*/true,
-          /*closeMarkerSingleToken=*/false),
+          /*reasoningEnabled=*/true),
       RecurrentReasoningBoundaryDecision::Capture);
 }
 
