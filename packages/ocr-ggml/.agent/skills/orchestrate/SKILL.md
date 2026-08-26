@@ -83,7 +83,7 @@ Run `git diff --name-only main...HEAD` and apply these rules:
 
 1. **Native addon packages** — if changed files match a package in the **CI Package Mapping** table in `.agent/knowledge/ci-validation.md`, CI is needed. Use the short name from that table. If multiple addon packages changed, run CI for each.
 
-2. **SDK / TS packages** (`packages/qvac-sdk/**`, `packages/rag/**`, `packages/cli/**`) — SDK CI runs automatically via `pr-checks-sdk-pod` on PR creation. No manual trigger needed.
+2. **SDK / TS packages** (`packages/sdk/**`, `packages/rag/**`, `packages/cli/**`) — SDK CI runs automatically via `pr-checks-sdk-pod` on PR creation. No manual trigger needed.
 
 3. **Everything else** (simple libraries, docs, workflows, config, markdown) — no CI needed.
 
@@ -153,7 +153,7 @@ If no CI needed or no reviewer fixes, proceed to reporting.
    ```
 
 2. **Determine PR type** from the changed files:
-   - If changes are in `packages/qvac-sdk/` or other TS packages → SDK PR
+   - If changes are in `packages/sdk/` or other TS packages → SDK PR
    - If changes are in native addon packages → Addon PR
    - If mixed → use addon format (more detailed)
 
