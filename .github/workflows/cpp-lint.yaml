@@ -97,6 +97,12 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
+      # Pin the LLVM toolchain instead of relying on the runner's system
+      # clang, whose default -stdlib=libc++ headers can drift out of sync
+      # with it on the persistent self-hosted fleet.
+      - name: Setup LLVM
+        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+
       # Must run BEFORE vcpkg so ROCM_PATH is set when the qvac-fabric
       # hip-backend feature is installed/resolved (setup-rocm exports
       # VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH so the hip package is cache-keyed

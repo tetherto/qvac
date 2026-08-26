@@ -181,8 +181,13 @@ jobs:
           arch: ${{ matrix.arch }}
           linux-extra-packages: ${{ inputs.linux-extra-packages }}
 
-      - name: Setup LLVM (Linux arm and macOS)
-        if: runner.environment == 'github-hosted'
+      # Self-hosted Linux runners keep an older system clang whose default
+      # -stdlib=libc++ headers can drift out of sync with it (other workflows
+      # install newer libc++ packages fleet-wide), so they need the pinned
+      # LLVM on PATH just like hosted runners. Self-hosted Windows stays on
+      # its preprovisioned toolchain.
+      - name: Setup LLVM (Linux and macOS)
+        if: runner.environment == 'github-hosted' || runner.os == 'Linux'
         uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
 
       - name: Manual Workspace Cleanup
