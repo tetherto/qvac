@@ -41,12 +41,8 @@ export async function unloadModel(params: UnloadModelParams) {
   stopLoggingStreamForModel(params.modelId)
 
   const shouldAutoClose = params.autoClose ?? !isBare
-  if (
-    shouldAutoClose &&
-    response.hasActiveModels === false &&
-    response.hasActiveProviders === false
-  ) {
-    logger.info('🧹 No models or providers active, automatically closing RPC connection...')
+  if (shouldAutoClose && response.hasActiveModels === false) {
+    logger.info('🧹 No models active, automatically closing RPC connection...')
     await close()
   }
 }

@@ -40,12 +40,6 @@ export class ModelNotLoadedError extends QvacErrorBase {
   }
 }
 
-export class ModelIsDelegatedError extends QvacErrorBase {
-  constructor(modelId: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.MODEL_IS_DELEGATED, [modelId], cause))
-  }
-}
-
 // ============== Model Loading Errors ==============
 
 export class ModelLoadFailedError extends QvacErrorBase {
@@ -772,31 +766,7 @@ export class RAGWorkspaceNotOpenError extends QvacErrorBase {
   }
 }
 
-// ============== RPC/Delegation Errors (Server-side) ==============
-
-export class DelegateNoFinalResponseError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE, undefined, cause))
-  }
-}
-
-export class DelegateConnectionFailedError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(SDK_SERVER_ERROR_CODES.DELEGATE_CONNECTION_FAILED, [details], cause))
-  }
-}
-
-export class DelegateProviderError extends QvacErrorBase {
-  constructor(details: string, providerCode?: number, cause?: unknown) {
-    super(
-      createErrorOptions(
-        SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR,
-        providerCode !== undefined ? [details, String(providerCode)] : [details],
-        cause
-      )
-    )
-  }
-}
+// ============== RPC Errors (Server-side) ==============
 
 export class RPCNoDataReceivedError extends QvacErrorBase {
   constructor(cause?: unknown) {
