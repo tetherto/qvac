@@ -1,6 +1,6 @@
 {
   "name": "@qvac/inference",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Bare-only in-process core of the QVAC SDK. Runs inference directly on the Bare runtime with explicit plugin assembly and no RPC, worker, or subprocess layer.",
   "license": "Apache-2.0",
   "repository": {
@@ -82,6 +82,10 @@
       "types": "./dist/models/registry/index.d.ts",
       "import": "./dist/models/registry/index.js"
     },
+    "./model-resource-profiles": {
+      "types": "./dist/models/registry/resource-profiles.d.ts",
+      "import": "./dist/models/registry/resource-profiles.js"
+    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"
@@ -151,7 +155,7 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
   },
   "engines": {
     "bare": "^1.30.3"

@@ -9,9 +9,8 @@ import {
   hasPlugin
 } from '@/plugins'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
-import { handlePluginInvoke, handlePluginInvokeStream } from '@/handlers/plugin-invoke'
+import { handlePluginInvokeStream } from '@/handlers/plugin-invoke'
 import {
-  ModelIsDelegatedError,
   PluginAlreadyRegisteredError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,
@@ -118,29 +117,6 @@ test('pluginInvokeStream: validates streamed chunks against responseSchema', asy
   } finally {
     unregisterModel(modelId)
     clearPlugins()
-  }
-})
-
-test('pluginInvoke: delegated models throw ModelIsDelegatedError', async function (t) {
-  const modelId = makeId('delegated-model')
-
-  registerModel(modelId, {
-    providerPublicKey: 'test-provider-public-key'
-  })
-
-  try {
-    await handlePluginInvoke({
-      type: 'pluginInvoke',
-      modelId,
-      handler: 'anything',
-      params: {}
-    })
-    t.fail('Expected handlePluginInvoke to throw')
-  } catch (error) {
-    t.ok(error instanceof ModelIsDelegatedError)
-    t.is((error as ModelIsDelegatedError).code, ERROR_CODES.MODEL_IS_DELEGATED)
-  } finally {
-    unregisterModel(modelId)
   }
 })
 

@@ -342,10 +342,9 @@ interface KeyState {
  * the matching operation's `begin(...)`: a `cancel` issued at the same
  * time as the matching `completion(...)` either lands first (and we need
  * to remember it long enough for `begin(...)` to follow) or lands second
- * (and we never touch this set). For a local call the gap is tiny; a
- * delegated call adds the provider round-trip. 30 seconds is overkill for
- * that but gives slow networks / pause-the-debugger scenarios enough
- * slack while still bounding worst-case retention.
+ * (and we never touch this set). The gap is tiny, so 30 seconds is overkill
+ * but gives slow networks / pause-the-debugger scenarios enough slack while
+ * still bounding worst-case retention.
  *
  * The size cap protects against a buggy or malicious caller firing a
  * stream of cancels for ids that never get a `begin(...)` follow-up —

@@ -9,6 +9,7 @@ const REGISTRY_PREFIX_Q4_0 = 'qvac_models_compiled/ggml/parakeet/2026-05-27'
 const REGISTRY_PREFIX_2026_07_01 = 'qvac_models_compiled/ggml/parakeet/2026-07-01'
 const REGISTRY_PREFIX_STREAMING = 'qvac_models_compiled/ggml/parakeet/2026-05-20'
 const REGISTRY_PREFIX_INDIC = 'qvac_models_compiled/ggml/indic_conformer/2026-08-07'
+const REGISTRY_PREFIX_UNIFIED = 'qvac_models_compiled/ggml/parakeet/2026-08-13'
 const DEFAULT_EXPIRES_IN = '604800'
 
 const outputPath = path.resolve(__dirname, '../test/mobile/testAssets/model-manifest.json')
@@ -34,7 +35,10 @@ const MODELS = {
     'diar_streaming_sortformer_4spk-v2.1.q8_0.gguf',
     REGISTRY_PREFIX_STREAMING
   ),
-  indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC)
+  indicConformerQ4: model('indic-conformer-ctc.q4_0.gguf', REGISTRY_PREFIX_INDIC),
+  unifiedQ4: model('parakeet-unified-en-0.6b.q4_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedQ8: model('parakeet-unified-en-0.6b.q8_0.gguf', REGISTRY_PREFIX_UNIFIED),
+  unifiedF16: model('parakeet-unified-en-0.6b.f16.gguf', REGISTRY_PREFIX_UNIFIED)
 }
 
 // Keyed by the mobile RUNNER FUNCTION NAME exported from
@@ -64,7 +68,7 @@ const TEST_MODELS = {
   runParakeetDuplexStreamingEouTest: [MODELS.eouQ4],
   runParakeetDuplexStreamingTest: [MODELS.tdtQ4],
   runParakeetEouStreamingTest: [MODELS.eouQ4],
-  runParakeetGpuSmokeTest: [MODELS.tdtQ4],
+  runParakeetGpuSmokeTest: [MODELS.tdtQ4, MODELS.unifiedQ4],
   runParakeetLiveStreamSimulationTest: [MODELS.tdtQ4],
   runParakeetMobilePerfCtcCpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],
   runParakeetMobilePerfCtcGpuTest: [MODELS.ctcQ4, MODELS.ctcQ8, MODELS.ctcF16],

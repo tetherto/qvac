@@ -52,13 +52,6 @@ export class ModelInfoExecutor extends AbstractModelExecutor<typeof modelInfoTes
     try {
       const info = await getLoadedModelInfo({ modelId: llmModelId })
 
-      if (info.isDelegated) {
-        return {
-          passed: false,
-          output: `Expected isDelegated=false for local model, got isDelegated=true`
-        }
-      }
-
       const checks = {
         modelIdMatches: info.modelId === llmModelId,
         modelTypeCanonical: info.modelType === ModelType.llamacppCompletion,
