@@ -45,6 +45,11 @@ def _run(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def _is_declared(value: object) -> bool:
+    """A manifest entry is usable only if it carries a non-empty string."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def links_workspace_inference(sdk: Path) -> bool:
     """Whether the sibling engine can be linked into this SDK checkout.
 
@@ -61,11 +66,10 @@ def links_workspace_inference(sdk: Path) -> bool:
         return False
     deps = pkg.get("dependencies")
     scripts = pkg.get("scripts")
-    return (
-        isinstance(deps, dict)
-        and isinstance(scripts, dict)
-        and "@qvac/inference" in deps
-        and "sdk-source:workspace" in scripts
+    if not isinstance(deps, dict) or not isinstance(scripts, dict):
+        return False
+    return _is_declared(deps.get("@qvac/inference")) and _is_declared(
+        scripts.get("sdk-source:workspace")
     )
 
 
