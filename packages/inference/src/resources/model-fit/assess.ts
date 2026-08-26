@@ -71,7 +71,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   } else if (!calibration) {
     reasons.push(`no validated calibration for ${platform}, so no estimate can be defended`)
   } else if (calibration.measuredAt) {
-    assumptions.push(`${platform} coefficients were calibrated on ${calibration.measuredAt}`)
+    assumptions.push(calibrationAssumption(platform, calibration))
   }
 
   const evaluated = models.map((candidate) =>
@@ -210,6 +210,28 @@ function extraArtifactBytes(
     total += profile.artifactBytes
   }
   return total
+}
+
+/**
+ * States when, and under what conditions, this platform's coefficients were
+ * measured.
+ *
+ * The backend belongs in the result because the buffers these coefficients
+ * cover are allocated by it, while the coefficients themselves are keyed by
+ * platform alone — so a fixture measured on one backend is being applied to
+ * every backend on that platform. That is a real caveat, and the caller is
+ * entitled to see it rather than read the fixture.
+ */
+function calibrationAssumption(
+  platform: ModelFitPlatform,
+  calibration: PlatformCalibration
+): string {
+  const base = `${platform} coefficients were calibrated on ${calibration.measuredAt}`
+  const on = calibration.measuredOn
+  if (!on) return base
+
+  const device = on.device ? ` (${on.device})` : ''
+  return `${base} against a ${on.backend} backend${device}, at ${on.kvElementBytes} bytes per KV element`
 }
 
 /**

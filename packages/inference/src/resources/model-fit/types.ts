@@ -36,6 +36,13 @@ export type ModelFitPlatform =
  * @property audioStreamingBytes - Extra resident cost of a streaming session.
  * @property validated - False while coefficients are provisional. An
  *   unvalidated platform assesses as `unknown`, exactly like a missing one.
+ * @property measuredOn - What the harness observed while measuring. Recorded
+ *   because these coefficients are keyed by platform alone, while the buffers
+ *   they measure are allocated by the backend: a `linux-x64` fixture measured on
+ *   CUDA is being applied to CPU-only hosts too. Stating each fixture's scope
+ *   keeps that visible, and means the key could later gain a backend dimension
+ *   without re-measuring anything. Absent on a placeholder, which measured
+ *   nothing.
  */
 export interface PlatformCalibration {
   weightUpperCoeff: number
@@ -45,7 +52,26 @@ export interface PlatformCalibration {
   audioStreamingBytes: ByteRange
   validated: boolean
   measuredAt?: string
+  measuredOn?: CalibrationProvenance
   notes?: readonly string[]
+}
+
+/**
+ * The measurement conditions behind one set of coefficients.
+ *
+ * @property backend - Best-effort label for the backend in play during the run,
+ *   inferred from the GPU drivers the resource collector reported: `metal`,
+ *   `vulkan`, `cuda`, `rocm`, or `cpu`.
+ * @property device - GPU name, when one was reported.
+ * @property kvElementBytes - Bytes per KV-cache element the residuals were
+ *   computed against. The single most useful number here: subtract the wrong
+ *   width and the fit is wrong, so recording it makes a bad run auditable after
+ *   the fact.
+ */
+export interface CalibrationProvenance {
+  backend: string
+  device?: string
+  kvElementBytes: number
 }
 
 export interface CalibrationFixture {

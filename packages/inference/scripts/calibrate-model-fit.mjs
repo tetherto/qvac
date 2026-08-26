@@ -17,9 +17,16 @@
 import os from 'bare-os'
 import fs from 'bare-fs'
 import path from 'bare-path'
-import { registerPlugin, loadModel, completion, unloadModel } from '../dist/index.js'
+import {
+  registerPlugin,
+  loadModel,
+  completion,
+  unloadModel,
+  getSystemResources
+} from '../dist/index.js'
 import * as catalog from '../dist/models/registry/index.js'
 import { MODEL_RESOURCE_PROFILES } from '../dist/models/registry/resource-profiles.js'
+import { kvElementBytes } from '../dist/resources/model-fit/estimators/llm.js'
 import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js'
 
 const SAMPLE_INTERVAL_MS = 25
@@ -69,6 +76,31 @@ function createSampler() {
 
 function settle() {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
+}
+
+/**
+ * Best-effort label for the backend in play, from the drivers the resource
+ * collector reports. Recorded with the coefficients because the buffers they
+ * measure are allocated by the backend, while the fixture is keyed by platform.
+ *
+ * Ordered by what llama.cpp prefers, so the label matches the likely choice
+ * rather than whichever driver happens to be listed first.
+ */
+function detectBackend(gpuList) {
+  for (const gpu of gpuList) {
+    const drivers = gpu.drivers ?? {}
+    for (const name of ['metal', 'cuda', 'rocm', 'vulkan', 'levelZero', 'opencl']) {
+      if (drivers[name]?.status === 'supported' && drivers[name].value) return name
+    }
+  }
+  return 'cpu'
+}
+
+function gpuName(gpuList) {
+  for (const gpu of gpuList) {
+    if (gpu.name?.status === 'supported' && gpu.name.value) return gpu.name.value
+  }
+  return undefined
 }
 
 /**
@@ -187,25 +219,57 @@ async function main() {
 
   registerPlugin(llmPlugin)
 
-  // f16 is the CPU KV default and the conservative end of the estimator's
-  // range, so residuals are computed against it.
-  const bytesPerElement = 2
+  // The residual is what is left after the KV cache is accounted for, so the
+  // cache subtracted has to be the one the engine actually allocated. A fixed
+  // f16 assumption over-subtracts by nearly 2x on a Metal or Vulkan backend —
+  // and since the error scales with context, it lands in the per-token slope
+  // rather than the intercept, corrupting the very coefficient the two-context
+  // design exists to isolate.
+  const resources = await getSystemResources()
+  const gpus = resources.capabilities.gpus
+  const gpuList = gpus.status === 'supported' ? gpus.value : []
+  const hasGpu = gpuList.length > 0
+  const backend = detectBackend(gpuList)
+  const device = gpuName(gpuList)
+  console.log(`backend: ${backend}${device ? ` (${device})` : ''}`)
 
+  const elementWidths = new Set()
   const measurements = []
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       const measurement = await measure(name, contextTokens)
+      // `.lower` is the width a GPU backend defaults to (q8_0), and equals f16
+      // when no GPU is reported — what the engine allocates in each case, not an
+      // optimistic bound borrowed from the estimator's range.
+      const bytesPerElement = kvElementBytes(measurement.facts, hasGpu).bytes.lower
+      elementWidths.add(bytesPerElement)
       const kv = kvBytes(measurement.facts, contextTokens, bytesPerElement)
-      measurements.push({
-        ...measurement,
-        kv,
-        residual: Math.max(0, measurement.workingBytes - kv)
-      })
+      // Deliberately unclamped. A negative residual is the signature of
+      // subtracting a cache the engine never allocated, and clamping it here
+      // would hide exactly the failure worth catching.
+      measurements.push({ ...measurement, kv, residual: measurement.workingBytes - kv })
       const mib = (n) => (n / 1024 / 1024).toFixed(0)
       console.log(
         `  ${name} @ ${contextTokens}: persistent ${mib(measurement.persistentBytes)} MiB, working ${mib(measurement.workingBytes)} MiB, kv ${mib(kv)} MiB`
       )
     }
+  }
+
+  if (elementWidths.size > 1) {
+    console.log(
+      `\nwarning: the fit mixes KV element widths (${[...elementWidths].join(', ')} bytes), so the residuals do not describe a single cache type`
+    )
+  }
+
+  // Fail loudly rather than fitting nonsense: `fitResiduals` floors its output
+  // at zero, so a bad subtraction would otherwise emit a plausible-looking
+  // `{ lower: 0, upper: 0 }` instead of an error.
+  const negative = measurements.filter((m) => m.residual < 0)
+  if (negative.length > 0) {
+    console.log(
+      `\n${negative.length} of ${measurements.length} residuals are negative: the KV cache being subtracted is larger than the working memory measured. The assumed cache type does not match what the engine allocated, so the fit would be meaningless. No fixture written.`
+    )
+    return
   }
 
   const weightRatios = measurements.map((m) => m.persistentBytes / m.artifactBytes)
@@ -229,17 +293,26 @@ async function main() {
     audioWindowBytes: { lower: 0, upper: 0 },
     audioStreamingBytes: { lower: 0, upper: 0 },
     validated: false,
-    measuredAt: new Date().toISOString().slice(0, 10)
+    measuredAt: new Date().toISOString().slice(0, 10),
+    measuredOn: {
+      backend,
+      ...(device ? { device } : {}),
+      kvElementBytes: Math.max(...elementWidths)
+    }
   }
 
   console.log('\nderived:', JSON.stringify(calibration, null, 2))
 
   const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1])
+  // Predict with the width this run actually allocated, not the estimator's f16
+  // upper end. Using f16 here on a q8_0 backend would pad the prediction by the
+  // whole cache-type spread and let weak coefficients through the gate; the
+  // point is to test the fit, not the conservatism of the range.
   const predictedUpper =
     heldOut.artifactBytes * calibration.weightUpperCoeff +
     calibration.fixedOverheadBytes.upper +
     calibration.computeBufferBytesPerToken.upper * CONTEXTS[1] +
-    kvBytes(heldOut.facts, CONTEXTS[1], bytesPerElement)
+    kvBytes(heldOut.facts, CONTEXTS[1], kvElementBytes(heldOut.facts, hasGpu).bytes.lower)
   const measuredTotal = heldOut.persistentBytes + heldOut.workingBytes
   const holds = measuredTotal <= predictedUpper
 

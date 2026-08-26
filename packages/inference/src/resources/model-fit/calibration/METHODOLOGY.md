@@ -32,11 +32,18 @@ for the per-layer accounting.
    minus the post-load reading is **working**.
 2. `weightUpperCoeff` is the worst `persistent / artifactBytes` ratio observed,
    floored at 1.0.
-3. Subtract the computed KV cache from each working measurement. What remains is
-   a residual that should be linear in context, so a least-squares fit over all
-   six points separates `fixedOverheadBytes` from
-   `computeBufferBytesPerToken`. Two contexts per model is the minimum that can
-   tell those apart.
+3. Subtract the KV cache from each working measurement — the cache the engine
+   _actually allocated_, taken from the estimator's own `kvElementBytes` rather
+   than assumed. On a Metal or Vulkan backend the default is `q8_0`, so a fixed
+   `f16` assumption over-subtracts by nearly 2×; because that error scales with
+   context it lands in the per-token slope rather than the intercept, corrupting
+   the one coefficient step 3 exists to isolate. What remains is a residual that
+   should be linear in context, so a least-squares fit over all six points
+   separates `fixedOverheadBytes` from `computeBufferBytesPerToken`. Two contexts
+   per model is the minimum that can tell those apart. A negative residual means
+   the subtracted cache was larger than the memory measured — the harness stops
+   rather than fitting nonsense, since the fit floors its output at zero and
+   would otherwise emit a plausible-looking `{ lower: 0, upper: 0 }`.
 4. Bounds are set at ±20% of the fit, with the upper bound additionally floored
    at the worst residual seen — an upper bound that does not cover an observed
    point is not an upper bound.
@@ -57,6 +64,27 @@ and evictable rather than anonymous RAM. The estimator counts them at full size
 anyway — the conservative reading, recorded as an assumption on every result.
 Measure with the same defaults the SDK uses, or the residuals will not describe
 what users actually run.
+
+## Scope of a fixture
+
+Coefficients are keyed by **platform**, while several of the buffers they cover
+are allocated by the **backend**. A `linux-x64` fixture measured on a CUDA host
+is therefore applied to CPU-only hosts on the same platform too.
+
+That is a deliberate choice, not an oversight. Splitting the key by backend would
+multiply the number of runs needed before the feature returns anything useful
+anywhere, and the ±20% bounds are wide enough to absorb some of the spread. What
+makes it safe to defer is that every fixture records the conditions it was
+measured under — `measuredOn.backend`, the GPU name, and the KV element width the
+residuals were computed against — and every assessment echoes them as an
+assumption on the result. So if a backend spread later proves wider than the
+bounds absorb, the key can gain a backend dimension without re-measuring
+anything, because each existing fixture already states which backend it
+describes.
+
+Practically: prefer to calibrate on the backend most users of that platform will
+actually hit, and read `measuredOn` before trusting a fixture for a different
+one.
 
 ## Status
 

@@ -83,8 +83,9 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
     contextTokens = facts.contextLength
   }
 
-  const elementBytes = kvElementBytes(facts, hasGpu, assumptions)
-  const kv = kvCacheBytes(facts, contextTokens, elementBytes, assumptions, reasons)
+  const element = kvElementBytes(facts, hasGpu)
+  assumptions.push(element.assumption)
+  const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
 
   const working: ByteRange = {
     lower:
@@ -111,28 +112,45 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   }
 }
 
+/** A KV-cache element width range, with the reason it is that range. */
+export interface KvElementWidth {
+  bytes: ByteRange
+  assumption: string
+}
+
 /**
  * Picks the KV-cache element width range for this model on this device.
  *
- * @returns Lower/upper bytes per cache element.
+ * Exported because the calibration harness has to subtract the cache the engine
+ * *actually* allocated before it can fit the remaining overhead. Hard-coding a
+ * width there would skew the fit by roughly 2× on a GPU backend — and because
+ * the error scales with context, it would corrupt the per-token slope rather
+ * than shifting the intercept. Sharing this rule keeps the two in step.
+ *
+ * @returns Lower/upper bytes per cache element, and the assumption that choice
+ *   rests on. Side-effect free so the harness can call it without an
+ *   assumptions array.
  */
-function kvElementBytes(facts: GgufFacts, hasGpu: boolean, assumptions: string[]): ByteRange {
+export function kvElementBytes(facts: GgufFacts, hasGpu: boolean): KvElementWidth {
   if (disablesFlashAttention(facts.architecture)) {
-    assumptions.push(
-      `${facts.architecture} loads with flash attention off, so the KV cache stays f16 on every backend`
-    )
-    return { lower: F16_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT }
+    return {
+      bytes: { lower: F16_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT },
+      assumption: `${facts.architecture} loads with flash attention off, so the KV cache stays f16 on every backend`
+    }
   }
 
   if (hasGpu) {
-    assumptions.push(
-      'a GPU is present, so the engine may default the KV cache to q8_0 (lower bound) or keep f16 on a CPU or OpenCL backend (upper bound)'
-    )
-    return { lower: Q8_0_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT }
+    return {
+      bytes: { lower: Q8_0_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT },
+      assumption:
+        'a GPU is present, so the engine may default the KV cache to q8_0 (lower bound) or keep f16 on a CPU or OpenCL backend (upper bound)'
+    }
   }
 
-  assumptions.push('no GPU reported, so the CPU f16 KV-cache default applies')
-  return { lower: F16_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT }
+  return {
+    bytes: { lower: F16_BYTES_PER_ELEMENT, upper: F16_BYTES_PER_ELEMENT },
+    assumption: 'no GPU reported, so the CPU f16 KV-cache default applies'
+  }
 }
 
 /**
