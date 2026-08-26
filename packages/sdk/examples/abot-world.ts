@@ -16,10 +16,10 @@ import path from 'path'
 // generates one block of video under the keys held for it and streams the
 // decoded frames.
 //
-// Runs on the machine hosting the worker — world sessions have no delegated
-// route. The default 832x480 tier needs >= 20 GB free VRAM on a dedicated GPU
-// (24 GB card in practice); pass 448 256 to use the low-VRAM tier, which runs
-// on ~6 GB cards well below interactive frame rates.
+// Runs on the machine hosting the worker; there is no remote route. The
+// default 832x480 tier needs >= 20 GB free VRAM on a dedicated GPU (24 GB card
+// in practice); pass 448 256 to use the low-VRAM tier, which runs on ~6 GB
+// cards well below interactive frame rates.
 const firstFramePath = process.argv[2]
 const prompt =
   process.argv[3] || '| unknown | A realistic outdoor world scene with a navigable path.'

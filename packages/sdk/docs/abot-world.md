@@ -37,12 +37,8 @@ at the first block**, so it needs **≥ 20 GB free VRAM on a dedicated GPU** —
 the first block even though loading succeeded. A **448x256** tier runs on ~6 GB
 cards; it is far below interactive frame rates but is what the E2E lane uses.
 
-A world session is bound to the worker holding that GPU, and the world
-operations have **no delegated route** — the same as `video`, `diffusion`,
-`upscale` and OCR, none of which declare a `delegatedHandler` today. So a
-`loadModel` carrying a `delegate` proxies to the provider and succeeds, and the
-first `worldStep` then fails with `ModelIsDelegatedError`. **Omit `delegate`**
-and load on the host holding the GPU.
+A world session is bound to the worker holding that GPU and runs there. There is
+no route to run one on a remote peer.
 
 ## Activation is deferred when there is no world yet
 

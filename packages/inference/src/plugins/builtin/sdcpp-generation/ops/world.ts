@@ -554,7 +554,7 @@ function asWorldSession(model: unknown, modelId: string, operation: string): Wor
   }
 
   const entry = getModelEntry(modelId)
-  const modelType = entry && !entry.isDelegated ? entry.local.modelType : ModelType.sdcppGeneration
+  const modelType = entry ? entry.local.modelType : ModelType.sdcppGeneration
   throw new ModelOperationNotSupportedError(modelId, modelType, operation, ['diffusion'], [])
 }
 
