@@ -7,9 +7,9 @@ npm dependency and dynamically link against it, so the multi-hundred-megabyte
 llama/ggml runtime is **built once** and **loaded once per process** instead of
 being statically embedded into every addon.
 
-It is modeled on [`@qvac/onnx`](../onnx) and follows the same
-npm + `prebuilds/` + `include_bare_module(... PREBUILD)` + companion-`.bare`
-pattern. See [INTEGRATION.md](./INTEGRATION.md) for the consumer guide.
+It follows the npm + `prebuilds/` + `include_bare_module(... PREBUILD)` +
+companion-`.bare` pattern. See [INTEGRATION.md](./INTEGRATION.md) for the
+consumer guide.
 
 ## What it ships
 
