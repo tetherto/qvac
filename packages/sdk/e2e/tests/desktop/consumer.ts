@@ -90,7 +90,6 @@ import { BciExecutor } from '../shared/executors/node/bci-executor.js'
 import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
-import { DelegatedInferenceExecutor } from '../shared/executors/node/delegated-inference-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
 import { NodeWorldExecutor } from '../shared/executors/node/world-executor.js'
 import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
@@ -713,7 +712,6 @@ export const executor = createExecutor({
     // download-resilience-*, and dispatch is first-match-wins.
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
-    new DelegatedInferenceExecutor(),
     new NodeDiffusionExecutor(resources),
     new NodeWorldExecutor(resources),
     new AudioGenExecutor(resources, {

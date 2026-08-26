@@ -67,8 +67,6 @@ from . import (
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
-    ProvideRequest,
-    ProvideResponse,
     RagProgressResponse,
     RagRequest,
     RagResponse,
@@ -76,8 +74,6 @@ from . import (
     ResumeResponse,
     StateRequest,
     StateResponse,
-    StopProvideRequest,
-    StopProvideResponse,
     SuspendRequest,
     SuspendResponse,
     TextToSpeechRequest,
@@ -334,11 +330,6 @@ async def plugin_invoke_stream(
         yield PluginInvokeStreamResponse.model_validate(chunk)
 
 
-async def provide(transport: Transport, params: ProvideRequest) -> ProvideResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    return ProvideResponse.model_validate(await transport.call(payload))
-
-
 async def rag(transport: Transport, params: RagRequest) -> RagResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return RagResponse.model_validate(await transport.call(payload))
@@ -369,13 +360,6 @@ async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
 async def state(transport: Transport, params: StateRequest) -> StateResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return StateResponse.model_validate(await transport.call(payload))
-
-
-async def stop_provide(
-    transport: Transport, params: StopProvideRequest
-) -> StopProvideResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    return StopProvideResponse.model_validate(await transport.call(payload))
 
 
 async def suspend(transport: Transport, params: SuspendRequest) -> SuspendResponse:
@@ -491,12 +475,10 @@ __all__ = [
     "ocr_stream",
     "plugin_invoke",
     "plugin_invoke_stream",
-    "provide",
     "rag",
     "rag_with_progress",
     "resume",
     "state",
-    "stop_provide",
     "suspend",
     "text_to_speech",
     "text_to_speech_stream",

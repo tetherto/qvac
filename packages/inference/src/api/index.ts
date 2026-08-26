@@ -13,8 +13,6 @@ export { embed } from '@/api/embed'
 export { finetune, type FinetuneHandle } from '@/api/finetune'
 export { translate } from '@/api/translate'
 export { cancel } from '@/api/cancel'
-export { startQVACProvider } from '@/api/provide'
-export { stopQVACProvider } from '@/api/stop-provider'
 export {
   ragChunk,
   ragIngest,

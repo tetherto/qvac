@@ -6,8 +6,6 @@ export {
   loadModel,
   downloadAsset,
   heartbeat,
-  startQVACProvider,
-  stopQVACProvider,
   unloadModel,
   transcribe,
   transcribeStream,

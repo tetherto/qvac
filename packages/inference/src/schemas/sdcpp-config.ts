@@ -69,14 +69,13 @@ export const sdcppConfigSchema = z.object({
         'via `t5XxlModelSrc` + VAE). ' +
         'On React Native, loading the video model on-device will likely fail ' +
         'because the video diffusion models currently ' +
-        'shipped by QVAC are too large to load on typical mobile devices; ' +
-        'pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead. ' +
+        'shipped by QVAC are too large to load on typical mobile devices. ' +
         "`'world'` builds an ABot-World interactive world session and exposes " +
         'worldCreateScene({ ... }) and worldStep({ ... }). It requires ' +
         '`taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes ' +
         'and/or `sceneSrc` to walk a pre-built one. World sessions run only on ' +
         'the machine hosting the worker and need a dedicated GPU with at least ' +
-        '20 GB free VRAM; there is no delegated route for them.'
+        '20 GB free VRAM.'
     ),
   threads: z.number().optional(),
   device: z.enum(['gpu', 'cpu']).optional(),
@@ -654,9 +653,8 @@ const videoGenerationBaseSchema = z.object({
     .string()
     .describe(
       'The identifier of the loaded video model to use for generation. ' +
-        'On React Native, prefer a `modelId` loaded with a `delegate` because ' +
-        'the video diffusion models currently shipped by QVAC are too ' +
-        'large to load on typical mobile devices.'
+        'On React Native, the video diffusion models currently shipped by ' +
+        'QVAC are too large to load on typical mobile devices.'
     ),
   requestId: z
     .string()
@@ -677,10 +675,7 @@ const videoGenerationBaseSchema = z.object({
       message: 'lora must be an absolute path'
     })
     .optional()
-    .describe(
-      'LTX video only. Worker-local absolute path to a LoRA adapter. ' +
-        'Under delegated inference the file must already exist on the provider.'
-    ),
+    .describe('LTX video only. Worker-local absolute path to a LoRA adapter.'),
   lora_strength: z
     .number()
     .min(0)

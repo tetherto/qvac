@@ -546,10 +546,6 @@ export const executor = createExecutor({
       'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
-      /^delegated-/,
-      'Electron skips delegated inference tests because provider startup and peer connectivity need separate packaged-app coverage'
-    ),
-    new SkipExecutor(
       /^finetune-/,
       'Electron skips finetune tests because training operations take too long for the stable Electron pass'
     ),
