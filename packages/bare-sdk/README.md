@@ -1,6 +1,6 @@
 # @qvac/bare-sdk
 
-> **Deprecated.** `@qvac/bare-sdk` is discontinued. Use [`@qvac/inference`](../inference) for in-process Bare. Last release is **0.18.1**. There will not be a 0.19.0 of this package.
+> **Deprecated.** `@qvac/bare-sdk` is discontinued. Use [`@qvac/inference`](../inference) for in-process Bare. Last release is **0.18.2**. There will not be a 0.19.0 of this package.
 
 > *Part of **QVAC** ecosystem*
 >
@@ -21,8 +21,8 @@
 ```
 
 ```diff
--"@qvac/bare-sdk": "^0.18.1",
-+"@qvac/inference": "^0.18.1",
+-"@qvac/bare-sdk": "^0.18.2",
++"@qvac/inference": "^0.18.2",
 ```
 
 See the [`@qvac/inference` README](../inference/README.md) for install, plugin assembly, and the capability-to-addon table.

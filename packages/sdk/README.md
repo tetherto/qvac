@@ -16,7 +16,7 @@ See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.i
 
 For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
 
-> **In-process Bare:** use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.1.
+> **In-process Bare:** use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.2.
 
 ## Supported environments and installation
 
