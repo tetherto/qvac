@@ -1,12 +1,16 @@
 import { z } from 'zod'
 import type { AbortController } from 'bare-abort-controller'
 import type { ModelProgressUpdate } from '@/schemas/load-model'
-import { modelSrcInputSchema, modelInputToSrcSchema } from '@/schemas/model-src-utils'
+import {
+  modelSrcInputSchema,
+  modelInputToSrcSchema,
+  MODEL_SOURCE_URI_HINT
+} from '@/schemas/model-src-utils'
+
+const ASSET_SRC_DESCRIPTION = `The asset to download and cache: ${MODEL_SOURCE_URI_HINT}.`
 
 const downloadAssetOptionsBaseSchema = z.object({
-  assetSrc: modelSrcInputSchema.describe(
-    'The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.'
-  ),
+  assetSrc: modelSrcInputSchema.describe(ASSET_SRC_DESCRIPTION),
   seed: z.boolean().optional()
 })
 
@@ -41,11 +45,7 @@ export const downloadAssetOptionsToRequestSchema = downloadAssetOptionsBaseSchem
 export const downloadAssetRequestSchema = z
   .object({
     type: z.literal('downloadAsset'),
-    assetSrc: z
-      .string()
-      .describe(
-        'The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.'
-      ),
+    assetSrc: z.string().describe(ASSET_SRC_DESCRIPTION),
     withProgress: z.boolean().optional(),
     seed: z.boolean().optional(),
     requestId: z

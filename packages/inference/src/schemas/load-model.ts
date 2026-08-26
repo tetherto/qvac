@@ -25,6 +25,7 @@ import {
   modelSrcInputSchema,
   modelInputToSrcSchema,
   modelInputToNameSchema,
+  MODEL_SOURCE_URI_HINT,
   type ModelDescriptor
 } from './model-src-utils'
 import {
@@ -59,8 +60,7 @@ export function isBuiltInModelType(modelType: unknown): boolean {
 }
 import { reloadConfigRequestSchema } from './reload-config'
 
-const MODEL_SRC_DESCRIPTION =
-  'The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.'
+const MODEL_SRC_DESCRIPTION = `The model to load: a registry model constant for a built-in model, or a model source — ${MODEL_SOURCE_URI_HINT} — for HTTP, local, or P2P models.`
 
 const loadModelCommonFields = {
   modelSrc: modelSrcInputSchema.describe(MODEL_SRC_DESCRIPTION),

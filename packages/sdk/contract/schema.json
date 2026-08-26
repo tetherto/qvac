@@ -7999,7 +7999,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8332,7 +8332,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8683,7 +8683,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8956,7 +8956,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9137,7 +9137,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9290,7 +9290,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -10140,7 +10140,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -11912,7 +11912,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -12125,7 +12125,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -13397,7 +13397,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -13877,7 +13877,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14006,7 +14006,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14093,7 +14093,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"

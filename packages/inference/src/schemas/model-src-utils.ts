@@ -10,12 +10,13 @@ import { resolveCanonicalEngine } from '@/schemas/engine-addon-map'
 // Addon field accepts model type inputs plus "vad"
 const addonSchema = z.union([modelTypeInputSchema, z.literal('vad')])
 
+// Shared phrasing for the accepted model-source locations, reused by every
+// field-level `.describe()` that documents a model/asset source.
+export const MODEL_SOURCE_URI_HINT =
+  'a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI'
+
 export const modelDescriptorSchema = z.object({
-  src: z
-    .string()
-    .describe(
-      'Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.'
-    ),
+  src: z.string().describe(`Location of the model file: ${MODEL_SOURCE_URI_HINT}.`),
   name: z
     .string()
     .optional()
@@ -28,10 +29,7 @@ export const modelDescriptorSchema = z.object({
     .string()
     .optional()
     .describe('Registry-relative path to the model (set for registry-backed models).'),
-  registrySource: z
-    .string()
-    .optional()
-    .describe('Registry source identifier, e.g. `huggingface`.'),
+  registrySource: z.string().optional().describe('Registry source identifier, e.g. `huggingface`.'),
   blobCoreKey: z.string().optional().describe('Hyperdrive blob core key for the model file.'),
   blobIndex: z
     .number()

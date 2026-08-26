@@ -6916,7 +6916,7 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7231,7 +7231,7 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7517,7 +7517,7 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7686,7 +7686,7 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7909,7 +7909,7 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -8830,7 +8830,7 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -10746,7 +10746,7 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -10985,7 +10985,7 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -12538,7 +12538,7 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13079,7 +13079,7 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13241,7 +13241,7 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13330,7 +13330,7 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13419,7 +13419,7 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source (local file path, HTTP(S) URL, or `registry://` / `hyperdrive://` URI) for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
