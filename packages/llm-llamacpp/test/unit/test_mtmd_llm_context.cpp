@@ -22,8 +22,12 @@ using test_common::getStatValue;
 namespace fs = std::filesystem;
 
 namespace {
-constexpr uint32_t kQwen35MultimodalPrefillCells = 2899;
-constexpr llama_pos kQwen35MultimodalPrefillPosMax = 90;
+// A cache-warm request on a force-open template stops before the `<think>`
+// opener, so these are two cells and two positions short of the rendered
+// prompt. See `MtmdLlmContext::preparePrefill` for why that opener must not
+// reach the saved cache.
+constexpr uint32_t kQwen35MultimodalPrefillCells = 2897;
+constexpr llama_pos kQwen35MultimodalPrefillPosMax = 88;
 
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
@@ -118,14 +122,15 @@ protected:
     return model;
   }
 
-  std::unique_ptr<LlamaModel> createQwen35Model() {
+  std::unique_ptr<LlamaModel>
+  createQwen35Model(const std::string& ctxSize = "4096") {
     if (!hasValidQwen35Model()) {
       return nullptr;
     }
     std::string modelPath = qwen35_model_path;
     std::string projectionPath = qwen35_projection_path;
     auto configCopy = config_files;
-    configCopy["ctx_size"] = "4096";
+    configCopy["ctx_size"] = ctxSize;
     auto model = std::make_unique<LlamaModel>(
         std::move(modelPath), std::move(projectionPath), std::move(configCopy));
     model->waitForLoadInitialization();
@@ -696,6 +701,186 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
          "compaction";
   EXPECT_EQ(ctx->getNPast(), posMax + 1)
       << "MTMD current_.pos must match the compacted sequence cursor";
+
+  fs::remove(cachePath);
+}
+
+// A cache warm never generates, so nothing will ever compact the reasoning
+// span its prompt opens. Stopping before the opener is what keeps a saved
+// cache from ending inside a `<think>` that no later turn can rewind past.
+// Differential rather than absolute: the same prompt with compaction off
+// decodes the opener, and the difference must be exactly its length.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdCacheWarmStopsBeforeForcedOpener) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  const auto warmPositions = [this](bool removeThinking) -> llama_pos {
+    auto model = createQwen35Model();
+    EXPECT_NE(model, nullptr);
+    if (!model) {
+      return -1;
+    }
+    auto* ctx =
+        dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+    EXPECT_NE(ctx, nullptr);
+    if (ctx == nullptr) {
+      return -1;
+    }
+    LlamaModel::Prompt prompt;
+    prompt.input = R"([{"role": "user", "content": "Is two plus two four?"}])";
+    prompt.prefill = true;
+    prompt.generationParams.remove_thinking_from_context = removeThinking;
+    EXPECT_TRUE(model->processPrompt(prompt).empty());
+    return ctx->getNPast();
+  };
+
+  const llama_pos withCompaction = warmPositions(/*removeThinking=*/true);
+  const llama_pos withoutCompaction = warmPositions(/*removeThinking=*/false);
+  ASSERT_GT(withoutCompaction, 0);
+  ASSERT_GT(withCompaction, 0);
+  EXPECT_EQ(withoutCompaction - withCompaction, 2)
+      << "a cache warm must stop before the two-token `<think>` opener, "
+         "withCompaction=" +
+             std::to_string(withCompaction) +
+             " withoutCompaction=" + std::to_string(withoutCompaction);
+}
+
+// Where the boundary actually lands on the MTMD path. Qwen3.5 force-opens
+// `<think>` at the tail of the last text chunk, and a full-state snapshot has
+// to be taken before those tokens decode, so the driver splits that chunk and
+// anchors between the halves. Read straight off the driver after prefill: the
+// anchor must sit exactly one opener short of the prefill cursor. Anchoring
+// after the opener is what leaves the next cached turn resuming inside a
+// reasoning block. Text-only, because the split is about the text chunk; the
+// media round trip is covered by the cached follow-up below.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryBeforeForcedOpener) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+
+  auto model = createQwen35Model();
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr);
+  ctx->setRemoveThinkingFromContext(true);
+
+  common_chat_msg msg;
+  msg.role = "user";
+  msg.content = "Is two plus two four?";
+  ASSERT_NO_THROW({
+    (void)ctx->evalMessage({msg}, /*isCacheLoaded=*/false, /*prefill=*/false);
+  });
+
+  const size_t openerTokens =
+      MtmdLlmContextTestPeer::forcedOpenTailTokens(*ctx);
+  ASSERT_GT(openerTokens, 0u)
+      << "Qwen3.5 must render a force-open opener, or this test proves "
+         "nothing about where the boundary lands";
+  ASSERT_TRUE(MtmdLlmContextTestPeer::hasReasoningBoundary(*ctx))
+      << "prefill must anchor a boundary when compaction is on";
+  EXPECT_EQ(
+      MtmdLlmContextTestPeer::reasoningBoundaryNPast(*ctx),
+      ctx->getNPast() - static_cast<llama_pos>(openerTokens))
+      << "the boundary must be anchored before the forced-open opener, not at "
+         "the end of prefill";
+}
+
+// The cached follow-up half of the test above, which is where a leftover
+// opener actually bites. Qwen3.5 is hybrid AND multimodal AND force-open, so
+// its prefill decodes `<think>\n` as the tail of the last text chunk. If the
+// boundary were anchored after that, the compacted cache would end inside a
+// reasoning block, and the next turn resuming from it would carry an opener
+// nothing closes. The driver splits that chunk instead and anchors between the
+// halves, so the compacted cache is preamble plus answer either way.
+//
+// Two turns on one context, second one reusing the first's cache: the visible
+// reasoning of turn 2 must open before it closes, and the cursor bookkeeping
+// must still agree with live memory afterwards.
+TEST_F(MtmdLlmContextTest, Qwen35MultimodalCachedFollowUpDoesNotResumeInside) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    GTEST_SKIP() << "Multimodal test image not found";
+  }
+
+  config_files["n_predict"] = "1024";
+  config_files["temp"] = "0";
+
+  // Both turns carry the image, and the prefill guard counts the cached cells
+  // plus the whole new prompt, so one 2.9k-cell image twice needs more than
+  // the 4096 the other Qwen3.5 tests run with.
+  auto model = createQwen35Model(/*ctxSize=*/"8192");
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+  auto* base = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(base, nullptr);
+  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  ASSERT_NE(ctx, nullptr);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-cached-follow-up.bin";
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt first;
+  first.input =
+      R"([{"role": "system", "content": "Answer with just one word: yes or no."},)"
+      R"( {"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Is there fruit in this image?"}])";
+  first.cacheKey = cachePath.string();
+  first.saveCacheToDisk = true;
+  first.media.push_back(readBinaryFile(imagePath));
+  first.generationParams.remove_thinking_from_context = true;
+
+  std::string firstOutput;
+  ASSERT_NO_THROW({ firstOutput = model->processPrompt(first); });
+  ASSERT_NE(firstOutput.find("</think>"), std::string::npos)
+      << "turn 1 must close a reasoning span or this test proves nothing";
+  const double firstDiscards =
+      getStatValue(model->runtimeStats(), "thinkingBlockDiscards");
+  ASSERT_GE(firstDiscards, 1.0) << "turn 1 must compact its reasoning block";
+
+  LlamaModel::Prompt second;
+  second.input =
+      R"([{"role": "system", "content": "Answer with just one word: yes or no."},)"
+      R"( {"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "Is there fruit in this image?"},)"
+      R"( {"role": "assistant", "content": "yes"},)"
+      R"( {"role": "user", "content": "Is the plate empty?"}])";
+  second.cacheKey = cachePath.string();
+  second.saveCacheToDisk = true;
+  second.media.push_back(readBinaryFile(imagePath));
+  second.generationParams.remove_thinking_from_context = true;
+
+  std::string secondOutput;
+  ASSERT_NO_THROW({ secondOutput = model->processPrompt(second); });
+  EXPECT_GT(secondOutput.length(), 0u)
+      << "a cached follow-up must still generate after compaction";
+
+  const size_t closeAt = secondOutput.find("</think>");
+  if (closeAt != std::string::npos) {
+    const size_t openAt = secondOutput.find("<think>");
+    EXPECT_NE(openAt, std::string::npos)
+        << "turn 2 closed a reasoning span it never opened, so it resumed "
+           "inside the previous turn's block; output: "
+        << secondOutput.substr(0, 200);
+    EXPECT_LT(openAt, closeAt)
+        << "turn 2 must open its reasoning span before closing it; output: "
+        << secondOutput.substr(0, 200);
+  }
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_seq_id seqId = ctx->getSeqId();
+  const auto sequenceCells =
+      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
+  EXPECT_EQ(ctx->getCacheTokens(), sequenceCells)
+      << "cacheTokens must still match live memory after a cached follow-up";
+  EXPECT_EQ(ctx->getNPast(), llama_memory_seq_pos_max(mem, seqId) + 1)
+      << "the cursor must still match the compacted sequence";
 
   fs::remove(cachePath);
 }

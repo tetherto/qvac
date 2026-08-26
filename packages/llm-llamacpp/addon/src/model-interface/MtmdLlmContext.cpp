@@ -521,6 +521,14 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   llama_pos nPastLocal = current_.pos;
 
+  // A force-open template renders `<think>\n` as the tail of the last text
+  // chunk. The full-state snapshot has to be taken before those tokens decode,
+  // so that chunk is split and the boundary anchored between the halves. A
+  // cache-warm request stops there and never decodes the opener at all: its
+  // cache is a prefix, the next turn re-decodes those tokens, and a cache that
+  // ends inside the opener is exactly what leaves a fragment nothing can trim.
+  const size_t openerTailTokens = forcedOpenTailTokens();
+
   for (size_t i = 0; i < nChunks; i++) {
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
@@ -612,15 +620,48 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             /*user_data=*/nullptr);
       }
     } else {
-      res = mtmd_helper_eval_chunk_single(
-          visionContext(),
-          modelCtx_.lctx,
-          chunk,
-          nPastLocal,
-          0,
-          params_.n_batch,
-          chunkLogitsLast,
-          &nPastLocal);
+      size_t chunkTokens = 0;
+      (void)mtmd_input_chunk_get_tokens_text(chunk, &chunkTokens);
+      const bool splitOpener = openerTailTokens > 0 && i == nChunks - 1 &&
+                               chunkTokens > openerTailTokens;
+      if (splitOpener) {
+        const size_t keptTokens = chunkTokens - openerTailTokens;
+        res = evalTextChunkRange(
+            chunk,
+            0,
+            keptTokens,
+            nPastLocal,
+            /*logitsLast=*/false,
+            &nPastLocal);
+        if (res == 0) {
+          // The anchor is the cursor the decode just stopped at, so book the
+          // span before capturing. `snapshotForRecurrentRollback` re-checks
+          // the gates and is a no-op on a cache-warm request, which is why
+          // the opener below is skipped rather than deferred for it.
+          current_.pos = nPastLocal;
+          refreshCurrentCacheTokensFromMemory();
+          snapshotForRecurrentRollback();
+        }
+        if (res == 0 && !prefill) {
+          res = evalTextChunkRange(
+              chunk,
+              keptTokens,
+              chunkTokens,
+              nPastLocal,
+              chunkLogitsLast,
+              &nPastLocal);
+        }
+      } else {
+        res = mtmd_helper_eval_chunk_single(
+            visionContext(),
+            modelCtx_.lctx,
+            chunk,
+            nPastLocal,
+            0,
+            params_.n_batch,
+            chunkLogitsLast,
+            &nPastLocal);
+      }
     }
     if (res != 0) {
       std::string errorMsg =
@@ -1130,15 +1171,13 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
-  // Pure attention anchors on a bare position, so it subtracts the opener
-  // and the rewind lands before the reasoning block, like the text path.
-  //
-  // The full-state path cannot here: multimodal prefill decodes whole chunks
-  // through `mtmd_helper_eval_chunk_single` and the opener is the tail of the
-  // last text chunk, so there is no decode stop to snapshot at. A recurrent or
-  // hybrid vision model on a force-open template therefore keeps the opener.
-  // No supported model is all three, and splitting an mtmd chunk would mean
-  // hand-decoding text the helper owns, M-RoPE positions included.
+  // The full-state path must anchor where the decode actually stopped, and
+  // both prefill drivers arrange that: the single-prompt chunk loop splits the
+  // last text chunk before the opener, and the batch path pauses on
+  // `prefillBoundaryPauseIndex`. So `current_.pos` IS the anchor here, and the
+  // capture below is a no-op when the split already took it. A pure-attention
+  // anchor is a bare position that nothing has to stop at, so it subtracts the
+  // opener here instead.
   const llama_pos anchorPos =
       needsRecurrentSnapshot_
           ? current_.pos
@@ -1146,6 +1185,94 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
                 current_.pos,
                 thinkingForcedOpen_,
                 reasoningState_.forcedOpenTokenCount);
+  captureReasoningBoundaryAt(anchorPos);
+}
+
+size_t MtmdLlmContext::forcedOpenTailTokens() const {
+  // Only the full-state path needs the decode to stop: a pure-attention
+  // rewind is positional and trims the opener even when it is already cached.
+  if (!needsRecurrentSnapshot_ || !thinkingForcedOpen_) {
+    return 0;
+  }
+  const auto openerTokens =
+      static_cast<size_t>(reasoningState_.forcedOpenTokenCount);
+  if (openerTokens == 0) {
+    return 0;
+  }
+  const auto decision = recurrentReasoningBoundaryDecision(
+      needsRecurrentSnapshot_,
+      removeThinkingFromContext_,
+      reasoningEnabled_ && params_.reasoning_budget != 0,
+      thinkingForcedOpen_,
+      reasoningState_.close_is_single_token);
+  return decision == RecurrentReasoningBoundaryDecision::Disabled
+             ? 0
+             : openerTokens;
+}
+
+int32_t MtmdLlmContext::evalTextChunkRange(
+    const mtmd_input_chunk* chunk, size_t from, size_t to, llama_pos nPast,
+    bool logitsLast, llama_pos* newNPast) {
+  size_t chunkTokens = 0;
+  const llama_token* tokens =
+      mtmd_input_chunk_get_tokens_text(chunk, &chunkTokens);
+  if (tokens == nullptr || to > chunkTokens || from >= to) {
+    return -1;
+  }
+  const int32_t maxBatch = params_.n_batch;
+  LlamaBatch batch(maxBatch, 0, 1);
+  size_t index = from;
+  while (index < to) {
+    batch->n_tokens = 0;
+    // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    for (; index < to && batch->n_tokens < maxBatch; index++) {
+      const int32_t slot = batch->n_tokens;
+      batch->token[slot] = tokens[index];
+      batch->pos[slot] = nPast++;
+      batch->n_seq_id[slot] = 1;
+      batch->seq_id[slot][0] = seqId_;
+      batch->logits[slot] = static_cast<int8_t>(false);
+      batch->n_tokens++;
+    }
+    if (logitsLast && index == to) {
+      batch->logits[batch->n_tokens - 1] = static_cast<int8_t>(true);
+    }
+    // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    const int32_t ret = llama_decode(modelCtx_.lctx, *batch);
+    if (ret != 0) {
+      return ret;
+    }
+    *newNPast += batch->n_tokens;
+  }
+  return 0;
+}
+
+llama_pos
+MtmdLlmContext::prefillBoundaryPauseIndex(llama_pos prefillLen) const {
+  if (isPrefillOnlyRequest_) {
+    return -1;
+  }
+  const auto openerTokens = static_cast<llama_pos>(forcedOpenTailTokens());
+  if (openerTokens == 0) {
+    return -1;
+  }
+  // The opener is the tail of the flattened plan, so the stop is the plan
+  // minus its length. A negative index means a cache hit already holds part
+  // of the opener and this prefill is shorter than it: there is no stop to
+  // take, and the resident fragment survives (see the text driver's
+  // `computeRecurrentSnapshotBoundary` for the same case).
+  const llama_pos boundary = prefillLen - openerTokens;
+  return boundary >= 0 ? boundary : -1;
+}
+
+void MtmdLlmContext::onPrefillBoundaryPause(llama_pos currentPos) {
+  // The batcher decodes text tokens itself, so this driver learns the cursor
+  // from the caller and has to book the span before anchoring on it.
+  advanceTextSpan(currentPos);
+  captureReasoningBoundaryAt(currentPos);
+}
+
+void MtmdLlmContext::captureReasoningBoundaryAt(llama_pos anchorPos) {
   try {
     compactor_.snapshotAtReasoningBoundary(
         modelCtx_.lctx, seqId_, anchorPos, "[MtmdLlm]");
@@ -1464,6 +1591,19 @@ PrefillPlan MtmdLlmContext::preparePrefill(
         ctxCeiling());
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextOverflow), errorMsg);
+  }
+
+  // A cache-warm request never generates, so nothing will compact the
+  // reasoning span its prompt opens. Stop before a force-open template's
+  // `<think>` so the saved cache does not end inside the opener: that leaves a
+  // resident fragment the next turn cannot rewind past, because a full-state
+  // snapshot only describes a point the decode has not reached yet. The prefix
+  // stays valid and the next turn decodes those tokens itself.
+  if (isPrefillOnlyRequest) {
+    const size_t openerTokens = forcedOpenTailTokens();
+    if (openerTokens > 0 && plan.tokens.size() > openerTokens) {
+      plan.tokens.resize(plan.tokens.size() - openerTokens);
+    }
   }
 
   // mtmd::input_chunks has a user-declared destructor and therefore no

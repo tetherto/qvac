@@ -183,4 +183,16 @@ public:
   static bool compactorRemovesThinking(const MtmdLlmContext& context) {
     return context.compactor_.removeThinkingFromContext();
   }
+
+  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
+    return context.rollbackState_.hasReasoningBoundary();
+  }
+
+  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
+    return context.rollbackState_.reasoningBoundaryNPast();
+  }
+
+  static size_t forcedOpenTailTokens(const MtmdLlmContext& context) {
+    return context.forcedOpenTailTokens();
+  }
 };

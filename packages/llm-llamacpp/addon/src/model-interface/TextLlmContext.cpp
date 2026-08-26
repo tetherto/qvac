@@ -656,7 +656,40 @@ PrefillPlan TextLlmContext::preparePrefill(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
 
+  // A cache-warm request never generates, so nothing will ever compact the
+  // reasoning span its prompt opens. Stop before a force-open template's
+  // `<think>` so the saved cache does not end inside the opener: that leaves a
+  // resident fragment the next turn cannot rewind past, because a full-state
+  // snapshot only describes a point the decode has not reached yet. The prefix
+  // stays valid and the next turn decodes those tokens itself.
+  if (isPrefillOnlyRequest) {
+    const size_t openerTokens = forcedOpenTailTokens();
+    if (openerTokens > 0 && inputTokens.size() > openerTokens) {
+      inputTokens.resize(inputTokens.size() - openerTokens);
+    }
+  }
+
   return PrefillPlan{.tokens = std::move(inputTokens)};
+}
+
+size_t TextLlmContext::forcedOpenTailTokens() const {
+  if (!needsRecurrentSnapshot_ || !thinkingForcedOpen_) {
+    return 0;
+  }
+  const auto openerTokens =
+      static_cast<size_t>(reasoningState_.forcedOpenTokenCount);
+  if (openerTokens == 0) {
+    return 0;
+  }
+  const auto decision = recurrentReasoningBoundaryDecision(
+      needsRecurrentSnapshot_,
+      removeThinkingFromContext_,
+      reasoningEnabled_ && params_.reasoning_budget != 0,
+      thinkingForcedOpen_,
+      reasoningState_.close_is_single_token);
+  return decision == RecurrentReasoningBoundaryDecision::Disabled
+             ? 0
+             : openerTokens;
 }
 
 void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
