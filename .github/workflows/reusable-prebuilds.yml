@@ -63,6 +63,16 @@ on:
         type: string
         required: false
         default: "7.13.0"
+      include-cuda:
+        description: >-
+          Install a pinned CUDA toolkit on the linux-x64 build so a consumer's
+          speech-cpp cuda feature compiles the ggml CUDA backend. No NVIDIA GPU
+          is needed on the runner (compile-only). Only affects the linux-x64
+          job; everything else is unchanged. Enable the consumer's CUDA cmake
+          option via platform-cmake-defines (e.g. `linux-x64: -D ENABLE_CUDA=ON`).
+        type: boolean
+        required: false
+        default: false
       extra-cmake-defines:
         description: >-
           Additional cmake defines appended verbatim to `bare-make generate` on every matrix entry. Space-separated. Example: "-D VK_PROFILING=ON" to enable Vulkan profiling on the llamacpp packages.
@@ -71,7 +81,7 @@ on:
         default: ""
       platform-cmake-defines:
         description: >-
-          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, so they can override common defines if needed. Platforms without an entry contribute nothing. Example: #magic___^_^___line
+          Platform-conditional cmake defines, one entry per line in `<platform>: <defines>` or `<platform>-<arch>: <defines>` form. The matched platform's defines are appended after `extra-cmake-defines`, then the matched platform-arch defines after those, so more specific entries can override broader ones. Platforms without an entry contribute nothing. Example: #magic___^_^___line
             platform-cmake-defines: |
               darwin: -D WHISPER_USE_METAL=ON
               ios: -D WHISPER_USE_METAL=ON
@@ -262,6 +272,10 @@ jobs:
         with:
           rocm-version: ${{ inputs.rocm-version }}
 
+      - if: ${{ inputs.include-cuda && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup CUDA toolkit for nvcc compile
+        uses: ./.github/actions/setup-cuda
+
       - if: ${{ inputs.include-vulkan-sdk && matrix.os == 'windows-2025' }}
         name: Set Vulkan SDK Path (Windows)
         run: |
@@ -309,18 +323,13 @@ jobs:
         shell: bash
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
+          MATRIX_ARCH: ${{ matrix.arch }}
           EXTRA_DEFINES: ${{ inputs.extra-cmake-defines }}
           PLATFORM_DEFINES_MAP: ${{ inputs.platform-cmake-defines }}
         run: |
-          DEFINES="-D BUILD_TESTING=OFF"
-          if [ "$MATRIX_PLATFORM" = "android" ]; then
-            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
-          fi
-          if [ -n "$EXTRA_DEFINES" ]; then
-            DEFINES="$DEFINES $EXTRA_DEFINES"
-          fi
-          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
-            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${MATRIX_PLATFORM}[[:space:]]*:" || true)
+          append_mapped_defines() {
+            KEY="$1"
+            LINE=$(echo "$PLATFORM_DEFINES_MAP" | grep -E "^[[:space:]]*${KEY}[[:space:]]*:" || true)
             if [ -n "$LINE" ]; then
               VALUE="${LINE#*:}"
               VALUE="${VALUE#"${VALUE%%[![:space:]]*}"}"
@@ -329,6 +338,17 @@ jobs:
                 DEFINES="$DEFINES $VALUE"
               fi
             fi
+          }
+          DEFINES="-D BUILD_TESTING=OFF"
+          if [ "$MATRIX_PLATFORM" = "android" ]; then
+            DEFINES="$DEFINES -D ANDROID_STL=c++_shared"
+          fi
+          if [ -n "$EXTRA_DEFINES" ]; then
+            DEFINES="$DEFINES $EXTRA_DEFINES"
+          fi
+          if [ -n "$PLATFORM_DEFINES_MAP" ]; then
+            append_mapped_defines "$MATRIX_PLATFORM"
+            append_mapped_defines "$MATRIX_PLATFORM-$MATRIX_ARCH"
           fi
           echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
 
