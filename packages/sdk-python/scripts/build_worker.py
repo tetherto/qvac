@@ -57,8 +57,15 @@ def links_workspace_inference(sdk: Path) -> bool:
         pkg = json.loads((sdk / "package.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    return "@qvac/inference" in pkg.get("dependencies", {}) and (
-        "sdk-source:workspace" in pkg.get("scripts", {})
+    if not isinstance(pkg, dict):
+        return False
+    deps = pkg.get("dependencies")
+    scripts = pkg.get("scripts")
+    return (
+        isinstance(deps, dict)
+        and isinstance(scripts, dict)
+        and "@qvac/inference" in deps
+        and "sdk-source:workspace" in scripts
     )
 
 
