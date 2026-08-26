@@ -32,11 +32,9 @@ export const methodShapes = {
   ocrStream: 'stream',
   pluginInvoke: 'reply',
   pluginInvokeStream: 'stream',
-  provide: 'reply',
   rag: 'reply',
   resume: 'reply',
   state: 'reply',
-  stopProvide: 'reply',
   suspend: 'reply',
   textToSpeech: 'stream',
   textToSpeechStream: 'duplex',
@@ -45,7 +43,9 @@ export const methodShapes = {
   translate: 'stream',
   unloadModel: 'reply',
   upscaleStream: 'stream',
-  videoStream: 'stream'
+  videoStream: 'stream',
+  worldSceneStream: 'stream',
+  worldStepStream: 'stream'
 } as const
 
 export type MethodName = keyof typeof methodShapes
