@@ -1,0 +1,48 @@
+---
+description: Core context for the @qvac/test-suite package (packages/test-suite)
+globs:
+  - packages/test-suite/**
+alwaysApply: false
+---
+
+# QVAC Test Suite
+
+`packages/test-suite` is the `@qvac/test-suite` package: a distributed MQTT test-orchestration framework
+(`qvac-test` CLI) that runs a consumer's test definitions across desktop Node, packaged Electron, strict
+Snap, iOS, and Android. It is an SDK-pod package — see `sdk-pod-packages.mdc`.
+
+- The framework is the **harness**, not a suite of tests. It ships no tests of its own. The tests it runs
+  live in the consumer repo; in this monorepo that consumer is `packages/sdk/e2e`.
+- Protect the public surfaces: CLI behaviour, package `exports`, config/runtime contracts, mobile
+  templates, the producer/consumer/report flow, and publish parity with the other SDK-pod packages.
+- `dist/` is gitignored and built by `npm run build`. Never commit build output, and never assume a fresh
+  checkout has one — CI packs the package when a consumer points at it via a `file:` link.
+
+## Names
+
+Published as `@qvac/test-suite` (public npm) and `@tetherto/test-suite-mono` (GitHub Packages, via the
+`name-suffix: "-mono"` the monorepo GPR action applies).
+
+Renamed in 0.11.0 from `@qvac/qvac-test-suite` / `@tetherto/qvac-test-suite`. Both old names are still
+recognised at runtime — see `FRAMEWORK_PACKAGE_NAMES` in `src/cli/commands/build-consumer-mobile.ts` and
+the esbuild `external` list in `src/utils/test-loader.ts`. Keep all four names in those two lists until the
+deprecated package is retired.
+
+## Local development
+
+```bash
+cd packages/test-suite
+npm install
+npm run check   # lunte + eslint + prettier
+npm run build   # tsc
+```
+
+## CI
+
+`SDK Pod Checks` gates this package: `format`, `lint`, `typecheck` and `build` run on every PR touching
+it. `trigger-reusable-lib-test-suite.yml` publishes it — GPR dev builds from `main`, `feature-*` and
+`tmp-*`, public npm from `release-test-suite-*`. Because the package ships only compiled output and has
+no `prepare` script, `dist` is built once in a dedicated job and downloaded by each publish job.
+
+The SDK e2e consumer wiring — the `test-suite-source` selector on `test-sdk.yml` — lands with the
+consumer migration, not here.
