@@ -315,9 +315,9 @@ private:
       const std::string& forcedOpenText);
 
   // Delegates to `rollbackState_.recordPostReasoningToken` while the
-  // post-reasoning capture phase is active (close marker committed AND
-  // a recurrent boundary snapshot exists). No-op for pure-attention
-  // models.
+  // post-reasoning capture phase is active, which starts once the close
+  // marker is committed. Every model kind anchors a boundary, so this runs
+  // on pure attention too; it is a no-op only when the feature is off.
   void recordPostReasoningTokenIfActive(llama_token tokenId);
 
   // Trailing tokens of the last text chunk that render the force-open
@@ -339,12 +339,11 @@ private:
   // checkpoint and rethrowing when the capture fails.
   void captureReasoningBoundaryAt(llama_pos anchorPos);
 
-  // Snapshot the full sequence state at the reasoning boundary on memory
-  // modules that don't support partial-tail erasure. No-op unless
-  // recurrent snapshot compaction is relevant for this request. When
-  // `remove_thinking_from_context` is enabled on a recurrent / hybrid
-  // model, unsupported template shapes throw instead of silently
-  // preserving reasoning in cache.
+  // Anchor the compaction boundary for this request: a full-state snapshot
+  // on memory that cannot erase a partial tail, a bare position on pure
+  // attention. No-op unless compaction is relevant for this request. A
+  // capture failure throws rather than silently preserving reasoning in
+  // cache.
   void snapshotForRecurrentRollback();
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory,

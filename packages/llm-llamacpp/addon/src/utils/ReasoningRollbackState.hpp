@@ -105,18 +105,18 @@ public:
   [[nodiscard]] size_t postReasoningTokenCount() const noexcept {
     return postReasoningTokens_.size();
   }
-  // Number of seeded structural tokens at the head of the replay
-  // buffer (close marker, etc.) that `clipPostReasoningTokens` must
-  // preserve regardless of the live-cache tail size.
+  // Number of seeded tokens at the head of the replay buffer, the
+  // pre-reasoning preamble a generated-opener template samples before the
+  // block opens, that `clipPostReasoningTokens` must preserve regardless of
+  // the live-cache tail size. No structural marker is ever seeded.
   [[nodiscard]] size_t seededPostReasoningCount() const noexcept {
     return seededPostReasoningCount_;
   }
   // Truncate the replay buffer so the captured suffix holds at most
-  // `maxCapturedTail` tokens. The seeded prefix (close marker + any
-  // other tokens added via `appendPostReasoningToken`) is never
-  // dropped, so passing 0 still preserves the structural prefix.
-  // Used when a tail trim shrinks the live tail between close-marker
-  // capture and replay.
+  // `maxCapturedTail` tokens. The seeded prefix, everything added through
+  // `appendPostReasoningToken`, is never dropped here, so passing 0 still
+  // replays the preamble. Used when a tail trim shrinks the live tail
+  // between close-marker capture and replay.
   void clipPostReasoningTokens(size_t maxCapturedTail);
 
   // Drop seeded tokens past `maxSeeded`, keeping the captured tail behind

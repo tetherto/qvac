@@ -260,32 +260,29 @@ private:
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
       const std::string& forcedOpenText);
 
-  // Delegates to `rollbackState_.recordPostReasoningToken` when the
-  // post-reasoning capture phase is active (close marker committed AND
-  // a recurrent boundary snapshot exists). No-op for pure-attention
-  // models where capture never starts.
+  // Delegates to `rollbackState_.recordPostReasoningToken` while the
+  // post-reasoning capture phase is active, which starts once the close
+  // marker is committed. Every model kind anchors a boundary, so this runs
+  // on pure attention too; it is a no-op only when the feature is off.
   void recordPostReasoningTokenIfActive(llama_token tokenId);
 
-  // Returns the token index in the prefill stream at which we should
-  // pause and snapshot the sequence state for the recurrent rollback
-  // path. Returns the sentinel `-1` when no snapshot is needed for
-  // this inference (memory module supports shift, feature disabled,
-  // prefill-only request, or reasoning channel not active). Throws when
-  // the feature is enabled for a recurrent / hybrid generation request
-  // but the template does not satisfy the snapshot + replay
-  // preconditions. Snapshots at END of prefill (boundary ==
-  // `prefillLen`); generated opener tokens, when present, are seeded
-  // into the replay buffer so the restored recurrent state stays
-  // structurally balanced after replay.
+  // Token index in the prefill stream where the decode must stop so the
+  // full-state snapshot is taken before a force-open template's `<think>`
+  // opener. The sentinel `-1` means no stop: the feature is off, the
+  // reasoning channel is inactive, this is a prefill-only request, or the
+  // model is pure attention, whose anchor is an absolute position that needs
+  // no decode stop. A generated-opener template has nothing in the prompt to
+  // stop before, so its boundary is the end of prefill and `compact()` clips
+  // the sampled opener pieces out of the replay instead.
   [[nodiscard]] llama_pos
   computeRecurrentSnapshotBoundary(llama_pos prefillLen) const;
 
-  // Takes a full-state snapshot of `seqId_` at the current `nPast_`
-  // and stores it in `rollbackState_`. No-op unless recurrent snapshot
-  // compaction is relevant for this request. Under the uniform
-  // hard-fail contract for `remove_thinking_from_context`, unsupported
-  // recurrent template shapes and snapshot capture failures propagate
-  // as `qvac_errors::StatusError`; the wrapper restores its pre-prompt
+  // Anchors the compaction boundary at the current `nPast_`: a full-state
+  // snapshot on recurrent / hybrid, a bare position on pure attention. No-op
+  // unless compaction is relevant for this request. Under the uniform
+  // hard-fail contract for `remove_thinking_from_context`, a capture failure
+  // propagates as `qvac_errors::StatusError`; the wrapper restores its
+  // pre-prompt
   // checkpoint via `restorePrefillEntry`, resets local positional
   // accounting, and re-throws so no saveCache path can persist a cache
   // whose header no longer matches live memory.
