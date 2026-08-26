@@ -6,7 +6,9 @@
 // integration matrix only exercises the CPU fallback path on real
 // devices. This file flips the switch with `useGPU: true` so that on
 //   - macOS / iOS:    Metal is engaged
-//   - Linux / Windows: Vulkan is engaged
+//   - Linux / Windows: CUDA or Vulkan is engaged (the opt-in `cuda` feature
+//                      compiles CUDA in alongside Vulkan and ggml registers
+//                      CUDA first, so a CUDA build on NVIDIA reports 2)
 //   - Android:         OpenCL on Adreno 700+, Vulkan on Mali / Xclipse;
 //                      the engine routes any vendor/tier it can't drive
 //                      to CPU and flags it via stats.gpuUnsupported
@@ -180,7 +182,10 @@ function assertGpuBackend(t, modelType, stats) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `${modelType}/${platform}: expected Metal backendId=1, got ${name}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    t.is(id, 3, `${modelType}/${platform}: expected Vulkan backendId=3, got ${name}`)
+    t.ok(
+      id === 2 || id === 3,
+      `${modelType}/${platform}: expected CUDA(2) or Vulkan(3) backendId, got ${name}`
+    )
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,

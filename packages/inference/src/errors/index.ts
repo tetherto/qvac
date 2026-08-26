@@ -61,24 +61,6 @@ export class RPCNoHandlerError extends QvacErrorBase {
   }
 }
 
-// ============== Provider / delegation, consumer side ==============
-
-export class ProviderStartFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(ERROR_CODES.PROVIDER_START_FAILED, details ? [details] : undefined, cause)
-    )
-  }
-}
-
-export class ProviderStopFailedError extends QvacErrorBase {
-  constructor(details?: string, cause?: unknown) {
-    super(
-      createErrorOptions(ERROR_CODES.PROVIDER_STOP_FAILED, details ? [details] : undefined, cause)
-    )
-  }
-}
-
 export class PluginsNotRegisteredError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.PLUGINS_NOT_REGISTERED, [], cause))
@@ -142,12 +124,6 @@ export class ModelNotFoundError extends QvacErrorBase {
 export class ModelNotLoadedError extends QvacErrorBase {
   constructor(modelId: string, cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.MODEL_NOT_LOADED, [modelId], cause))
-  }
-}
-
-export class ModelIsDelegatedError extends QvacErrorBase {
-  constructor(modelId: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.MODEL_IS_DELEGATED, [modelId], cause))
   }
 }
 
@@ -309,8 +285,8 @@ export class CompletionFailedError extends QvacErrorBase {
  * the addon error.
  *
  * Serializes its typed fields (`toErrorResponseFields`) so a receiver can
- * rebuild it after the error crosses a serialization boundary (a
- * delegated provider's response).
+ * rebuild it after the error crosses a serialization boundary (an RPC
+ * response).
  */
 export class ContextOverflowError extends QvacErrorBase {
   readonly promptTokens?: number
@@ -366,7 +342,7 @@ export class RequestIdConflictError extends QvacErrorBase {
   /**
    * Surface typed fields on the serialized error envelope so a receiver can
    * rebuild this exact class from `typedFields` after the error is serialized
-   * across a boundary (a delegated provider's response). Without this,
+   * across a boundary (an RPC response). Without this,
    * `err instanceof RequestIdConflictError` would be `false` on the far side.
    */
   toErrorResponseFields(): Record<string, unknown> {
@@ -800,31 +776,7 @@ export class InvalidAudioChunkError extends QvacErrorBase {
   }
 }
 
-// ============== Delegation, provider side ==============
-
-export class DelegateNoFinalResponseError extends QvacErrorBase {
-  constructor(cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE, undefined, cause))
-  }
-}
-
-export class DelegateConnectionFailedError extends QvacErrorBase {
-  constructor(details: string, cause?: unknown) {
-    super(createErrorOptions(ERROR_CODES.DELEGATE_CONNECTION_FAILED, [details], cause))
-  }
-}
-
-export class DelegateProviderError extends QvacErrorBase {
-  constructor(details: string, providerCode?: number, cause?: unknown) {
-    super(
-      createErrorOptions(
-        ERROR_CODES.DELEGATE_PROVIDER_ERROR,
-        providerCode !== undefined ? [details, String(providerCode)] : [details],
-        cause
-      )
-    )
-  }
-}
+// ============== RPC transport ==============
 
 export class RPCNoDataReceivedError extends QvacErrorBase {
   constructor(cause?: unknown) {
