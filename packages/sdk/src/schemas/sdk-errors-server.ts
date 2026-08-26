@@ -9,7 +9,6 @@ export const SDK_SERVER_ERROR_CODES = {
   MODEL_ALREADY_REGISTERED: 52001,
   MODEL_NOT_FOUND: 52002,
   MODEL_NOT_LOADED: 52003,
-  MODEL_IS_DELEGATED: 52004,
   UNKNOWN_MODEL_TYPE: 52005,
 
   // Model Loading Errors (52,200-52,399)
@@ -97,10 +96,7 @@ export const SDK_SERVER_ERROR_CODES = {
   INVALID_AUDIO_CHUNK_TYPE: 53502,
   ASYNC_DISPOSE_UNAVAILABLE: 53503,
 
-  // RPC/Delegation (Server-side) (53,700-53,849)
-  DELEGATE_NO_FINAL_RESPONSE: 53700,
-  DELEGATE_CONNECTION_FAILED: 53701,
-  DELEGATE_PROVIDER_ERROR: 53702,
+  // RPC (Server-side) (53,700-53,849)
   RPC_NO_DATA_RECEIVED: 53703,
   RPC_UNKNOWN_REQUEST_TYPE: 53704,
 
@@ -142,11 +138,6 @@ const serverErrorDefinitions: ErrorCodesMap = {
   [SDK_SERVER_ERROR_CODES.MODEL_NOT_LOADED]: {
     name: 'MODEL_NOT_LOADED',
     message: (modelId: string) => `Model with ID "${modelId}" is not loaded`
-  },
-  [SDK_SERVER_ERROR_CODES.MODEL_IS_DELEGATED]: {
-    name: 'MODEL_IS_DELEGATED',
-    message: (modelId: string) =>
-      `Model "${modelId}" is a delegated model and cannot be accessed directly`
   },
   [SDK_SERVER_ERROR_CODES.UNKNOWN_MODEL_TYPE]: {
     name: 'UNKNOWN_MODEL_TYPE',
@@ -490,20 +481,7 @@ const serverErrorDefinitions: ErrorCodesMap = {
       'Host runtime does not expose Symbol.asyncDispose; the SDK request-lifecycle primitives require ES2024 `using`/`asyncDispose` support. Verify your runtime (Bare/Expo/Node ≥ 20.4) and any polyfill registration.'
   },
 
-  // RPC/Delegation (Server-side) (53,700-53,899)
-  [SDK_SERVER_ERROR_CODES.DELEGATE_NO_FINAL_RESPONSE]: {
-    name: 'DELEGATE_NO_FINAL_RESPONSE',
-    message: 'No final response received from delegated provider'
-  },
-  [SDK_SERVER_ERROR_CODES.DELEGATE_CONNECTION_FAILED]: {
-    name: 'DELEGATE_CONNECTION_FAILED',
-    message: (details: string) => `Failed to connect to delegated provider: ${details}`
-  },
-  [SDK_SERVER_ERROR_CODES.DELEGATE_PROVIDER_ERROR]: {
-    name: 'DELEGATE_PROVIDER_ERROR',
-    message: (details: string, providerCode?: string) =>
-      `Delegated provider error: ${details}` + (providerCode ? ` (code: ${providerCode})` : '')
-  },
+  // RPC (Server-side) (53,700-53,899)
   [SDK_SERVER_ERROR_CODES.RPC_NO_DATA_RECEIVED]: {
     name: 'RPC_NO_DATA_RECEIVED',
     message: 'No data received from request'
