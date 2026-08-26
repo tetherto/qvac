@@ -1,8 +1,8 @@
 {
   "name": "speech-cpp",
-  "version-date": "2026-08-24",
-  "port-version": 5,
-  "description": "Local overlay, not for merge: umbrella port over the QVAC speech stack pinned to the Strix ACE-Step optimization branch ahead of its registry release.",
+  "version-date": "2026-08-26",
+  "port-version": 1,
+  "description": "Local overlay, not for merge: umbrella port over the QVAC speech stack pinned to the Strix ACE-Step LM/DiT compute optimization branch ahead of its registry release.",
   "homepage": "https://github.com/tetherto/qvac-ext-lib-whisper.cpp",
   "license": "MIT",
   "dependencies": [

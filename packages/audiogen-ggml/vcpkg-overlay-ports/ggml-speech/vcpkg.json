@@ -1,8 +1,8 @@
 {
   "name": "ggml-speech",
-  "version-date": "2026-08-24",
-  "port-version": 2,
-  "description": "Local overlay, not for merge: speech-stack ggml flavour pinned to the Strix ACE-Step Vulkan optimization branch ahead of its registry release.",
+  "version-date": "2026-08-26",
+  "port-version": 1,
+  "description": "Local overlay, not for merge: speech-stack ggml flavour pinned to the speech branch tip for the Strix ACE-Step LM/DiT compute optimization round.",
   "homepage": "https://github.com/tetherto/qvac-ext-ggml/tree/speech",
   "license": "MIT",
   "dependencies": [
