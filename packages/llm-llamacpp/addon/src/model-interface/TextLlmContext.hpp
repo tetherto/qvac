@@ -395,7 +395,7 @@ private:
 
   // Snapshot of `llama_perf_context()` taken at the start of
   // `compactThinkSpan` — i.e. right after user-visible generation
-  // completes and before any recurrent replay decode runs. Consumed by
+  // completes and before any replay decode runs. Consumed by
   // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
   // `llama_decode` calls (which accumulate into `n_p_eval` /
   // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.

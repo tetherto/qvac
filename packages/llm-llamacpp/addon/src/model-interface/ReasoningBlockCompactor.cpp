@@ -108,8 +108,7 @@ void ReasoningBlockCompactor::recordPreReasoningToken(llama_token id) {
   // `updateReasoningBuffer` flips back on the close marker. Without
   // this guard every post-close answer token would be appended twice:
   // once by `recordPostReasoningTokenIfActive` (captured tail) and once
-  // here (seeded prefix), and the recurrent replay would decode the
-  // answer through the SSM twice.
+  // here (seeded prefix), and the replay would decode the answer twice.
   if (thinkSpan_.has_value()) {
     return;
   }

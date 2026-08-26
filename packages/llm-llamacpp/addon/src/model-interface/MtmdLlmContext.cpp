@@ -1770,16 +1770,16 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     outputCallback(completeChars);
   }
 
-  // Record post-reasoning tokens for recurrent replay. Capture starts after
+  // Record post-reasoning tokens for the replay. Capture starts after
   // the close marker is committed, so the first token after the close lands
   // here on the next scheduler iteration.
   recordPostReasoningTokenIfActive(tokenId);
 
   if (reasoningEnabled_) {
     const bool wasInside = reasoningState_.inside_reasoning;
-    // Seed pre-reasoning tokens for the recurrent replay path — see
-    // the earlier MtmdLlmContext detection site and
-    // TextLlmContext::onLogitsReady for full rationale.
+    // Seed pre-reasoning tokens for the replay path, see the earlier
+    // MtmdLlmContext detection site and TextLlmContext::onLogitsReady
+    // for the full rationale.
     if (!wasInside) {
       compactor_.recordPreReasoningToken(tokenId);
     }

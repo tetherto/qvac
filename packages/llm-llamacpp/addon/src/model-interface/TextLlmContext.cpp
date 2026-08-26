@@ -588,7 +588,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
 
     // Snapshot fires exactly once when prefill reaches the configured
-    // recurrent rollback boundary.
+    // reasoning boundary.
     if (!snapshotTaken && snapBoundary >= 0 && tokenIndex == snapBoundary) {
       snapshotForRecurrentRollback();
       snapshotTaken = true;
@@ -915,7 +915,7 @@ SequenceStepResult TextLlmContext::onLogitsReady(
 
   if (reasoningEnabled_) {
     const bool wasInside = reasoningState_.inside_reasoning;
-    // Seed the sampled token into the recurrent replay buffer BEFORE
+    // Seed the sampled token into the replay buffer BEFORE
     // running the reasoning detector: on generated-opener templates
     // (`thinkingForcedOpen == false`) every token sampled after
     // end-of-prefill and up to and including the token that flips

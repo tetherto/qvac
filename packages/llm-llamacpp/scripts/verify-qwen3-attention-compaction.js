@@ -74,8 +74,8 @@ async function main() {
 
   let exitCode = 0
   // Under the uniform hard-fail contract (PR #2813), any compaction
-  // failure — including a pure-attention `seq_rm + seq_add` rejection
-  // — throws `StatusError` from `run()`. Reaching this point means
+  // failure throws `StatusError` from `run()`, including a rewind or a
+  // replay that the memory rejects. Reaching this point means
   // both turns' compaction succeeded (or was a no-op because the
   // model never emitted a reasoning block).
   //

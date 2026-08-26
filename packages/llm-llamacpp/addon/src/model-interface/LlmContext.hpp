@@ -385,8 +385,8 @@ public:
 
   /**
    * Consume the per-inference user-visible `llama_perf_context` snapshot
-   * if one was captured (currently only by contexts that may run a
-   * recurrent replay decode during thinking-block compaction). Returns
+   * if one was captured (by any context that may run a replay decode
+   * during thinking-block compaction). Returns
    * `std::nullopt` when no snapshot was taken, in which case the caller
    * should fall back to a live `llama_perf_context()` read.
    *

@@ -1319,7 +1319,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       state_->batchScheduler_->runtimeStats();
   // TTFT comes from the scheduler's prefill-step timer rather than
   // `llama_perf_context().t_p_eval_ms`, which would include the
-  // recurrent replay decode run by `compactThinkSpan` in
+  // replay decode run by `compactThinkSpan` in
   // `onGenerationFinished`. No `llama_perf_context_reset` here: this
   // runs under a shared stateMtx_ concurrently with in-flight batch
   // jobs, and the scheduler releases its own mutex around llama_decode,

@@ -91,12 +91,12 @@ public:
     return capturingPostReasoning_;
   }
   void recordPostReasoningToken(llama_token id);
-  // Unconditional append used to seed the replay buffer with the close
-  // marker token id (and any other tokens that must land in the
-  // replayed prefix) before `capturingPostReasoning_` is flipped on.
-  // Skips null token ids; never checks the capture flag. Bumps the
-  // seeded-prefix counter so `clipPostReasoningTokens` cannot drop
-  // structural tokens.
+  // Unconditional append used to seed the replay buffer with the
+  // pre-reasoning preamble a generated-opener template samples, before
+  // `capturingPostReasoning_` is flipped on. No `<think>` or `</think>` is
+  // ever seeded. Skips null token ids; never checks the capture flag. Bumps
+  // the seeded-prefix counter so `clipPostReasoningTokens` cannot drop the
+  // preamble.
   void appendPostReasoningToken(llama_token id);
   [[nodiscard]] const std::vector<llama_token>&
   postReasoningTokens() const noexcept {
