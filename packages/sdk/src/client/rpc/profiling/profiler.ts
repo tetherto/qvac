@@ -3,7 +3,6 @@ import {
   record,
   recordPhase,
   recordServerBreakdownPhases,
-  recordDelegationBreakdownPhases,
   type BaseTimings,
   type BaseEvent
 } from '@qvac/inference/surface'
@@ -139,10 +138,6 @@ export function recordClientEvents(
     }
   }
 
-  if (serverMeta?.delegation) {
-    recordDelegationBreakdownPhases(base, serverMeta.delegation)
-  }
-
   if (serverMeta?.operation) {
     recordOperationEvent(serverMeta.operation)
   }
@@ -192,10 +187,6 @@ export function recordClientStreamEvents(
 
   if (serverMeta?.server) {
     recordServerBreakdownPhases(base, serverMeta.server, 'server')
-  }
-
-  if (serverMeta?.delegation) {
-    recordDelegationBreakdownPhases(base, serverMeta.delegation)
   }
 
   if (serverMeta?.operation) {
