@@ -1,45 +1,20 @@
 @startuml
 !include <C4/C4_Context>
+HIDE_STEREOTYPE()
 
 title QVAC SDK Family - System Context
 
-Person(dev, "Application Developer", "Integrates QVAC into JavaScript, Python, Bare, desktop, and mobile applications")
-System_Boundary(qvac_sdk_family, "QVAC SDK Family") {
-    System(ts_sdk, "@qvac/sdk", "Batteries-included TypeScript SDK with default Bare worker and built-in plugins")
-    System(bare_sdk, "@qvac/bare-sdk", "Slim Bare distribution with explicit plugin assembly and no built-in addon dependencies")
-    System(inference, "@qvac/inference", "Implemented SDK core: Bare-only in-process engine with no RPC, worker, or subprocess layer")
-    System(py_sdk, "tetherto-qvac-sdk", "Generated Python client for the shared SDK worker RPC contract")
-}
+Person(dev, "Application Developer", "Builds JS, Python, Bare, desktop, and mobile apps")
 
-System_Ext(dht, "Hyperswarm DHT", "Distributed hash table for P2P peer discovery")
-System_Ext(hyperdrive, "Hyperdrive Peers", "P2P nodes hosting model files")
-System_Ext(cdn, "HTTP Servers", "CDN/direct download sources for models")
-System_Ext(registry, "QVAC Model Registry", "Centralized model catalog with metadata, search, and HTTP download")
-System_Ext(providers, "Remote Providers", "P2P nodes offering delegated inference")
+System(sdk, "QVAC SDK Family", "Local-first P2P inference. JS, Python, and Bare entry points share one engine")
 
-Rel_D(dev, ts_sdk, "Calls TypeScript API")
-Rel_D(dev, bare_sdk, "Assembles Bare plugins")
-Rel_D(dev, inference, "Calls in-process Bare engine")
-Rel_D(dev, py_sdk, "Calls Python API")
-Rel_R(ts_sdk, dht, "Peer discovery")
-Rel_R(bare_sdk, dht, "Peer discovery")
-Rel_R(inference, dht, "Peer discovery")
-Rel_R(py_sdk, dht, "Via worker")
-Rel_D(ts_sdk, hyperdrive, "P2P model downloads")
-Rel_D(bare_sdk, hyperdrive, "P2P model downloads")
-Rel_D(inference, hyperdrive, "P2P model downloads")
-Rel_D(py_sdk, hyperdrive, "Via worker")
-Rel_D(ts_sdk, cdn, "HTTP model downloads")
-Rel_D(bare_sdk, cdn, "HTTP model downloads")
-Rel_D(inference, cdn, "HTTP model downloads")
-Rel_D(py_sdk, cdn, "Via worker")
-Rel_D(ts_sdk, registry, "Model catalog queries and downloads")
-Rel_D(bare_sdk, registry, "Model catalog queries and downloads")
-Rel_D(inference, registry, "Model catalog queries and downloads")
-Rel_D(py_sdk, registry, "Via worker")
-Rel_D(ts_sdk, providers, "Delegated inference")
-Rel_D(bare_sdk, providers, "Delegated inference")
-Rel_D(inference, providers, "Delegated inference")
-Rel_D(py_sdk, providers, "Via worker")
+System_Ext(registry, "QVAC Model Registry", "Catalog, search, and blob download")
+System_Ext(http, "HTTP / CDN", "Direct model file downloads")
+System_Ext(p2p, "Holepunch P2P Network", "Hyperswarm DHT, Hyperdrive seeders, delegated inference providers")
+
+Rel_D(dev, sdk, "Calls SDK API")
+Rel_L(sdk, registry, "Queries catalog and downloads", "Holepunch")
+Rel_D(sdk, http, "Downloads models", "HTTPS")
+Rel_R(sdk, p2p, "Peer discovery, sync, delegated inference", "Hyperswarm")
 
 @enduml
