@@ -275,41 +275,53 @@ void MtmdLlmContext::initVisionContext() {
 }
 
 bool MtmdLlmContext::checkAntiprompt() {
-  if (!params_.antiprompt.empty()) {
-    constexpr int kNPrev = 32;
-    std::string lastOutput =
-        common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
+  if (params_.antiprompt.empty() && templateStops_.empty()) {
+    return false;
+  }
+  constexpr int kNPrev = 32;
+  std::string lastOutput =
+      common_sampler_prev_str(smpl_.get(), modelCtx_.lctx, kNPrev);
 
-    // Check if each of the reverse prompts appears anywhere in the recent
-    // output. We search the full kNPrev-token window because a single token
-    // can decode to many characters, and a short antiprompt like "\n" may
-    // appear at the start of such a token, far from the string's tail.
-    // Matching is case-insensitive so callers don't have to list every
-    // casing variant the model might emit.
-    std::string lastOutputLower = lastOutput;
-    std::transform(
-        lastOutputLower.begin(),
-        lastOutputLower.end(),
-        lastOutputLower.begin(),
-        [](unsigned char c) { return std::tolower(c); });
-    for (const std::string& antiprompt : params_.antiprompt) {
-      std::string antipromptLower = antiprompt;
+  // Check if each of the reverse prompts appears anywhere in the recent
+  // output. We search the full kNPrev-token window because a single token
+  // can decode to many characters, and a short antiprompt like "\n" may
+  // appear at the start of such a token, far from the string's tail.
+  // Matching is case-insensitive so callers don't have to list every
+  // casing variant the model might emit.
+  std::string lastOutputLower = lastOutput;
+  std::transform(
+      lastOutputLower.begin(),
+      lastOutputLower.end(),
+      lastOutputLower.begin(),
+      [](unsigned char c) { return std::tolower(c); });
+  auto containsAnyStop = [&](const std::vector<std::string>& stops) {
+    for (const std::string& stop : stops) {
+      std::string stopLower = stop;
       std::transform(
-          antipromptLower.begin(),
-          antipromptLower.end(),
-          antipromptLower.begin(),
+          stopLower.begin(),
+          stopLower.end(),
+          stopLower.begin(),
           [](unsigned char c) { return std::tolower(c); });
-      if (lastOutputLower.find(antipromptLower) != std::string::npos) {
+      if (lastOutputLower.find(stopLower) != std::string::npos) {
         return true;
       }
     }
+    return false;
+  };
+  if (containsAnyStop(params_.antiprompt) || containsAnyStop(templateStops_)) {
+    return true;
+  }
 
-    // check for reverse prompt using special tokens
-    llama_token lastToken = common_sampler_last(smpl_.get());
-    for (auto token : antipromptTokens_) {
-      if (token == lastToken) {
-        return true;
-      }
+  // check for reverse prompt using special tokens
+  llama_token lastToken = common_sampler_last(smpl_.get());
+  for (auto token : antipromptTokens_) {
+    if (token == lastToken) {
+      return true;
+    }
+  }
+  for (auto token : templateStopTokens_) {
+    if (token == lastToken) {
+      return true;
     }
   }
   return false;
@@ -372,6 +384,15 @@ void MtmdLlmContext::tokenizeChat(
   const Tokenizer tokenize = [this](const std::string& text) {
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
   };
+  // Template stop strings are per request: replace, never accumulate.
+  templateStops_ = rendered.additionalStops;
+  templateStopTokens_.clear();
+  for (const std::string& stop : templateStops_) {
+    const auto ids = tokenize(stop);
+    if (ids.size() == 1) {
+      templateStopTokens_.push_back(ids[0]);
+    }
+  }
   if (configureTemplateDerivedSampling(
           params_, tokenize, rendered, !tools.empty())) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));

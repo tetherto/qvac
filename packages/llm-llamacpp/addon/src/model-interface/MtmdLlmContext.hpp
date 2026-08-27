@@ -352,6 +352,11 @@ private:
   common_params params_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
+  // Per-request stop strings supplied by the chat template
+  // (`common_chat_params::additional_stops`). Refreshed on every
+  // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
+  std::vector<std::string> templateStops_;
+  std::vector<llama_token> templateStopTokens_;
   std::vector<llama_token> forcedTokens_;
 
   mtmd::bitmaps bitmaps_;
