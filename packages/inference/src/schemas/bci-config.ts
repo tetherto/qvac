@@ -10,17 +10,16 @@ import { modelSrcInputSchema } from '@/schemas/model-src-utils'
 
 // Reduced whisper inference field set exposed by the BCI addon (see the
 // `WhisperConfig` interface in `@qvac/bci-whispercpp`).
-// TODO(QVAC-23933): suppress_blank, single_segment, print_realtime and
-// print_timestamps map 1:1 to upstream `whisper_full_params` with no
-// human-readable semantics documented in-repo; left without a `.describe()`
-// pending source text from the addon owner (same gap as whisperConfigSchema).
 const bciWhisperConfigSchema = z
   .object({
     language: z.string().optional().describe('Transcription language (ISO 639-1). Default `en`.'),
     n_threads: z.number().int().optional().describe('Number of CPU threads. `0` = auto.'),
     temperature: z.number().optional().describe('Sampling temperature. Default 0.0.'),
     suppress_nst: z.boolean().optional().describe('Suppress non-speech tokens (NST).'),
-    suppress_blank: z.boolean().optional(),
+    suppress_blank: z
+      .boolean()
+      .optional()
+      .describe('Suppress the blank / leading-space token at the start of sampling.'),
     duration_ms: z
       .number()
       .int()
@@ -31,12 +30,30 @@ const bciWhisperConfigSchema = z
       .boolean()
       .optional()
       .describe('Omit timestamps from the transcription output.'),
-    single_segment: z.boolean().optional(),
+    single_segment: z
+      .boolean()
+      .optional()
+      .describe('Force the whole audio into one output segment (for streaming or short clips).'),
     print_special: z.boolean().optional().describe('Print special tokens in the output.'),
     print_progress: z.boolean().optional().describe('Print progress updates during transcription.'),
-    print_realtime: z.boolean().optional(),
-    print_timestamps: z.boolean().optional(),
-    detect_language: z.boolean().optional().describe('Automatically detect the spoken language.'),
+    print_realtime: z
+      .boolean()
+      .optional()
+      .describe(
+        'whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).'
+      ),
+    print_timestamps: z
+      .boolean()
+      .optional()
+      .describe(
+        'Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.'
+      ),
+    detect_language: z
+      .boolean()
+      .optional()
+      .describe(
+        "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+      ),
     greedy_best_of: z
       .number()
       .int()

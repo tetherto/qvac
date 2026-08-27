@@ -8738,6 +8738,7 @@
                           "type": "boolean"
                         },
                         "suppress_blank": {
+                          "description": "Suppress the blank / leading-space token at the start of sampling.",
                           "type": "boolean"
                         },
                         "duration_ms": {
@@ -8755,6 +8756,7 @@
                           "type": "boolean"
                         },
                         "single_segment": {
+                          "description": "Force the whole audio into one output segment (for streaming or short clips).",
                           "type": "boolean"
                         },
                         "print_special": {
@@ -8766,13 +8768,15 @@
                           "type": "boolean"
                         },
                         "print_realtime": {
+                          "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                           "type": "boolean"
                         },
                         "print_timestamps": {
+                          "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                           "type": "boolean"
                         },
                         "detect_language": {
-                          "description": "Automatically detect the spoken language.",
+                          "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                           "type": "boolean"
                         },
                         "greedy_best_of": {

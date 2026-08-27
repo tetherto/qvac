@@ -7191,7 +7191,12 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     suppress_nst: Annotated[
         bool | None, Field(description="Suppress non-speech tokens (NST).")
     ] = None
-    suppress_blank: bool | None = None
+    suppress_blank: Annotated[
+        bool | None,
+        Field(
+            description="Suppress the blank / leading-space token at the start of sampling."
+        ),
+    ] = None
     duration_ms: Annotated[
         int | None,
         Field(
@@ -7206,17 +7211,35 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     no_timestamps: Annotated[
         bool | None, Field(description="Omit timestamps from the transcription output.")
     ] = None
-    single_segment: bool | None = None
+    single_segment: Annotated[
+        bool | None,
+        Field(
+            description="Force the whole audio into one output segment (for streaming or short clips)."
+        ),
+    ] = None
     print_special: Annotated[
         bool | None, Field(description="Print special tokens in the output.")
     ] = None
     print_progress: Annotated[
         bool | None, Field(description="Print progress updates during transcription.")
     ] = None
-    print_realtime: bool | None = None
-    print_timestamps: bool | None = None
+    print_realtime: Annotated[
+        bool | None,
+        Field(
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+        ),
+    ] = None
+    print_timestamps: Annotated[
+        bool | None,
+        Field(
+            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+        ),
+    ] = None
     detect_language: Annotated[
-        bool | None, Field(description="Automatically detect the spoken language.")
+        bool | None,
+        Field(
+            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+        ),
     ] = None
     greedy_best_of: Annotated[
         int | None,
