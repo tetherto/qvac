@@ -404,7 +404,8 @@ TEST_F(ChatTemplateUtilsTest, ResolveToolChoicePassesThroughAutoNoneRequired) {
   EXPECT_EQ(required.tools.size(), 1u) << "tools list is not narrowed";
 }
 
-TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceNamedFunctionNarrowsAndRequires) {
+TEST_F(
+    ChatTemplateUtilsTest, ResolveToolChoiceNamedFunctionNarrowsAndRequires) {
   common_chat_tool other = makeWeatherTool();
   other.name = "get_time";
   const std::vector<common_chat_tool> tools{makeWeatherTool(), other};

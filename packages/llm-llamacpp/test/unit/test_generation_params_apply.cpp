@@ -117,7 +117,9 @@ TEST(TemplateDerivedSamplingTest, LoadTimeUserGrammarSurvivesToolsAbsentClear) {
   EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"loaded\"");
 }
 
-TEST(TemplateDerivedSamplingTest, ComposedJsonSchemaReplacesOutputFormatGrammar) {
+TEST(
+    TemplateDerivedSamplingTest,
+    ComposedJsonSchemaReplacesOutputFormatGrammar) {
   common_params params = paramsWithoutReasoningBudget();
   params.sampling.grammar =
       common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, "root ::= \"{}\"");

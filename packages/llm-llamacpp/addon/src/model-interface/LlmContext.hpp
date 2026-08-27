@@ -400,7 +400,9 @@ public:
    * consumed by the next `tokenizeChat`. Pass a default-constructed value to
    * clear. Default no-op for contexts that do not render chat templates.
    */
-  virtual void setRenderOverrides(RenderOverrides overrides) { (void)overrides; }
+  virtual void setRenderOverrides(RenderOverrides overrides) {
+    (void)overrides;
+  }
 
   /**
    * Why the most recent generation stopped (`None` when no generation

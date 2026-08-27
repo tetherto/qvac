@@ -51,12 +51,23 @@ std::string jsonEscape(const std::string& text) {
   out.reserve(text.size() + 16);
   for (const char c : text) {
     switch (c) {
-    case '"': out += "\\\""; break;
-    case '\\': out += "\\\\"; break;
-    case '\n': out += "\\n"; break;
-    case '\r': out += "\\r"; break;
-    case '\t': out += "\\t"; break;
-    default: out += c;
+    case '"':
+      out += "\\\"";
+      break;
+    case '\\':
+      out += "\\\\";
+      break;
+    case '\n':
+      out += "\\n";
+      break;
+    case '\r':
+      out += "\\r";
+      break;
+    case '\t':
+      out += "\\t";
+      break;
+    default:
+      out += c;
     }
   }
   return out;
@@ -64,12 +75,13 @@ std::string jsonEscape(const std::string& text) {
 
 // TOOL_PROMPT extended with the assistant's reply and one more user turn, so
 // the request continues the same conversation instead of starting a new one.
-std::string followUpPrompt(
-    const std::string& assistantReply, const std::string& userTurn) {
+std::string
+followUpPrompt(const std::string& assistantReply, const std::string& userTurn) {
   std::string prompt(TOOL_PROMPT);
   prompt.pop_back(); // drop the closing ']'
   prompt += R"(,{"role":"assistant","content":")" + jsonEscape(assistantReply) +
-            R"("},{"role":"user","content":")" + jsonEscape(userTurn) + R"("}])";
+            R"("},{"role":"user","content":")" + jsonEscape(userTurn) +
+            R"("}])";
   return prompt;
 }
 
@@ -336,10 +348,12 @@ TEST_F(ToolGrammarModelTest, JsonSchemaWithToolsComposesIntoToolGrammar) {
   // instead: a well-formed tool call or a schema-shaped JSON answer, never
   // free text.
   EXPECT_TRUE(
-      hasToolCallBlock(output) || output.find("\"colour\"") != std::string::npos)
+      hasToolCallBlock(output) ||
+      output.find("\"colour\"") != std::string::npos)
       << output;
   EXPECT_EQ(
-      test_common::getStatValue(model->runtimeStats(), "toolDefinitionsDropped"),
+      test_common::getStatValue(
+          model->runtimeStats(), "toolDefinitionsDropped"),
       0)
       << "json_schema with tools must not trip the tools-stripped retry";
 }
@@ -362,7 +376,8 @@ TEST_F(ToolGrammarModelTest, JsonSchemaWithoutToolsStillConstrainsOutput) {
 // A first-turn tool block sits below firstMsgTokens_, so a context slide on a
 // later turn removes tokens after it and never touches the tool definitions.
 // Verifies the existing protection rather than changing it.
-TEST_F(ToolGrammarModelTest, ProtectedPrefixKeepsFirstTurnToolBlockAcrossSlides) {
+TEST_F(
+    ToolGrammarModelTest, ProtectedPrefixKeepsFirstTurnToolBlockAcrossSlides) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
   }
@@ -395,9 +410,8 @@ TEST_F(ToolGrammarModelTest, ProtectedPrefixKeepsFirstTurnToolBlockAcrossSlides)
   ASSERT_FALSE(first.empty());
   const llama_pos protectedEnd = ctx->getFirstMsgTokens();
   ASSERT_GT(protectedEnd, 0);
-  const auto firstPromptTokens =
-      static_cast<llama_pos>(test_common::getStatValue(
-          model->runtimeStats(), "promptTokens"));
+  const auto firstPromptTokens = static_cast<llama_pos>(
+      test_common::getStatValue(model->runtimeStats(), "promptTokens"));
   EXPECT_GE(protectedEnd, firstPromptTokens)
       << "the whole first prompt, tools included, must be protected";
 

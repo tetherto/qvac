@@ -8,7 +8,8 @@
 // (single path: `LlamaModel::processPromptImpl`, cleared with the sampler
 // restore; batch path: `ContinuousBatchScheduler::submitLocked`, dies with
 // the slot driver). Lives in its own header because both `LlmContext` and
-// `SequenceDriver` consume it and `LlmContext.hpp` includes `SequenceDriver.hpp`.
+// `SequenceDriver` consume it and `LlmContext.hpp` includes
+// `SequenceDriver.hpp`.
 struct RenderOverrides {
   // Raw JSON Schema string. With tools present it is handed to the template so
   // the tool-call grammar and the response schema compose into one grammar.

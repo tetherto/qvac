@@ -9,9 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include <llama.h>
-
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama.h>
 
 #include "QwenTemplate.hpp"
 #include "addon/LlmErrors.hpp"
