@@ -225,7 +225,11 @@ export function createWorldStepResult(
         }
         const parsed = worldStepStreamResponseSchema.parse(response)
 
-        if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
+        if (
+          parsed.step !== undefined &&
+          parsed.totalSteps !== undefined &&
+          parsed.elapsedMs !== undefined
+        ) {
           progressPending.push({
             step: parsed.step,
             totalSteps: parsed.totalSteps,
