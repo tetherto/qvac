@@ -18,7 +18,7 @@ export const VERBOSITY = {
 const verbositySchema = z.enum(VERBOSITY)
 
 // Base schema - validates types, all fields optional (for input validation)
-export const llmConfigBaseSchema = z.object({
+export const llmConfigBaseSchema = z.strictObject({
   ctx_size: z
     .number()
     .optional()
@@ -193,7 +193,7 @@ export const LLM_CONFIG_DEFAULTS = {
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
-export const llmConfigSchema = llmConfigBaseSchema.strict().transform((data) => ({
+export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
   ...LLM_CONFIG_DEFAULTS,
   ...data
 }))

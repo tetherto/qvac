@@ -530,11 +530,10 @@ const commonModelConfigSchema = z.object({
 // Request schemas for each model type (use canonical types since transforms normalize)
 // Use base schemas (no defaults) for client-side validation.
 // Server applies device defaults, then full schema defaults.
-// Strict so a retired key errors instead of being dropped. Other types are not yet aligned.
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppCompletion),
-    modelConfig: llmConfigBaseSchema.strict()
+    modelConfig: llmConfigBaseSchema
   })
   .strict()
 

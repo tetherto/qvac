@@ -235,3 +235,8 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
     true
   )
 })
+
+test('llmConfigBaseSchema: rejects the retired no_mmap without a test-applied strict()', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ no_mmap: true }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ load_mode: 'none' }).success, true)
+})

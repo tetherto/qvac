@@ -10,6 +10,7 @@ import {
   BUILTIN_DEVICE_PATTERNS,
   type ConfigResolutionLog
 } from '@/runtime/model-config-utils'
+import { validateConfig } from '@/config/config-utils'
 
 test('matchesPattern: matches Pixel device', (t) => {
   const ctx: RuntimeContext = {
@@ -410,3 +411,24 @@ test('RESOLVER: omitted load_mode stays omitted', (t) => {
 
   t.is('load_mode' in result, false)
 })
+
+function devicePatternConfig(key: string, modelConfig: Record<string, unknown>) {
+  return {
+    deviceDefaults: [{ name: 't', match: { platform: 'linux' }, defaults: { [key]: modelConfig } }]
+  }
+}
+
+for (const key of ['llm', 'llamacpp-completion']) {
+  test(`CONFIG: deviceDefaults.${key} rejects the retired no_mmap`, (t) => {
+    t.exception(() => validateConfig(devicePatternConfig(key, { no_mmap: true })), /no_mmap/)
+  })
+
+  test(`CONFIG: deviceDefaults.${key} keeps a valid load_mode`, (t) => {
+    const config = validateConfig(devicePatternConfig(key, { load_mode: 'none' }))
+    const defaults = config.deviceDefaults?.[0]?.defaults as Record<
+      string,
+      Record<string, unknown>
+    >
+    t.is(defaults[key].load_mode, 'none')
+  })
+}
