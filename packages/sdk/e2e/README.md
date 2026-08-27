@@ -75,10 +75,10 @@ npx qvac-test run:local:electron --filter completion-
 The Electron consumer registers the desktop/shared executor set, so standard filters such as `completion-`,
 `embedding-`, `translation-`, or `model-` route through the same test definitions used by desktop.
 
-The full Electron pass intentionally skips `diffusion-`, `finetune-`, `delegated-`, `no-lingering-bare-`, and
+The full Electron pass intentionally skips `diffusion-`, `finetune-`, `no-lingering-bare-`, and
 `vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
 the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
-the worker during long-running operations, delegated inference depends on peer/provider startup semantics, and
+the worker during long-running operations, and
 no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
 packaged worker lock.
 

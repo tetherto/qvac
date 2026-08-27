@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import subprocess
 import sys
@@ -44,6 +45,30 @@ def _run(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
+def links_workspace_inference(sdk: Path) -> bool:
+    """Whether the sibling engine can be linked into this SDK checkout.
+
+    The directory alone is not enough: QVAC_POC_SDK_DIR can point at a checkout
+    with `packages/inference` but no script to link it.
+    """
+    if not (sdk.parent / "inference").is_dir():
+        return False
+    try:
+        pkg = json.loads((sdk / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(pkg, dict):
+        return False
+    deps = pkg.get("dependencies")
+    scripts = pkg.get("scripts")
+    return (
+        isinstance(deps, dict)
+        and isinstance(scripts, dict)
+        and "@qvac/inference" in deps
+        and "sdk-source:workspace" in scripts
+    )
+
+
 def build(sdk: Path, *, force: bool) -> Path:
     worker = worker_path(sdk)
     if worker.exists() and not force:
@@ -57,7 +82,20 @@ def build(sdk: Path, *, force: bool) -> Path:
     # `bun run build` is lint + tsc + alias resolution; run the worker-producing
     # steps directly so a build here doesn't depend on the SDK's lint passing
     # (the SDK has its own lint CI). `bun install` pulls the addon prebuilds.
-    _run(["bun", "install"], sdk)
+    #
+    # Compile against the sibling engine where there is one: the published
+    # release lags the engine API the SDK source already consumes.
+    if links_workspace_inference(sdk):
+        # The helper rewrites the manifest and leaves it rewritten. Restoring is
+        # safe: node_modules keeps the link, so tsc still gets the workspace engine.
+        manifest = sdk / "package.json"
+        saved = manifest.read_text(encoding="utf-8")
+        try:
+            _run(["bun", "run", "sdk-source:workspace"], sdk)
+        finally:
+            manifest.write_text(saved, encoding="utf-8")
+    else:
+        _run(["bun", "install"], sdk)
     # bun/npm don't reliably set the exec bit on the prebuilt Bare binary, and
     # the client execs it directly (node_modules/bare-runtime-<plat>/bin/bare),
     # so it fails with EACCES on Linux CI. Make every installed bare runnable.
