@@ -1,6 +1,4 @@
-# Changelog
-
-## [0.11.0]
+# QVAC Test Suite v0.11.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.11.0
 
