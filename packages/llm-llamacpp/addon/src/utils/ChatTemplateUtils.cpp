@@ -252,30 +252,30 @@ getChatTemplate(const ::llama_model* model, const common_params& params) {
   return chatTemplate;
 }
 
-std::string getPrompt(
+PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs, bool* outThinkingForcedOpen,
-    std::string* outThinkingStartTag, std::string* outThinkingEndTag,
-    std::vector<std::string>* outThinkingEndTags,
-    std::string* outGenerationPrompt) {
-  auto exportParams = [&](const common_chat_params& params) {
-    if (outThinkingForcedOpen) {
-      *outThinkingForcedOpen = params.thinking_forced_open;
-    }
-    if (outThinkingStartTag) {
-      *outThinkingStartTag = params.thinking_start_tag;
-    }
-    if (outThinkingEndTag) {
-      *outThinkingEndTag = params.thinking_end_tags.empty()
-                               ? std::string()
-                               : params.thinking_end_tags.front();
-    }
-    if (outThinkingEndTags) {
-      *outThinkingEndTags = params.thinking_end_tags;
-    }
-    if (outGenerationPrompt) {
-      *outGenerationPrompt = params.generation_prompt;
-    }
+    struct common_chat_templates_inputs& inputs) {
+  // Single export point for all three render paths below.
+  auto exportParams = [](const common_chat_params& params,
+                         bool renderedByJinja,
+                         bool toolDefinitionsDropped) {
+    PromptRenderResult out;
+    out.prompt = params.prompt;
+    out.thinkingForcedOpen = params.thinking_forced_open;
+    out.thinkingStartTag = params.thinking_start_tag;
+    out.thinkingEndTag = params.thinking_end_tags.empty()
+                             ? std::string()
+                             : params.thinking_end_tags.front();
+    out.thinkingEndTags = params.thinking_end_tags;
+    out.generationPrompt = params.generation_prompt;
+    out.grammar = params.grammar;
+    out.grammarLazy = params.grammar_lazy;
+    out.grammarTriggers = params.grammar_triggers;
+    out.preservedTokens = params.preserved_tokens;
+    out.additionalStops = params.additional_stops;
+    out.renderedByJinja = renderedByJinja;
+    out.toolDefinitionsDropped = toolDefinitionsDropped;
+    return out;
   };
   // A template can fail either because it rejects the tool definitions or
   // because it rejects the shape of the message list (e.g. Qwen3.5 raises
@@ -286,8 +286,10 @@ std::string getPrompt(
   std::string firstError;
   try {
     auto params = common_chat_templates_apply(tmpls, inputs);
-    exportParams(params);
-    return params.prompt;
+    return exportParams(
+        params,
+        /* renderedByJinja = */ inputs.use_jinja,
+        /* toolDefinitionsDropped = */ false);
   } catch (const std::exception& e) {
     firstError = e.what();
   } catch (...) {
@@ -306,8 +308,10 @@ std::string getPrompt(
               "definitions; rendering without tools. Error: %s\n",
               firstError.c_str()));
       inputs.tools.clear();
-      exportParams(params);
-      return params.prompt;
+      return exportParams(
+          params,
+          /* renderedByJinja = */ inputs.use_jinja,
+          /* toolDefinitionsDropped = */ true);
     } catch (...) {
       // Falls through: the template rejects this conversation with or
       // without tools, so tools were not the cause.
@@ -323,8 +327,10 @@ std::string getPrompt(
           firstError.c_str()));
   inputs.use_jinja = false;
   auto params = common_chat_templates_apply(tmpls, inputs);
-  exportParams(params);
-  return params.prompt;
+  return exportParams(
+      params,
+      /* renderedByJinja = */ false,
+      /* toolDefinitionsDropped = */ !inputs.tools.empty());
 }
 
 bool configureReasoningBudgetSampling(

@@ -141,28 +141,53 @@ std::string
 getChatTemplate(const ::llama_model* model, const common_params& params);
 
 /**
+ * @brief Everything a chat-template render produces besides the prompt text.
+ *
+ * Filled in one place for every render path (Jinja success, tools-stripped
+ * retry, legacy fallback) so a field cannot be exported on one path and
+ * silently left default on another.
+ */
+struct PromptRenderResult {
+  std::string prompt;
+
+  // Reasoning-channel metadata.
+  bool thinkingForcedOpen = false;
+  std::string thinkingStartTag;
+  /// First entry of `thinkingEndTags`, or empty. Used for forced-close text.
+  std::string thinkingEndTag;
+  std::vector<std::string> thinkingEndTags;
+  /// Assistant generation prompt already appended to `prompt`.
+  std::string generationPrompt;
+
+  // Tool-calling sampler machinery computed by the template. `grammar` is
+  // untyped here; `configureTemplateDerivedSampling` tags it TOOL_CALLS only
+  // when `renderedByJinja` is true.
+  std::string grammar;
+  bool grammarLazy = false;
+  std::vector<common_grammar_trigger> grammarTriggers;
+  std::vector<std::string> preservedTokens;
+  std::vector<std::string> additionalStops;
+
+  /// False when the legacy (non-Jinja) renderer produced this result. The
+  /// legacy renderer echoes the caller's own grammar into `grammar`, which
+  /// must never be treated as a tool grammar.
+  bool renderedByJinja = true;
+
+  /// True when the template rejected the tool definitions and the prompt was
+  /// rendered without them.
+  bool toolDefinitionsDropped = false;
+};
+
+/**
  * @brief Applies chat templates to generate a prompt, with fallback handling
  * for models that don't support tools.
  *
- * @p outThinkingForcedOpen (optional) receives the flag indicating that the
- *    template force-opened the reasoning channel in the prompt suffix.
- * @p outThinkingStartTag (optional) receives the template-specific reasoning
- *    start tag, when the template exposes one.
- * @p outThinkingEndTag (optional) receives the template-specific reasoning
- *    end tag used for forced close text, when the template exposes one.
- * @p outThinkingEndTags (optional) receives all template-specific reasoning
- *    end tags, any of which should stop reasoning-budget sampling.
- * @p outGenerationPrompt (optional) receives the assistant generation prompt
- *    already appended to the formatted prompt.
+ * On a tools-stripped retry `inputs.tools` is cleared so callers never see a
+ * tool list the prompt does not carry.
  */
-std::string getPrompt(
+PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs,
-    bool* outThinkingForcedOpen = nullptr,
-    std::string* outThinkingStartTag = nullptr,
-    std::string* outThinkingEndTag = nullptr,
-    std::vector<std::string>* outThinkingEndTags = nullptr,
-    std::string* outGenerationPrompt = nullptr);
+    struct common_chat_templates_inputs& inputs);
 
 /**
  * @brief Configures the common-sampling reasoning-budget fields from

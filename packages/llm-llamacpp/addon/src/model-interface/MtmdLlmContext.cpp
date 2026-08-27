@@ -350,24 +350,18 @@ void MtmdLlmContext::tokenizeChat(
   if (!tools.empty()) {
     inputs.tools = tools;
   }
-  std::string thinkingStartTag;
-  std::string thinkingEndTag;
-  std::vector<std::string> thinkingEndTags;
-  std::string generationPrompt;
-  formattedChat = getPrompt(
-      tmpls_.get(),
-      inputs,
-      &thinkingForcedOpen_,
-      &thinkingStartTag,
-      &thinkingEndTag,
-      &thinkingEndTags,
-      &generationPrompt);
+  const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
+  formattedChat = rendered.prompt;
+  thinkingForcedOpen_ = rendered.thinkingForcedOpen;
   thinkingForcedOpenText_ =
-      thinkingForcedOpen_
-          ? getThinkingForcedOpenText(generationPrompt, thinkingStartTag)
-          : std::string{};
+      thinkingForcedOpen_ ? getThinkingForcedOpenText(
+                                rendered.generationPrompt,
+                                rendered.thinkingStartTag)
+                          : std::string{};
   configureReasoningTags(
-      thinkingStartTag, thinkingEndTag, thinkingForcedOpenText_);
+      rendered.thinkingStartTag,
+      rendered.thinkingEndTag,
+      thinkingForcedOpenText_);
 
   if (formattedChat.empty()) {
     std::string errorMsg = string_format(
@@ -378,9 +372,9 @@ void MtmdLlmContext::tokenizeChat(
   if (configureReasoningBudgetSampling(
           params_,
           modelCtx_.lctx,
-          thinkingStartTag,
-          thinkingEndTags,
-          generationPrompt)) {
+          rendered.thinkingStartTag,
+          rendered.thinkingEndTags,
+          rendered.generationPrompt)) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
       std::string errorMsg = string_format(

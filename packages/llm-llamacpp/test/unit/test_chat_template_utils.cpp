@@ -305,11 +305,9 @@ TEST_F(ChatTemplateUtilsTest, GetFixedQwen3TemplateNotNull) {
   EXPECT_GT(strlen(expectedTemplate), 0u);
 }
 
-TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
-  common_chat_templates_ptr tmpls =
-      common_chat_templates_init(nullptr, getFixedQwen3Template());
-  ASSERT_NE(tmpls, nullptr);
+namespace {
 
+common_chat_templates_inputs makeQwenInputs() {
   common_chat_templates_inputs inputs;
   inputs.use_jinja = true;
   inputs.enable_thinking = true;
@@ -318,27 +316,122 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
       /* role = */ "user",
       /* content = */ "What is the capital of France?",
   }};
+  return inputs;
+}
 
-  bool thinkingForcedOpen = true;
-  std::string thinkingStartTag;
-  std::string thinkingEndTag;
-  std::vector<std::string> thinkingEndTags;
-  std::string generationPrompt;
-  const std::string prompt = getPrompt(
-      tmpls.get(),
-      inputs,
-      &thinkingForcedOpen,
-      &thinkingStartTag,
-      &thinkingEndTag,
-      &thinkingEndTags,
-      &generationPrompt);
+common_chat_tool makeWeatherTool() {
+  common_chat_tool tool;
+  tool.name = "get_weather";
+  tool.description = "Get the weather for a city";
+  tool.parameters =
+      R"({"type":"object","properties":{"city":{"type":"string"},)"
+      R"("days":{"type":"integer"}},"required":["city"]})";
+  return tool;
+}
 
-  EXPECT_NE(prompt.find("<|im_start|>assistant"), std::string::npos);
-  EXPECT_EQ(thinkingStartTag, "<think>");
-  EXPECT_EQ(thinkingEndTag, "</think>");
-  EXPECT_EQ(thinkingEndTags, std::vector<std::string>{"</think>"});
-  EXPECT_NE(generationPrompt.find("<|im_start|>assistant"), std::string::npos);
-  EXPECT_FALSE(thinkingForcedOpen);
+// Renders any conversation but raises as soon as tools are present, so
+// getPrompt() must take its tools-stripped retry path.
+constexpr const char* TOOL_REJECTING_TEMPLATE =
+    "{%- if tools %}{{ raise_exception('no tools here') }}{%- endif %}"
+    "{%- for m in messages %}<{{ m.role }}>{{ m.content }}{%- endfor %}"
+    "{%- if add_generation_prompt %}<assistant>{%- endif %}";
+
+// Raises unconditionally under Jinja. The `<|im_start|>` marker inside the
+// message makes llama.cpp's legacy renderer recognise it as ChatML, so the
+// legacy fallback succeeds instead of throwing.
+constexpr const char* ALWAYS_RAISING_TEMPLATE =
+    "{{ raise_exception('<|im_start|> always fails') }}";
+
+} // namespace
+
+TEST_F(ChatTemplateUtilsTest, GetPromptExportsQwenThinkingMetadata) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_NE(rendered.prompt.find("<|im_start|>assistant"), std::string::npos);
+  EXPECT_EQ(rendered.thinkingStartTag, "<think>");
+  EXPECT_EQ(rendered.thinkingEndTag, "</think>");
+  EXPECT_EQ(rendered.thinkingEndTags, std::vector<std::string>{"</think>"});
+  EXPECT_NE(
+      rendered.generationPrompt.find("<|im_start|>assistant"),
+      std::string::npos);
+  EXPECT_FALSE(rendered.thinkingForcedOpen);
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_FALSE(rendered.toolDefinitionsDropped);
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos);
+  EXPECT_FALSE(rendered.grammar.empty());
+  EXPECT_FALSE(rendered.preservedTokens.empty());
+  // A lazy grammar without triggers can never activate; the template must
+  // supply them whenever it asks for laziness.
+  if (rendered.grammarLazy) {
+    EXPECT_FALSE(rendered.grammarTriggers.empty());
+  }
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_FALSE(rendered.toolDefinitionsDropped);
+  EXPECT_EQ(inputs.tools.size(), 1u) << "tools must not be stripped on success";
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptWithoutToolsExportsNoGrammar) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_TRUE(rendered.grammar.empty());
+  EXPECT_FALSE(rendered.grammarLazy);
+  EXPECT_TRUE(rendered.grammarTriggers.empty());
+  // preservedTokens is deliberately not asserted empty: the template also
+  // preserves its reasoning tags (<think>, </think>) with no tools present.
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptFlagsToolDefinitionsDropped) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, TOOL_REJECTING_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_TRUE(rendered.toolDefinitionsDropped);
+  EXPECT_TRUE(rendered.renderedByJinja);
+  EXPECT_TRUE(inputs.tools.empty()) << "stripped tools must not leak to callers";
+  EXPECT_NE(rendered.prompt.find("<user>"), std::string::npos);
+  EXPECT_TRUE(rendered.grammar.empty());
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptLegacyFallbackMarksProvenance) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, ALWAYS_RAISING_TEMPLATE);
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  // The legacy renderer echoes the caller's grammar back untouched; it must
+  // arrive tagged as non-Jinja so it is never mistaken for a tool grammar.
+  inputs.grammar = "root ::= \"x\"";
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_FALSE(rendered.renderedByJinja);
+  EXPECT_FALSE(inputs.use_jinja);
+  EXPECT_EQ(rendered.grammar, "root ::= \"x\"");
+  EXPECT_FALSE(rendered.prompt.empty());
 }
 
 TEST_F(ChatTemplateUtilsTest, ThinkingForcedOpenTextUsesTemplateSuffix) {
