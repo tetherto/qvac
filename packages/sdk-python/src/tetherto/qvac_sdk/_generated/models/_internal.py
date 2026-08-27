@@ -7316,53 +7316,137 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     GeneratedBaseModel
 ):
-    language: str | None = None
+    language: Annotated[
+        str | None,
+        Field(description="Transcription language (ISO 639-1). Default `en`."),
+    ] = None
     n_threads: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Number of CPU threads. `0` = auto.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    temperature: float | None = None
-    suppress_nst: bool | None = None
-    suppress_blank: bool | None = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature. Default 0.0.")
+    ] = None
+    suppress_nst: Annotated[
+        bool | None, Field(description="Suppress non-speech tokens (NST).")
+    ] = None
+    suppress_blank: Annotated[
+        bool | None,
+        Field(
+            description="Suppress the blank / leading-space token at the start of sampling."
+        ),
+    ] = None
     duration_ms: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Maximum duration of audio to transcribe, in milliseconds.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
-    translate: bool | None = None
-    no_timestamps: bool | None = None
-    single_segment: bool | None = None
-    print_special: bool | None = None
-    print_progress: bool | None = None
-    print_realtime: bool | None = None
-    print_timestamps: bool | None = None
-    detect_language: bool | None = None
+    translate: Annotated[
+        bool | None, Field(description="Translate the transcribed audio into English.")
+    ] = None
+    no_timestamps: Annotated[
+        bool | None, Field(description="Omit timestamps from the transcription output.")
+    ] = None
+    single_segment: Annotated[
+        bool | None,
+        Field(
+            description="Force the whole audio into one output segment (for streaming or short clips)."
+        ),
+    ] = None
+    print_special: Annotated[
+        bool | None, Field(description="Print special tokens in the output.")
+    ] = None
+    print_progress: Annotated[
+        bool | None, Field(description="Print progress updates during transcription.")
+    ] = None
+    print_realtime: Annotated[
+        bool | None,
+        Field(
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+        ),
+    ] = None
+    print_timestamps: Annotated[
+        bool | None,
+        Field(
+            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+        ),
+    ] = None
+    detect_language: Annotated[
+        bool | None,
+        Field(
+            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+        ),
+    ] = None
     greedy_best_of: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Greedy decoding: number of candidate completions; `-1` = default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
     beam_search_beam_size: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+        int | None,
+        Field(
+            description="Beam size for beam-search decoding; `-1` = default.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigBciConfig(
     GeneratedBaseModel
 ):
-    day_idx: Annotated[int | None, Field(ge=-9007199254740991, le=9007199254740991)] = (
-        None
-    )
+    day_idx: Annotated[
+        int | None,
+        Field(
+            description="Session day index selecting day-specific projection matrices; `-1` enables mel passthrough (parity testing only).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigContextParams(
     GeneratedBaseModel
 ):
-    model: str | None = None
-    use_gpu: bool | None = None
-    flash_attn: bool | None = None
-    gpu_device: float | None = None
+    model: Annotated[
+        str | None,
+        Field(
+            description="Optional whisper model path override (usually set via the loaded model files)."
+        ),
+    ] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            description="Enable GPU acceleration. Enabled by default; set false to force CPU."
+        ),
+    ] = None
+    flash_attn: Annotated[bool | None, Field(description="Enable flash attention.")] = (
+        None
+    )
+    gpu_device: Annotated[
+        float | None, Field(description="GPU device index to use.")
+    ] = None
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(
     GeneratedBaseModel
 ):
-    caption_enabled: bool | None = None
+    caption_enabled: Annotated[
+        bool | None,
+        Field(
+            description="Format output segments with caption markers. Default false."
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(
@@ -7504,12 +7588,21 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfig(GeneratedBaseMode
             title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig",
         ),
     ] = None
-    backends_dir: Annotated[str | None, Field(alias="backendsDir")] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.",
+        ),
+    ] = None
     embedder_model_src: Annotated[
         str
         | LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc
         | None,
-        Field(alias="embedderModelSrc"),
+        Field(
+            alias="embedderModelSrc",
+            description="BCI embedder model source (neural-signal embedder weights).",
+        ),
     ] = None
 
 
@@ -8656,74 +8749,159 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel(
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode | None,
         Field(
-            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
+            description="Generation mode; currently only `'full'` is supported. Default `'full'`.",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode",
         ),
     ] = None
-    beamsize: float | None = None
-    lengthpenalty: float | None = None
-    maxlength: float | None = None
-    repetitionpenalty: float | None = None
-    norepeatngramsize: float | None = None
-    temperature: float | None = None
-    topk: float | None = None
-    topp: float | None = None
+    beamsize: Annotated[
+        float | None,
+        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
+    ] = None
+    lengthpenalty: Annotated[
+        float | None,
+        Field(description="Length-normalization strength (≥0). Default 1.0."),
+    ] = None
+    maxlength: Annotated[
+        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
+    ] = None
+    repetitionpenalty: Annotated[
+        float | None,
+        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
+    ] = None
+    norepeatngramsize: Annotated[
+        float | None,
+        Field(
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
+    ] = None
+    topk: Annotated[
+        float | None,
+        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+    ] = None
+    topp: Annotated[
+        float | None,
+        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+    ] = None
     model_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc,
-        Field(alias="modelSrc"),
+        Field(
+            alias="modelSrc",
+            description="Second-stage (pivot) translation model source.",
+        ),
     ]
     src_vocab_src: Annotated[
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc
         | None,
-        Field(alias="srcVocabSrc"),
+        Field(
+            alias="srcVocabSrc",
+            description="Pivot model source-language vocabulary file source.",
+        ),
     ] = None
     dst_vocab_src: Annotated[
         str
         | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc
         | None,
-        Field(alias="dstVocabSrc"),
+        Field(
+            alias="dstVocabSrc",
+            description="Pivot model target-language vocabulary file source.",
+        ),
     ] = None
-    normalize: float | None = None
+    normalize: Annotated[
+        float | None,
+        Field(
+            description="Pivot model input normalization: 1 = on (default), 0 = off."
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamot(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode | None,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"),
+        Field(
+            description="Generation mode; currently only `'full'` is supported. Default `'full'`.",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode",
+        ),
     ] = None
-    beamsize: float | None = None
-    lengthpenalty: float | None = None
-    maxlength: float | None = None
-    repetitionpenalty: float | None = None
-    norepeatngramsize: float | None = None
-    temperature: float | None = None
-    topk: float | None = None
-    topp: float | None = None
-    engine: Literal["Bergamot"] = "Bergamot"
+    beamsize: Annotated[
+        float | None,
+        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
+    ] = None
+    lengthpenalty: Annotated[
+        float | None,
+        Field(description="Length-normalization strength (≥0). Default 1.0."),
+    ] = None
+    maxlength: Annotated[
+        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
+    ] = None
+    repetitionpenalty: Annotated[
+        float | None,
+        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
+    ] = None
+    norepeatngramsize: Annotated[
+        float | None,
+        Field(
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
+    ] = None
+    topk: Annotated[
+        float | None,
+        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+    ] = None
+    topp: Annotated[
+        float | None,
+        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+    ] = None
+    engine: Annotated[
+        Literal["Bergamot"],
+        Field(
+            description="Translation backend: Bergamot — fast bilingual models keyed by ISO 639-1 codes."
+        ),
+    ] = "Bergamot"
     from_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom,
         Field(
             alias="from",
+            description="Source language (ISO 639-1, e.g. `en`).",
             title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom",
         ),
     ]
     to: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"),
+        Field(
+            description="Target language (ISO 639-1, e.g. `de`).",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo",
+        ),
     ]
     src_vocab_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc | None,
-        Field(alias="srcVocabSrc"),
+        Field(
+            alias="srcVocabSrc",
+            description="Source-language vocabulary file source (required for Bergamot).",
+        ),
     ] = None
     dst_vocab_src: Annotated[
         str | LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc | None,
-        Field(alias="dstVocabSrc"),
+        Field(
+            alias="dstVocabSrc",
+            description="Target-language vocabulary file source (required for Bergamot).",
+        ),
     ] = None
-    normalize: float | None = None
+    normalize: Annotated[
+        float | None,
+        Field(description="Input normalization: 1 = on (default), 0 = off."),
+    ] = None
     pivot_model: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel | None,
         Field(
             alias="pivotModel",
+            description="Optional second-stage model for pivot translation (translate via an intermediate language).",
             title="LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModel",
         ),
     ] = None
@@ -8794,27 +8972,63 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo(Enum):
 class LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode | None,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"),
+        Field(
+            description="Generation mode; currently only `'full'` is supported. Default `'full'`.",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode",
+        ),
     ] = None
-    beamsize: float | None = None
-    lengthpenalty: float | None = None
-    maxlength: float | None = None
-    repetitionpenalty: float | None = None
-    norepeatngramsize: float | None = None
-    temperature: float | None = None
-    topk: float | None = None
-    topp: float | None = None
-    engine: Literal["IndicTrans"] = "IndicTrans"
+    beamsize: Annotated[
+        float | None,
+        Field(description="Beam search width (≥1); 1 disables beam search. Default 4."),
+    ] = None
+    lengthpenalty: Annotated[
+        float | None,
+        Field(description="Length-normalization strength (≥0). Default 1.0."),
+    ] = None
+    maxlength: Annotated[
+        float | None, Field(description="Maximum generated tokens (>0). Default 512.")
+    ] = None
+    repetitionpenalty: Annotated[
+        float | None,
+        Field(description="Penalty on previously generated tokens (0–2). Default 1.0."),
+    ] = None
+    norepeatngramsize: Annotated[
+        float | None,
+        Field(
+            description="Disallow repeating n-grams of this size (0–10); 0 disables. Default 0."
+        ),
+    ] = None
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature (0–2). Default 0.3.")
+    ] = None
+    topk: Annotated[
+        float | None,
+        Field(description="Keep top-K logits (0–vocab_size); 0 disables. Default 0."),
+    ] = None
+    topp: Annotated[
+        float | None,
+        Field(description="Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0."),
+    ] = None
+    engine: Annotated[
+        Literal["IndicTrans"],
+        Field(
+            description="Translation backend: IndicTrans2 — keyed by ISO 15924 codes; full generation-parameter support."
+        ),
+    ] = "IndicTrans"
     from_: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom,
         Field(
             alias="from",
+            description="Source language (ISO 15924, e.g. `hin_Deva`).",
             title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom",
         ),
     ]
     to: Annotated[
         LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo,
-        Field(title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"),
+        Field(
+            description="Target language (ISO 15924, e.g. `eng_Latn`).",
+            title="LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo",
+        ),
     ]
 
 
@@ -11250,38 +11464,91 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
-    lang_list: Annotated[list[str] | None, Field(alias="langList")] = None
+    lang_list: Annotated[
+        list[str] | None,
+        Field(
+            alias="langList",
+            description="Languages handled by the recognizer, e.g. `['en']` or `['en', 'fr']`. Required for `easyocr`; ignored by the language-agnostic `doctr` pipeline.",
+        ),
+    ] = None
     pipeline_type: Annotated[
         LoadModelSrcRequestGgmlOcrModelConfigPipelineType | None,
         Field(
             alias="pipelineType",
+            description="OCR pipeline: `'easyocr'` (CRAFT detector + CRNN recognizer, default) or `'doctr'` (DBNet detector + doctr recognizer, language-agnostic).",
             title="LoadModelSrcRequestGgmlOcrModelConfigPipelineType",
         ),
     ] = None
-    mag_ratio: Annotated[float | None, Field(alias="magRatio")] = None
-    canvas_size: Annotated[float | None, Field(alias="canvasSize")] = None
-    default_rotation_angles: Annotated[
-        list[float] | None, Field(alias="defaultRotationAngles")
+    mag_ratio: Annotated[
+        float | None,
+        Field(
+            alias="magRatio",
+            description="Detection magnification ratio (easyocr only). Default 1.5.",
+        ),
     ] = None
-    contrast_retry: Annotated[bool | None, Field(alias="contrastRetry")] = None
+    canvas_size: Annotated[
+        float | None,
+        Field(
+            alias="canvasSize",
+            description="Detection canvas cap (long side, px) applied after `magRatio` scaling; lower it on memory-constrained targets. Default 2560. easyocr only.",
+        ),
+    ] = None
+    default_rotation_angles: Annotated[
+        list[float] | None,
+        Field(
+            alias="defaultRotationAngles",
+            description="Rotation angles tried when the primary pass is low-confidence (easyocr only). Default [90, 270].",
+        ),
+    ] = None
+    contrast_retry: Annotated[
+        bool | None,
+        Field(
+            alias="contrastRetry",
+            description="Retry low-confidence boxes with contrast adjustment (easyocr only). Default false.",
+        ),
+    ] = None
     low_confidence_threshold: Annotated[
-        float | None, Field(alias="lowConfidenceThreshold")
+        float | None,
+        Field(
+            alias="lowConfidenceThreshold",
+            description="Confidence threshold below which contrast-retry kicks in (easyocr only). Default 0.4.",
+        ),
     ] = None
     recognizer_batch_size: Annotated[
-        float | None, Field(alias="recognizerBatchSize")
+        float | None,
+        Field(
+            alias="recognizerBatchSize",
+            description="Recognizer batch size (easyocr only). Default 32.",
+        ),
     ] = None
-    n_threads: Annotated[float | None, Field(alias="nThreads")] = None
+    n_threads: Annotated[
+        float | None,
+        Field(
+            alias="nThreads",
+            description="GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
+        ),
+    ] = None
     backend_device: Annotated[
         LoadModelSrcRequestGgmlOcrModelConfigBackendDevice | None,
         Field(
             alias="backendDevice",
+            description="ggml backend device: `'cpu'` (default), `'vulkan'`, `'metal'`, or `'opencl'`. Falls back to CPU when the requested GPU device is unavailable.",
             title="LoadModelSrcRequestGgmlOcrModelConfigBackendDevice",
         ),
     ] = None
-    gpu_device: Annotated[float | None, Field(alias="gpuDevice")] = None
+    gpu_device: Annotated[
+        float | None,
+        Field(
+            alias="gpuDevice",
+            description="0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
+        ),
+    ] = None
     detector_model_src: Annotated[
         str | LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc | None,
-        Field(alias="detectorModelSrc"),
+        Field(
+            alias="detectorModelSrc",
+            description="Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.",
+        ),
     ] = None
 
 
@@ -12921,10 +13188,16 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
-    threads: float | None = None
+    threads: Annotated[
+        float | None,
+        Field(description="CPU threads for loading and CPU ops. Default: auto."),
+    ] = None
     device: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigDevice | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigDevice"),
+        Field(
+            description="Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`).",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigDevice",
+        ),
     ] = None
     main_gpu: Annotated[
         MainGpu2 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
@@ -12949,11 +13222,17 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     ] = None
     rng: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigRng | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigRng"),
+        Field(
+            description="Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigRng",
+        ),
     ] = None
     sampler_rng: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"),
+        Field(
+            description="Sampler RNG type override. Default: auto (follows `rng`).",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng",
+        ),
     ] = None
     clip_on_cpu: Annotated[
         bool | None, Field(description="Force CLIP text encoder to run on CPU")
@@ -12999,7 +13278,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode",
         ),
     ] = None
-    verbosity: float | None = None
+    verbosity: Annotated[
+        float | None,
+        Field(
+            description="Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0."
+        ),
+    ] = None
     clip_l_model_src: Annotated[
         str | LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc | None,
         Field(
@@ -13807,11 +14091,29 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestGgmlClassificationModelConfig(GeneratedBaseModel):
-    model_path: Annotated[str | None, Field(alias="modelPath")] = None
-    top_k: Annotated[
-        int | None, Field(alias="topK", ge=-9007199254740991, le=9007199254740991)
+    model_path: Annotated[
+        str | None,
+        Field(
+            alias="modelPath",
+            description="Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.",
+        ),
     ] = None
-    native_logger: Annotated[bool | None, Field(alias="nativeLogger")] = None
+    top_k: Annotated[
+        int | None,
+        Field(
+            alias="topK",
+            description="Limit returned results to the top-K classes. Default: all classes.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    native_logger: Annotated[
+        bool | None,
+        Field(
+            alias="nativeLogger",
+            description="Forward native C++ log lines through the engine logger. Off by default.",
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):

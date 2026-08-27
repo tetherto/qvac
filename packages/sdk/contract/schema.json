@@ -8637,57 +8637,73 @@
                       "type": "object",
                       "properties": {
                         "language": {
+                          "description": "Transcription language (ISO 639-1). Default `en`.",
                           "type": "string"
                         },
                         "n_threads": {
+                          "description": "Number of CPU threads. `0` = auto.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "temperature": {
+                          "description": "Sampling temperature. Default 0.0.",
                           "type": "number"
                         },
                         "suppress_nst": {
+                          "description": "Suppress non-speech tokens (NST).",
                           "type": "boolean"
                         },
                         "suppress_blank": {
+                          "description": "Suppress the blank / leading-space token at the start of sampling.",
                           "type": "boolean"
                         },
                         "duration_ms": {
+                          "description": "Maximum duration of audio to transcribe, in milliseconds.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "translate": {
+                          "description": "Translate the transcribed audio into English.",
                           "type": "boolean"
                         },
                         "no_timestamps": {
+                          "description": "Omit timestamps from the transcription output.",
                           "type": "boolean"
                         },
                         "single_segment": {
+                          "description": "Force the whole audio into one output segment (for streaming or short clips).",
                           "type": "boolean"
                         },
                         "print_special": {
+                          "description": "Print special tokens in the output.",
                           "type": "boolean"
                         },
                         "print_progress": {
+                          "description": "Print progress updates during transcription.",
                           "type": "boolean"
                         },
                         "print_realtime": {
+                          "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                           "type": "boolean"
                         },
                         "print_timestamps": {
+                          "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                           "type": "boolean"
                         },
                         "detect_language": {
+                          "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                           "type": "boolean"
                         },
                         "greedy_best_of": {
+                          "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "beam_search_beam_size": {
+                          "description": "Beam size for beam-search decoding; `-1` = default.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
@@ -8699,6 +8715,7 @@
                       "type": "object",
                       "properties": {
                         "day_idx": {
+                          "description": "Session day index selecting day-specific projection matrices; `-1` enables mel passthrough (parity testing only).",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
@@ -8710,15 +8727,19 @@
                       "type": "object",
                       "properties": {
                         "model": {
+                          "description": "Optional whisper model path override (usually set via the loaded model files).",
                           "type": "string"
                         },
                         "use_gpu": {
+                          "description": "Enable GPU acceleration. Enabled by default; set false to force CPU.",
                           "type": "boolean"
                         },
                         "flash_attn": {
+                          "description": "Enable flash attention.",
                           "type": "boolean"
                         },
                         "gpu_device": {
+                          "description": "GPU device index to use.",
                           "type": "number"
                         }
                       },
@@ -8728,15 +8749,18 @@
                       "type": "object",
                       "properties": {
                         "caption_enabled": {
+                          "description": "Format output segments with caption markers. Default false.",
                           "type": "boolean"
                         }
                       },
                       "title": "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "backendsDir": {
+                      "description": "Android only: override the default ggml backend prebuilds directory. Defaults to `<addon>/prebuilds`.",
                       "type": "string"
                     },
                     "embedderModelSrc": {
+                      "description": "BCI embedder model source (neural-signal embedder weights).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -9170,37 +9194,47 @@
                       "type": "object",
                       "properties": {
                         "mode": {
+                          "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                           "type": "string",
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode"
                         },
                         "beamsize": {
+                          "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
                         "lengthpenalty": {
+                          "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
                         "maxlength": {
+                          "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
                         "repetitionpenalty": {
+                          "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
                         "norepeatngramsize": {
+                          "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "temperature": {
+                          "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
                         "topk": {
+                          "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "topp": {
+                          "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
                         "engine": {
                           "type": "string",
-                          "const": "Bergamot"
+                          "const": "Bergamot",
+                          "description": "Translation backend: Bergamot — fast bilingual models keyed by ISO 639-1 codes."
                         },
                         "from": {
                           "type": "string",
@@ -9260,6 +9294,7 @@
                             "tr",
                             "vi"
                           ],
+                          "description": "Source language (ISO 639-1, e.g. `en`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotFrom"
                         },
                         "to": {
@@ -9320,9 +9355,11 @@
                             "tr",
                             "vi"
                           ],
+                          "description": "Target language (ISO 639-1, e.g. `de`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo"
                         },
                         "srcVocabSrc": {
+                          "description": "Source-language vocabulary file source (required for Bergamot).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9417,6 +9454,7 @@
                           ]
                         },
                         "dstVocabSrc": {
+                          "description": "Target-language vocabulary file source (required for Bergamot).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -9511,38 +9549,49 @@
                           ]
                         },
                         "normalize": {
+                          "description": "Input normalization: 1 = on (default), 0 = off.",
                           "type": "number"
                         },
                         "pivotModel": {
+                          "description": "Optional second-stage model for pivot translation (translate via an intermediate language).",
                           "type": "object",
                           "properties": {
                             "mode": {
+                              "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                               "type": "string",
                               "enum": ["full"],
                               "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode"
                             },
                             "beamsize": {
+                              "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                               "type": "number"
                             },
                             "lengthpenalty": {
+                              "description": "Length-normalization strength (≥0). Default 1.0.",
                               "type": "number"
                             },
                             "maxlength": {
+                              "description": "Maximum generated tokens (>0). Default 512.",
                               "type": "number"
                             },
                             "repetitionpenalty": {
+                              "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                               "type": "number"
                             },
                             "norepeatngramsize": {
+                              "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                               "type": "number"
                             },
                             "temperature": {
+                              "description": "Sampling temperature (0–2). Default 0.3.",
                               "type": "number"
                             },
                             "topk": {
+                              "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                               "type": "number"
                             },
                             "topp": {
+                              "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                               "type": "number"
                             },
                             "modelSrc": {
@@ -9637,9 +9686,11 @@
                                   "required": ["src"],
                                   "title": "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc"
                                 }
-                              ]
+                              ],
+                              "description": "Second-stage (pivot) translation model source."
                             },
                             "srcVocabSrc": {
+                              "description": "Pivot model source-language vocabulary file source.",
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -9734,6 +9785,7 @@
                               ]
                             },
                             "dstVocabSrc": {
+                              "description": "Pivot model target-language vocabulary file source.",
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -9828,6 +9880,7 @@
                               ]
                             },
                             "normalize": {
+                              "description": "Pivot model input normalization: 1 = on (default), 0 = off.",
                               "type": "number"
                             }
                           },
@@ -9842,37 +9895,47 @@
                       "type": "object",
                       "properties": {
                         "mode": {
+                          "description": "Generation mode; currently only `'full'` is supported. Default `'full'`.",
                           "type": "string",
                           "enum": ["full"],
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransMode"
                         },
                         "beamsize": {
+                          "description": "Beam search width (≥1); 1 disables beam search. Default 4.",
                           "type": "number"
                         },
                         "lengthpenalty": {
+                          "description": "Length-normalization strength (≥0). Default 1.0.",
                           "type": "number"
                         },
                         "maxlength": {
+                          "description": "Maximum generated tokens (>0). Default 512.",
                           "type": "number"
                         },
                         "repetitionpenalty": {
+                          "description": "Penalty on previously generated tokens (0–2). Default 1.0.",
                           "type": "number"
                         },
                         "norepeatngramsize": {
+                          "description": "Disallow repeating n-grams of this size (0–10); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "temperature": {
+                          "description": "Sampling temperature (0–2). Default 0.3.",
                           "type": "number"
                         },
                         "topk": {
+                          "description": "Keep top-K logits (0–vocab_size); 0 disables. Default 0.",
                           "type": "number"
                         },
                         "topp": {
+                          "description": "Nucleus-sampling threshold (0 < p ≤ 1). Default 1.0.",
                           "type": "number"
                         },
                         "engine": {
                           "type": "string",
-                          "const": "IndicTrans"
+                          "const": "IndicTrans",
+                          "description": "Translation backend: IndicTrans2 — keyed by ISO 15924 codes; full generation-parameter support."
                         },
                         "from": {
                           "type": "string",
@@ -9904,6 +9967,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
+                          "description": "Source language (ISO 15924, e.g. `hin_Deva`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransFrom"
                         },
                         "to": {
@@ -9936,6 +10000,7 @@
                             "tel_Telu",
                             "urd_Arab"
                           ],
+                          "description": "Target language (ISO 15924, e.g. `eng_Latn`).",
                           "title": "LoadModelSrcRequestNmtcppTranslationModelConfigIndicTransTo"
                         }
                       },
@@ -11805,49 +11870,61 @@
                   "type": "object",
                   "properties": {
                     "langList": {
+                      "description": "Languages handled by the recognizer, e.g. `['en']` or `['en', 'fr']`. Required for `easyocr`; ignored by the language-agnostic `doctr` pipeline.",
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "pipelineType": {
+                      "description": "OCR pipeline: `'easyocr'` (CRAFT detector + CRNN recognizer, default) or `'doctr'` (DBNet detector + doctr recognizer, language-agnostic).",
                       "type": "string",
                       "enum": ["easyocr", "doctr"],
                       "title": "LoadModelSrcRequestGgmlOcrModelConfigPipelineType"
                     },
                     "magRatio": {
+                      "description": "Detection magnification ratio (easyocr only). Default 1.5.",
                       "type": "number"
                     },
                     "canvasSize": {
+                      "description": "Detection canvas cap (long side, px) applied after `magRatio` scaling; lower it on memory-constrained targets. Default 2560. easyocr only.",
                       "type": "number"
                     },
                     "defaultRotationAngles": {
+                      "description": "Rotation angles tried when the primary pass is low-confidence (easyocr only). Default [90, 270].",
                       "type": "array",
                       "items": {
                         "type": "number"
                       }
                     },
                     "contrastRetry": {
+                      "description": "Retry low-confidence boxes with contrast adjustment (easyocr only). Default false.",
                       "type": "boolean"
                     },
                     "lowConfidenceThreshold": {
+                      "description": "Confidence threshold below which contrast-retry kicks in (easyocr only). Default 0.4.",
                       "type": "number"
                     },
                     "recognizerBatchSize": {
+                      "description": "Recognizer batch size (easyocr only). Default 32.",
                       "type": "number"
                     },
                     "nThreads": {
+                      "description": "GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
                       "type": "number"
                     },
                     "backendDevice": {
+                      "description": "ggml backend device: `'cpu'` (default), `'vulkan'`, `'metal'`, or `'opencl'`. Falls back to CPU when the requested GPU device is unavailable.",
                       "type": "string",
                       "enum": ["cpu", "vulkan", "metal", "opencl"],
                       "title": "LoadModelSrcRequestGgmlOcrModelConfigBackendDevice"
                     },
                     "gpuDevice": {
+                      "description": "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
                       "type": "number"
                     },
                     "detectorModelSrc": {
+                      "description": "Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -11993,9 +12070,11 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
                     },
                     "threads": {
+                      "description": "CPU threads for loading and CPU ops. Default: auto.",
                       "type": "number"
                     },
                     "device": {
+                      "description": "Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`).",
                       "type": "string",
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
@@ -12043,11 +12122,13 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigType"
                     },
                     "rng": {
+                      "description": "Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`.",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigRng"
                     },
                     "sampler_rng": {
+                      "description": "Sampler RNG type override. Default: auto (follows `rng`).",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
@@ -12093,6 +12174,7 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number"
                     },
                     "clipLModelSrc": {
@@ -14034,14 +14116,17 @@
                   "type": "object",
                   "properties": {
                     "modelPath": {
+                      "description": "Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.",
                       "type": "string"
                     },
                     "topK": {
+                      "description": "Limit returned results to the top-K classes. Default: all classes.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "nativeLogger": {
+                      "description": "Forward native C++ log lines through the engine logger. Off by default.",
                       "type": "boolean"
                     }
                   },
