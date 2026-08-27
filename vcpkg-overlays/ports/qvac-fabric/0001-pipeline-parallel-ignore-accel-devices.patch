@@ -1,0 +1,24 @@
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 77c76ff..69bd3b0 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -436,9 +436,16 @@ llama_context::llama_context(
+         if (pipeline_parallel) {
+             for (auto & backend : backends) {
+                 auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(backend.get()));
+-                if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+-                    // ignore CPU backend
+-                    // TODO: should we ignore ACCEL types too?
++                if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU || dev_type == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
++                    // ignore CPU and ACCEL backends: they are helper backends that never
++                    // form a pipeline stage, so their lack of async/events must not veto
++                    // pipelining for the compute devices that do.
++                    //
++                    // ACCEL devices are added unconditionally above, so leaving them in
++                    // this check disabled pipeline parallelism outright on any build with
++                    // one present - e.g. Accelerate on macOS, which reports
++                    // caps.async = caps.events = false. That happened silently: only the
++                    // enabled path logs.
+                     continue;
+                 }
+                 auto * dev = ggml_backend_get_device(backend.get());

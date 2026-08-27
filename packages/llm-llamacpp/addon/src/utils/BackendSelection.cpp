@@ -112,6 +112,35 @@ void emplaceIfValidDevice(
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu,
     const ggml_backend_reg_t reg, const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
+  // QVAC-24112: keep excluding RPC devices from automatic selection. Every RPC
+  // device reports the base "RPC" reg name (not the per-endpoint
+  // "RPC[host:port]" one — ggml_backend_rpc_add_server points each device's
+  // .reg at ggml_backend_rpc_reg(), whose null context makes get_name fall
+  // back to "RPC"; only the reg handed to ggml_backend_register carries the
+  // endpoint), so this exclusion catches every RPC device regardless of which
+  // endpoint added it.
+  //
+  // That is deliberately broad, for two reasons:
+  //
+  //  1. A device's "description" here is the literal endpoint string for RPC
+  //     devices, not hardware info. Feeding that through the Adreno/Mali
+  //     substring checks below is nonsensical, and an endpoint that happens
+  //     to contain "mali" or "dreno" would misfire them.
+  //  2. ggml has no API to unregister a backend. Once a load registers RPC
+  //     devices, they stay in the process-global registry for the rest of the
+  //     process's life — including across LlamaModel::reload() and the
+  //     reloads finetuning triggers internally. Without this exclusion, a
+  //     later load that never asked for RPC could silently inherit and select
+  //     a stale remote device from an earlier, unrelated one.
+  //
+  // RPC devices are still usable: the caller names them explicitly via the
+  // 'devices' config key (LoadFitNormalization.cpp), which is forwarded
+  // straight to llama.cpp's --device and bypasses this heuristic path
+  // entirely. That is the only supported way to select them — automatic
+  // selection cannot safely reason about a remote device's suitability, so it
+  // does not try. LoadFitNormalization.cpp enforces that 'devices' is set
+  // whenever 'rpc-servers' is, rather than silently falling back to whatever
+  // local hardware (if any) automatic selection finds.
   if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
     auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG

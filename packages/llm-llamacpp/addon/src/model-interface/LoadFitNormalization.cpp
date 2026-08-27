@@ -1,6 +1,7 @@
 #include "model-interface/LoadFitNormalization.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cinttypes>
 #include <iterator>
@@ -12,6 +13,7 @@
 #include <common/arg.h>
 #include <common/chat.h>
 #include <common/log.h>
+#include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -60,6 +62,74 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
     }
   }
   return tokens;
+}
+
+// QVAC-24112: register remote RPC devices before backend selection runs.
+//
+// llama.cpp registers RPC endpoints from its own `--rpc` handler, which the
+// passthrough loop below does not reach until long after chooseBackend() has
+// already picked a device. Registering here makes the remote devices visible
+// to the selection pass; see the call site for the ordering contract.
+//
+// Mirrors add_rpc_devices() in common/arg.cpp, which is static and so cannot be
+// linked against. Two deliberate differences:
+//
+//  - Upstream calls ggml_backend_load_all() first. We must not: the caller has
+//    already loaded backends through LlamaBackendsHandle (LlamaModel.cpp:193),
+//    which honours the configured backends directory. Loading again here would
+//    pull from the default search path as well, registering duplicate or
+//    unintended backends wherever they ship as separate shared objects.
+//
+//  - ggml_backend_rpc_add_server() returns nullptr for an endpoint it cannot
+//    reach, and upstream passes that straight to ggml_backend_register().
+//    That is not a crash (register_backend early-returns on null), which is
+//    the problem: the endpoint is dropped silently and the load continues on
+//    whatever devices remain. We reject it naming the endpoint instead.
+void registerRpcDevices(const std::string& servers) {
+  const std::vector<std::string> endpoints = split(servers, ',');
+  if (endpoints.empty()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: 'rpc-servers' is empty; expected a comma-separated list of "
+            "host:port endpoints.\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+
+  ggml_backend_reg_t rpcReg = ggml_backend_reg_by_name("RPC");
+  if (rpcReg == nullptr) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: 'rpc-servers' was given but this build has no RPC backend "
+            "(GGML_RPC was not enabled in qvac-fabric).\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+
+  using AddServerFn = ggml_backend_reg_t (*)(const char* endpoint);
+  auto addServer = reinterpret_cast<AddServerFn>(
+      ggml_backend_reg_get_proc_address(rpcReg, "ggml_backend_rpc_add_server"));
+  if (addServer == nullptr) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: RPC backend does not export ggml_backend_rpc_add_server.\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+
+  for (const std::string& endpoint : endpoints) {
+    ggml_backend_reg_t reg = addServer(endpoint.c_str());
+    if (reg == nullptr) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: could not reach RPC server '%s'. Check that "
+              "ggml-rpc-server is running there and the port is open.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              endpoint.c_str()));
+    }
+    ggml_backend_register(reg);
+  }
 }
 
 uint32_t trainedContext(const ModelMetaData& metadata) {
@@ -627,12 +697,21 @@ NormalizedLoad normalizeLoadForFit(
       splitMode = LLAMA_SPLIT_MODE_LAYER;
     } else if (val == "row") {
       splitMode = LLAMA_SPLIT_MODE_ROW;
+    } else if (val == "tensor") {
+      // Real tensor parallelism: shards each weight and inserts all-reduces,
+      // via the meta device. Distinct from the older 'row', which is a
+      // deprecated split-buffer path no backend we ship provides.
+      //
+      // qvac-fabric enforces its own preconditions and throws if unmet: the
+      // architecture must be on its supported list, flash attention must be
+      // on, and the KV cache must not be quantized.
+      splitMode = LLAMA_SPLIT_MODE_TENSOR;
     } else if (val != "none") {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "%s: invalid split-mode '%s', must be 'none', 'layer', or "
-              "'row'.\n",
+              "%s: invalid split-mode '%s', must be 'none', 'layer', 'row', or "
+              "'tensor'.\n",
               K_LEGACY_PARSER_NAME.data(),
               it->second.c_str()));
     }
@@ -651,7 +730,97 @@ NormalizedLoad normalizeLoadForFit(
         "Multi-GPU parameters (split-mode, main-gpu, tensor-split) are not "
         "supported on mobile (single-GPU device).");
   }
+  // Reject RPC here rather than letting it through: registration opens
+  // blocking sockets during model load, and the path is untested on mobile.
+  // Failing loudly beats a load that stalls on an unreachable peer.
+  //
+  // 'rpc' is llama.cpp's own spelling. It is matched here too, otherwise the
+  // passthrough loop forwards it as --rpc and qvac-fabric registers the
+  // endpoints itself, bypassing this guard entirely.
+  if (configFilemap.count("rpc-servers") > 0 ||
+      configFilemap.count("rpc_servers") > 0 ||
+      configFilemap.count("rpc") > 0) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Distributed inference (rpc-servers) is not supported on mobile.");
+  }
+  // Same reasoning as the multi-GPU keys: an explicit device list overrides
+  // the mobile backend selection and the tuning derived from it.
+  if (configFilemap.count("devices") > 0 ||
+      configFilemap.count("device-list") > 0) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Explicit device lists (devices) are not supported on mobile.");
+  }
 #endif
+
+  // Set when this load registered RPC devices, so the CPU-fallback branch
+  // below can tell "no RPC involved" apart from "RPC involved, but automatic
+  // selection could not place it" — the latter must fail loudly rather than
+  // silently run everything locally.
+  bool rpcDevicesRegistered = false;
+
+  // Ordering contract: this must run *before* the 'device' lookup and the
+  // resolveBackend() call below, because RPC devices only exist in the ggml
+  // registry once they are added here. It must also run *after* the mobile
+  // guard above, which rejects the multi-device config keys outright.
+  //
+  // The key is erased on use: the passthrough loop further down forwards every
+  // remaining key to llama.cpp as '--<key> <value>', and a surviving 'rpc' key
+  // would make its parser register the same endpoints a second time.
+  //
+  // 'rpc' is accepted as an alias because it is llama.cpp's own flag name.
+  // Handling it here rather than letting the passthrough loop forward it as
+  // --rpc matters: qvac-fabric's own handler calls ggml_backend_load_all(),
+  // which would re-load backends from the default path (see registerRpcDevices).
+  {
+    static constexpr std::array<std::string_view, 3> K_RPC_KEYS = {
+        "rpc-servers", "rpc_servers", "rpc"};
+
+    std::vector<ConfigMap::iterator> found;
+    for (const std::string_view key : K_RPC_KEYS) {
+      if (auto it = configFilemap.find(std::string(key));
+          it != configFilemap.end()) {
+        found.push_back(it);
+      }
+    }
+    if (found.size() > 1) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: more than one of 'rpc-servers', 'rpc_servers' and 'rpc' is "
+              "present; use exactly one.\n",
+              K_LEGACY_PARSER_NAME.data()));
+    }
+    if (found.size() == 1) {
+      registerRpcDevices(found.front()->second);
+      rpcDevicesRegistered = true;
+      configFilemap.erase(found.front());
+    }
+  }
+
+  // Hoisted alongside 'rpc-servers' rather than parsed where it is used below,
+  // so the CPU-fallback branch can consult it: a caller who named devices
+  // explicitly has already told us what to use, and that must not be
+  // silently overridden by automatic selection failing to find a local GPU.
+  std::string explicitDevices;
+  {
+    auto hDevices = configFilemap.find("devices");
+    auto uDevices = configFilemap.find("device-list");
+    if (hDevices != configFilemap.end() && uDevices != configFilemap.end()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: both 'devices' and 'device-list' are present; use one or "
+              "the other.\n",
+              K_LEGACY_PARSER_NAME.data()));
+    }
+    if (auto it = (hDevices != configFilemap.end()) ? hDevices : uDevices;
+        it != configFilemap.end()) {
+      explicitDevices = it->second;
+      configFilemap.erase(it);
+    }
+  }
 
   auto deviceIt = configFilemap.find("device");
   if (deviceIt == configFilemap.end()) {
@@ -787,23 +956,50 @@ NormalizedLoad normalizeLoadForFit(
         }
       }
     } else if (selected.type == BackendType::CPU) {
-      params.mmproj_use_gpu = false;
-      if (mmprojUseGpuOverride.value_or(false)) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
-            "running the multimodal projector on CPU\n");
+      // Automatic selection only ever looks at *local* hardware (the RPC
+      // filter in emplaceIfValidDevice keeps it that way deliberately — see
+      // that function), so this branch cannot tell "genuinely no GPU
+      // anywhere" apart from "no local GPU, but the caller named remote ones
+      // explicitly". Silently forcing single-device CPU inference in the
+      // second case would run the whole model locally while reporting
+      // success — exactly the failure mode this feature exists to avoid.
+      // Require 'devices' in that case instead of guessing.
+      if (rpcDevicesRegistered && explicitDevices.empty()) {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "%s: 'rpc-servers' was given but no local GPU was found, so "
+                "automatic device selection cannot tell which devices to use. "
+                "Set 'devices' to name them explicitly (e.g. 'RPC0,RPC1').\n",
+                K_LEGACY_PARSER_NAME.data()));
       }
-      result.runtimeBackendDevice = 0;
-      params.split_mode = LLAMA_SPLIT_MODE_NONE;
-      params.main_gpu = -1;
-      if (splitMode != LLAMA_SPLIT_MODE_NONE) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] split-mode, tensor-split and main-gpu ignored: "
-            "no GPU backend available, falling back to CPU\n");
-        splitMode = LLAMA_SPLIT_MODE_NONE;
-        configFilemap.erase("tensor-split");
+      if (rpcDevicesRegistered) {
+        // Caller named devices explicitly (checked above): honor the
+        // caller's split-mode and tensor-split as configured, rather than
+        // taking the no-GPU-found degrade path below meant for a machine
+        // that only ever had CPU as an option.
+        params.mmproj_use_gpu = mmprojUseGpuOverride.value_or(true);
+        result.runtimeBackendDevice = 1;
+        params.split_mode = splitMode;
+      } else {
+        params.mmproj_use_gpu = false;
+        if (mmprojUseGpuOverride.value_or(false)) {
+          QLOG_IF(
+              Priority::WARNING,
+              "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
+              "running the multimodal projector on CPU\n");
+        }
+        result.runtimeBackendDevice = 0;
+        params.split_mode = LLAMA_SPLIT_MODE_NONE;
+        params.main_gpu = -1;
+        if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+          QLOG_IF(
+              Priority::WARNING,
+              "[LlamaModel] split-mode, tensor-split and main-gpu ignored: "
+              "no GPU backend available, falling back to CPU\n");
+          splitMode = LLAMA_SPLIT_MODE_NONE;
+          configFilemap.erase("tensor-split");
+        }
       }
     } else {
       throw qvac_errors::StatusError(
@@ -811,10 +1007,14 @@ NormalizedLoad normalizeLoadForFit(
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
-    // In multi-GPU split mode we intentionally omit --device so llama.cpp
-    // distributes layers/rows across all available GPUs rather than pinning
-    // to the single backend that chooseBackend selected.
-    if (splitMode == LLAMA_SPLIT_MODE_NONE) {
+
+    if (!explicitDevices.empty()) {
+      configVector.emplace_back("--device");
+      configVector.emplace_back(explicitDevices);
+    } else if (splitMode == LLAMA_SPLIT_MODE_NONE) {
+      // In multi-GPU split mode we intentionally omit --device so llama.cpp
+      // distributes layers/rows across all available GPUs rather than pinning
+      // to the single backend that chooseBackend selected.
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
     }

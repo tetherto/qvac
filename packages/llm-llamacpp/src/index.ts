@@ -980,17 +980,49 @@ namespace LlmLlamacpp {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;
     /**
-     * How to split the model across GPUs: 'none' (default, single GPU), 'layer'
-     * (pipeline parallelism), 'row' (tensor parallelism).
+     * How to split the model across devices — local GPUs, or remote ones added
+     * with `rpc-servers`.
      *
-     * 'row' needs split buffers, which only the SYCL backend provides as of
-     * qvac-fabric v10069 — no backend this package ships does. It is accepted but
-     * degraded to 'layer' at load with a WARNING, so it behaves like 'layer'. See
-     * docs/multi-gpu.md.
+     * - `'none'` (default): one device.
+     * - `'layer'`: whole layers per device. The scheduler may additionally
+     *   overlap micro-batches between them (pipeline parallelism), which needs
+     *   every participating device to support async compute and events.
+     * - `'tensor'`: real tensor parallelism — each weight is sharded and
+     *   all-reduces are inserted. Requires a supported architecture, flash
+     *   attention on, and a non-quantized KV cache; load fails if unmet.
+     * - `'row'`: deprecated, superseded by `'tensor'`. Needs split buffers,
+     *   which no backend this package ships provides, so it is accepted and
+     *   degraded to `'layer'` at load with a WARNING.
+     *
+     * See docs/multi-gpu.md.
      */
-    "split-mode"?: "none" | "layer" | "row";
+    "split-mode"?: "none" | "layer" | "row" | "tensor";
     /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
     "tensor-split"?: string;
+    /**
+     * Comma-separated `host:port` endpoints of remote `ggml-rpc-server`
+     * processes, e.g. `'10.0.0.1:50052,10.0.0.2:50052'`. Their devices join the
+     * local ones and can then be selected with `devices`, letting a single
+     * model run split across several machines.
+     *
+     * Only the machine loading the model needs the model file. Every endpoint
+     * must be reachable at load time — an unreachable one fails the load rather
+     * than being skipped. Endpoints must run a server built from the same
+     * qvac-fabric revision as this addon, since the RPC wire protocol is
+     * versioned and mismatched builds refuse to connect.
+     *
+     * The channel is unauthenticated: use it only on a trusted private network.
+     */
+    "rpc-servers"?: string;
+    /**
+     * Explicit ggml device list, e.g. `'RPC0,RPC1'`. Overrides automatic
+     * placement, including the multi-GPU behaviour of spreading across every
+     * visible device — which is rarely what you want once remote devices are
+     * registered, since the list then mixes local and remote. Names come from
+     * the ggml registry (`RPC0`, `RPC1`, … for remote devices, in the order
+     * given to `rpc-servers`).
+     */
+    devices?: string;
     "cache-type-k"?: string;
     "cache-type-v"?: string;
     /**

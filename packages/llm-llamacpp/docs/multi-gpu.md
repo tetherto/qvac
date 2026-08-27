@@ -17,14 +17,43 @@ Controls how the model is distributed across GPUs.
 | Value    | Behavior |
 |----------|----------|
 | `'none'` | **Default.** Pin the entire model to a single GPU selected by `main-gpu` (or auto-detected). No multi-GPU. |
-| `'layer'`| **Pipeline parallelism.** Each transformer layer is assigned to a GPU. Layers flow sequentially through GPUs. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
-| `'row'`  | **Accepted, but not effective on any shipped backend.** Degraded to `'layer'` at load with a warning, because no backend this package ships provides the split buffers row-split requires. **See [backend limitations](#tensor-parallelism-is-unavailable-in-shipped-builds) below.** |
+| `'layer'`| **Layer split.** Each transformer layer is assigned to a device. The scheduler may additionally overlap micro-batches between devices — see [pipeline parallelism](#pipeline-parallelism) — but only when every participating device supports async compute and events. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
+| `'tensor'`| **Tensor parallelism.** Each weight is sharded across devices and all-reduces are inserted, so every device works on the same tokens simultaneously. Requires a supported architecture, flash attention enabled, and a non-quantized KV cache — the load **fails** if any is unmet. Communication is far more frequent than layer split, so it wants a fast interconnect. |
+| `'row'`  | **Deprecated, superseded by `'tensor'`.** Accepted but not effective on any shipped backend: degraded to `'layer'` at load with a warning, because no backend this package ships provides the split buffers row-split requires. **See [backend limitations](#why-row-is-never-effective) below.** |
+
+> **Note:** `'row'` and `'tensor'` are different mechanisms, not aliases. `'row'`
+> is the legacy split-buffer path described below; `'tensor'` is the current
+> implementation and is unaffected by the split-buffer limitation.
 
 Accepts both `split-mode` (hyphen) and `split_mode` (underscore). Providing both throws an error. Case-insensitive (`'LAYER'` works).
 
-#### Tensor parallelism is unavailable in shipped builds
+### Pipeline parallelism
 
-True tensor parallelism (`row` mode) requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. As of **qvac-fabric v10069, only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`, which this package does not expose. Vulkan, Metal and OpenCL never provided it.
+Under `split-mode: 'layer'`, devices can either take turns (a relay — one busy
+at a time) or overlap micro-batches so a later stage works on one ubatch while
+an earlier stage starts the next. The overlap is what produces a throughput win.
+
+It engages only when **all** of these hold, and is otherwise disabled **with no
+warning** — only the enabled path logs, as `pipeline parallelism enabled`:
+
+- `split-mode` is exactly `'layer'`
+- more than one device participates
+- `gpu_layers` exceeds the model's total layer count
+- KV offload is on and no per-tensor overrides are set
+- every non-CPU, non-ACCEL device reports async compute and events
+
+Give it work to overlap: the batch size must exceed the ubatch size, and the
+prompt must be long enough to produce several ubatches. A short prompt has
+nothing to pipeline even when the feature is on.
+
+To confirm it actually engaged, set `verbosity: '3'` and watch the native log
+for `pipeline parallelism enabled`. Do not infer it from throughput alone.
+
+### Why `'row'` is never effective
+
+`'row'` requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. **Only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`. Vulkan, Metal and OpenCL never provided it.
+
+That separate mode is what `split-mode: 'tensor'` now exposes, so tensor parallelism **is** available — it simply does not go through `'row'`. Everything below concerns `'row'` only.
 
 This package ships Metal (Apple), Vulkan (Linux/Windows/Android), OpenCL (Android) and optionally HIP — **none of them, so `split-mode: 'row'` is never effective in a shipped build.**
 
@@ -88,9 +117,82 @@ Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both thr
 
 **In `layer` mode:** `main-gpu` has no effect on layer distribution — placement is controlled entirely by `tensor-split`. As with `row` mode, `'integrated'`/`'dedicated'` still affect backend selection but are not forwarded to qvac-fabric.
 
+## Distributed inference across machines (`rpc-servers`)
+
+The devices a model is split across need not be local. `rpc-servers` attaches
+remote GPUs exposed by `ggml-rpc-server` processes, letting one model run across
+several machines — for a model too large for any single box, or to add
+throughput. Every `split-mode` above applies unchanged to remote devices.
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath] },
+  config: {
+    device: 'gpu',
+    'rpc-servers': '10.0.0.1:50052,10.0.0.2:50052',
+    devices: 'RPC0,RPC1',
+    'split-mode': 'layer',
+    'tensor-split': '1,1',
+    gpu_layers: '999'
+  }
+})
+```
+
+On each worker machine:
+
+```bash
+ggml-rpc-server -H 0.0.0.0 -p 50052 -d MTL0   # -d takes a ggml device name
+```
+
+### `devices`
+
+Remote devices are named `RPC0`, `RPC1`, … in the order given to `rpc-servers`.
+
+Set `devices` to name exactly which ones take part. Without it, split modes
+distribute across *every* visible device — sensible for local multi-GPU, but
+rarely what you want here, because the registry then mixes local and remote.
+
+Automatic backend selection never considers RPC devices on its own — it can't
+reason about whether a remote device is reachable or suitable the way it can
+for local hardware. **On a machine with no local GPU, `rpc-servers` without
+`devices` fails the load** rather than silently running the model on the local
+CPU. Set `devices` in that case (e.g. `'RPC0,RPC1'`).
+
+### Requirements and caveats
+
+- **Matching builds.** The RPC wire protocol is versioned. Client and every
+  server must be built from the same qvac-fabric revision; mismatched builds
+  refuse to connect.
+- **Model file.** Needed only on the machine loading it. Weights are pushed to
+  the remote devices.
+- **Reachability at load.** Every endpoint must be reachable when the model
+  loads. An unreachable one fails the load naming that endpoint rather than
+  being skipped — connection attempts time out after ~5s.
+- **Unauthenticated.** The channel has no authentication or encryption. Use it
+  only on a trusted private network.
+- **One server per pipeline stage.** A server handles one client connection
+  serially, so devices behind the same server process are not pipelined against
+  each other.
+- **Not supported on mobile.** Rejected at load on Android and iOS.
+
+### Verifying it actually distributed
+
+A run that produces correct text is *not* evidence the model was distributed —
+if remote devices are dropped, the load quietly falls back to local execution
+and still generates fine. Set `verbosity: '3'` and check the native log for
+per-layer placement:
+
+```
+load_tensors: layer   0 assigned to device RPC0
+load_tensors: layer   9 assigned to device RPC1
+```
+
 ## How the parameters interact
 
 ```
+rpc-servers ──> Remote devices registered FIRST, so the steps below see them
+  │              alongside local ones (RPC0, RPC1, ... in the order given)
+  ▼
 device ─── 'cpu' ──> All GPU params ignored, CPU inference
   │
   └── 'gpu' ──> Backend selection runs (considers main-gpu)
@@ -100,16 +202,21 @@ device ─── 'cpu' ──> All GPU params ignored, CPU inference
                   │
                   └── GPU found
                         │
+                        ├── devices = 'RPC0,RPC1' (any split-mode)
+                        │   Passed through verbatim as --device; the two
+                        │   branches below do not apply
+                        │
                         ├── split-mode = 'none' (default)
                         │   Model pinned to single chosen GPU via --device
                         │   tensor-split has no effect
                         │
-                        └── split-mode = 'layer' | 'row'
-                            --device is NOT passed (so qvac-fabric sees all GPUs)
+                        └── split-mode = 'layer' | 'row' | 'tensor'
+                            --device is NOT passed (qvac-fabric sees every
+                              device, local and remote alike)
                             tensor-split proportions forwarded as --tensor-split
                             main-gpu (integer only) forwarded as --main-gpu
                               row: selects GPU for intermediate results and KV
-                              layer: not used for placement
+                              layer/tensor: not used for placement
 ```
 
 ### Interaction with `device` and backend selection
@@ -122,12 +229,15 @@ The `device` parameter is always required and is consumed first. When set to `'g
 
 After backend selection, the split-mode determines the forwarding strategy:
 
+- **`devices` set** (any split-mode): the list is passed through verbatim as `--device`, and the two rules below do not apply. This is the only way to constrain which devices take part while a split mode is active.
 - **`split-mode: 'none'`** (or omitted): the chosen backend name is passed as `--device <backend>`, pinning inference to that single GPU.
-- **`split-mode: 'layer'` or `'row'`**: `--device` is intentionally **not** passed. This lets qvac-fabric discover all available GPUs and distribute the model according to `tensor-split`.
+- **`split-mode: 'layer'`, `'row'` or `'tensor'`**, with no `devices`: `--device` is intentionally **not** passed. This lets qvac-fabric discover all available devices and distribute the model according to `tensor-split`.
 
 ### Why `--device` is omitted in split modes
 
-When a split mode is active, passing `--device` would pin all computation to the single backend that `chooseBackend()` selected, defeating the purpose of multi-GPU. By omitting it, qvac-fabric's own device enumeration distributes layers or rows across all visible GPU backends.
+When a split mode is active, passing the single backend that `chooseBackend()` selected would pin all computation to it, defeating the purpose. Omitting it lets qvac-fabric's own enumeration distribute across every visible device.
+
+That default assumes every visible device is one you want to use — true for local multi-GPU, but not once `rpc-servers` has added remote devices to the same registry. Set `devices` to name the participants explicitly in that case.
 
 ## Usage examples
 
@@ -237,4 +347,6 @@ The `row` column describes what tensor parallelism would give on a split-buffer 
 | Complexity | Simpler scheduling | Requires cross-GPU communication per layer |
 | Backend support | All backends | **SYCL only** (not shipped) — every shipped backend degrades to layer mode |
 
-`layer` is the only effective strategy on every backend this package ships. `row` can be set but is degraded to `layer` at load with a warning — see [above](#tensor-parallelism-is-unavailable-in-shipped-builds). Start with `layer` mode and equal `tensor-split`.
+`row` can be set but is degraded to `layer` at load with a warning — see [above](#why-row-is-never-effective). Use `tensor` instead when you want tensor parallelism and the model's architecture supports it.
+
+Start with `layer` mode and equal `tensor-split`. Reach for `tensor` when generation latency matters more than prompt throughput and the devices have a fast interconnect; the per-op all-reduces make it sensitive to link speed.
