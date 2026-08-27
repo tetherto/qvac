@@ -165,3 +165,29 @@ test('send normalizes a config-resolution rejection into a typed error', async f
     clearPlugins()
   }
 })
+
+test('send rejects a malformed modelConfig instead of coercing it to defaults', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  try {
+    for (const malformed of [false, 42, 'abc', [], ['a']]) {
+      try {
+        await send({
+          type: 'loadModel',
+          modelSrc: '/m.gguf',
+          modelType: ModelType.llamacppCompletion,
+          modelConfig: malformed
+        } as never)
+        t.fail(`expected rejection for modelConfig=${JSON.stringify(malformed)}`)
+      } catch (error) {
+        t.ok(
+          error instanceof RequestValidationFailedError,
+          `modelConfig=${JSON.stringify(malformed)} is a type error, not silent defaults`
+        )
+      }
+    }
+  } finally {
+    await close()
+    clearPlugins()
+  }
+})

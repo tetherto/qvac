@@ -425,10 +425,7 @@ for (const key of ['llm', 'llamacpp-completion']) {
 
   test(`CONFIG: deviceDefaults.${key} keeps a valid load_mode`, (t) => {
     const config = validateConfig(devicePatternConfig(key, { load_mode: 'none' }))
-    const defaults = config.deviceDefaults?.[0]?.defaults as Record<
-      string,
-      Record<string, unknown>
-    >
+    const defaults = config.deviceDefaults?.[0]?.defaults as Record<string, Record<string, unknown>>
     t.is(defaults[key].load_mode, 'none')
   })
 }

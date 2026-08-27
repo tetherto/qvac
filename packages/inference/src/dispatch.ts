@@ -133,8 +133,16 @@ function applyDeviceDefaults<T extends Request>(request: T): T {
     return request
   }
 
-  const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {}
+  const raw = request.modelConfig
+  // Spreading a non-object would coerce it into a valid defaults object; pass it through so the schema reports the type error.
+  if (raw !== undefined && raw !== null && !isPlainObject(raw)) return request
+
+  const rawConfig = (raw as Record<string, unknown>) ?? {}
   return { ...request, modelConfig: resolveModelConfig(canonicalType, rawConfig) }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
