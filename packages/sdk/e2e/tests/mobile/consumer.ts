@@ -568,6 +568,10 @@ export const executor = createExecutor({
     new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
     new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
     new SkipExecutor(
+      /^world-/,
+      'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route'
+    ),
+    new SkipExecutor(
       /^multi-gpu-/,
       'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)'
     ),

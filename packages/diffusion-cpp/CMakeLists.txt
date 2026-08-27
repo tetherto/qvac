@@ -9,6 +9,21 @@ endif()
 option(SD_CUDA "Enable CUDA GPU backend" OFF)
 if(SD_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
+
+  # nvcc defaults its host compiler to g++, which rejects the -stdlib=libc++
+  # that vcpkg-overlays/triplets/{x64,arm64}-linux.cmake put in
+  # VCPKG_CXX_FLAGS / VCPKG_LINKER_FLAGS. enable_language(CUDA) then fails its
+  # ABI check inside the port build with
+  #   g++: error: unrecognized command-line option '-stdlib=libc++'
+  # Export CUDAHOSTCXX for the vcpkg child process rather than setting
+  # CMAKE_CUDA_HOST_COMPILER in vcpkg-overlays/toolchains/linux-clang.cmake:
+  # that file's contents feed the vcpkg ABI hash of every package on the linux
+  # triplets, so editing it invalidates the binary cache for non-CUDA builds
+  # too and forces every port to rebuild from source. Windows and macOS keep
+  # their default host compiler (MSVC / clang), which already matches.
+  if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
+    set(ENV{CUDAHOSTCXX} "clang++")
+  endif()
 endif()
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)

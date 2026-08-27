@@ -52,6 +52,10 @@
     "pkg_manager": "bun"
   },
   {
+    "package": "test-suite",
+    "path": "packages/test-suite"
+  },
+  {
     "package": "opencode-plugin",
     "path": "plugins/opencode"
   },

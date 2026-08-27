@@ -7,6 +7,7 @@ import ImgStableDiffusion, {
   type VideoStableDiffusionArgs
 } from '@qvac/diffusion-cpp'
 import addonLogging from '@qvac/diffusion-cpp/addonLogging'
+import type { WorldConfig } from '@qvac/diffusion-cpp/world'
 import {
   definePlugin,
   defineHandler,
@@ -17,6 +18,10 @@ import {
   videoStreamResponseSchema,
   upscaleRequestSchema,
   upscaleStreamResponseSchema,
+  worldSceneRequestSchema,
+  worldSceneStreamResponseSchema,
+  worldStepRequestSchema,
+  worldStepStreamResponseSchema,
   ModelType,
   ADDON_DIFFUSION,
   type CreateModelParams,
@@ -36,6 +41,12 @@ import {
   video
 } from '@/plugins/builtin/sdcpp-generation/ops/video'
 import { upscale } from '@/plugins/builtin/sdcpp-generation/ops/upscale'
+import {
+  createWorldSession,
+  worldCreateScene,
+  worldScenePath,
+  worldStep
+} from '@/plugins/builtin/sdcpp-generation/ops/world'
 
 type DiffusionArtifactKey =
   | 'clipLModelPath'
@@ -49,6 +60,8 @@ type DiffusionArtifactKey =
   | 'audioVaeModelPath'
   | 'embeddingsConnectorsModelPath'
   | 'esrganModelPath'
+  | 'taehvModelPath'
+  | 'seedScenePath'
 
 // Single source of truth for `SdcppConfig.upscaler.*` → addon-config key
 // mapping. Used by both the diffusion-mode (post-generation upscaler) and the
@@ -126,6 +139,83 @@ export const diffusionPlugin = definePlugin({
       )
     }
 
+    // ABot-World fields describe a walk session and have no meaning in any
+    // other layout, so reject them up front rather than resolving files the
+    // selected mode will drop.
+    if (cfg.mode !== 'world') {
+      const stray = (['taehvModelSrc', 'sceneSrc', 'world'] as const).find(
+        (key) => cfg[key] !== undefined
+      )
+      if (stray) {
+        throw new ModelLoadFailedError(
+          `modelConfig.${stray} is ABot-World only. Use mode: 'world' or remove it.`
+        )
+      }
+    } else {
+      // The mirror of the rule above, as an ALLOW-list rather than a deny-list.
+      // Only `config.world` and the four world artifact sources reach the walk
+      // session; every other field the SCHEMA KNOWS is accepted by it and then
+      // silently dropped.
+      //
+      // Scope worth being exact about: `sdcppConfigSchema` is not `.strict()`,
+      // so a field it does not know — a typo'd `taehvModelSrcc`, say — is
+      // stripped by Zod before this ever runs, and this list cannot see it.
+      // That is whole-schema behaviour shared with every other mode, not
+      // something world can change here. That splits into two kinds of harm, and a deny-list
+      // would have to be extended by hand every time a diffusion or video field
+      // is added:
+      //   - compute keys such as `device: 'cpu'` — the escape hatch every other
+      //     mode honours — hand back a GPU session with no feedback;
+      //   - companion SOURCES such as `clipLModelSrc` are resolved below, which
+      //     DOWNLOADS them, before createModel throws them away.
+      const worldSupported = new Set([
+        'mode',
+        'taehvModelSrc',
+        'sceneSrc',
+        'world',
+        't5XxlModelSrc',
+        'vaeModelSrc'
+      ])
+      // Where world has a nested equivalent, name it — the rest just say so.
+      const worldEquivalent: Record<string, string> = {
+        device: 'world.backend',
+        'main-gpu': 'world.backend',
+        threads: 'world.threads',
+        offload_to_cpu: 'world.offloadParamsToCpu'
+      }
+      const unsupported = Object.keys(cfg).filter(
+        (key) => !worldSupported.has(key) && cfg[key as keyof typeof cfg] !== undefined
+      )
+      if (unsupported.length > 0) {
+        const key = unsupported[0]!
+        const pointer = worldEquivalent[key]
+        throw new ModelLoadFailedError(
+          `modelConfig.${key} does not reach the ABot-World session. ` +
+            (pointer
+              ? `Use modelConfig.${pointer} instead, which is forwarded to it.`
+              : 'World mode accepts only taehvModelSrc, sceneSrc, t5XxlModelSrc, ' +
+                'vaeModelSrc and the world block; nothing else reaches the walk ' +
+                'session.') +
+            (unsupported.length > 1 ? ` Also unsupported: ${unsupported.slice(1).join(', ')}.` : '')
+        )
+      }
+      if (!cfg.taehvModelSrc) {
+        throw new ModelLoadFailedError(
+          'modelConfig.taehvModelSrc is required in world mode. Provide the taew2_2 ' +
+            'pixel decoder before loading the walk session.'
+        )
+      }
+      // A session that can neither walk an existing world nor build one is
+      // inert; say so now rather than after downloading ~5.5 GB of DiT.
+      if (!cfg.sceneSrc && (!cfg.t5XxlModelSrc || !cfg.vaeModelSrc)) {
+        throw new ModelLoadFailedError(
+          'World mode needs either modelConfig.sceneSrc (walk an existing world) or ' +
+            'both modelConfig.t5XxlModelSrc (umT5-XXL) and modelConfig.vaeModelSrc ' +
+            '(Wan2.2 VAE) so worldCreateScene can build one.'
+        )
+      }
+    }
+
     // Standalone-upscaler mode never references auxiliary models: the primary
     // modelSrc IS the ESRGAN file. Skip resolution to avoid downloading
     // unused encoders/VAEs and to keep load fast.
@@ -144,6 +234,8 @@ export const diffusionPlugin = definePlugin({
       uncondModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
+      taehvModelSrc,
+      sceneSrc,
       upscaler,
       ...rest
     } = cfg
@@ -168,7 +260,9 @@ export const diffusionPlugin = definePlugin({
       )
     }
 
-    // Video jobs do not apply ESRGAN so we drop the whole `upscaler` object.
+    // Video does not apply ESRGAN, so the whole `upscaler` object is dropped.
+    // World does not either, but it REJECTS the field above rather than dropping
+    // it silently, so it cannot reach here.
     const effectiveUpscaler = cfg.mode === 'video' ? undefined : upscaler
     const { model_src: esrganModelSrc, ...upscalerRuntime } = effectiveUpscaler ?? {}
     const runtimeConfig = {
@@ -187,7 +281,9 @@ export const diffusionPlugin = definePlugin({
       uncondModelSrc,
       audioVaeModelSrc,
       embeddingsConnectorsModelSrc,
-      esrganModelSrc
+      esrganModelSrc,
+      taehvModelSrc,
+      sceneSrc
     }
     const hasSources = Object.values(sources).some(Boolean)
 
@@ -207,7 +303,9 @@ export const diffusionPlugin = definePlugin({
       uncondModelPath,
       audioVaeModelPath,
       embeddingsConnectorsModelPath,
-      esrganModelPath
+      esrganModelPath,
+      taehvModelPath,
+      seedScenePath
     ] = await Promise.all([
       clipLModelSrc ? resolve(clipLModelSrc) : undefined,
       clipGModelSrc ? resolve(clipGModelSrc) : undefined,
@@ -219,7 +317,9 @@ export const diffusionPlugin = definePlugin({
       uncondModelSrc ? resolve(uncondModelSrc) : undefined,
       audioVaeModelSrc ? resolve(audioVaeModelSrc) : undefined,
       embeddingsConnectorsModelSrc ? resolve(embeddingsConnectorsModelSrc) : undefined,
-      esrganModelSrc ? resolve(esrganModelSrc) : undefined
+      esrganModelSrc ? resolve(esrganModelSrc) : undefined,
+      taehvModelSrc ? resolve(taehvModelSrc) : undefined,
+      sceneSrc ? resolve(sceneSrc) : undefined
     ])
 
     return {
@@ -235,7 +335,9 @@ export const diffusionPlugin = definePlugin({
         ...(uncondModelPath && { uncondModelPath }),
         ...(audioVaeModelPath && { audioVaeModelPath }),
         ...(embeddingsConnectorsModelPath && { embeddingsConnectorsModelPath }),
-        ...(esrganModelPath && { esrganModelPath })
+        ...(esrganModelPath && { esrganModelPath }),
+        ...(taehvModelPath && { taehvModelPath }),
+        ...(seedScenePath && { seedScenePath })
       }
     }
   },
@@ -281,6 +383,39 @@ export const diffusionPlugin = definePlugin({
         config: toEsrganAddonConfig(config),
         logger,
         opts: { stats: true }
+      })
+      return { model }
+    }
+
+    if (config.mode === 'world') {
+      if (!artifacts?.['taehvModelPath']) {
+        throw new ModelLoadFailedError(
+          'modelConfig.taehvModelSrc is required in world mode. ' +
+            'Provide the taew2_2 pixel decoder before loading the walk session.'
+        )
+      }
+
+      // Only the `world` block reaches the native session. The flat
+      // stable-diffusion.cpp keys describe a sampler pipeline the walk session
+      // does not have, and unknown keys are silently ignored natively — so
+      // forwarding them would look supported and do nothing.
+      const model = createWorldSession({
+        modelId,
+        files: {
+          model: modelPath,
+          taehv: artifacts['taehvModelPath'],
+          scene: worldScenePath(modelId)
+        },
+        // Cast rather than rebuild: `exactOptionalPropertyTypes` will not widen
+        // the schema's `x?: T` into the addon's `x?: T` without it, and the
+        // addon already drops undefined values before stringifying them.
+        config: (config.world ?? {}) as WorldConfig,
+        encoders: {
+          t5: artifacts['t5XxlModelPath'],
+          vae: artifacts['vaeModelPath']
+        },
+        seedScenePath: artifacts['seedScenePath'],
+        logger
       })
       return { model }
     }
@@ -427,6 +562,26 @@ export const diffusionPlugin = definePlugin({
       // back to soft-cancel.
       cancel: { scope: 'none' },
       handler: upscale
+    }),
+    worldStepStream: defineHandler({
+      requestSchema: worldStepRequestSchema,
+      responseSchema: worldStepStreamResponseSchema,
+      streaming: true,
+      // Block-granular, not mid-block: the engine has no abort hook, so the
+      // current block finishes internally. Cancel stops frame delivery and
+      // makes the step reject rather than resolve truncated, so it is a real
+      // cancel from the caller's side — it just does not shorten the compute.
+      cancel: { scope: 'model', hard: false },
+      handler: worldStep
+    }),
+    worldSceneStream: defineHandler({
+      requestSchema: worldSceneRequestSchema,
+      responseSchema: worldSceneStreamResponseSchema,
+      streaming: true,
+      // Scene creation is uninterruptible — the engine accepts no abort
+      // predicate for it, so the SDK falls back to soft-cancel.
+      cancel: { scope: 'none' },
+      handler: worldCreateScene
     })
   },
 

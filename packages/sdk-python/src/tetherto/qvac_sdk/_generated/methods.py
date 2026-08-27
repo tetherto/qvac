@@ -92,6 +92,10 @@ from . import (
     UpscaleStreamResponse,
     VideoStreamRequest,
     VideoStreamResponse,
+    WorldSceneStreamRequest,
+    WorldSceneStreamResponse,
+    WorldStepStreamRequest,
+    WorldStepStreamResponse,
 )
 
 
@@ -426,6 +430,22 @@ async def video_stream(
         yield VideoStreamResponse.model_validate(chunk)
 
 
+async def world_scene_stream(
+    transport: Transport, params: WorldSceneStreamRequest
+) -> AsyncIterator[WorldSceneStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield WorldSceneStreamResponse.model_validate(chunk)
+
+
+async def world_step_stream(
+    transport: Transport, params: WorldStepStreamRequest
+) -> AsyncIterator[WorldStepStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield WorldStepStreamResponse.model_validate(chunk)
+
+
 __all__ = [
     "audio_gen_stream",
     "batch_completion_stream",
@@ -468,4 +488,6 @@ __all__ = [
     "unload_model",
     "upscale_stream",
     "video_stream",
+    "world_scene_stream",
+    "world_step_stream",
 ]
