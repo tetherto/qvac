@@ -305,6 +305,49 @@ jobs:
   # longer trigger anything here. (Benchmark / weekend / on-merge mobile runs
   # are unaffected — they call the mobile workflow directly.)
 
+  # QVAC-23767 hard gate: the linux prebuilds' dynamic-linking layout (no
+  # hard GPU-loader / external C++ runtime NEEDED on the addon; Vulkan ships
+  # as a self-contained DL module). The integration legs run the same checks
+  # but are continue-on-error; this job is NOT, and publish-prebuild-status
+  # folds its result into the qvac/prebuild-diffusion-cpp commit status that
+  # Merge Guard's verify-prebuilds requires — so a prebuild that would abort
+  # CPU-only hosts (gh#3853) cannot merge.
+  verify-prebuild-linking:
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - prebuild
+      - prebuild-artifact-reuse
+    if: |
+      always() && !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout linking checker (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - name: Download prebuilds (from artifacts)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          path: ${{ runner.temp }}/qvac-diffusion-cpp
+          merge-multiple: true
+      - name: Verify linux prebuild dynamic linking
+        run: node packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs "${{ runner.temp }}/qvac-diffusion-cpp"
+
   combine-perf-reports:
     name: Combined Performance Report
     # run-mobile-integration-tests removed — only desktop perf is combined on PRs now.
@@ -336,7 +379,8 @@ jobs:
 
   publish-prebuild-status:
     # Posts qvac/prebuild-diffusion-cpp for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
-    needs: [prebuild, prebuild-artifact-reuse, ci-router]
+    # verify-prebuild-linking folds in below: a linking violation publishes failure even when the build itself passed.
+    needs: [prebuild, prebuild-artifact-reuse, ci-router, verify-prebuild-linking]
     if: always() && !cancelled() && github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
@@ -357,8 +401,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PREBUILD_RESULT: ${{ needs.prebuild.result }}
-          REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # A verify-prebuild-linking failure is presented as a failed build:
+          # the produced artifacts must not ship (they would abort CPU-only
+          # hosts at addon load, gh#3853). Its skip is legitimate exactly when
+          # no prebuilds exist to verify (no-label path), which the script
+          # below already fails closed on via ci-router.
+          PREBUILD_RESULT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'failure' || needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.verify-prebuild-linking.result == 'failure' && 'false' || needs.prebuild-artifact-reuse.outputs.reuse_hit }}
           # A skipped prebuild is only a pass when ci-router succeeded and chose
           # not to build (no label); a skip from an upstream failure fails closed.
           CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
@@ -371,7 +420,7 @@ jobs:
 
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
-    needs: [authorize, ci-router, run-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks]
+    needs: [authorize, ci-router, run-integration-tests, combine-perf-reports, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks, verify-prebuild-linking]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     permissions:
@@ -380,5 +429,5 @@ jobs:
       packages: read
     with:
       sanity-checks-status: ${{ needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      build-status: ${{ (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') && needs.verify-prebuild-linking.result != 'failure' }}
       general-checks-status: ${{ github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' }}

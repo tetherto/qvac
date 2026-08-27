@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
@@ -33,7 +34,9 @@ void freeSdImageData(sd_image_t& image) noexcept {
     return;
   }
 
-  // stable-diffusion.cpp returns malloc-owned sd_image_t::data from upscale().
+  // Frees ADDON-owned pixel copies only (see upscaleImage: engine output is
+  // deep-copied and released with free_sd_images; the input image belongs to
+  // the caller and is never freed here).
   // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
   free(image.data);
   image.data = nullptr;
@@ -196,12 +199,30 @@ sd_image_t EsrganUpscaler::upscaleImage(
       }
       throw StatusError(general_error::InternalError, "ESRGAN upscale failed");
     }
-    // Keep the first image's pixels; free any extras and the array container.
+    // The engine owns the returned array and every pixel buffer in it; the
+    // matching deallocator is free_sd_images(). Deep-copy the first image
+    // into addon-owned memory before releasing the whole batch, so no
+    // engine allocation is ever passed to the addon's free() (allocator/CRT
+    // boundaries differ on Windows prebuilds and mixing them corrupts the
+    // heap).
     sd_image_t next = outImages[0];
-    for (int j = 1; j < outCount; ++j) {
-      freeSdImageData(outImages[j]);
+    const size_t nextBytes = static_cast<size_t>(next.width) *
+                             static_cast<size_t>(next.height) *
+                             static_cast<size_t>(next.channel);
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+    auto* copied = static_cast<uint8_t*>(malloc(nextBytes));
+    if (copied == nullptr) {
+      free_sd_images(outImages, outCount);
+      if (currentOwned) {
+        freeSdImageData(current);
+      }
+      throw StatusError(
+          general_error::InternalError,
+          "ESRGAN upscale: failed to allocate the result copy");
     }
-    free(outImages);
+    memcpy(copied, next.data, nextBytes);
+    next.data = copied;
+    free_sd_images(outImages, outCount);
 
     if (currentOwned) {
       freeSdImageData(current);

@@ -219,21 +219,17 @@ bool sdAbortCallback(void* /*data*/) {
 }
 
 // RAII wrapper for the sd_image_t* array returned by generate_image().
-// Frees each image's pixel buffer and the array itself on destruction,
-// even if an exception is thrown mid-iteration (e.g. in PNG encoding or
-// outputCallback).  Call release(i) after processing image i to free
-// its pixel buffer immediately rather than waiting until destruction.
+// The engine owns the array and every pixel buffer in it; the matching
+// deallocator is free_sd_images(), called once on destruction — even if an
+// exception is thrown mid-iteration (e.g. in PNG encoding or
+// outputCallback). No engine allocation is ever passed to the addon's
+// free() (allocator/CRT boundaries differ on Windows prebuilds and mixing
+// them corrupts the heap), so the whole batch stays resident until the
+// wrapper goes out of scope.
 class SdImageBatch {
 public:
   SdImageBatch(sd_image_t* data, int count) : data_(data), count_(count) {}
-  ~SdImageBatch() {
-    if (!data_)
-      return;
-    for (int i = 0; i < count_; ++i) {
-      free(data_[i].data);
-    }
-    free(data_);
-  }
+  ~SdImageBatch() { free_sd_images(data_, count_); }
 
   SdImageBatch(const SdImageBatch&) = delete;
   SdImageBatch& operator=(const SdImageBatch&) = delete;
@@ -245,14 +241,6 @@ public:
     if (!data_)
       throw std::runtime_error("SdImageBatch: null data");
     return data_[i];
-  }
-
-  // Release pixel buffer for image i immediately after it has been consumed.
-  void release(int i) {
-    if (!data_)
-      return;
-    free(data_[i].data);
-    data_[i].data = nullptr;
   }
 
 private:
@@ -943,8 +931,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
         }
       }
     }
-    results.release(
-        i); // free pixel buffer immediately; destructor handles the rest
     if (cancelRequested_.load()) {
       wasCancelled = true;
     }
@@ -1325,17 +1311,21 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- Generate -------------------------------------------------------------
   // Wan 2.1 / TI2V-5B invoke one sampler (total == vid.sampleSteps). Wan 2.2
-  // A14B normally invokes the high-noise expert first and the low-noise
-  // expert second; with explicit highNoiseSteps both per-expert totals are
-  // known. The -1 sentinel derives the switch point from moe_boundary inside
-  // the engine, so the per-expert split is unknown here — fall back to
-  // bounded matching (any total <= vid.sampleSteps, capped at the expected
-  // sequence count). Encoder/VAE sequences remain excluded by
-  // sdProgressCallback().
+  // A14B invokes the high-noise expert first and the low-noise expert
+  // second. With explicit highNoiseSteps the engine's schedule spans
+  // sampleSteps + highNoiseSteps sigmas and is split at the expert boundary:
+  // the high-noise sampler reports total == highNoiseSteps and the low-noise
+  // sampler total == sampleSteps (sample_params.sample_steps IS the
+  // low-noise count; the high-noise schedule rides on top — the two are also
+  // counted separately in the cumulative stats below). The -1 sentinel
+  // instead derives the switch point from moe_boundary inside the engine —
+  // there total_steps == sampleSteps and each expert reports a slice of it,
+  // so the split is unknown here: fall back to bounded matching (any total
+  // <= vid.sampleSteps, capped at the expected sequence count).
+  // Encoder/VAE sequences remain excluded by sdProgressCallback().
   const bool hasHighNoiseExpert = !config_.highNoiseDiffusionModelPath.empty();
   if (hasHighNoiseExpert && vid.highNoiseSteps > 0) {
-    g_progressCtx.denoiseTotals = {
-        vid.highNoiseSteps, vid.sampleSteps - vid.highNoiseSteps};
+    g_progressCtx.denoiseTotals = {vid.highNoiseSteps, vid.sampleSteps};
     g_progressCtx.maxDenoiseSequences = 2; // one sequence per expert
   } else if (hasHighNoiseExpert) {
     g_progressCtx.denoiseTotalBound = vid.sampleSteps;

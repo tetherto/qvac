@@ -93,7 +93,9 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    # matrix.os disambiguates same platform/arch rows (three linux-x64 legs:
+    # 22.04 GPU, 24.04 GPU, 22.04-cpu GitHub-hosted) in checks and artifacts.
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/diffusion-cpp
@@ -376,7 +378,8 @@ jobs:
       # runners; never strips packages from self-hosted machines. NOTE: red
       # legs here do not block merges (run-integration-tests is
       # continue-on-error); the hard-blocking DT_NEEDED gate is the
-      # verify-prebuild-symbols follow-up.
+      # verify-prebuild-linking job in on-pr-diffusion-cpp.yml, which fails
+      # the qvac/prebuild-diffusion-cpp commit status Merge Guard requires.
       - name: Linux - ensure no graphics stack (no libvulkan)
         if: matrix.platform == 'linux' && matrix.no_gpu == 'true' && runner.environment == 'github-hosted'
         shell: bash
@@ -430,7 +433,7 @@ jobs:
         if: always() && !cancelled()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: perf-report-diffusion-cpp-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          name: perf-report-diffusion-cpp-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}-${{ github.run_number }}
           path: ${{ env.WORKDIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 90
