@@ -1,7 +1,7 @@
 import type { ProfilerResourceGauge } from '@/schemas/profiling'
 import type { InferenceBackendDiagnostics } from '@/schemas/system-resources'
 
-export type ProfilingEventKind = 'rpc' | 'handler' | 'download' | 'load' | 'delegation'
+export type ProfilingEventKind = 'rpc' | 'handler' | 'download' | 'load'
 
 export interface ProfilingEvent {
   /** Timestamp when event was recorded (monotonic ms) */

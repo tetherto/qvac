@@ -206,7 +206,7 @@ C++ Dependencies
 --- apache-2.0 (Apache License 2.0) ---
 
   parakeet-cpp
-    https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/main/engines/parakeet
+    https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet
   qvac-lib-inference-addon-cpp
     https://github.com/tetherto/qvac
 
@@ -223,7 +223,7 @@ C++ Dependencies
 --- mit (MIT License) ---
 
   whisper-cpp
-    https://github.com/tetherto/qvac-ext-lib-whisper.cpp
+    https://github.com/tetherto/qvac-fabric-speech.cpp
 
 --- Unknown ---
 
