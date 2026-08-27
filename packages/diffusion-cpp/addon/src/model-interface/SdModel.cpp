@@ -1,5 +1,9 @@
 #include "SdModel.hpp"
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -367,12 +371,24 @@ void SdModel::load() {
   // moves per-module weight loads INSIDE generate_*(): the model loader then
   // emits progress ticks (total = tensor count) that reach JS consumers
   // indistinguishably from sampler ticks, and the first job's conditionerMs
-  // absorbs weight-load time. Load eagerly at new_sd_ctx() instead — the
-  // load cost lands in modelLoadMs where this addon already accounts for it,
-  // and generate_*() emits only sampler and VAE-tiling sequences. (The
-  // engine auto-downgrades eager_load when graph-cut layer splitting is
-  // active; this addon does not enable that mode.)
+  // absorbs weight-load time. On desktop, load eagerly at new_sd_ctx()
+  // instead — the cost lands in modelLoadMs where this addon already
+  // accounts for it, and generate_*() emits only sampler and VAE-tiling
+  // sequences. (The engine auto-downgrades eager_load when graph-cut layer
+  // splitting is active; this addon does not enable that mode.)
+  //
+  // Mobile stays lazy: eager loading front-loads every module's full weight
+  // prep into load(), which pushed the Device Farm API-behavior and
+  // model-loading suites past their 20-minute timeouts on a Pixel 9 (those
+  // suites never generate, so under lazy loading they never pay weight
+  // prep). Loader ticks inside generate_*() are still excluded from the
+  // denoise stats by the total matcher — tensor counts do not collide with
+  // step totals in practice — at the cost of first-job conditionerMs skew.
+#if defined(__ANDROID__) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
+  params.eager_load = false;
+#else
   params.eager_load = true;
+#endif
 
   // Load DL GPU backend modules before probing devices / creating the SD
   // context. In GGML_BACKEND_DL mode, device enumeration is empty until these

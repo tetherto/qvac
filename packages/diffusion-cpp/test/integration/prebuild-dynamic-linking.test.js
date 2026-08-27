@@ -194,10 +194,15 @@ test(
 
       // The main-gpu resolver enumerates the live ggml device registry at
       // this load; on a Vulkan-capable host it can only report a Vulkan
-      // backend if the DL module was dlopen'd and registered.
-      const resolvedLine = logs.find((line) =>
-        line.includes("main-gpu resolved to backend 'Vulkan")
-      )
+      // backend if the DL module was dlopen'd and registered. C++ log lines
+      // are marshalled to the JS event loop asynchronously, so poll like
+      // main-gpu-backend.test.js does instead of reading synchronously.
+      const deadline = Date.now() + 5000
+      let resolvedLine = null
+      while (!resolvedLine && Date.now() < deadline) {
+        resolvedLine = logs.find((line) => line.includes("main-gpu resolved to backend 'Vulkan"))
+        if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
+      }
       t.ok(
         resolvedLine,
         `ggml device registry resolved a Vulkan backend (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
