@@ -410,9 +410,7 @@ async function ensureRPC(): Promise<RPC> {
               HOME_DIR: process.env['SNAP_USER_COMMON']
                 ? String(process.env['SNAP_USER_COMMON'])
                 : os.homedir(),
-              ...(turbovecRollout === undefined
-                ? {}
-                : { QVAC_RAG_TURBOVEC: turbovecRollout })
+              ...(turbovecRollout === undefined ? {} : { QVAC_RAG_TURBOVEC: turbovecRollout })
             })
           ],
           platform: process.platform,
