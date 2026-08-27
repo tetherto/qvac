@@ -17,6 +17,19 @@ vcpkg_from_git(
     # DEVICE_TYPE_CPU. Resolves the TODO upstream already left on that line.
     # Belongs upstream in qvac-fabric-llm.cpp; carried here until it lands.
     0001-pipeline-parallel-ignore-accel-devices.patch
+    # get_command_queue() held one global mutex across the full connect (TCP
+    # connect + hello negotiation, up to RPC_CLIENT_CONNECT_TIMEOUT_MS each),
+    # so registering N 'rpc-servers' endpoints was N times slower than one,
+    # worst-case N x the connect timeout, even though the endpoints are
+    # independent. Narrows the lock to the connection-cache bookkeeping only
+    # (double-checked, standard pattern) and adds
+    # ggml_backend_rpc_prefetch_connection() so a caller can warm several
+    # endpoints' connections in parallel before registering them - the
+    # registration order (and so RPC0/RPC1/... device numbering) stays
+    # exactly as sequential and deterministic as before; only the network
+    # wait moves out from under the lock. Belongs upstream; carried here
+    # until it lands.
+    0002-rpc-parallel-endpoint-connect.patch
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.

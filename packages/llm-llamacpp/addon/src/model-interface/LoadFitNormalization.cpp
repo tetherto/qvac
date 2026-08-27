@@ -1,9 +1,10 @@
 #include "model-interface/LoadFitNormalization.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cinttypes>
+#include <initializer_list>
+#include <thread>
 #include <iterator>
 #include <sstream>
 #include <stdexcept>
@@ -64,6 +65,41 @@ std::vector<std::string> split(const std::string& str, char delimiter) {
   return tokens;
 }
 
+// Finds exactly one of `keys` present in `configFilemap`. Throws
+// InvalidArgument, naming every key in `keys`, if more than one is present —
+// the shared shape behind every "accept 'foo' or 'foo_bar', not both" config
+// key in this file (split-mode, rpc-servers/rpc_servers/rpc, devices/
+// device-list, mmproj-use-gpu). Returns configFilemap.end() if none are
+// present; callers still do their own value parsing and erase() on use.
+load_fit_normalization::ConfigMap::iterator findOneOfAliasedKeys(
+    load_fit_normalization::ConfigMap& configFilemap,
+    std::initializer_list<std::string_view> keys) {
+  std::vector<load_fit_normalization::ConfigMap::iterator> found;
+  for (const std::string_view key : keys) {
+    if (auto it = configFilemap.find(std::string(key));
+        it != configFilemap.end()) {
+      found.push_back(it);
+    }
+  }
+  if (found.size() > 1) {
+    std::string joined;
+    for (const std::string_view key : keys) {
+      if (!joined.empty()) {
+        joined += ", ";
+      }
+      joined += "'";
+      joined += key;
+      joined += "'";
+    }
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: more than one of %s is present; use exactly one.\n",
+            K_LEGACY_PARSER_NAME.data(), joined.c_str()));
+  }
+  return found.empty() ? configFilemap.end() : found.front();
+}
+
 // QVAC-24112: register remote RPC devices before backend selection runs.
 //
 // llama.cpp registers RPC endpoints from its own `--rpc` handler, which the
@@ -117,7 +153,68 @@ void registerRpcDevices(const std::string& servers) {
             K_LEGACY_PARSER_NAME.data()));
   }
 
-  for (const std::string& endpoint : endpoints) {
+  // Optional: connects to every endpoint concurrently before the loop below
+  // registers them one at a time. Without this, N endpoints cost N times a
+  // full connect (each up to the connect timeout on an unreachable one) even
+  // though the endpoints are independent of each other.
+  //
+  // Deliberately does not change what happens below: registration order (and
+  // so RPC0/RPC1/... device numbering) stays exactly as sequential and
+  // deterministic as it always was. Only the network wait moves earlier and
+  // runs in parallel; addServer() below still assigns device numbers one
+  // endpoint at a time, in list order, same as if this block did not exist -
+  // it just becomes a cache hit on an already-open connection instead of a
+  // fresh connect.
+  //
+  // A failed connect is NOT cached by get_command_queue() (only successful
+  // ones are, so a transient failure gets a fresh retry on the next call
+  // rather than being stuck), so addServer() below would otherwise redo the
+  // full failing connect a second time, sequentially, for a still-down
+  // endpoint - silently reintroducing the same N-times-the-timeout cost this
+  // exists to avoid, for the unreachable case specifically. ok[i] records
+  // which endpoints already failed during prefetch so the loop below can
+  // fail fast on those instead of retrying.
+  //
+  // Optional because an older qvac-fabric build (predating this addon
+  // change) will not export it; ggml_backend_reg_get_proc_address() returns
+  // null for an unknown name rather than failing the whole call, so a build
+  // without it falls back to today's sequential behavior with no error.
+  using PrefetchFn = bool (*)(const char* endpoint);
+  auto prefetch = reinterpret_cast<PrefetchFn>(ggml_backend_reg_get_proc_address(
+      rpcReg, "ggml_backend_rpc_prefetch_connection"));
+  // NOT std::vector<bool>: its bits are packed, so writes to two different
+  // indices from two different threads can share an underlying word and
+  // race. uint8_t elements are genuinely independent memory.
+  std::vector<uint8_t> prefetchOk(endpoints.size(), 0);
+  bool didPrefetch = false;
+  if (prefetch != nullptr && endpoints.size() > 1) {
+    didPrefetch = true;
+    std::vector<std::thread> prefetchers;
+    prefetchers.reserve(endpoints.size());
+    for (size_t i = 0; i < endpoints.size(); i++) {
+      // Each thread writes only prefetchOk[i], a distinct element; no shared
+      // mutable state is touched, so no synchronization is needed beyond the
+      // join() below.
+      prefetchers.emplace_back([prefetch, &endpoint = endpoints[i], &ok = prefetchOk[i]]() {
+        ok = prefetch(endpoint.c_str()) ? 1 : 0;
+      });
+    }
+    for (std::thread& prefetcher : prefetchers) {
+      prefetcher.join();
+    }
+  }
+
+  for (size_t i = 0; i < endpoints.size(); i++) {
+    const std::string& endpoint = endpoints[i];
+    if (didPrefetch && !prefetchOk[i]) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: could not reach RPC server '%s'. Check that "
+              "ggml-rpc-server is running there and the port is open.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              endpoint.c_str()));
+    }
     ggml_backend_reg_t reg = addServer(endpoint.c_str());
     if (reg == nullptr) {
       throw qvac_errors::StatusError(
@@ -562,7 +659,9 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .isMaliGpu = isMaliGpu};
           },
       .gpuBackendSupportsRowSplit =
-          []() { return backend_selection::gpuBackendSupportsRowSplit(); }};
+          []() { return backend_selection::gpuBackendSupportsRowSplit(); },
+      .registerRpcDevices =
+          [](const std::string& servers) { ::registerRpcDevices(servers); }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -679,17 +778,7 @@ NormalizedLoad normalizeLoadForFit(
   }
 
   llama_split_mode splitMode = LLAMA_SPLIT_MODE_NONE;
-  auto hIt = configFilemap.find("split-mode");
-  auto uIt = configFilemap.find("split_mode");
-  if (hIt != configFilemap.end() && uIt != configFilemap.end()) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        string_format(
-            "%s: both 'split-mode' and 'split_mode' are present; "
-            "use one or the other.\n",
-            K_LEGACY_PARSER_NAME.data()));
-  }
-  if (auto it = (hIt != configFilemap.end()) ? hIt : uIt;
+  if (auto it = findOneOfAliasedKeys(configFilemap, {"split-mode", "split_mode"});
       it != configFilemap.end()) {
     std::string val = it->second;
     std::transform(val.begin(), val.end(), val.begin(), ::tolower);
@@ -706,6 +795,30 @@ NormalizedLoad normalizeLoadForFit(
       // architecture must be on its supported list, flash attention must be
       // on, and the KV cache must not be quantized.
       splitMode = LLAMA_SPLIT_MODE_TENSOR;
+
+      // qvac-fabric's own memory-fit preflight (on by default: fit_params
+      // defaults to true in common_params, and this addon has no config key
+      // that turns it off) throws internally for SPLIT_MODE_TENSOR
+      // (fit.cpp: "llama_params_fit is not implemented for SPLIT_MODE_TENSOR").
+      // Its caller in common_init_from_params() catches that, logs its own
+      // WARN, and discards the failure status - loading proceeds with
+      // whatever gpu_layers/ctx_size/tensor-split was configured, completely
+      // unchecked against available memory across the split devices. An
+      // over-provisioned tensor-split load has no preflight catching it
+      // before an OOM or bad allocation at actual load/decode time.
+      //
+      // Surfacing that here because qvac-fabric's own WARN uses its
+      // "common_fit_params" tag, giving no indication it is specifically
+      // about tensor mode being unfittable, not a real fit failure - easy to
+      // miss unless you already know to look for it, exactly the kind of
+      // silent-degrade this whole feature is built to avoid.
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] split-mode 'tensor' has no memory-fit safety net: "
+          "qvac-fabric does not implement fit_params for SPLIT_MODE_TENSOR "
+          "and silently skips it, so gpu_layers/ctx_size/tensor-split are "
+          "used exactly as configured with no check against available "
+          "memory across the split devices. Size them manually.\n");
     } else if (val != "none") {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
@@ -773,30 +886,12 @@ NormalizedLoad normalizeLoadForFit(
   // Handling it here rather than letting the passthrough loop forward it as
   // --rpc matters: qvac-fabric's own handler calls ggml_backend_load_all(),
   // which would re-load backends from the default path (see registerRpcDevices).
-  {
-    static constexpr std::array<std::string_view, 3> K_RPC_KEYS = {
-        "rpc-servers", "rpc_servers", "rpc"};
-
-    std::vector<ConfigMap::iterator> found;
-    for (const std::string_view key : K_RPC_KEYS) {
-      if (auto it = configFilemap.find(std::string(key));
-          it != configFilemap.end()) {
-        found.push_back(it);
-      }
-    }
-    if (found.size() > 1) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: more than one of 'rpc-servers', 'rpc_servers' and 'rpc' is "
-              "present; use exactly one.\n",
-              K_LEGACY_PARSER_NAME.data()));
-    }
-    if (found.size() == 1) {
-      registerRpcDevices(found.front()->second);
-      rpcDevicesRegistered = true;
-      configFilemap.erase(found.front());
-    }
+  if (auto it =
+          findOneOfAliasedKeys(configFilemap, {"rpc-servers", "rpc_servers", "rpc"});
+      it != configFilemap.end()) {
+    dependencies.registerRpcDevices(it->second);
+    rpcDevicesRegistered = true;
+    configFilemap.erase(it);
   }
 
   // Hoisted alongside 'rpc-servers' rather than parsed where it is used below,
@@ -804,22 +899,10 @@ NormalizedLoad normalizeLoadForFit(
   // explicitly has already told us what to use, and that must not be
   // silently overridden by automatic selection failing to find a local GPU.
   std::string explicitDevices;
-  {
-    auto hDevices = configFilemap.find("devices");
-    auto uDevices = configFilemap.find("device-list");
-    if (hDevices != configFilemap.end() && uDevices != configFilemap.end()) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: both 'devices' and 'device-list' are present; use one or "
-              "the other.\n",
-              K_LEGACY_PARSER_NAME.data()));
-    }
-    if (auto it = (hDevices != configFilemap.end()) ? hDevices : uDevices;
-        it != configFilemap.end()) {
-      explicitDevices = it->second;
-      configFilemap.erase(it);
-    }
+  if (auto it = findOneOfAliasedKeys(configFilemap, {"devices", "device-list"});
+      it != configFilemap.end()) {
+    explicitDevices = it->second;
+    configFilemap.erase(it);
   }
 
   auto deviceIt = configFilemap.find("device");
@@ -854,36 +937,25 @@ NormalizedLoad normalizeLoadForFit(
     // configFilemap so it is never forwarded to llama.cpp's argument parser
     // by the passthrough loop.
     std::optional<bool> mmprojUseGpuOverride;
-    {
-      auto hMmproj = configFilemap.find("mmproj-use-gpu");
-      auto uMmproj = configFilemap.find("mmproj_use_gpu");
-      if (hMmproj != configFilemap.end() && uMmproj != configFilemap.end()) {
+    if (auto it = findOneOfAliasedKeys(
+            configFilemap, {"mmproj-use-gpu", "mmproj_use_gpu"});
+        it != configFilemap.end()) {
+      std::string val = it->second;
+      std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+      if (val == "true" || val == "on" || val == "1") {
+        mmprojUseGpuOverride = true;
+      } else if (val == "false" || val == "off" || val == "0") {
+        mmprojUseGpuOverride = false;
+      } else {
         throw qvac_errors::StatusError(
             qvac_errors::general_error::InvalidArgument,
             string_format(
-                "%s: both 'mmproj-use-gpu' and 'mmproj_use_gpu' are present; "
-                "use one or the other.\n",
-                K_LEGACY_PARSER_NAME.data()));
+                "%s: invalid mmproj-use-gpu '%s', must be 'true'/'on'/'1' or "
+                "'false'/'off'/'0'.\n",
+                K_LEGACY_PARSER_NAME.data(),
+                it->second.c_str()));
       }
-      if (auto it = (hMmproj != configFilemap.end()) ? hMmproj : uMmproj;
-          it != configFilemap.end()) {
-        std::string val = it->second;
-        std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-        if (val == "true" || val == "on" || val == "1") {
-          mmprojUseGpuOverride = true;
-        } else if (val == "false" || val == "off" || val == "0") {
-          mmprojUseGpuOverride = false;
-        } else {
-          throw qvac_errors::StatusError(
-              qvac_errors::general_error::InvalidArgument,
-              string_format(
-                  "%s: invalid mmproj-use-gpu '%s', must be 'true'/'on'/'1' or "
-                  "'false'/'off'/'0'.\n",
-                  K_LEGACY_PARSER_NAME.data(),
-                  it->second.c_str()));
-        }
-        configFilemap.erase(it);
-      }
+      configFilemap.erase(it);
     }
 
     if (selected.type == BackendType::GPU) {

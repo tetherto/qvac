@@ -81,9 +81,15 @@ using BackendResolver = std::function<SelectedBackend(
     const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
     bool)>;
 
+// Registers the comma-separated 'host:port' endpoints as ggml RPC devices.
+// Throws qvac_errors::StatusError (InvalidArgument) on an empty list, a
+// missing RPC backend, or an endpoint that cannot be reached.
+using RpcDeviceRegistrar = std::function<void(const std::string&)>;
+
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
+  RpcDeviceRegistrar registerRpcDevices;
 };
 
 struct NormalizedLoad {

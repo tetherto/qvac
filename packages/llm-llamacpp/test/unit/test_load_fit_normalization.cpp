@@ -326,8 +326,13 @@ class LoadFitNormalizationTest : public ::testing::Test {
 protected:
   test_common::MockModelMetaData metadata_{false, "llama"};
 
-  static lfn::NormalizationDependencies
-  backend(lfn::SelectedBackend selected, bool supportsRowSplit = false) {
+  // rpcRegistrations, when given, records every string 'rpc-servers'/'rpc'
+  // resolved to, in call order. Left null in tests with no RPC config: the
+  // registrar becomes a harmless no-op, matching how those tests never
+  // reference RPC-related config keys.
+  static lfn::NormalizationDependencies backend(
+      lfn::SelectedBackend selected, bool supportsRowSplit = false,
+      std::vector<std::string>* rpcRegistrations = nullptr) {
     return {
         .resolveBackend = [selected](
                               backend_selection::BackendType,
@@ -335,7 +340,13 @@ protected:
                               const ModelMetaData&,
                               bool) { return selected; },
         .gpuBackendSupportsRowSplit =
-            [supportsRowSplit]() { return supportsRowSplit; }};
+            [supportsRowSplit]() { return supportsRowSplit; },
+        .registerRpcDevices =
+            [rpcRegistrations](const std::string& servers) {
+              if (rpcRegistrations != nullptr) {
+                rpcRegistrations->push_back(servers);
+              }
+            }};
   }
 
   static lfn::ConfigMap baseConfig() {
@@ -561,4 +572,124 @@ TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
           {},
           backend({.type = backend_selection::CPU, .name = "none"}))),
       qvac_errors::StatusError);
+}
+
+// QVAC-24112: RPC distributed inference.
+
+TEST_F(LoadFitNormalizationTest, TensorSplitModeIsAcceptedAndForwarded) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, DuplicateRpcAliasesRemainInvalidArgument) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052";
+  config["rpc"] = "127.0.0.1:50053";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "both 'rpc-servers' and 'rpc' present must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "more than one of 'rpc-servers', 'rpc_servers', 'rpc'"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, DuplicateDeviceListAliasesRemainInvalidArgument) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  config["device-list"] = "none";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, RpcServersReachesTheRegistrarAndIsErased) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  std::vector<std::string> registrations;
+  // Erasure is exercised implicitly: a surviving 'rpc-servers' key would be
+  // forwarded by the passthrough loop as '--rpc-servers', an argument
+  // llama.cpp does not recognize, and the call below would throw.
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "none"}, false,
+          &registrations)));
+  EXPECT_THAT(
+      registrations,
+      ::testing::ElementsAre("127.0.0.1:50052,127.0.0.1:50053"));
+}
+
+// The CPU-only-head-node case a code review caught: a machine with no local
+// GPU that asked for 'rpc-servers' but not 'devices' used to silently fall
+// back to single-device local CPU inference, generating correct output while
+// quietly ignoring the RPC config entirely. It must fail instead.
+TEST_F(LoadFitNormalizationTest, RpcHeadlessNodeThrowsWithoutExplicitDevices) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  config["split-mode"] = "layer";
+  std::vector<std::string> registrations;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::CPU, .name = "none"}, false,
+            &registrations)));
+    FAIL() << "rpc-servers with no local GPU and no explicit devices must "
+              "throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("no local GPU was found"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'devices'"));
+  }
+  // The registrar still ran (and connected) before selection decided there
+  // was nowhere local to fall back to; only the *decision* is the bug.
+  EXPECT_THAT(
+      registrations,
+      ::testing::ElementsAre("127.0.0.1:50052,127.0.0.1:50053"));
+}
+
+// Same headless machine, but the caller named devices explicitly: must not
+// throw, and must keep the requested split-mode instead of taking the
+// no-GPU-found degrade path meant for a machine that never had RPC involved.
+TEST_F(LoadFitNormalizationTest, RpcHeadlessNodeHonorsExplicitDevices) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  // "none" is parse_device_list's single magic value that resolves without a
+  // real device present (arg.cpp) - the only device string usable in a
+  // mock-only unit test. RpcHeadlessNodeThrowsWithoutExplicitDevices above
+  // covers the case this exists to unblock: a real name like "RPC0,RPC1".
+  config["devices"] = "none";
+  config["split-mode"] = "layer";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
 }

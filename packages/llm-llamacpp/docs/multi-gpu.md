@@ -27,6 +27,18 @@ Controls how the model is distributed across GPUs.
 
 Accepts both `split-mode` (hyphen) and `split_mode` (underscore). Providing both throws an error. Case-insensitive (`'LAYER'` works).
 
+> **`'tensor'` has no memory-fit safety net.** qvac-fabric's memory-fit
+> preflight (`fit_params`, on by default — there is no config key here to turn
+> it off) does not support `SPLIT_MODE_TENSOR`. It fails internally, and
+> qvac-fabric's own caller silently discards that failure and proceeds to load
+> with `gpu_layers`/`ctx_size`/`tensor-split` exactly as configured, with no
+> check against what actually fits across the split devices. A load that logs
+> `common_fit_params: ... not implemented for SPLIT_MODE_TENSOR, abort` is
+> **not failing** — that line means the fit step was skipped entirely, not
+> that anything went wrong yet. An over-provisioned tensor-split load has
+> nothing catching it before an OOM or a bad allocation partway through. Size
+> `gpu_layers`/`ctx_size` for tensor mode by hand.
+
 ### Pipeline parallelism
 
 Under `split-mode: 'layer'`, devices can either take turns (a relay — one busy
