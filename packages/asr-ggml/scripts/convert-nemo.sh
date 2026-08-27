@@ -3,7 +3,7 @@
 # Convert staged Parakeet `.nemo` checkpoints into the single-file
 # `.gguf` format the ggml backend consumes. Wraps the in-tree
 # `scripts/convert-nemo-to-gguf.py` (vendored from
-# qvac-ext-lib-whisper.cpp/engines/parakeet/scripts; resync on bump).
+# qvac-fabric-speech.cpp/engines/parakeet/scripts; resync on bump).
 #
 # Requirements:
 #   - A Python venv at ./venv with `gguf`, `numpy`, `torch`, `pyyaml`

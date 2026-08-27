@@ -72,7 +72,6 @@ async function loadJsConfig(filePath: string): Promise<QvacConfig> {
       importPath = pathToFileURL(filePath).toString()
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const configModule: { default?: unknown } = await import(importPath)
     return validateConfig(configModule.default || configModule)
   } catch (error) {

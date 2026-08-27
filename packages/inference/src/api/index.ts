@@ -13,8 +13,6 @@ export { embed } from '@/api/embed'
 export { finetune, type FinetuneHandle } from '@/api/finetune'
 export { translate } from '@/api/translate'
 export { cancel } from '@/api/cancel'
-export { startQVACProvider } from '@/api/provide'
-export { stopQVACProvider } from '@/api/stop-provider'
 export {
   ragChunk,
   ragIngest,
@@ -37,6 +35,13 @@ export { audioGen } from '@/api/audio-gen'
 export { classify } from '@/api/classify'
 export { video, type VideoProgressTick } from '@/api/video'
 export { upscale } from '@/api/upscale'
+export { worldCreateScene, worldStep } from '@/api/world'
+export {
+  type WorldStepResult,
+  type WorldStepProgressTick,
+  type WorldSceneResult,
+  type WorldSceneResultWithPack
+} from '@/api/world-result'
 export {
   modelRegistryList,
   modelRegistrySearch,

@@ -38,7 +38,7 @@
 **QVAC** lets you run a comprehensive range of AI workloads locally using open models across Linux, macOS, Windows, Android, and iOS.
 
 QVAC provides:
-- **SDK** for building local-first AI applications and systems in JavaScript/TypeScript and Python. You can also delegate inference to peers through QVAC's built-in P2P capabilities.
+- **SDK** for building local-first AI applications and systems in JavaScript/TypeScript and Python.
 - **HTTP server** for using QVAC as a local model provider. Its OpenAI-compatible API lets you connect AI tools such as OpenCode and OpenClaw, or any other compatible tool.
 
 ## Why QVAC
@@ -47,7 +47,7 @@ QVAC provides:
 - **Privacy and control:** keep data local, own the AI system. No cloud or third-party APIs required.
 - **One SDK, all of AI:** a comprehensive range of AI capabilities through one interface.
 - **Cross-platform:** one codebase for Linux, macOS, Windows, Android, and iOS, using JavaScript/TypeScript or Python.
-- **Peer-to-peer:** delegate inference to peers and build unstoppable internet systems, like BitTorrent or IPFS, but for AI.
+- **Peer-to-peer:** fetch AI models directly between peers and build unstoppable internet systems, like BitTorrent or IPFS, but for AI.
 
 ## Quickstart
 
@@ -291,7 +291,6 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 
 QVAC's built-in P2P capabilities let you build unstoppable internet systems without depending on centralized infrastructure:
 
-- **Delegated inference:** offload inference to other devices through [Pears](https://pears.com), letting resource-constrained devices run AI workloads beyond what their local hardware can handle.
 - **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution.
 - **Blind relays:** route traffic through relay peers when devices cannot connect directly across NATs and firewalls, keeping the network connected without centralized infrastructure.
 

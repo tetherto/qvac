@@ -26,28 +26,26 @@ export async function unloadModel(params: UnloadModelParams) {
   await getRequestRegistry().withModelDraining(modelId, async () => {
     clearFinetuneRuntimeState(modelId)
 
-    if (!entry.isDelegated) {
-      if (entry.local.model.unload) {
-        await entry.local.model.unload()
-      }
+    if (entry.local.model.unload) {
+      await entry.local.model.unload()
+    }
 
-      if (clearStorage && entry.local.path) {
-        const modelPath = entry.local.path
-        const modelFileName = path.basename(modelPath)
-        const shardInfo = detectShardedModel(modelFileName)
+    if (clearStorage && entry.local.path) {
+      const modelPath = entry.local.path
+      const modelFileName = path.basename(modelPath)
+      const shardInfo = detectShardedModel(modelFileName)
 
-        if (shardInfo.isSharded) {
-          const shardDir = path.dirname(modelPath)
-          await fsPromises.rm(shardDir, { recursive: true, force: true })
-          logger.info(`Sharded model storage cleared: ${shardDir}`)
-        } else {
-          const target = getClearStorageTarget(modelPath)
-          await fsPromises.rm(target.path, {
-            recursive: target.kind === 'directory',
-            force: true
-          })
-          logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
-        }
+      if (shardInfo.isSharded) {
+        const shardDir = path.dirname(modelPath)
+        await fsPromises.rm(shardDir, { recursive: true, force: true })
+        logger.info(`Sharded model storage cleared: ${shardDir}`)
+      } else {
+        const target = getClearStorageTarget(modelPath)
+        await fsPromises.rm(target.path, {
+          recursive: target.kind === 'directory',
+          force: true
+        })
+        logger.info(`Model storage cleared (${target.kind}): ${target.path}`)
       }
     }
 
