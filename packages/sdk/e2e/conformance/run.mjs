@@ -56,10 +56,8 @@ async function runCase(testCase) {
   // Worker-driven tool loop: only the Python client wraps it
   // (`completion_orchestrate`). The JS client runs tool loops client-side, so
   // there is no JS entry point that drives the worker loop -- skip rather than
-  // reimplement the loop here (that would test the runner, not the SDK). Skip
-  // before loadModel: the case's modelConfig is expressed in the worker's
-  // snake_case (`n_ctx`), which the JS client's camelCase modelConfig schema
-  // rejects. The Python runner covers this case; see cases.json's description.
+  // reimplement the loop here (that would test the runner, not the SDK).
+  // The Python runner covers this case; see cases.json's description.
   if (category === 'completionOrchestrate') {
     console.log(
       `SKIP ${testCase.id} (completionOrchestrate is worker-driven; JS orchestrates client-side)`
