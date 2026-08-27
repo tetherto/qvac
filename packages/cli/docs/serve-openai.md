@@ -38,6 +38,7 @@ For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac se
 | `GET`    | `/v1/models/catalog/{id}`        | A single catalog entry                                                                                      |
 | `POST`   | `/v1/chat/completions`           | Chat                                                                                                        |
 | `POST`   | `/v1/completions`                | Legacy text completions (single + multi-prompt; blocking + SSE)                                             |
+| `POST`   | `/v1/text/translations`          | Text-to-text translation (single + batch, blocking + SSE)                                                   |
 | `POST`   | `/v1/responses`                  | Responses API (blocking + SSE streaming); volatile, see below                                               |
 | `GET`    | `/v1/responses/{id}`             | Retrieve a stored response                                                                                  |
 | `DELETE` | `/v1/responses/{id}`             | Delete a stored response                                                                                    |
@@ -869,3 +870,80 @@ Two generation modes:
 | 404  | `video_not_found`         | Unknown job id                                                                                                                                                                     |
 | 501  | `unsupported_variant`     | `GET …/content?variant=` other than `video`                                                                                                                                        |
 | 503  | `model_not_ready`         | Model not loaded yet                                                                                                                                                               |
+
+## `POST /v1/text/translations`
+
+Translates text with a translation model, backed by the SDK's `translate()`.
+`model` names a `serve.models` alias whose endpoint category is `translation`.
+
+### Request
+
+- **Content-Type:** `application/json`
+- **Fields:**
+  - `model` (required) — a `serve.models` alias whose endpoint category is `translation`
+  - `input` (required) — a string, or an array of strings for batch
+  - `stream` (optional) — `true` streams Server-Sent Events (single input only)
+
+### Response
+
+`{ object: "list", data: [...], model }`, one `translation` entry per input,
+matched by `index`:
+
+```json
+{
+  "object": "list",
+  "data": [{ "object": "translation", "index": 0, "text": "Hello, world." }],
+  "model": "ta-en"
+}
+```
+
+Streaming emits `text_translation.chunk` events
+(`{ object, id, created, model, delta }`) and ends with `data: [DONE]`.
+
+### Examples
+
+```bash
+# Blocking, single input
+curl -sS http://127.0.0.1:11434/v1/text/translations \
+  -H "Content-Type: application/json" \
+  -d '{"model":"ta-en","input":"வணக்கம் உலகம்"}'
+
+# Batch (blocking only)
+curl -sS http://127.0.0.1:11434/v1/text/translations \
+  -H "Content-Type: application/json" \
+  -d '{"model":"ta-en","input":["வணக்கம்","நன்றி"]}'
+```
+
+### Errors
+
+| HTTP | `error.code`            | When                                                  |
+| ---- | ----------------------- | ----------------------------------------------------- |
+| 400  | `invalid_json`          | Body is not valid JSON                                |
+| 400  | `missing_model`         | `model` is missing                                    |
+| 400  | `missing_input`         | `input` is missing or empty                           |
+| 400  | `unsupported_streaming` | `stream: true` combined with an array (batch) `input` |
+| 400  | `invalid_model_type`    | Alias is not a `translation` model                    |
+| 404  | `model_not_found`       | Unknown alias                                         |
+| 503  | `model_not_loaded`      | Model not loaded and lazy loading is disabled         |
+| 503  | `model_load_failed`     | Lazy load of the model failed                         |
+| 503  | `model_load_timeout`    | Lazy load exceeded `serve.load.timeoutMs`             |
+| 503  | `model_not_ready`       | Model not loaded yet                                  |
+
+### Model configuration
+
+A translation model is configured under `serve.models` with a `config` block.
+The SDK `translate()` requires the language direction, so `config` must carry
+the `engine` and the `from` / `to` languages. For a Bergamot Tamil→English model:
+
+```json
+{
+  "serve": {
+    "models": {
+      "ta-en": {
+        "model": "BERGAMOT_TA_EN",
+        "config": { "engine": "Bergamot", "from": "ta", "to": "en" }
+      }
+    }
+  }
+}
+```
