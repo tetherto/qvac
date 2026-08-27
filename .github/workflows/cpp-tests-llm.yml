@@ -93,16 +93,17 @@ jobs:
         run: |
           echo "VCPKG_BINARY_SOURCES=clear;files,$GITHUB_WORKSPACE/$WORKDIR/vcpkg/cache,readwrite" >> "$GITHUB_ENV"
 
-      # Windows needs a natively-separated path. `github.workspace` expands with
-      # backslashes, so interpolating it into a forward-slash literal yields a
-      # mixed path that vcpkg resolves elsewhere -- it then reports
-      # "Restored 0 package(s)" and rebuilds while actions/cache saves an empty
-      # directory.
+      # Windows needs a native path. Interpolating github.workspace (which
+      # expands with backslashes) into a forward-slash literal produced a mixed
+      # path that vcpkg resolved elsewhere: it logged "Restored 0 package(s)",
+      # rebuilt, and the post-job save then stored an empty directory.
+      # GetFullPath makes the normalisation explicit rather than relying on
+      # Join-Path's.
       - name: Point vcpkg at the cached binary directory (Windows)
         if: ${{ matrix.os == 'windows-2025' }}
         shell: powershell
         run: |
-          $cacheDir = Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:WORKDIR 'vcpkg\cache')
+          $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:WORKDIR 'vcpkg/cache')))
           echo "VCPKG_BINARY_SOURCES=clear;files,$cacheDir,readwrite" >> $env:GITHUB_ENV
 
       - name: Cleanup vcpkg
@@ -123,12 +124,37 @@ jobs:
         shell: bash
         run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
 
-      - name: Get vcpkg cache
+      # Trusted contexts restore and save; every other context restores only.
+      # This job runs PR-head code (npm install below, then the build) and is
+      # reachable from approved external forks via reusable-fork-approval, so an
+      # unconditional save would be a cache-poisoning write from fork code.
+      # .cursor/rules/devops/github-actions.mdc:82 restricts cache writes to
+      # push / workflow_dispatch / merge_group; cache-models does the same split.
+      #
+      # No restore-keys deliberately. A prefix match would restore the previous
+      # entry's archives and save them alongside the newly built ones, and the
+      # files provider never deletes, so the entry would grow without bound and
+      # compete for the repo cache budget with the models-* entry this same job
+      # restores below.
+      - name: Get vcpkg cache (restore + save, trusted contexts)
+        if: >-
+          github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch' ||
+          github.event_name == 'merge_group'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          key: cpp-tests-v6-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v6-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+
+      - name: Get vcpkg cache (restore-only, untrusted contexts)
+        if: >-
+          github.event_name != 'push' &&
+          github.event_name != 'workflow_dispatch' &&
+          github.event_name != 'merge_group'
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir)) }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
