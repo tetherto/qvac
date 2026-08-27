@@ -11,9 +11,7 @@ from tetherto.qvac_sdk._generated.models import (
 )
 
 
-@pytest.mark.parametrize(
-    "load_mode", ["none", "mmap", "mlock", "mmap+mlock", "dio"]
-)
+@pytest.mark.parametrize("load_mode", ["none", "mmap", "mlock", "mmap+mlock", "dio"])
 def test_load_mode_accepts_every_addon_value(load_mode: str) -> None:
     config = LoadModelSrcRequestLlamacppCompletionModelConfig.model_validate(
         {"ctx_size": 2048, "load_mode": load_mode}
