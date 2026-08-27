@@ -3,7 +3,9 @@ description: >-
   Installs the TheRock ROCm dist (gfx target) on a linux-x64 runner and exports
   ROCM_PATH/HIP_PATH/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a consumer's
   qvac-fabric hip-backend feature can cross-compile libqvac-ggml-hip.so. No AMD
-  GPU is required on the runner (compile-only, like nvcc for CUDA).
+  GPU is required on the runner (compile-only, like nvcc for CUDA). Prefers a
+  host-baked SDK at /opt/rocm when /opt/rocm/.qvac-rocm matches the requested
+  pin (self-hosted qvac-* linux-x64 images); otherwise downloads + caches.
 
 inputs:
   rocm-version:
@@ -27,9 +29,49 @@ inputs:
 runs:
   using: composite
   steps:
+    # Self-hosted qvac-* linux-x64 images bake TheRock at /opt/rocm (ansible
+    # roles/rocm). Skip the multi-GB download when the stamp matches this pin.
+    - name: Detect host-baked ROCm at /opt/rocm
+      id: preinstalled
+      shell: bash
+      env:
+        ROCM_VERSION: ${{ inputs.rocm-version }}
+        ROCM_GFX: ${{ inputs.gfx }}
+        ROCM_SHA256: ${{ inputs.sha256 }}
+      run: |
+        hipcfg="/opt/rocm/lib/cmake/hip/hip-config.cmake"
+        marker="/opt/rocm/.qvac-rocm"
+        if [ ! -f "$hipcfg" ]; then
+          echo "No host-baked ROCm at /opt/rocm — will download/cache"
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ ! -f "$marker" ]; then
+          echo "Found $hipcfg but no $marker — ignoring unmarked /opt/rocm, will download/cache"
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        stamp_gfx="$(sed -n 's/^gfx=//p' "$marker" | head -1 | tr -d '\r')"
+        stamp_version="$(sed -n 's/^version=//p' "$marker" | head -1 | tr -d '\r')"
+        stamp_sha="$(sed -n 's/^sha256=//p' "$marker" | head -1 | tr -d '\r')"
+        if [ "$stamp_gfx" != "$ROCM_GFX" ] || [ "$stamp_version" != "$ROCM_VERSION" ]; then
+          echo "Host-baked ROCm is ${stamp_gfx}/${stamp_version}, want ${ROCM_GFX}/${ROCM_VERSION} — will download/cache"
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ -n "$ROCM_SHA256" ] && [ "$stamp_sha" != "$ROCM_SHA256" ]; then
+          echo "Host-baked ROCm sha256 ${stamp_sha} != ${ROCM_SHA256} — will download/cache"
+          echo "hit=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "Using host-baked ROCm at /opt/rocm (${ROCM_GFX} ${ROCM_VERSION})"
+        echo "hit=true" >> "$GITHUB_OUTPUT"
+        echo "prefix=/opt/rocm" >> "$GITHUB_OUTPUT"
+
     # Cache the extracted SDK so the multi-GB tarball is fetched + unpacked once
     # per (gfx, version, sha256). The key includes sha256 so re-pinning busts it.
     - name: Cache ROCm SDK (TheRock dist)
+      if: steps.preinstalled.outputs.hit != 'true'
       id: cache-rocm
       uses: actions/cache@v4
       with:
@@ -37,7 +79,7 @@ runs:
         key: rocm-therock-${{ inputs.gfx }}-${{ inputs.rocm-version }}-${{ inputs.sha256 }}
 
     - name: Download + verify + extract ROCm SDK (TheRock dist)
-      if: steps.cache-rocm.outputs.cache-hit != 'true'
+      if: steps.preinstalled.outputs.hit != 'true' && steps.cache-rocm.outputs.cache-hit != 'true'
       shell: bash
       env:
         ROCM_VERSION: ${{ inputs.rocm-version }}
@@ -59,10 +101,17 @@ runs:
 
     - name: Export ROCm environment
       shell: bash
+      env:
+        ROCM_PREINSTALLED: ${{ steps.preinstalled.outputs.hit }}
+        ROCM_PREINSTALLED_PREFIX: ${{ steps.preinstalled.outputs.prefix }}
       run: |
-        hipcfg="$(find "$RUNNER_TEMP/rocm" -path '*/lib/cmake/hip/hip-config.cmake' | head -1)"
-        if [ -z "$hipcfg" ]; then echo "::error::ROCm hip-config.cmake not found after extract"; exit 1; fi
-        rocm_prefix="$(cd "$(dirname "$hipcfg")/../../.." && pwd)"
+        if [ "$ROCM_PREINSTALLED" = "true" ]; then
+          rocm_prefix="$ROCM_PREINSTALLED_PREFIX"
+        else
+          hipcfg="$(find "$RUNNER_TEMP/rocm" -path '*/lib/cmake/hip/hip-config.cmake' | head -1)"
+          if [ -z "$hipcfg" ]; then echo "::error::ROCm hip-config.cmake not found after extract"; exit 1; fi
+          rocm_prefix="$(cd "$(dirname "$hipcfg")/../../.." && pwd)"
+        fi
         echo "ROCm prefix: $rocm_prefix"
         # Only $prefix/bin on PATH (hipcc) — NOT lib/llvm/bin, whose bundled
         # libc++ lacks __config_site and would hijack the system clang++ used for
