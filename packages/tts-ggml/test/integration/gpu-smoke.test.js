@@ -49,9 +49,16 @@ const { recordTtsStats } = require('../utils/perf-helper')
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isApple = platform === 'darwin' || platform === 'ios'
-// Parler GPU coverage is validated on Apple and the Android Device Farm.
-// Keep desktop Vulkan out until dedicated Linux/Windows runs prove it there.
-const isParlerGpuPlatform = isApple || platform === 'android'
+const GPU_BACKEND_IDS = { metal: 1, cuda: 2, vulkan: 3, opencl: 4 }
+// CI rows whose prebuild bundles more than one usable GPU backend (the linux
+// runners carry CUDA and Vulkan) pin the engine cascade through
+// TTS_CPP_GPU_BACKEND; the assertions expect whatever the row pinned and fall
+// back to the platform's cascade default when unset.
+const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
+// Parler GPU coverage is validated on Apple, the Android Device Farm, and the
+// linux CUDA lane. Keep desktop Vulkan out until dedicated runs prove it there.
+const isParlerGpuPlatform =
+  isApple || platform === 'android' || (platform === 'linux' && PINNED_GPU_BACKEND === 'cuda')
 // CosyVoice3's tts-cpp allowlist is Metal (Apple), OpenCL/Adreno (Android),
 // and Vulkan on desktop hosts, so the strict GPU leg runs everywhere the
 // desktop and mobile GPU runners exist. On Android the engine keeps its
@@ -84,10 +91,10 @@ function backendIdToName(id) {
   }
 }
 
-// Which platforms wire up a GPU backend in tts-cpp's vcpkg port
-// today (default-features in qvac-registry-vcpkg/ports/tts-cpp/vcpkg.json):
+// Which platforms wire up a GPU backend in the speech-cpp vcpkg port
+// today (features in qvac-registry-vcpkg/ports/speech-cpp/vcpkg.json):
 //   - darwin / ios:        metal
-//   - linux / win32:       vulkan
+//   - linux / win32:       vulkan (linux-x64 prebuilds also bundle cuda)
 //   - android:             vulkan + opencl
 function expectsGpu() {
   return (
@@ -145,7 +152,12 @@ function assertGpuBackend(t, engineTag, stats, allowPolicyCpu = false) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `${engineTag}/${platform}: expected Metal backendId=1, got ${name}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    t.is(id, 3, `${engineTag}/${platform}: expected Vulkan backendId=3, got ${name}`)
+    const expectedId = GPU_BACKEND_IDS[PINNED_GPU_BACKEND] || GPU_BACKEND_IDS.vulkan
+    t.is(
+      id,
+      expectedId,
+      `${engineTag}/${platform}: expected ${backendIdToName(expectedId)} backendId=${expectedId}, got ${name}`
+    )
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,

@@ -19,7 +19,7 @@ export type DownloadAssetOptions = BaseDownloadAssetOptions
  * Downloads an asset (model file) without loading it into memory.
  *
  * This function is specifically designed for download-only operations and
- * doesn't accept runtime configuration options like modelConfig or delegate.
+ * doesn't accept runtime configuration options like modelConfig.
  * Use this for download-only operations instead of loadModel for better semantic clarity.
  *
  * @param options - Download configuration including:
