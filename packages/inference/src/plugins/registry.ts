@@ -29,6 +29,10 @@ function findPluginUsingLoggingModule(loggingModule: PluginLoggingModule) {
   return Array.from(plugins.values()).find((plugin) => plugin.logging?.module === loggingModule)
 }
 
+function findPluginProvidingTurboVecIndex() {
+  return Array.from(plugins.values()).find((plugin) => plugin.capabilities?.turbovecIndexProvider)
+}
+
 function getModelTypeForError(plugin: unknown) {
   if (!plugin || typeof plugin !== 'object') return '(unknown)'
   if (!('modelType' in plugin)) return '(unknown)'
@@ -52,6 +56,16 @@ export function registerPlugin(plugin: QvacPlugin): void {
 
   if (plugins.has(plugin.modelType)) {
     throw new PluginAlreadyRegisteredError(plugin.modelType)
+  }
+
+  const pluginProvidingTurboVecIndex = plugin.capabilities?.turbovecIndexProvider
+    ? findPluginProvidingTurboVecIndex()
+    : undefined
+  if (pluginProvidingTurboVecIndex) {
+    throw new PluginDefinitionInvalidError(
+      plugin.modelType,
+      `plugin "${plugin.modelType}" cannot provide turbovecIndexProvider because plugin "${pluginProvidingTurboVecIndex.modelType}" already provides it`
+    )
   }
 
   // Validate logging module shape if provided
@@ -127,11 +141,7 @@ export function getAllPlugins(): QvacPlugin[] {
 }
 
 export function getTurboVecIndexProvider() {
-  for (const plugin of plugins.values()) {
-    const provider = plugin.capabilities?.turbovecIndexProvider
-    if (provider) return provider
-  }
-  return undefined
+  return findPluginProvidingTurboVecIndex()?.capabilities?.turbovecIndexProvider
 }
 
 export function clearPlugins(): void {

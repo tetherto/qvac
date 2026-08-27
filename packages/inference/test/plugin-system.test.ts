@@ -196,6 +196,78 @@ test('plugin registry exposes a registered TurboVec index provider', function (t
   t.is(getTurboVecIndexProvider(), undefined)
 })
 
+test('registerPlugin: rejects a second TurboVec index provider', function (t) {
+  clearPlugins()
+
+  const firstProvider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+  const secondProvider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+
+  try {
+    registerPlugin({
+      modelType: 'test-first-turbovec-provider',
+      displayName: 'First TurboVec Provider Test',
+      addonPackage: '@qvac/test-addon',
+      loadConfigSchema: z.object({}),
+      createModel() {
+        return {
+          model: { load: async function () {} }
+        }
+      },
+      handlers: {},
+      capabilities: {
+        turbovecIndexProvider: firstProvider
+      }
+    })
+
+    try {
+      registerPlugin({
+        modelType: 'test-second-turbovec-provider',
+        displayName: 'Second TurboVec Provider Test',
+        addonPackage: '@qvac/test-addon',
+        loadConfigSchema: z.object({}),
+        createModel() {
+          return {
+            model: { load: async function () {} }
+          }
+        },
+        handlers: {},
+        capabilities: {
+          turbovecIndexProvider: secondProvider
+        }
+      })
+      t.fail('Expected registerPlugin to reject a second TurboVec provider')
+    } catch (error) {
+      t.ok(error instanceof PluginDefinitionInvalidError)
+      t.ok(
+        (error as Error).message.includes('test-first-turbovec-provider'),
+        'error names the registered provider plugin'
+      )
+      t.ok(
+        (error as Error).message.includes('test-second-turbovec-provider'),
+        'error names the rejected provider plugin'
+      )
+    }
+
+    t.is(getTurboVecIndexProvider(), firstProvider, 'first provider remains registered')
+  } finally {
+    clearPlugins()
+  }
+})
+
 test('registerPlugin: rejects duplicate modelType registration', function (t) {
   clearPlugins()
 
