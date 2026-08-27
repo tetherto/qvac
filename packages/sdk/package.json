@@ -224,7 +224,6 @@
     "@qvac/llm-llamacpp": "^0.45.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.18.0",
-    "@qvac/rag": "^0.6.4",
     "@qvac/registry-client": "^0.6.1",
     "@qvac/translation-nmtcpp": "^0.10.0",
     "@qvac/tts-ggml": "^0.7.4",
