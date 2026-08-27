@@ -8199,6 +8199,7 @@
                       "type": "boolean"
                     }
                   },
+                  "additionalProperties": false,
                   "title": "LoadModelSrcRequestLlamacppCompletionModelConfig"
                 }
               },
