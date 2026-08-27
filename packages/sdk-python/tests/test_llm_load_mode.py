@@ -34,8 +34,6 @@ def test_retired_no_mmap_is_rejected_not_dropped() -> None:
             {"ctx_size": 2048, "no_mmap": True}
         )
 
-    # extra_forbidden, not a coerced or ignored field: dropping the key would
-    # leave the caller on a default mmap load with no error.
     assert excinfo.value.errors()[0]["type"] == "extra_forbidden"
 
 

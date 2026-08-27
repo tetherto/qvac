@@ -221,7 +221,7 @@ const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
   device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
-  load_mode: 'none' // disable memory-mapped model loading
+  load_mode: 'none' // read fully into memory: no mmap, mlock or direct I/O
 }
 ```
 

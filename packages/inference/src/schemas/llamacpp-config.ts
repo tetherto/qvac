@@ -193,7 +193,7 @@ export const LLM_CONFIG_DEFAULTS = {
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
-export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
+export const llmConfigSchema = llmConfigBaseSchema.strict().transform((data) => ({
   ...LLM_CONFIG_DEFAULTS,
   ...data
 }))

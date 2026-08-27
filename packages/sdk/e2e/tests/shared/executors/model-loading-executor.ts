@@ -13,7 +13,6 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
-  modelLoadLlmLoadModeMmap,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
@@ -32,7 +31,6 @@ import {
 const modelLoadTests = [
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
-  modelLoadLlmLoadModeMmap,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
@@ -54,7 +52,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
     [modelLoadLlmLoadModeNone.testId]: this.loadLlmWithLoadMode.bind(this),
-    [modelLoadLlmLoadModeMmap.testId]: this.loadLlmWithLoadMode.bind(this),
     [modelLoadLlmLegacyNoMmapRejected.testId]: this.rejectLegacyNoMmap.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
     [modelLoadOcr.testId]: this.loadOcr.bind(this),
@@ -279,10 +276,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     expectation: typeof modelLoadLlmLoadModeNone.expectation
   ): Promise<TestResult> {
     const { loadMode } = params as { loadMode: 'none' | 'mmap' }
-    // Registered under its own dep so cleanup goes through ResourceManager.evict()
-    // rather than a bare unloadModel: 'none' loads a private copy of the whole
-    // model instead of mapping it, and evict() is what applies the mobile
-    // unloadSettleMs pause that keeps the next load off still-resident pages.
+    // Own dep, not the shared 'llm' fixture, so it is released between tests.
     const dep = `llm-load-mode-${loadMode}`
     try {
       const modelId = await loadModel({
@@ -309,14 +303,22 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         modelType: 'llamacpp-completion',
         modelConfig: { no_mmap: noMmap }
       } as unknown as Parameters<typeof loadModel>[0])
-      // Unexpected: validation let the retired key through. Register it so the
-      // failure path still releases the model instead of leaking it.
+      // Should not happen, but release it rather than leak on the failure path.
       this.resources.register(dep, modelId)
       await this.resources.evict(dep)
       return { passed: false, output: 'Legacy no_mmap should have been rejected' }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
-      return ValidationHelpers.validate(errorMsg, expectation)
+      // A native --no-mmap error means the key reached the addon: the regression.
+      if (/invalid argument|--no-mmap/.test(errorMsg)) {
+        return {
+          passed: false,
+          output: `no_mmap reached the addon instead of failing SDK validation: ${errorMsg}`
+        }
+      }
+      // The code is on the error, not in its message.
+      const code = (error as { code?: number }).code
+      return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
     }
   }
 
