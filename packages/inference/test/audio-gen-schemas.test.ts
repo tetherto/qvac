@@ -1,5 +1,6 @@
 import test from 'brittle'
 import {
+  AUDIOGEN_ENGINES,
   audioGenClientParamsSchema,
   audioGenConfigSchema,
   audioGenStreamRequestSchema,
@@ -32,6 +33,38 @@ test('audioGenConfigSchema requires all four model sources', (t) => {
   )
 })
 
+test('audioGenConfigSchema accepts MiniMax model pairs and rejects mixed engine files', (t) => {
+  t.alike([...AUDIOGEN_ENGINES], ['acestep', 'minimax'])
+  t.ok(
+    audioGenConfigSchema.safeParse({
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf',
+      synthModelSrc: 'minimax-synth.gguf',
+      useGPU: true,
+      inferenceSteps: 12,
+      cfgScale: 1.8
+    }).success
+  )
+  t.is(
+    audioGenConfigSchema.safeParse({
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf'
+    }).success,
+    false,
+    'both MiniMax models are required'
+  )
+  t.is(
+    audioGenConfigSchema.safeParse({
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf',
+      synthModelSrc: 'minimax-synth.gguf',
+      ditModelSrc: 'acestep-dit.gguf'
+    }).success,
+    false,
+    'ACE-Step files cannot be mixed into MiniMax config'
+  )
+})
+
 test('AudioGen load transform permits omitted primary modelSrc', (t) => {
   const request = loadModelOptionsToRequestSchema.parse({
     modelType: 'audiogen',
@@ -58,6 +91,44 @@ test('audioGen client params validate generation controls', (t) => {
       modelId: 'model-1',
       caption: ' ',
       bpm: 0
+    }).success,
+    false
+  )
+})
+
+test('audioGen client params validate MiniMax frame and flow controls', (t) => {
+  t.ok(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      maxFrames: 250,
+      inferenceSteps: 12,
+      cfgScale: 1.8
+    }).success
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      duration: 10,
+      maxFrames: 250
+    }).success,
+    false,
+    'duration and maxFrames are mutually exclusive'
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      inferenceSteps: 1001
+    }).success,
+    false
+  )
+  t.is(
+    audioGenClientParamsSchema.safeParse({
+      modelId: 'minimax-model',
+      caption: 'warm cinematic piano',
+      cfgScale: 1e-100
     }).success,
     false
   )

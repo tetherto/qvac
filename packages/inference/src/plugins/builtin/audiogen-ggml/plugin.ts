@@ -1,4 +1,10 @@
-import { AudioGen } from '@qvac/audiogen-ggml'
+import {
+  AudioGen,
+  ENGINE_ACESTEP,
+  ENGINE_MINIMAX,
+  type AudioGenEngine,
+  type AudioGenFiles
+} from '@qvac/audiogen-ggml'
 import {
   ADDON_AUDIOGEN,
   ModelType,
@@ -18,7 +24,7 @@ import { ModelLoadFailedError } from '@/errors/index'
 
 export const audioGenPlugin = definePlugin({
   modelType: ModelType.audiogenGgml,
-  displayName: 'Audio Generation (GGML / ACE-Step)',
+  displayName: 'Audio Generation (GGML / ACE-Step and MiniMax)',
   addonPackage: ADDON_AUDIOGEN,
   loadConfigSchema: audioGenConfigSchema,
   // AudioGen's primary `modelSrc` is intentionally empty: all required
@@ -29,16 +35,8 @@ export const audioGenPlugin = definePlugin({
 
   createModel(params: CreateModelParams): PluginModelResult {
     const config = (params.modelConfig ?? {}) as AudioGenRuntimeConfig
-    const textEncModel = params.artifacts?.['textEncModelPath']
-    const lmModel = params.artifacts?.['lmModelPath']
-    const ditModel = params.artifacts?.['ditModelPath']
-    const vaeModel = params.artifacts?.['vaeModelPath']
-
-    if (!textEncModel || !lmModel || !ditModel || !vaeModel) {
-      throw new ModelLoadFailedError(
-        'AudioGen requires resolved text encoder, LM, DiT, and VAE model artifacts'
-      )
-    }
+    const engine = config.engine ?? ENGINE_ACESTEP
+    const files = getAudioGenFiles(engine, params.artifacts)
 
     const logger = createStreamLogger(params.modelId, ModelType.audiogenGgml)
     const addonConfig = {
@@ -46,18 +44,15 @@ export const audioGenPlugin = definePlugin({
       ...(config.inferenceSteps !== undefined && {
         inferenceSteps: config.inferenceSteps
       }),
+      ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale }),
       ...(config.shift !== undefined && { shift: config.shift }),
       ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers }),
       ...(config.threads !== undefined && { threads: config.threads }),
       ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
     }
     const model = new AudioGen({
-      files: {
-        textEncModel,
-        lmModel,
-        ditModel,
-        vaeModel
-      },
+      engine,
+      files,
       config: addonConfig,
       logger
     })
@@ -76,3 +71,29 @@ export const audioGenPlugin = definePlugin({
     })
   }
 })
+
+function getAudioGenFiles(
+  engine: AudioGenEngine,
+  artifacts: CreateModelParams['artifacts']
+): AudioGenFiles {
+  const lmModel = artifacts?.['lmModelPath']
+  if (engine === ENGINE_MINIMAX) {
+    const synthModel = artifacts?.['synthModelPath']
+    if (!lmModel || !synthModel) {
+      throw new ModelLoadFailedError(
+        'MiniMax AudioGen requires resolved LM and synthesis artifacts'
+      )
+    }
+    return { lmModel, synthModel }
+  }
+
+  const textEncModel = artifacts?.['textEncModelPath']
+  const ditModel = artifacts?.['ditModelPath']
+  const vaeModel = artifacts?.['vaeModelPath']
+  if (!textEncModel || !lmModel || !ditModel || !vaeModel) {
+    throw new ModelLoadFailedError(
+      'ACE-Step AudioGen requires resolved text encoder, LM, DiT, and VAE artifacts'
+    )
+  }
+  return { textEncModel, lmModel, ditModel, vaeModel }
+}

@@ -2,6 +2,32 @@ import { audioGenConfigSchema, type ResolveContext } from '@/schemas/index'
 
 export async function resolveAudioGenConfig(config: Record<string, unknown>, ctx: ResolveContext) {
   const parsed = audioGenConfigSchema.parse(config)
+  return parsed.engine === 'minimax'
+    ? resolveMinimaxConfig(parsed, ctx)
+    : resolveAcestepConfig(parsed, ctx)
+}
+
+async function resolveMinimaxConfig(
+  parsed: Extract<ReturnType<typeof audioGenConfigSchema.parse>, { engine: 'minimax' }>,
+  ctx: ResolveContext
+) {
+  const { lmModelSrc, synthModelSrc, ...runtimeConfig } = parsed
+  const lmModelPath = await ctx.resolveModelPath(lmModelSrc)
+  const synthModelPath = await ctx.resolveModelPath(synthModelSrc)
+
+  return {
+    config: runtimeConfig,
+    artifacts: {
+      lmModelPath,
+      synthModelPath
+    }
+  }
+}
+
+async function resolveAcestepConfig(
+  parsed: Exclude<ReturnType<typeof audioGenConfigSchema.parse>, { engine: 'minimax' }>,
+  ctx: ResolveContext
+) {
   const { textEncModelSrc, lmModelSrc, ditModelSrc, vaeModelSrc, ...runtimeConfig } = parsed
   // These four artifacts total several gigabytes. Resolving them concurrently
   // splits bandwidth across independent registry streams and can make each one

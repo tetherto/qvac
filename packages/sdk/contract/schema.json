@@ -299,9 +299,27 @@
           "minLength": 1
         },
         "duration": {
-          "description": "Approximate requested duration in seconds. ACE-Step rounds to its latent frame grid; use output frames or stats.audioDurationMs as authoritative.",
+          "description": "Approximate requested duration in seconds. Engines round to their frame grid; use output frames or stats.audioDurationMs as authoritative.",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "maxFrames": {
+          "description": "MiniMax semantic-frame cap. Cannot be combined with duration.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "inferenceSteps": {
+          "description": "MiniMax flow steps for this generation; 0 uses the model default.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cfgScale": {
+          "description": "MiniMax flow classifier-free guidance scale for this generation.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.4028234663852886e38
         },
         "lmTemperature": {
           "description": "LM sampling temperature (ACE-Step default: 0.85).",
@@ -2796,6 +2814,12 @@
       },
       "required": ["type", "events"],
       "additionalProperties": false
+    },
+    "constants.AudioGenEngine": {
+      "title": "AudioGenEngine",
+      "type": "string",
+      "enum": ["acestep", "minimax"],
+      "x-enum-varnames": ["ACESTEP", "MINIMAX"]
     },
     "constants.AudioGenTaskType": {
       "title": "AudioGenTaskType",
@@ -12930,370 +12954,578 @@
                   "const": "audiogen-ggml"
                 },
                 "modelConfig": {
-                  "type": "object",
-                  "properties": {
-                    "useGPU": {
-                      "type": "boolean"
-                    },
-                    "inferenceSteps": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "shift": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "nGpuLayers": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "threads": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "backendsDir": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "textEncModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "engine": {
+                          "type": "string",
+                          "const": "acestep"
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "type": "number"
-                            },
-                            "engine": {
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "type": "string"
-                            },
-                            "addon": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon"
-                                },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc"
-                        }
-                      ]
-                    },
-                    "lmModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                        "useGPU": {
+                          "type": "boolean"
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "type": "number"
-                            },
-                            "engine": {
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "type": "string"
-                            },
-                            "addon": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrcAddon"
-                                },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc"
-                        }
-                      ]
-                    },
-                    "ditModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                        "threads": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
-                              "type": "string"
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "type": "number"
-                            },
-                            "engine": {
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "type": "string"
-                            },
-                            "addon": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrcAddon"
-                                },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc"
-                        }
-                      ]
-                    },
-                    "vaeModelSrc": {
-                      "anyOf": [
-                        {
-                          "type": "string"
+                        "backendsDir": {
+                          "type": "string",
+                          "minLength": 1
                         },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "src": {
+                        "inferenceSteps": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "shift": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "nGpuLayers": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "textEncModelSrc": {
+                          "anyOf": [
+                            {
                               "type": "string"
                             },
-                            "name": {
-                              "type": "string"
-                            },
-                            "modelId": {
-                              "type": "string"
-                            },
-                            "registryPath": {
-                              "type": "string"
-                            },
-                            "registrySource": {
-                              "type": "string"
-                            },
-                            "blobCoreKey": {
-                              "type": "string"
-                            },
-                            "blobIndex": {
-                              "type": "number"
-                            },
-                            "engine": {
-                              "type": "string"
-                            },
-                            "expectedSize": {
-                              "type": "number"
-                            },
-                            "sha256Checksum": {
-                              "type": "string"
-                            },
-                            "addon": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "llamacpp-completion",
-                                    "whispercpp-transcription",
-                                    "bci-whispercpp-transcription",
-                                    "llamacpp-embedding",
-                                    "nmtcpp-translation",
-                                    "onnx-tts",
-                                    "tts-ggml",
-                                    "parakeet-transcription",
-                                    "ggml-ocr",
-                                    "sdcpp-generation",
-                                    "audiogen-ggml",
-                                    "ggml-vla",
-                                    "ggml-classification",
-                                    "llm",
-                                    "whisper",
-                                    "bci",
-                                    "embeddings",
-                                    "nmt",
-                                    "parakeet",
-                                    "tts",
-                                    "ocr",
-                                    "diffusion",
-                                    "audiogen",
-                                    "vla",
-                                    "classification"
-                                  ],
-                                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrcAddon"
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
                                 },
-                                {
-                                  "type": "string",
-                                  "const": "vad"
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
                                 }
-                              ]
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc"
                             }
-                          },
-                          "required": ["src"],
-                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc"
+                          ]
+                        },
+                        "lmModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc"
+                            }
+                          ]
+                        },
+                        "ditModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc"
+                            }
+                          ]
+                        },
+                        "vaeModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc"
+                            }
+                          ]
                         }
-                      ]
+                      },
+                      "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigAcestep"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "engine": {
+                          "type": "string",
+                          "const": "minimax"
+                        },
+                        "useGPU": {
+                          "type": "boolean"
+                        },
+                        "threads": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "backendsDir": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "inferenceSteps": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000
+                        },
+                        "cfgScale": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 3.4028234663852886e38
+                        },
+                        "lmModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc"
+                            }
+                          ]
+                        },
+                        "synthModelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc"
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["engine", "lmModelSrc", "synthModelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimax"
                     }
-                  },
-                  "required": ["textEncModelSrc", "lmModelSrc", "ditModelSrc", "vaeModelSrc"],
-                  "additionalProperties": false,
-                  "title": "LoadModelSrcRequestAudiogenGgmlModelConfig"
+                  ]
                 }
               },
               "required": ["type", "modelSrc", "modelType", "modelConfig"],
