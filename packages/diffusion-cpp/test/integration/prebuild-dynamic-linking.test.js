@@ -137,10 +137,15 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
 // File-level layout checks above prove the module EXISTS; this proves Linux
 // can actually dlopen and register it. A packaging mistake in the backends
 // subdir, the dlopen search path, or module registration would pass the
-// layout checks while GPU selection silently fell back to CPU — so on the
-// linux GPU legs, load a model on device 'gpu' and require the ggml dynamic
-// loader to report our shipped Vulkan module (same log-capture pattern as
-// main-gpu-backend.test.js).
+// layout checks while GPU selection silently fell back to CPU. Backend
+// registration is PROCESS-GLOBAL and happens on the first model load in the
+// suite, so this test cannot rely on catching the one-time
+// `load_backend: loaded Vulkan backend from ...` line — instead it requests
+// `main-gpu: 0`, whose resolution walks the live ggml device registry on
+// EVERY load and logs the resolved backend name: it can only resolve to
+// Vulkan0 if the DL module actually registered (same log-capture pattern as
+// main-gpu-backend.test.js). If registration broke, resolution falls back
+// to CPU and the assertion fails.
 test(
   'linux GPU host registers the Vulkan backend through the DL module',
   { timeout: 600000 },
@@ -177,6 +182,7 @@ test(
         files: { model: path.join(modelDir, modelName) },
         config: {
           device: 'gpu',
+          'main-gpu': 0,
           threads: 4,
           prediction: 'v',
           verbosity: 2,
@@ -186,18 +192,15 @@ test(
       })
       await model.load()
 
-      // ggml-backend-reg logs `load_backend: loaded <name> backend from <path>`
-      // for every module it dlopens; require the Vulkan one to come from our
-      // shipped module directory, proving dlopen + registration end-to-end.
-      const loaderLine = logs.find(
-        (line) =>
-          line.includes('load_backend') &&
-          line.includes('loaded Vulkan backend from') &&
-          line.includes(MODULE_NAME)
+      // The main-gpu resolver enumerates the live ggml device registry at
+      // this load; on a Vulkan-capable host it can only report a Vulkan
+      // backend if the DL module was dlopen'd and registered.
+      const resolvedLine = logs.find((line) =>
+        line.includes("main-gpu resolved to backend 'Vulkan")
       )
       t.ok(
-        loaderLine,
-        `ggml loader registered the shipped Vulkan module: ${loaderLine || 'NO MATCHING LOG LINE'}`
+        resolvedLine,
+        `ggml device registry resolved a Vulkan backend (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
       )
     } finally {
       if (model) await model.unload().catch(() => {})
