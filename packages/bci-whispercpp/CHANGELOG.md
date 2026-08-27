@@ -7,17 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in CUDA GPU backend on Linux / Windows (NVIDIA). `bci-whispercpp[cuda]`
+  forwards to `speech-cpp[cuda]`, gated behind the new `ENABLE_CUDA` CMake
+  option and the `npm run build:cuda` / `build:native:cuda` scripts. Opt-in
+  because it needs `nvcc` on the build host, which the published prebuilds
+  are built without; at runtime only the NVIDIA driver plus CUDA runtime
+  libraries are needed. On linux-x64 the `cuda` feature flips ggml into
+  hybrid dynamically-loaded backend mode: CPU-variant, Vulkan and CUDA
+  backends ship as `.so` modules next to the addon, only the CUDA module
+  depends on the CUDA runtime, and hosts that cannot resolve it fall back to
+  Vulkan or CPU. The native backend loader now also runs on desktop Linux
+  (previously Android and linux-arm64 only) so those modules register before
+  `whisper_init`. ggml registers CUDA ahead of Vulkan, so `use_gpu: true`
+  prefers CUDA when a supported NVIDIA device is present.
+
 ### Changed
 
 - Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
   `qvac-fabric-speech.cpp` in the package documentation, following the
   upstream repository rename. Old GitHub links keep working via redirect.
 
-- Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
-  2026-08-26. The Whisper engine sources are unchanged; the ggml update adds
+- Raise the `speech-cpp` floor to 2026-08-26#1, aligning all speech addons
+  (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, `bci-whispercpp`) on the same
+  port and ggml-speech cut. Relative to 2026-08-26 the bundled ggml computes
+  explicit-f32-precision matmuls in true f32 on CUDA and adds CONCAT support
+  for all scalar and quantized types. The earlier 2026-08-26 bump brought in
   Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch guards for the
   `conv_transpose_1d`, `im2col` and `pad` paths, and Adreno OpenCL launch
-  validation with GEMV work-group limits.
+  validation with GEMV work-group limits; the Whisper engine sources are
+  unchanged.
 
 ## [0.7.2] - 2026-08-18
 

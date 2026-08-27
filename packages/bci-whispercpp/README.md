@@ -81,11 +81,25 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
+**CUDA (Linux / Windows on NVIDIA)** is opt-in because it needs `nvcc` on the
+build host; the published prebuilds are built without it. Build it yourself
+with `npm run build:cuda` (or `bare-make generate -D ENABLE_CUDA=ON`), which
+adds the `cuda` feature to the `speech-cpp` dependency. On linux-x64 that
+flips ggml into hybrid dynamically-loaded backend mode: the CPU-variant,
+Vulkan, and CUDA backends ship as `.so` modules next to the addon, only the
+CUDA module depends on the CUDA runtime, and hosts that cannot resolve it
+skip the module and fall back to Vulkan or CPU. Only the NVIDIA driver plus
+the CUDA runtime libraries are needed at runtime; ggml registers CUDA ahead
+of Vulkan, so `use_gpu: true` prefers CUDA when a supported device is
+present.
+
 ### Prerequisites
 
 - **Bare runtime** >= 1.24.0
 - **CMake** >= 3.25
 - **vcpkg** with `VCPKG_ROOT` environment variable set
+- Optional: the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+  (`nvcc`) for the opt-in `build:cuda` build on Linux/Windows
 
 ## Quickstart
 
@@ -337,7 +351,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `model` | string | Optional override; usually set via `args.files.model`. |
-| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows, OpenCL/Vulkan on Android. |
+| `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on opt-in `build:cuda` builds, which is preferred when an NVIDIA device is present), OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
 | `gpu_device` | number | Select a non-default GPU device. |
 
@@ -351,7 +365,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `backendsDir` | string | `<addon>/prebuilds` | **Android only.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; ignored on other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
+| `backendsDir` | string | `<addon>/prebuilds` | **Android and Linux.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
 
 ### streamOpts (passed to `transcribeStream()`)
 
