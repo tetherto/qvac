@@ -11488,11 +11488,29 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestGgmlClassificationModelConfig(GeneratedBaseModel):
-    model_path: Annotated[str | None, Field(alias="modelPath")] = None
-    top_k: Annotated[
-        int | None, Field(alias="topK", ge=-9007199254740991, le=9007199254740991)
+    model_path: Annotated[
+        str | None,
+        Field(
+            alias="modelPath",
+            description="Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.",
+        ),
     ] = None
-    native_logger: Annotated[bool | None, Field(alias="nativeLogger")] = None
+    top_k: Annotated[
+        int | None,
+        Field(
+            alias="topK",
+            description="Limit returned results to the top-K classes. Default: all classes.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    native_logger: Annotated[
+        bool | None,
+        Field(
+            alias="nativeLogger",
+            description="Forward native C++ log lines through the engine logger. Off by default.",
+        ),
+    ] = None
 
 
 class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
