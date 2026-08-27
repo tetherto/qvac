@@ -12,7 +12,7 @@ Legend:
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
 | inference | Bare-only in-process engine. Use this instead of `@qvac/bare-sdk` | SDK |
-| bare-sdk | Deprecated (last release 0.18.2). Use `@qvac/inference` for in-process Bare | SDK |
+| bare-sdk | Removed (last npm release 0.18.2). Use `@qvac/inference` for in-process Bare | SDK |
 | ai-sdk-provider | Vercel AI SDK provider exposing the QVAC runtime (chat, embeddings, transcription, translation, speech, OCR, image) | SDK |
 | bci-whispercpp | Brain-Computer Interface (BCI) neural-signal transcription addon powered by whisper.cpp | Addon |
 | classification-ggml | Image classification addon (MobileNetV3-Small) on the GGML backend | Addon |
