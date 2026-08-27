@@ -290,6 +290,16 @@ declare namespace LlmLlamacpp {
          */
         json_schema?: string | Record<string, unknown>;
         /**
+         * Tool choice for a request whose prompt declares `function` tools, in the
+         * OpenAI style: `"auto"` (default) lets the model decide and constrains a
+         * call only once it starts one; `"required"` forces a tool call;
+         * `"none"` disables the tool-call grammar while leaving the tool
+         * definitions in the prompt; any other string names one declared function
+         * and forces a call to it. Ignored when the prompt carries no tools;
+         * `"required"` or a function name without tools throws.
+         */
+        tool_choice?: "auto" | "none" | "required" | (string & {});
+        /**
          * Per-request reasoning channel budget. `-1` keeps the model's reasoning
          * channel on; `0` disables it for this request; any positive integer caps
          * the reasoning channel at that many tokens. Equivalent to the load-time

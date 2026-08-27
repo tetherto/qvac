@@ -139,6 +139,10 @@ function normalizeGenerationParams(generationParams) {
         typeof sanitized.remove_thinking_from_context !== "boolean") {
         throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
     }
+    if (sanitized.tool_choice !== undefined &&
+        (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)) {
+        throw new TypeError('generationParams.tool_choice must be "auto", "none", "required" or a declared function name');
+    }
     const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
     const hasJsonSchema = sanitized.json_schema !== undefined &&
         sanitized.json_schema !== null &&

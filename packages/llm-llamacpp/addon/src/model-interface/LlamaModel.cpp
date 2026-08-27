@@ -1013,9 +1013,17 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   auto restore =
       state_->llmContext_->applyGenerationParams(prompt.generationParams);
+  // Render-time overrides ride alongside the sampler overrides and are
+  // cleared with them, so a request's `tool_choice` / `json_schema` can never
+  // leak into the next request's prompt render.
+  state_->llmContext_->setRenderOverrides(
+      renderOverridesFrom(prompt.generationParams));
 
   try {
-    ScopeGuard paramsGuard([&] { restore(); });
+    ScopeGuard paramsGuard([&] {
+      state_->llmContext_->setRenderOverrides({});
+      restore();
+    });
 
     const LlmContext::EvalMessageResult evalResult =
         resolved.tools.empty()

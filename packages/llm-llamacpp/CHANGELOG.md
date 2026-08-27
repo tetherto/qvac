@@ -13,6 +13,12 @@
   load-time antiprompts.
 - `RuntimeStats.toolDefinitionsDropped` reports renders where the template
   rejected the tool definitions and the prompt was produced without them.
+- `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
+  function name) controls whether a tool call is forced, allowed or disabled for
+  a request that declares tools; a function name restricts the call to it.
+- With tools in the prompt, `generationParams.json_schema` is composed into the
+  template's tool grammar so the response schema and the tool calls are
+  enforced by one grammar. Without tools it behaves as before.
 
 ### Fixed
 

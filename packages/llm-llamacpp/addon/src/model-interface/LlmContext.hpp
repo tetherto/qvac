@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
@@ -51,6 +52,11 @@ struct GenerationParams {
   // `TextLlmContext::needsRecurrentSnapshot_` documents what differs between
   // them. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
+  // OpenAI-style tool choice for a request that carries tools: "auto"
+  // (default), "none", "required", or the name of one declared function
+  // (restricts the call to that function). Consumed at prompt render time,
+  // not by the sampler, so it is deliberately absent from `hasOverrides()`.
+  std::optional<std::string> tool_choice;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
   // common_params rebuild). Intentionally excludes
@@ -58,13 +64,21 @@ struct GenerationParams {
   // on `common_params`, and is applied directly via
   // `setRemoveThinkingFromContext` on both the single- prompt and batch paths.
   // Including it here would force a no-op `common_sampler_init` whenever it's
-  // the only override set.
+  // the only override set. `tool_choice` is excluded for the same reason: it
+  // shapes the chat-template render, and the sampler rebuild it needs happens
+  // in `tokenizeChat` when the rendered grammar is applied.
   [[nodiscard]] bool hasOverrides() const {
     return n_predict || temp || top_p || top_k || frequency_penalty ||
            presence_penalty || repeat_penalty || seed || grammar ||
            json_schema || reasoning_budget;
   }
 };
+
+/// The render-time subset of a request's `GenerationParams`.
+inline RenderOverrides renderOverridesFrom(const GenerationParams& p) {
+  return RenderOverrides{
+      .jsonSchema = p.json_schema, .toolChoice = p.tool_choice};
+}
 
 struct CommonSamplerDeleter {
   void operator()(common_sampler* ptr) {
@@ -380,6 +394,13 @@ public:
    */
   [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
   virtual void resetToolDefinitionsDropped() {}
+
+  /**
+   * Install the per-request render overrides (`json_schema`, `tool_choice`)
+   * consumed by the next `tokenizeChat`. Pass a default-constructed value to
+   * clear. Default no-op for contexts that do not render chat templates.
+   */
+  virtual void setRenderOverrides(RenderOverrides overrides) { (void)overrides; }
 
   /**
    * Why the most recent generation stopped (`None` when no generation

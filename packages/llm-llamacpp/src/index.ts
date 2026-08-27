@@ -220,6 +220,15 @@ function normalizeGenerationParams(
     );
   }
 
+  if (
+    sanitized.tool_choice !== undefined &&
+    (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)
+  ) {
+    throw new TypeError(
+      'generationParams.tool_choice must be "auto", "none", "required" or a declared function name',
+    );
+  }
+
   const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
   const hasJsonSchema =
     sanitized.json_schema !== undefined &&
@@ -1187,6 +1196,18 @@ namespace LlmLlamacpp {
      * JSON Schema. Mutually exclusive with `grammar` — passing both throws.
      */
     json_schema?: string | Record<string, unknown>;
+    /**
+     * Tool choice for a request whose prompt declares `function` tools, in the
+     * OpenAI style: `"auto"` (default) lets the model decide and constrains a
+     * call only once it starts one; `"required"` forces a tool call;
+     * `"none"` disables the tool-call grammar while leaving the tool
+     * definitions in the prompt; any other string names one declared function
+     * and forces a call to it. Ignored when the prompt carries no tools;
+     * `"required"` or a function name without tools throws.
+     */
+    // `string & {}` keeps the three literals visible to autocomplete without
+    // the union collapsing to plain `string`.
+    tool_choice?: "auto" | "none" | "required" | (string & {});
     /**
      * Per-request reasoning channel budget. `-1` keeps the model's reasoning
      * channel on; `0` disables it for this request; any positive integer caps

@@ -59,6 +59,10 @@ void applyGenerationOverridesToSampling(
         __func__);
   }
 
+  // On a request that also carries tools, `tokenizeChat` hands the raw schema
+  // to the chat template and `configureTemplateDerivedSampling` replaces this
+  // OUTPUT_FORMAT grammar with the composed TOOL_CALLS one. The conversion
+  // here still runs so tools-free requests behave exactly as before.
   if (overrides.json_schema) {
     try {
       auto parsed = nlohmann::ordered_json::parse(*overrides.json_schema);

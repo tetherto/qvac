@@ -359,8 +359,17 @@ void MtmdLlmContext::tokenizeChat(
   inputs.messages = chatMsgs;
   inputs.add_generation_prompt = isLastMessageFromUser;
 
-  if (!tools.empty()) {
-    inputs.tools = tools;
+  // See TextLlmContext::tokenizeChat for the tool_choice / json_schema rules.
+  const ResolvedToolChoice toolChoice =
+      resolveToolChoice(renderOverrides_.toolChoice, tools);
+  bool composedJsonSchema = false;
+  if (!toolChoice.tools.empty()) {
+    inputs.tools = toolChoice.tools;
+    inputs.tool_choice = toolChoice.choice;
+    if (renderOverrides_.jsonSchema && !renderOverrides_.jsonSchema->empty()) {
+      inputs.json_schema = *renderOverrides_.jsonSchema;
+      composedJsonSchema = true;
+    }
   }
   const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
   formattedChat = rendered.prompt;
@@ -396,7 +405,7 @@ void MtmdLlmContext::tokenizeChat(
     }
   }
   if (configureTemplateDerivedSampling(
-          params_, tokenize, rendered, !tools.empty())) {
+          params_, tokenize, rendered, !tools.empty(), composedJsonSchema)) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
       std::string errorMsg = string_format(

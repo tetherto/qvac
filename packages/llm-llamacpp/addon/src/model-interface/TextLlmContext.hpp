@@ -122,6 +122,10 @@ public:
   [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
   void resetToolDefinitionsDropped() override;
 
+  void setRenderOverrides(RenderOverrides overrides) override {
+    renderOverrides_ = std::move(overrides);
+  }
+
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
@@ -296,6 +300,8 @@ private:
   std::vector<llama_token> templateStopTokens_;
   // Renders in the current request where the template dropped the tools.
   int32_t toolDefinitionsDropped_ = 0;
+  // Per-request `json_schema` / `tool_choice` for the chat-template render.
+  RenderOverrides renderOverrides_;
   std::vector<llama_token> forcedTokens_;
 
   llama_pos nPast_ = 0;

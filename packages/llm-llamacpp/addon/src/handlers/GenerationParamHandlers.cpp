@@ -68,6 +68,10 @@ const GenerationParamHandlerList GENERATION_PARAM_HANDLERS = {
      [](js_env_t* env, js::Object& obj, GenerationParams& p) {
        readNonEmptyStrInto(env, obj, "json_schema", p.json_schema);
      }},
+    {"tool_choice",
+     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
+       readNonEmptyStrInto(env, obj, "tool_choice", p.tool_choice);
+     }},
     {"reasoning_budget",
      [](js_env_t* env, js::Object& obj, GenerationParams& p) {
        auto value = obj.getOptionalPropertyAs<js::Number, double>(

@@ -12,6 +12,7 @@
 #include <llama.h>
 
 #include "MediaLoadOrder.hpp"
+#include "RenderOverrides.hpp"
 #include "addon/LlmErrors.hpp"
 
 class LlamaBatch;
@@ -188,6 +189,10 @@ public:
   // support.
 
   virtual void setRemoveThinkingFromContext(bool value) { (void)value; }
+  /// Per-request `json_schema` / `tool_choice` for the chat-template render;
+  /// see `LlmContext::setRenderOverrides`. The scheduler sets it before
+  /// `preparePrefill`; the driver is destroyed with its slot, so no clear.
+  virtual void setRenderOverrides(RenderOverrides overrides) { (void)overrides; }
 
   /// Tokenize the prompt and stage it for prefill (without running
   /// generation). Returns the text tokens still pending decode by the

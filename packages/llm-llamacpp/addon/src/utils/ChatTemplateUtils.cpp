@@ -11,7 +11,10 @@
 
 #include <llama.h>
 
+#include <inference-addon-cpp/Errors.hpp>
+
 #include "QwenTemplate.hpp"
+#include "addon/LlmErrors.hpp"
 #include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
@@ -483,9 +486,48 @@ bool configureReasoningBudgetSampling(
   return changed;
 }
 
+ResolvedToolChoice resolveToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools) {
+  ResolvedToolChoice resolved;
+  resolved.tools = tools;
+  if (!rawToolChoice || rawToolChoice->empty() || *rawToolChoice == "auto") {
+    return resolved;
+  }
+  const std::string& raw = *rawToolChoice;
+  if (raw == "none" || raw == "required") {
+    resolved.choice = common_chat_tool_choice_parse_oaicompat(raw);
+    if (resolved.choice == COMMON_CHAT_TOOL_CHOICE_REQUIRED && tools.empty()) {
+      throw qvac_errors::StatusError(
+          qvac_lib_inference_addon_llama::errors::ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "generationParams.tool_choice is \"required\" but the prompt "
+          "declares no tools");
+    }
+    return resolved;
+  }
+  // Anything else names one declared function.
+  const auto it = std::ranges::find_if(
+      tools, [&](const common_chat_tool& t) { return t.name == raw; });
+  if (it == tools.end()) {
+    throw qvac_errors::StatusError(
+        qvac_lib_inference_addon_llama::errors::ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "generationParams.tool_choice names an undeclared function: %s",
+            raw.c_str()));
+  }
+  resolved.choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+  resolved.tools = {*it};
+  return resolved;
+}
+
 bool configureTemplateDerivedSampling(
     common_params& params, const Tokenizer& tokenize,
-    const PromptRenderResult& rendered, bool toolsRequested) {
+    const PromptRenderResult& rendered, bool toolsRequested,
+    bool composedJsonSchema) {
   common_params_sampling next = params.sampling;
   applyReasoningBudget(
       next,
@@ -508,6 +550,15 @@ bool configureTemplateDerivedSampling(
   bool toolGrammarApplied = false;
   if (toolsRequested && rendered.renderedByJinja && !rendered.grammar.empty() &&
       tokenize) {
+    // The per-request json_schema was rendered into the tool grammar, so the
+    // OUTPUT_FORMAT grammar built from the same schema is now redundant and
+    // the composed grammar takes its place.
+    const bool schemaAlreadyComposed =
+        composedJsonSchema &&
+        next.grammar.type == COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT;
+    if (schemaAlreadyComposed) {
+      next.grammar = {};
+    }
     if (next.grammar.type == COMMON_GRAMMAR_TYPE_USER ||
         next.grammar.type == COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT) {
       QLOG_IF(

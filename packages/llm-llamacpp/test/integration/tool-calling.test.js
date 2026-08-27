@@ -372,6 +372,63 @@ safeTest(
   }
 )
 
+// generationParams.tool_choice: "required" forces a call, "none" turns the
+// tool grammar off (tools stay in the prompt), a function name restricts the
+// call to that function, and an undeclared name is rejected up front.
+safeTest(
+  '[tools] tool_choice controls whether and which tool is called',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      async function runWithToolChoice(toolChoice) {
+        const response = await model.run(clonePrompt(), {
+          generationParams: { tool_choice: toolChoice }
+        })
+        return (await collectResponse(response)).text
+      }
+
+      const required = await runWithToolChoice('required')
+      t.ok(
+        required.includes('<tool_call>'),
+        `required produced a tool call: ${required.slice(0, 200)}`
+      )
+      assertDeclaredToolCalls(t, required, clonePrompt(), 'required')
+
+      const named = await runWithToolChoice('queryDB')
+      const namedCalls = parseToolCalls(named, t)
+      t.ok(namedCalls.length > 0, 'named function produced a tool call')
+      for (const call of namedCalls) {
+        t.is(call.name, 'queryDB', 'named function restricts the call to that function')
+      }
+
+      // "none" only removes the grammar constraint (llama-server semantics);
+      // the tools stay in the prompt, so a call is still allowed, just not
+      // enforced. The contract under test is that the request completes.
+      const none = await runWithToolChoice('none')
+      t.ok(none.length > 0, `none still generated text: ${none.slice(0, 200)}`)
+
+      // `t.exception.all` so a native error subclass cannot escape as an
+      // unhandled rejection (see grammar.test.js for the rationale).
+      // The addon raises during the job, so the rejection surfaces on the
+      // response's `.await()`, not on `model.run()` itself.
+      await t.exception.all(
+        async () => {
+          const response = await model.run(clonePrompt(), {
+            generationParams: { tool_choice: 'notDeclared' }
+          })
+          await response.await()
+        },
+        /undeclared function/,
+        'an undeclared function name is rejected'
+      )
+    } finally {
+      await release()
+    }
+  }
+)
+
 // A per-request GBNF grammar takes precedence over the template's tool
 // grammar; the request must complete and honour the user's grammar.
 safeTest(

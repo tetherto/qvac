@@ -218,7 +218,10 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  *     carries no tools.
  *   - USER / OUTPUT_FORMAT belong to the caller (load-time config or
  *     per-request generationParams) and are left untouched; a rendered tool
- *     grammar is then suppressed and logged.
+ *     grammar is then suppressed and logged. Exception: when
+ *     `composedJsonSchema` is true the per-request schema was already handed
+ *     to the template, so the rendered grammar carries it and replaces the
+ *     OUTPUT_FORMAT grammar.
  *   - NONE: the rendered tool grammar is applied when `toolsRequested` and
  *     the render came from the Jinja engine.
  *
@@ -227,7 +230,32 @@ using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
  */
 bool configureTemplateDerivedSampling(
     common_params& params, const Tokenizer& tokenize,
-    const PromptRenderResult& rendered, bool toolsRequested);
+    const PromptRenderResult& rendered, bool toolsRequested,
+    bool composedJsonSchema = false);
+
+/**
+ * @brief The template-side view of a request's `tool_choice`.
+ *
+ * llama.cpp knows only auto / none / required. A named function is realised
+ * as "render only that tool and require a call", so `tools` is the list to
+ * hand to the template, not necessarily the list the caller sent.
+ */
+struct ResolvedToolChoice {
+  common_chat_tool_choice choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
+  std::vector<common_chat_tool> tools;
+};
+
+/**
+ * @brief Resolves a raw `tool_choice` string against the declared tools.
+ *
+ * - unset / "auto" / "none" / "required": the matching enum, tools unchanged.
+ *   "required" with no tools is an InvalidArgument.
+ * - any other string: the name of one declared function; returns REQUIRED with
+ *   `tools` narrowed to that function. An unknown name is an InvalidArgument.
+ */
+ResolvedToolChoice resolveToolChoice(
+    const std::optional<std::string>& rawToolChoice,
+    const std::vector<common_chat_tool>& tools);
 
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);

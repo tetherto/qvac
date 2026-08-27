@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
 #include "model-interface/LlamaModel.hpp"
@@ -384,6 +385,97 @@ TEST_F(ChatTemplateUtilsTest, GetPromptExportsToolGrammarWhenToolsPresent) {
   EXPECT_TRUE(rendered.renderedByJinja);
   EXPECT_FALSE(rendered.toolDefinitionsDropped);
   EXPECT_EQ(inputs.tools.size(), 1u) << "tools must not be stripped on success";
+}
+
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoicePassesThroughAutoNoneRequired) {
+  const std::vector<common_chat_tool> tools{makeWeatherTool()};
+  EXPECT_EQ(
+      resolveToolChoice(std::nullopt, tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_AUTO);
+  EXPECT_EQ(
+      resolveToolChoice(std::string("auto"), tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_AUTO);
+  EXPECT_EQ(
+      resolveToolChoice(std::string("none"), tools).choice,
+      COMMON_CHAT_TOOL_CHOICE_NONE);
+  const ResolvedToolChoice required =
+      resolveToolChoice(std::string("required"), tools);
+  EXPECT_EQ(required.choice, COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+  EXPECT_EQ(required.tools.size(), 1u) << "tools list is not narrowed";
+}
+
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceNamedFunctionNarrowsAndRequires) {
+  common_chat_tool other = makeWeatherTool();
+  other.name = "get_time";
+  const std::vector<common_chat_tool> tools{makeWeatherTool(), other};
+  const ResolvedToolChoice named =
+      resolveToolChoice(std::string("get_time"), tools);
+  EXPECT_EQ(named.choice, COMMON_CHAT_TOOL_CHOICE_REQUIRED);
+  ASSERT_EQ(named.tools.size(), 1u);
+  EXPECT_EQ(named.tools[0].name, "get_time");
+}
+
+TEST_F(ChatTemplateUtilsTest, ResolveToolChoiceRejectsUnknownOrToolless) {
+  const std::vector<common_chat_tool> tools{makeWeatherTool()};
+  EXPECT_THROW(
+      resolveToolChoice(std::string("GET_WEATHER"), tools),
+      qvac_errors::StatusError)
+      << "function names are case-sensitive";
+  EXPECT_THROW(
+      resolveToolChoice(std::string("required"), {}), qvac_errors::StatusError);
+  EXPECT_NO_THROW(resolveToolChoice(std::string("none"), {}));
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptRequiredToolChoiceMakesGrammarEager) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_FALSE(rendered.grammar.empty());
+  EXPECT_FALSE(rendered.grammarLazy) << "required must not wait for a trigger";
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptNoneToolChoiceKeepsToolsDropsGrammar) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs inputs = makeQwenInputs();
+  inputs.tools = {makeWeatherTool()};
+  inputs.tool_choice = COMMON_CHAT_TOOL_CHOICE_NONE;
+  const PromptRenderResult rendered = getPrompt(tmpls.get(), inputs);
+
+  EXPECT_NE(rendered.prompt.find("get_weather"), std::string::npos)
+      << "none keeps the tool definitions in the prompt";
+  EXPECT_TRUE(rendered.grammar.empty());
+}
+
+TEST_F(ChatTemplateUtilsTest, GetPromptComposesJsonSchemaIntoToolGrammar) {
+  common_chat_templates_ptr tmpls =
+      common_chat_templates_init(nullptr, getFixedQwen3Template());
+  ASSERT_NE(tmpls, nullptr);
+
+  common_chat_templates_inputs plain = makeQwenInputs();
+  plain.tools = {makeWeatherTool()};
+  const PromptRenderResult withoutSchema = getPrompt(tmpls.get(), plain);
+
+  common_chat_templates_inputs withSchema = makeQwenInputs();
+  withSchema.tools = {makeWeatherTool()};
+  withSchema.json_schema =
+      R"({"type":"object","properties":{"answer":{"type":"string"}},"required":["answer"]})";
+  const PromptRenderResult composed = getPrompt(tmpls.get(), withSchema);
+
+  EXPECT_FALSE(composed.grammar.empty());
+  EXPECT_NE(composed.grammar, withoutSchema.grammar)
+      << "the response schema must change the rendered grammar";
+  EXPECT_TRUE(composed.renderedByJinja);
+  EXPECT_FALSE(composed.toolDefinitionsDropped)
+      << "json_schema with tools must not trip the tools-stripped retry";
 }
 
 TEST_F(ChatTemplateUtilsTest, GetPromptWithoutToolsExportsNoGrammar) {

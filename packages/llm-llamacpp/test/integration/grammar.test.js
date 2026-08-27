@@ -238,3 +238,44 @@ safeTest(
     )
   }
 )
+
+// With tools in the prompt the per-request json_schema is composed into the
+// template's tool grammar, so the model is constrained to either a schema-valid
+// answer or a well-formed tool call — never free text.
+safeTest(
+  'generationParams | json_schema composes with the tool grammar',
+  { timeout: 600_000 },
+  async (t) => {
+    const { model } = await setupModel(t, { seed: '42', tools: 'true', n_predict: '128' })
+
+    const prompt = [
+      { role: 'system', content: 'Extract the person info as JSON. /no_think' },
+      {
+        type: 'function',
+        name: 'lookupPerson',
+        description: 'Look up a person by name',
+        parameters: {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: ['name']
+        }
+      },
+      { role: 'user', content: "Hi, I'm Alice and I'm 30 years old." }
+    ]
+    const response = await model.run(prompt, {
+      generationParams: { json_schema: PERSON_SCHEMA, seed: 42 }
+    })
+    const output = (await collectResponse(response)).trim()
+
+    const toolCall = /<tool_call>([\s\S]*?)<\/tool_call>/.exec(output)
+    if (toolCall) {
+      const parsed = JSON.parse(toolCall[1].trim())
+      t.is(parsed.name, 'lookupPerson', 'tool call names the declared function')
+      t.is(typeof parsed.arguments.name, 'string', 'tool call argument is schema-typed')
+    } else {
+      const parsed = JSON.parse(output.replace(/^<think>[\s\S]*?<\/think>\s*/, ''))
+      t.is(typeof parsed.name, 'string', 'answer matches the response schema (name)')
+      t.ok(Number.isInteger(parsed.age), 'answer matches the response schema (age)')
+    }
+  }
+)

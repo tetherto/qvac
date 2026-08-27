@@ -117,6 +117,37 @@ TEST(TemplateDerivedSamplingTest, LoadTimeUserGrammarSurvivesToolsAbsentClear) {
   EXPECT_EQ(params.sampling.grammar.grammar, "root ::= \"loaded\"");
 }
 
+TEST(TemplateDerivedSamplingTest, ComposedJsonSchemaReplacesOutputFormatGrammar) {
+  common_params params = paramsWithoutReasoningBudget();
+  params.sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, "root ::= \"{}\"");
+  EXPECT_TRUE(configureTemplateDerivedSampling(
+      params,
+      stubTokenizer(),
+      toolRender(),
+      /* toolsRequested = */ true,
+      /* composedJsonSchema = */ true));
+  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+  EXPECT_EQ(params.sampling.grammar.grammar, toolRender().grammar);
+}
+
+TEST(TemplateDerivedSamplingTest, ComposedFlagNeverOverridesUserGrammar) {
+  common_params params = paramsWithoutReasoningBudget();
+  params.sampling.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_USER, "root ::= \"x\"");
+  EXPECT_FALSE(configureTemplateDerivedSampling(
+      params, stubTokenizer(), toolRender(), true, true));
+  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_USER);
+}
+
+TEST(TemplateDerivedSamplingTest, ToolChoiceDoesNotCountAsSamplerOverride) {
+  GenerationParams overrides;
+  overrides.tool_choice = "required";
+  EXPECT_FALSE(overrides.hasOverrides())
+      << "tool_choice is a render override; it must not force a no-op "
+         "common_sampler_init in applyGenerationParamsToContext";
+}
+
 TEST(TemplateDerivedSamplingTest, OutputFormatGrammarSuppressesToolGrammar) {
   common_params params = paramsWithoutReasoningBudget();
   params.sampling.grammar =

@@ -428,6 +428,10 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
+  // `json_schema` / `tool_choice` shape the chat-template render, not the
+  // sampler, so they travel separately from the `tmpParams` overrides above.
+  driver->setRenderOverrides(renderOverridesFrom(request.overrides));
+
   PrefillPlan plan = driver->preparePrefill(
       request.chatMsgs,
       request.tools,
