@@ -154,6 +154,26 @@ export function kvElementBytes(facts: GgufFacts, hasGpu: boolean): KvElementWidt
 }
 
 /**
+ * KV-cache bytes at one fixed element width, clamped to the trained context.
+ *
+ * Exported for the calibration harness, which must subtract the cache the
+ * engine actually allocated using the exact accounting the estimator uses —
+ * a hand-rolled copy drifted once already (no sliding-window branch, `ceil`
+ * where the estimator bounds with `floor`, no SSM state). A non-degenerate
+ * range means part of the layout is engine-owned, so the allocation cannot be
+ * known from the file alone and the model is unsuitable for calibration; the
+ * harness aborts on it rather than guessing.
+ */
+export function kvCacheBytesForWidth(
+  facts: GgufFacts,
+  contextTokens: number,
+  bytesPerElement: number
+): ByteRange {
+  const tokens = Math.min(contextTokens, facts.contextLength)
+  return kvCacheBytes(facts, tokens, { lower: bytesPerElement, upper: bytesPerElement }, [], [])
+}
+
+/**
  * Sizes the KV cache for the requested context.
  *
  * Three cases, in order of how much the file actually tells us:

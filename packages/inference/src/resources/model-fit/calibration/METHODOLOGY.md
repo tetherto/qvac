@@ -24,7 +24,8 @@ for the per-layer accounting.
 
 ## Procedure
 
-`scripts/calibrate-model-fit.mjs` on the platform being calibrated:
+`scripts/calibrate-model-fit.ts` on the platform being calibrated (bare ≥ 1.30
+runs it directly via type-stripping):
 
 1. For each of three models (small, medium, large) at two contexts (512 and
    8192 tokens): settle, read RSS, load, settle, read RSS again — the difference

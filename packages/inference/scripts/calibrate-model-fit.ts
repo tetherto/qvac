@@ -4,11 +4,13 @@
 // real operations, and derives the coefficients in
 // `src/resources/model-fit/calibration/<platform>.ts`.
 //
-// Run from the package root, on the platform being calibrated:
+// Run from the package root, on the platform being calibrated, with bare ≥ 1.30
+// (which runs TypeScript directly via type-stripping — the version the
+// `engines` field already requires):
 //
 //   npm run build
-//   bare scripts/calibrate-model-fit.mjs            # measure and print
-//   bare scripts/calibrate-model-fit.mjs --write    # also rewrite the fixture
+//   bare scripts/calibrate-model-fit.ts            # measure and print
+//   bare scripts/calibrate-model-fit.ts --write    # also rewrite the fixture
 //
 // Models are downloaded on first run and cached, so the first pass is slow and
 // needs registry access. See calibration/METHODOLOGY.md for what the numbers
@@ -26,8 +28,12 @@ import {
 } from '../dist/index.js'
 import * as catalog from '../dist/models/registry/index.js'
 import { MODEL_RESOURCE_PROFILES } from '../dist/models/registry/resource-profiles.js'
-import { kvElementBytes } from '../dist/resources/model-fit/estimators/llm.js'
+import { kvElementBytes, kvCacheBytesForWidth } from '../dist/resources/model-fit/estimators/llm.js'
 import { llmPlugin } from '../dist/plugins/builtin/llamacpp-completion/plugin.js'
+import type { GgufFacts } from '../dist/schemas/model-resource-profile.js'
+import type { PlatformCalibration } from '../dist/resources/model-fit/types.js'
+
+declare const Bare: { argv: string[]; exit(code?: number): void }
 
 const SAMPLE_INTERVAL_MS = 25
 const SETTLE_MS = 250
@@ -41,14 +47,28 @@ const CONTEXTS = [512, 8192]
 const FIT_MODELS = ['QWEN3_600M_INST_Q4', 'LLAMA_3_2_1B_INST_Q4_0', 'QWEN3_4B_INST_Q4_K_M']
 const HELD_OUT_MODEL = 'QWEN3_8B_INST_Q4_K_M'
 
+interface Measurement {
+  name: string
+  contextTokens: number
+  artifactBytes: number
+  facts: GgufFacts
+  persistentBytes: number
+  workingBytes: number
+}
+
+interface FitPoint extends Measurement {
+  kv: number
+  residual: number
+}
+
 function rssBytes() {
   const usage = os.memoryUsage()
   return usage && usage.rss > 0 ? usage.rss : 0
 }
 
 function createSampler() {
-  const samples = []
-  let timer = null
+  const samples: number[] = []
+  let timer: ReturnType<typeof setTimeout> | null = null
   let running = false
 
   function tick() {
@@ -86,9 +106,12 @@ function settle() {
  * Ordered by what llama.cpp prefers, so the label matches the likely choice
  * rather than whichever driver happens to be listed first.
  */
-function detectBackend(gpuList) {
+function detectBackend(gpuList: readonly Record<string, unknown>[]) {
   for (const gpu of gpuList) {
-    const drivers = gpu.drivers ?? {}
+    const drivers = (gpu.drivers ?? {}) as Record<
+      string,
+      { status: string; value?: unknown } | undefined
+    >
     for (const name of ['metal', 'cuda', 'rocm', 'vulkan', 'levelZero', 'opencl']) {
       if (drivers[name]?.status === 'supported' && drivers[name].value) return name
     }
@@ -96,46 +119,42 @@ function detectBackend(gpuList) {
   return 'cpu'
 }
 
-function gpuName(gpuList) {
+function gpuName(gpuList: readonly Record<string, unknown>[]) {
   for (const gpu of gpuList) {
-    if (gpu.name?.status === 'supported' && gpu.name.value) return gpu.name.value
+    const name = gpu.name as { status: string; value?: string } | undefined
+    if (name?.status === 'supported' && name.value) return name.value
   }
   return undefined
 }
 
 /**
- * KV-cache bytes for one model at one context, using the same accounting the
- * estimator uses. Kept in sync deliberately: the harness measures the residual
- * left over *after* the KV cache is accounted for, so the coefficients it
- * derives describe everything else.
+ * KV-cache bytes the engine allocated for one model at one context, computed
+ * by the estimator's own exported accounting rather than a local copy — a copy
+ * drifted from `estimators/llm.ts` once already.
+ *
+ * The residuals this harness fits describe everything *except* the cache, so a
+ * cache whose size the file does not state exactly (an engine-owned layer
+ * pattern or hybrid block choice) cannot be subtracted. That surfaces as a
+ * non-degenerate range, and the harness stops: calibration models must be
+ * dense.
  */
-function kvBytes(facts, contextTokens, bytesPerElement) {
-  const tokens = Math.min(contextTokens, facts.contextLength)
-
-  if (facts.kvLayerClasses?.length) {
-    let total = 0
-    for (const layerClass of facts.kvLayerClasses) {
-      const classTokens =
-        layerClass.windowed && facts.slidingWindow ? Math.min(tokens, facts.slidingWindow) : tokens
-      total +=
-        layerClass.count *
-        layerClass.headCountKv *
-        (layerClass.keyLength + layerClass.valueLength) *
-        classTokens *
-        bytesPerElement
-    }
-    return total
+function exactKvBytes(
+  name: string,
+  facts: GgufFacts,
+  contextTokens: number,
+  bytesPerElement: number
+) {
+  const kv = kvCacheBytesForWidth(facts, contextTokens, bytesPerElement)
+  if (kv.lower !== kv.upper) {
+    throw new Error(
+      `${name}'s KV cache is not exactly determined by the file (bounds span ${kv.lower}–${kv.upper} bytes); part of its layout is engine-owned, so it cannot be subtracted from a measurement. Use a dense model for calibration.`
+    )
   }
-
-  const perBlockPerToken = facts.headCountKv * (facts.keyLength + facts.valueLength)
-  const blocks = facts.fullAttentionInterval
-    ? Math.ceil(facts.blockCount / facts.fullAttentionInterval)
-    : facts.blockCount
-  return blocks * perBlockPerToken * tokens * bytesPerElement
+  return kv.lower
 }
 
-async function measure(name, contextTokens) {
-  const model = catalog[name]
+async function measure(name: string, contextTokens: number): Promise<Measurement> {
+  const model = (catalog as Record<string, { sha256Checksum: string } | undefined>)[name]
   if (!model) throw new Error(`unknown catalog constant: ${name}`)
 
   const profile = MODEL_RESOURCE_PROFILES[model.sha256Checksum]
@@ -146,7 +165,7 @@ async function measure(name, contextTokens) {
 
   const modelId = await loadModel({
     modelSrc: model,
-    modelConfig: { 'ctx-size': contextTokens }
+    modelConfig: { ctx_size: contextTokens }
   })
 
   await settle()
@@ -181,7 +200,7 @@ async function measure(name, contextTokens) {
  * residual is measured working memory minus the KV cache the estimator would
  * already have accounted for.
  */
-function fitResiduals(points) {
+function fitResiduals(points: readonly FitPoint[]) {
   const n = points.length
   const sumX = points.reduce((total, p) => total + p.contextTokens, 0)
   const sumY = points.reduce((total, p) => total + p.residual, 0)
@@ -196,7 +215,7 @@ function fitResiduals(points) {
   return { fixed: Math.max(0, fixed), perToken: Math.max(0, perToken) }
 }
 
-function fixtureSource(platform, calibration) {
+function fixtureSource(platform: string, calibration: PlatformCalibration) {
   const json = JSON.stringify(calibration, null, 2)
     .replace(/"([a-zA-Z]+)":/g, '$1:')
     .replace(/"/g, "'")
@@ -205,7 +224,7 @@ function fixtureSource(platform, calibration) {
 /**
  * ${platform} coefficients.
  *
- * Generated by \`scripts/calibrate-model-fit.mjs\`; see \`METHODOLOGY.md\` next
+ * Generated by \`scripts/calibrate-model-fit.ts\`; see \`METHODOLOGY.md\` next
  * to this file for how the numbers are derived and validated.
  */
 export const ${platform.toUpperCase().replace(/-/g, '_')}_CALIBRATION: PlatformCalibration = ${json}
@@ -233,8 +252,8 @@ async function main() {
   const device = gpuName(gpuList)
   console.log(`backend: ${backend}${device ? ` (${device})` : ''}`)
 
-  const elementWidths = new Set()
-  const measurements = []
+  const elementWidths = new Set<number>()
+  const measurements: FitPoint[] = []
   for (const name of FIT_MODELS) {
     for (const contextTokens of CONTEXTS) {
       const measurement = await measure(name, contextTokens)
@@ -243,12 +262,12 @@ async function main() {
       // optimistic bound borrowed from the estimator's range.
       const bytesPerElement = kvElementBytes(measurement.facts, hasGpu).bytes.lower
       elementWidths.add(bytesPerElement)
-      const kv = kvBytes(measurement.facts, contextTokens, bytesPerElement)
+      const kv = exactKvBytes(name, measurement.facts, contextTokens, bytesPerElement)
       // Deliberately unclamped. A negative residual is the signature of
       // subtracting a cache the engine never allocated, and clamping it here
       // would hide exactly the failure worth catching.
       measurements.push({ ...measurement, kv, residual: measurement.workingBytes - kv })
-      const mib = (n) => (n / 1024 / 1024).toFixed(0)
+      const mib = (n: number) => (n / 1024 / 1024).toFixed(0)
       console.log(
         `  ${name} @ ${contextTokens}: persistent ${mib(measurement.persistentBytes)} MiB, working ${mib(measurement.workingBytes)} MiB, kv ${mib(kv)} MiB`
       )
@@ -279,7 +298,7 @@ async function main() {
   // the held-out check below is meaningless.
   const worstResidual = Math.max(...measurements.map((m) => m.residual))
 
-  const calibration = {
+  const calibration: PlatformCalibration = {
     weightUpperCoeff: Number(Math.max(1, ...weightRatios).toFixed(3)),
     fixedOverheadBytes: {
       lower: Math.round(fit.fixed * 0.8),
@@ -303,16 +322,17 @@ async function main() {
 
   console.log('\nderived:', JSON.stringify(calibration, null, 2))
 
-  const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1])
+  const heldOut = await measure(HELD_OUT_MODEL, CONTEXTS[1]!)
   // Predict with the width this run actually allocated, not the estimator's f16
   // upper end. Using f16 here on a q8_0 backend would pad the prediction by the
   // whole cache-type spread and let weak coefficients through the gate; the
   // point is to test the fit, not the conservatism of the range.
+  const heldOutWidth = kvElementBytes(heldOut.facts, hasGpu).bytes.lower
   const predictedUpper =
     heldOut.artifactBytes * calibration.weightUpperCoeff +
     calibration.fixedOverheadBytes.upper +
-    calibration.computeBufferBytesPerToken.upper * CONTEXTS[1] +
-    kvBytes(heldOut.facts, CONTEXTS[1], kvElementBytes(heldOut.facts, hasGpu).bytes.lower)
+    calibration.computeBufferBytesPerToken.upper * CONTEXTS[1]! +
+    exactKvBytes(HELD_OUT_MODEL, heldOut.facts, CONTEXTS[1]!, heldOutWidth)
   const measuredTotal = heldOut.persistentBytes + heldOut.workingBytes
   const holds = measuredTotal <= predictedUpper
 
