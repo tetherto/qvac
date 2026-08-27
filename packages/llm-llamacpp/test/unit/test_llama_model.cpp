@@ -1367,6 +1367,47 @@ TEST_F(LlamaModelTest, CommonParamsParseSplitModeRow) {
   }
 }
 
+// QVAC-24253: unlike 'row', a requested 'tensor' is never degraded — it goes
+// through qvac-fabric's meta device and needs no split buffers. It also
+// disables auto-fit, which fabric does not implement for this mode.
+TEST_F(LlamaModelTest, CommonParamsParseSplitModeTensor) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "2048";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "10";
+  config["split-mode"] = "tensor";
+
+  fs::path backendDir;
+#ifdef TEST_BINARY_DIR
+  backendDir = fs::path(TEST_BINARY_DIR);
+#else
+  backendDir = fs::current_path() / "build" / "test" / "unit";
+#endif
+  config["backendsDir"] = backendDir.string();
+
+  LlamaModel model(
+      getValidModelPath(),
+      std::string(test_projection_path),
+      std::unordered_map<std::string, std::string>(config));
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  double backendDevice = getStatValue(model.runtimeStats(), "backendDevice");
+  if (backendDevice == 0.0) {
+    // CPU fallback clears every multi-GPU parameter, and auto-fit stays on.
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_NONE);
+    EXPECT_TRUE(model.getCommonParams().fit_params);
+  } else {
+    EXPECT_EQ(model.getCommonParams().split_mode, LLAMA_SPLIT_MODE_TENSOR);
+    EXPECT_FALSE(model.getCommonParams().fit_params);
+  }
+}
+
 TEST_F(LlamaModelTest, CommonParamsParseSplitModeCaseInsensitive) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

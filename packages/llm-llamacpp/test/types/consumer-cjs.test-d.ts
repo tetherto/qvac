@@ -43,6 +43,20 @@ const config: LlmLlamacpp.LlamaConfig = {
 };
 void config;
 
+// QVAC-24253: 'tensor' must be assignable, and the union must stay closed —
+// the @ts-expect-error below fails to compile if split-mode ever widens to
+// `string`, which would silently drop the compile-time check on every mode.
+const tensorConfig: LlmLlamacpp.LlamaConfig = {
+  device: "gpu",
+  "split-mode": "tensor",
+  ctx_size: "4096",
+};
+void tensorConfig;
+
+// @ts-expect-error - 'sharded' is not a split mode
+const badSplitMode: LlmLlamacpp.LlamaConfig = { device: "gpu", "split-mode": "sharded" };
+void badSplitMode;
+
 const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },

@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `split-mode: 'tensor'` enables qvac-fabric's meta-device tensor parallelism, splitting weights
+  and KV cache across all visible GPUs. **EXPERIMENTAL and desktop-only** (still rejected on
+  Android/iOS with the other multi-GPU parameters). Three constraints, all enforced up front with
+  `InvalidArgument` rather than surfacing as an opaque native failure:
+  - Requires flash attention — `flash-attn: 'off'` is rejected (leaving it unset is fine, it
+    already defaults to `on`).
+  - Disables auto-fit, which qvac-fabric does not implement for this mode: `gpu_layers` then
+    defaults to every layer and `ctx_size` to the model's trained context, so **set `ctx_size`
+    explicitly for large models** or the load can OOM. Logged at INFO on every tensor-mode load.
+  - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2/4,
+    MiniMax, Qwen3-Next/3.5 and others as of qvac-fabric v10297.0.0); rejected before loading with
+    the architecture named.
+
+  Unrelated to `split-mode: 'row'`, which needs split buffers no shipped backend provides and is
+  still degraded to `'layer'`. `examples/multiGpuBenchmark.js` now benchmarks the new mode
+  alongside the existing three. See `docs/multi-gpu.md`.
+
 ## [0.47.0] - 2026-08-24
 
 ### Added

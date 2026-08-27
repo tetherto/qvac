@@ -441,6 +441,269 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
   EXPECT_EQ(probeCalls, 1);
 }
 
+// QVAC-24253: split-mode 'tensor' (LLAMA_SPLIT_MODE_TENSOR).
+//
+// The fixture's metadata_ is MockModelMetaData{false, "llama"}, and "llama" is
+// a tensor-split-supported architecture, so it is usable as-is for the cases
+// that are not about the architecture check.
+
+TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  // qvac-fabric's auto-fit is not implemented for SPLIT_MODE_TENSOR, so the
+  // addon disables it rather than letting fabric log a misleading fit failure.
+  EXPECT_FALSE(result.params.fit_params);
+  EXPECT_FALSE(result.fitSnapshot.fitParams);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitLeavesFitEnabledForOtherModes) {
+  // Only the split modes are exercised with a GPU name here. 'none' is covered
+  // separately below with the CPU backend: it is the one mode that forwards
+  // `--device <name>` to llama.cpp's parser, which rejects a device that does
+  // not exist on the host running the test.
+  for (const char* mode : {"layer", "row"}) {
+    auto config = baseConfig();
+    config["split-mode"] = mode;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+    EXPECT_TRUE(result.params.fit_params) << "mode: " << mode;
+    EXPECT_TRUE(result.fitSnapshot.fitParams) << "mode: " << mode;
+  }
+
+  auto noneConfig = baseConfig();
+  noneConfig["split-mode"] = "none";
+  const auto none = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(noneConfig),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_TRUE(none.params.fit_params);
+  EXPECT_TRUE(none.fitSnapshot.fitParams);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsUnderscoreKeyAndUppercase) {
+  auto config = baseConfig();
+  config["split_mode"] = "TENSOR";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitDoesNotInvokeRowProbe) {
+  int probeCalls = 0;
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"});
+  dependencies.gpuBackendSupportsRowSplit = [&probeCalls]() {
+    ++probeCalls;
+    return false;
+  };
+
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+  // The split-buffer probe is ROW-only: SPLIT_MODE_TENSOR goes through the meta
+  // device and needs no split buffers.
+  EXPECT_EQ(probeCalls, 0);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitIsNeverDegraded) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  // Same unsupported-split-buffer backend that degrades 'row' to 'layer'.
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, false));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsFlashAttnOff) {
+  for (const char* key : {"flash-attn", "flash_attn"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config[key] = "off";
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "tensor split with " << key << "=off must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash attention"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnOnOrUnset) {
+  auto explicitOn = baseConfig();
+  explicitOn["split-mode"] = "tensor";
+  explicitOn["flash-attn"] = "on";
+  EXPECT_EQ(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(explicitOn),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+          .params.split_mode,
+      LLAMA_SPLIT_MODE_TENSOR);
+
+  // Unset is the common case: tuneLoadConfigMap defaults flash-attn to "on".
+  auto unset = baseConfig();
+  unset["split-mode"] = "tensor";
+  EXPECT_EQ(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(unset),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+          .params.split_mode,
+      LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsUnsupportedArchitecture) {
+  test_common::MockModelMetaData mamba{false, "mamba2"};
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        mamba,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+    FAIL() << "tensor split on an unsupported architecture must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("mamba2"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'layer'"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsSupportedArchitecture) {
+  test_common::MockModelMetaData qwen{false, "qwen3"};
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      qwen,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  config["tensor-split"] = "0.25,0.75";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  // The tensor-mode constraints key on the post-fallback split_mode, so a CPU
+  // fallback must not disable auto-fit.
+  EXPECT_TRUE(result.params.fit_params);
+}
+
+// The architecture denylist duplicates llm_arch_supports_sm_tensor() from
+// qvac-fabric src/llama-arch.cpp, which the addon cannot reach: it lives in
+// the internal src/llama-arch.h, outside the installed include tree.
+// This test is the pin on that duplication: if a qvac-fabric bump changes which
+// architectures support SPLIT_MODE_TENSOR, this fails and the list must be
+// re-derived from LLM_ARCH_NAMES. Verified against qvac-fabric v10297.0.0.
+TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistMatchesFabric) {
+  static constexpr const char* kUnsupported[] = {
+      "grok",       "mpt",         "plamo2",         "minicpm3",
+      "gemma3n",    "mamba",       "mamba2",         "jamba",
+      "falcon-h1",  "olmo2",       "olmoe",          "deepseek2",
+      "deepseek32", "deepseek4",   "glm-dsa",        "bitnet",
+      "t5",         "nemotron_h",  "nemotron_h_moe", "granitehybrid",
+      "lfm2",       "lfm2moe",     "minimax-m2",     "minimax-m3",
+      "mistral4",   "kimi-linear", "qwen3tts",       "qwen3next",
+      "qwen35",     "qwen35moe"};
+  EXPECT_EQ(std::size(kUnsupported), 30U)
+      << "fabric's unsupported-architecture list changed size";
+
+  for (const char* arch : kUnsupported) {
+    test_common::MockModelMetaData metadata{false, arch};
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    EXPECT_THROW(
+        static_cast<void>(lfn::normalizeLoadForFit(
+            "/tmp/model.gguf",
+            std::move(config),
+            metadata,
+            {},
+            backend({.type = backend_selection::GPU, .name = "vulkan0"}))),
+        qvac_errors::StatusError)
+        << "expected rejection for architecture: " << arch;
+  }
+
+  // Near-misses that fabric DOES support: neither is in its case list, and
+  // both are easy to add to the denylist by mistake because a sibling is.
+  for (const char* arch :
+       {"deepseek2-ocr", "t5encoder", "llama", "qwen3", "qwen3moe", "gemma3"}) {
+    test_common::MockModelMetaData metadata{false, arch};
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR)
+        << "expected acceptance for architecture: " << arch;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitErrorTextListsTensor) {
+  auto config = baseConfig();
+  config["split-mode"] = "not_a_split_mode";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+    FAIL() << "an invalid split-mode must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid split-mode"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'tensor'"));
+  }
+}
+
 TEST_F(
     LoadFitNormalizationTest, GpuDefaultsReachCanonicalKvAndPlacementFields) {
   auto config = baseConfig();

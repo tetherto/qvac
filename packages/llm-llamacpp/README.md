@@ -177,8 +177,8 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context. In batch mode the sliding window is the per-sequence slot (`n_ctx / n_parallel`), so `n_discarded` is clamped to that per-slot window, not the full context; a value `>=` the slot cap is clamped and logs a warning |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
-| tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
+| split-mode        | `"none"`, `"layer"`, `"row"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only ([details](./docs/multi-gpu.md)) |
+| tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |

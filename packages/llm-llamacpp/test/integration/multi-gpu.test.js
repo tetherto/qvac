@@ -159,6 +159,64 @@ safeTest(
   }
 )
 
+// QVAC-24253. A device count alone cannot tell tensor mode from layer mode —
+// both put buffers on >= 2 devices. The meta backend names itself
+// "Meta(<dev0>,<dev1>,...)" (ggml-backend-meta.cpp), so that string in the logs
+// is the positive proof LLAMA_SPLIT_MODE_TENSOR actually engaged rather than
+// being quietly degraded or ignored.
+function assertMetaDeviceEngaged(t, devices, logs) {
+  const metaLine = logs.some((line) => line.includes('Meta('))
+  t.ok(metaLine, 'should report a Meta(...) device, proving the meta backend engaged')
+  assertMultiDevice('weights and KV')(t, devices)
+}
+
+safeTest(
+  'multi-gpu: split-mode=tensor distributes weights and KV across GPUs',
+  { timeout: 600_000, skip },
+  async (t) => {
+    // ctx_size is pinned by BASE_CONFIG, which matters here: tensor mode
+    // disables auto-fit, so an unset ctx_size would default to the model's full
+    // trained context.
+    await runMultiGpuTest(t, { 'split-mode': 'tensor' }, assertMetaDeviceEngaged)
+  }
+)
+
+safeTest(
+  'multi-gpu: split-mode=tensor rejects flash-attn off',
+  { timeout: 600_000, skip },
+  async (t) => {
+    if (!hasMultiGpu) {
+      t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
+      return
+    }
+
+    let addon = null
+    try {
+      const [modelName, dirPath] = await ensureModel({
+        modelName: MODEL.name,
+        downloadUrl: MODEL.url
+      })
+
+      addon = new LlmLlamacpp({
+        files: { model: [path.join(dirPath, modelName)] },
+        config: { ...BASE_CONFIG, 'split-mode': 'tensor', 'flash-attn': 'off' },
+        logger: null,
+        opts: { stats: true }
+      })
+
+      await addon.load()
+      t.fail('load should reject when tensor split is combined with flash-attn=off')
+    } catch (error) {
+      t.ok(
+        /flash attention/i.test(error.message),
+        'error should name the flash-attention requirement, got: ' + error.message
+      )
+    } finally {
+      if (addon) await addon.unload().catch(() => {})
+    }
+  }
+)
+
 setImmediate(() => {
   setTimeout(() => {}, 500)
 })
