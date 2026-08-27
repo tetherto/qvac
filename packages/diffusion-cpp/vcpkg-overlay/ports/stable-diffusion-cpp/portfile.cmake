@@ -5,13 +5,14 @@
 # completes ABot-World cached sessions without reverting August's public APIs.
 #
 # Vulkan validation: static library, CLI, server, seven native tests, and
-# qvac-ext-stable-diffusion.cpp PR #34 adds transactional Wan VAE CPU fallback.
+# qvac-ext-stable-diffusion.cpp PR #34 adds transactional Wan VAE CPU fallback
+# and fixes ABot runner/ModelManager destruction ordering.
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF b2228a463ab1c29852840acd957ca712b4a4b42e
-    SHA512 b4562256672174814558eb11ff87acbbec458052070ffcec0bbca8cd05bb5200b379542ef230b10562dfd07cae7837318e80e3415d55d157cc802b14443dabb9
+    REF 01ed66c58c034a50f63d6110a994c886aa055284
+    SHA512 660ffcfbfa51dae6c887e0e3f92dd77d5bb44bbd2f51791d89856d1f7f44b49c2b39275ac2131a5212474a5f7faaaefec29c0abfd677956a7a5f79b656a881c4
 )
 
 set(SD_FLASH_ATTN OFF)
