@@ -8709,7 +8709,12 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
             title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage",
         ),
     ]
-    voice: str | None = None
+    voice: Annotated[
+        str | None,
+        Field(
+            description="Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning."
+        ),
+    ] = None
     use_gpu: Annotated[
         bool | None,
         Field(

@@ -301,9 +301,10 @@ export const ttsChatterboxRuntimeConfigSchema = z.object({
     .literal('chatterbox')
     .describe('TTS engine: Chatterbox (multilingual, voice cloning).'),
   language: ttsChatterboxLanguageSchema.describe('Language code. Default `en`.'),
-  // TODO(QVAC-23933): `voice` is not forwarded for Chatterbox (cloning uses
-  // referenceAudioSrc); left undescribed pending an accurate meaning from the addon owner.
-  voice: z.string().optional(),
+  voice: z
+    .string()
+    .optional()
+    .describe('Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning.'),
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   // Chatterbox-only native streaming controls.
   streamChunkTokens: ttsNonNegativeIntegerSchema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),

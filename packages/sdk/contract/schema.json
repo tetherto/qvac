@@ -10141,6 +10141,7 @@
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"
                         },
                         "voice": {
+                          "description": "Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning.",
                           "type": "string"
                         },
                         "useGPU": {
