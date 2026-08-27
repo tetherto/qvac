@@ -89,7 +89,7 @@ VCPKG_ROOT=/path/to/vcpkg npm run build
 
 ## Quickstart
 
-To run an example you need the BCI model files and (for batch mode) the test fixtures. The download script fetches the **model files from the QVAC model registry** (no GitHub CLI, no auth) and the **neural-signal fixtures from the public release tarball** (the fixtures aren't in the registry yet).
+To run an example you need the BCI model files and (for batch mode) the test fixtures. The download script fetches the **model files from the QVAC model registry** (no GitHub CLI, no auth) and the **neural-signal fixtures from the `bci-test-assets-v0.1.0` release tarball** (the fixtures aren't in the registry yet). The repository is private, so set `GITHUB_TOKEN` (or `GH_TOKEN`) for the fixtures download; `BCI_FIXTURES_URL` overrides the source entirely.
 
 ```bash
 cd packages/bci-whispercpp
