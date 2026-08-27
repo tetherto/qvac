@@ -8,11 +8,16 @@ import {
   type TurboVecIndexProvider
 } from '@qvac/rag'
 import Corestore from 'corestore'
-import env from 'bare-env'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
+import { getEnv } from '@/runtime/env'
 import { getConfiguredCacheDir } from '@/runtime/state'
-import { RAGWorkspaceModelMismatchError, RAGWorkspaceNotOpenError } from '@/errors/index'
+import {
+  PathTraversalError,
+  RAGWorkspaceInUseError,
+  RAGWorkspaceModelMismatchError,
+  RAGWorkspaceNotOpenError
+} from '@/errors/index'
 import { validateAndJoinPath } from '@/utils/path-security'
 import { createStreamLogger, getEngineLogger, RAG_NAMESPACE } from '@/logging/index'
 import { cancelAllRagOperations } from '@/rag/rag-operation-manager'
@@ -20,7 +25,6 @@ import { registerCorestore, unregisterCorestore } from '@/runtime/runtime-lifecy
 import { getTurboVecIndexProvider } from '@/plugins/registry'
 
 const logger = getEngineLogger()
-const TURBOVEC_ROLLOUT_ENV = 'QVAC_RAG_TURBOVEC'
 const WORKSPACE_MARKER_FILE = '.qvac-rag-workspace.json'
 const WORKSPACE_MARKER_VERSION = 1
 
@@ -44,6 +48,7 @@ const ragWorkspaces = new Map<string, RagWorkspaceEntry>()
 // Track workspace opens in progress. Concurrent callers wait for the same
 // attempt, so one failed open cannot remove another caller's workspace.
 const openingWorkspaces = new Map<string, Promise<RagWorkspaceEntry>>()
+let isCleaningUp = false
 
 export const DEFAULT_WORKSPACE = 'default'
 
@@ -61,12 +66,43 @@ function getRagIndexBaseDir() {
   return path.join(path.dirname(cacheDir), 'rag-turbovec')
 }
 
+function getWorkspacePath(basePath: string, workspace: string) {
+  const workspacePath = validateAndJoinPath(basePath, workspace)
+  if (workspacePath === path.resolve(basePath)) {
+    throw new PathTraversalError(workspace, basePath)
+  }
+  return workspacePath
+}
+
 function getStorePath(workspace: string) {
-  return validateAndJoinPath(getRagBaseDir(), workspace)
+  return getWorkspacePath(getRagBaseDir(), workspace)
 }
 
 function getIndexPath(workspace: string) {
-  return validateAndJoinPath(getRagIndexBaseDir(), workspace)
+  return getWorkspacePath(getRagIndexBaseDir(), workspace)
+}
+
+async function createWorkspaceDirectory(directoryPath: string) {
+  await fsPromises.mkdir(path.dirname(directoryPath), { recursive: true })
+  try {
+    await fsPromises.mkdir(directoryPath)
+    return true
+  } catch (error) {
+    if ((error as { code?: string }).code === 'EEXIST') return false
+    throw error
+  }
+}
+
+async function cleanupCreatedWorkspacePaths(
+  storePath: string,
+  indexPath: string,
+  createdStore: boolean,
+  createdIndex: boolean
+) {
+  const removals: Array<Promise<void>> = []
+  if (createdStore) removals.push(fsPromises.rm(storePath, { recursive: true, force: true }))
+  if (createdIndex) removals.push(fsPromises.rm(indexPath, { recursive: true, force: true }))
+  await Promise.all(removals)
 }
 
 function missingIndexProviderError(workspace: string) {
@@ -76,14 +112,19 @@ function missingIndexProviderError(workspace: string) {
   })
 }
 
-// Fallback for a pinned TurboVec workspace when its plugin is missing.
-// The adapter catches these failures and scans HyperDB until the plugin returns.
+// A pinned workspace scans HyperDB while its plugin is missing. If a plugin is
+// registered later, the next create/load attempt (for example, reindex/reopen)
+// uses it; existing searches do not switch providers automatically.
 function createUnavailableIndexProvider(workspace: string): TurboVecIndexProvider {
   return {
-    create() {
+    create(options) {
+      const indexProvider = getTurboVecIndexProvider()
+      if (indexProvider) return indexProvider.create(options)
       throw missingIndexProviderError(workspace)
     },
-    load() {
+    load(snapshotPath) {
+      const indexProvider = getTurboVecIndexProvider()
+      if (indexProvider) return indexProvider.load(snapshotPath)
       throw missingIndexProviderError(workspace)
     }
   }
@@ -119,7 +160,7 @@ function createRagDbAdapter(
 }
 
 function getRequestedAdapterType(): RagAdapterType {
-  return env[TURBOVEC_ROLLOUT_ENV] === '1' ? 'turbovec' : 'hyperdb'
+  return getEnv().QVAC_RAG_TURBOVEC === '1' ? 'turbovec' : 'hyperdb'
 }
 
 function unreadableMarkerError(markerPath: string, cause: unknown) {
@@ -131,12 +172,13 @@ function unreadableMarkerError(markerPath: string, cause: unknown) {
 }
 
 function parseWorkspaceMarker(contents: string): RagAdapterType | null {
-  let marker: RagWorkspaceMarker
+  let marker: Partial<RagWorkspaceMarker> | null
   try {
-    marker = JSON.parse(contents) as RagWorkspaceMarker
+    marker = JSON.parse(contents) as Partial<RagWorkspaceMarker> | null
   } catch {
     return null
   }
+  if (marker === null || typeof marker !== 'object' || Array.isArray(marker)) return null
   if (marker.version !== WORKSPACE_MARKER_VERSION) return null
   if (marker.adapterType !== 'hyperdb' && marker.adapterType !== 'turbovec') return null
   return marker.adapterType
@@ -213,18 +255,36 @@ async function getOrCreateWorkspaceEntry(workspace?: string) {
 
 async function openWorkspaceEntry(key: string) {
   const storePath = getStorePath(key)
-  const workspaceExisted = fs.existsSync(storePath)
-  const marker = await readWorkspaceAdapterType(storePath)
-  const adapterType =
-    marker.adapterType ??
-    (workspaceExisted ? detectExistingAdapterType(key) : getRequestedAdapterType())
-  const corestore = new Corestore(storePath)
+  const indexPath = getIndexPath(key)
+  let createdStore = false
+  let createdIndex = false
+  let corestore: Corestore | undefined
 
   let dbAdapter: RagDbAdapter | undefined
   try {
-    dbAdapter = createRagDbAdapter(corestore, key, adapterType, marker.adapterType !== null)
-    if (!marker.present) await writeWorkspaceAdapterType(storePath, adapterType)
+    createdStore = await createWorkspaceDirectory(storePath)
+    const marker = await readWorkspaceAdapterType(storePath)
+    const adapterType =
+      marker.adapterType ??
+      (createdStore ? getRequestedAdapterType() : detectExistingAdapterType(key))
+    if (adapterType === 'turbovec') {
+      createdIndex = await createWorkspaceDirectory(indexPath)
+    }
+    corestore = new Corestore(storePath)
+    const isPinned = marker.adapterType !== null || !createdStore
+    dbAdapter = createRagDbAdapter(corestore, key, adapterType, isPinned)
     await dbAdapter.ready()
+    if (!marker.present) {
+      try {
+        await writeWorkspaceAdapterType(storePath, adapterType)
+      } catch (error) {
+        if (createdStore) throw error
+        logger.warn(
+          `Failed to write the RAG workspace adapter marker for existing workspace '${key}'; continuing without it:`,
+          error
+        )
+      }
+    }
   } catch (error) {
     if (dbAdapter) {
       try {
@@ -233,15 +293,38 @@ async function openWorkspaceEntry(key: string) {
         // Keep the adapter initialization error as the primary failure.
       }
     }
-    try {
-      await corestore.close()
-    } catch {
-      // Keep the adapter initialization error as the primary failure.
+    if (corestore) {
+      try {
+        await corestore.close()
+      } catch {
+        // Keep the adapter initialization error as the primary failure.
+      }
     }
-    if (!workspaceExisted && !ragWorkspaces.has(key)) {
-      await deleteWorkspace(key)
+    try {
+      await cleanupCreatedWorkspacePaths(storePath, indexPath, createdStore, createdIndex)
+    } catch (cleanupError) {
+      logger.warn(`Failed to clean up newly created RAG workspace '${key}':`, cleanupError)
     }
     throw error
+  }
+
+  if (isCleaningUp) {
+    let closeError: Error | undefined
+    try {
+      await dbAdapter.close()
+    } catch (error) {
+      if (error instanceof Error) closeError = error
+    }
+    try {
+      await corestore.close()
+    } catch (error) {
+      if (!closeError && error instanceof Error) closeError = error
+    }
+    throw new QvacErrorRAG({
+      code: ERR_CODES.DB_OPERATION_FAILED,
+      adds: `RAG workspace '${key}' open was cancelled during cleanup`,
+      cause: closeError
+    })
   }
 
   registerCorestore(corestore, {
@@ -295,6 +378,10 @@ export async function getRagInstance(
 
 export async function closeRagInstance(workspace?: string) {
   const key = getWorkspaceKey(workspace)
+  const opening = openingWorkspaces.get(key)
+  if (opening) {
+    await opening
+  }
   const entry = ragWorkspaces.get(key)
 
   if (!entry) {
@@ -310,14 +397,15 @@ export async function closeRagInstance(workspace?: string) {
   ragWorkspaces.delete(key)
 }
 
-let isCleaningUp = false
-
 export async function closeAllRagInstances() {
   if (isCleaningUp) return
   isCleaningUp = true
 
   try {
     cancelAllRagOperations()
+
+    const openingAttempts = Array.from(openingWorkspaces.values())
+    await Promise.allSettled(openingAttempts)
 
     const closures = Array.from(ragWorkspaces.entries()).map(async ([key, entry]) => {
       if (entry.rag) {
@@ -368,13 +456,17 @@ export function listWorkspaces(): RagWorkspaceInfo[] {
 
 export function isWorkspaceLoaded(workspace: string) {
   const key = getWorkspaceKey(workspace)
-  return ragWorkspaces.has(key)
+  return ragWorkspaces.has(key) || openingWorkspaces.has(key)
 }
 
 export async function deleteWorkspace(workspace: string) {
   const key = getWorkspaceKey(workspace)
   const storePath = getStorePath(key)
   const indexPath = getIndexPath(key)
+
+  if (isWorkspaceLoaded(key)) {
+    throw new RAGWorkspaceInUseError(key)
+  }
 
   if (!fs.existsSync(storePath) && !fs.existsSync(indexPath)) {
     return false
