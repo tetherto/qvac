@@ -19,14 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
-  2026-08-26. The engine gains CUDA paths for Chatterbox, Supertonic, Parler-TTS,
-  CosyVoice3 and Audio8, built into the linux-x64 prebuild via the new `cuda`
-  feature. On the ggml
-  side the update adds Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch
-  guards for the `conv_transpose_1d`, `im2col` and `pad` paths, the CUDA
-  transpose-copy strided-destination fix, and Adreno
-  OpenCL launch validation with GEMV work-group limits.
+- Raise the `speech-cpp` floor to 2026-08-26#1, aligning all speech addons
+  (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, `bci-whispercpp`) on the same
+  port and ggml-speech cut. Relative to 2026-08-26 the bundled ggml computes
+  explicit-f32-precision matmuls in true f32 on CUDA and adds CONCAT support
+  for all scalar and quantized types. The earlier 2026-08-26 bump gave the
+  engine CUDA paths for Chatterbox, Supertonic, Parler-TTS, CosyVoice3 and
+  Audio8, built into the linux-x64 prebuild via the new `cuda` feature, and
+  on the ggml side added Vulkan `im2col`/`col2im` tiling, CUDA kernels and
+  launch guards for the `conv_transpose_1d`, `im2col` and `pad` paths, the
+  CUDA transpose-copy strided-destination fix, and Adreno OpenCL launch
+  validation with GEMV work-group limits.
 
 ## [0.7.5] - 2026-08-20
 
