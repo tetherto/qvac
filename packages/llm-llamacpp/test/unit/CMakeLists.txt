@@ -53,6 +53,7 @@ add_executable(
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
   test_reasoning_budget.cpp
+  test_tool_grammar.cpp
   test_cancel_rollback.cpp
   test_job_cancel_registry.cpp
   test_reasoning_block_compactor.cpp

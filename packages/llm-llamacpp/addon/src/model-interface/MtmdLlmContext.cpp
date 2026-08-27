@@ -369,12 +369,11 @@ void MtmdLlmContext::tokenizeChat(
     throw qvac_errors::StatusError(ADDON_ID, toString(EmptyPrompt), errorMsg);
   }
 
-  if (configureReasoningBudgetSampling(
-          params_,
-          modelCtx_.lctx,
-          rendered.thinkingStartTag,
-          rendered.thinkingEndTags,
-          rendered.generationPrompt)) {
+  const Tokenizer tokenize = [this](const std::string& text) {
+    return ::common_tokenize(modelCtx_.lctx, text, false, true);
+  };
+  if (configureTemplateDerivedSampling(
+          params_, tokenize, rendered, !tools.empty())) {
     smpl_.reset(common_sampler_init(modelCtx_.model, params_.sampling));
     if (!smpl_) {
       std::string errorMsg = string_format(

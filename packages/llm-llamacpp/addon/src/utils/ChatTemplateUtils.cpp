@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <ranges>
+#include <set>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -333,12 +334,22 @@ PromptRenderResult getPrompt(
       /* toolDefinitionsDropped = */ !inputs.tools.empty());
 }
 
-bool configureReasoningBudgetSampling(
-    common_params& params, ::llama_context* lctx,
-    const std::string& thinkingStartTag,
+namespace {
+
+Tokenizer tokenizerFor(::llama_context* lctx) {
+  if (lctx == nullptr) {
+    return {};
+  }
+  return [lctx](const std::string& text) {
+    return common_tokenize(lctx, text, false, true);
+  };
+}
+
+void applyReasoningBudget(
+    common_params_sampling& next, const common_params& params,
+    const Tokenizer& tokenize, const std::string& thinkingStartTag,
     const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt) {
-  common_params_sampling next = params.sampling;
   next.reasoning_budget_tokens =
       params.reasoning_budget > 0 ? params.reasoning_budget : -1;
   next.reasoning_budget_start.clear();
@@ -346,34 +357,166 @@ bool configureReasoningBudgetSampling(
   next.reasoning_budget_forced.clear();
   next.generation_prompt.clear();
 
-  if (params.reasoning_budget > 0 && lctx != nullptr &&
-      !thinkingEndTags.empty() && !thinkingEndTags.front().empty()) {
+  if (params.reasoning_budget > 0 && tokenize && !thinkingEndTags.empty() &&
+      !thinkingEndTags.front().empty()) {
     next.generation_prompt = generationPrompt;
     if (!thinkingStartTag.empty()) {
-      next.reasoning_budget_start =
-          common_tokenize(lctx, thinkingStartTag, false, true);
+      next.reasoning_budget_start = tokenize(thinkingStartTag);
     }
 
     next.reasoning_budget_end.reserve(thinkingEndTags.size());
     for (const std::string& thinkingEndTag : thinkingEndTags) {
       if (!thinkingEndTag.empty()) {
-        next.reasoning_budget_end.emplace_back(
-            common_tokenize(lctx, thinkingEndTag, false, true));
+        next.reasoning_budget_end.emplace_back(tokenize(thinkingEndTag));
       }
     }
-    next.reasoning_budget_forced = common_tokenize(
-        lctx,
-        params.sampling.reasoning_budget_message + thinkingEndTags.front(),
-        false,
-        true);
+    next.reasoning_budget_forced = tokenize(
+        params.sampling.reasoning_budget_message + thinkingEndTags.front());
+  }
+}
+
+bool sameTriggers(
+    const std::vector<common_grammar_trigger>& a,
+    const std::vector<common_grammar_trigger>& b) {
+  return std::ranges::equal(
+      a, b, [](const common_grammar_trigger& x, const common_grammar_trigger& y) {
+        return x.type == y.type && x.value == y.value && x.token == y.token;
+      });
+}
+
+bool samplingChanged(
+    const common_params_sampling& before, const common_params_sampling& next) {
+  return before.reasoning_budget_tokens != next.reasoning_budget_tokens ||
+         before.reasoning_budget_start != next.reasoning_budget_start ||
+         before.reasoning_budget_end != next.reasoning_budget_end ||
+         before.reasoning_budget_forced != next.reasoning_budget_forced ||
+         before.generation_prompt != next.generation_prompt ||
+         before.grammar.type != next.grammar.type ||
+         before.grammar.grammar != next.grammar.grammar ||
+         before.grammar_lazy != next.grammar_lazy ||
+         !sameTriggers(before.grammar_triggers, next.grammar_triggers) ||
+         before.preserved_tokens != next.preserved_tokens;
+}
+
+// Mirrors tools/server/server-schema.cpp: preserved tokens keep only strings
+// that tokenize to a single id; a WORD trigger that tokenizes to a single id
+// is promoted to a TOKEN trigger. Returns false when the resulting grammar
+// would be rejected by common_sampler_init (lazy with no triggers).
+bool applyToolGrammar(
+    common_params_sampling& next, const Tokenizer& tokenize,
+    const PromptRenderResult& rendered) {
+  std::set<llama_token> preserved;
+  for (const std::string& text : rendered.preservedTokens) {
+    const auto ids = tokenize(text);
+    if (ids.size() == 1) {
+      preserved.insert(ids[0]);
+    }
   }
 
-  const bool changed =
-      params.sampling.reasoning_budget_tokens != next.reasoning_budget_tokens ||
-      params.sampling.reasoning_budget_start != next.reasoning_budget_start ||
-      params.sampling.reasoning_budget_end != next.reasoning_budget_end ||
-      params.sampling.reasoning_budget_forced != next.reasoning_budget_forced ||
-      params.sampling.generation_prompt != next.generation_prompt;
+  std::vector<common_grammar_trigger> triggers;
+  triggers.reserve(rendered.grammarTriggers.size());
+  for (const common_grammar_trigger& trigger : rendered.grammarTriggers) {
+    if (trigger.type != COMMON_GRAMMAR_TRIGGER_TYPE_WORD) {
+      triggers.push_back(trigger);
+      continue;
+    }
+    const auto ids = tokenize(trigger.value);
+    if (ids.size() == 1) {
+      if (!preserved.contains(ids[0])) {
+        QLOG_IF(
+            Priority::ERROR,
+            string_format(
+                "[ChatTemplateUtils] tool grammar trigger word is not a "
+                "preserved token; not applying the tool grammar: %s\n",
+                trigger.value.c_str()));
+        return false;
+      }
+      common_grammar_trigger promoted;
+      promoted.type = COMMON_GRAMMAR_TRIGGER_TYPE_TOKEN;
+      promoted.value = trigger.value;
+      promoted.token = ids[0];
+      triggers.push_back(std::move(promoted));
+    } else {
+      triggers.push_back(trigger);
+    }
+  }
+
+  if (rendered.grammarLazy && triggers.empty()) {
+    QLOG_IF(
+        Priority::ERROR,
+        "[ChatTemplateUtils] template produced a lazy tool grammar with no "
+        "triggers; not applying the tool grammar\n");
+    return false;
+  }
+
+  next.grammar =
+      common_grammar(COMMON_GRAMMAR_TYPE_TOOL_CALLS, rendered.grammar);
+  next.grammar_lazy = rendered.grammarLazy;
+  next.grammar_triggers = std::move(triggers);
+  next.preserved_tokens = std::move(preserved);
+  // The grammar sampler must skip the assistant prefix already in the prompt.
+  next.generation_prompt = rendered.generationPrompt;
+  return true;
+}
+
+} // namespace
+
+bool configureReasoningBudgetSampling(
+    common_params& params, ::llama_context* lctx,
+    const std::string& thinkingStartTag,
+    const std::vector<std::string>& thinkingEndTags,
+    const std::string& generationPrompt) {
+  common_params_sampling next = params.sampling;
+  applyReasoningBudget(
+      next,
+      params,
+      tokenizerFor(lctx),
+      thinkingStartTag,
+      thinkingEndTags,
+      generationPrompt);
+  const bool changed = samplingChanged(params.sampling, next);
+  if (changed) {
+    params.sampling = std::move(next);
+  }
+  return changed;
+}
+
+bool configureTemplateDerivedSampling(
+    common_params& params, const Tokenizer& tokenize,
+    const PromptRenderResult& rendered, bool toolsRequested) {
+  common_params_sampling next = params.sampling;
+  applyReasoningBudget(
+      next,
+      params,
+      tokenize,
+      rendered.thinkingStartTag,
+      rendered.thinkingEndTags,
+      rendered.generationPrompt);
+
+  // Only a TOOL_CALLS grammar is ours to clear. A USER or OUTPUT_FORMAT
+  // grammar was set by load-time config or per-request generationParams and
+  // must survive a tools-free request untouched.
+  if (next.grammar.type == COMMON_GRAMMAR_TYPE_TOOL_CALLS) {
+    next.grammar = {};
+    next.grammar_lazy = false;
+    next.grammar_triggers.clear();
+    next.preserved_tokens.clear();
+  }
+
+  if (toolsRequested && rendered.renderedByJinja && !rendered.grammar.empty() &&
+      tokenize) {
+    if (next.grammar.type == COMMON_GRAMMAR_TYPE_USER ||
+        next.grammar.type == COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[ChatTemplateUtils] a user grammar or json_schema is active; the "
+          "template's tool-call grammar is not applied\n");
+    } else {
+      applyToolGrammar(next, tokenize, rendered);
+    }
+  }
+
+  const bool changed = samplingChanged(params.sampling, next);
   if (changed) {
     params.sampling = std::move(next);
   }

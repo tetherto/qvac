@@ -166,6 +166,60 @@ function assertDeclaredToolCalls(t, output, prompt, label) {
         `${label}: tool_call "${toolCall.name}" has required argument "${required}"`
       )
     }
+
+    assertArgumentsMatchSchema(
+      t,
+      toolCall.arguments,
+      tool.parameters,
+      `${label}: "${toolCall.name}"`
+    )
+  }
+}
+
+// Under the template's tool grammar a schema-invalid argument is
+// unrepresentable, so every argument the model emitted must satisfy the
+// declared JSON-schema type and enum. `minimum`/`default` are deliberately
+// not checked: they are not grammar properties.
+function assertArgumentsMatchSchema(t, args, schema, label) {
+  const properties = (schema && schema.properties) || {}
+  for (const [key, value] of Object.entries(args)) {
+    const prop = properties[key]
+    t.ok(prop, `${label}: argument "${key}" is declared in the schema`)
+    if (!prop) continue
+    assertValueMatchesSchema(t, value, prop, `${label}.${key}`)
+  }
+}
+
+function assertValueMatchesSchema(t, value, prop, label) {
+  if (prop.enum) {
+    t.ok(prop.enum.includes(value), `${label}: value ${JSON.stringify(value)} is in enum`)
+    return
+  }
+  switch (prop.type) {
+    case 'integer':
+      t.ok(Number.isInteger(value), `${label}: ${JSON.stringify(value)} is an integer`)
+      break
+    case 'number':
+      t.ok(typeof value === 'number', `${label}: ${JSON.stringify(value)} is a number`)
+      break
+    case 'string':
+      t.ok(typeof value === 'string', `${label}: ${JSON.stringify(value)} is a string`)
+      break
+    case 'boolean':
+      t.ok(typeof value === 'boolean', `${label}: ${JSON.stringify(value)} is a boolean`)
+      break
+    case 'array':
+      t.ok(Array.isArray(value), `${label}: is an array`)
+      if (Array.isArray(value) && prop.items) {
+        value.forEach((item, i) => assertValueMatchesSchema(t, item, prop.items, `${label}[${i}]`))
+      }
+      break
+    case 'object':
+      t.ok(value && typeof value === 'object' && !Array.isArray(value), `${label}: is an object`)
+      if (value && typeof value === 'object') assertArgumentsMatchSchema(t, value, prop, label)
+      break
+    default:
+      break
   }
 }
 
@@ -288,3 +342,57 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
     }
   }
 })
+
+// The tool grammar applied for a tools request must not survive into the
+// next request on the same loaded model: a plain question must answer in
+// text, not in a <tool_call> block.
+safeTest(
+  '[tools] grammar does not leak into a tools-free follow-up',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      const withTools = await runPrompt(model, clonePrompt())
+      t.ok(withTools.text.length > 0, 'tools prompt generated text')
+
+      const plainPrompt = [
+        { role: 'system', content: 'You are a helpful assistant. /no_think' },
+        { role: 'user', content: 'Name one colour of the rainbow.' }
+      ]
+      const withoutTools = await runPrompt(model, plainPrompt)
+      t.ok(withoutTools.text.length > 0, 'tools-free prompt generated text')
+      t.absent(
+        withoutTools.text.includes('<tool_call>'),
+        `tools-free output has no tool_call block: ${withoutTools.text.slice(0, 200)}`
+      )
+    } finally {
+      await release()
+    }
+  }
+)
+
+// A per-request GBNF grammar takes precedence over the template's tool
+// grammar; the request must complete and honour the user's grammar.
+safeTest(
+  '[tools] per-request grammar wins over the tool grammar',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      const prompt = clonePrompt()
+      prompt[prompt.length - 1] = {
+        role: 'user',
+        content: 'Answer only yes or no: is the sky blue? /no_think'
+      }
+      const response = await model.run(prompt, {
+        generationParams: { grammar: 'root ::= ("yes" | "no")', predict: 4, seed: 42 }
+      })
+      const { text } = await collectResponse(response)
+      t.ok(text === 'yes' || text === 'no', `user grammar constrained the output (got "${text}")`)
+    } finally {
+      await release()
+    }
+  }
+)

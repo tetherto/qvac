@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -201,6 +202,32 @@ bool configureReasoningBudgetSampling(
     const std::string& thinkingStartTag,
     const std::vector<std::string>& thinkingEndTags,
     const std::string& generationPrompt);
+
+/// Tokenizes one string the way the sampler expects (`common_tokenize(lctx,
+/// text, false, true)`). Injected so the conversion below is testable
+/// without a model.
+using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
+
+/**
+ * @brief Configures every template-derived sampling field in one pass: the
+ * reasoning-budget fields and the tool-call grammar.
+ *
+ * Grammar precedence is decided from `params.sampling.grammar.type`:
+ *   - TOOL_CALLS is owned by this function. It is always cleared first, so a
+ *     grammar applied for a previous request never survives into one that
+ *     carries no tools.
+ *   - USER / OUTPUT_FORMAT belong to the caller (load-time config or
+ *     per-request generationParams) and are left untouched; a rendered tool
+ *     grammar is then suppressed and logged.
+ *   - NONE: the rendered tool grammar is applied when `toolsRequested` and
+ *     the render came from the Jinja engine.
+ *
+ * Returns true when `params.sampling` changed and the caller must rebuild
+ * the common_sampler.
+ */
+bool configureTemplateDerivedSampling(
+    common_params& params, const Tokenizer& tokenize,
+    const PromptRenderResult& rendered, bool toolsRequested);
 
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);
