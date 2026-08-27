@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-27
+
 ### Added
 
 - **CUDA GPU backend for both engines on Linux / Windows (NVIDIA).** The
@@ -51,12 +53,22 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
 - **The GPU integration tests accept CUDA as a desktop backend.**
   `gpu.test.js` and `parakeet-gpu-smoke.test.js` asserted
   `backendId === 3` (Vulkan) on Linux / Windows, which was written when Vulkan
   was the only GPU backend wired there. Both now accept CUDA (`2`) or Vulkan
   (`3`), because a CUDA-enabled build compiles both in and ggml registers CUDA
   first.
+- Raise the `speech-cpp` floor to 2026-08-26#1, aligning all speech addons
+  (`asr-ggml`, `tts-ggml`, `audiogen-ggml`, `bci-whispercpp`) on the same
+  port and ggml-speech cut. Relative to 2026-08-26 the bundled ggml computes
+  explicit-f32-precision matmuls in true f32 on CUDA and adds CONCAT support
+  for all scalar and quantized types; the engine sources for whisper and
+  parakeet are unchanged.
 - Raise the `speech-cpp` floor to 2026-08-26, including the new opt-in `cuda`
   feature's own floor, which brings in ggml-speech
   2026-08-26. Sortformer finalization is now deterministic: every non-cancelled
