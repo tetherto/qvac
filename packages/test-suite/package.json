@@ -1,6 +1,6 @@
 {
   "name": "@qvac/test-suite",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "description": "Generic distributed testing framework for multi-platform execution",
   "type": "module",
   "main": "./dist/index.js",

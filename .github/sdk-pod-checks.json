@@ -10,15 +10,6 @@
     "depends_on": ["packages/inference"]
   },
   {
-    "package": "bare-sdk",
-    "path": "packages/bare-sdk",
-    "pkg_manager": "bun",
-    "needs_bare": true,
-    "tests_bare": true,
-    "sdk_sources": ["workspace"],
-    "depends_on": ["packages/inference"]
-  },
-  {
     "package": "inference",
     "path": "packages/inference",
     "pkg_manager": "bun",
