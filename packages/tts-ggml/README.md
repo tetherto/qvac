@@ -26,7 +26,7 @@ validated Android paths, including Vulkan on ARM Mali (see
 [Backends & GPU acceleration](#backends--gpu-acceleration)). Audio8 supports
 CUDA/Vulkan offload on Linux and Vulkan on Windows.
 
-[qvac-tts-cpp]: https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp
+[qvac-tts-cpp]: https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts
 
 ## Features
 
@@ -198,7 +198,7 @@ npm run convert-models
 ```
 
 The Audio8 GGUFs are produced by the converters in
-qvac-ext-lib-whisper.cpp (`engines/tts/scripts/convert-audio8-lm-to-gguf.py`
+qvac-fabric-speech.cpp (`engines/tts/scripts/convert-audio8-lm-to-gguf.py`
 and `convert-audio8-codec-to-gguf.py`) until they are published to the model
 registry alongside the other engines.
 
@@ -524,7 +524,7 @@ const model = new TTSGgml({
 
 Convert the GGUF from the public [LavaSRcpp](https://github.com/Topping1/LavaSRcpp)
 ONNX release using the `convert-lavasr-denoiser-to-gguf.py` script shipped in the
-[`qvac-ext-lib-whisper.cpp/tts-cpp`][qvac-tts-cpp] repo (this package ships only
+[`qvac-fabric-speech.cpp/engines/tts`][qvac-tts-cpp] repo (this package ships only
 the enhancer converter under `scripts/`):
 
 ```bash
@@ -542,7 +542,7 @@ Notes:
   front for every engine — a stateful streaming denoiser is the follow-up. Use
   batch synthesis, or drop the denoiser for streaming.
 - The tts-cpp UL-UNAS forward is implemented in
-  [qvac-ext-lib-whisper.cpp#78](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/78)
+  [qvac-fabric-speech.cpp#78](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/78)
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
   `tts-cpp` build that includes that port — see the pinned version in `vcpkg.json`.
 

@@ -1,10 +1,10 @@
 import {
   PROFILING_KEY,
+  nowMs,
   type ProfilingRequestMeta,
   type ServerBreakdown,
   type OperationEvent
 } from '@qvac/inference/surface'
-import { nowMs } from '@qvac/inference/surface'
 
 export interface ServerProfilingContext {
   meta: ProfilingRequestMeta
