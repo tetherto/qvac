@@ -149,6 +149,8 @@ jobs:
           package: llm-llamacpp
           paths: packages/llm-llamacpp/models/unit-test
           hash-files-glob: packages/llm-llamacpp/scripts/download-unit-test-models.js
+          # The C++ unit tests load none of the integration models.
+          warm: 'false'
 
       - name: Download test models
         if: steps.model-cache.outputs.cache-hit != 'true'
