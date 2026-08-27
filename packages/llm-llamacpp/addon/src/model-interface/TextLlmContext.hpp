@@ -160,12 +160,6 @@ public:
   /// asks for the stop index and reports back when it lands there.
   [[nodiscard]] llama_pos
   prefillBoundaryPauseIndex(llama_pos prefillLen) const override;
-
-  /// Trailing prompt tokens that render a force-open `<think>` opener, so a
-  /// decode can stop before them. 0 unless the full-state path needs the stop:
-  /// a pure-attention rewind is positional and trims the opener even when it
-  /// is already cached.
-  [[nodiscard]] size_t forcedOpenTailTokens() const;
   void onPrefillBoundaryPause(llama_pos currentPos) override;
 
   void syncPosition(llama_pos currentPos) override;

@@ -191,8 +191,4 @@ public:
   static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
     return context.rollbackState_.reasoningBoundaryNPast();
   }
-
-  static size_t forcedOpenTailTokens(const MtmdLlmContext& context) {
-    return context.forcedOpenTailTokens();
-  }
 };

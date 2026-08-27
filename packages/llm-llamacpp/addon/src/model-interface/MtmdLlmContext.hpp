@@ -228,14 +228,6 @@ public:
   void
   onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
 
-  /// Text-token index where the batch prefill must pause so the reasoning
-  /// boundary is anchored before a force-open `<think>` opener. `-1` when no
-  /// pause is wanted. Mirrors the text driver; the flattened `PrefillPlan`
-  /// ends with the opener, so the index is the plan minus its length.
-  [[nodiscard]] llama_pos
-  prefillBoundaryPauseIndex(llama_pos prefillLen) const override;
-  void onPrefillBoundaryPause(llama_pos currentPos) override;
-
   SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
@@ -319,21 +311,6 @@ private:
   // marker is committed. Every model kind anchors a boundary, so this runs
   // on pure attention too; it is a no-op only when the feature is off.
   void recordPostReasoningTokenIfActive(llama_token tokenId);
-
-  // Trailing tokens of the last text chunk that render the force-open
-  // reasoning opener, so the decode can stop before them. 0 when the split
-  // does not apply: pure attention anchors an absolute position and needs no
-  // stop, and a template that generates its own opener has nothing in the
-  // prompt to skip.
-  [[nodiscard]] size_t forcedOpenTailTokens() const;
-
-  // The TEXT branch of `mtmd_helper_eval_chunk_single` over a sub-range of one
-  // chunk, so prefill can stop between the prompt and the opener that follows
-  // it. Positions advance 1:1 exactly as the helper does; only media decode
-  // carries M-RoPE geometry.
-  int32_t evalTextChunkRange(
-      const mtmd_input_chunk* chunk, size_t from, size_t to, llama_pos nPast,
-      bool logitsLast, llama_pos* newNPast);
 
   // Anchor the compaction boundary at `anchorPos`, unwinding to the pre-prompt
   // checkpoint and rethrowing when the capture fails.

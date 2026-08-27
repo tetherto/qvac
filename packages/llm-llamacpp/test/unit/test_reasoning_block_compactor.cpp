@@ -906,12 +906,12 @@ TEST(
   EXPECT_EQ(accepting.replayedTokens()[2], 901);
 }
 
-TEST(
-    ReasoningBlockCompactorClosedSpan,
-    RecurrentCompactsToTheSameCacheAsPureAttention) {
-  // Same generated-opener turn as above on the full-state path. The
-  // mechanism differs, a state restore rather than a tail trim, but the
-  // replayed sequence and the resulting cache must be identical.
+TEST(ReasoningBlockCompactorClosedSpan, RecurrentReplaysTheSeededCloseMarker) {
+  // Same generated-opener turn as above on the full-state path. Its boundary
+  // is the end of prefill, so the restored prefix still opens a block and the
+  // seeded close marker has to survive the clip and be replayed ahead of the
+  // answer. That is what keeps the restored state balanced, and it is why the
+  // prefill decode never has to stop mid-prompt.
   CompactorFixture fx;
   fx.compactor.setRemoveThinkingFromContext(true);
   fx.compactor.setReasoningEnabled(true);
@@ -926,6 +926,9 @@ TEST(
   fx.compactor.recordPreReasoningToken(/*preamble=*/700);
   fx.compactor.recordPreReasoningToken(/*openMarker=*/701);
   fx.compactor.setOpenSpan(kSpanStart);
+  // Seeded at the close-detection site, before capture flips on, exactly as
+  // the drivers do it.
+  fx.compactor.recordCloseMarkerForReplay(/*closeMarker=*/702);
   fx.compactor.requestCloseCapture();
   fx.compactor.onCloseCommitted(kSpanEnd);
   fx.rollback.recordPostReasoningToken(/*answer0=*/900);
@@ -938,12 +941,16 @@ TEST(
   fx.compactor.setRewindOpsForTesting(nullptr);
 
   EXPECT_EQ(outcome.kind, ReasoningBlockCompactor::Outcome::Kind::Compacted);
-  EXPECT_EQ(outcome.replayedTokens, 3u);
-  EXPECT_EQ(outcome.newPos, kBoundary + 3);
-  ASSERT_EQ(accepting.replayedTokens().size(), 3u);
+  EXPECT_EQ(outcome.replayedTokens, 5u);
+  EXPECT_EQ(outcome.newPos, kBoundary + 5);
+  ASSERT_EQ(accepting.replayedTokens().size(), 5u);
   EXPECT_EQ(accepting.replayedTokens()[0], 700);
-  EXPECT_EQ(accepting.replayedTokens()[1], 900);
-  EXPECT_EQ(accepting.replayedTokens()[2], 901);
+  EXPECT_EQ(accepting.replayedTokens()[1], 701)
+      << "the seeded opener stays on the full-state path, the close balances "
+         "it";
+  EXPECT_EQ(accepting.replayedTokens()[2], 702);
+  EXPECT_EQ(accepting.replayedTokens()[3], 900);
+  EXPECT_EQ(accepting.replayedTokens()[4], 901);
 }
 
 TEST(

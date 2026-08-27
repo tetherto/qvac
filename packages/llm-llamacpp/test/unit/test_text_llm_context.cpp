@@ -473,56 +473,6 @@ TEST_F(TextLlmContextTest, ProcessWithTools) {
   });
 }
 
-// The text driver's half of the cache-warm rule. A prefill-only request never
-// generates, so nothing will ever compact the reasoning span its prompt opens,
-// and a cache that ends inside a force-open `<think>` leaves a fragment the
-// next turn's full-state snapshot cannot rewind past. Differential: the same
-// warm with compaction off decodes the opener, and the gap is its length.
-// Hybrid only, a pure-attention rewind is positional and trims the opener even
-// when it is already cached.
-TEST_F(TextLlmContextTest, Qwen35HybridCacheWarmStopsBeforeForcedOpener) {
-  const std::string hybridPath =
-      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
-  if (!std::filesystem::exists(hybridPath)) {
-    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
-  }
-
-  const auto warmPositions = [&](bool removeThinking) -> llama_pos {
-    auto config = config_files;
-    config["ctx_size"] = "4096";
-    std::string path = hybridPath;
-    std::string projection;
-    auto model = std::make_unique<LlamaModel>(
-        std::move(path), std::move(projection), std::move(config));
-    model->waitForLoadInitialization();
-    EXPECT_TRUE(model->isLoaded());
-    if (!model->isLoaded()) {
-      return -1;
-    }
-    auto* ctx = LlamaModelTestPeer::llmContext(*model);
-    EXPECT_NE(ctx, nullptr);
-    if (ctx == nullptr) {
-      return -1;
-    }
-    LlamaModel::Prompt prompt;
-    prompt.input = R"([{"role": "user", "content": "Is two plus two four?"}])";
-    prompt.prefill = true;
-    prompt.generationParams.remove_thinking_from_context = removeThinking;
-    EXPECT_TRUE(model->processPrompt(prompt).empty());
-    return ctx->getNPast();
-  };
-
-  const llama_pos withCompaction = warmPositions(/*removeThinking=*/true);
-  const llama_pos withoutCompaction = warmPositions(/*removeThinking=*/false);
-  ASSERT_GT(withCompaction, 0);
-  ASSERT_GT(withoutCompaction, 0);
-  EXPECT_EQ(withoutCompaction - withCompaction, 2)
-      << "a cache warm must stop before the two-token `<think>` opener, "
-         "withCompaction=" +
-             std::to_string(withCompaction) +
-             " withoutCompaction=" + std::to_string(withoutCompaction);
-}
-
 TEST_F(TextLlmContextTest, ProcessWithToolsInvalidFormat) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";

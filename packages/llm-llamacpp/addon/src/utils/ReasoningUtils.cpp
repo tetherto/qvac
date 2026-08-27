@@ -42,6 +42,7 @@ bool initializeReasoningState(
   state.cached_close_tag_token = LLAMA_TOKEN_NULL;
   state.cached_newline_token = LLAMA_TOKEN_NULL;
   state.close_is_single_token = false;
+  state.cached_close_tag_tokens.clear();
 
   if (lctx == nullptr || tags.open.empty() || tags.close.empty()) {
     return false;
@@ -96,6 +97,7 @@ bool initializeReasoningState(
   // `TextLlmContext` / `MtmdLlmContext` seed the replay buffer with
   // `cached_close_tag_token` rather than the sampled token id.
   state.close_is_single_token = (closeTokens.size() == 1);
+  state.cached_close_tag_tokens = closeTokens;
 
   std::vector<llama_token> newlineTokens =
       common_tokenize(lctx, "\n", false, true);

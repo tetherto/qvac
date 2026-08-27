@@ -22,12 +22,8 @@ using test_common::getStatValue;
 namespace fs = std::filesystem;
 
 namespace {
-// A cache-warm request on a force-open template stops before the `<think>`
-// opener, so these are two cells and two positions short of the rendered
-// prompt. See `MtmdLlmContext::preparePrefill` for why that opener must not
-// reach the saved cache.
-constexpr uint32_t kQwen35MultimodalPrefillCells = 2897;
-constexpr llama_pos kQwen35MultimodalPrefillPosMax = 88;
+constexpr uint32_t kQwen35MultimodalPrefillCells = 2899;
+constexpr llama_pos kQwen35MultimodalPrefillPosMax = 90;
 
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
@@ -705,56 +701,13 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
   fs::remove(cachePath);
 }
 
-// A cache warm never generates, so nothing will ever compact the reasoning
-// span its prompt opens. Stopping before the opener is what keeps a saved
-// cache from ending inside a `<think>` that no later turn can rewind past.
-// Differential rather than absolute: the same prompt with compaction off
-// decodes the opener, and the difference must be exactly its length.
-TEST_F(MtmdLlmContextTest, Qwen35MtmdCacheWarmStopsBeforeForcedOpener) {
-  if (!hasValidQwen35Model()) {
-    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
-  }
-
-  const auto warmPositions = [this](bool removeThinking) -> llama_pos {
-    auto model = createQwen35Model();
-    EXPECT_NE(model, nullptr);
-    if (!model) {
-      return -1;
-    }
-    auto* ctx =
-        dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
-    EXPECT_NE(ctx, nullptr);
-    if (ctx == nullptr) {
-      return -1;
-    }
-    LlamaModel::Prompt prompt;
-    prompt.input = R"([{"role": "user", "content": "Is two plus two four?"}])";
-    prompt.prefill = true;
-    prompt.generationParams.remove_thinking_from_context = removeThinking;
-    EXPECT_TRUE(model->processPrompt(prompt).empty());
-    return ctx->getNPast();
-  };
-
-  const llama_pos withCompaction = warmPositions(/*removeThinking=*/true);
-  const llama_pos withoutCompaction = warmPositions(/*removeThinking=*/false);
-  ASSERT_GT(withoutCompaction, 0);
-  ASSERT_GT(withCompaction, 0);
-  EXPECT_EQ(withoutCompaction - withCompaction, 2)
-      << "a cache warm must stop before the two-token `<think>` opener, "
-         "withCompaction=" +
-             std::to_string(withCompaction) +
-             " withoutCompaction=" + std::to_string(withoutCompaction);
-}
-
-// Where the boundary actually lands on the MTMD path. Qwen3.5 force-opens
-// `<think>` at the tail of the last text chunk, and a full-state snapshot has
-// to be taken before those tokens decode, so the driver splits that chunk and
-// anchors between the halves. Read straight off the driver after prefill: the
-// anchor must sit exactly one opener short of the prefill cursor. Anchoring
-// after the opener is what leaves the next cached turn resuming inside a
-// reasoning block. Text-only, because the split is about the text chunk; the
-// media round trip is covered by the cached follow-up below.
-TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryBeforeForcedOpener) {
+// Where the boundary lands on the MTMD path. The full-state anchor is the end
+// of prefill, so the forced opener stays in the restored prefix and the seeded
+// close marker balances it on replay. Anchoring earlier would mean stopping
+// the prefill decode mid-prompt, which changes the answer on Vulkan with
+// coopmat2. Text-only, the media round trip is covered by the cached follow-up
+// below.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryAtEndOfPrefill) {
   if (!hasValidQwen35Model()) {
     GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
   }
@@ -774,18 +727,12 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryBeforeForcedOpener) {
     (void)ctx->evalMessage({msg}, /*isCacheLoaded=*/false, /*prefill=*/false);
   });
 
-  const size_t openerTokens =
-      MtmdLlmContextTestPeer::forcedOpenTailTokens(*ctx);
-  ASSERT_GT(openerTokens, 0u)
-      << "Qwen3.5 must render a force-open opener, or this test proves "
-         "nothing about where the boundary lands";
   ASSERT_TRUE(MtmdLlmContextTestPeer::hasReasoningBoundary(*ctx))
       << "prefill must anchor a boundary when compaction is on";
   EXPECT_EQ(
-      MtmdLlmContextTestPeer::reasoningBoundaryNPast(*ctx),
-      ctx->getNPast() - static_cast<llama_pos>(openerTokens))
-      << "the boundary must be anchored before the forced-open opener, not at "
-         "the end of prefill";
+      MtmdLlmContextTestPeer::reasoningBoundaryNPast(*ctx), ctx->getNPast())
+      << "the full-state boundary is the end of prefill, so no prefill decode "
+         "is split";
 }
 
 // The cached follow-up half of the test above, which is where a leftover

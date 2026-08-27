@@ -656,37 +656,7 @@ PrefillPlan TextLlmContext::preparePrefill(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
 
-  // A cache-warm request never generates, so nothing will ever compact the
-  // reasoning span its prompt opens. Stop before a force-open template's
-  // `<think>` so the saved cache does not end inside the opener: that leaves a
-  // resident fragment the next turn cannot rewind past, because a full-state
-  // snapshot only describes a point the decode has not reached yet. The prefix
-  // stays valid and the next turn decodes those tokens itself.
-  if (isPrefillOnlyRequest) {
-    const size_t openerTokens = forcedOpenTailTokens();
-    if (openerTokens > 0 && inputTokens.size() > openerTokens) {
-      inputTokens.resize(inputTokens.size() - openerTokens);
-    }
-  }
-
   return PrefillPlan{.tokens = std::move(inputTokens)};
-}
-
-size_t TextLlmContext::forcedOpenTailTokens() const {
-  if (!needsRecurrentSnapshot_ || !thinkingForcedOpen_) {
-    return 0;
-  }
-  const auto openerTokens =
-      static_cast<size_t>(reasoningState_.forcedOpenTokenCount);
-  if (openerTokens == 0) {
-    return 0;
-  }
-  const auto decision = recurrentReasoningBoundaryDecision(
-      removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0);
-  return decision == RecurrentReasoningBoundaryDecision::Disabled
-             ? 0
-             : openerTokens;
 }
 
 void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
@@ -935,10 +905,19 @@ SequenceStepResult TextLlmContext::onLogitsReady(
           nPast_ - static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
     }
     if (wasInside && !nowInside) {
-      // Defer end capture — the close-marker token has not yet been
-      // committed to the cache. Nothing structural is seeded here: the
-      // compacted cache carries the preamble and the visible answer, so
-      // there is no `<think>` left for a `</think>` to balance.
+      // The full-state boundary sits at the end of prefill, so the restored
+      // prefix still opens a block. Seed the canonical close so the replay
+      // balances it again. Pure attention anchors before the span and drops
+      // this in the compactor, keeping `preamble + answer`.
+      //
+      // Canonical token, not `tokenId`: a close carrying whitespace padding
+      // (Qwen3's `"\n</think>\n\n"`) defers the detector flip onto the
+      // padding piece, and seeding that replays a newline with nothing
+      // closing the block.
+      compactor_.recordCloseMarkerForReplay(
+          reasoningState_.cached_close_tag_tokens);
+      // Defer end capture: the close-marker token has not yet been committed
+      // to the cache.
       compactor_.requestCloseCapture();
     }
   }
@@ -957,6 +936,10 @@ SequenceStepResult TextLlmContext::onLogitsReady(
       tokenStr =
           common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
       reasoningState_.inside_reasoning = false;
+      // EOS substitution: the original EOS reached the capture site with
+      // capture still off and the substituted close never does, so seed it
+      // here or the restored state opens a block nothing closes.
+      compactor_.recordCloseMarkerForReplay(tokenId);
       compactor_.requestCloseCapture();
       if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
@@ -1179,11 +1162,12 @@ TextLlmContext::computeRecurrentSnapshotBoundary(llama_pos prefillLen) const {
   // still opens a reasoning block and the next cached turn resumes inside
   // it. Generated-opener templates have nothing to subtract, their opener
   // is sampled after prefill and `compact()` clips it out of the replay.
-  const llama_pos boundary =
-      qvac_lib_inference_addon_llama::utils::reasoningBoundaryTokenIndex(
-          prefillLen,
-          thinkingForcedOpen_,
-          reasoningState_.forcedOpenTokenCount);
+  // End of prefill. A force-open template leaves its opener in the restored
+  // prefix and the seeded close marker balances it, so nothing has to stop
+  // mid-prefill. That matters beyond tidiness: splitting the prefill changes
+  // the answer on Vulkan with coopmat2, where the same tokens fed as one
+  // decode and as two land on different SSM state.
+  const llama_pos boundary = prefillLen;
   // The boundary clamps at 0, so a prefill shorter than the opener anchors
   // at the admission cursor instead of underflowing. That is the cache hit
   // that left part of the opener resident, and the fragment survives the
@@ -1236,12 +1220,12 @@ void TextLlmContext::snapshotForRecurrentRollback() {
 
 llama_pos
 TextLlmContext::prefillBoundaryPauseIndex(llama_pos prefillLen) const {
-  // Only the full-state path needs the decode to stop at the boundary; a
-  // pure-attention anchor is recorded after prefill with the opener already
-  // subtracted, so pausing the batch for it would split a chunk for nothing.
-  // `computeRecurrentSnapshotBoundary` applies both that gate and the
-  // prefill-only / feature gates, and returns -1 when no pause is wanted.
-  return computeRecurrentSnapshotBoundary(prefillLen);
+  // Nothing pauses any more. The full-state boundary is the end of prefill,
+  // which `onPrefillComplete` already covers, and a pure-attention anchor is
+  // a bare position recorded after prefill. Splitting a batch here would also
+  // change the answer on Vulkan with coopmat2.
+  (void)prefillLen;
+  return -1;
 }
 
 void TextLlmContext::onPrefillBoundaryPause(llama_pos currentPos) {
@@ -1690,6 +1674,7 @@ bool TextLlmContext::handleReasoningEOS(
   // invisible to the compactor and `compactThinkSpan` later bails at
   // `end < 0` — observable as multi-turn reasoning blocks no longer
   // being compacted when the model emits EOS instead of `</think>`.
+  compactor_.recordCloseMarkerForReplay(tokenId);
   compactor_.requestCloseCapture();
   compactor_.onCloseCommitted(nPast);
 

@@ -143,6 +143,26 @@ public:
   // that reach this method on generated-opener templates are dropped by
   // `compact()`'s `clipSeededPrefix` before the replay runs.
   //
+  // Seeds the replay buffer with the reasoning close marker so a restored
+  // full-state prefix lands on a balanced `<think>...</think>` span. The
+  // marker sits in the seeded prefix, ahead of the captured answer tail.
+  //
+  // Full-state only. Pure attention anchors before the span and replays the
+  // visible tail alone, so it needs no marker and keeps a compacted cache of
+  // `preamble + answer`.
+  //
+  // Callers MUST pass the canonical close token
+  // (`reasoningState_.cached_close_tag_token`), not the sampled token that
+  // tripped the detector: a template whose close carries whitespace padding
+  // (Qwen3's `"\n</think>\n\n"`) defers the flip onto a padding piece, and
+  // seeding that would replay a newline with no matching `</think>`.
+  void recordCloseMarkerForReplay(llama_token id);
+
+  // Sequence overload. The canonical close does not always tokenise to one
+  // piece; seeding every piece is what lets a multi-token marker restore a
+  // balanced span. Null ids are skipped, an empty span is a no-op.
+  void recordCloseMarkerForReplay(const std::vector<llama_token>& ids);
+
   // No-op on features-off requests and before the boundary has been
   // captured (nothing to restore against, so seeding would be pointless
   // bookkeeping).
