@@ -324,6 +324,23 @@ test('argv rollout overlay selects TurboVec for a new workspace', async (t) => {
   }
 })
 
+test('unrecognized rollout flag value selects HyperDB for a new workspace', async (t) => {
+  const workspace = workspaceName('flag-typo')
+  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
+
+  clearPlugins()
+  env[TURBOVEC_ROLLOUT_ENV] = 'true'
+
+  try {
+    const adapter = await getRagDbAdapter(workspace)
+    t.ok(adapter instanceof HyperDBAdapter, "only '1' opts a new workspace into TurboVec")
+  } finally {
+    restoreEnv(originalFlag)
+    clearPlugins()
+    await cleanupWorkspace(workspace)
+  }
+})
+
 test('RAG workspace keeps its pinned adapter when the rollout flag changes', async (t) => {
   const turboWorkspace = workspaceName('pinned-turbo')
   const hyperdbWorkspace = workspaceName('pinned-hyperdb')

@@ -160,7 +160,13 @@ function createRagDbAdapter(
 }
 
 function getRequestedAdapterType(): RagAdapterType {
-  return getEnv().QVAC_RAG_TURBOVEC === '1' ? 'turbovec' : 'hyperdb'
+  const rolloutFlag = getEnv().QVAC_RAG_TURBOVEC
+  if (rolloutFlag && rolloutFlag !== '0' && rolloutFlag !== '1') {
+    logger.warn(
+      `Ignoring unrecognized QVAC_RAG_TURBOVEC value '${rolloutFlag}'; set it to '1' to enable TurboVec for new workspaces`
+    )
+  }
+  return rolloutFlag === '1' ? 'turbovec' : 'hyperdb'
 }
 
 function unreadableMarkerError(markerPath: string, cause: unknown) {
