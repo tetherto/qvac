@@ -65,14 +65,21 @@ function readNativeTable(source, tableName) {
   return [...body.matchAll(/\{\s*"([^"]+)"/g)].map((match) => match[1])
 }
 
+const SIBLING_SPEECH_REPO_DIR_NAMES = ['qvac-fabric-speech.cpp', 'qvac-ext-lib-whisper.cpp']
+
+const VOICE_CONTROLS_RELATIVE_SUFFIX = 'engines/tts/src/voice_controls.cpp'
+
+function siblingVoiceControlsCandidates() {
+  return SIBLING_SPEECH_REPO_DIR_NAMES.map((dirName) =>
+    path.join(__dirname, '../../../../../', dirName, VOICE_CONTROLS_RELATIVE_SUFFIX)
+  )
+}
+
 function nativeVoiceControlsSource() {
   const override = process.env.TTS_CPP_SOURCE_DIR
   const candidates = [
     override && path.join(override, 'src/voice_controls.cpp'),
-    path.join(
-      __dirname,
-      '../../../../../qvac-fabric-speech.cpp/engines/tts/src/voice_controls.cpp'
-    )
+    ...siblingVoiceControlsCandidates()
   ].filter(Boolean)
   for (const candidate of candidates) {
     try {
@@ -81,6 +88,21 @@ function nativeVoiceControlsSource() {
   }
   return null
 }
+
+function assertCandidatesCoverDirNames(t, candidates, dirNames) {
+  for (const dirName of dirNames) {
+    t.ok(
+      candidates.some((candidate) => candidate.includes(dirName)),
+      `candidates include ${dirName}`
+    )
+  }
+}
+
+test('voice controls: sibling candidates cover old and new speech repo dir names', (t) => {
+  const candidates = siblingVoiceControlsCandidates()
+  t.is(candidates.length, SIBLING_SPEECH_REPO_DIR_NAMES.length)
+  assertCandidatesCoverDirNames(t, candidates, SIBLING_SPEECH_REPO_DIR_NAMES)
+})
 
 test('voice controls: the JS vocabulary mirrors the tts-cpp source of truth', (t) => {
   const source = nativeVoiceControlsSource()
