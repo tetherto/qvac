@@ -10,13 +10,13 @@
 > <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
 > <a href="https://discord.com/invite/tetherdev" >Discord</a>
 
-**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js and [Expo](https://expo.dev).
 
 See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.io/sdk/getting-started) for the comprehensive QVAC documentation.
 
 For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
 
-> **Running on Bare directly?** `@qvac/sdk` runs on Bare, but you must register the plugins you use explicitly before the first SDK call (Node and Expo do this automatically). For direct Bare usage we recommend [`@qvac/bare-sdk`](../bare-sdk/README.md) — the same SDK surface with no built-in plugin addons, designed for consumers wiring their own worker entry (Pear apps, bare-expo apps, direct Bare scripts).
+> **In-process Bare:** use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.2.
 
 ## Supported environments and installation
 
@@ -131,8 +131,8 @@ const profile = profiler.exportJSON()
 The sample uses the same status, provenance, and scope semantics as
 `getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
 clock as the profiling event's `ts`, so the two timestamps are comparable.
-`resources.origin` is `local` for the current worker and `provider` for a
-delegated provider's worker. Samples are delivered to `profiler.onRecord`; they
+`resources.origin` records that the sample was taken on the `local` worker.
+Samples are delivered to `profiler.onRecord`; they
 are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
 gauges in `summary` mode still incurs the sampling cost without retaining them.
 Disabling profiling or omitting `includeResourceGauges` performs no resource
@@ -177,12 +177,23 @@ node dist/examples/path/to/example.js
 bun run examples/path/to/example.ts
 ```
 
+`examples/abot-world.ts` has a companion guide covering the hardware
+requirements, scene-pack lifecycle, cancellation semantics and concurrency rules
+of an interactive world session: see
+[ABot-World interactive world sessions](./docs/abot-world.md).
+
 ## Build
 
 Use the [Bun](https://bun.sh/) package manager:
 
 ```bash
 bun i
+```
+
+`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
+
+```bash
+bun run sdk-source:workspace
 ```
 
 ```bash
@@ -201,13 +212,12 @@ npm i path/to/sdk-0.3.0.tgz
 
 ## Testing
 
-The SDK test suite is organized into three buckets by runtime:
+The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime    | Location     | Command                                |
-| ----------------- | ---------- | ------------ | -------------------------------------- |
-| Unit              | Bun / Node | `test/unit/` | `bun run test:unit`                    |
-| Server (Bare)     | Bare       | `test/bare/` | `bun run test:bare`                    |
-| Client (consumer) | Node / RN  | `e2e/`       | See [`e2e/README.md`](./e2e/README.md) |
+| Bucket            | Runtime    | Location | Command                                |
+| ----------------- | ---------- | -------- | -------------------------------------- |
+| Unit              | Bun / Node | `test/`  | `bun run test:unit`                    |
+| Client (consumer) | Node / RN  | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
 
 See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 

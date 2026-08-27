@@ -11,7 +11,8 @@ Legend:
 | Package | Description | Category |
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
-| bare-sdk | Bare-targeted slim assembly of the SDK; consumers install only the addons they need and register plugins explicitly | SDK |
+| inference | Bare-only in-process engine. Use this instead of `@qvac/bare-sdk` | SDK |
+| bare-sdk | Deprecated (last release 0.18.2). Use `@qvac/inference` for in-process Bare | SDK |
 | ai-sdk-provider | Vercel AI SDK provider exposing the QVAC runtime (chat, embeddings, transcription, translation, speech, OCR, image) | SDK |
 | bci-whispercpp | Brain-Computer Interface (BCI) neural-signal transcription addon powered by whisper.cpp | Addon |
 | classification-ggml | Image classification addon (MobileNetV3-Small) on the GGML backend | Addon |
@@ -19,10 +20,8 @@ Legend:
 | diffusion-cpp | Native C++ addon for image/video generation via `qvac-ext-stable-diffusion.cpp` | Addon |
 | embed-llamacpp | Native C++ addon for text embedding generation via `qvac-fabric-llm.cpp` | Addon |
 | langdetect-text | Language detection library providing an interface for detecting the language of given text | Addon |
-| langdetect-text-cld2 | Language detection using CLD2 with the same API as `@qvac/langdetect-text` | Addon |
 | llm-llamacpp | Native C++ addon for running Large Language Models (LLMs) via `qvac-fabric-llm.cpp` | Addon |
 | ocr-ggml | Optical Character Recognition (OCR) addon (EasyOCR pipeline) on the GGML backend | Addon |
-| onnx | Bare addon for ONNX Runtime session management | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
 | transcription-parakeet | Speech-to-text (ASR) and Sortformer speaker-diarization addon using NVIDIA Parakeet models | Addon |
 | transcription-whispercpp | Whisper-based audio transcription addon via `qvac-ext-lib-whisper.cpp` | Addon |
@@ -43,3 +42,4 @@ Legend:
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 | qvac-ci | CI utilities for the QVAC monorepo | Tool |
 | registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
+| test-suite | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving e2e suites across desktop, Electron, Snap, Android, and iOS consumers | Tool |

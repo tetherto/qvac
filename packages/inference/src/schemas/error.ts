@@ -3,8 +3,8 @@ import { QvacErrorBase } from '@qvac/error'
 import { formatZodError } from '@/utils/zod-error'
 
 /**
- * Serialized shape for errors that cross a response boundary — a
- * delegated provider's response over `bare-rpc`, or a duplex stream.
+ * Serialized shape for errors that cross a response boundary — an RPC
+ * reply over `bare-rpc`, or a duplex stream.
  * The fields are the union of (a) the `QvacErrorBase` serialisation
  * (`name`, `code`, `message`, `stack`, `cause`, `timestamp`) and (b) the
  * `typedFields` map carrying per-class structured data a receiver uses

@@ -88,6 +88,7 @@ jobs:
           node --test
           .github/scripts/test/ci-trust-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
+          .github/scripts/test/publish-gate-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
 
       # The co-load inventory drifts when the SDK swaps an addon, not when the

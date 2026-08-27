@@ -13,6 +13,7 @@ The following packages belong to the SDK pod:
 - `packages/logging`
 - `packages/error`
 - `packages/ai-sdk-provider`
+- `packages/test-suite`
 - `packages/inference`
 - `packages/registry-server`
 - `plugins/opencode` (tag slug: `opencode-plugin`)
@@ -44,6 +45,7 @@ globs:
   - packages/logging/**
   - packages/error/**
   - packages/ai-sdk-provider/**
+  - packages/test-suite/**
   - packages/inference/**
   - packages/registry-server/**
   - plugins/opencode/**

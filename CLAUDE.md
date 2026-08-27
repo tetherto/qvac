@@ -70,9 +70,9 @@ npx standard <file>        # JS lint (standardjs)
 npm run lint               # lint all JS (excludes addon/)
 ```
 
-### SDK (packages/qvac-sdk)
+### SDK (packages/sdk)
 ```bash
-cd packages/qvac-sdk
+cd packages/sdk
 bun install
 bun run build       # lint + typecheck + compile
 bun run lint        # eslint + typecheck
@@ -82,9 +82,6 @@ bun run format      # prettier check
 **Testing:**
 ```bash
 bun run test:unit
-bun run test:bare
-bun run test:security
-bun run test:security:bare
 ```
 
 ### Environment Variables
