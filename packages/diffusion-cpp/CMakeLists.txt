@@ -143,7 +143,11 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
   # dependencies; without an explicit link the shared .bare module builds with
   # __cudaRegisterFatBinary et al. unresolved (shared links tolerate undefined
   # symbols) and fails only at dlopen. Link the toolkit runtime directly.
-  if(SD_CUDA)
+  # Under GGML_BACKEND_DL the rationale inverts: ggml-cuda is a dlopen'd
+  # MODULE that carries its own CUDA deps, and linking the toolkit here would
+  # put hard DT_NEEDED libcudart/libcublas/libcublasLt entries back on the
+  # .bare — the exact load-time abort class this DL layout removes (gh#3853).
+  if(SD_CUDA AND NOT GGML_BACKEND_DL)
     find_package(CUDAToolkit REQUIRED)
     target_link_libraries(${inference-addon-sd} PRIVATE CUDA::cudart CUDA::cublas CUDA::cublasLt)
   endif()

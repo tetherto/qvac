@@ -43,15 +43,16 @@ struct ProgressCtx {
 
   // Phase-boundary capture for conditioner / denoise / vae timing.
   //
-  // sd.cpp emits a separate progress sequence per phase, each restarting at
-  // step==0: text encoders (total = token count), one sampler invocation per
-  // image batch item / video expert (total = its step count), VAE decode and
-  // tiled VAE passes (total = tile count). The 2026-08-11 engine ticks every
-  // phase and may interleave sequences, so ticks are attributed to the
-  // denoise window by their reported total, not by sequence position:
+  // The pinned engine's progress emitters are: the sampler (one sequence per
+  // image batch item / video expert, total = its step count) and sd_tiling
+  // (VAE encode/decode tile passes, total = tile count, only when vae_tiling
+  // is enabled). Text encoders do NOT tick, and with eager_load = true (set
+  // at ctx creation) the model loader ticks during load(), not inside
+  // generate_*(). Ticks are attributed to the denoise window by their
+  // reported total:
   //   - exact mode (denoiseTotals non-empty): a tick is denoise iff its total
   //     is one of the known sampler step counts (image: steps; video: the
-  //     explicit high/low expert split).
+  //     explicit high/low expert totals).
   //   - bounded mode (denoiseTotals empty, denoiseTotalBound > 0): a tick is
   //     denoise iff 0 < total <= bound, capped at maxDenoiseSequences
   //     sequence starts (video MoE with the moe_boundary sentinel, where the
@@ -61,11 +62,19 @@ struct ProgressCtx {
   // on a step==0 tick while fewer than maxDenoiseSequences starts have been
   // accepted, and closes on its step==total tick — so a later phase whose
   // total collides with a sampler total is not counted once the expected
-  // sampler sequences are done.
+  // sampler sequences are done. A repeated start for the SAME total while
+  // that sequence is still open is treated as idempotent: second-order
+  // samplers (heun, dpm2, ...) call the denoise model twice at i==0 and the
+  // engine emits the (0, total) start tick for both, which must claim one
+  // slot, not two. KNOWN LIMIT: a pre-sampler VAE-ENCODE tiling pass (init
+  // image + vae_tiling) whose tile count equals a sampler total would claim
+  // a slot ahead of the sampler; phase stats then mis-attribute and the
+  // denoiseTicks==0 warning at job end is the tell.
   std::vector<int> denoiseTotals; // exact sampler totals to match
   int denoiseTotalBound = 0;      // bounded-mode fallback (0 = off)
   int maxDenoiseSequences = 1;    // cap on accepted sequence starts
   int openDenoiseSequences = 0;   // accepted starts not yet completed
+  int openSequenceTotal = -1;     // total of the open sequence (-1 = none)
   std::chrono::steady_clock::time_point denoiseFirstTime;
   std::chrono::steady_clock::time_point denoiseLastTime;
   int denoiseSequences = 0;
@@ -118,24 +127,34 @@ void sdProgressCallback(int step, int steps, float /*time*/, void* /*data*/) {
     totalMatches = steps > 0 && steps <= ctx.denoiseTotalBound;
   }
   bool isDenoise = false;
+  bool isNewSequence = false;
   if (totalMatches) {
     if (step == 0) {
-      if (ctx.denoiseSequences < ctx.maxDenoiseSequences) {
-        ++ctx.openDenoiseSequences;
+      if (ctx.openDenoiseSequences > 0 && steps == ctx.openSequenceTotal) {
+        // Second-order samplers emit the (0, total) start tick twice for one
+        // invocation (the engine fires it on step == 1 and step == -1);
+        // a repeated start for the open sequence is the same sequence.
         isDenoise = true;
+      } else if (ctx.denoiseSequences < ctx.maxDenoiseSequences) {
+        ++ctx.openDenoiseSequences;
+        ctx.openSequenceTotal = steps;
+        isDenoise = true;
+        isNewSequence = true;
       }
     } else if (ctx.openDenoiseSequences > 0) {
       isDenoise = true;
       if (step == steps) {
         --ctx.openDenoiseSequences; // completed: later same-total sequences
                                     // must not reopen the denoise window
+        if (ctx.openDenoiseSequences == 0)
+          ctx.openSequenceTotal = -1;
       }
     }
   }
   if (isDenoise) {
     if (ctx.denoiseTicks == 0)
       ctx.denoiseFirstTime = now;
-    if (step == 0) {
+    if (isNewSequence) {
       ++ctx.denoiseSequences;
       ctx.denoiseSteps += steps;
     }
@@ -202,6 +221,16 @@ PhaseStats computePhaseStats(
     // gives no interval to measure, so denoise/rate stay 0.
     ps.conditionerMs = toMs(ctx.denoiseFirstTime - t0);
     ps.vaeMs = toMs(tGen - ctx.denoiseLastTime);
+  } else if (ctx.observedTicks > 0) {
+    // Progress arrived but nothing matched the expected sampler totals —
+    // either the matcher is wrong for this engine/job shape or another
+    // phase's sequence consumed the start cap. Say so instead of silently
+    // reporting zeroed phase stats.
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "no progress tick matched the sampler totals (" +
+            std::to_string(ctx.observedTicks) +
+            " ticks observed); phase timings unavailable for this job");
   }
   if (ps.conditionerMs < 0.0)
     ps.conditionerMs = 0.0; // clamp tiny negative jitter
@@ -334,6 +363,16 @@ void SdModel::load() {
   params.n_threads = config_.nThreads;
   params.flash_attn = config_.flashAttn;
   params.diffusion_flash_attn = config_.diffusionFlashAttn;
+  // The engine defaults to lazy weight loading (eager_load = false), which
+  // moves per-module weight loads INSIDE generate_*(): the model loader then
+  // emits progress ticks (total = tensor count) that reach JS consumers
+  // indistinguishably from sampler ticks, and the first job's conditionerMs
+  // absorbs weight-load time. Load eagerly at new_sd_ctx() instead — the
+  // load cost lands in modelLoadMs where this addon already accounts for it,
+  // and generate_*() emits only sampler and VAE-tiling sequences. (The
+  // engine auto-downgrades eager_load when graph-cut layer splitting is
+  // active; this addon does not enable that mode.)
+  params.eager_load = true;
 
   // Load DL GPU backend modules before probing devices / creating the SD
   // context. In GGML_BACKEND_DL mode, device enumeration is empty until these
@@ -479,6 +518,7 @@ std::any SdModel::process(const std::any& input) {
   g_progressCtx.denoiseTotalBound = 0;
   g_progressCtx.maxDenoiseSequences = 1;
   g_progressCtx.openDenoiseSequences = 0;
+  g_progressCtx.openSequenceTotal = -1;
   g_progressCtx.denoiseSequences = 0;
   g_progressCtx.denoiseTicks = 0;
   g_progressCtx.denoiseSteps = 0;
@@ -852,16 +892,20 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   // -- Generate --------------------------------------------------------------
   // stable-diffusion.cpp invokes sample() once per image batch item before
   // decoding all final latents; each sampler sequence reports total ==
-  // gen.steps, which encoder/VAE sequences never do.
+  // gen.steps.
   g_progressCtx.denoiseTotals = {gen.steps};
   // One sampler sequence per batch item; the sequence-start gate must admit
   // all of them.
   g_progressCtx.maxDenoiseSequences = std::max(1, gen.batchCount);
-  // img2img (SDEdit) slices the sigma schedule by strength, so its sampler
-  // sequence reports t_enc + 1 steps (t_enc = steps * strength, clamped to
-  // steps - 1 — mirrors the engine). Match that total too; the FLUX
-  // ref-image path keeps the full count.
-  if (gen.mode == "img2img") {
+  // The SDEdit path (init_image set) slices the sigma schedule by strength,
+  // so its sampler sequence reports t_enc + 1 steps (t_enc = steps *
+  // strength, clamped to steps - 1 — mirrors the engine, which gates the
+  // slice on strength < 1 for init-image jobs). Match that total ONLY when
+  // that path is actually taken: the FLUX ref-image branch never sets
+  // init_image and keeps the full count, and a blanket tEnc+1 entry at low
+  // strength (e.g. 1 at strength 0) would let an unrelated single-tile /
+  // single-step sequence claim a denoise slot.
+  if (gen.mode == "img2img" && genParams.init_image.data != nullptr) {
     int tEnc = static_cast<int>(static_cast<float>(gen.steps) * gen.strength);
     if (tEnc >= gen.steps)
       tEnc = gen.steps - 1;

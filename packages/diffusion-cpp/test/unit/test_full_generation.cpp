@@ -100,10 +100,11 @@ TEST_F(SdFullGenerationTest, Txt2ImgMatchesIntegrationConfig) {
   EXPECT_GT(progressTicks.size(), 0u)
       << "Must receive at least 1 progress tick";
 
-  // The 2026-08-11 engine ticks every phase (text encoders, sampler, VAE
-  // decode), so the last tick belongs to the VAE, not the sampler. Assert the
-  // sampler sequence ran to completion instead: some tick must report
-  // step==total==10 (the configured step count).
+  // Besides the sampler, the engine may tick VAE tiling passes (text
+  // encoders never tick; the model loader ticks during load() since the
+  // addon loads eagerly), so the last tick is not necessarily the sampler's.
+  // Assert the sampler sequence ran to completion instead: some tick must
+  // report step==total==10 (the configured step count).
   // Progress JSON shape: {"step":N,"total":M,"elapsed_ms":T}
   const bool sawCompletedDenoise = std::any_of(
       progressTicks.begin(), progressTicks.end(), [](const std::string& tick) {

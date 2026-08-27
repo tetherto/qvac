@@ -12,7 +12,14 @@ const MODULE_NAME = 'qvac__diffusion-cpp'
 // GPU userspace loaders that must never be a hard DT_NEEDED of the addon
 // module itself: a CPU-only server has none of them installed, and a hard
 // link makes the whole worker abort at addon load (QVAC-23767 / gh#3853).
-const FORBIDDEN_NEEDED = ['libvulkan.', 'libOpenCL.', 'libcuda.', 'libcudart.']
+const FORBIDDEN_NEEDED = [
+  'libvulkan.',
+  'libOpenCL.',
+  'libcuda.',
+  'libcudart.',
+  'libcublas.',
+  'libcublasLt.'
+]
 
 // The prebuild must also stay self-contained w.r.t. the C++ runtime: neither
 // libc++ nor libstdc++ is guaranteed on a minimal Linux install, so a NEEDED

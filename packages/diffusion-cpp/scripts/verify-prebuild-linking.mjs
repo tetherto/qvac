@@ -20,7 +20,14 @@ import path from 'node:path'
 
 const MODULE_NAME = 'qvac__diffusion-cpp'
 const TARGETS = ['linux-x64', 'linux-arm64']
-const FORBIDDEN_NEEDED = ['libvulkan.', 'libOpenCL.', 'libcuda.', 'libcudart.']
+const FORBIDDEN_NEEDED = [
+  'libvulkan.',
+  'libOpenCL.',
+  'libcuda.',
+  'libcudart.',
+  'libcublas.',
+  'libcublasLt.'
+]
 const FORBIDDEN_RUNTIME = ['libc++.', 'libc++abi.', 'libstdc++.']
 
 // 32-bit-pair read of a little-endian u64 (offsets here are far below 2^53).
