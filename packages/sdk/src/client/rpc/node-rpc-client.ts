@@ -400,6 +400,7 @@ async function ensureRPC(): Promise<RPC> {
       }
 
       try {
+        const turbovecRollout = process.env['QVAC_RAG_TURBOVEC']
         bareWorkerProc = spawn('bare', {
           args: [
             WORKER_PATH,
@@ -408,7 +409,10 @@ async function ensureRPC(): Promise<RPC> {
               // Snap's HOME can be revision-scoped; SNAP_USER_COMMON is stable.
               HOME_DIR: process.env['SNAP_USER_COMMON']
                 ? String(process.env['SNAP_USER_COMMON'])
-                : os.homedir()
+                : os.homedir(),
+              ...(turbovecRollout === undefined
+                ? {}
+                : { QVAC_RAG_TURBOVEC: turbovecRollout })
             })
           ],
           platform: process.platform,
