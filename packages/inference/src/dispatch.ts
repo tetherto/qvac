@@ -142,7 +142,8 @@ function applyDeviceDefaults<T extends Request>(request: T): T {
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  if (!value || typeof value !== 'object') return false
+  return !Array.isArray(value)
 }
 
 function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
