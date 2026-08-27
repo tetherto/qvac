@@ -59,7 +59,9 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
+    # smoke_timeout_minutes applies only in default mode; qvac_perf_only runs
+    # the full perf list and keeps the leg's normal timeout_minutes.
+    timeout-minutes: ${{ (!inputs.qvac_perf_only && matrix.smoke_timeout_minutes) || matrix.timeout_minutes || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -116,6 +118,7 @@ jobs:
             platform: darwin
             arch: x64
             runner: macos-15-large
+            smoke_timeout_minutes: 45
             label: darwin-x64
             single_test: test/integration/api-behavior.test.js
           - os: windows-2025
