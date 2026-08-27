@@ -31,6 +31,15 @@ const ADDON_EXACT = new Set([
 
 const ENTRY_RE = /^([a-z][a-z0-9_]*):\s+(\S+)\s*(?:#\s*(.*\S))?\s*$/
 
+/**
+ * Deliberately a line parser, NOT a YAML parser. `.github/runners.yaml` is a
+ * flat `key: label # comment` list by contract (stated in its header), which
+ * keeps this dependency-free. Anything outside that shape fails loudly here
+ * rather than silently mis-parsing: indented / nested lines and bare junk do
+ * not match ENTRY_RE and throw; quoted or list/map values are rejected below.
+ * If runners.yaml ever needs real YAML (nesting, anchors), swap this for a YAML
+ * library at the same time — do not just relax the regex.
+ */
 export function parseRunnersYaml(source) {
   const runners = []
   const seenKeys = new Set()
@@ -41,9 +50,12 @@ export function parseRunnersYaml(source) {
     if (!trimmed || trimmed.startsWith('#')) continue
     const match = line.match(ENTRY_RE)
     if (!match) {
-      throw new Error(`invalid runners.yaml line: ${JSON.stringify(line)}`)
+      throw new Error(`invalid runners.yaml line (expected "key: label # comment"): ${JSON.stringify(line)}`)
     }
     const [, key, label, description = ''] = match
+    if (/["'{}[\]]/.test(label)) {
+      throw new Error(`runners.yaml value must be a bare label, not quoted/structured: ${JSON.stringify(line)}`)
+    }
     if (seenKeys.has(key)) throw new Error(`duplicate runner key: ${key}`)
     if (seenLabels.has(label)) throw new Error(`duplicate runner label: ${label}`)
     seenKeys.add(key)
@@ -145,6 +157,22 @@ function isCommentLine(line) {
   return /^\s*#/.test(line)
 }
 
+/**
+ * Flags catalog labels hardcoded where they select the machine: `runs-on:`,
+ * `runs-on: ${{ '<label>' }}`, matrix `runner:` fields, and `"runner":"<label>"`
+ * inside fromJSON matrix blobs.
+ *
+ * `os:` matrix values, `matrix.os == '<label>'` conditionals, and `"os":"..."`
+ * in fromJSON blobs are deliberately NOT flagged. `os` is a frozen logical
+ * identity that names a matrix row / gates steps / labels artifacts; it is
+ * decoupled from the runner catalog (self-hosted rows pair e.g. `os: macos-14`
+ * with `runner: qvac-macos26-arm64-gpu`). Every catalog-label `os` row already
+ * carries an explicit `runner:` from the catalog, so `runs-on` never resolves
+ * via a `matrix.os` fallback. Bumping a catalog label therefore never needs an
+ * `os` edit, and vice versa. See docs/ci/SELF-HOSTED-RUNNERS.md ("os is a frozen
+ * logical id"). Do not fold `os` in here without also renaming the label-like
+ * `os` values, or every intentional identity becomes a false positive.
+ */
 export function findHardcodedLabelViolations(relativePath, source, runners) {
   const findings = []
   const lines = source.split(/\r?\n/)

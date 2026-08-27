@@ -31,6 +31,16 @@ The `runner_names` job declares an explicit least-privilege `permissions: conten
 
 Keep [`.github/actionlint.yaml`](../../.github/actionlint.yaml) in sync: every `qvac-*` label in the catalog must be listed there. Prefer `runner.environment` for cleanup gating so steps do not couple to `qvac-` prefixes.
 
+### `os` is a frozen logical id, not a catalog label
+
+The catalog governs only **where a job runs** — `runs-on:` and matrix `runner:`. It deliberately does **not** manage the `os:` matrix field, `matrix.os == '...'` step conditionals, or `"os":"..."` inside `fromJSON` matrices. `os` is a frozen logical identity: it names a matrix row, gates platform-specific steps (e.g. `if: matrix.os == 'macos-14'` in [`pr-test-inference-addon-cpp.yml`](../../.github/workflows/pr-test-inference-addon-cpp.yml)), and labels artifacts. Self-hosted rows intentionally pair a logical `os` with a different runner (e.g. `os: macos-14` + `runner: qvac-macos26-arm64-gpu`).
+
+Because every catalog-label `os` row also carries an explicit `runner:` from the catalog, `runs-on` never falls back to `matrix.os`. So bumping a catalog label (e.g. `macos_arm64_gpu: qvac-macos26-arm64-gpu` → a new label) never requires touching any `os:` value, and re-imaging the logical `os` id (should the darwin fleet move off the `macos-14` string) is a separate, deliberate edit. `validate-runner-names.mjs` does not flag `os` for this reason. If you ever need `os` values that must track the runner, add an explicit `runner:` from the catalog to that row rather than relying on the `os` string.
+
+### The `runner_names` bootstrap job runs unconditionally
+
+Every wired workflow gains a `runner_names` job with no `if:` / `needs:` gate, so it runs on every PR event even when the consumer matrix is skipped (e.g. an unauthorized fork where `authorize` sets `allowed=false`). This is an accepted cost: the job is `ubuntu-latest`, has no checkout, and only echoes static label strings (~5s). Replicating each consumer's bespoke skip conditions (authorize gates, draft/label checks, CI-router outputs) onto the bootstrap across ~40 heterogeneous workflows would be high-churn and fragile for a job this cheap, and a skipped `runner_names` would cascade its `needs` consumers into skips anyway. Leave it ungated.
+
 ## Manual Workspace Cleanup
 
 Several workflows begin with a step named **Manual Workspace Cleanup** that runs before `actions/checkout`:

@@ -50,6 +50,10 @@ test('parseRunnersYaml rejects duplicates and junk', () => {
     /duplicate runner label/,
   )
   assert.throws(() => parseRunnersYaml('not yaml at all\n'), /invalid/)
+  // The line parser must fail loudly on non-flat YAML rather than mis-parse it.
+  assert.throws(() => parseRunnersYaml('macos_ios: "macos-14"\n'), /bare label/)
+  assert.throws(() => parseRunnersYaml("macos_ios: 'macos-14'\n"), /bare label/)
+  assert.throws(() => parseRunnersYaml('group:\n  macos_ios: macos-14\n'), /invalid/)
 })
 
 test('reusable-runner-names.yml matches the catalog', () => {

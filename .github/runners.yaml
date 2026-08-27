@@ -2,6 +2,18 @@
 # Edit this file, then run: node .github/scripts/sync-runner-names.mjs
 #
 # ubuntu-latest is intentionally omitted; keep it hardcoded as GitHub's alias.
+#
+# FORMAT CONTRACT: a flat `key: label # comment` list, one entry per line.
+# The parser (.github/scripts/lib/runner-names.mjs) is line-based, not YAML —
+# do NOT quote values, nest maps, or use lists here (it fails loudly). If real
+# YAML is ever needed, swap the parser at the same time.
+#
+# SCOPE: this catalog governs only where jobs RUN (runs-on / matrix.runner).
+# It does NOT manage `os:` matrix values or `matrix.os == '...'` conditionals —
+# those are frozen logical identities decoupled from the runner label (a
+# self-hosted row pairs e.g. `os: macos-14` with `runner: qvac-macos26-arm64-gpu`).
+# Bumping a label here never requires an `os` edit, and vice versa. See
+# docs/ci/SELF-HOSTED-RUNNERS.md.
 
 # GitHub-hosted (pinned images)
 macos_ios: macos-14 # iOS Device Farm build host
