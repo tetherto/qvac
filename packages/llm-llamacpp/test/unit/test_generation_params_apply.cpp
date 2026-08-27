@@ -137,12 +137,27 @@ TEST(TemplateDerivedSamplingTest, ChangeDetectionFiresOnGrammarOnlyDelta) {
   EXPECT_EQ(params.sampling.grammar.grammar, rendered.grammar);
 }
 
-TEST(TemplateDerivedSamplingTest, ChangeDetectionStaysFalseWhenNothingMoved) {
+// common_sampler_reset() rewinds the sampler chain but not the grammar, so a
+// tool grammar that a previous request drove to completion would reject every
+// token if the sampler were reused. Re-applying a tool grammar must therefore
+// always report a change, even when the grammar text is identical.
+TEST(TemplateDerivedSamplingTest, ReappliedToolGrammarAlwaysRequestsRebuild) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
       params, stubTokenizer(), toolRender(), true));
-  EXPECT_FALSE(configureTemplateDerivedSampling(
+  EXPECT_TRUE(configureTemplateDerivedSampling(
       params, stubTokenizer(), toolRender(), true));
+  EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+}
+
+TEST(TemplateDerivedSamplingTest, NoGrammarAndNothingMovedStaysFalse) {
+  common_params params = paramsWithoutReasoningBudget();
+  PromptRenderResult rendered;
+  rendered.generationPrompt = "<|im_start|>assistant\n";
+  EXPECT_FALSE(configureTemplateDerivedSampling(
+      params, stubTokenizer(), rendered, false));
+  EXPECT_FALSE(configureTemplateDerivedSampling(
+      params, stubTokenizer(), rendered, false));
 }
 
 TEST(

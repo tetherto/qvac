@@ -117,6 +117,25 @@ TEST_F(ToolGrammarModelTest, ToolGrammarAppliedOnToolRequest) {
   }
 }
 
+// Two tools requests in a row on the same context render the same grammar.
+// The grammar sampler keeps state across requests and common_sampler_reset()
+// does not rewind it, so the second request must get a fresh sampler or it
+// generates nothing. Regression for the tool-calling follow-up turn.
+TEST_F(ToolGrammarModelTest, ToolGrammarReappliedOnSecondToolRequest) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  auto model = createModel();
+  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const std::string first = model->processPrompt(makePrompt(TOOL_PROMPT));
+  EXPECT_FALSE(first.empty());
+
+  const std::string second = model->processPrompt(makePrompt(TOOL_PROMPT));
+  EXPECT_FALSE(second.empty()) << "second tools request generated nothing";
+  EXPECT_EQ(sampling(*model).grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+}
+
 // The single-prompt context is long-lived and a request with no
 // generationParams gets no restore lambda, so the tool grammar written by
 // turn 1 must be cleared by turn 2's tokenizeChat, not left to leak.

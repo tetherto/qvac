@@ -503,6 +503,7 @@ bool configureTemplateDerivedSampling(
     next.preserved_tokens.clear();
   }
 
+  bool toolGrammarApplied = false;
   if (toolsRequested && rendered.renderedByJinja && !rendered.grammar.empty() &&
       tokenize) {
     if (next.grammar.type == COMMON_GRAMMAR_TYPE_USER ||
@@ -512,11 +513,16 @@ bool configureTemplateDerivedSampling(
           "[ChatTemplateUtils] a user grammar or json_schema is active; the "
           "template's tool-call grammar is not applied\n");
     } else {
-      applyToolGrammar(next, tokenize, rendered);
+      toolGrammarApplied = applyToolGrammar(next, tokenize, rendered);
     }
   }
 
-  const bool changed = samplingChanged(params.sampling, next);
+  // A tool grammar is stateful: the previous request may have driven it to
+  // its terminal state, and common_sampler_reset() rewinds only the sampler
+  // chain, never the grammar. So an applied tool grammar always needs a fresh
+  // sampler, even when the grammar text is identical to the last request's.
+  const bool changed =
+      toolGrammarApplied || samplingChanged(params.sampling, next);
   if (changed) {
     params.sampling = std::move(next);
   }
