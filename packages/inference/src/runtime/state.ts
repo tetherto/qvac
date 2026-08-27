@@ -36,6 +36,8 @@ const configRegistry: QvacConfig = {
   loggerLevel: undefined,
   loggerConsoleOutput: undefined,
   httpDownloadConcurrency: undefined,
+  requireHttpChecksum: undefined,
+  requireSecureTransport: undefined,
   registryDownloadMaxRetries: undefined,
   registryStreamTimeoutMs: undefined,
   deviceDefaults: undefined
@@ -101,6 +103,16 @@ export function setConfig(config: QvacConfig) {
   if (config.httpDownloadConcurrency !== undefined && config.httpDownloadConcurrency !== null) {
     configRegistry.httpDownloadConcurrency = config.httpDownloadConcurrency
     logger.info(`HTTP download concurrency set to: ${config.httpDownloadConcurrency}`)
+  }
+
+  if (config.requireHttpChecksum !== undefined && config.requireHttpChecksum !== null) {
+    configRegistry.requireHttpChecksum = config.requireHttpChecksum
+    logger.info(`Require HTTP checksum: ${config.requireHttpChecksum}`)
+  }
+
+  if (config.requireSecureTransport !== undefined && config.requireSecureTransport !== null) {
+    configRegistry.requireSecureTransport = config.requireSecureTransport
+    logger.info(`Require secure transport: ${config.requireSecureTransport}`)
   }
 
   if (

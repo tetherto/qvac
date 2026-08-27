@@ -46,7 +46,8 @@ export async function handleLoadModel(
     return handleConfigReload(request)
   }
 
-  const { modelSrc, modelName, seed, fallbackSrc } = request
+  const { modelSrc, modelName, seed, fallbackSrc, requireHttpChecksum, requireSecureTransport } =
+    request
   const canonicalModelType = normalizeModelType(request.modelType)
 
   const profilingMeta = (request as Record<string, unknown>)[PROFILING_KEY] as
@@ -94,7 +95,8 @@ export async function handleLoadModel(
         signal: ctx.signal,
         scope: ctx.scope,
         requestId
-      }
+      },
+      security: { requireHttpChecksum, requireSecureTransport }
     })
 
     const primaryResolve = session.resolvePrimaryModelPath(modelSrc, fallbackSrc)

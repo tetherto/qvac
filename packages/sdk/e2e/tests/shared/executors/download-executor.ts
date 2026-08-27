@@ -1,8 +1,8 @@
 import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@qvac/qvac-test-suite'
-import { downloadCancelIsolation } from '../../download-tests.js'
+import { downloadCancelIsolation, downloadHuggingFaceVerify } from '../../download-tests.js'
 
-const downloadTests = [downloadCancelIsolation] as const
+const downloadTests = [downloadCancelIsolation, downloadHuggingFaceVerify] as const
 
 const CACHE_HIT_THRESHOLD_MS = 500
 
@@ -16,7 +16,26 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
   pattern = /^download-/
 
   protected handlers = {
-    [downloadCancelIsolation.testId]: this.cancelIsolation.bind(this)
+    [downloadCancelIsolation.testId]: this.cancelIsolation.bind(this),
+    [downloadHuggingFaceVerify.testId]: this.huggingFaceVerify.bind(this)
+  }
+
+  async huggingFaceVerify(
+    params: typeof downloadHuggingFaceVerify.params,
+    _expectation: typeof downloadHuggingFaceVerify.expectation
+  ): Promise<TestResult> {
+    // A checksum mismatch throws before resolving, so a resolved id means the
+    // streamed bytes matched the Hub SHA-256.
+    try {
+      const id = await downloadAsset({ assetSrc: params.assetUrl })
+      const ok = typeof id === 'string' && id.length > 0
+      return { passed: ok, output: ok ? `verified: ${id}` : `unexpected result: ${String(id)}` }
+    } catch (err) {
+      return {
+        passed: false,
+        output: `Hugging Face download/verify failed: ${err instanceof Error ? err.message : String(err)}`
+      }
+    }
   }
 
   async cancelIsolation(
