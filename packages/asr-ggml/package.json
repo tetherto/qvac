@@ -1,6 +1,6 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
   "addon": true,
   "engines": {
@@ -14,6 +14,8 @@
     "format": "prettier --write \"examples/**/*.js\" \"scripts/**/*.{js,mjs}\" \"test/**/*.js\" \"binding.js\"",
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:native:cuda": "bare-make generate -D ASR_CUDA=ON && bare-make build && bare-make install",
+    "build:cuda": "npm run build:ts && npm run build:native:cuda",
     "build:ts": "tsc -p tsconfig.build.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "clean": "rm -rf build/ prebuilds/",

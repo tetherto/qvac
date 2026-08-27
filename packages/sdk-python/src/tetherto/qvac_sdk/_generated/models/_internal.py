@@ -829,11 +829,9 @@ class BciTranscribeRequestNeuralDataBase64(GeneratedBaseModel):
 
 class BciTranscribeRequestNeuralDataFilePath(GeneratedBaseModel):
     type: Annotated[
-        Literal["filePath"], Field(description="Local neural `.bin` file path.")
+        Literal["filePath"], Field(description="Neural `.bin` file path.")
     ] = "filePath"
-    value: Annotated[
-        str, Field(description="Path to a BCI neural `.bin` recording on the provider.")
-    ]
+    value: Annotated[str, Field(description="Path to a BCI neural `.bin` recording.")]
 
 
 class BciTranscribeRequest(GeneratedBaseModel):
@@ -854,7 +852,7 @@ class BciTranscribeRequest(GeneratedBaseModel):
         BciTranscribeRequestNeuralDataBase64 | BciTranscribeRequestNeuralDataFilePath,
         Field(
             alias="neuralData",
-            description="Fixed wire shape for BCI neural input: either inline base64 neural bytes or a provider-local `.bin` file path.",
+            description="Fixed wire shape for BCI neural input: either inline base64 neural bytes or a `.bin` file path.",
         ),
     ]
     type: Literal["bciTranscribe"] = "bciTranscribe"
@@ -1065,6 +1063,7 @@ class CancelRequestBroadKind(Enum):
     transcribe = "transcribe"
     translate = "translate"
     diffusion = "diffusion"
+    world = "world"
     audiogen = "audiogen"
     tts = "tts"
     ocr = "ocr"
@@ -3039,7 +3038,7 @@ class GetLoadedModelInfoRequest(GeneratedBaseModel):
     type: Literal["getLoadedModelInfo"] = "getLoadedModelInfo"
 
 
-class LocalLoadedModelInfoToolDialect(Enum):
+class LoadedModelInfoToolDialect(Enum):
     hermes = "hermes"
     pythonic = "pythonic"
     json = "json"
@@ -3049,12 +3048,11 @@ class LocalLoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
-class LocalLoadedModelInfo(GeneratedBaseModel):
+class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     model_id: Annotated[str, Field(alias="modelId")]
-    is_delegated: Annotated[Literal[False], Field(alias="isDelegated")] = False
     model_type: Annotated[str, Field(alias="modelType")]
     handlers: list[str]
     display_name: Annotated[str | None, Field(alias="displayName")] = None
@@ -3063,29 +3061,9 @@ class LocalLoadedModelInfo(GeneratedBaseModel):
     name: str | None = None
     path: str | None = None
     tool_dialect: Annotated[
-        LocalLoadedModelInfoToolDialect | None,
-        Field(alias="toolDialect", title="LocalLoadedModelInfoToolDialect"),
+        LoadedModelInfoToolDialect | None,
+        Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
     ] = None
-
-
-class DelegatedLoadedModelInfoProviderInfo(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    provider_public_key: Annotated[str, Field(alias="providerPublicKey")]
-
-
-class DelegatedLoadedModelInfo(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    model_id: Annotated[str, Field(alias="modelId")]
-    is_delegated: Annotated[Literal[True], Field(alias="isDelegated")] = True
-    handlers: list[str]
-    provider_info: Annotated[
-        DelegatedLoadedModelInfoProviderInfo,
-        Field(alias="providerInfo", title="DelegatedLoadedModelInfoProviderInfo"),
-    ]
 
 
 class GetLoadedModelInfoResponse(GeneratedBaseModel):
@@ -3093,7 +3071,7 @@ class GetLoadedModelInfoResponse(GeneratedBaseModel):
         extra="forbid",
     )
     type: Literal["getLoadedModelInfo"] = "getLoadedModelInfo"
-    info: LocalLoadedModelInfo | DelegatedLoadedModelInfo
+    info: Annotated[LoadedModelInfo, Field(title="LoadedModelInfo")]
 
 
 class GetModelInfoRequest(GeneratedBaseModel):
@@ -6464,37 +6442,8 @@ class GetSystemResourcesResponse(GeneratedBaseModel):
     type: Literal["getSystemResources"] = "getSystemResources"
 
 
-class HeartbeatRequestDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-
-
 class HeartbeatRequest(GeneratedBaseModel):
     type: Literal["heartbeat"] = "heartbeat"
-    delegate: Annotated[
-        HeartbeatRequestDelegate | None, Field(title="HeartbeatRequestDelegate")
-    ] = None
 
 
 class HeartbeatResponse(GeneratedBaseModel):
@@ -6503,46 +6452,6 @@ class HeartbeatResponse(GeneratedBaseModel):
     )
     type: Literal["heartbeat"] = "heartbeat"
     number: float
-
-
-class LoadModelSrcRequestLlamacppCompletionDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class Predict(RootModel[int]):
@@ -6850,10 +6759,6 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestLlamacppCompletionDelegate | None,
-        Field(title="LoadModelSrcRequestLlamacppCompletionDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -6879,46 +6784,6 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
             title="LoadModelSrcRequestLlamacppCompletionModelConfig",
         ),
     ]
-
-
-class LoadModelSrcRequestWhispercppTranscriptionDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy(Enum):
@@ -7099,10 +6964,6 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestWhispercppTranscriptionDelegate | None,
-        Field(title="LoadModelSrcRequestWhispercppTranscriptionDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -7128,46 +6989,6 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
             title="LoadModelSrcRequestWhispercppTranscriptionModelConfig",
         ),
     ]
-
-
-class LoadModelSrcRequestBciWhispercppTranscriptionDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
@@ -7319,10 +7140,6 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestBciWhispercppTranscriptionDelegate | None,
-        Field(title="LoadModelSrcRequestBciWhispercppTranscriptionDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -7348,46 +7165,6 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
             title="LoadModelSrcRequestBciWhispercppTranscriptionModelConfig",
         ),
     ]
-
-
-class LoadModelSrcRequestParakeetTranscriptionDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
@@ -7482,10 +7259,6 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestParakeetTranscriptionDelegate | None,
-        Field(title="LoadModelSrcRequestParakeetTranscriptionDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -7511,46 +7284,6 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
             title="LoadModelSrcRequestParakeetTranscriptionModelConfig",
         ),
     ] = None
-
-
-class LoadModelSrcRequestLlamacppEmbeddingDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigDevice(Enum):
@@ -7699,10 +7432,6 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestLlamacppEmbeddingDelegate | None,
-        Field(title="LoadModelSrcRequestLlamacppEmbeddingDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -7727,46 +7456,6 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
             alias="modelConfig", title="LoadModelSrcRequestLlamacppEmbeddingModelConfig"
         ),
     ]
-
-
-class LoadModelSrcRequestNmtcppTranslationDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotMode(Enum):
@@ -8314,10 +8003,6 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestNmtcppTranslationDelegate | None,
-        Field(title="LoadModelSrcRequestNmtcppTranslationDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -8341,46 +8026,6 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
         | LoadModelSrcRequestNmtcppTranslationModelConfigIndicTrans,
         Field(alias="modelConfig"),
     ]
-
-
-class LoadModelSrcRequestTtsGgmlDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage(Enum):
@@ -9844,10 +9489,6 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestTtsGgmlDelegate | None,
-        Field(title="LoadModelSrcRequestTtsGgmlDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -9872,46 +9513,6 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         | LoadModelSrcRequestTtsGgmlModelConfigAudio8,
         Field(alias="modelConfig"),
     ]
-
-
-class LoadModelSrcRequestGgmlOcrDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestGgmlOcrModelConfigPipelineType(Enum):
@@ -10017,10 +9618,6 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestGgmlOcrDelegate | None,
-        Field(title="LoadModelSrcRequestGgmlOcrDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -10043,50 +9640,11 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
     ]
 
 
-class LoadModelSrcRequestSdcppGenerationDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
-
-
 class LoadModelSrcRequestSdcppGenerationModelConfigMode(Enum):
     diffusion = "diffusion"
     upscale = "upscale"
     video = "video"
+    world = "world"
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
@@ -10624,6 +10182,174 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
     ) = None
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc(GeneratedBaseModel):
+    src: str
+    name: str | None = None
+    model_id: Annotated[str | None, Field(alias="modelId")] = None
+    registry_path: Annotated[str | None, Field(alias="registryPath")] = None
+    registry_source: Annotated[str | None, Field(alias="registrySource")] = None
+    blob_core_key: Annotated[str | None, Field(alias="blobCoreKey")] = None
+    blob_index: Annotated[float | None, Field(alias="blobIndex")] = None
+    engine: str | None = None
+    expected_size: Annotated[float | None, Field(alias="expectedSize")] = None
+    sha256_checksum: Annotated[str | None, Field(alias="sha256Checksum")] = None
+    addon: (
+        LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon
+        | Literal["vad"]
+        | None
+    ) = None
+
+
+class Threads(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="CPU threads for the session. -1 = auto-detect (default).",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    seed: Annotated[
+        int | None,
+        Field(description="Walk RNG seed.", ge=-9007199254740991, le=9007199254740991),
+    ] = None
+    threads: Annotated[
+        Literal[-1] | Threads | None,
+        Field(description="CPU threads for the session. -1 = auto-detect (default)."),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description='Per-module backend override, e.g. "diffusion=cuda0,vae=cuda1" to keep scene creation off the walk GPU on a multi-GPU host.',
+            min_length=1,
+        ),
+    ] = None
+    num_frame_per_block: Annotated[
+        int | None,
+        Field(
+            alias="numFramePerBlock",
+            description="Latent frames denoised per step. 0 = model default (3), and 64 is the ceiling. The native parser accepts up to 1024, but that is a range check rather than a memory budget: a block delivers roughly 4x this many decoded frames, so 1024 is ~4096 frames and several GB of raw pixels at 832x480 before any of it is encoded. 64 is ~20x the default and bounds a block at a few hundred MB.",
+            ge=0,
+            le=64,
+        ),
+    ] = None
+    local_attn_size: Annotated[
+        int | None,
+        Field(
+            alias="localAttnSize",
+            description="History attention window in latent frames. 0 = engine default (8). With `kvCache` the engine validates this against the compiled KV ring and fails at load on an unsupported combination.",
+            ge=0,
+            le=1024,
+        ),
+    ] = None
+    offload_params_to_cpu: Annotated[
+        bool | None,
+        Field(
+            alias="offloadParamsToCpu",
+            description="Keep weights in CPU memory and offload during GPU compute.",
+        ),
+    ] = None
+    frame_jpeg_quality: Annotated[
+        int | None,
+        Field(
+            alias="frameJpegQuality",
+            description="Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at that quality on the standard scale (higher = better quality and larger frames). A block is roughly 14 MB of raw pixels at 832x480 and the default numFramePerBlock — more at a higher resolution or a larger block — so 85 is a good choice whenever frames cross a process or network boundary.",
+            ge=0,
+            le=100,
+        ),
+    ] = None
+    kv_cache: Annotated[
+        bool | None,
+        Field(
+            alias="kvCache",
+            description="Per-layer history KV cache (~3.7x fewer frame-passes per block). Costs ~1.2 GB more VRAM but keeps block times flat; without it they ramp from ~1.8 s to ~7.5 s as the recompute window fills.",
+        ),
+    ] = None
+    profile: Annotated[
+        bool | None, Field(description="Per-stage timing logs from the native session.")
+    ] = None
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -10670,7 +10396,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(GeneratedBas
     ) = None
 
 
-class Threads(RootModel[int]):
+class Threads1(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -10718,7 +10444,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
         ),
     ] = None
     threads: Annotated[
-        Literal[-1] | Threads | None,
+        Literal[-1] | Threads1 | None,
         Field(
             description="Number of CPU threads dedicated to the ESRGAN upscaler. -1 = auto."
         ),
@@ -10729,7 +10455,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices; pass a `delegate` to `loadModel(...)` to run generation on a desktop peer instead.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
@@ -10886,6 +10612,27 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             description="Text-embedding connector weights — required for LTX-2 video. Its presence selects the LTX-2 video layout (Gemma text encoder via `llmModelSrc` + video VAE via `vaeModelSrc` + these connectors) instead of the Wan layout.",
         ),
     ] = None
+    taehv_model_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc | None,
+        Field(
+            alias="taehvModelSrc",
+            description="taew2_2 streaming pixel decoder (`taew2_2_f16.gguf`) — required for mode: 'world'. Decodes each generated block's latents to RGB frames. Rejected in every other mode.",
+        ),
+    ] = None
+    scene_src: Annotated[
+        str | LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc | None,
+        Field(
+            alias="sceneSrc",
+            description="Pre-built ABot-World scene pack (`.safetensors`) — mode: 'world' only. Supplying it loads the walk session eagerly at loadModel time, so a bad pack fails fast. Omit it to start with no world and build one with worldCreateScene({ ... }), in which case the session activates on the first worldStep. Scene packs are produced by worldCreateScene and are specific to the resolution they were created at.",
+        ),
+    ] = None
+    world: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigWorld | None,
+        Field(
+            description="ABot-World session tuning — mode: 'world' only, rejected in every other mode. Forwarded to the native session as-is.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigWorld",
+        ),
+    ] = None
     upscaler: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigUpscaler | None,
         Field(
@@ -10904,10 +10651,6 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestSdcppGenerationDelegate | None,
-        Field(title="LoadModelSrcRequestSdcppGenerationDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -10932,46 +10675,6 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
             alias="modelConfig", title="LoadModelSrcRequestSdcppGenerationModelConfig"
         ),
     ] = None
-
-
-class LoadModelSrcRequestAudiogenGgmlDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrcAddon(Enum):
@@ -11162,31 +10865,81 @@ class LoadModelSrcRequestAudiogenGgmlModelConfig(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    use_gpu: Annotated[bool | None, Field(alias="useGPU")] = None
+    use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="useGPU",
+            description="Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.",
+        ),
+    ] = None
     inference_steps: Annotated[
-        int | None, Field(alias="inferenceSteps", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="inferenceSteps",
+            description="DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
-    shift: Annotated[float | None, Field(ge=0.0)] = None
+    shift: Annotated[
+        float | None,
+        Field(
+            description="Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).",
+            ge=0.0,
+        ),
+    ] = None
     n_gpu_layers: Annotated[
-        int | None, Field(alias="nGpuLayers", ge=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="nGpuLayers",
+            description="GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
-    threads: Annotated[int | None, Field(ge=0, le=9007199254740991)] = None
-    backends_dir: Annotated[str | None, Field(alias="backendsDir", min_length=1)] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count; `0` (default) lets the engine auto-pick.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.",
+            min_length=1,
+        ),
+    ] = None
     text_enc_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc,
-        Field(alias="textEncModelSrc"),
+        Field(
+            alias="textEncModelSrc",
+            description="Text-encoder model source; turns the caption and lyrics into embeddings.",
+        ),
     ]
     lm_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc,
-        Field(alias="lmModelSrc"),
+        Field(
+            alias="lmModelSrc",
+            description="Language-model source; plans the song structure.",
+        ),
     ]
     dit_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc,
-        Field(alias="ditModelSrc"),
+        Field(
+            alias="ditModelSrc",
+            description="DiT model source; generates the audio latent (the quality-defining stage).",
+        ),
     ]
     vae_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc,
-        Field(alias="vaeModelSrc"),
+        Field(
+            alias="vaeModelSrc",
+            description="VAE model source; decodes the latent into the output waveform.",
+        ),
     ]
 
 
@@ -11199,10 +10952,6 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestAudiogenGgmlDelegate | None,
-        Field(title="LoadModelSrcRequestAudiogenGgmlDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -11225,46 +10974,6 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
         LoadModelSrcRequestAudiogenGgmlModelConfig,
         Field(alias="modelConfig", title="LoadModelSrcRequestAudiogenGgmlModelConfig"),
     ]
-
-
-class LoadModelSrcRequestGgmlVlaDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
 
 
 class LoadModelSrcRequestGgmlVlaModelConfigBackend(Enum):
@@ -11355,10 +11064,6 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestGgmlVlaDelegate | None,
-        Field(title="LoadModelSrcRequestGgmlVlaDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -11381,46 +11086,6 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelSrcRequestGgmlClassificationDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
-
-
 class LoadModelSrcRequestGgmlClassificationModelConfig(GeneratedBaseModel):
     model_path: Annotated[str | None, Field(alias="modelPath")] = None
     top_k: Annotated[
@@ -11438,10 +11103,6 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelSrcRequestGgmlClassificationDelegate | None,
-        Field(title="LoadModelSrcRequestGgmlClassificationDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -11469,46 +11130,6 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
     ] = None
 
 
-class LoadModelCustomPluginRequestDelegate(GeneratedBaseModel):
-    provider_public_key: Annotated[
-        str,
-        Field(
-            alias="providerPublicKey",
-            description="Hex-encoded public key of the remote provider to delegate to.",
-            pattern="^[0-9a-fA-F]{64}$",
-        ),
-    ]
-    timeout: Annotated[
-        float | None,
-        Field(
-            description="Per-call timeout in milliseconds for the delegated request.",
-            ge=100.0,
-        ),
-    ] = None
-    health_check_timeout: Annotated[
-        float | None,
-        Field(
-            alias="healthCheckTimeout",
-            description="Timeout in milliseconds for the health-check probe before delegating.",
-            ge=100.0,
-        ),
-    ] = None
-    fallback_to_local: Annotated[
-        bool | None,
-        Field(
-            alias="fallbackToLocal",
-            description="When `true`, fall back to local execution if the delegated provider is unreachable.",
-        ),
-    ] = False
-    force_new_connection: Annotated[
-        bool | None,
-        Field(
-            alias="forceNewConnection",
-            description="When `true`, skip any cached delegation connection and open a fresh one.",
-        ),
-    ] = False
-
-
 class LoadModelCustomPluginRequestModelConfig(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any], Field(title="LoadModelCustomPluginRequestModelConfig")
@@ -11521,10 +11142,6 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
     model_name: Annotated[str | None, Field(alias="modelName")] = None
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
     seed: bool | None = None
-    delegate: Annotated[
-        LoadModelCustomPluginRequestDelegate | None,
-        Field(title="LoadModelCustomPluginRequestDelegate"),
-    ] = None
     fallback_src: Annotated[
         str | None,
         Field(
@@ -11745,7 +11362,6 @@ class ReloadConfigRequest(GeneratedBaseModel):
     model_id: Annotated[str, Field(alias="modelId", pattern="^[0-9a-f]{16}$")]
     model_src: Annotated[Any | None, Field(alias="modelSrc")] = None
     with_progress: Annotated[Any | None, Field(alias="withProgress")] = None
-    delegate: Any | None = None
     seed: Any | None = None
     model_type: Annotated[
         ReloadConfigRequestModelType,
@@ -12361,38 +11977,6 @@ class PluginInvokeStreamResponse(GeneratedBaseModel):
     done: bool | None = None
 
 
-class ProvideRequestFirewallMode(Enum):
-    allow = "allow"
-    deny = "deny"
-
-
-class ProvideRequestFirewall(GeneratedBaseModel):
-    mode: Annotated[
-        ProvideRequestFirewallMode | None, Field(title="ProvideRequestFirewallMode")
-    ] = "allow"
-    public_keys: Annotated[list[str] | None, Field(alias="publicKeys")] = []
-
-
-class ProvideRequest(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    firewall: Annotated[
-        ProvideRequestFirewall | None, Field(title="ProvideRequestFirewall")
-    ] = None
-    type: Literal["provide"] = "provide"
-
-
-class ProvideResponse(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    type: Literal["provide"] = "provide"
-    success: bool
-    error: str | None = None
-    public_key: Annotated[str | None, Field(alias="publicKey")] = None
-
-
 class RagRequestChunkChunkOptsChunkStrategy(Enum):
     character = "character"
     paragraph = "paragraph"
@@ -12777,22 +12361,6 @@ class StateResponse(GeneratedBaseModel):
     )
     type: Literal["state"] = "state"
     state: Annotated[StateResponseState, Field(title="StateResponseState")]
-
-
-class StopProvideRequest(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    type: Literal["stopProvide"] = "stopProvide"
-
-
-class StopProvideResponse(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    type: Literal["stopProvide"] = "stopProvide"
-    success: bool
-    error: str | None = None
 
 
 class SuspendRequest(GeneratedBaseModel):
@@ -13539,9 +13107,6 @@ class UnloadModelResponse(GeneratedBaseModel):
     success: bool
     error: str | None = None
     has_active_models: Annotated[bool | None, Field(alias="hasActiveModels")] = None
-    has_active_providers: Annotated[bool | None, Field(alias="hasActiveProviders")] = (
-        None
-    )
 
 
 class UpscaleStreamRequest(GeneratedBaseModel):
@@ -13768,7 +13333,7 @@ class VideoStreamRequest(GeneratedBaseModel):
         str,
         Field(
             alias="modelId",
-            description="The identifier of the loaded video model to use for generation. On React Native, prefer a `modelId` loaded with a `delegate` because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices.",
+            description="The identifier of the loaded video model to use for generation. On React Native, the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices.",
         ),
     ]
     request_id: Annotated[
@@ -13789,7 +13354,7 @@ class VideoStreamRequest(GeneratedBaseModel):
     lora: Annotated[
         str | None,
         Field(
-            description="LTX video only. Worker-local absolute path to a LoRA adapter. Under delegated inference the file must already exist on the provider.",
+            description="LTX video only. Worker-local absolute path to a LoRA adapter.",
             min_length=1,
             pattern="^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)",
         ),
@@ -14179,6 +13744,277 @@ class VideoStreamResponse(GeneratedBaseModel):
     ] = None
 
 
+class WorldSceneStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier of a model loaded with modelConfig.mode: 'world'.",
+        ),
+    ]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this scene creation. Note that scene creation cannot be interrupted — the engine exposes no abort hook — so cancelling it stops the SDK from yielding, but the encode runs to completion.",
+            min_length=1,
+        ),
+    ] = None
+    prompt: Annotated[
+        str,
+        Field(
+            description='Scene prompt, encoded verbatim by umT5-XXL. The reference pipeline prefixes prompts with "| unknown | ".',
+            min_length=1,
+        ),
+    ]
+    image: Annotated[
+        str,
+        Field(
+            description="Base64 PNG/JPEG bytes of the first frame, up to 3 MB decoded and 8192x8192 pixels. It is cover-scaled and center-cropped to width x height, so a frame larger than the target resolution buys nothing. The pixel ceiling is read from the image header and enforced by the worker before anything decodes it, so a compressed image that expands to gigabytes is refused rather than allocated.",
+            max_length=4194304,
+            min_length=1,
+            pattern="^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+        ),
+    ]
+    width: Annotated[
+        int | None,
+        Field(
+            description="Scene width in pixels, a multiple of 32, at most 4096. Defaults to 832. width x height must also stay within 2088960 pixels (1920x1088). That product rule is a cross-field constraint, so it is NOT expressed in the generated JSON Schema or Python client — those validate each axis only, and the combined limit is enforced by the worker, which rejects the request before any GPU memory is allocated.",
+            gt=0,
+            le=4096,
+            multiple_of=32,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Scene height in pixels, a multiple of 32, at most 4096. Defaults to 480. See `width` for the total-pixel ceiling, which bounds the product as well as each axis and is enforced server-side.",
+            gt=0,
+            le=4096,
+            multiple_of=32,
+        ),
+    ] = None
+    return_pack: Annotated[
+        bool | None,
+        Field(
+            alias="returnPack",
+            description="Return the generated scene pack in the response. Off by default: the pack is 10+ MB (a third larger again as base64) and the common create-then-walk-now flow never touches the bytes — the world is already live on the session. Turn it on to persist a world, then pass the saved file back as modelConfig.sceneSrc on a later load to walk it again.",
+        ),
+    ] = None
+    type: Literal["worldSceneStream"] = "worldSceneStream"
+
+
+class WorldSceneStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    scene_create_ms: Annotated[
+        float | None,
+        Field(
+            alias="sceneCreateMs",
+            description="Wall-clock time in milliseconds for the scene pack: loading the prompt and image encoders, encoding both, and writing the pack.",
+        ),
+    ] = None
+    width: Annotated[
+        int | None,
+        Field(
+            description="Scene width in pixels, baked into the pack.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Scene height in pixels, baked into the pack.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
+class WorldSceneStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["worldSceneStream"] = "worldSceneStream"
+    data: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the finished scene pack (~10 MB). Persist it and pass it back as modelConfig.sceneSrc to walk the same world again later."
+        ),
+    ] = None
+    done: bool | None = None
+    stats: Annotated[
+        WorldSceneStreamResponseStats | None,
+        Field(title="WorldSceneStreamResponseStats"),
+    ] = None
+
+
+class WorldStepStreamRequestKeysItem(Enum):
+    w = "W"
+    a = "A"
+    s = "S"
+    d = "D"
+    i = "I"
+    j = "J"
+    k = "K"
+    l = "L"  # noqa: E741
+
+
+class WorldStepStreamRequest(GeneratedBaseModel):
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Identifier of a model loaded with modelConfig.mode: 'world'. The session activates on the first step when no sceneSrc was supplied at load.",
+        ),
+    ]
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight block, for cancel(). Optional on the wire — the server generates one when the field is missing.",
+            min_length=1,
+        ),
+    ] = None
+    keys: Annotated[
+        list[WorldStepStreamRequestKeysItem] | None,
+        Field(
+            description="Keys held for this block. WASD move, IJKL steer the camera; duplicates are collapsed. Omit or pass an empty array to idle."
+        ),
+    ] = None
+    type: Literal["worldStepStream"] = "worldStepStream"
+
+
+class WorldStepStreamResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_load_ms: Annotated[
+        float | None,
+        Field(
+            alias="modelLoadMs",
+            description="Time in milliseconds spent loading the DiT, decoder and scene pack.",
+        ),
+    ] = None
+    step_ms: Annotated[
+        float | None,
+        Field(
+            alias="stepMs",
+            description="Generation time in milliseconds for this block, excluding frame encoding.",
+        ),
+    ] = None
+    total_step_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalStepMs",
+            description="Cumulative generation time in milliseconds across the session.",
+        ),
+    ] = None
+    total_steps: Annotated[
+        int | None,
+        Field(
+            alias="totalSteps",
+            description="Number of blocks generated so far in this session; resets when the session reloads.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    total_frames: Annotated[
+        int | None,
+        Field(
+            alias="totalFrames",
+            description="Cumulative frames delivered across the session.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    frames: Annotated[
+        int | None,
+        Field(
+            description="Frames delivered for this block — 9 for the first block after a load (decoder warmup), 12 thereafter at the default numFramePerBlock.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    width: Annotated[
+        int | None,
+        Field(
+            description="Frame width in pixels.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Frame height in pixels.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    action_mask: Annotated[
+        int | None,
+        Field(
+            alias="actionMask",
+            description="The 8-bit key mask this block was generated under (bit 0..7 = W,A,S,D,I,J,K,L).",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
+class WorldStepStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["worldStepStream"] = "worldStepStream"
+    step: Annotated[
+        int | None,
+        Field(
+            description="The engine's own `step` counter, forwarded verbatim: blocks completed on this session. One tick is emitted per block, after its frames, so this is not progress within a block.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    total_steps: Annotated[
+        int | None,
+        Field(
+            alias="totalSteps",
+            description="Frames DELIVERED by the block that just finished — a final count, not a running one, because the engine emits this after the frames rather than during. Named `totalSteps` only so the wire shape matches videoStream and diffusionStream, where that slot holds a sampler-step total.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    elapsed_ms: Annotated[
+        float | None,
+        Field(
+            alias="elapsedMs",
+            description="Milliseconds elapsed within this block so far.",
+        ),
+    ] = None
+    data: Annotated[
+        str | None,
+        Field(
+            description="Base64 of one decoded frame — PNG, or JPEG when world.frameJpegQuality is 1..100."
+        ),
+    ] = None
+    frame_index: Annotated[
+        int | None,
+        Field(
+            alias="frameIndex",
+            description="Zero-based index of this frame within the block.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    done: bool | None = None
+    stats: Annotated[
+        WorldStepStreamResponseStats | None, Field(title="WorldStepStreamResponseStats")
+    ] = None
+
+
 class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
     root: Annotated[
         CancelRequestRequest | CancelRequestBroad, Field(title="CancelRequest")
@@ -14291,12 +14127,10 @@ class Response(
         | OcrStreamResponse
         | PluginInvokeResponse
         | PluginInvokeStreamResponse
-        | ProvideResponse
         | Response_1
         | RagProgressResponse
         | ResumeResponse
         | StateResponse
-        | StopProvideResponse
         | SuspendResponse
         | TextToSpeechResponse
         | TextToSpeechStreamResponse
@@ -14306,6 +14140,8 @@ class Response(
         | UnloadModelResponse
         | UpscaleStreamResponse
         | VideoStreamResponse
+        | WorldSceneStreamResponse
+        | WorldStepStreamResponse
     ]
 ):
     root: Annotated[
@@ -14337,12 +14173,10 @@ class Response(
         | OcrStreamResponse
         | PluginInvokeResponse
         | PluginInvokeStreamResponse
-        | ProvideResponse
         | Response_1
         | RagProgressResponse
         | ResumeResponse
         | StateResponse
-        | StopProvideResponse
         | SuspendResponse
         | TextToSpeechResponse
         | TextToSpeechStreamResponse
@@ -14351,7 +14185,9 @@ class Response(
         | TranslateResponse
         | UnloadModelResponse
         | UpscaleStreamResponse
-        | VideoStreamResponse,
+        | VideoStreamResponse
+        | WorldSceneStreamResponse
+        | WorldStepStreamResponse,
         Field(
             description="Any response emitted by the server, including progress updates and error envelopes.",
             title="AnyResponse",
@@ -14392,11 +14228,9 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | ProvideRequest
         | Request_5
         | ResumeRequest
         | StateRequest
-        | StopProvideRequest
         | SuspendRequest
         | TextToSpeechRequest
         | TextToSpeechStreamRequest
@@ -14406,6 +14240,8 @@ class Request(
         | UnloadModelRequest
         | UpscaleStreamRequest
         | VideoStreamRequest
+        | WorldSceneStreamRequest
+        | WorldStepStreamRequest
     ]
 ):
     root: Annotated[
@@ -14434,11 +14270,9 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | ProvideRequest
         | Request_5
         | ResumeRequest
         | StateRequest
-        | StopProvideRequest
         | SuspendRequest
         | TextToSpeechRequest
         | TextToSpeechStreamRequest
@@ -14447,7 +14281,9 @@ class Request(
         | Request_6
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | VideoStreamRequest,
+        | VideoStreamRequest
+        | WorldSceneStreamRequest
+        | WorldStepStreamRequest,
         Field(
             description="Any request accepted by the server, in wire (pre-parse) shape.",
             title="AnyRequest",

@@ -125,7 +125,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 
 ## Package coverage
 
-- **Models (full list)**: `sdk`, `bare-sdk`, `inference`, `registry-server/client`
+- **Models (full list)**: `sdk`, `inference`, `registry-server/client`
 - **Models (by engine)**: All addon packages, mapped by engine name
 - **JS**: Every package with dependencies in `package.json`
 - **Python**: Packages with `requirements.txt` or `pyproject.toml` in benchmarks/scripts
