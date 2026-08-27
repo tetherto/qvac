@@ -43,10 +43,6 @@ class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
     ]
 
 
-class AssessModelFitRequestModelsItemWorkloadFixed(GeneratedBaseModel):
-    kind: Literal["fixed"] = "fixed"
-
-
 class AssessModelFitRequestModelsItemWorkloadLlm(GeneratedBaseModel):
     kind: Literal["llm"] = "llm"
     context_tokens: Annotated[
@@ -92,8 +88,7 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
         Field(description="Additional catalog constants this load also requires."),
     ] = None
     workload: Annotated[
-        AssessModelFitRequestModelsItemWorkloadFixed
-        | AssessModelFitRequestModelsItemWorkloadLlm
+        AssessModelFitRequestModelsItemWorkloadLlm
         | AssessModelFitRequestModelsItemWorkloadAudio,
         Field(description="Workload the caller intends to run."),
     ]

@@ -319,18 +319,6 @@
                     "properties": {
                       "kind": {
                         "type": "string",
-                        "const": "fixed"
-                      }
-                    },
-                    "required": ["kind"],
-                    "description": "A load whose memory does not scale with any request dimension.",
-                    "title": "AssessModelFitRequestModelsItemWorkloadFixed"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
                         "const": "llm"
                       },
                       "contextTokens": {

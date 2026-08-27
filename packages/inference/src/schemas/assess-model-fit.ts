@@ -13,13 +13,11 @@ export const modelFitVerdictSchema = z.enum(['likely-fits', 'likely-too-large', 
  * Normalized workload shapes. An engine's estimator declares which kinds it
  * supports; anything else assesses as `unknown`.
  *
- * Phase 1 covers a fixed-cost load, LLM context, and an audio window. Further
- * kinds (text, image, video) are additive in later phases.
+ * Phase 1 covers LLM context and an audio window. Further kinds (fixed-cost
+ * loads, text, image, video) are additive in later phases — a kind joins the
+ * union only once an estimator actually handles it.
  */
 export const modelFitWorkloadSchema = z.discriminatedUnion('kind', [
-  z
-    .object({ kind: z.literal('fixed') })
-    .describe('A load whose memory does not scale with any request dimension.'),
   z
     .object({
       kind: z.literal('llm'),
