@@ -28,21 +28,61 @@ export const audioGenTaskTypeSchema = z.enum(AUDIOGEN_TASK_TYPES)
 
 export const audioGenRuntimeConfigSchema = z
   .object({
-    useGPU: z.boolean().optional(),
-    inferenceSteps: z.number().int().nonnegative().optional(),
-    shift: z.number().nonnegative().optional(),
-    nGpuLayers: z.number().int().nonnegative().optional(),
-    threads: z.number().int().nonnegative().optional(),
-    backendsDir: z.string().min(1).optional()
+    useGPU: z
+      .boolean()
+      .optional()
+      .describe(
+        'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.'
+      ),
+    inferenceSteps: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe(
+        'DiT sampling steps; `0` (default) lets the engine auto-pick per DiT architecture (turbo 8 / sft 50).'
+      ),
+    shift: z
+      .number()
+      .nonnegative()
+      .optional()
+      .describe(
+        'Flow-matching time-shift; `0` (default) lets the engine auto-pick per DiT architecture (turbo 3.0 / sft 1.0).'
+      ),
+    nGpuLayers: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.'),
+    threads: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('CPU thread count; `0` (default) lets the engine auto-pick.'),
+    backendsDir: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
+      )
   })
   .strict()
 
 export const audioGenConfigSchema = audioGenRuntimeConfigSchema
   .extend({
-    textEncModelSrc: modelSrcInputSchema,
-    lmModelSrc: modelSrcInputSchema,
-    ditModelSrc: modelSrcInputSchema,
-    vaeModelSrc: modelSrcInputSchema
+    textEncModelSrc: modelSrcInputSchema.describe(
+      'Text-encoder model source; turns the caption and lyrics into embeddings.'
+    ),
+    lmModelSrc: modelSrcInputSchema.describe('Language-model source; plans the song structure.'),
+    ditModelSrc: modelSrcInputSchema.describe(
+      'DiT model source; generates the audio latent (the quality-defining stage).'
+    ),
+    vaeModelSrc: modelSrcInputSchema.describe(
+      'VAE model source; decodes the latent into the output waveform.'
+    )
   })
   .strict()
 
