@@ -364,6 +364,9 @@ void MtmdLlmContext::tokenizeChat(
   }
   const PromptRenderResult rendered = getPrompt(tmpls_.get(), inputs);
   formattedChat = rendered.prompt;
+  if (rendered.toolDefinitionsDropped) {
+    ++toolDefinitionsDropped_;
+  }
   thinkingForcedOpen_ = rendered.thinkingForcedOpen;
   thinkingForcedOpenText_ =
       thinkingForcedOpen_ ? getThinkingForcedOpenText(
@@ -1074,6 +1077,14 @@ int32_t MtmdLlmContext::getThinkingBlockDiscards() const {
 }
 void MtmdLlmContext::resetThinkingBlockDiscards() {
   compactor_.resetBlockDiscards();
+}
+
+int32_t MtmdLlmContext::getToolDefinitionsDropped() const {
+  return toolDefinitionsDropped_;
+}
+
+void MtmdLlmContext::resetToolDefinitionsDropped() {
+  toolDefinitionsDropped_ = 0;
 }
 
 std::optional<llama_perf_context_data>

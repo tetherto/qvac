@@ -162,6 +162,9 @@ public:
   [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
   void resetThinkingBlockDiscards() override;
 
+  [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
+  void resetToolDefinitionsDropped() override;
+
   void setRemoveThinkingFromContext(bool value) override;
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
@@ -357,6 +360,8 @@ private:
   // `tokenizeChat`, unlike the load-time `params_.antiprompt`.
   std::vector<std::string> templateStops_;
   std::vector<llama_token> templateStopTokens_;
+  // Renders in the current request where the template dropped the tools.
+  int32_t toolDefinitionsDropped_ = 0;
   std::vector<llama_token> forcedTokens_;
 
   mtmd::bitmaps bitmaps_;

@@ -877,6 +877,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
       // per-context accumulator, so a per-job value would be misattributed.
@@ -982,6 +983,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
 
   // Reset per-inference counters so they don't leak across runs.
   state_->llmContext_->resetThinkingBlockDiscards();
+  state_->llmContext_->resetToolDefinitionsDropped();
   state_->llmContext_->resetVisionEncodeMs();
 
   // Prompt media (both hoisted byte buffers and inline paths) is loaded by
@@ -1335,6 +1337,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
       {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
+      {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
@@ -1394,6 +1397,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
       {"promptTokens", promptTokens},
       {"thinkingBlockDiscards",
        static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
+      {"toolDefinitionsDropped",
+       static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
       // Why the generation stopped, as the numeric GenerationStopReason
       // value; addon.js maps it to a string (same pattern as
       // backendDevice). Prefill-only requests report None rather than

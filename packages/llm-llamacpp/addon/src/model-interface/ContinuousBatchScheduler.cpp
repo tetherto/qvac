@@ -1054,9 +1054,11 @@ void RuntimeStatsSnapshot::recordDecodeStep(
 }
 
 void RuntimeStatsSnapshot::accumulateSlot(
-    int64_t nPast, int64_t thinkingDiscards, const Request& req) {
+    int64_t nPast, int64_t thinkingDiscards, const Request& req,
+    int64_t toolsDropped) {
   cacheTokens += nPast;
   thinkingBlockDiscards += thinkingDiscards;
+  toolDefinitionsDropped += toolsDropped;
   generatedTokens += static_cast<int64_t>(req.generatedTokens.size());
   // Count tokens actually prefilled, not the prompt size planned at admission:
   // once prefill completes, prefillFedCount is reset to 0, so the full prompt
@@ -1602,6 +1604,7 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     const SlotState& slot, const Request& req) {
   int64_t nPast = 0;
   int64_t thinkingDiscards = 0;
+  int64_t toolsDropped = 0;
   // Read after the caller has finalized the driver, so a finished sequence
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
   std::optional<GenerationStopReason> stopReason;
@@ -1618,9 +1621,11 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
     nPast = static_cast<int64_t>(slot.driver->getNPast());
     thinkingDiscards =
         static_cast<int64_t>(slot.driver->getThinkingBlockDiscards());
+    toolsDropped =
+        static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());
     stopReason = slot.driver->getGenerationStopReason();
   }
-  stats_.accumulateSlot(nPast, thinkingDiscards, req);
+  stats_.accumulateSlot(nPast, thinkingDiscards, req, toolsDropped);
   // Every terminal path that folds a slot into the aggregate also records the
   // request's observed end-to-end figures for its submitter, next to its
   // output.

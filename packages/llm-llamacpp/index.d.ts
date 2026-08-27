@@ -473,6 +473,15 @@ declare namespace LlmLlamacpp {
          */
         thinkingBlockDiscards: number;
         /**
+         * Number of prompt renders in this request where the chat template
+         * rejected the tool definitions and the prompt was produced without
+         * them, so the model never saw the tools. Per-inference for single
+         * requests; summed across completed slots for batch requests. 0 when no
+         * tools were sent or the template accepted them. Only delivered when the
+         * model was created with `opts: { stats: true }`.
+         */
+        toolDefinitionsDropped: number;
+        /**
          * How busy the shared backend was, not a property of your request: the
          * mean number of sequences decoded together per engine step, including
          * overlapping requests from other callers (capped by the `parallel`

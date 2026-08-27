@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Tool calls are now constrained by the chat template's native tool grammar:
+  when a prompt carries tool definitions the sampler applies the grammar the
+  template computes, so malformed tool-call markup and schema-invalid
+  arguments cannot be generated. A load-time or per-request `grammar` /
+  `json_schema` still takes precedence over the tool grammar.
+- Chat-template `additional_stops` are honoured per request alongside the
+  load-time antiprompts.
+- `RuntimeStats.toolDefinitionsDropped` reports renders where the template
+  rejected the tool definitions and the prompt was produced without them.
+
+### Fixed
+
+- A tool grammar applied for one request no longer leaks into a following
+  request that carries no tools on the same loaded model.
+
 ## [0.49.0] - 2026-08-31
 
 ### Added

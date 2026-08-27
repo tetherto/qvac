@@ -374,6 +374,14 @@ public:
   virtual void resetThinkingBlockDiscards() {}
 
   /**
+   * Number of renders in the most recent request where the chat template
+   * rejected the tool definitions and the prompt was produced without them.
+   * 0 when no tools were sent or the template accepted them.
+   */
+  [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
+  virtual void resetToolDefinitionsDropped() {}
+
+  /**
    * Why the most recent generation stopped (`None` when no generation
    * has run or the context does not track it). Surfaced to runtime
    * stats as `stopReason` so callers can distinguish a prediction-limit

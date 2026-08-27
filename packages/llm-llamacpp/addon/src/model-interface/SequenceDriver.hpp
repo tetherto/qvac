@@ -165,6 +165,10 @@ public:
 
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
 
+  /// Renders where the template rejected the tool definitions (see
+  /// `LlmContext::getToolDefinitionsDropped`).
+  [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
+
   /// Why this sequence's generation stopped, once the scheduler has finalized
   /// the driver (`None` before that, for a prefill-only slot, or on a
   /// cancel/decode-error leg, which skips `onGenerationFinished`). Per

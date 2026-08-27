@@ -163,6 +163,7 @@ struct TimedDecodeResult {
 struct RuntimeStatsSnapshot {
   int64_t cacheTokens = 0;
   int64_t thinkingBlockDiscards = 0;
+  int64_t toolDefinitionsDropped = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
 
@@ -179,8 +180,9 @@ struct RuntimeStatsSnapshot {
       uint64_t decodeTokens, std::chrono::nanoseconds stepDuration);
 
   /// Fold one completed slot's contribution into the running totals.
-  void
-  accumulateSlot(int64_t nPast, int64_t thinkingDiscards, const Request& req);
+  void accumulateSlot(
+      int64_t nPast, int64_t thinkingDiscards, const Request& req,
+      int64_t toolsDropped = 0);
 
   /// How busy the shared backend was, NOT a property of any one request: the
   /// mean number of sequences decoded together, averaged over every
