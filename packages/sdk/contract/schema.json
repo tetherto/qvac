@@ -11452,6 +11452,7 @@
                               "type": "object",
                               "properties": {
                                 "dialect": {
+                                  "description": "Chinese dialect to render (e.g. `cantonese`, `sichuan`).",
                                   "type": "string",
                                   "enum": [
                                     "cantonese",
@@ -11475,11 +11476,13 @@
                                   "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"
                                 },
                                 "volume": {
+                                  "description": "Speaking volume: `loud` or `soft`.",
                                   "type": "string",
                                   "enum": ["loud", "soft"],
                                   "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"
                                 },
                                 "style": {
+                                  "description": "Speaking style: `peppa` or `robot`.",
                                   "type": "string",
                                   "enum": ["peppa", "robot"],
                                   "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"

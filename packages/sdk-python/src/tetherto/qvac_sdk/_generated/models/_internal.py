@@ -10770,15 +10770,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct(GeneratedBaseModel
     )
     dialect: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect"),
+        Field(
+            description="Chinese dialect to render (e.g. `cantonese`, `sichuan`).",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructDialect",
+        ),
     ] = None
     volume: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume"),
+        Field(
+            description="Speaking volume: `loud` or `soft`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructVolume",
+        ),
     ] = None
     style: Annotated[
         LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle | None,
-        Field(title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle"),
+        Field(
+            description="Speaking style: `peppa` or `robot`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle",
+        ),
     ] = None
 
 
