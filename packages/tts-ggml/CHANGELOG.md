@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-27
+
 ### Added
 
 - CUDA GPU acceleration on linux x64: the prebuild now bundles the CUDA
@@ -34,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   launch guards for the `conv_transpose_1d`, `im2col` and `pad` paths, the
   CUDA transpose-copy strided-destination fix, and Adreno OpenCL launch
   validation with GEMV work-group limits.
+
+### Fixed
+
+- Expose `binding.js` through the package `exports` map
+  (`@qvac/tts-ggml/binding.js`), so mobile bundlers that resolve the native
+  binding through exports can load the addon.
 
 ## [0.7.5] - 2026-08-20
 

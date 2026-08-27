@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-27
+
 ### Added
 
 - Add desktop CPU support for MiniMax-Music3 through local LM and synthesis
@@ -16,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pair runs on the first usable ggml GPU backend (CUDA, Vulkan, Metal) with
   CPU fallback, and `stats.backendDevice`/`backendId` report the backend
   actually in use.
+- Opt-in CUDA GPU backend on Linux / Windows (NVIDIA). The new `ENABLE_CUDA`
+  CMake option appends the `cuda` manifest feature, which pulls
+  `speech-cpp[cuda]` and hence `ggml-speech[cuda]`. Off by default because it
+  needs `nvcc` on the build host; at runtime only the NVIDIA driver is needed.
+  CUDA is additive next to Vulkan, and the engine's validated-GPU preference
+  selects CUDA when both backends are compiled in. Apple and Android are
+  excluded, matching `speech-cpp`'s own `supports` expression, so every
+  existing build resolves exactly as before.
 
 ### Changed
 
@@ -43,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   event. Both are fixed by requiring `speech-cpp` `2026-08-24#2`.
 - `cancel()` no longer hangs forever when the job it targets fails before
   the native engine starts; it now settles as soon as the run settles.
+- Expose `binding.js` through the package `exports` map
+  (`@qvac/audiogen-ggml/binding.js`), so mobile bundlers that resolve the
+  native binding through exports can load the addon.
 
 ## [0.2.4] - 2026-08-20
 

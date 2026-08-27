@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-27
+
 ### Added
 
 - **CUDA GPU backend for both engines on Linux / Windows (NVIDIA).** The
