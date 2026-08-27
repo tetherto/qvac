@@ -73,7 +73,7 @@ runs:
     - name: Cache ROCm SDK (TheRock dist)
       if: steps.preinstalled.outputs.hit != 'true'
       id: cache-rocm
-      uses: actions/cache@v4
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
       with:
         path: ${{ runner.temp }}/rocm
         key: rocm-therock-${{ inputs.gfx }}-${{ inputs.rocm-version }}-${{ inputs.sha256 }}
