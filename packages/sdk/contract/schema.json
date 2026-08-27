@@ -11794,9 +11794,11 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
                     },
                     "threads": {
+                      "description": "CPU threads for loading and CPU ops. Default: auto.",
                       "type": "number"
                     },
                     "device": {
+                      "description": "Prefer GPU backends (`'gpu'`, default) or force CPU (`'cpu'`).",
                       "type": "string",
                       "enum": ["gpu", "cpu"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigDevice"
@@ -11844,11 +11846,13 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigType"
                     },
                     "rng": {
+                      "description": "Context RNG type: `'cpu'`, `'cuda'` (default; Philox, not GPU-specific), or `'std_default'`.",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigRng"
                     },
                     "sampler_rng": {
+                      "description": "Sampler RNG type override. Default: auto (follows `rng`).",
                       "type": "string",
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
@@ -11894,6 +11898,7 @@
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode"
                     },
                     "verbosity": {
+                      "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
                       "type": "number"
                     },
                     "clipLModelSrc": {
