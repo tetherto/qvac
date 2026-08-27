@@ -13597,14 +13597,17 @@
                   "type": "object",
                   "properties": {
                     "modelPath": {
+                      "description": "Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.",
                       "type": "string"
                     },
                     "topK": {
+                      "description": "Limit returned results to the top-K classes. Default: all classes.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "nativeLogger": {
+                      "description": "Forward native C++ log lines through the engine logger. Off by default.",
                       "type": "boolean"
                     }
                   },
