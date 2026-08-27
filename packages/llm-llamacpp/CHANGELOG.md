@@ -1,13 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Fixed
-
-- README documented the removed `no_mmap` config key. It now documents
-  `load_mode`, whose `none` value is the closest equivalent: a full buffered
-  read with no mmap, mlock or direct I/O.
-
 ## [0.47.0] - 2026-08-24
 
 ### Added
