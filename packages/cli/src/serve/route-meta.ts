@@ -23,5 +23,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   Models:
     'Lifecycle for models configured under `serve.models`. GET lists every configured model; each loads on first request unless `preload: true` warmed it at startup. DELETE unloads a model but keeps the alias reloadable — the next request loads it again.',
   'Model Catalog':
-    'Discovery listing of models the SDK provides, filterable by capability (role, addon, quantization, engine, text). Rows are catalog entries, not callable endpoints — a `not_configured` model must be added to `serve.models` before it can be used.'
+    'Discovery listing of models the SDK provides, filterable by capability (role, addon, quantization, engine, text). Rows are catalog entries, not callable endpoints — a `not_configured` model must be added to `serve.models` before it can be used.',
+  Translation:
+    'QVAC extension (not an OpenAI route): text-to-text translation via SDK `translate()`.'
 }

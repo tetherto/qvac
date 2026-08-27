@@ -27,6 +27,8 @@ export interface QvacContext {
   ) => Promise<string | sdk.TranscribeSegment[]> & { requestId: string }
   /** Test seam — overrides `video()` from `@qvac/sdk` when set. */
   videoOverride?: typeof sdk.video
+  /** Test seam — overrides `translate()` from `@qvac/sdk` when set. */
+  translateOverride?: typeof sdk.translate
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
   cancelOverride?: typeof sdk.cancel
   /** Test seam — overrides the SDK model load when set, so lazy-load and preload
