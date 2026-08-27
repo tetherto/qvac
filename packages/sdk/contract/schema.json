@@ -11565,49 +11565,61 @@
                   "type": "object",
                   "properties": {
                     "langList": {
+                      "description": "Languages handled by the recognizer, e.g. `['en']` or `['en', 'fr']`. Required for `easyocr`; ignored by the language-agnostic `doctr` pipeline.",
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
                     },
                     "pipelineType": {
+                      "description": "OCR pipeline: `'easyocr'` (CRAFT detector + CRNN recognizer, default) or `'doctr'` (DBNet detector + doctr recognizer, language-agnostic).",
                       "type": "string",
                       "enum": ["easyocr", "doctr"],
                       "title": "LoadModelSrcRequestGgmlOcrModelConfigPipelineType"
                     },
                     "magRatio": {
+                      "description": "Detection magnification ratio (easyocr only). Default 1.5.",
                       "type": "number"
                     },
                     "canvasSize": {
+                      "description": "Detection canvas cap (long side, px) applied after `magRatio` scaling; lower it on memory-constrained targets. Default 2560. easyocr only.",
                       "type": "number"
                     },
                     "defaultRotationAngles": {
+                      "description": "Rotation angles tried when the primary pass is low-confidence (easyocr only). Default [90, 270].",
                       "type": "array",
                       "items": {
                         "type": "number"
                       }
                     },
                     "contrastRetry": {
+                      "description": "Retry low-confidence boxes with contrast adjustment (easyocr only). Default false.",
                       "type": "boolean"
                     },
                     "lowConfidenceThreshold": {
+                      "description": "Confidence threshold below which contrast-retry kicks in (easyocr only). Default 0.4.",
                       "type": "number"
                     },
                     "recognizerBatchSize": {
+                      "description": "Recognizer batch size (easyocr only). Default 32.",
                       "type": "number"
                     },
                     "nThreads": {
+                      "description": "GGML CPU thread count: `0` (default) auto-detects physical cores, `> 0` sets an explicit count, `< 0` leaves the backend's default unchanged.",
                       "type": "number"
                     },
                     "backendDevice": {
+                      "description": "ggml backend device: `'cpu'` (default), `'vulkan'`, `'metal'`, or `'opencl'`. Falls back to CPU when the requested GPU device is unavailable.",
                       "type": "string",
                       "enum": ["cpu", "vulkan", "metal", "opencl"],
                       "title": "LoadModelSrcRequestGgmlOcrModelConfigBackendDevice"
                     },
                     "gpuDevice": {
+                      "description": "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`.",
                       "type": "number"
                     },
                     "detectorModelSrc": {
+                      "description": "Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.",
                       "anyOf": [
                         {
                           "type": "string"
