@@ -57,6 +57,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   was the only GPU backend wired there. Both now accept CUDA (`2`) or Vulkan
   (`3`), because a CUDA-enabled build compiles both in and ggml registers CUDA
   first.
+- Raise the `speech-cpp` floor to 2026-08-26, including the new opt-in `cuda`
+  feature's own floor, which brings in ggml-speech
+  2026-08-26. Sortformer finalization is now deterministic: every non-cancelled
+  finalize ends with exactly one synthetic terminator, where before a real
+  trailing segment could carry the final flag instead. The speaker spans this
+  package emits are unchanged, because it keys off the terminator's negative
+  speaker id rather than the flag. Indic Conformer multilingual CTC also runs on
+  Vulkan now. The Whisper engine sources are unchanged. On the ggml side the
+  update adds Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch guards for
+  the `conv_transpose_1d`, `im2col` and `pad` paths, and Adreno OpenCL launch
+  validation with GEMV work-group limits.
 
 ### Fixed
 

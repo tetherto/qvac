@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+option(ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -10,6 +11,10 @@ endif()
 
 if(ENABLE_VULKAN)
   list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
+endif()
+
+if(ENABLE_CUDA)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -81,11 +86,11 @@ message(STATUS "Building tts-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}
 # next to the `.bare` module. Mirrors qvac/packages/transcription-
 # parakeet/CMakeLists.txt's BACKEND_DL_LIBS path.
 #
-# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android with
-# GGML_BACKEND_DL=ON + GGML_CPU_STATIC=ON, so only the CPU backend
-# ships as a static archive AND as an IMPORTED `ggml::ggml-cpu` target;
-# Vulkan / OpenCL get built as MODULE .so files at
-# `${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-{vulkan,opencl}.so`
+# Hybrid-mode caveat: the ggml-speech vcpkg port builds Android (and
+# linux-arm64, and linux-x64 with the cuda feature) with
+# GGML_BACKEND_DL=ON, so backends
+# ship as MODULE .so files at
+# `${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-{cpu*,vulkan,opencl,cuda}.so`
 # but ggml-config.cmake.in deliberately leaves them out of
 # `GGML_AVAILABLE_BACKENDS`' IMPORTED set (the loader is expected to
 # find them via `ggml_backend_load_all_from_path()` at runtime). We
@@ -103,9 +108,9 @@ endif()
 
 # Loose-file pickup for MODULE backends that aren't surfaced as
 # IMPORTED targets by find_package(ggml). On Android this is what
-# actually delivers Vulkan + OpenCL into the prebuilds folder; we
-# do the same on Linux as a fallback for any future hybrid build
-# there. Glob runs at configure time -- the .so files come from
+# actually delivers Vulkan + OpenCL into the prebuilds folder, and on
+# hybrid Linux builds (arm64, x64 with ENABLE_CUDA) it delivers the
+# CPU-variant / Vulkan / CUDA modules. Glob runs at configure time -- the .so files come from
 # ggml-speech's `file(INSTALL ...)` step in its portfile, which has
 # already completed by the time vcpkg hands control back to us. Apple
 # / Windows static-only configs return an empty list and skip the
@@ -116,7 +121,7 @@ if((ANDROID OR UNIX) AND NOT APPLE)
     message(WARNING "tts-ggml: VCPKG_INSTALLED_PATH "
       "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
       "ggml backend .so pickup -- the runtime may fail to find "
-      "Vulkan / OpenCL backends.")
+      "Vulkan / OpenCL / CUDA backends.")
   else()
     file(GLOB BACKEND_DL_LOOSE_SOS
       "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
@@ -128,7 +133,7 @@ endif()
 
 add_bare_module(tts-ggml EXPORTS ${BACKEND_DL_LIBS})
 
-# Stage every loose MODULE backend (Vulkan / OpenCL on Android, ...)
+# Stage every loose MODULE backend (Vulkan / OpenCL on Android, CUDA on desktop, ...)
 # into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
 # branch uses for IMPORTED targets (see cmake-bare.cmake's
 # `DESTINATION ${host}/${name}` -- e.g. `android-arm64/qvac__tts-ggml`).
@@ -168,6 +173,13 @@ target_include_directories(
     ${QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS}
 )
 
+# No direct CUDA linkage here: the ggml-speech port builds the linux-x64
+# [cuda] configuration in hybrid BACKEND_DL mode, so the CUDA backend ships
+# as a MODULE .so (staged by the loose-file pickup above) that carries its
+# own libcuda / cudart / cuBLAS DT_NEEDED entries. Linking them into the
+# .bare would make the whole addon fail to dlopen on hosts without an
+# NVIDIA driver and the CUDA runtime, instead of gracefully skipping the
+# CUDA module and falling back to Vulkan or CPU.
 target_link_libraries(
   ${tts-ggml}
   PRIVATE
