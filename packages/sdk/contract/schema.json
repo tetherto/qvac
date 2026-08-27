@@ -8253,126 +8253,161 @@
                   "type": "object",
                   "properties": {
                     "strategy": {
+                      "description": "Decoding strategy: `'greedy'` or `'beam_search'`.",
                       "type": "string",
                       "enum": ["greedy", "beam_search"],
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigStrategy"
                     },
                     "n_threads": {
+                      "description": "CPU threads for transcription; `0` = auto (half of hardware cores).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "n_max_text_ctx": {
+                      "description": "Maximum text tokens from previous segments used as context.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "offset_ms": {
+                      "description": "Milliseconds to skip at the start of the audio.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "duration_ms": {
+                      "description": "Maximum duration of audio to transcribe, in milliseconds.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "audio_ctx": {
+                      "description": "Audio context window size in samples; `0` = model default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "translate": {
+                      "description": "Translate the transcribed audio into English.",
                       "type": "boolean"
                     },
                     "no_context": {
+                      "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                       "type": "boolean"
                     },
                     "no_timestamps": {
+                      "description": "Omit timestamps from the transcription output.",
                       "type": "boolean"
                     },
                     "single_segment": {
+                      "description": "Force the whole audio into one output segment (for streaming or short clips).",
                       "type": "boolean"
                     },
                     "print_special": {
+                      "description": "Print special tokens in the output.",
                       "type": "boolean"
                     },
                     "print_progress": {
+                      "description": "Print progress updates during transcription.",
                       "type": "boolean"
                     },
                     "print_realtime": {
+                      "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                       "type": "boolean"
                     },
                     "print_timestamps": {
+                      "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                       "type": "boolean"
                     },
                     "token_timestamps": {
+                      "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                       "type": "boolean"
                     },
                     "thold_pt": {
+                      "description": "Word-timestamp probability threshold for accepting a word (0–1).",
                       "type": "number"
                     },
                     "thold_ptsum": {
+                      "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                       "type": "number"
                     },
                     "max_len": {
+                      "description": "Maximum tokens per transcription segment.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "split_on_word": {
+                      "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
                       "type": "boolean"
                     },
                     "max_tokens": {
+                      "description": "Maximum tokens per segment; `0` = no limit.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "debug_mode": {
+                      "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                       "type": "boolean"
                     },
                     "tdrz_enable": {
+                      "description": "Enable tinydiarize (lightweight speaker-turn detection).",
                       "type": "boolean"
                     },
                     "suppress_regex": {
+                      "description": "Regular-expression pattern for tokens to suppress.",
                       "type": "string"
                     },
                     "initial_prompt": {
+                      "description": "Initial prompt (context) prepended to the transcription.",
                       "type": "string"
                     },
                     "language": {
+                      "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                       "type": "string"
                     },
                     "detect_language": {
+                      "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                       "type": "boolean"
                     },
                     "suppress_blank": {
+                      "description": "Suppress the blank / leading-space token at the start of sampling.",
                       "type": "boolean"
                     },
                     "suppress_nst": {
+                      "description": "Suppress non-speech tokens (NST).",
                       "type": "boolean"
                     },
                     "temperature": {
+                      "description": "Sampling temperature (0–1). Default 0.0.",
                       "type": "number"
                     },
                     "length_penalty": {
+                      "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                       "type": "number"
                     },
                     "temperature_inc": {
+                      "description": "Temperature increment applied when sampling fails.",
                       "type": "number"
                     },
                     "entropy_thold": {
+                      "description": "Entropy threshold for filtering uncertain words.",
                       "type": "number"
                     },
                     "logprob_thold": {
+                      "description": "Log-probability threshold for filtering words; `-1` disables.",
                       "type": "number"
                     },
                     "greedy_best_of": {
+                      "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "beam_search_beam_size": {
+                      "description": "Beam size for beam-search decoding; `-1` = default.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
@@ -8381,27 +8416,34 @@
                       "type": "object",
                       "properties": {
                         "threshold": {
+                          "description": "VAD probability threshold for classifying a segment as speech.",
                           "type": "number"
                         },
                         "min_speech_duration_ms": {
+                          "description": "Minimum duration for a segment to count as speech (ms).",
                           "type": "number"
                         },
                         "min_silence_duration_ms": {
+                          "description": "Minimum silence duration required to split speech segments (ms).",
                           "type": "number"
                         },
                         "max_speech_duration_s": {
+                          "description": "Maximum duration of a single speech segment (s).",
                           "type": "number"
                         },
                         "speech_pad_ms": {
+                          "description": "Padding added before and after each speech segment (ms).",
                           "type": "number"
                         },
                         "samples_overlap": {
+                          "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                           "type": "number"
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams"
                     },
                     "audio_format": {
+                      "description": "Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
                       "type": "string",
                       "enum": ["f32le", "s16le"],
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat"
@@ -8410,15 +8452,19 @@
                       "type": "object",
                       "properties": {
                         "model": {
+                          "description": "Path to the whisper model file (context override).",
                           "type": "string"
                         },
                         "use_gpu": {
+                          "description": "Enable GPU acceleration. Default false.",
                           "type": "boolean"
                         },
                         "flash_attn": {
+                          "description": "Enable flash attention.",
                           "type": "boolean"
                         },
                         "gpu_device": {
+                          "description": "GPU device index to use.",
                           "type": "number"
                         }
                       },
@@ -8428,12 +8474,14 @@
                       "type": "object",
                       "properties": {
                         "caption_enabled": {
+                          "description": "Format output segments as captions.",
                           "type": "boolean"
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig"
                     },
                     "vadModelSrc": {
+                      "description": "Voice-activity-detection (VAD) model source; enables VAD when set.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -8789,98 +8837,121 @@
                   "type": "object",
                   "properties": {
                     "maxThreads": {
+                      "description": "CPU threads; `0` defers to hardware concurrency. Default 4.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "useGPU": {
+                      "description": "Enable the ggml GPU backend. Default false.",
                       "type": "boolean"
                     },
                     "sampleRate": {
+                      "description": "Input audio sample rate in Hz. Default 16000.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "channels": {
+                      "description": "Input audio channel count. Default 1 (mono).",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "captionEnabled": {
+                      "description": "Format output segments as captions. Default false.",
                       "type": "boolean"
                     },
                     "timestampsEnabled": {
+                      "description": "Emit per-segment timestamps. Default true.",
                       "type": "boolean"
                     },
                     "seed": {
+                      "description": "Sampling RNG seed; `-1` picks a random seed. Default -1.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "streaming": {
+                      "description": "Open a long-lived streaming session. Default false.",
                       "type": "boolean"
                     },
                     "streamingChunkMs": {
+                      "description": "Streaming chunk cadence in ms. Default 2000.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingHistoryMs": {
+                      "description": "Sortformer rolling-history window in ms. Default 30000.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingEmitPartials": {
+                      "description": "Emit partial results before chunk boundaries. Default true.",
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
+                      "description": "CTC/TDT-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
                       "type": "boolean"
                     },
                     "streamingLeftContextMs": {
+                      "description": "ASR encoder left-context window in ms; omit to keep the model default (10000).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingRightLookaheadMs": {
+                      "description": "ASR encoder right-lookahead window in ms; omit to keep the model default (2000).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "language": {
+                      "description": "Multilingual CTC language id (e.g. `hi`, `ta`); required for Indic Conformer GGUFs, ignored on monolingual CTC.",
                       "type": "string"
                     },
                     "streamingSpkCacheEnable": {
+                      "description": "AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
                       "type": "boolean"
                     },
                     "streamingSpkCacheLen": {
+                      "description": "AOSC: long-term speaker-cache rows (~15 s). Default 188.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingFifoLen": {
+                      "description": "AOSC: FIFO warmup buffer rows. Default 188.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingChunkLeftContextMs": {
+                      "description": "AOSC: encoder left-context window in ms. Default 80.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingChunkRightContextMs": {
+                      "description": "AOSC: encoder right-context window in ms. Default 560.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingSpkCacheUpdatePeriod": {
+                      "description": "AOSC: FIFO-overflow pop-out count. Default 144.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
+                      "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
                       "type": "string"
                     },
                     "openclCacheDir": {
+                      "description": "Persistent directory for ggml-opencl's compiled-program cache (Android only).",
                       "type": "string"
                     },
                     "parakeetEncoderSrc": {},
@@ -13627,126 +13698,161 @@
               "type": "object",
               "properties": {
                 "strategy": {
+                  "description": "Decoding strategy: `'greedy'` or `'beam_search'`.",
                   "type": "string",
                   "enum": ["greedy", "beam_search"],
                   "title": "ReloadConfigRequestModelConfigStrategy"
                 },
                 "n_threads": {
+                  "description": "CPU threads for transcription; `0` = auto (half of hardware cores).",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "n_max_text_ctx": {
+                  "description": "Maximum text tokens from previous segments used as context.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "offset_ms": {
+                  "description": "Milliseconds to skip at the start of the audio.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "duration_ms": {
+                  "description": "Maximum duration of audio to transcribe, in milliseconds.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "audio_ctx": {
+                  "description": "Audio context window size in samples; `0` = model default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "translate": {
+                  "description": "Translate the transcribed audio into English.",
                   "type": "boolean"
                 },
                 "no_context": {
+                  "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                   "type": "boolean"
                 },
                 "no_timestamps": {
+                  "description": "Omit timestamps from the transcription output.",
                   "type": "boolean"
                 },
                 "single_segment": {
+                  "description": "Force the whole audio into one output segment (for streaming or short clips).",
                   "type": "boolean"
                 },
                 "print_special": {
+                  "description": "Print special tokens in the output.",
                   "type": "boolean"
                 },
                 "print_progress": {
+                  "description": "Print progress updates during transcription.",
                   "type": "boolean"
                 },
                 "print_realtime": {
+                  "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                   "type": "boolean"
                 },
                 "print_timestamps": {
+                  "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                   "type": "boolean"
                 },
                 "token_timestamps": {
+                  "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                   "type": "boolean"
                 },
                 "thold_pt": {
+                  "description": "Word-timestamp probability threshold for accepting a word (0–1).",
                   "type": "number"
                 },
                 "thold_ptsum": {
+                  "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                   "type": "number"
                 },
                 "max_len": {
+                  "description": "Maximum tokens per transcription segment.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "split_on_word": {
+                  "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
                   "type": "boolean"
                 },
                 "max_tokens": {
+                  "description": "Maximum tokens per segment; `0` = no limit.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "debug_mode": {
+                  "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                   "type": "boolean"
                 },
                 "tdrz_enable": {
+                  "description": "Enable tinydiarize (lightweight speaker-turn detection).",
                   "type": "boolean"
                 },
                 "suppress_regex": {
+                  "description": "Regular-expression pattern for tokens to suppress.",
                   "type": "string"
                 },
                 "initial_prompt": {
+                  "description": "Initial prompt (context) prepended to the transcription.",
                   "type": "string"
                 },
                 "language": {
+                  "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                   "type": "string"
                 },
                 "detect_language": {
+                  "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                   "type": "boolean"
                 },
                 "suppress_blank": {
+                  "description": "Suppress the blank / leading-space token at the start of sampling.",
                   "type": "boolean"
                 },
                 "suppress_nst": {
+                  "description": "Suppress non-speech tokens (NST).",
                   "type": "boolean"
                 },
                 "temperature": {
+                  "description": "Sampling temperature (0–1). Default 0.0.",
                   "type": "number"
                 },
                 "length_penalty": {
+                  "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                   "type": "number"
                 },
                 "temperature_inc": {
+                  "description": "Temperature increment applied when sampling fails.",
                   "type": "number"
                 },
                 "entropy_thold": {
+                  "description": "Entropy threshold for filtering uncertain words.",
                   "type": "number"
                 },
                 "logprob_thold": {
+                  "description": "Log-probability threshold for filtering words; `-1` disables.",
                   "type": "number"
                 },
                 "greedy_best_of": {
+                  "description": "Greedy decoding: number of candidate completions; `-1` = default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "beam_search_beam_size": {
+                  "description": "Beam size for beam-search decoding; `-1` = default.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
@@ -13755,27 +13861,34 @@
                   "type": "object",
                   "properties": {
                     "threshold": {
+                      "description": "VAD probability threshold for classifying a segment as speech.",
                       "type": "number"
                     },
                     "min_speech_duration_ms": {
+                      "description": "Minimum duration for a segment to count as speech (ms).",
                       "type": "number"
                     },
                     "min_silence_duration_ms": {
+                      "description": "Minimum silence duration required to split speech segments (ms).",
                       "type": "number"
                     },
                     "max_speech_duration_s": {
+                      "description": "Maximum duration of a single speech segment (s).",
                       "type": "number"
                     },
                     "speech_pad_ms": {
+                      "description": "Padding added before and after each speech segment (ms).",
                       "type": "number"
                     },
                     "samples_overlap": {
+                      "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                       "type": "number"
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigVadParams"
                 },
                 "audio_format": {
+                  "description": "Interpretation of raw audio bytes: `'f32le'` or `'s16le'`.",
                   "type": "string",
                   "enum": ["f32le", "s16le"],
                   "title": "ReloadConfigRequestModelConfigAudioFormat"
@@ -13784,15 +13897,19 @@
                   "type": "object",
                   "properties": {
                     "model": {
+                      "description": "Path to the whisper model file (context override).",
                       "type": "string"
                     },
                     "use_gpu": {
+                      "description": "Enable GPU acceleration. Default false.",
                       "type": "boolean"
                     },
                     "flash_attn": {
+                      "description": "Enable flash attention.",
                       "type": "boolean"
                     },
                     "gpu_device": {
+                      "description": "GPU device index to use.",
                       "type": "number"
                     }
                   },
@@ -13802,12 +13919,14 @@
                   "type": "object",
                   "properties": {
                     "caption_enabled": {
+                      "description": "Format output segments as captions.",
                       "type": "boolean"
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigMiscConfig"
                 },
                 "vadModelSrc": {
+                  "description": "Voice-activity-detection (VAD) model source; enables VAD when set.",
                   "anyOf": [
                     {
                       "type": "string"
