@@ -1,6 +1,6 @@
 # @qvac/bci-whispercpp
 
-Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by the [tetherto/qvac-ext-lib-whisper.cpp](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) fork of whisper.cpp.
+Brain-Computer Interface (BCI) neural signal transcription addon for qvac, powered by the [tetherto/qvac-fabric-speech.cpp](https://github.com/tetherto/qvac-fabric-speech.cpp) fork of whisper.cpp.
 
 Transcribes multi-channel neural signals (e.g., 512-channel microelectrode array recordings) into text using a BCI-trained whisper model running natively via GGML. Output matches the Python BrainWhisperer reference model exactly.
 
@@ -372,7 +372,7 @@ The encoder accepts up to ~3000 timesteps per forward pass; `MAX_WINDOW_TIMESTEP
 
 ## whisper.cpp Patches
 
-The BCI patches live in the `tetherto/qvac-ext-lib-whisper.cpp` fork and are consumed via the `qvac-registry-vcpkg` port (see `vcpkg.json` for the pinned version):
+The BCI patches live in the `tetherto/qvac-fabric-speech.cpp` fork and are consumed via the `qvac-registry-vcpkg` port (see `vcpkg.json` for the pinned version):
 
 | Feature | Description |
 |---------|-------------|
@@ -409,7 +409,7 @@ Every thrown `QvacErrorAddonBCI` extends `QvacErrorBase` and carries the numeric
 
 ## Resources
 
-- whisper.cpp fork (Tether): [`tetherto/qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp)
+- whisper.cpp fork (Tether): [`tetherto/qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
 - Sibling package — audio transcription: [`@qvac/transcription-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/transcription-whispercpp)
 - vcpkg registry: [`qvac-registry-vcpkg`](https://github.com/tetherto/qvac-registry-vcpkg)
 - BrainWhisperer reference (Python): the model checkpoints converted by `scripts/convert-model.py`

@@ -71,7 +71,7 @@ function nativeVoiceControlsSource() {
     override && path.join(override, 'src/voice_controls.cpp'),
     path.join(
       __dirname,
-      '../../../../../qvac-ext-lib-whisper.cpp/engines/tts/src/voice_controls.cpp'
+      '../../../../../qvac-fabric-speech.cpp/engines/tts/src/voice_controls.cpp'
     )
   ].filter(Boolean)
   for (const candidate of candidates) {

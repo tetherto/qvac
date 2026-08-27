@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
 - Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
   2026-08-26. This is the engine half of the MiniMax-Music3 GPU support above:
   MiniMax-Music3 now runs on Vulkan, and the Vulkan `im2col_3d` path handles

@@ -51,6 +51,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
 - **The GPU integration tests accept CUDA as a desktop backend.**
   `gpu.test.js` and `parakeet-gpu-smoke.test.js` asserted
   `backendId === 3` (Vulkan) on Linux / Windows, which was written when Vulkan

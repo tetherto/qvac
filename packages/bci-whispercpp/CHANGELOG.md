@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
+
 - Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
   2026-08-26. The Whisper engine sources are unchanged; the ggml update adds
   Vulkan `im2col`/`col2im` tiling, CUDA kernels and launch guards for the
@@ -57,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `bci.js`, `configChecker.js`, `addonLogging.js`, `lib/*.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and transcription output are unchanged.
 - Faster desktop neural-signal preprocessing on the GPU (Vulkan) and CPU paths. Public API and transcription output are unchanged.
 - Desktop linux-arm64 prebuilds now ship per-arch ggml CPU variants (`whisper-cpp` override 1.9.1#3, pulling `ggml-speech` 2026-07-14): the previous armv8-a-baseline build compiled out the ARM dotprod/fp16 kernels. The addon now loads the dynamically-loadable ggml backends on linux-arm64 (previously Android-only).
-- Bumped the `whisper-cpp` override from `1.9.1#3` to `1.9.1#4` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), consuming the QVAC-21623 Adreno OpenCL whisper base/small q8_0 decode optimization: `1.9.1#4` pins `tetherto/qvac-ext-lib-whisper.cpp` master `d95e742b` ([#91](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/91), fused-QKV decoder repack + vocab-logits slice) and floors `ggml-speech` to `2026-07-15`, which pins `tetherto/qvac-ext-ggml` speech `d7e27ac7` ([#42](https://github.com/tetherto/qvac-ext-ggml/pull/42), ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM; FA-on-GPU decode routing opt-in via `GGML_OPENCL_FA_ADRENO`). Registry baseline unchanged; the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical).
+- Bumped the `whisper-cpp` override from `1.9.1#3` to `1.9.1#4` (registry PR [tetherto/qvac-registry-vcpkg#253](https://github.com/tetherto/qvac-registry-vcpkg/pull/253)), consuming the QVAC-21623 Adreno OpenCL whisper base/small q8_0 decode optimization: `1.9.1#4` pins `tetherto/qvac-fabric-speech.cpp` master `d95e742b` ([#91](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/91), fused-QKV decoder repack + vocab-logits slice) and floors `ggml-speech` to `2026-07-15`, which pins `tetherto/qvac-ext-ggml` speech `d7e27ac7` ([#42](https://github.com/tetherto/qvac-ext-ggml/pull/42), ggml-opencl Adreno FLASH_ATTN partial-KV NaN fix + q8_0 SOA `get_rows` + faster f16 GEMV/GEMM; FA-on-GPU decode routing opt-in via `GGML_OPENCL_FA_ADRENO`). Registry baseline unchanged; the delta is OpenCL-only (non-Adreno / Vulkan / Metal / CPU byte-identical).
 - Refactored the JS and native internals to the team coding standards: extracted loops and large functions into named helpers, replaced magic numbers and repeated string literals with named constants (shared stream-header layout and addon-event names), and removed tracker-coupled comments. Behavior-preserving; public API and transcription output are unchanged.
 
 ## [0.5.0] - 2026-07-14
@@ -79,8 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the `qvac-lib-inference-addon-cpp` vcpkg dependency to `1.2.2` (self-pin fix for safe `Worklet.terminate()` on Android).
 - Bumped the `whisper-cpp` vcpkg override from `1.8.5#5` to `1.9.1`, which pulls
   the latest from upstream `ggml-org/whisper.cpp` v1.9.1 into our fork
-  `tetherto/qvac-ext-lib-whisper.cpp` (master `cb91a378`,
-  [#73](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/pull/73)). The
+  `tetherto/qvac-fabric-speech.cpp` (master `cb91a378`,
+  [#73](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/73)). The
   registry baseline is left unchanged; the override resolves the new version
   forward of the pinned baseline against
   [tetherto/qvac-registry-vcpkg#219](https://github.com/tetherto/qvac-registry-vcpkg/pull/219)

@@ -60,7 +60,7 @@ struct SupertonicConfig {
   // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
   // the single switch: when set, the model denoises the synthesized PCM BEFORE
   // the enhancer (rate-preserving); empty disables it (full backward compat).
-  // The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp PR
+  // The tts-cpp UL-UNAS forward is implemented in qvac-fabric-speech.cpp PR
   // #78; a non-empty path activates it once the pinned tts-cpp includes #78.
   std::string denoiserGgufPath;
 };
