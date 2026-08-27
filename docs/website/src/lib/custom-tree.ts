@@ -217,12 +217,6 @@ export const customTree: Node[] = [
     name: 'P2P capabilities',
   },
   {
-    name: 'Delegated inference',
-    url: '/p2p-capabilities/delegated-inference',
-    type: 'page',
-    icon: resolveIcon('Share2'),
-  },
-  {
     name: 'Blind relays',
     url: '/p2p-capabilities/blind-relays',
     type: 'page',

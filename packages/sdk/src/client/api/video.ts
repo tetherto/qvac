@@ -32,8 +32,8 @@ export interface VideoResult {
  * `modelConfig.clipVisionModelSrc` set to `clip_vision_h.safetensors`; LTX-2
  * `img2vid` conditions on the first frame through its video VAE and needs no
  * CLIP vision weights (the same LTX-2 model loaded for txt2vid also does
- * img2vid). On React Native, prefer a `modelId` loaded with a `delegate` since
- * the bundled video diffusion models are too large for typical mobile devices.
+ * img2vid). On React Native, the bundled video diffusion models are too large
+ * for typical mobile devices.
  *
  * @example Basic txt2vid generation
  * ```typescript
@@ -151,7 +151,11 @@ export function video(params: VideoClientParams): VideoResult {
         ) {
           const parsed = videoStreamResponseSchema.parse(response)
 
-          if (parsed.step != null && parsed.totalSteps != null && parsed.elapsedMs != null) {
+          if (
+            parsed.step !== undefined &&
+            parsed.totalSteps !== undefined &&
+            parsed.elapsedMs !== undefined
+          ) {
             progressQueue.push({
               step: parsed.step,
               totalSteps: parsed.totalSteps,

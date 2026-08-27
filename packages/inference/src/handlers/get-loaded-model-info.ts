@@ -21,18 +21,6 @@ export function handleGetLoadedModelInfo(
     throw new ModelNotFoundError(modelId)
   }
 
-  if (entry.isDelegated) {
-    const info: LoadedModelInfo = {
-      modelId: entry.id,
-      isDelegated: true,
-      handlers: [],
-      providerInfo: {
-        providerPublicKey: entry.delegated.providerPublicKey
-      }
-    }
-    return { type: 'getLoadedModelInfo', info }
-  }
-
   const plugin = getPlugin(entry.local.modelType)
   if (!plugin) {
     logger.warn(
@@ -44,7 +32,6 @@ export function handleGetLoadedModelInfo(
 
   const info: LoadedModelInfo = {
     modelId: entry.id,
-    isDelegated: false,
     modelType: entry.local.modelType,
     handlers,
     loadedAt: entry.local.loadedAt,

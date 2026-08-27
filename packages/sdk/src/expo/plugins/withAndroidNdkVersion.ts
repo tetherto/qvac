@@ -15,7 +15,7 @@ function withAndroidNdkVersion(config: ExpoConfig): ExpoConfig {
   const ndkVersion = DEFAULT_NDK_VERSION
   return withDangerousMod(config, [
     'android',
-    function setNdkVersion(config) {
+    function (config) {
       const buildGradlePath = path.join(config.modRequest.platformProjectRoot, 'build.gradle')
 
       if (fs.existsSync(buildGradlePath)) {

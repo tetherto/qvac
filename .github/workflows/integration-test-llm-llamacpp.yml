@@ -59,7 +59,9 @@ on:
 
 jobs:
   run-integration-tests:
-    timeout-minutes: ${{ matrix.timeout_minutes || 360 }}
+    # smoke_timeout_minutes applies only in default mode; qvac_perf_only runs
+    # the full perf list and keeps the leg's normal timeout_minutes.
+    timeout-minutes: ${{ (!inputs.qvac_perf_only && matrix.smoke_timeout_minutes) || matrix.timeout_minutes || 360 }}
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
@@ -111,11 +113,14 @@ jobs:
             arch: arm64
             runner: qvac-macos26-arm64-gpu
             label: darwin-arm64
+          # Smoke check for the x64 prebuild; darwin-arm64 runs the full suite.
           - os: macos-15-large
             platform: darwin
             arch: x64
             runner: macos-15-large
+            smoke_timeout_minutes: 45
             label: darwin-x64
+            single_test: test/integration/api-behavior.test.js
           - os: windows-2025
             platform: win32
             arch: x64
@@ -292,6 +297,13 @@ jobs:
             bare test/integration/all.js --exit 2>&1 | tee test-output.log
             exit ${PIPESTATUS[0]}
           fi
+          if [ -n "${{ matrix.single_test }}" ]; then
+            echo "single_test set: running only ${{ matrix.single_test }} on ${{ matrix.label }}"
+            npm run build:ts
+            npx brittle -r test/integration/all.js "${{ matrix.single_test }}"
+            bare test/integration/all.js --exit 2>&1 | tee test-output.log
+            exit "${PIPESTATUS[0]}"
+          fi
           npm run test:integration 2>&1 | tee test-output.log
           exit ${PIPESTATUS[0]}
         shell: bash
@@ -318,6 +330,10 @@ jobs:
               test/integration/qwen3-5-image-elephant-perf.test.js `
               test/integration/qwen3-5-image-fruit-plate-perf.test.js `
               test/integration/qwen3-5-image-high-res-aurora-perf.test.js
+          } elseif ("${{ matrix.single_test }}" -ne "") {
+            Write-Host "single_test set: running only ${{ matrix.single_test }} on ${{ matrix.label }}"
+            npm run build:ts
+            npx brittle -r test/integration/all.js "${{ matrix.single_test }}"
           } else {
             npm run test:integration:generate
           }

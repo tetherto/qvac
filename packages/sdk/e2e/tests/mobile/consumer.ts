@@ -67,7 +67,6 @@ import { MobileConfigReloadExecutor } from './executors/config-reload-executor.j
 import { MobileTtsExecutor } from './executors/tts-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { MobileDownloadResilienceExecutor } from './executors/download-resilience-executor.js'
-import { DelegatedInferenceExecutor } from '../shared/executors/delegated-inference-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
@@ -569,6 +568,10 @@ export const executor = createExecutor({
     new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
     new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
     new SkipExecutor(
+      /^world-/,
+      'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route'
+    ),
+    new SkipExecutor(
       /^multi-gpu-/,
       'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)'
     ),
@@ -679,7 +682,6 @@ export const executor = createExecutor({
     new MobileVisionExecutor(resources),
     new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
-    new DelegatedInferenceExecutor(),
     new LifecycleExecutor(resources),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),

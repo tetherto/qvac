@@ -305,11 +305,12 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | Directory | Package | Purpose |
 |-----------|---------|---------|
 | `sdk` | `@qvac/sdk` | TypeScript host: public API, worker shell, RPC transports, bundling; re-exports `@qvac/inference` |
-| `bare-sdk` | `@qvac/bare-sdk` | Deprecated slim Bare distribution; Bare consumers use `@qvac/inference` |
+| `bare-sdk` | `@qvac/bare-sdk` | Removed from the repo; last npm release 0.18.2. Bare consumers use `@qvac/inference` |
 | `inference` | `@qvac/inference` | Engine: dispatch, plugins, models, P2P, RAG, schemas; Bare in-process, no worker/RPC |
 | `sdk-python` | `tetherto-qvac-sdk` | Generated Python client for the SDK worker contract |
 | `cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`, verification, release helpers) |
 | `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
+| `test-suite` | `@qvac/test-suite` | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving the SDK e2e suites across desktop, Electron, Snap, Android, and iOS |
 | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode integration |
 | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw integration |
 | `docs/website` | - | Documentation site (Next.js / Fumadocs) |
