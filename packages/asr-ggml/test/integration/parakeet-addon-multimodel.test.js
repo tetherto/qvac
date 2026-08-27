@@ -96,6 +96,26 @@ test('CTC desktop integration — English transcription', { timeout: 600000 }, a
   }
 })
 
+test('Unified desktop integration — English transcription', { timeout: 600000 }, async (t) => {
+  const loggerBinding = setupJsLogger(binding)
+  try {
+    const modelPath = await loadGgufOrSkip(t, 'unified')
+    if (!modelPath) return
+    const audio = loadAudioSample()
+    if (!audio) {
+      t.pass('sample.raw not found — skipping')
+      return
+    }
+    await runModelTest(t, 'unified', modelPath, audio, { minTextLength: 10 })
+  } finally {
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
+  }
+})
+
 test('EOU desktop integration — streaming transcription', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
   try {

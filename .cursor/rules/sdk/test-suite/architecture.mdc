@@ -1,0 +1,162 @@
+---
+description: Framework architecture reference for @qvac/test-suite
+globs:
+  - packages/test-suite/**/*.ts
+  - packages/test-suite/**/*.tsx
+---
+
+# Framework Architecture Reference
+
+## Core Interfaces
+
+### TestDefinition
+```typescript
+{
+  testId: string;
+  params: any;
+  expectation: Expectation;
+  metadata?: Record<string, any>;
+  suites?: string[];
+  skip?: { reason: string; issue?: string; impact?: string; platforms?: string[] };
+}
+```
+
+### TestHandler
+```typescript
+{
+  pattern: RegExp;
+  setup?(testId, context): Promise<void>;
+  execute(testId, context, params, expectation): Promise<TestResult>;
+  teardown?(testId, context): Promise<void>;
+}
+```
+
+### QvacTestConfig
+```typescript
+{
+  mqtt?: {
+    brokerUrl?: string | { env: string };
+    broker?: { protocol, host, port, path };
+    username?: string | { env: string };
+    password?: string | { env: string };
+    caPath?: string | { env: string };
+    certPath?: string | { env: string };
+    keyPath?: string | { env: string };
+    sessionExpiryInterval?: number;
+    rejectUnauthorized?: boolean;
+  };
+  testDir: string;
+  consumers: {
+    shared?: { include },
+    desktop?: { platforms, entry, include, dependencies },
+    electron?: { platforms, entry, appDir, appName, include, dependencies,
+                 packageManager, packageScript },
+    snap?: { runtime, entry, appDir, snapName, appCommand, artifactPath,
+             snapConfigDir, packageManager, packageScript },
+    mobile?: { platforms, entry, include, dependencies,
+               mobileInit?, metroConfig?, qvacConfig?, assets?, expoPlugins?, copyArtifact? }
+  };
+  comparison?: { baselineRef };
+}
+```
+
+String/number config fields support `{ env: "VAR_NAME" }` to read from environment variables at runtime.
+`.env` is loaded automatically before config resolution.
+
+## MQTT Topics
+
+```
+qvac/register           # Consumer → Producer: registration
+qvac/register-ack/{id}  # Producer → Consumer: ack with the complete test queue
+qvac/test-prepare       # Consumer → Producer: test setup is about to begin
+qvac/test-start         # Consumer → Producer: test started
+qvac/results            # Consumer → Producer: test result
+qvac/heartbeat          # Consumer → Producer: keepalive
+qvac/queue-empty        # Consumer → Producer: an empty queue finished bootstrap
+qvac/profiling          # Consumer → Producer: profiler export data
+qvac/app-memory         # Consumer → Producer: runtime memory samples
+qvac/batch-complete     # Producer → All: batch done
+```
+
+The first consumer registered for a run owns its queue. Additional consumers receive an empty queue
+and are not tracked as run participants.
+
+## Consumer Build Process
+
+### Desktop
+```
+1. Read config (include, dependencies)
+2. Create temp directory
+3. Install dependencies from package.json → temp/node_modules/
+4. Bundle entry + includes with esbuild
+   - External: keep node_modules as requires
+5. Output: build/consumers/{platform}/
+   ├── consumer.js
+   └── node_modules/
+```
+
+### Mobile
+```
+1. Create temp Expo project
+2. Install dependencies (RN-compatible versions)
+3. Copy source + tests to project
+4. Metro bundles (includes node_modules)
+5. Expo build → IPA/APK
+```
+
+Templates in `templates/mobile-consumer/` are copied verbatim into the generated app, so their import
+specifier for the framework is rewritten at scaffold time to whichever package name the consumer actually
+installed (`resolveFrameworkPackageName` in `src/cli/commands/build-consumer-mobile.ts`).
+
+## RunID
+
+Generated from a timestamp, per entry point:
+
+| Entry point | Format |
+| --- | --- |
+| `run:local:*` | `local-<epoch-ms>` (`generateRunId`, `cli/utils/process-manager.ts`) |
+| `run:producer` | `run-<epoch-ms>` |
+| `build:consumer:{android,ios}` | `mobile-<epoch-ms>` |
+| `run:bootstrap:snap` | `snap-bootstrap-<epoch-ms>` |
+
+`--runId` overrides all of these, and CI always passes one explicitly.
+
+> `qvacTestConfigSchema` still declares a `runIdStrategy` field described as generating
+> `repo-branch-commit-timestamp`. **Nothing reads that field** and no such format is ever produced. Treat
+> the table above as authoritative; the schema entry is inert and should be removed or implemented in a
+> separate change.
+
+## Validation Types (Built-in)
+
+- `contains-all`: All strings present
+- `contains-any`: At least one string present
+- `regex`: Pattern match
+- `numeric-range`: min/max bounds
+- `type`: Type checking (`string`, `number`, `array`)
+- `throws-error`: Error contains text
+- `function`: Custom validator function (not serializable over MQTT)
+
+## Report Formats
+
+### JSON (`results-{runId}.json`)
+```json
+{
+  "runId": "...",
+  "timestamp": "...",
+  "summary": { "total": 0, "passed": 0, "failed": 0, "skipped": 0, "successRate": "0.0", "duration": 0 },
+  "categories": { "category": { "passed": 0, "failed": 0, "skipped": 0, "total": 0 } },
+  "suites": { "suite": { "passed": 0, "failed": 0, "skipped": 0, "total": 0 } },
+  "tests": [{ "testId": "", "consumerId": "", "outcome": "", "duration": 0 }],
+  "consumers": [{ "consumerId": "", "platform": "" }],
+  "system": { "hostname": "", "platform": "", "nodeVersion": "" },
+  "profiling": [],
+  "memory": []
+}
+```
+
+### HTML (`report-{runId}.html`)
+- Per-category results with pass/fail/skip counts
+- Per-suite breakdown (when tests have suite tags)
+- Failed test details with error output
+- Profiling data and memory charts (when available)
+- System information

@@ -13,11 +13,6 @@ export const PROFILING_KEY = '__profiling'
 export const PROFILING_TRAILER_KEY = '__profilingTrailer'
 
 /**
- * Symbol key for attaching delegation breakdown to response objects.
- */
-export const DELEGATION_BREAKDOWN_KEY = Symbol.for('@qvac/inference:delegation-breakdown')
-
-/**
  * Symbol key for attaching operation event to response objects.
  */
 export const OPERATION_EVENT_KEY = Symbol.for('@qvac/inference:operation-event')
@@ -38,7 +33,6 @@ export const profilerGPUResourceGaugeSchema = z.object({
 })
 
 export const profilerResourceGaugeSchema = z.object({
-  origin: z.enum(['local', 'provider']),
   sampledAt: systemResourceSampleSchema.shape.sampledAt,
   cpu: systemResourceSampleSchema.shape.cpu,
   memory: systemResourceSampleSchema.shape.memory,
@@ -58,21 +52,6 @@ export const serverBreakdownSchema = z.object({
   totalServerMs: z.number().optional()
 })
 
-/**
- * Delegation timing breakdown (consumer server → client).
- * Captures timing for server-to-provider delegation hops.
- * Note: Only injected for unary requests; streaming delegation
- * records server-side but does not inject into response.
- */
-export const delegationBreakdownSchema = z.object({
-  profileId: z.string().optional(),
-  connectionMs: z.number().optional(),
-  requestStringifyMs: z.number().optional(),
-  serverWaitMs: z.number().optional(),
-  responseJsonParseMs: z.number().optional(),
-  totalDelegationMs: z.number().optional()
-})
-
 export const operationEventSchema = z.object({
   op: z.string(),
   kind: z.literal('handler'),
@@ -90,14 +69,12 @@ export const profilingRequestMetaSchema = z.object({
   id: z.string().optional(),
   includeServer: z.boolean().optional(),
   includeResources: z.boolean().optional(),
-  resourceOrigin: z.enum(['local', 'provider']).optional(),
   mode: profilerModeSchema.optional()
 })
 
 export const profilingResponseMetaSchema = z.object({
   id: z.string(),
   server: serverBreakdownSchema.optional(),
-  delegation: delegationBreakdownSchema.optional(),
   operation: operationEventSchema.optional()
 })
 
@@ -127,7 +104,6 @@ export type ProfilingResponseMeta = z.infer<typeof profilingResponseMetaSchema>
 export type ProfilerMode = z.infer<typeof profilerModeSchema>
 export type ProfilingRequestMeta = z.infer<typeof profilingRequestMetaSchema>
 export type ServerBreakdown = z.infer<typeof serverBreakdownSchema>
-export type DelegationBreakdown = z.infer<typeof delegationBreakdownSchema>
 export type PerCallProfiling = z.infer<typeof perCallProfilingSchema>
 export type OperationEvent = z.infer<typeof operationEventSchema>
 export type ProfilerGPUResourceGauge = z.infer<typeof profilerGPUResourceGaugeSchema>

@@ -14,12 +14,7 @@ import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { NmtResponse, LlmResponse } from '@/utils/addon-responses'
 import { buildNmtTranslationStats } from '@/plugins/ops/translate-stats'
-import {
-  ModelIsDelegatedError,
-  ModelNotFoundError,
-  ModelTypeMismatchError,
-  TranslationFailedError
-} from '@/errors/index'
+import { ModelNotFoundError, ModelTypeMismatchError, TranslationFailedError } from '@/errors/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { isAddonContextOverflowError } from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { generateRandomRequestId } from '@/runtime/request-id'
@@ -73,9 +68,6 @@ export async function* translate(
   const entry = getModelEntry(modelId)
   if (!entry) {
     throw new ModelNotFoundError(modelId)
-  }
-  if (entry.isDelegated) {
-    throw new ModelIsDelegatedError(modelId)
   }
   const canonicalModelType = entry.local.modelType
   const model = entry.local.model
