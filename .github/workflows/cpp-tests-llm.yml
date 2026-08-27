@@ -1,6 +1,10 @@
 name: CPP Tests (LLM)
 
 on:
+  # PROBE ONLY (DO NOT MERGE): exercises the restore-only cache branch, which a
+  # pull_request_target caller can never reach because it resolves this file
+  # from the base branch.
+  pull_request:
   workflow_dispatch:
     inputs:
       workdir:
