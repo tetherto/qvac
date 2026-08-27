@@ -287,34 +287,9 @@
                   "sha256Checksum": {
                     "type": "string",
                     "description": "Expected SHA-256 checksum of the model file."
-                  },
-                  "engine": {
-                    "type": "string",
-                    "enum": [
-                      "llamacpp-completion",
-                      "whispercpp-transcription",
-                      "bci-whispercpp-transcription",
-                      "llamacpp-embedding",
-                      "nmtcpp-translation",
-                      "onnx-tts",
-                      "tts-ggml",
-                      "ggml-ocr",
-                      "parakeet-transcription",
-                      "sdcpp-generation",
-                      "audiogen-ggml",
-                      "ggml-vla",
-                      "ggml-classification",
-                      "onnx-vad"
-                    ],
-                    "description": "Canonical inference engine identifier.",
-                    "title": "AssessModelFitRequestModelsItemModelEngine"
-                  },
-                  "expectedSize": {
-                    "type": "number",
-                    "description": "Expected total size of the model file in bytes."
                   }
                 },
-                "required": ["name", "sha256Checksum", "engine", "expectedSize"],
+                "required": ["name", "sha256Checksum"],
                 "description": "Catalog model constant to assess.",
                 "title": "AssessModelFitRequestModelsItemModel"
               },
@@ -331,34 +306,9 @@
                     "sha256Checksum": {
                       "type": "string",
                       "description": "Expected SHA-256 checksum of the model file."
-                    },
-                    "engine": {
-                      "type": "string",
-                      "enum": [
-                        "llamacpp-completion",
-                        "whispercpp-transcription",
-                        "bci-whispercpp-transcription",
-                        "llamacpp-embedding",
-                        "nmtcpp-translation",
-                        "onnx-tts",
-                        "tts-ggml",
-                        "ggml-ocr",
-                        "parakeet-transcription",
-                        "sdcpp-generation",
-                        "audiogen-ggml",
-                        "ggml-vla",
-                        "ggml-classification",
-                        "onnx-vad"
-                      ],
-                      "description": "Canonical inference engine identifier.",
-                      "title": "AssessModelFitRequestModelsItemArtifactsItemEngine"
-                    },
-                    "expectedSize": {
-                      "type": "number",
-                      "description": "Expected total size of the model file in bytes."
                     }
                   },
-                  "required": ["name", "sha256Checksum", "engine", "expectedSize"],
+                  "required": ["name", "sha256Checksum"],
                   "title": "AssessModelFitRequestModelsItemArtifactsItem"
                 }
               },

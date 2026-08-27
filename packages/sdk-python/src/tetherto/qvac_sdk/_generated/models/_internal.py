@@ -21,23 +21,6 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
-class AssessModelFitRequestModelsItemModelEngine(Enum):
-    llamacpp_completion = "llamacpp-completion"
-    whispercpp_transcription = "whispercpp-transcription"
-    bci_whispercpp_transcription = "bci-whispercpp-transcription"
-    llamacpp_embedding = "llamacpp-embedding"
-    nmtcpp_translation = "nmtcpp-translation"
-    onnx_tts = "onnx-tts"
-    tts_ggml = "tts-ggml"
-    ggml_ocr = "ggml-ocr"
-    parakeet_transcription = "parakeet-transcription"
-    sdcpp_generation = "sdcpp-generation"
-    audiogen_ggml = "audiogen-ggml"
-    ggml_vla = "ggml-vla"
-    ggml_classification = "ggml-classification"
-    onnx_vad = "onnx-vad"
-
-
 class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
     name: Annotated[str, Field(description="Catalog name of the model entry.")]
     sha256_checksum: Annotated[
@@ -47,37 +30,6 @@ class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
             description="Expected SHA-256 checksum of the model file.",
         ),
     ]
-    engine: Annotated[
-        AssessModelFitRequestModelsItemModelEngine,
-        Field(
-            description="Canonical inference engine identifier.",
-            title="AssessModelFitRequestModelsItemModelEngine",
-        ),
-    ]
-    expected_size: Annotated[
-        float,
-        Field(
-            alias="expectedSize",
-            description="Expected total size of the model file in bytes.",
-        ),
-    ]
-
-
-class AssessModelFitRequestModelsItemArtifactsItemEngine(Enum):
-    llamacpp_completion = "llamacpp-completion"
-    whispercpp_transcription = "whispercpp-transcription"
-    bci_whispercpp_transcription = "bci-whispercpp-transcription"
-    llamacpp_embedding = "llamacpp-embedding"
-    nmtcpp_translation = "nmtcpp-translation"
-    onnx_tts = "onnx-tts"
-    tts_ggml = "tts-ggml"
-    ggml_ocr = "ggml-ocr"
-    parakeet_transcription = "parakeet-transcription"
-    sdcpp_generation = "sdcpp-generation"
-    audiogen_ggml = "audiogen-ggml"
-    ggml_vla = "ggml-vla"
-    ggml_classification = "ggml-classification"
-    onnx_vad = "onnx-vad"
 
 
 class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
@@ -87,20 +39,6 @@ class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
         Field(
             alias="sha256Checksum",
             description="Expected SHA-256 checksum of the model file.",
-        ),
-    ]
-    engine: Annotated[
-        AssessModelFitRequestModelsItemArtifactsItemEngine,
-        Field(
-            description="Canonical inference engine identifier.",
-            title="AssessModelFitRequestModelsItemArtifactsItemEngine",
-        ),
-    ]
-    expected_size: Annotated[
-        float,
-        Field(
-            alias="expectedSize",
-            description="Expected total size of the model file in bytes.",
         ),
     ]
 

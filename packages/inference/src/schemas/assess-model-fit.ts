@@ -46,12 +46,14 @@ export const modelFitWorkloadSchema = z.discriminatedUnion('kind', [
 /**
  * The part of a model constant an assessment reads. Pass a catalog constant
  * directly — the extra fields are ignored.
+ *
+ * Only the checksum (the profile lookup key) and the name (the result label)
+ * are read; everything else — engine, byte totals, transformer facts — comes
+ * from the resolved resource profile, not from the caller.
  */
 export const modelFitModelRefSchema = modelRegistryEntrySchema.pick({
   name: true,
-  sha256Checksum: true,
-  engine: true,
-  expectedSize: true
+  sha256Checksum: true
 })
 
 /**

@@ -110,9 +110,7 @@ function candidate(overrides: Partial<ModelFitCandidate> = {}): ModelFitCandidat
   return {
     model: {
       name: 'TEST_MODEL',
-      sha256Checksum: 'a'.repeat(64),
-      engine: 'llamacpp-completion',
-      expectedSize: 1_000_000_000
+      sha256Checksum: 'a'.repeat(64)
     },
     workload: { kind: 'llm', contextTokens: 4096 },
     ...overrides
@@ -519,21 +517,11 @@ test('assess: sequential takes the largest peak, concurrent sums them', (t) => {
 
   const models: ModelFitCandidate[] = [
     candidate({
-      model: {
-        name: 'A',
-        sha256Checksum: 'a'.repeat(64),
-        engine: 'llamacpp-completion',
-        expectedSize: 0
-      },
+      model: { name: 'A', sha256Checksum: 'a'.repeat(64) },
       workload: { kind: 'llm', contextTokens: 1 }
     }),
     candidate({
-      model: {
-        name: 'B',
-        sha256Checksum: 'b'.repeat(64),
-        engine: 'llamacpp-completion',
-        expectedSize: 0
-      },
+      model: { name: 'B', sha256Checksum: 'b'.repeat(64) },
       workload: { kind: 'llm', contextTokens: 1 }
     })
   ]
@@ -572,20 +560,10 @@ test('assess: sequential takes the largest peak, concurrent sums them', (t) => {
 
 test('assess: one unknown model makes the combined verdict unknown', (t) => {
   const known = candidate({
-    model: {
-      name: 'KNOWN',
-      sha256Checksum: 'a'.repeat(64),
-      engine: 'llamacpp-completion',
-      expectedSize: 0
-    }
+    model: { name: 'KNOWN', sha256Checksum: 'a'.repeat(64) }
   })
   const unknown = candidate({
-    model: {
-      name: 'UNKNOWN',
-      sha256Checksum: 'b'.repeat(64),
-      engine: 'llamacpp-completion',
-      expectedSize: 0
-    }
+    model: { name: 'UNKNOWN', sha256Checksum: 'b'.repeat(64) }
   })
 
   const result = assessModelFitFromResources({
@@ -618,6 +596,10 @@ test('assess: an uncalibrated platform yields unknown for every model', (t) => {
   t.ok(result.budget, 'the budget is still reported — only the estimate is missing')
   t.ok(result.reasons.some((r) => r.includes('no validated calibration')))
   t.is(result.models[0]!.verdict, 'unknown')
+  t.ok(
+    result.models[0]!.reasons.some((r) => r.includes('no validated calibration for linux-arm64')),
+    'the per-model reason names the uncalibrated platform'
+  )
 })
 
 test('assess: an unrecognized platform yields unknown', (t) => {
@@ -632,6 +614,11 @@ test('assess: an unrecognized platform yields unknown', (t) => {
 
   t.is(result.verdict, 'unknown')
   t.ok(result.reasons.some((r) => r.includes('not one this assessment covers')))
+  t.is(result.models[0]!.verdict, 'unknown')
+  t.ok(
+    result.models[0]!.reasons.some((r) => r.includes('not one this assessment covers')),
+    'the per-model reason states the platform is uncovered, not that calibration is missing'
+  )
 })
 
 test('assess: an engine with no estimator yields unknown', (t) => {
@@ -652,14 +639,7 @@ test('assess: a companion artifact missing from the catalog yields unknown', (t)
   const result = assessModelFitFromResources({
     models: [
       candidate({
-        artifacts: [
-          {
-            name: 'VAD',
-            sha256Checksum: 'c'.repeat(64),
-            engine: 'onnx-vad',
-            expectedSize: 1_000
-          }
-        ]
+        artifacts: [{ name: 'VAD', sha256Checksum: 'c'.repeat(64) }]
       })
     ],
     execution: 'sequential',

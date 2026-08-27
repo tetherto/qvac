@@ -75,7 +75,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
   }
 
   const evaluated = models.map((candidate) =>
-    evaluate(candidate, calibration, resources, resolveProfile)
+    evaluate(candidate, platform, calibration, resources, resolveProfile)
   )
 
   for (const { result } of evaluated) {
@@ -128,6 +128,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
 
 function evaluate(
   candidate: ModelFitCandidate,
+  platform: ModelFitPlatform | undefined,
   calibration: PlatformCalibration | undefined,
   resources: SystemResources,
   resolveProfile: ProfileResolver
@@ -138,7 +139,11 @@ function evaluate(
       result: {
         kind: 'unknown',
         estimatorVersion: 'none',
-        reasons: ['no validated calibration for this platform']
+        reasons: [
+          platform
+            ? `no validated calibration for ${platform}`
+            : 'the runtime platform is not one this assessment covers'
+        ]
       }
     }
   }
