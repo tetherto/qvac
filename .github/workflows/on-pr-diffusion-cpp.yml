@@ -328,11 +328,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout linking checker (PR head)
+      - name: Checkout linking checker (trusted ref)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # The artifacts under inspection are the untrusted input; the
+          # INSPECTOR must come from a trusted ref so a PR cannot edit the
+          # rule it is judged by (same policy as publish-prebuild-status).
+          # On pull_request_target the checker is always taken from the
+          # default branch. workflow_dispatch is maintainer-triggered on a
+          # ref they chose, so it validates that ref's own checker — which is
+          # also how a PR introducing checker changes proves them pre-merge.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
           sparse-checkout: packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
@@ -346,7 +352,16 @@ jobs:
           path: ${{ runner.temp }}/qvac-diffusion-cpp
           merge-multiple: true
       - name: Verify linux prebuild dynamic linking
-        run: node packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs "${{ runner.temp }}/qvac-diffusion-cpp"
+        run: |
+          # Bootstrap: until the PR introducing the checker merges, the
+          # default branch has no script — and a PR cannot influence the
+          # default branch, so skipping when it is absent there is safe
+          # (no trusted rule exists yet). After merge this branch is dead.
+          if [ ! -f packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs ]; then
+            echo "checker not present on the trusted ref yet (pre-merge bootstrap); nothing to enforce"
+            exit 0
+          fi
+          node packages/diffusion-cpp/scripts/verify-prebuild-linking.mjs "${{ runner.temp }}/qvac-diffusion-cpp"
 
   combine-perf-reports:
     name: Combined Performance Report
