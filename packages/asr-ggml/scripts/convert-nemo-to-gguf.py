@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 #
-# Vendored from qvac-ext-lib-whisper.cpp@c3203333a4041c180eaa57bfd5d309402900c9ff
+# Vendored from qvac-fabric-speech.cpp@c3203333a4041c180eaa57bfd5d309402900c9ff
 #   (engines/parakeet/scripts/convert-nemo-to-gguf.py).
-# qvac-ext-lib-whisper.cpp owns the GGUF tensor/metadata layout this script
+# qvac-fabric-speech.cpp owns the GGUF tensor/metadata layout this script
 # produces; if the layout changes upstream, resync the file rather than
 # diverging it locally. Copy is verbatim apart from this header.
-# Original copyright/license: MIT, qvac-ext-lib-whisper.cpp authors -- see
+# Original copyright/license: MIT, qvac-fabric-speech.cpp authors -- see
 # the top-level NOTICE for attribution.
 """Convert an NVIDIA NeMo .nemo archive to a single GGUF for the
 parakeet.cpp Engine.

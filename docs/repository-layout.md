@@ -11,7 +11,8 @@ Legend:
 | Package | Description | Category |
 | :--- | :--- | :--- |
 | sdk | Main entry point to develop AI applications with QVAC | SDK |
-| bare-sdk | Bare-targeted slim assembly of the SDK; consumers install only the addons they need and register plugins explicitly | SDK |
+| inference | Bare-only in-process engine. Use this instead of `@qvac/bare-sdk` | SDK |
+| bare-sdk | Removed (last npm release 0.18.2). Use `@qvac/inference` for in-process Bare | SDK |
 | ai-sdk-provider | Vercel AI SDK provider exposing the QVAC runtime (chat, embeddings, transcription, translation, speech, OCR, image) | SDK |
 | bci-whispercpp | Brain-Computer Interface (BCI) neural-signal transcription addon powered by whisper.cpp | Addon |
 | classification-ggml | Image classification addon (MobileNetV3-Small) on the GGML backend | Addon |
@@ -23,7 +24,7 @@ Legend:
 | ocr-ggml | Optical Character Recognition (OCR) addon (EasyOCR pipeline) on the GGML backend | Addon |
 | rag | JavaScript library for Retrieval-Augmented Generation (RAG) with document ingestion, vector search, and LLM integration | Addon |
 | transcription-parakeet | Speech-to-text (ASR) and Sortformer speaker-diarization addon using NVIDIA Parakeet models | Addon |
-| transcription-whispercpp | Whisper-based audio transcription addon via `qvac-ext-lib-whisper.cpp` | Addon |
+| transcription-whispercpp | Whisper-based audio transcription addon via `qvac-fabric-speech.cpp` | Addon |
 | translation-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | tts-ggml | Text-to-Speech (TTS) addon wrapping the Chatterbox and Supertonic engines on the GGML backend | Addon |
 | vla-ggml | Vision-Language-Action (VLA) inference addon on the GGML backend | Addon |

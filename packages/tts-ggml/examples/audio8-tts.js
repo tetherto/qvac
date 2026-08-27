@@ -28,7 +28,7 @@
  * audio8-codec-decoder-q8_0.gguf, and, to clone,
  * audio8-codec-encoder-q8_0.gguf) under:
  *   models/
- * Produce them with the converters in qvac-ext-lib-whisper.cpp
+ * Produce them with the converters in qvac-fabric-speech.cpp
  * (engines/tts/scripts/convert-audio8-{lm,codec}-to-gguf.py) until they are
  * published to the model registry.
  *
