@@ -9,7 +9,6 @@ type ResolveConfigFn = () => Promise<QvacConfig | undefined>
 // Minimal RPC interface for config initialization
 // Using loose types to avoid Buffer type conflicts between Node/Bare runtimes
 interface RPCClient {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request(command: number): any
 }
 
@@ -33,13 +32,9 @@ async function sendInitMessage(
     runtimeContext
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const req = rpc.request(1)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
   req.send(JSON.stringify(initMessage), 'utf8')
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
   const response = await req.reply('utf8')
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
   const parsed = JSON.parse(response.toString()) as {
     success: boolean
     error?: string

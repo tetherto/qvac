@@ -298,7 +298,7 @@ Common examples:
 
 Release lower layers before upper layers when a feature spans packages:
 
-1. `@qvac/sdk` — model constants, inference semantics, parser fixes (`@qvac/bare-sdk` + `tetherto-qvac-sdk` lockstep via `qv-sdk-lockstep-sync`).
+1. `@qvac/sdk` — model constants, inference semantics, parser fixes (`tetherto-qvac-sdk` lockstep via `qv-sdk-lockstep-sync`).
 2. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
 3. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
 4. `@qvac/opencode-plugin` / `@qvac/openclaw-plugin` — plugin changes that depend on provider/CLI.
