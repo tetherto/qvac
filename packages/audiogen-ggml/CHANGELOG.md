@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   over 2x faster on AMD Strix Halo (RADV) through tiled `im2col`/`col2im`
   pipelines and a large-tile transpose copy, and CUDA transposed copies now
   cover every type and stay off strided destinations.
+- On CUDA the ACE-Step language model now runs on the GPU instead of the CPU,
+  by raising the `speech-cpp` floor further to 2026-08-26#1: the bundled ggml
+  computes explicit-f32-precision matmuls in true f32 on CUDA, which removes
+  the NaN risk for the LM's large activations and lifts its CPU-only
+  placement.
 
 ### Fixed
 
