@@ -181,7 +181,9 @@ TEST(TemplateDerivedSamplingTest, GenerationPromptClearedForUserGrammar) {
   EXPECT_TRUE(params.sampling.generation_prompt.empty());
 }
 
-TEST(TemplateDerivedSamplingTest, LazyGrammarWithNoTriggersIsRejectedNotApplied) {
+TEST(
+    TemplateDerivedSamplingTest,
+    LazyGrammarWithNoTriggersIsRejectedNotApplied) {
   common_params params = paramsWithoutReasoningBudget();
   PromptRenderResult rendered = toolRender();
   rendered.grammarTriggers.clear();
@@ -199,7 +201,9 @@ TEST(TemplateDerivedSamplingTest, TriggerWordNotPreservedIsRejected) {
   EXPECT_EQ(params.sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
 }
 
-TEST(TemplateDerivedSamplingTest, PreservedTokenConversionKeepsOnlySingleIdTokens) {
+TEST(
+    TemplateDerivedSamplingTest,
+    PreservedTokenConversionKeepsOnlySingleIdTokens) {
   common_params params = paramsWithoutReasoningBudget();
   ASSERT_TRUE(configureTemplateDerivedSampling(
       params, stubTokenizer(), toolRender(), true));
@@ -220,7 +224,8 @@ TEST(TemplateDerivedSamplingTest, WordTriggerPromotedToTokenWhenSingleId) {
       COMMON_GRAMMAR_TRIGGER_TYPE_TOKEN);
   EXPECT_EQ(params.sampling.grammar_triggers[0].token, 101);
   EXPECT_EQ(
-      params.sampling.grammar_triggers[1].type, COMMON_GRAMMAR_TRIGGER_TYPE_WORD)
+      params.sampling.grammar_triggers[1].type,
+      COMMON_GRAMMAR_TRIGGER_TYPE_WORD)
       << "a multi-token word stays a WORD trigger";
 }
 

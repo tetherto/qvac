@@ -412,7 +412,8 @@ TEST_F(ChatTemplateUtilsTest, GetPromptFlagsToolDefinitionsDropped) {
 
   EXPECT_TRUE(rendered.toolDefinitionsDropped);
   EXPECT_TRUE(rendered.renderedByJinja);
-  EXPECT_TRUE(inputs.tools.empty()) << "stripped tools must not leak to callers";
+  EXPECT_TRUE(inputs.tools.empty())
+      << "stripped tools must not leak to callers";
   EXPECT_NE(rendered.prompt.find("<user>"), std::string::npos);
   EXPECT_TRUE(rendered.grammar.empty());
 }

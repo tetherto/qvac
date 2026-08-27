@@ -379,7 +379,9 @@ bool sameTriggers(
     const std::vector<common_grammar_trigger>& a,
     const std::vector<common_grammar_trigger>& b) {
   return std::ranges::equal(
-      a, b, [](const common_grammar_trigger& x, const common_grammar_trigger& y) {
+      a,
+      b,
+      [](const common_grammar_trigger& x, const common_grammar_trigger& y) {
         return x.type == y.type && x.value == y.value && x.token == y.token;
       });
 }

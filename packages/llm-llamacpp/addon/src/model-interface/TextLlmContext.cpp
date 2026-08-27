@@ -360,11 +360,10 @@ void TextLlmContext::tokenizeChat(
     ++toolDefinitionsDropped_;
   }
   thinkingForcedOpen_ = rendered.thinkingForcedOpen;
-  thinkingForcedOpenText_ =
-      thinkingForcedOpen_ ? getThinkingForcedOpenText(
-                                rendered.generationPrompt,
-                                rendered.thinkingStartTag)
-                          : std::string{};
+  thinkingForcedOpenText_ = thinkingForcedOpen_ ? getThinkingForcedOpenText(
+                                                      rendered.generationPrompt,
+                                                      rendered.thinkingStartTag)
+                                                : std::string{};
   configureReasoningTags(
       rendered.thinkingStartTag,
       rendered.thinkingEndTag,
