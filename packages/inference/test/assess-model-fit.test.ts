@@ -136,8 +136,8 @@ test('estimateLlm: dense model KV matches the hand-computed cache', (t) => {
   // 32 blocks × 8 KV heads × (128 + 128) elements × 4096 tokens × 2 bytes
   const expected = 32 * 8 * 256 * 4096 * F16
   t.is(expected, 512 * MIB, 'sanity: the hand-computed cache is 512 MiB')
-  t.is(result.working.lower, expected)
-  t.is(result.working.upper, expected, 'no GPU, so both bounds use the f16 default')
+  t.is(result.persistent.lower, expected, 'the cache is resident, so it lands in persistent')
+  t.is(result.persistent.upper, expected, 'no GPU, so both bounds use the f16 default')
   t.is(result.estimatorVersion, LLM_ESTIMATOR_VERSION)
 })
 
@@ -154,8 +154,8 @@ test('estimateLlm: a GPU widens the bound to span the q8_0 default', (t) => {
   if (result.kind !== 'estimate') return
 
   const elements = 32 * 8 * 256 * 4096
-  t.is(result.working.lower, Math.ceil(elements * Q8_0), 'GPU default is q8_0')
-  t.is(result.working.upper, elements * F16, 'CPU or OpenCL backend keeps f16')
+  t.is(result.persistent.lower, Math.ceil(elements * Q8_0), 'GPU default is q8_0')
+  t.is(result.persistent.upper, elements * F16, 'CPU or OpenCL backend keeps f16')
   t.ok(result.assumptions.some((a) => a.includes('q8_0')))
 })
 
@@ -170,8 +170,8 @@ test('estimateLlm: bitnet keeps f16 even with a GPU (flash attention is off)', (
 
   t.is(result.kind, 'estimate')
   if (result.kind !== 'estimate') return
-  t.is(result.working.lower, result.working.upper)
-  t.is(result.working.lower, 32 * 8 * 256 * 4096 * F16)
+  t.is(result.persistent.lower, result.persistent.upper)
+  t.is(result.persistent.lower, 32 * 8 * 256 * 4096 * F16)
 })
 
 test('estimateLlm: context above the trained window is clamped', (t) => {
@@ -185,7 +185,7 @@ test('estimateLlm: context above the trained window is clamped', (t) => {
 
   t.is(result.kind, 'estimate')
   if (result.kind !== 'estimate') return
-  t.is(result.working.lower, 32 * 8 * 256 * 2048 * F16, 'sized for 2048, not 1,000,000')
+  t.is(result.persistent.lower, 32 * 8 * 256 * 2048 * F16, 'sized for 2048, not 1,000,000')
   t.ok(result.assumptions.some((a) => a.includes('clamped to the trained context')))
 })
 
@@ -224,12 +224,12 @@ test('estimateLlm: per-layer classes cap windowed blocks at the sliding window',
 
   const windowed = 50 * 16 * (256 + 256) * 1024 * F16
   const full = 10 * 4 * (512 + 512) * contextTokens * F16
-  t.is(result.working.lower, windowed + full)
+  t.is(result.persistent.lower, windowed + full)
 
   // What the per-layer sum buys: reading every block as the widest one is 18x
   // larger here, and worse still at the model's full 262144-token context.
   const flat = 60 * 16 * (512 + 512) * contextTokens * F16
-  t.ok(flat / result.working.upper > 15, 'the flat maximum is more than 15x the per-layer sum')
+  t.ok(flat / result.persistent.upper > 15, 'the flat maximum is more than 15x the per-layer sum')
 })
 
 test('estimateLlm: hybrid attention sizes only the full-attention blocks', (t) => {
@@ -263,12 +263,12 @@ test('estimateLlm: hybrid attention sizes only the full-attention blocks', (t) =
 
   const perBlockPerToken = 4 * (256 + 256)
   const ssm = 24 * (4096 * 128 + 4096 * 4) * 4
-  t.is(result.working.lower, 8 * perBlockPerToken * contextTokens * F16 + ssm)
-  t.is(result.working.upper, 8 * perBlockPerToken * contextTokens * F16 + ssm)
+  t.is(result.persistent.lower, 8 * perBlockPerToken * contextTokens * F16 + ssm)
+  t.is(result.persistent.upper, 8 * perBlockPerToken * contextTokens * F16 + ssm)
   t.ok(result.assumptions.some((a) => a.includes('every 4 blocks')))
 
   const flat = 32 * perBlockPerToken * contextTokens * F16
-  t.ok(result.working.upper < flat, 'hybrid accounting is below the flat all-blocks figure')
+  t.ok(result.persistent.upper < flat, 'hybrid accounting is below the flat all-blocks figure')
 })
 
 test('estimateLlm: a sliding window without a layer pattern gives a deliberately wide bound', (t) => {
@@ -299,8 +299,8 @@ test('estimateLlm: a sliding window without a layer pattern gives a deliberately
   if (result.kind !== 'estimate') return
 
   const perBlockPerToken = 8 * (64 + 64)
-  t.is(result.working.lower, 24 * perBlockPerToken * 128 * F16, 'every block windowed')
-  t.is(result.working.upper, 24 * perBlockPerToken * contextTokens * F16, 'every block full')
+  t.is(result.persistent.lower, 24 * perBlockPerToken * 128 * F16, 'every block windowed')
+  t.is(result.persistent.upper, 24 * perBlockPerToken * contextTokens * F16, 'every block full')
   t.ok(result.reasons.some((r) => r.includes('engine-owned')))
 })
 
@@ -315,8 +315,9 @@ test('estimateLlm: weights use the artifact size as the floor', (t) => {
 
   t.is(result.kind, 'estimate')
   if (result.kind !== 'estimate') return
-  t.is(result.persistent.lower, 4_500_000_000, 'model plus companion artifacts')
-  t.is(result.persistent.upper, Math.ceil(4_500_000_000 * 1.05))
+  const kv = 32 * 8 * 256 * 1024 * F16
+  t.is(result.persistent.lower, 4_500_000_000 + kv, 'model plus companions plus resident KV')
+  t.is(result.persistent.upper, Math.ceil(4_500_000_000 * 1.05 + kv))
   t.ok(result.assumptions.some((a) => a.includes('file-backed and evictable')))
 })
 
@@ -545,9 +546,10 @@ test('assess: sequential takes the largest peak, concurrent sums them', (t) => {
     resolveProfile
   })
 
-  // Both keep 2 × 2 GiB resident; the peaks are 1 GiB + 512 B each.
-  const persistent = 4 * GIB
-  const peak = 1 * GIB + 512
+  // Both keep 2 × (2 GiB + 512 B of KV) resident; the working peaks are the
+  // 1 GiB fixed overhead each.
+  const persistent = 2 * (2 * GIB + 512)
+  const peak = 1 * GIB
   t.is(sequential.estimate?.lowerBoundBytes, persistent + peak)
   t.is(concurrent.estimate?.lowerBoundBytes, persistent + 2 * peak)
   t.is(sequential.execution, 'sequential')

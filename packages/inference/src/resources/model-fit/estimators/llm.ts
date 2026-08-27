@@ -63,10 +63,6 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   // The upper coefficient covers the allocator's copy-on-write and alignment
   // slack measured during calibration.
   const artifactBytes = profile.artifactBytes + extraArtifactBytes
-  const persistent: ByteRange = {
-    lower: artifactBytes,
-    upper: Math.ceil(artifactBytes * calibration.weightUpperCoeff)
-  }
   assumptions.push(
     'weights are counted at full artifact size; llama.cpp maps them by default, so those pages are file-backed and evictable rather than anonymous RAM'
   )
@@ -87,15 +83,25 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   assumptions.push(element.assumption)
   const kv = kvCacheBytes(facts, contextTokens, element.bytes, assumptions, reasons)
 
+  // The KV cache is persistent, not a working peak: llama.cpp builds the
+  // context when the model loads, so every loaded model's cache is resident
+  // for its whole lifetime. Parking it in `working` would let `sequential`
+  // aggregation count only the largest cache while all of them are resident.
+  const persistent: ByteRange = {
+    lower: Math.ceil(artifactBytes + kv.lower),
+    upper: Math.ceil(artifactBytes * calibration.weightUpperCoeff + kv.upper)
+  }
+  assumptions.push(
+    'the KV cache counts as resident for the model’s whole lifetime; llama.cpp allocates it when the model loads, not per operation'
+  )
+
   const working: ByteRange = {
     lower:
       calibration.fixedOverheadBytes.lower +
-      calibration.computeBufferBytesPerToken.lower * contextTokens +
-      kv.lower,
+      calibration.computeBufferBytesPerToken.lower * contextTokens,
     upper:
       calibration.fixedOverheadBytes.upper +
-      calibration.computeBufferBytesPerToken.upper * contextTokens +
-      kv.upper
+      calibration.computeBufferBytesPerToken.upper * contextTokens
   }
 
   assumptions.push(
