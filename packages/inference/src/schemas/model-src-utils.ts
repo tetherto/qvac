@@ -13,7 +13,7 @@ const addonSchema = z.union([modelTypeInputSchema, z.literal('vad')])
 // Shared phrasing for the accepted model-source locations, reused by every
 // field-level `.describe()` that documents a model/asset source.
 export const MODEL_SOURCE_URI_HINT =
-  'a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI'
+  'a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI'
 
 export const modelDescriptorSchema = z.object({
   src: z.string().describe(`Location of the model file: ${MODEL_SOURCE_URI_HINT}.`),

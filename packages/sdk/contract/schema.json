@@ -3281,7 +3281,7 @@
         },
         "assetSrc": {
           "type": "string",
-          "description": "The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+          "description": "The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         },
         "withProgress": {
           "type": "boolean"
@@ -7999,7 +7999,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8215,7 +8215,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -8332,7 +8332,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8582,7 +8582,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -8683,7 +8683,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8855,7 +8855,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -8956,7 +8956,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9137,7 +9137,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9290,7 +9290,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9514,7 +9514,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -9608,7 +9608,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -9737,7 +9737,7 @@
                                   "properties": {
                                     "src": {
                                       "type": "string",
-                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                     },
                                     "name": {
                                       "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -9831,7 +9831,7 @@
                                   "properties": {
                                     "src": {
                                       "type": "string",
-                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                     },
                                     "name": {
                                       "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -9925,7 +9925,7 @@
                                   "properties": {
                                     "src": {
                                       "type": "string",
-                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                     },
                                     "name": {
                                       "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10140,7 +10140,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -10284,7 +10284,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10378,7 +10378,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10472,7 +10472,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10566,7 +10566,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10660,7 +10660,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10754,7 +10754,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -10931,7 +10931,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11025,7 +11025,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11370,7 +11370,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11464,7 +11464,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11619,7 +11619,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11713,7 +11713,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11807,7 +11807,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -11912,7 +11912,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -12024,7 +12024,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12125,7 +12125,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -12305,7 +12305,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12400,7 +12400,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12495,7 +12495,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12590,7 +12590,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12685,7 +12685,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12780,7 +12780,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12875,7 +12875,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -12970,7 +12970,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13065,7 +13065,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13160,7 +13160,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13264,7 +13264,7 @@
                               "properties": {
                                 "src": {
                                   "type": "string",
-                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
                                   "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13397,7 +13397,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -13492,7 +13492,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13586,7 +13586,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13680,7 +13680,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13774,7 +13774,7 @@
                           "properties": {
                             "src": {
                               "type": "string",
-                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
                               "description": "Display name for this model instance; overrides the name derived from the source.",
@@ -13877,7 +13877,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14006,7 +14006,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14093,7 +14093,7 @@
                 },
                 "modelSrc": {
                   "type": "string",
-                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models."
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14386,7 +14386,7 @@
                       "properties": {
                         "src": {
                           "type": "string",
-                          "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+                          "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                         },
                         "name": {
                           "description": "Display name for this model instance; overrides the name derived from the source.",

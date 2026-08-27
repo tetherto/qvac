@@ -2603,7 +2603,7 @@ class DownloadAssetRequest(GeneratedBaseModel):
         str,
         Field(
             alias="assetSrc",
-            description="The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI.",
+            description="The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI.",
         ),
     ]
     with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
@@ -6625,7 +6625,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -6916,7 +6916,7 @@ class LoadModelSrcRequestLlamacppCompletion(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7063,7 +7063,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -7231,7 +7231,7 @@ class LoadModelSrcRequestWhispercppTranscription(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7396,7 +7396,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -7517,7 +7517,7 @@ class LoadModelSrcRequestBciWhispercppTranscription(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7686,7 +7686,7 @@ class LoadModelSrcRequestParakeetTranscription(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -7909,7 +7909,7 @@ class LoadModelSrcRequestLlamacppEmbedding(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -8137,7 +8137,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -8245,7 +8245,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -8359,7 +8359,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -8469,7 +8469,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -8579,7 +8579,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -8830,7 +8830,7 @@ class LoadModelSrcRequestNmtcppTranslation(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -8963,7 +8963,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc(GeneratedBase
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9071,7 +9071,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9177,7 +9177,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc(GeneratedBaseM
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9283,7 +9283,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc(GeneratedBase
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9391,7 +9391,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9499,7 +9499,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9726,7 +9726,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -9834,7 +9834,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10146,7 +10146,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10254,7 +10254,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10409,7 +10409,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10517,7 +10517,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10623,7 +10623,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc(GeneratedBase
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10746,7 +10746,7 @@ class LoadModelSrcRequestTtsGgml(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -10866,7 +10866,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc(GeneratedBaseModel):
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -10985,7 +10985,7 @@ class LoadModelSrcRequestGgmlOcr(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -11160,7 +11160,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc(GeneratedBaseMo
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11266,7 +11266,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc(GeneratedBaseMo
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11372,7 +11372,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc(GeneratedBaseMo
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11478,7 +11478,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc(GeneratedBaseMode
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11584,7 +11584,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc(GeneratedBaseMode
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11694,7 +11694,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11800,7 +11800,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc(GeneratedBaseM
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -11908,7 +11908,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12014,7 +12014,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc(GeneratedBas
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12124,7 +12124,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc(
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12230,7 +12230,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(GeneratedBas
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12538,7 +12538,7 @@ class LoadModelSrcRequestSdcppGeneration(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -12646,7 +12646,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigTextEncModelSrc(GeneratedBaseMod
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12752,7 +12752,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigLmModelSrc(GeneratedBaseModel):
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12858,7 +12858,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigDitModelSrc(GeneratedBaseModel):
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -12964,7 +12964,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigVaeModelSrc(GeneratedBaseModel):
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
@@ -13079,7 +13079,7 @@ class LoadModelSrcRequestAudiogenGgml(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13241,7 +13241,7 @@ class LoadModelSrcRequestGgmlVla(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13330,7 +13330,7 @@ class LoadModelSrcRequestGgmlClassification(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13419,7 +13419,7 @@ class LoadModelCustomPluginRequest(GeneratedBaseModel):
         str,
         Field(
             alias="modelSrc",
-            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI — for HTTP, local, or P2P models.",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
         ),
     ]
     model_name: Annotated[str | None, Field(alias="modelName")] = None
@@ -13553,7 +13553,7 @@ class ReloadConfigRequestModelConfigVadModelSrc(GeneratedBaseModel):
     src: Annotated[
         str,
         Field(
-            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `hyperdrive://` URI."
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
     name: Annotated[
