@@ -33,7 +33,9 @@ const vadParamsSchema = z
     samples_overlap: z
       .number()
       .optional()
-      .describe('Overlap between consecutive speech segments (0–1).')
+      .describe(
+        'Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.'
+      )
   })
   .optional()
 
@@ -52,12 +54,6 @@ const miscConfigSchema = z
   })
   .optional()
 
-// TODO(QVAC-23933): the following whisper fields map 1:1 to upstream
-// `whisper_full_params` and have no human-readable semantics documented in-repo,
-// so they are intentionally left without a `.describe()` pending source text
-// from the addon owner: no_context, single_segment, print_realtime,
-// print_timestamps, token_timestamps, thold_ptsum, split_on_word, max_tokens,
-// debug_mode, suppress_blank, length_penalty.
 export const whisperConfigSchema = z.object({
   strategy: z
     .enum(['greedy', 'beam_search'])
@@ -89,23 +85,53 @@ export const whisperConfigSchema = z.object({
     .optional()
     .describe('Audio context window size in samples; `0` = model default.'),
   translate: z.boolean().optional().describe('Translate the transcribed audio into English.'),
-  no_context: z.boolean().optional(),
+  no_context: z
+    .boolean()
+    .optional()
+    .describe(
+      "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently."
+    ),
   no_timestamps: z.boolean().optional().describe('Omit timestamps from the transcription output.'),
-  single_segment: z.boolean().optional(),
+  single_segment: z
+    .boolean()
+    .optional()
+    .describe('Force the whole audio into one output segment (for streaming or short clips).'),
   print_special: z.boolean().optional().describe('Print special tokens in the output.'),
   print_progress: z.boolean().optional().describe('Print progress updates during transcription.'),
-  print_realtime: z.boolean().optional(),
-  print_timestamps: z.boolean().optional(),
-  token_timestamps: z.boolean().optional(),
+  print_realtime: z
+    .boolean()
+    .optional()
+    .describe(
+      'whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).'
+    ),
+  print_timestamps: z
+    .boolean()
+    .optional()
+    .describe('Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.'),
+  token_timestamps: z
+    .boolean()
+    .optional()
+    .describe('Experimental: compute per-token timestamps (populates `t0`/`t1`).'),
   thold_pt: z
     .number()
     .optional()
     .describe('Word-timestamp probability threshold for accepting a word (0–1).'),
-  thold_ptsum: z.number().optional(),
+  thold_ptsum: z
+    .number()
+    .optional()
+    .describe(
+      'Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).'
+    ),
   max_len: z.number().int().optional().describe('Maximum tokens per transcription segment.'),
-  split_on_word: z.boolean().optional(),
-  max_tokens: z.number().int().optional(),
-  debug_mode: z.boolean().optional(),
+  split_on_word: z
+    .boolean()
+    .optional()
+    .describe('When `max_len > 0`, split segments on word boundaries instead of mid-token.'),
+  max_tokens: z.number().int().optional().describe('Maximum tokens per segment; `0` = no limit.'),
+  debug_mode: z
+    .boolean()
+    .optional()
+    .describe('Experimental: emit extra debug output (e.g. the computed log-mel).'),
   tdrz_enable: z
     .boolean()
     .optional()
@@ -122,11 +148,24 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe("Transcription language (ISO 639-1) or `'auto'` to detect."),
-  detect_language: z.boolean().optional().describe('Automatically detect the spoken language.'),
-  suppress_blank: z.boolean().optional(),
+  detect_language: z
+    .boolean()
+    .optional()
+    .describe(
+      "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+    ),
+  suppress_blank: z
+    .boolean()
+    .optional()
+    .describe('Suppress the blank / leading-space token at the start of sampling.'),
   suppress_nst: z.boolean().optional().describe('Suppress non-speech tokens (NST).'),
   temperature: z.number().optional().describe('Sampling temperature (0–1). Default 0.0.'),
-  length_penalty: z.number().optional(),
+  length_penalty: z
+    .number()
+    .optional()
+    .describe(
+      "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config."
+    ),
   temperature_inc: z
     .number()
     .optional()
@@ -220,13 +259,13 @@ export const parakeetRuntimeConfigSchema = z.object({
     .int()
     .nonnegative()
     .optional()
-    .describe('ASR encoder left-context window in ms; `-1` keeps the model default (10000).'),
+    .describe('ASR encoder left-context window in ms; omit to keep the model default (10000).'),
   streamingRightLookaheadMs: z
     .number()
     .int()
     .nonnegative()
     .optional()
-    .describe('ASR encoder right-lookahead window in ms; `-1` keeps the model default (2000).'),
+    .describe('ASR encoder right-lookahead window in ms; omit to keep the model default (2000).'),
   language: z
     .string()
     .optional()

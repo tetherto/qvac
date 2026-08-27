@@ -8418,6 +8418,7 @@
                       "type": "boolean"
                     },
                     "no_context": {
+                      "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                       "type": "boolean"
                     },
                     "no_timestamps": {
@@ -8425,6 +8426,7 @@
                       "type": "boolean"
                     },
                     "single_segment": {
+                      "description": "Force the whole audio into one output segment (for streaming or short clips).",
                       "type": "boolean"
                     },
                     "print_special": {
@@ -8436,12 +8438,15 @@
                       "type": "boolean"
                     },
                     "print_realtime": {
+                      "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                       "type": "boolean"
                     },
                     "print_timestamps": {
+                      "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                       "type": "boolean"
                     },
                     "token_timestamps": {
+                      "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                       "type": "boolean"
                     },
                     "thold_pt": {
@@ -8449,6 +8454,7 @@
                       "type": "number"
                     },
                     "thold_ptsum": {
+                      "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                       "type": "number"
                     },
                     "max_len": {
@@ -8458,14 +8464,17 @@
                       "maximum": 9007199254740991
                     },
                     "split_on_word": {
+                      "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
                       "type": "boolean"
                     },
                     "max_tokens": {
+                      "description": "Maximum tokens per segment; `0` = no limit.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "debug_mode": {
+                      "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                       "type": "boolean"
                     },
                     "tdrz_enable": {
@@ -8485,10 +8494,11 @@
                       "type": "string"
                     },
                     "detect_language": {
-                      "description": "Automatically detect the spoken language.",
+                      "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                       "type": "boolean"
                     },
                     "suppress_blank": {
+                      "description": "Suppress the blank / leading-space token at the start of sampling.",
                       "type": "boolean"
                     },
                     "suppress_nst": {
@@ -8500,6 +8510,7 @@
                       "type": "number"
                     },
                     "length_penalty": {
+                      "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                       "type": "number"
                     },
                     "temperature_inc": {
@@ -8550,7 +8561,7 @@
                           "type": "number"
                         },
                         "samples_overlap": {
-                          "description": "Overlap between consecutive speech segments (0–1).",
+                          "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                           "type": "number"
                         }
                       },
@@ -9075,13 +9086,13 @@
                       "type": "boolean"
                     },
                     "streamingLeftContextMs": {
-                      "description": "ASR encoder left-context window in ms; `-1` keeps the model default (10000).",
+                      "description": "ASR encoder left-context window in ms; omit to keep the model default (10000).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
                     "streamingRightLookaheadMs": {
-                      "description": "ASR encoder right-lookahead window in ms; `-1` keeps the model default (2000).",
+                      "description": "ASR encoder right-lookahead window in ms; omit to keep the model default (2000).",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
@@ -13875,6 +13886,7 @@
                   "type": "boolean"
                 },
                 "no_context": {
+                  "description": "Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently.",
                   "type": "boolean"
                 },
                 "no_timestamps": {
@@ -13882,6 +13894,7 @@
                   "type": "boolean"
                 },
                 "single_segment": {
+                  "description": "Force the whole audio into one output segment (for streaming or short clips).",
                   "type": "boolean"
                 },
                 "print_special": {
@@ -13893,12 +13906,15 @@
                   "type": "boolean"
                 },
                 "print_realtime": {
+                  "description": "whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback).",
                   "type": "boolean"
                 },
                 "print_timestamps": {
+                  "description": "Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data.",
                   "type": "boolean"
                 },
                 "token_timestamps": {
+                  "description": "Experimental: compute per-token timestamps (populates `t0`/`t1`).",
                   "type": "boolean"
                 },
                 "thold_pt": {
@@ -13906,6 +13922,7 @@
                   "type": "number"
                 },
                 "thold_ptsum": {
+                  "description": "Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1).",
                   "type": "number"
                 },
                 "max_len": {
@@ -13915,14 +13932,17 @@
                   "maximum": 9007199254740991
                 },
                 "split_on_word": {
+                  "description": "When `max_len > 0`, split segments on word boundaries instead of mid-token.",
                   "type": "boolean"
                 },
                 "max_tokens": {
+                  "description": "Maximum tokens per segment; `0` = no limit.",
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
                 },
                 "debug_mode": {
+                  "description": "Experimental: emit extra debug output (e.g. the computed log-mel).",
                   "type": "boolean"
                 },
                 "tdrz_enable": {
@@ -13942,10 +13962,11 @@
                   "type": "string"
                 },
                 "detect_language": {
-                  "description": "Automatically detect the spoken language.",
+                  "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
                   "type": "boolean"
                 },
                 "suppress_blank": {
+                  "description": "Suppress the blank / leading-space token at the start of sampling.",
                   "type": "boolean"
                 },
                 "suppress_nst": {
@@ -13957,6 +13978,7 @@
                   "type": "number"
                 },
                 "length_penalty": {
+                  "description": "Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config.",
                   "type": "number"
                 },
                 "temperature_inc": {
@@ -14007,7 +14029,7 @@
                       "type": "number"
                     },
                     "samples_overlap": {
-                      "description": "Overlap between consecutive speech segments (0–1).",
+                      "description": "Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default.",
                       "type": "number"
                     }
                   },

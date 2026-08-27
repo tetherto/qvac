@@ -6955,7 +6955,9 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadParams(
     ] = None
     samples_overlap: Annotated[
         float | None,
-        Field(description="Overlap between consecutive speech segments (0–1)."),
+        Field(
+            description="Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default."
+        ),
     ] = None
 
 
@@ -7089,27 +7091,57 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     translate: Annotated[
         bool | None, Field(description="Translate the transcribed audio into English.")
     ] = None
-    no_context: bool | None = None
+    no_context: Annotated[
+        bool | None,
+        Field(
+            description="Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently."
+        ),
+    ] = None
     no_timestamps: Annotated[
         bool | None, Field(description="Omit timestamps from the transcription output.")
     ] = None
-    single_segment: bool | None = None
+    single_segment: Annotated[
+        bool | None,
+        Field(
+            description="Force the whole audio into one output segment (for streaming or short clips)."
+        ),
+    ] = None
     print_special: Annotated[
         bool | None, Field(description="Print special tokens in the output.")
     ] = None
     print_progress: Annotated[
         bool | None, Field(description="Print progress updates during transcription.")
     ] = None
-    print_realtime: bool | None = None
-    print_timestamps: bool | None = None
-    token_timestamps: bool | None = None
+    print_realtime: Annotated[
+        bool | None,
+        Field(
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+        ),
+    ] = None
+    print_timestamps: Annotated[
+        bool | None,
+        Field(
+            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+        ),
+    ] = None
+    token_timestamps: Annotated[
+        bool | None,
+        Field(
+            description="Experimental: compute per-token timestamps (populates `t0`/`t1`)."
+        ),
+    ] = None
     thold_pt: Annotated[
         float | None,
         Field(
             description="Word-timestamp probability threshold for accepting a word (0–1)."
         ),
     ] = None
-    thold_ptsum: float | None = None
+    thold_ptsum: Annotated[
+        float | None,
+        Field(
+            description="Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1)."
+        ),
+    ] = None
     max_len: Annotated[
         int | None,
         Field(
@@ -7118,11 +7150,26 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
-    split_on_word: bool | None = None
-    max_tokens: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    split_on_word: Annotated[
+        bool | None,
+        Field(
+            description="When `max_len > 0`, split segments on word boundaries instead of mid-token."
+        ),
     ] = None
-    debug_mode: bool | None = None
+    max_tokens: Annotated[
+        int | None,
+        Field(
+            description="Maximum tokens per segment; `0` = no limit.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    debug_mode: Annotated[
+        bool | None,
+        Field(
+            description="Experimental: emit extra debug output (e.g. the computed log-mel)."
+        ),
+    ] = None
     tdrz_enable: Annotated[
         bool | None,
         Field(description="Enable tinydiarize (lightweight speaker-turn detection)."),
@@ -7140,16 +7187,29 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
         Field(description="Transcription language (ISO 639-1) or `'auto'` to detect."),
     ] = None
     detect_language: Annotated[
-        bool | None, Field(description="Automatically detect the spoken language.")
+        bool | None,
+        Field(
+            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+        ),
     ] = None
-    suppress_blank: bool | None = None
+    suppress_blank: Annotated[
+        bool | None,
+        Field(
+            description="Suppress the blank / leading-space token at the start of sampling."
+        ),
+    ] = None
     suppress_nst: Annotated[
         bool | None, Field(description="Suppress non-speech tokens (NST).")
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–1). Default 0.0.")
     ] = None
-    length_penalty: float | None = None
+    length_penalty: Annotated[
+        float | None,
+        Field(
+            description="Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config."
+        ),
+    ] = None
     temperature_inc: Annotated[
         float | None,
         Field(description="Temperature increment applied when sampling fails."),
@@ -7612,7 +7672,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingLeftContextMs",
-            description="ASR encoder left-context window in ms; `-1` keeps the model default (10000).",
+            description="ASR encoder left-context window in ms; omit to keep the model default (10000).",
             ge=0,
             le=9007199254740991,
         ),
@@ -7621,7 +7681,7 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         int | None,
         Field(
             alias="streamingRightLookaheadMs",
-            description="ASR encoder right-lookahead window in ms; `-1` keeps the model default (2000).",
+            description="ASR encoder right-lookahead window in ms; omit to keep the model default (2000).",
             ge=0,
             le=9007199254740991,
         ),
@@ -11467,7 +11527,9 @@ class ReloadConfigRequestModelConfigVadParams(GeneratedBaseModel):
     ] = None
     samples_overlap: Annotated[
         float | None,
-        Field(description="Overlap between consecutive speech segments (0–1)."),
+        Field(
+            description="Overlap between consecutive speech segments (0 < x ≤ 1); an explicit `0` falls back to the engine default."
+        ),
     ] = None
 
 
@@ -11591,27 +11653,57 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     translate: Annotated[
         bool | None, Field(description="Translate the transcribed audio into English.")
     ] = None
-    no_context: bool | None = None
+    no_context: Annotated[
+        bool | None,
+        Field(
+            description="Do not carry past transcription forward as the decoder's initial prompt; each window is decoded independently."
+        ),
+    ] = None
     no_timestamps: Annotated[
         bool | None, Field(description="Omit timestamps from the transcription output.")
     ] = None
-    single_segment: bool | None = None
+    single_segment: Annotated[
+        bool | None,
+        Field(
+            description="Force the whole audio into one output segment (for streaming or short clips)."
+        ),
+    ] = None
     print_special: Annotated[
         bool | None, Field(description="Print special tokens in the output.")
     ] = None
     print_progress: Annotated[
         bool | None, Field(description="Print progress updates during transcription.")
     ] = None
-    print_realtime: bool | None = None
-    print_timestamps: bool | None = None
-    token_timestamps: bool | None = None
+    print_realtime: Annotated[
+        bool | None,
+        Field(
+            description="whisper.cpp prints results to stderr as it decodes; diagnostic only (prefer the segment callback)."
+        ),
+    ] = None
+    print_timestamps: Annotated[
+        bool | None,
+        Field(
+            description="Prefix each `print_realtime` line with `[t0 --> t1]`; no effect on returned data."
+        ),
+    ] = None
+    token_timestamps: Annotated[
+        bool | None,
+        Field(
+            description="Experimental: compute per-token timestamps (populates `t0`/`t1`)."
+        ),
+    ] = None
     thold_pt: Annotated[
         float | None,
         Field(
             description="Word-timestamp probability threshold for accepting a word (0–1)."
         ),
     ] = None
-    thold_ptsum: float | None = None
+    thold_ptsum: Annotated[
+        float | None,
+        Field(
+            description="Timestamp-token sum-probability threshold used when deriving token-level timestamps (0–1)."
+        ),
+    ] = None
     max_len: Annotated[
         int | None,
         Field(
@@ -11620,11 +11712,26 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
-    split_on_word: bool | None = None
-    max_tokens: Annotated[
-        int | None, Field(ge=-9007199254740991, le=9007199254740991)
+    split_on_word: Annotated[
+        bool | None,
+        Field(
+            description="When `max_len > 0`, split segments on word boundaries instead of mid-token."
+        ),
     ] = None
-    debug_mode: bool | None = None
+    max_tokens: Annotated[
+        int | None,
+        Field(
+            description="Maximum tokens per segment; `0` = no limit.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    debug_mode: Annotated[
+        bool | None,
+        Field(
+            description="Experimental: emit extra debug output (e.g. the computed log-mel)."
+        ),
+    ] = None
     tdrz_enable: Annotated[
         bool | None,
         Field(description="Enable tinydiarize (lightweight speaker-turn detection)."),
@@ -11642,16 +11749,29 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
         Field(description="Transcription language (ISO 639-1) or `'auto'` to detect."),
     ] = None
     detect_language: Annotated[
-        bool | None, Field(description="Automatically detect the spoken language.")
+        bool | None,
+        Field(
+            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+        ),
     ] = None
-    suppress_blank: bool | None = None
+    suppress_blank: Annotated[
+        bool | None,
+        Field(
+            description="Suppress the blank / leading-space token at the start of sampling."
+        ),
+    ] = None
     suppress_nst: Annotated[
         bool | None, Field(description="Suppress non-speech tokens (NST).")
     ] = None
     temperature: Annotated[
         float | None, Field(description="Sampling temperature (0–1). Default 0.0.")
     ] = None
-    length_penalty: float | None = None
+    length_penalty: Annotated[
+        float | None,
+        Field(
+            description="Beam-search length penalty. Must be ≥ 0, so the upstream `-1` 'disabled' sentinel cannot be set via config."
+        ),
+    ] = None
     temperature_inc: Annotated[
         float | None,
         Field(description="Temperature increment applied when sampling fails."),
