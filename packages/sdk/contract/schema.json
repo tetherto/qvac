@@ -9893,7 +9893,8 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "chatterbox"
+                          "const": "chatterbox",
+                          "description": "TTS engine: Chatterbox (multilingual, voice cloning)."
                         },
                         "language": {
                           "type": "string",
@@ -9922,49 +9923,60 @@
                             "zh",
                             "hi"
                           ],
+                          "description": "Language code. Default `en`.",
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLanguage"
                         },
                         "voice": {
+                          "description": "Ignored by Chatterbox; use `referenceAudioSrc` for voice cloning.",
                           "type": "string"
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "streamChunkTokens": {
+                          "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "streamFirstChunkTokens": {
+                          "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "cfmSteps": {
+                          "description": "Chatterbox CFM Euler step count. Default 2.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "cfgRate": {
+                          "description": "Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.",
                           "type": "number",
                           "minimum": 0
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 9007199254740991
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
                         },
                         "s3genModelSrc": {
+                          "description": "Chatterbox S3Gen + HiFT model source (speech tokens to 24 kHz waveform).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10048,6 +10060,7 @@
                           ]
                         },
                         "referenceAudioSrc": {
+                          "description": "Chatterbox voice-cloning reference audio source (wav).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10131,6 +10144,7 @@
                           ]
                         },
                         "mecabDictSrc": {
+                          "description": "Chatterbox MTL only: compiled MeCab/IPAdic dictionary source for Japanese segmentation (required for language `ja`).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10214,6 +10228,7 @@
                           ]
                         },
                         "cangjieTsvSrc": {
+                          "description": "Chatterbox MTL only: Cangjie TSV source for Chinese romanisation (required for language `zh`).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10297,6 +10312,7 @@
                           ]
                         },
                         "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10380,6 +10396,7 @@
                           ]
                         },
                         "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10485,7 +10502,8 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "supertonic"
+                          "const": "supertonic",
+                          "description": "TTS engine: Supertonic."
                         },
                         "language": {
                           "type": "string",
@@ -10522,30 +10540,38 @@
                             "uk",
                             "vi"
                           ],
+                          "description": "Language code. Default `en`.",
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLanguage"
                         },
                         "voice": {
+                          "description": "Supertonic baked voice id, e.g. `F1` or `M1`.",
                           "type": "string"
                         },
                         "ttsSpeed": {
+                          "description": "Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor.",
                           "type": "number"
                         },
                         "ttsNumInferenceSteps": {
+                          "description": "Supertonic vector-estimator CFM steps; 0 uses the GGUF default.",
                           "type": "number"
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "vulkanCacheDir": {
+                          "description": "Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
                           "type": "string",
                           "minLength": 1
                         },
                         "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10629,6 +10655,7 @@
                           ]
                         },
                         "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -10734,21 +10761,26 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "parler"
+                          "const": "parler",
+                          "description": "TTS engine: Parler."
                         },
                         "description": {
+                          "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
                           "type": "string",
                           "minLength": 1
                         },
                         "voiceDescription": {
+                          "description": "Alias of `description`; mutually exclusive with the voice-template fields.",
                           "type": "string",
                           "minLength": 1
                         },
                         "voice": {
+                          "description": "Parler voice-template speaker name; also Supertonic’s baked voice id.",
                           "type": "string",
                           "minLength": 1
                         },
                         "emotion": {
+                          "description": "Speaking style (Parler voice-template field).",
                           "type": "string",
                           "enum": [
                             "command",
@@ -10767,78 +10799,95 @@
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerEmotion"
                         },
                         "pitch": {
+                          "description": "Parler voice-template pitch descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "pace": {
+                          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
                           "type": "string",
                           "enum": ["slow", "moderate", "fast"],
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerPace"
                         },
                         "expressivity": {
+                          "description": "Parler voice-template expressivity descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "noise": {
+                          "description": "Parler voice-template background-noise descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "reverb": {
+                          "description": "Parler voice-template reverb descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "quality": {
+                          "description": "Parler voice-template audio-quality descriptor.",
                           "type": "string",
                           "minLength": 1
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "streamChunkTokens": {
+                          "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
+                          "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "temperature": {
+                          "description": "Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).",
                           "type": "number",
                           "minimum": 0
                         },
                         "topK": {
+                          "description": "Top-k sampling cutoff; unset defers to the engine default (50).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "topP": {
+                          "description": "Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.",
                           "type": "number",
                           "exclusiveMinimum": 0,
                           "maximum": 1
                         },
                         "maxFrames": {
+                          "description": "Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
                           "anyOf": [
                             {
                               "type": "number",
@@ -10852,11 +10901,13 @@
                           ]
                         },
                         "minNewTokens": {
+                          "description": "Parler minimum tokens before EOS; `-1` uses the model default.",
                           "type": "integer",
                           "minimum": -1,
                           "maximum": 2147483647
                         },
                         "normalizeNumbers": {
+                          "description": "Parler prompt digit expansion (engine default: enabled).",
                           "type": "boolean"
                         }
                       },
@@ -10869,19 +10920,23 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "cosyvoice3"
+                          "const": "cosyvoice3",
+                          "description": "TTS engine: CosyVoice3."
                         },
                         "emotion": {
+                          "description": "Speaking style: `'anger'`, `'happy'`, `'neutral'`, or `'sad'`. One conditioning control per synthesis (emotion / non-moderate pace / instruct).",
                           "type": "string",
                           "enum": ["anger", "happy", "neutral", "sad"],
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Emotion"
                         },
                         "pace": {
+                          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`; `'moderate'` disengages the pace channel.",
                           "type": "string",
                           "enum": ["slow", "moderate", "fast"],
                           "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Pace"
                         },
                         "instruct": {
+                          "description": "Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis.",
                           "anyOf": [
                             {
                               "type": "string",
@@ -10930,39 +10985,47 @@
                           ]
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "streamChunkTokens": {
+                          "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
+                          "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -11046,6 +11109,7 @@
                           ]
                         },
                         "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
                           "anyOf": [
                             {
                               "type": "string"
@@ -11138,53 +11202,65 @@
                       "properties": {
                         "ttsEngine": {
                           "type": "string",
-                          "const": "audio8"
+                          "const": "audio8",
+                          "description": "TTS engine: Audio8."
                         },
                         "referenceText": {
+                          "description": "Transcript of `referenceAudioSrc`; required when cloning a voice.",
                           "type": "string",
                           "minLength": 1
                         },
                         "greedy": {
+                          "description": "Audio8: take the argmax instead of sampling.",
                           "type": "boolean"
                         },
                         "temperature": {
+                          "description": "Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).",
                           "type": "number",
                           "minimum": 0
                         },
                         "topK": {
+                          "description": "Top-k sampling cutoff; unset defers to the engine default (50).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "topP": {
+                          "description": "Top-p (nucleus) sampling cutoff (0 < p ≤ 1); unset defers to the engine default.",
                           "type": "number",
                           "exclusiveMinimum": 0,
                           "maximum": 1
                         },
                         "maxFrames": {
+                          "description": "Generation-length cap in decoder frames; 0 = engine default (Parler ≈86 frames/s, Audio8 ≈21.5).",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
                         },
                         "useGPU": {
+                          "description": "Route inference through a GPU backend (Metal / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
                         "outputSampleRate": {
                           "type": "integer",
                           "minimum": 8000,
-                          "maximum": 192000
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
                         "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
                         "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -11270,9 +11346,11 @@
                               "required": ["src"],
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc"
                             }
-                          ]
+                          ],
+                          "description": "Audio8 codec decoder model source (codes to 44.1 kHz waveform)."
                         },
                         "audio8CodecEncoderModelSrc": {
+                          "description": "Audio8 codec encoder model source (waveform to codes); required only for voice cloning.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -11356,6 +11434,7 @@
                           ]
                         },
                         "referenceAudioSrc": {
+                          "description": "Audio8 voice-cloning reference recording source; pair with `referenceText`.",
                           "anyOf": [
                             {
                               "type": "string"
@@ -15566,18 +15645,22 @@
           "exclusiveMinimum": 0
         },
         "description": {
+          "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voiceDescription": {
+          "description": "Alias of `description`; mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voice": {
+          "description": "Parler voice-template speaker name; also Supertonic’s baked voice id.",
           "type": "string",
           "minLength": 1
         },
         "emotion": {
+          "description": "Speaking style (Parler voice-template field).",
           "type": "string",
           "enum": [
             "command",
@@ -15596,27 +15679,33 @@
           "title": "TextToSpeechRequestEmotion"
         },
         "pitch": {
+          "description": "Parler voice-template pitch descriptor.",
           "type": "string",
           "minLength": 1
         },
         "pace": {
+          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
           "type": "string",
           "enum": ["slow", "moderate", "fast"],
           "title": "TextToSpeechRequestPace"
         },
         "expressivity": {
+          "description": "Parler voice-template expressivity descriptor.",
           "type": "string",
           "minLength": 1
         },
         "noise": {
+          "description": "Parler voice-template background-noise descriptor.",
           "type": "string",
           "minLength": 1
         },
         "reverb": {
+          "description": "Parler voice-template reverb descriptor.",
           "type": "string",
           "minLength": 1
         },
         "quality": {
+          "description": "Parler voice-template audio-quality descriptor.",
           "type": "string",
           "minLength": 1
         },
@@ -15704,18 +15793,22 @@
           "exclusiveMinimum": 0
         },
         "description": {
+          "description": "Parler free-text voice description (alias `voiceDescription`). Mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voiceDescription": {
+          "description": "Alias of `description`; mutually exclusive with the voice-template fields.",
           "type": "string",
           "minLength": 1
         },
         "voice": {
+          "description": "Parler voice-template speaker name; also Supertonic’s baked voice id.",
           "type": "string",
           "minLength": 1
         },
         "emotion": {
+          "description": "Speaking style (Parler voice-template field).",
           "type": "string",
           "enum": [
             "command",
@@ -15734,27 +15827,33 @@
           "title": "TextToSpeechStreamRequestEmotion"
         },
         "pitch": {
+          "description": "Parler voice-template pitch descriptor.",
           "type": "string",
           "minLength": 1
         },
         "pace": {
+          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`.",
           "type": "string",
           "enum": ["slow", "moderate", "fast"],
           "title": "TextToSpeechStreamRequestPace"
         },
         "expressivity": {
+          "description": "Parler voice-template expressivity descriptor.",
           "type": "string",
           "minLength": 1
         },
         "noise": {
+          "description": "Parler voice-template background-noise descriptor.",
           "type": "string",
           "minLength": 1
         },
         "reverb": {
+          "description": "Parler voice-template reverb descriptor.",
           "type": "string",
           "minLength": 1
         },
         "quality": {
+          "description": "Parler voice-template audio-quality descriptor.",
           "type": "string",
           "minLength": 1
         },
