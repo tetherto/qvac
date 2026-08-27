@@ -143,3 +143,25 @@ test('close resets readiness so the next call re-runs the guard', async function
   await t.exception(() => send(fakeRequest('heartbeat')), PluginsNotRegisteredError)
   await close()
 })
+
+test('send normalizes a config-resolution rejection into a typed error', async function (t) {
+  clearPlugins()
+  registerPlugin(makeFakePlugin(ModelType.llamacppCompletion))
+  try {
+    await send({
+      type: 'loadModel',
+      modelSrc: '/m.gguf',
+      modelType: ModelType.llamacppCompletion,
+      modelConfig: { no_mmap: true }
+    } as never)
+    t.fail('expected send to reject the retired no_mmap key')
+  } catch (error) {
+    t.ok(
+      error instanceof RequestValidationFailedError,
+      'a resolver rejection is normalized, not surfaced as a raw ZodError'
+    )
+  } finally {
+    await close()
+    clearPlugins()
+  }
+})

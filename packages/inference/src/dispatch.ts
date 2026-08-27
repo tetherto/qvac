@@ -152,10 +152,11 @@ function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
  * parse would drop, so it is carried across.
  */
 function prepareRequest<T extends Request>(request: T): Request {
-  const withDeviceDefaults = applyDeviceDefaults(request)
-  const profilingMeta = getProfilingMeta(withDeviceDefaults)
   let validated: Request
+  let profilingMeta: ProfilingRequestMeta | undefined
   try {
+    const withDeviceDefaults = applyDeviceDefaults(request)
+    profilingMeta = getProfilingMeta(withDeviceDefaults)
     validated = requestSchema.parse(withDeviceDefaults)
   } catch (error) {
     if (error instanceof z.ZodError) {

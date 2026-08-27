@@ -276,7 +276,6 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     expectation: typeof modelLoadLlmLoadModeNone.expectation
   ): Promise<TestResult> {
     const { loadMode } = params as { loadMode: 'none' | 'mmap' }
-    // Own dep, not the shared 'llm' fixture, so it is released between tests.
     const dep = `llm-load-mode-${loadMode}`
     try {
       const modelId = await loadModel({
