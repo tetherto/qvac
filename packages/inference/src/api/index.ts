@@ -35,6 +35,13 @@ export { audioGen } from '@/api/audio-gen'
 export { classify } from '@/api/classify'
 export { video, type VideoProgressTick } from '@/api/video'
 export { upscale } from '@/api/upscale'
+export { worldCreateScene, worldStep } from '@/api/world'
+export {
+  type WorldStepResult,
+  type WorldStepProgressTick,
+  type WorldSceneResult,
+  type WorldSceneResultWithPack
+} from '@/api/world-result'
 export {
   modelRegistryList,
   modelRegistrySearch,

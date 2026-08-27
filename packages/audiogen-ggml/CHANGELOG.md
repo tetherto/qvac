@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CPU fallback, and `stats.backendDevice`/`backendId` report the backend
   actually in use.
 
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-26, which brings in ggml-speech
+  2026-08-26. This is the engine half of the MiniMax-Music3 GPU support above:
+  MiniMax-Music3 now runs on Vulkan, and the Vulkan `im2col_3d` path handles
+  work-group counts past the y-dimension limit. ACE-Step Vulkan generation is
+  over 2x faster on AMD Strix Halo (RADV) through tiled `im2col`/`col2im`
+  pipelines and a large-tile transpose copy, and CUDA transposed copies now
+  cover every type and stay off strided destinations.
+- On CUDA the ACE-Step language model now runs on the GPU instead of the CPU,
+  by raising the `speech-cpp` floor further to 2026-08-26#1: the bundled ggml
+  computes explicit-f32-precision matmuls in true f32 on CUDA, which removes
+  the NaN risk for the LM's large activations and lifts its CPU-only
+  placement.
+
 ### Fixed
 
 - MiniMax-Music3 produced tonal noise instead of music, and a cancellation

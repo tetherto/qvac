@@ -310,6 +310,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `sdk-python` | `tetherto-qvac-sdk` | Generated Python client for the SDK worker contract |
 | `cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`, verification, release helpers) |
 | `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
+| `test-suite` | `@qvac/test-suite` | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving the SDK e2e suites across desktop, Electron, Snap, Android, and iOS |
 | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode integration |
 | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw integration |
 | `docs/website` | - | Documentation site (Next.js / Fumadocs) |

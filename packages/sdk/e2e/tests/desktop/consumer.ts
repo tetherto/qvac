@@ -40,6 +40,10 @@ import {
   VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
+  ABOT_WORLD_0_5B_Q8_0,
+  ABOT_WORLD_0_5B_LF_VAE,
+  ABOT_WORLD_0_5B_LF_VAE_F16,
+  UMT5_XXL_ENC_Q8_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
   SD_V2_1_1B_Q8_0,
@@ -87,6 +91,7 @@ import { VisionExecutor } from '../shared/executors/node/vision-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
 import { DownloadResilienceExecutor } from '../shared/executors/node/download-resilience-executor.js'
 import { NodeDiffusionExecutor } from '../shared/executors/node/diffusion-executor.js'
+import { NodeWorldExecutor } from '../shared/executors/node/world-executor.js'
 import { AudioGenExecutor } from '../shared/executors/audio-gen-executor.js'
 import { FinetuneExecutor } from '../shared/executors/node/finetune-executor.js'
 import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
@@ -523,6 +528,21 @@ resources.define('diffusion', {
   }
 })
 
+// ABot-World. Loaded without sceneSrc on purpose: activation is deferred until
+// worldCreateScene builds a pack, which is the flow the tests exercise. The
+// walk needs real VRAM — at the 448x256 tier the tests use, roughly 6 GB.
+resources.define('world', {
+  constant: ABOT_WORLD_0_5B_Q8_0,
+  type: 'sdcpp-generation',
+  config: {
+    mode: 'world',
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+    world: { seed: 42, kvCache: true, frameJpegQuality: 85 }
+  }
+})
+
 resources.define('audiogen-turbo', {
   type: 'audiogen-ggml',
   config: {
@@ -693,6 +713,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new NodeDiffusionExecutor(resources),
+    new NodeWorldExecutor(resources),
     new AudioGenExecutor(resources, {
       resolveAudioAsset: (fileName) => path.resolve(process.cwd(), 'assets/audio', fileName)
     }),

@@ -177,6 +177,11 @@ node dist/examples/path/to/example.js
 bun run examples/path/to/example.ts
 ```
 
+`examples/abot-world.ts` has a companion guide covering the hardware
+requirements, scene-pack lifecycle, cancellation semantics and concurrency rules
+of an interactive world session: see
+[ABot-World interactive world sessions](./docs/abot-world.md).
+
 ## Build
 
 Use the [Bun](https://bun.sh/) package manager:

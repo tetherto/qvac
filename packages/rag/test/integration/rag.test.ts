@@ -1,16 +1,19 @@
 import test from 'brittle'
-import { RAG, HyperDBAdapter, QvacLlmAdapter } from '../../src/index.js'
+import { RAG, HyperDBAdapter, QvacLlmAdapter, TurboVecAdapter } from '../../src/index.js'
 import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
 import QvacLogger from '@qvac/logging'
 
 import LlmPlugin from '@qvac/llm-llamacpp'
 import EmbedderPlugin from '@qvac/embed-llamacpp'
+import IdMapIndex from '@qvac/embed-llamacpp/idMapIndex'
 import Corestore from 'corestore'
 import HyperDB from 'hyperdb'
 import type { Hypercore } from 'corestore'
 import type { HyperDBInstance } from 'hyperdb'
 
 import fs from 'bare-fs'
+import path from 'bare-path'
+import tmp from 'test-tmp'
 
 import { ensureModels, RAG_MODELS } from '../../examples/utils.js'
 import type { EmbeddingFunction, IngestStage, ReindexStage } from '../../src/types.js'
@@ -281,6 +284,94 @@ test('RAG Integration: Search and retrieval functionality', { timeout: 30000 }, 
     )
   }
 })
+
+test(
+  'RAG Integration: TurboVec adapter persists and reopens through the public RAG API',
+  { timeout: 60000 },
+  async (t) => {
+    await ensureSetup()
+
+    const tmpDir = await tmp()
+    const turboStore = new Corestore(path.join(tmpDir, 'store'))
+    const checkpointDir = path.join(tmpDir, 'index')
+    let checkpointLoads = 0
+    const indexProvider = {
+      create(options: ConstructorParameters<typeof IdMapIndex>[0]) {
+        return new IdMapIndex(options)
+      },
+      load(snapshotPath: string) {
+        checkpointLoads++
+        return IdMapIndex.load(snapshotPath)
+      }
+    }
+    let firstRag: RAG | null = null
+    let reopenedRag: RAG | null = null
+
+    try {
+      const firstAdapter = new TurboVecAdapter({
+        store: turboStore,
+        dbName: 'rag-turbovec-integration',
+        indexProvider,
+        checkpointDir
+      })
+      firstRag = new RAG({
+        embeddingFunction: embeddingFunction!,
+        dbAdapter: firstAdapter
+      })
+      await firstRag.ready()
+
+      const result = await firstRag.ingest(
+        [
+          {
+            id: 'turbovec-target',
+            content: 'Marine mammals use sound to communicate across long distances.'
+          },
+          {
+            id: 'turbovec-competitor',
+            content: 'Volcanic rocks form when molten material cools and solidifies.'
+          }
+        ],
+        modelName,
+        { chunk: false }
+      )
+      t.ok(
+        result.processed.every((document) => document.status === 'fulfilled'),
+        'TurboVec should persist all documents through RAG ingestion'
+      )
+      t.is(await firstAdapter.checkpoint(), true, 'TurboVec should create a checkpoint')
+
+      await firstRag.close()
+      firstRag = null
+
+      const reopenedAdapter = new TurboVecAdapter({
+        store: turboStore,
+        dbName: 'rag-turbovec-integration',
+        indexProvider,
+        checkpointDir
+      })
+      reopenedRag = new RAG({
+        embeddingFunction: embeddingFunction!,
+        dbAdapter: reopenedAdapter
+      })
+      await reopenedRag.ready()
+
+      const searchResults = await reopenedRag.search(
+        'Marine mammals use sound to communicate across long distances.',
+        { topK: 1 }
+      )
+      t.is(checkpointLoads, 1, 'TurboVec should load the persisted native checkpoint')
+      t.is(
+        searchResults[0]?.id,
+        'turbovec-target',
+        'RAG search should return the persisted TurboVec document after reopen'
+      )
+    } finally {
+      if (reopenedRag) await reopenedRag.close()
+      if (firstRag) await firstRag.close()
+      await turboStore.close()
+    }
+  }
+)
 
 test('RAG Integration: Inference with context retrieval', { timeout: 60000 }, async (t) => {
   await ensureSetup()

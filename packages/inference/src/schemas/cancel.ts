@@ -29,6 +29,7 @@ const cancelKindSchema = z
     'transcribe',
     'translate',
     'diffusion',
+    'world',
     'audiogen',
     'tts',
     'ocr',
