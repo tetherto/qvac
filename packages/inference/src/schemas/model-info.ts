@@ -119,20 +119,15 @@ export const getLoadedModelInfoRequestSchema = getLoadedModelInfoParamsSchema.ex
   type: z.literal('getLoadedModelInfo')
 })
 
-const delegatedProviderInfoSchema = z.object({
-  providerPublicKey: z.string()
-})
-
 /**
- * Loaded local model: routing plugin known on this node, so modelType +
+ * Loaded model info: routing plugin known on this node, so modelType +
  * handler vocabulary are authoritative. `toolDialect` is the tool-call dialect
  * the completion normalizer parses for this model (completion-capable models
  * only), letting a consumer replay a prior tool call in the model's own dialect.
  */
-const localLoadedModelInfoSchema = z
+export const loadedModelInfoSchema = z
   .object({
     modelId: z.string(),
-    isDelegated: z.literal(false),
     modelType: z.string(),
     handlers: z.array(z.string()),
     displayName: z.string().optional(),
@@ -142,26 +137,7 @@ const localLoadedModelInfoSchema = z
     path: z.string().optional(),
     toolDialect: toolDialectSchema.optional()
   })
-  .meta({ title: 'LocalLoadedModelInfo' })
-
-/**
- * Loaded delegated model: this node only stores routing info, so `modelType`,
- * `displayName`, `addonPackage`, `loadedAt`, `name`, and `path` are absent,
- * and `handlers` is always empty.
- */
-const delegatedLoadedModelInfoSchema = z
-  .object({
-    modelId: z.string(),
-    isDelegated: z.literal(true),
-    handlers: z.array(z.string()),
-    providerInfo: delegatedProviderInfoSchema
-  })
-  .meta({ title: 'DelegatedLoadedModelInfo' })
-
-export const loadedModelInfoSchema = z.discriminatedUnion('isDelegated', [
-  localLoadedModelInfoSchema,
-  delegatedLoadedModelInfoSchema
-])
+  .meta({ title: 'LoadedModelInfo' })
 
 export const getLoadedModelInfoResponseSchema = z.object({
   type: z.literal('getLoadedModelInfo'),

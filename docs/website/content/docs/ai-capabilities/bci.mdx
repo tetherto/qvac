@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-Brain–computer interface (BCI) transcription uses a **GGML** engine ([`@qvac/bci-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp), built on the [`qvac-ext-lib-whisper.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp) fork) to decode multi-channel neural signals (e.g., 512-channel microelectrode-array recordings) into text. Load a model using `modelType: "bci"`.
+Brain–computer interface (BCI) transcription uses a **GGML** engine ([`@qvac/bci-whispercpp`](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp), built on the [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) fork) to decode multi-channel neural signals (e.g., 512-channel microelectrode-array recordings) into text. Load a model using `modelType: "bci"`.
 
 BCI consumes a **neural-signal buffer**. Provide the signal as `neuralData`, either as a file path (string, to a `.bin` file) or an in-memory `Uint8Array` buffer.
 
