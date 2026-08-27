@@ -240,3 +240,9 @@ test(
   { timeout: 600000 },
   (t) => runDuplexStreamingTest(t, 'tdt')
 )
+
+test(
+  'Unified runStreaming — duplex feed surfaces transcripts incrementally and resolves cleanly',
+  { timeout: 600000 },
+  (t) => runDuplexStreamingTest(t, 'unified')
+)

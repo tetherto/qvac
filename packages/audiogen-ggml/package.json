@@ -1,6 +1,6 @@
 {
   "name": "@qvac/audiogen-ggml",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Audio generation (music) addon for qvac",
   "addon": true,
   "engines": {
@@ -37,6 +37,7 @@
   "exports": {
     "./package": "./package.json",
     ".": "./index.js",
+    "./binding.js": "./binding.js",
     "./models": "./models.js",
     "./test/benchmark-runner": "./test/utils/benchmark-runner.js"
   },

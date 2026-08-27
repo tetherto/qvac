@@ -3,6 +3,17 @@ import {
   requestSchema,
   responseSchema,
   PROFILING_TRAILER_KEY,
+  nowMs,
+  shouldProfile,
+  shouldIncludeServerBreakdown,
+  shouldIncludeResourceGauges,
+  generateId as createProfileId,
+  createProfilingMeta,
+  createProfilingDisabledMeta,
+  injectProfilingMetaIntoObject,
+  extractProfilingMeta,
+  stripProfilingMeta,
+  recordFailure,
   type Request,
   type Response,
   type RPCOptions
@@ -20,19 +31,6 @@ import {
 import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors-client'
 import { formatZodError } from '@/utils/zod-error'
 import { z } from 'zod'
-import {
-  nowMs,
-  shouldProfile,
-  shouldIncludeServerBreakdown,
-  shouldIncludeResourceGauges,
-  generateId as createProfileId,
-  createProfilingMeta,
-  createProfilingDisabledMeta,
-  injectProfilingMetaIntoObject,
-  extractProfilingMeta,
-  stripProfilingMeta,
-  recordFailure
-} from '@qvac/inference/surface'
 import {
   createClientTimings,
   createClientStreamTimings,

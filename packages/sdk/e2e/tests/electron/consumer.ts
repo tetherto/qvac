@@ -538,12 +538,12 @@ export const executor = createExecutor({
       'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      /^world-/,
+      'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
     new SkipExecutor(
-      /^delegated-/,
-      'Electron skips delegated inference tests because provider startup and peer connectivity need separate packaged-app coverage'
+      /^audio-gen-/,
+      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,

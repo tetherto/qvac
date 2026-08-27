@@ -17,10 +17,6 @@ import { InvalidResponseError } from '@/utils/errors-client'
  *   - P2P / Hyperdrive downloads: stall cleanly, continue after `resume()`
  *   - HTTP downloads: bypass suspend entirely (bytes keep flowing)
  *   - Local native inference: runs to completion regardless
- *   - Delegated reply RPCs: stall, then auto-recover after `resume()`
- *     (subject to delegate `timeout`)
- *   - Delegated stream RPCs: severed, consumer iterator hangs silently;
- *     re-issue after `resume()` works normally.
  *
  * @throws {RPCError} When one or more resources fail to suspend. The runtime
  *   still commits to `"suspended"` so callers can recover with `resume()`.
