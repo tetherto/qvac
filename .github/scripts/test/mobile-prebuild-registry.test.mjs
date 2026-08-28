@@ -598,7 +598,13 @@ for (const addon of MOBILE_ADDONS) {
   test(`${addon.workflow}: empty package-version resolves its own @latest`, () => {
     const run = runStep({ addonName: addon.npmName })
     assert.equal(run.status, 0, run.output)
-    assert.match(run.invocations, new RegExp(`spec=${addon.npmName.replace(/[/@.]/g, '\\$&')}@latest`))
+    // Plain containment, not a built regex: the addon name is interpolated from
+    // a workflow file, and hand-escaping it for RegExp is how the earlier
+    // incomplete-escaping alerts happened. There is nothing to match here.
+    assert.ok(
+      run.invocations.includes(`spec=${addon.npmName}@latest`),
+      `expected spec=${addon.npmName}@latest in:\n${run.invocations}`,
+    )
   })
 
   test(`${addon.workflow}: another addon's package is rejected`, () => {
