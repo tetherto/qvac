@@ -10,8 +10,7 @@ import {
 import Corestore from 'corestore'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { getEnv } from '@/runtime/env'
-import { getConfiguredCacheDir } from '@/runtime/state'
+import { getConfig, getConfiguredCacheDir } from '@/runtime/state'
 import {
   PathTraversalError,
   RAGWorkspaceInUseError,
@@ -159,16 +158,6 @@ function createRagDbAdapter(
   })
 }
 
-function getRequestedAdapterType(): RagAdapterType {
-  const rolloutFlag = getEnv().QVAC_RAG_TURBOVEC
-  if (rolloutFlag && rolloutFlag !== '0' && rolloutFlag !== '1') {
-    logger.warn(
-      `Ignoring unrecognized QVAC_RAG_TURBOVEC value '${rolloutFlag}'; set it to '1' to enable TurboVec for new workspaces`
-    )
-  }
-  return rolloutFlag === '1' ? 'turbovec' : 'hyperdb'
-}
-
 function unreadableMarkerError(markerPath: string, cause: unknown) {
   return new QvacErrorRAG({
     code: ERR_CODES.DB_OPERATION_FAILED,
@@ -188,6 +177,10 @@ function parseWorkspaceMarker(contents: string): RagAdapterType | null {
   if (marker.version !== WORKSPACE_MARKER_VERSION) return null
   if (marker.adapterType !== 'hyperdb' && marker.adapterType !== 'turbovec') return null
   return marker.adapterType
+}
+
+function getRequestedAdapterType(): RagAdapterType {
+  return getConfig().ragTurbovec === true ? 'turbovec' : 'hyperdb'
 }
 
 function detectExistingAdapterType(workspace: string): RagAdapterType {

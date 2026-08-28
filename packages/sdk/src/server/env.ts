@@ -4,7 +4,6 @@ import { z } from 'zod'
 
 const envSchema = z.object({
   QVAC_IPC_SOCKET_PATH: z.string().optional(),
-  QVAC_RAG_TURBOVEC: z.string().optional(),
   HOME_DIR: z.string()
 })
 

@@ -1,17 +1,8 @@
 import test from 'brittle'
-import env from 'bare-env'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
-import { z } from 'zod'
-import {
-  ERR_CODES,
-  HyperDBAdapter,
-  QvacErrorRAG,
-  TurboVecAdapter,
-  type TurboVecIndex,
-  type TurboVecIndexProvider
-} from '@qvac/rag'
-import { clearPlugins, registerPlugin } from '@/plugins'
+import { HyperDBAdapter, TurboVecAdapter } from '@qvac/rag'
+import { clearPlugins } from '@/plugins'
 import {
   closeAllRagInstances,
   closeRagInstance,
@@ -25,18 +16,13 @@ import {
   RAGWorkspaceInUseError,
   RAGWorkspaceNotOpenError
 } from '@/errors/index'
-import { getEnv, initEnv } from '@/runtime/env'
 import { getConfiguredCacheDir } from '@/runtime/state'
+import { qvacConfigSchema } from '@/schemas/index'
 import { getRegisteredResourceCounts } from '@/runtime/runtime-lifecycle'
-
-const TURBOVEC_ROLLOUT_ENV = 'QVAC_RAG_TURBOVEC'
+import { observableIndexProvider, registerProviderPlugin } from './fixtures/turbovec-provider'
 
 function workspaceName(suffix: string) {
   return `test-turbovec-provider-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-function restoreEnv(value: string | undefined) {
-  env[TURBOVEC_ROLLOUT_ENV] = value ?? ''
 }
 
 async function cleanupWorkspace(workspace: string) {
@@ -54,76 +40,14 @@ function workspacePaths(workspace: string) {
   }
 }
 
-function observableIndexProvider() {
-  const calls = { create: 0, load: 0, addWithIds: 0, search: 0 }
-
-  function createIndex(dim: number): TurboVecIndex {
-    const indexIds: bigint[] = []
-    return {
-      get length() {
-        return indexIds.length
-      },
-      dim,
-      addWithIds(_vectors, ids) {
-        calls.addWithIds++
-        for (const id of ids) indexIds.push(id)
-      },
-      search(_queries, k) {
-        calls.search++
-        const ids = indexIds.slice(0, k)
-        return {
-          scores: new Float32Array(ids.length).fill(1),
-          ids: new BigUint64Array(ids),
-          m: 1,
-          k: ids.length
-        }
-      },
-      contains(id) {
-        return indexIds.includes(id)
-      },
-      remove(id) {
-        const index = indexIds.indexOf(id)
-        if (index === -1) return false
-        indexIds.splice(index, 1)
-        return true
-      },
-      prepare() {},
-      write(snapshotPath) {
-        fs.writeFileSync(snapshotPath, 'test index\n')
-      },
-      dispose() {}
-    }
-  }
-
-  const provider: TurboVecIndexProvider = {
-    create(options) {
-      calls.create++
-      return createIndex(options.dim)
-    },
-    load() {
-      calls.load++
-      return createIndex(8)
-    }
-  }
-  return { provider, calls }
-}
-
-function registerProviderPlugin(modelType: string, provider: TurboVecIndexProvider) {
-  registerPlugin({
-    modelType,
-    displayName: modelType,
-    addonPackage: '@qvac/test-addon',
-    loadConfigSchema: z.object({}),
-    createModel() {
-      return {
-        model: { load: async function () {} }
-      }
-    },
-    handlers: {},
-    capabilities: {
-      turbovecIndexProvider: provider
-    }
-  })
+async function pinTurbovecWorkspace(workspace: string) {
+  const { storePath, indexPath } = workspacePaths(workspace)
+  await fsPromises.mkdir(storePath, { recursive: true })
+  await fsPromises.mkdir(indexPath, { recursive: true })
+  await fsPromises.writeFile(
+    path.join(storePath, '.qvac-rag-workspace.json'),
+    `${JSON.stringify({ version: 1, adapterType: 'turbovec' })}\n`
+  )
 }
 
 test('workspace paths cannot resolve to the RAG storage roots', async (t) => {
@@ -162,41 +86,38 @@ test('workspace paths cannot resolve to the RAG storage roots', async (t) => {
   }
 })
 
-test('TurboVec workspace failure leaves the workspace unpinned', async (t) => {
-  const workspace = workspaceName('missing')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
+test('config validation rejects a non-boolean ragTurbovec value', (t) => {
+  t.absent(
+    qvacConfigSchema.safeParse({ ragTurbovec: 'true' }).success,
+    'a string flag fails config validation'
+  )
+  t.absent(
+    qvacConfigSchema.safeParse({ ragTurbovec: 1 }).success,
+    'a numeric flag fails config validation'
+  )
+  t.ok(qvacConfigSchema.safeParse({ ragTurbovec: true }).success)
+})
+
+test('a new workspace defaults to HyperDB when ragTurbovec is not set', async (t) => {
+  const workspace = workspaceName('default-adapter')
   clearPlugins()
-  env[TURBOVEC_ROLLOUT_ENV] = '1'
 
   try {
-    try {
-      await getRagDbAdapter(workspace)
-      t.fail('workspace creation should require a provider')
-    } catch (error) {
-      t.ok(error instanceof QvacErrorRAG)
-      if (error instanceof QvacErrorRAG) {
-        t.is(error.code, ERR_CODES.DEPENDENCY_REQUIRED)
-      }
-    }
-
-    env[TURBOVEC_ROLLOUT_ENV] = '0'
     const adapter = await getRagDbAdapter(workspace)
     t.ok(adapter instanceof HyperDBAdapter)
   } finally {
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
 })
 
-test('TurboVec workspace consumes a registered plugin provider', async (t) => {
+test('pinned TurboVec workspace uses a registered plugin provider', async (t) => {
   const workspace = workspaceName('registered')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const { provider, calls } = observableIndexProvider()
 
   clearPlugins()
   registerProviderPlugin('test-turbovec-provider', provider)
-  env[TURBOVEC_ROLLOUT_ENV] = '1'
+  await pinTurbovecWorkspace(workspace)
 
   try {
     const adapter = await getRagDbAdapter(workspace)
@@ -217,7 +138,6 @@ test('TurboVec workspace consumes a registered plugin provider', async (t) => {
     t.ok(calls.search > 0, 'search uses the native index')
     t.is(results[0]?.id, 'registered-provider')
   } finally {
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -225,11 +145,9 @@ test('TurboVec workspace consumes a registered plugin provider', async (t) => {
 
 test('existing TurboVec layout with an unrecognized marker opens without a provider', async (t) => {
   const workspace = workspaceName('unrecognized-marker')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const { storePath, indexPath } = workspacePaths(workspace)
 
   clearPlugins()
-  env[TURBOVEC_ROLLOUT_ENV] = '0'
   await fsPromises.mkdir(storePath, { recursive: true })
   await fsPromises.mkdir(indexPath, { recursive: true })
   await fsPromises.writeFile(
@@ -241,7 +159,6 @@ test('existing TurboVec layout with an unrecognized marker opens without a provi
     const adapter = await getRagDbAdapter(workspace)
     t.ok(adapter instanceof TurboVecAdapter)
   } finally {
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -249,11 +166,9 @@ test('existing TurboVec layout with an unrecognized marker opens without a provi
 
 test('null workspace marker falls back to the existing TurboVec layout', async (t) => {
   const workspace = workspaceName('null-marker')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const { storePath, indexPath } = workspacePaths(workspace)
 
   clearPlugins()
-  env[TURBOVEC_ROLLOUT_ENV] = '0'
   await fsPromises.mkdir(storePath, { recursive: true })
   await fsPromises.mkdir(indexPath, { recursive: true })
   await fsPromises.writeFile(path.join(storePath, '.qvac-rag-workspace.json'), 'null\n')
@@ -262,7 +177,6 @@ test('null workspace marker falls back to the existing TurboVec layout', async (
     const adapter = await getRagDbAdapter(workspace)
     t.ok(adapter instanceof TurboVecAdapter)
   } finally {
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -270,13 +184,11 @@ test('null workspace marker falls back to the existing TurboVec layout', async (
 
 test('existing HyperDB workspace opens when its marker cannot be written', async (t) => {
   const workspace = workspaceName('marker-write-failure')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const originalReady = HyperDBAdapter.prototype.ready
   const { storePath } = workspacePaths(workspace)
   const markerPath = path.join(storePath, '.qvac-rag-workspace.json')
 
   clearPlugins()
-  env[TURBOVEC_ROLLOUT_ENV] = '0'
   await fsPromises.mkdir(storePath, { recursive: true })
   HyperDBAdapter.prototype.ready = async function () {
     await originalReady.call(this)
@@ -291,106 +203,22 @@ test('existing HyperDB workspace opens when its marker cannot be written', async
   } finally {
     HyperDBAdapter.prototype.ready = originalReady
     if (fs.existsSync(storePath)) await fsPromises.chmod(storePath, 0o700)
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
-  }
-})
-
-test('argv rollout overlay selects TurboVec for a new workspace', async (t) => {
-  const workspace = workspaceName('argv-rollout')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
-  const originalArgv = Bare.argv.slice()
-  const homeDir = getEnv().HOME_DIR
-  const { provider } = observableIndexProvider()
-
-  clearPlugins()
-  registerProviderPlugin('test-turbovec-argv-rollout', provider)
-  env[TURBOVEC_ROLLOUT_ENV] = '0'
-  Bare.argv.length = 0
-  Bare.argv.push(
-    'react-native-bare-kit',
-    '',
-    JSON.stringify({ HOME_DIR: homeDir, QVAC_RAG_TURBOVEC: '1' })
-  )
-  initEnv()
-
-  try {
-    const adapter = await getRagDbAdapter(workspace)
-    t.ok(adapter instanceof TurboVecAdapter)
-  } finally {
-    Bare.argv.length = 0
-    Bare.argv.push(...originalArgv)
-    restoreEnv(originalFlag)
-    initEnv()
-    clearPlugins()
-    await cleanupWorkspace(workspace)
-  }
-})
-
-test('unrecognized rollout flag value selects HyperDB for a new workspace', async (t) => {
-  const workspace = workspaceName('flag-typo')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
-
-  clearPlugins()
-  env[TURBOVEC_ROLLOUT_ENV] = 'true'
-
-  try {
-    const adapter = await getRagDbAdapter(workspace)
-    t.ok(adapter instanceof HyperDBAdapter, "only '1' opts a new workspace into TurboVec")
-  } finally {
-    restoreEnv(originalFlag)
-    clearPlugins()
-    await cleanupWorkspace(workspace)
-  }
-})
-
-test('RAG workspace keeps its pinned adapter when the rollout flag changes', async (t) => {
-  const turboWorkspace = workspaceName('pinned-turbo')
-  const hyperdbWorkspace = workspaceName('pinned-hyperdb')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
-  const { provider } = observableIndexProvider()
-
-  clearPlugins()
-  registerProviderPlugin('test-turbovec-pin', provider)
-
-  try {
-    env[TURBOVEC_ROLLOUT_ENV] = '1'
-    const turboAdapter = await getRagDbAdapter(turboWorkspace)
-    t.ok(turboAdapter instanceof TurboVecAdapter)
-    await closeRagInstance(turboWorkspace)
-
-    env[TURBOVEC_ROLLOUT_ENV] = '0'
-    const reopenedTurboAdapter = await getRagDbAdapter(turboWorkspace)
-    t.ok(reopenedTurboAdapter instanceof TurboVecAdapter)
-    await closeRagInstance(turboWorkspace)
-
-    const hyperdbAdapter = await getRagDbAdapter(hyperdbWorkspace)
-    t.ok(hyperdbAdapter instanceof HyperDBAdapter)
-    await closeRagInstance(hyperdbWorkspace)
-
-    env[TURBOVEC_ROLLOUT_ENV] = '1'
-    const reopenedHyperdbAdapter = await getRagDbAdapter(hyperdbWorkspace)
-    t.ok(reopenedHyperdbAdapter instanceof HyperDBAdapter)
-  } finally {
-    restoreEnv(originalFlag)
-    clearPlugins()
-    await cleanupWorkspace(turboWorkspace)
-    await cleanupWorkspace(hyperdbWorkspace)
   }
 })
 
 test('pinned TurboVec workspace recovers when its provider is registered later', async (t) => {
   const workspace = workspaceName('late-provider')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const initial = observableIndexProvider()
 
   clearPlugins()
   registerProviderPlugin('test-turbovec-late-provider-initial', initial.provider)
+  await pinTurbovecWorkspace(workspace)
 
   try {
-    env[TURBOVEC_ROLLOUT_ENV] = '1'
     const initialAdapter = await getRagDbAdapter(workspace)
+    t.ok(initialAdapter instanceof TurboVecAdapter)
     await initialAdapter.saveEmbeddings([
       {
         id: 'late-provider',
@@ -402,7 +230,6 @@ test('pinned TurboVec workspace recovers when its provider is registered later',
     await closeRagInstance(workspace)
 
     clearPlugins()
-    env[TURBOVEC_ROLLOUT_ENV] = '0'
     const reopenedAdapter = await getRagDbAdapter(workspace)
     t.ok(reopenedAdapter instanceof TurboVecAdapter)
     const degradedResults = await reopenedAdapter.search(
@@ -423,7 +250,6 @@ test('pinned TurboVec workspace recovers when its provider is registered later',
     t.ok(late.calls.search > 0, 'later searches use the recovered native index')
     t.is(indexedResults[0]?.id, 'late-provider')
   } finally {
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -431,14 +257,12 @@ test('pinned TurboVec workspace recovers when its provider is registered later',
 
 test('failed TurboVec open preserves workspace directories it did not create', async (t) => {
   const workspace = workspaceName('existing')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const originalReady = TurboVecAdapter.prototype.ready
   const { storePath, indexPath } = workspacePaths(workspace)
   const indexSentinel = path.join(indexPath, 'index-owner')
   const initializationError = new Error('TurboVec initialization failed')
 
   clearPlugins()
-  env[TURBOVEC_ROLLOUT_ENV] = '1'
   await fsPromises.mkdir(storePath, { recursive: true })
   await fsPromises.mkdir(indexPath, { recursive: true })
   await fsPromises.writeFile(indexSentinel, 'owned elsewhere\n')
@@ -458,7 +282,6 @@ test('failed TurboVec open preserves workspace directories it did not create', a
     t.ok(fs.existsSync(indexSentinel), 'the existing index directory is preserved')
   } finally {
     TurboVecAdapter.prototype.ready = originalReady
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -466,7 +289,6 @@ test('failed TurboVec open preserves workspace directories it did not create', a
 
 test('in-flight TurboVec open blocks deletion and is settled by shutdown', async (t) => {
   const workspace = workspaceName('opening-shutdown')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const originalReady = TurboVecAdapter.prototype.ready
   const storesBefore = getRegisteredResourceCounts().stores
   let markReadyStarted = () => {}
@@ -481,7 +303,7 @@ test('in-flight TurboVec open blocks deletion and is settled by shutdown', async
 
   clearPlugins()
   registerProviderPlugin('test-turbovec-opening-shutdown', provider)
-  env[TURBOVEC_ROLLOUT_ENV] = '1'
+  await pinTurbovecWorkspace(workspace)
   TurboVecAdapter.prototype.ready = async function () {
     markReadyStarted()
     await readyGate
@@ -537,7 +359,6 @@ test('in-flight TurboVec open blocks deletion and is settled by shutdown', async
     if (shutdownPromise) await shutdownPromise
     if (openPromise) await openPromise.catch(() => undefined)
     TurboVecAdapter.prototype.ready = originalReady
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -545,7 +366,6 @@ test('in-flight TurboVec open blocks deletion and is settled by shutdown', async
 
 test('closing during a failed in-flight open reports the workspace as not open', async (t) => {
   const workspace = workspaceName('opening-close-failure')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const originalReady = TurboVecAdapter.prototype.ready
   const openError = new Error('TurboVec initialization failed')
   let markReadyStarted = () => {}
@@ -560,7 +380,7 @@ test('closing during a failed in-flight open reports the workspace as not open',
 
   clearPlugins()
   registerProviderPlugin('test-turbovec-opening-close-failure', provider)
-  env[TURBOVEC_ROLLOUT_ENV] = '1'
+  await pinTurbovecWorkspace(workspace)
   TurboVecAdapter.prototype.ready = async function () {
     markReadyStarted()
     await readyGate
@@ -593,7 +413,6 @@ test('closing during a failed in-flight open reports the workspace as not open',
     releaseReady()
     if (openPromise) await openPromise.catch(() => undefined)
     TurboVecAdapter.prototype.ready = originalReady
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }
@@ -601,7 +420,6 @@ test('closing during a failed in-flight open reports the workspace as not open',
 
 test('closing an in-flight TurboVec open waits for initialization', async (t) => {
   const workspace = workspaceName('opening-close')
-  const originalFlag = env[TURBOVEC_ROLLOUT_ENV]
   const originalReady = TurboVecAdapter.prototype.ready
   let markReadyStarted = () => {}
   let releaseReady = () => {}
@@ -615,7 +433,7 @@ test('closing an in-flight TurboVec open waits for initialization', async (t) =>
 
   clearPlugins()
   registerProviderPlugin('test-turbovec-opening-close', provider)
-  env[TURBOVEC_ROLLOUT_ENV] = '1'
+  await pinTurbovecWorkspace(workspace)
   TurboVecAdapter.prototype.ready = async function () {
     markReadyStarted()
     await readyGate
@@ -646,7 +464,6 @@ test('closing an in-flight TurboVec open waits for initialization', async (t) =>
     if (openPromise) await openPromise.catch(() => undefined)
     if (closePromise) await closePromise.catch(() => undefined)
     TurboVecAdapter.prototype.ready = originalReady
-    restoreEnv(originalFlag)
     clearPlugins()
     await cleanupWorkspace(workspace)
   }

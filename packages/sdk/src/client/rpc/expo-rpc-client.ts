@@ -94,15 +94,12 @@ export async function getRPC() {
       throw new RPCConnectionFailedError(message, error instanceof Error ? error : undefined)
     }
 
-    // @ts-expect-error: ProcessEnv is index-based, but bracket access is not Metro-compatible.
-    const turbovecRollout = process.env.QVAC_RAG_TURBOVEC
     worklet.start('worker.bundle', mobileBundle as string, [
       // Normalize arg number across platforms
       'react-native-bare-kit',
       'worker.js',
       JSON.stringify({
-        HOME_DIR: Paths.document.uri.replace('file://', ''),
-        ...(turbovecRollout === undefined ? {} : { QVAC_RAG_TURBOVEC: turbovecRollout })
+        HOME_DIR: Paths.document.uri.replace('file://', '')
       })
     ])
     logger.info('Worklet started')

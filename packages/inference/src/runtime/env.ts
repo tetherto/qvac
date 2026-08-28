@@ -2,8 +2,7 @@ import env from 'bare-env'
 import { z } from 'zod'
 
 const envSchema = z.object({
-  HOME_DIR: z.string(),
-  QVAC_RAG_TURBOVEC: z.string().optional()
+  HOME_DIR: z.string()
 })
 
 type Env = z.infer<typeof envSchema>
