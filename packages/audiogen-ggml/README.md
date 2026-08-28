@@ -26,8 +26,8 @@ You get the audio as **interleaved Int16 PCM** through an output callback
 (a single PCM payload once generation completes; progress ticks stream during
 the run), followed by a final stats event. The addon never
 downloads anything: you give it **local file paths** to the model GGUFs and it
-opens them. GPU (Metal / Vulkan, including Vulkan on Android Mali devices) is
-used when you ask for it, with a CPU fallback.
+opens them. GPU (Metal / CUDA / Vulkan, including Vulkan on Android Mali
+devices) is used when you ask for it, with a CPU fallback.
 
 ## Install
 
@@ -39,6 +39,16 @@ Published prebuilds cover Linux x64/arm64, macOS x64/arm64, Windows x64,
 Android arm64, and iOS arm64. You also need the model GGUFs on disk (see
 [Models](#models)); point the addon at the folder that holds them.
 MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
+
+The linux-x64 prebuild bundles the CUDA backend next to Vulkan: ggml runs in
+hybrid dynamically-loaded backend mode, the CPU-variant, Vulkan, and CUDA
+backends ship as `.so` modules beside the addon, and only the CUDA module
+depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
+CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
+cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
+prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
+opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`
+on the build host).
 
 To build the native addon from source in a repository checkout:
 
@@ -345,7 +355,7 @@ runnable end-to-end script (`npm run example`).
 
 | Option | Meaning |
 |--------|---------|
-| `useGPU` | Run on GPU (Metal / Vulkan, including Android Mali); falls back to CPU. |
+| `useGPU` | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU. |
 | `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
 | `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |

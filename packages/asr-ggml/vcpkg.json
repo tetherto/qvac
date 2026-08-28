@@ -12,7 +12,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-26#1",
+      "version>=": "2026-08-28",
       "default-features": false,
       "features": [
         "whisper",
@@ -24,7 +24,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-26#1",
+      "version>=": "2026-08-28",
       "default-features": false,
       "features": [
         "whisper",
@@ -36,7 +36,7 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-08-26#1",
+      "version>=": "2026-08-28",
       "default-features": false,
       "features": [
         "whisper",
@@ -61,7 +61,7 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-08-26#1",
+          "version>=": "2026-08-28",
           "default-features": false,
           "features": [
             "cuda"

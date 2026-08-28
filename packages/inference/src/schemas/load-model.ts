@@ -108,7 +108,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   ],
   [ModelType.ggmlOcr, configKeys(ocrConfigSchema)],
   [ModelType.sdcppGeneration, configKeys(sdcppConfigSchema)],
-  [ModelType.audiogenGgml, configKeys(audioGenConfigSchema)],
+  [ModelType.audiogenGgml, configKeys(...audioGenConfigSchema.options)],
   [ModelType.ggmlVla, configKeys(vlaConfigSchema)],
   [ModelType.ggmlClassification, configKeys(classificationConfigSchema)]
 ])
