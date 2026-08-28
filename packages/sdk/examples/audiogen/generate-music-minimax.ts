@@ -32,9 +32,9 @@ try {
     modelId,
     caption,
     lyrics: process.env['AUDIOGEN_LYRICS'] ?? '[Instrumental]',
-    maxFrames: numberFromEnv('AUDIOGEN_MAX_FRAMES') ?? 1,
+    maxFrames: numberFromEnv('AUDIOGEN_MAX_FRAMES') ?? 250,
     seed: numberFromEnv('AUDIOGEN_SEED') ?? 7,
-    inferenceSteps: numberFromEnv('AUDIOGEN_STEPS') ?? 1,
+    inferenceSteps: numberFromEnv('AUDIOGEN_STEPS') ?? 12,
     cfgScale: numberFromEnv('AUDIOGEN_CFG_SCALE') ?? 1.7
   })
 
