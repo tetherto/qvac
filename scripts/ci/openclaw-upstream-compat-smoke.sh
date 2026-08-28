@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+VERIFY_AGENT_OUTPUT="$SCRIPT_DIR/verify-openclaw-agent-output.cjs"
+
 SMOKE_DIR="${SMOKE_DIR:-$(mktemp -d)}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$(mktemp -d)}"
 QVAC_MODEL="${QVAC_MODEL:-qwen3.5-0.8b}"
-QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-1800000}"
-OPENCLAW_AGENT_TIMEOUT="${OPENCLAW_AGENT_TIMEOUT:-45m}"
+# Keep in step with OPENCLAW_AGENT_TIMEOUT below: readiness is awaited inside
+# the agent run, so a longer value here is unreachable.
+QVAC_READY_TIMEOUT_MS="${QVAC_READY_TIMEOUT_MS:-480000}"
+OPENCLAW_AGENT_TIMEOUT="${OPENCLAW_AGENT_TIMEOUT:-10m}"
 OPENCLAW_PACKAGE_SPEC="${OPENCLAW_PACKAGE_SPEC:-openclaw@latest}"
 QVAC_OPENCLAW_PLUGIN_SPEC="${QVAC_OPENCLAW_PLUGIN_SPEC:-@qvac/openclaw-plugin@latest}"
 QVAC_CLI_SPEC="${QVAC_CLI_SPEC:-@qvac/cli@latest}"
@@ -22,9 +27,30 @@ cd "$SMOKE_DIR"
 # Collect everything that explains a hung or looping agent turn. This has to run
 # on the failure paths too -- when `timeout` kills the agent the script exits
 # non-zero under `set -e`, and previously nothing but stdout/stderr survived.
+# `2>/dev/null || true` on a hardcoded path is how the openclaw-config.json
+# artifact went missing from every run for months: the path was wrong and
+# nothing said so. These copies stay best-effort -- a missing directory must
+# never fail the smoke -- but each one reports what it did, so a layout change
+# upstream shows up as a warning in the log instead of a silently absent
+# artifact. Paths confirmed against a live run: `openclaw onboard` prints
+# "Sessions OK: ~/.openclaw/agents/main/sessions", and the agent JSON reports
+# meta.agentMeta.sessionFile under that same directory.
+collect_diagnostic_dir() {
+  local label="$1" src="$2" dest="$3"
+  if [[ ! -d "$src" ]]; then
+    echo "warning: ${label} not found at ${src}; artifact will be absent" >&2
+    return 0
+  fi
+  if cp -r "$src" "$dest" 2> /dev/null; then
+    echo "collected ${label} from ${src}" >&2
+  else
+    echo "warning: failed to copy ${label} from ${src}" >&2
+  fi
+}
+
 collect_diagnostics() {
-  cp -r "$HOME/.openclaw/agents/main/sessions" "$ARTIFACT_DIR/sessions" 2> /dev/null || true
-  cp -r "$HOME/.openclaw/logs" "$ARTIFACT_DIR/openclaw-logs" 2> /dev/null || true
+  collect_diagnostic_dir "sessions" "$HOME/.openclaw/agents/main/sessions" "$ARTIFACT_DIR/sessions"
+  collect_diagnostic_dir "openclaw logs" "$HOME/.openclaw/logs" "$ARTIFACT_DIR/openclaw-logs"
 }
 trap collect_diagnostics EXIT
 
@@ -238,98 +264,6 @@ if [[ "${SKIP_OPENCLAW_AGENT:-0}" == "1" ]]; then
   exit 0
 fi
 
-# Verification lives in a file rather than a heredoc so each retry can re-run it.
-cat > "$SMOKE_DIR/verify-agent-output.cjs" <<'NODE'
-const { readFileSync } = require('node:fs')
-
-const [outputPath, model] = process.argv.slice(2)
-const text = readFileSync(outputPath, 'utf8').trim()
-if (!text) throw new Error('OpenClaw agent produced no stdout')
-
-function parseJsonOutput(value) {
-  try {
-    return JSON.parse(value)
-  } catch {
-    const lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      try {
-        return JSON.parse(lines[index])
-      } catch {
-        // Keep scanning for the final JSON record.
-      }
-    }
-    throw new Error('OpenClaw agent stdout did not contain JSON output')
-  }
-}
-
-const result = parseJsonOutput(text)
-
-// Every field below lives under `meta`, not at the top level. Reading them off
-// `result` yields undefined, which used to collapse each assertion onto a
-// `JSON.stringify(result)` fallback -- and that blob always contains "qvac-ok"
-// (echoed back as meta.finalPromptText), "qvac", and the model name. The whole
-// verification block could not fail: a run where the model refused outright
-// still reported success. Assert against the assistant text and the structured
-// metadata only, never the serialized blob.
-const meta = result.meta ?? {}
-const agentMeta = meta.agentMeta ?? {}
-
-const payloadText = Array.isArray(result.payloads)
-  ? result.payloads.map((entry) => String(entry?.text ?? '')).join('\n')
-  : ''
-const finalText = String(meta.finalAssistantVisibleText ?? '') || payloadText
-
-if (!finalText.trim()) {
-  throw new Error('OpenClaw agent produced no assistant text')
-}
-// A bare "contains qvac-ok" check is not enough: a model that refuses the task
-// quotes the token back while doing so ("...your specific query about
-// \"qvac-ok\"..."), which would pass. The prompt asks for the token and nothing
-// else, so a compliant reply is short; a refusal or a ramble is not. The cap is
-// deliberately loose -- real passes are under 20 characters, observed refusals
-// run past 300 -- so it rejects non-answers without policing phrasing.
-const MAX_COMPLIANT_REPLY_CHARS = 120
-
-// OpenClaw reply-routing directives (`[[reply_to_current]]`,
-// `[[reply_to:<id>]]`) are control tokens, not content. A 0.8b model parrots
-// them out of the system prompt -- historically as a bare directive with no
-// answer behind it. Strip them so the length check measures real text, and so
-// a reply that is *only* routing tokens falls to the empty-text error below
-// rather than masquerading as an answer.
-const compact = finalText.replace(/\[\[[^\]]*\]\]/g, '').trim()
-
-if (!compact) {
-  throw new Error(`OpenClaw agent replied with no content: ${finalText.trim().slice(0, 300)}`)
-}
-
-if (!/qvac-ok/i.test(compact)) {
-  throw new Error(`OpenClaw agent response did not include qvac-ok: ${compact.slice(0, 300)}`)
-}
-if (compact.length > MAX_COMPLIANT_REPLY_CHARS) {
-  throw new Error(
-    `OpenClaw agent did not answer the prompt (${compact.length} chars, expected <= ${MAX_COMPLIANT_REPLY_CHARS}): ${compact.slice(0, 300)}`
-  )
-}
-if (meta.aborted === true) {
-  throw new Error('OpenClaw agent run was aborted')
-}
-
-// The real field is meta.executionTrace.fallbackUsed; the flatter paths are
-// kept only as forward-compatible fallbacks. Reading the wrong one here was
-// the same inert-assertion bug this PR exists to fix.
-const fallbackUsed =
-  meta.executionTrace?.fallbackUsed ?? meta.fallbackUsed ?? result.fallbackUsed
-if (fallbackUsed !== undefined && fallbackUsed !== false) {
-  throw new Error(`OpenClaw fallback was used: ${fallbackUsed}`)
-}
-if (agentMeta.provider !== 'qvac') {
-  throw new Error(`OpenClaw agent did not run through the qvac provider: ${agentMeta.provider}`)
-}
-if (agentMeta.model !== model && agentMeta.model !== `qvac/${model}`) {
-  throw new Error(`OpenClaw agent ran model ${agentMeta.model}, expected ${model}`)
-}
-NODE
-
 # Each attempt gets a fresh session id. Retrying into the same session would
 # replay the poisoned transcript that caused the first failure -- the 2026-08-27
 # timeout looped for 13 turns before the run was killed, and resuming it would
@@ -393,7 +327,7 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   fi
 
   verify_status=0
-  node "$SMOKE_DIR/verify-agent-output.cjs" "$attempt_stdout" "$QVAC_MODEL" || verify_status=$?
+  node "$VERIFY_AGENT_OUTPUT" "$attempt_stdout" "$QVAC_MODEL" || verify_status=$?
   if (( verify_status == 0 )); then
     agent_ok=1
     agent_attempts_used="$attempt"

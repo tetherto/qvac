@@ -24,7 +24,12 @@ concurrency:
 
 env:
   QVAC_SMOKE_MODEL: qwen3.5-0.8b
-  QVAC_READY_TIMEOUT_MS: "1800000"
+  # Must stay under OPENCLAW_AGENT_TIMEOUT: the readiness wait happens inside
+  # the agent run, so a readyTimeoutMs longer than the agent timeout can never
+  # be reached -- the agent timeout fires first and reports an opaque kill
+  # instead of the plugin's "service never became healthy" error. Observed
+  # readiness is well under a minute, so 8m is generous.
+  QVAC_READY_TIMEOUT_MS: "480000"
   OPENCLAW_AGENT_TIMEOUT: 10m
 
 jobs:
