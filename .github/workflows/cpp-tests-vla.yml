@@ -135,6 +135,8 @@ jobs:
 
       # vla requests qvac-fabric[hip-backend] (linux-x64), which requires ROCm at
       # build time — install it so the addon's C++ tests build with HIP.
+      # Omit `with:` so version/gfx/sha256 all come from the action defaults
+      # and match /opt/rocm/.qvac-rocm when this job runs on a stamped image.
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Setup ROCm SDK for HIP cross-compile
         uses: ./.github/actions/setup-rocm
