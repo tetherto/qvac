@@ -1134,13 +1134,12 @@ void MtmdLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
-  // The full-state path must anchor where the decode actually stopped, and
-  // both prefill drivers arrange that: the single-prompt chunk loop splits the
-  // last text chunk before the opener, and the batch path pauses on
-  // `prefillBoundaryPauseIndex`. So `current_.pos` IS the anchor here, and the
-  // capture below is a no-op when the split already took it. A pure-attention
-  // anchor is a bare position that nothing has to stop at, so it subtracts the
-  // opener here instead.
+  // The full-state path anchors at the end of prefill on both prefill
+  // drivers, with the decode stopped exactly there, so `current_.pos` IS the
+  // anchor here. A force-open opener stays in the restored prefix and the
+  // seeded close marker balances it. A pure-attention anchor is a bare
+  // position that nothing has to stop at, so it subtracts the opener here
+  // instead.
   const llama_pos anchorPos =
       needsRecurrentSnapshot_
           ? current_.pos

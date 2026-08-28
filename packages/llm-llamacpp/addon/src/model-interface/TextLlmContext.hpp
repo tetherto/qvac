@@ -155,13 +155,6 @@ public:
   void
   onPrefillComplete(llama_pos currentPos, size_t prefillTokenCount) override;
 
-  /// `SequenceDriver` prefill-pause hooks. The batch path cannot cap its own
-  /// chunk at the reasoning boundary (the chunk is global across slots), so it
-  /// asks for the stop index and reports back when it lands there.
-  [[nodiscard]] llama_pos
-  prefillBoundaryPauseIndex(llama_pos prefillLen) const override;
-  void onPrefillBoundaryPause(llama_pos currentPos) override;
-
   void syncPosition(llama_pos currentPos) override;
 
   SequenceStepResult onLogitsReady(
@@ -282,9 +275,8 @@ private:
   // whose header no longer matches live memory.
   void snapshotForRecurrentRollback();
 
-  /// Capture + hard-fail rollback shared by `snapshotForRecurrentRollback`
-  /// (anchor derived from `nPast_`) and `onPrefillBoundaryPause` (anchor
-  /// supplied by the batcher, which has not advanced `nPast_` yet).
+  /// Boundary capture plus the hard-fail rollback that guards it, split out
+  /// of `snapshotForRecurrentRollback` so the unwind path stays readable.
   void captureReasoningBoundaryAt(llama_pos anchorPos);
 
   common_init_result_ptr llamaInit_;

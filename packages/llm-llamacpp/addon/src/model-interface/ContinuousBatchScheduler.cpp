@@ -444,22 +444,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // (their memory rejects partial `seq_rm`). No-op for pure-attention.
   driver->snapshotPreRequestRollbackAnchor();
 
-  // Where this prefill has to stop so the driver can anchor its reasoning
-  // boundary BEFORE a force-open template's `<think>` opener. The
-  // single-prompt loop caps its own chunk; here the chunk is global across
-  // slots, so the stop is carried on the request instead. `-1` means none, and
-  // an index at the end of prefill is already covered by `onPrefillComplete`.
-  const auto prefillTextTokens = static_cast<llama_pos>(plan.tokens.size());
-  const llama_pos boundaryPauseIndex =
-      driver->prefillBoundaryPauseIndex(prefillTextTokens);
-  if (boundaryPauseIndex == 0) {
-    // The whole prefill is the opener, so there is no chunk to split: the
-    // boundary is the admission cursor. Anchored here, before the size checks
-    // and admission below, so a capture failure unwinds through the same
-    // `cacheGuard` path as every other throw in this region.
-    driver->onPrefillBoundaryPause(driver->getNPast());
-  }
-
   const auto promptSize = static_cast<unsigned>(driver->getNPast()) +
                           static_cast<unsigned>(plan.totalPositions());
   // M-RoPE media consumes more KV cells than positions; the cells must also
@@ -527,10 +511,6 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
         "ContinuousBatchScheduler::submit: failed to add to batch "
         "(MultiRequestBatcher::AddStatus=" +
             std::to_string(static_cast<int>(status)) + ")");
-  }
-  if (boundaryPauseIndex > 0 && boundaryPauseIndex < prefillTextTokens) {
-    batcher_.setPrefillBoundaryPause(
-        seqId, static_cast<size_t>(boundaryPauseIndex));
   }
   const uint64_t admissionId = nextAdmissionId_++;
   // Counted before the slot is installed so a group is never briefly seen as
@@ -661,27 +641,6 @@ ContinuousBatchScheduler::prefillCompleteFn() {
           batcher_.markFinished(seqId);
         }
       };
-}
-
-MultiRequestBatcher::PrefillBoundaryPauseFn
-ContinuousBatchScheduler::prefillBoundaryPauseFn() {
-  // Throws the same way `prefillCompleteFn` does, and for the same reason:
-  // the capture site is `snapshotAtReasoningBoundary` under the uniform
-  // hard-fail contract. `workerLoop`'s catch routes the group through
-  // `failGroupLocked` -> `cancelSlotLocked(Skip)`.
-  return [this](uint32_t seqId, llama_pos currentPos) {
-    auto& slot = slots_[seqId];
-    if (!slot.has_value() || !slot->driver) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          qvac_errors::general_error::toString(
-              qvac_errors::general_error::InternalError),
-          "ContinuousBatchScheduler::step: missing sequence driver for "
-          "prefill-boundary seqId " +
-              std::to_string(seqId));
-    }
-    slot->driver->onPrefillBoundaryPause(currentPos);
-  };
 }
 
 void ContinuousBatchScheduler::clearSeqKv(uint32_t seqId) noexcept {
@@ -949,8 +908,7 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       decodeTokens,
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
-  batcher_.advance(
-      fillResult.chunkSize, prefillCompleteFn(), prefillBoundaryPauseFn());
+  batcher_.advance(fillResult.chunkSize, prefillCompleteFn());
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {

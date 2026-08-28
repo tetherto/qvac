@@ -1199,12 +1199,12 @@ void TextLlmContext::snapshotForRecurrentRollback() {
   if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
     return;
   }
-  // The full-state path must anchor where the decode actually stopped, which
-  // both prefill drivers arrange: the single-prompt loop caps its own chunk at
-  // `computeRecurrentSnapshotBoundary`, and the batch path pauses on
-  // `prefillBoundaryPauseIndex` and calls `onPrefillBoundaryPause`, which
-  // captures directly. Reaching here on the full-state path therefore means
-  // the decode already stopped at the right place, so `nPast_` IS the anchor.
+  // The full-state path anchors at the end of prefill, which both prefill
+  // drivers reach with the decode stopped exactly there: the single-prompt
+  // loop fires once it has consumed `computeRecurrentSnapshotBoundary`, and
+  // the batch path arrives from `onPrefillComplete`. So `nPast_` IS the
+  // anchor. A force-open opener stays in the restored prefix and the seeded
+  // close marker balances it.
   // A pure-attention anchor is a bare position and nothing has to have
   // stopped there, so subtract the forced-open opener here: this is the
   // only capture site that path reaches.
@@ -1216,23 +1216,6 @@ void TextLlmContext::snapshotForRecurrentRollback() {
                 thinkingForcedOpen_,
                 reasoningState_.forcedOpenTokenCount);
   captureReasoningBoundaryAt(anchorPos);
-}
-
-llama_pos
-TextLlmContext::prefillBoundaryPauseIndex(llama_pos prefillLen) const {
-  // Nothing pauses any more. The full-state boundary is the end of prefill,
-  // which `onPrefillComplete` already covers, and a pure-attention anchor is
-  // a bare position recorded after prefill. Splitting a batch here would also
-  // change the answer on Vulkan with coopmat2.
-  (void)prefillLen;
-  return -1;
-}
-
-void TextLlmContext::onPrefillBoundaryPause(llama_pos currentPos) {
-  // The batch path leaves `nPast_` at the admission cursor until
-  // `onPrefillComplete`, so the anchor comes from the caller. The gates were
-  // already applied when `prefillBoundaryPauseIndex` produced this stop.
-  captureReasoningBoundaryAt(currentPos);
 }
 
 void TextLlmContext::captureReasoningBoundaryAt(llama_pos anchorPos) {

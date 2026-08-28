@@ -515,8 +515,6 @@ private:
   void serviceNextMediaSegmentLocked(std::unique_lock<std::mutex>* lock);
   void failSlotLocked(uint32_t seqId, std::exception_ptr error);
   [[nodiscard]] MultiRequestBatcher::PrefillCompleteFn prefillCompleteFn();
-  [[nodiscard]] MultiRequestBatcher::PrefillBoundaryPauseFn
-  prefillBoundaryPauseFn();
   /// Extract finished requests and run the full per-slot drain (terminal
   /// driver hook with output flushing, stats, cache save, KV clear). A
   /// cache-save throw is contained per slot: it fails only that slot's
