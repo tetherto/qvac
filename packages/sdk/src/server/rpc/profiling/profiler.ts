@@ -1,8 +1,8 @@
-import { nowMs } from '@qvac/inference/surface'
 import {
   responseSchema,
   OPERATION_EVENT_KEY,
   PROFILING_TRAILER_KEY,
+  nowMs,
   type Response,
   type ProfilingRequestMeta,
   type OperationEvent

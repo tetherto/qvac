@@ -328,7 +328,7 @@ test('Supertonic: no enhancer -> no enhancer params (backward compat)', (t) => {
 // === LavaSR denoiser param forwarding ===
 // Mirrors the enhancer: enabled purely by a GGUF path, runs before the
 // enhancer, rate-preserving. The tts-cpp UL-UNAS forward is implemented in
-// qvac-ext-lib-whisper.cpp PR #78; these tests exercise the JS wiring
+// qvac-fabric-speech.cpp PR #78; these tests exercise the JS wiring
 // (path forwarding + validation) without loading a model.
 
 test('Supertonic: files.lavasrDenoiser forwards lavasrDenoiserPath', (t) => {

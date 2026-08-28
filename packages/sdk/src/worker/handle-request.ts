@@ -1,10 +1,10 @@
 import {
   PROFILING_KEY,
+  nowMs,
   type Request,
   type Response,
   type ProfilingRequestMeta
 } from '@qvac/inference/surface'
-import { nowMs } from '@qvac/inference/surface'
 import { send, stream, duplex, dispatchTransport } from '@qvac/inference/engine'
 import type RPC from 'bare-rpc'
 import { sendErrorResponse, sendStreamErrorResponse } from '@/server/error-handlers'
