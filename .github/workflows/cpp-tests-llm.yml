@@ -57,7 +57,11 @@ jobs:
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
 
     env:
-      WORKDIR: ${{ inputs.workdir }}
+      # PROBE ONLY: the pull_request trigger carries no inputs, so
+      # inputs.workdir is empty and the default on workflow_dispatch /
+      # workflow_call does not apply. Not needed on the real branch, where this
+      # workflow is only ever reached through those two events.
+      WORKDIR: ${{ inputs.workdir || 'packages/llm-llamacpp' }}
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
