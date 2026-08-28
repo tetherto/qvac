@@ -158,10 +158,11 @@ safeTest(
 
       // ── Assertions (on last iteration) ──────────────────────────────────────
       t.ok(progressTicks.length > 0, `Received progress ticks (got ${progressTicks.length})`)
-      t.is(
-        progressTicks[progressTicks.length - 1].total,
-        STEPS,
-        `Final progress tick reports ${STEPS} total steps`
+      t.ok(
+        // The 2026-08-11 engine also ticks encoder/VAE phases, so the final
+        // tick belongs to the VAE; assert the sampler ran to completion instead.
+        progressTicks.some((p) => p.step === STEPS && p.total === STEPS),
+        `Sampler sequence completed (step=${STEPS}/total=${STEPS})`
       )
 
       t.is(images.length, 1, 'Received exactly 1 image')
