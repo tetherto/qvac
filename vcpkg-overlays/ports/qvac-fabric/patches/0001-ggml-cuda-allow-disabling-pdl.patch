@@ -1,0 +1,60 @@
+From: QVAC-23763
+Subject: [PATCH] ggml-cuda: allow PDL to be disabled via GGML_CUDA_NO_PDL
+
+GGML_CUDA_RESTRICT expands differently depending on the GPU architecture:
+
+    #if (defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER)
+    #  define GGML_CUDA_RESTRICT
+    #else
+    #  define GGML_CUDA_RESTRICT __restrict__
+    #endif
+
+Host passes have no __CUDA_ARCH__ and so always see __restrict__, while a
+device pass at Hopper or newer sees nothing. For a template __global__ kernel
+nvcc emits the launch stub as host code, so the stub's signature loses
+__restrict__ while the visible declaration keeps it, and the host compiler
+rejects it:
+
+    error: template-id '__wrapper__device_stub_sigmoid_back_cuda<__half>'
+      for 'void __wrapper__device_stub_sigmoid_back_cuda(const half*&, ...)'
+      does not match any template declaration
+    note: candidate is: template<class T> void __wrapper__device_stub_sigmoid_back_cuda(
+      const T* __restrict__&, ...)
+
+This only bites when architectures from different generations are compiled
+together, which is exactly ggml's own default list. Measured on CUDA 13.3:
+
+    86 alone      ok        86 + 89     ok      (both pre-Hopper)
+    86 + 90       fails     86 + 120a   fails   (crosses into Hopper/Blackwell)
+
+It is not specific to a machine, a GPU, a host compiler or a CUDA release:
+reproduced identically with CUDA 12.8 and 13.3 and with both g++ and clang++
+as the host compiler, and it is a pure compile-time failure with no GPU
+involved. It affects several files, sigmoid-back.cu and gated_delta_net_back.cu
+among them, so excluding individual sources is not a viable workaround.
+
+qvac ships CUDA for the RTX 3090 (sm_86), the Jetson Orin (sm_87) and the
+RTX 5090 (sm_120), which necessarily spans generations, so the whole CUDA
+backend fails to build without this.
+
+Adding the opt-out lets the port pass -DGGML_CUDA_NO_PDL, which makes
+GGML_CUDA_RESTRICT expand to __restrict__ uniformly across every pass. The cost
+is losing Programmatic Dependent Launch on Hopper and newer, which is a
+performance optimisation and not a correctness feature.
+
+This is a workaround carried by the port and every future fabric bump has to
+keep carrying it. The proper fix belongs upstream in fabric, either by making
+GGML_CUDA_RESTRICT architecture-independent or by keeping the PDL and
+__restrict__ split out of template kernel signatures.
+
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -115,7 +115,7 @@
+ // However, this has been bugged in CTK < 12.3 for MSVC builds, see
+ // https://github.com/ggml-org/llama.cpp/pull/22522#discussion_r3302393293
+ // __CUDA_ARCH__  is undefined in host passes; GPU arch check happens in device-side code.
+-#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && \
++#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && !defined(GGML_CUDA_NO_PDL) && \
+     (CUDART_VERSION >= 12030 || (!(defined(_MSC_VER) && !defined(__clang__)) && CUDART_VERSION >= 11080))
+ #    define GGML_CUDA_USE_PDL
+ #endif  // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && (CUDART_VERSION >= 12030 || (!(defined(_MSC_VER) && !defined(__clang__)) && CUDART_VERSION >= 11080))
