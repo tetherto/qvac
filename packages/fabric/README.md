@@ -25,6 +25,8 @@ consumer guide.
   ship under `prebuilds/<platform>/qvac__fabric/` and are loaded at runtime via
   `ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
   are linked statically inside `qvac__fabric.bare` and self-register on load.
+  On **linux-x64** this includes the ROCm/HIP backend (`libqvac-ggml-hip.so`,
+  gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts.
 
 ## Architecture
 
@@ -68,11 +70,17 @@ npm install
 npm run build   # bare-make generate && bare-make build && bare-make install
 ```
 
+On **linux-x64** a ROCm/TheRock SDK is required, discovered via `ROCM_PATH` or
+`/opt/rocm`. The `hip` port is deterministic — it hard-fails rather than
+installing empty, so that the vcpkg binary cache cannot conflate a no-HIP build
+with a real one under the same ABI hash. Other platforms need nothing extra; the
+`hip` dependency is gated on `linux & x64`.
+
 ## Supported platforms
 
 | Platform | Triplet | Backends |
 |----------|---------|----------|
-| Linux | `x64-linux`, `arm64-linux` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` |
+| Linux | `x64-linux`, `arm64-linux` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` (x64 also ships ROCm/HIP) |
 | macOS | `arm64-osx` | static (CPU, Metal) inside `.bare` |
 | Windows | (default MSVC) | static inside `.bare` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` |
