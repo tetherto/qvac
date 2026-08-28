@@ -28,7 +28,7 @@ export const audioGenPlugin = definePlugin({
   addonPackage: ADDON_AUDIOGEN,
   loadConfigSchema: audioGenConfigSchema,
   // AudioGen's primary `modelSrc` is intentionally empty: all required
-  // weights are config-owned artifacts resolved from the four model sources.
+  // weights are config-owned artifacts (ACE-Step: four sources; MiniMax: LM + synth).
   skipPrimaryModelPathValidation: true,
 
   resolveConfig: resolveAudioGenConfig,
