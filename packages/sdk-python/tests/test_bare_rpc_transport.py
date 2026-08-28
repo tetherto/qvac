@@ -94,7 +94,7 @@ async def test_load_model_and_completion_stream(transport) -> None:
             "history": [{"role": "user", "content": "Say hello in five words."}],
             "stream": True,
             # Bound + seed the generation: Qwen3's thinking trace otherwise
-            # rambles nondeterministically and can outgrow n_ctx mid-stream,
+            # rambles nondeterministically and can outgrow ctx_size mid-stream,
             # surfacing as a flaky CONTEXT_OVERFLOW.
             "generationParams": {"predict": 512, "temp": 0, "seed": 42},
         }
