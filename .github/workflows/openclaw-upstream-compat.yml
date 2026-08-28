@@ -25,7 +25,7 @@ concurrency:
 env:
   QVAC_SMOKE_MODEL: qwen3.5-0.8b
   QVAC_READY_TIMEOUT_MS: "1800000"
-  OPENCLAW_AGENT_TIMEOUT: 45m
+  OPENCLAW_AGENT_TIMEOUT: 12m
 
 jobs:
   smoke:
@@ -33,8 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     # PR runs skip the agent turn (SKIP_OPENCLAW_AGENT below) so 15m covers
     # install + plugin setup; scheduled/dispatch runs exercise the full agent
-    # turn and need headroom for the readyTimeoutMs wait (30m) + agent timeout (45m).
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 75 }}
+    # turn and need headroom for install plus up to two 12m agent attempts.
+    # A healthy end-to-end run takes ~6m, so 45m leaves ample margin without
+    # letting a wedged server burn a full hour of runner time.
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
     permissions:
       contents: read
     steps:
@@ -88,8 +90,8 @@ jobs:
               ``,
               `- Run: ${runUrl}`,
               `- Artifact: \`openclaw-upstream-compat\``,
-              `- Triage: inspect package metadata and \`npm-install.log\` first, then \`openclaw-onboard.stderr\`, \`openclaw-models-status.stdout\`, \`openclaw-agent.stdout\`, and \`openclaw-agent.stderr\` when present.`,
-              `- Likely cause: latest \`openclaw\` changed package metadata, plugin setup, localService lifecycle, config schema, model catalog, message content handling, or agent JSON output in a way that the latest published \`@qvac/openclaw-plugin\` no longer satisfies.`,
+              `- Triage: diff \`versions.md\` against the last passing run's artifact **first**. If no package version moved, this is not upstream drift — look at \`openclaw-agent.stderr\` (turn count, \`failover decision\` lines), \`sessions/\`, and \`qvac-serve.stdout\`/\`qvac-serve.stderr\` for a loop or a wedged server.`,
+              `- Possible causes, in the order worth checking: a version bump visible in \`versions.md\` (upstream \`openclaw\`, or QVAC's own \`@qvac/openclaw-plugin\` / \`@qvac/cli\` / \`@qvac/sdk\`); a wedged \`qvac serve\` that stops answering mid-run; or model nondeterminism — the smoke drives a 0.8b model and already retries once before failing.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {
