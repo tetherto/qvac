@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-27
+
 ### Added
 
 - **CUDA GPU backend for both engines on Linux / Windows (NVIDIA).** The
@@ -50,6 +52,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
     (`packages/ggml-coload-smoke`) cannot produce two CUDA runtime instances.
 
 ### Changed
+
+- Renamed engine repository references from `qvac-ext-lib-whisper.cpp` to
+  `qvac-fabric-speech.cpp` in the package documentation, following the
+  upstream repository rename. Old GitHub links keep working via redirect.
 
 - **The GPU integration tests accept CUDA as a desktop backend.**
   `gpu.test.js` and `parakeet-gpu-smoke.test.js` asserted

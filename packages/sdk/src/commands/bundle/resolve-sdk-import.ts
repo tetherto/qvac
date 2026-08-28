@@ -7,7 +7,7 @@ export type SdkExportEntry = string | { [condition: string]: SdkExportEntry }
 const SDK_EXPORT_CONDITIONS = ['bare', 'import', 'module', 'default', 'node', 'require']
 
 export function selectExportTarget(entry: SdkExportEntry | undefined): string | null {
-  if (entry == null) return null
+  if (entry === null || entry === undefined) return null
   if (typeof entry === 'string') return entry
   for (const condition of SDK_EXPORT_CONDITIONS) {
     const resolved = selectExportTarget(entry[condition])
