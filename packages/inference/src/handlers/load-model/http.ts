@@ -152,11 +152,11 @@ async function validateCachedFile(
     logger.info(`✅ Using cached HTTP model: ${modelPath}`)
     return modelPath
   } catch (error) {
-    // Re-throw PartialDownloadOfflineError
-    if (error instanceof PartialDownloadOfflineError) {
+    // A refused insecure hop and an offline partial are terminal; everything
+    // else (missing file, access error) just means "no usable cache" → re-download.
+    if (error instanceof PartialDownloadOfflineError || error instanceof InsecureModelSourceError) {
       throw error
     }
-    // File doesn't exist or other access error
     return null
   }
 }
