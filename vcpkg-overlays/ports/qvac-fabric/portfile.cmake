@@ -1,15 +1,15 @@
-# VALIDATION OVERLAY — DO NOT MERGE.
-# Pins qvac-fabric to the head of tetherto/qvac-fabric-llm.cpp#214
-# ("QVAC-24112 fit: budget against real memory availability", base temp-10297)
-# so this PR's tensor-split work is compiled and unit-tested against that
-# fit change before either lands. The registry port's parameterised
-# `REF v${VERSION}` is replaced with the literal commit because no tag exists
-# for it. Revert this commit before merging.
+# ROLLOUT PHASE A VALIDATION OVERLAY — TEMPORARY.
+# Pins qvac-fabric to temp-10297 @ 94357c6b1 ("Merge pull request #214 from
+# tetherto/fix/fit-host-memory-budget") so all 7 consumers build against the
+# release branch before the v10297.1.0 tag exists and before anything is
+# published to the registry. The registry port's parameterised
+# `REF v${VERSION}` is replaced with the literal commit for that reason.
+# Reverted by /rollout-phase-b before the dependency bump.
 vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
-  REF 5854dddb5c6215a98008d93a1e2103f274b63274
-  SHA512 d3777799bfc26b20099bd0c4249b759125acfc941cdeca6d50cf9608752a30744e03baac0ca7cd9c20c60d295ecca6006980dc6af3e84a55ff1fb0acb08cdc09
+  REF 94357c6b16aaae0470fa3702247ec2d6fc677edb
+  SHA512 dda43bf6a9a11a069a5dad19615826a685403343fb5c506a9761aca631552c96857daf8cb9d41c1cf23e63e7a6016068a9a44b64d01ffa1da85ebd420eebebff
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
