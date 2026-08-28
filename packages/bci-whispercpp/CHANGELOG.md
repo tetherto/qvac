@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CUDA GPU acceleration on linux x64: the prebuild now builds with
+  `ENABLE_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
+  per-arch CPU variants as runtime-loaded modules; `use_gpu: true` prefers
+  CUDA on NVIDIA hosts. CUDA engages where the NVIDIA driver and CUDA 13
+  runtime libraries (cudart, cuBLAS) are present; on every other host the
+  CUDA module is skipped and the addon behaves as before (Vulkan or CPU).
+
 ## [0.8.0] - 2026-08-27
 
 ### Added
