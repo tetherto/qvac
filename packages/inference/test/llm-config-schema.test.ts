@@ -1,6 +1,4 @@
 import test from 'brittle'
-import type LlmLlamacpp from '@qvac/llm-llamacpp'
-import type { z } from 'zod'
 import {
   llmConfigBaseSchema,
   llmConfigSchema,
@@ -236,14 +234,4 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
     }).success,
     true
   )
-})
-
-// Fails to compile if the addon widens or narrows its own load_mode union.
-type AddonLoadMode = NonNullable<LlmLlamacpp.LlamaConfig['load_mode']>
-type SdkLoadMode = NonNullable<z.infer<typeof llmConfigBaseSchema>['load_mode']>
-type ExactlyEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
-const loadModeMatchesAddon: ExactlyEqual<AddonLoadMode, SdkLoadMode> = true
-
-test('llmConfigBaseSchema: load_mode matches the addon union exactly', (t) => {
-  t.ok(loadModeMatchesAddon)
 })

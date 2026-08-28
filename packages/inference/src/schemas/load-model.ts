@@ -533,7 +533,7 @@ const commonModelConfigSchema = z.object({
 export const loadLlmModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppCompletion),
-    modelConfig: llmConfigBaseSchema.strict()
+    modelConfig: llmConfigBaseSchema
   })
   .strict()
 

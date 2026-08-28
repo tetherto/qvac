@@ -133,17 +133,8 @@ function applyDeviceDefaults<T extends Request>(request: T): T {
     return request
   }
 
-  const raw = request.modelConfig
-  // Spreading a non-object would coerce it into a valid defaults object; pass it through so the schema reports the type error.
-  if (raw !== undefined && raw !== null && !isPlainObject(raw)) return request
-
-  const rawConfig = (raw as Record<string, unknown>) ?? {}
+  const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {}
   return { ...request, modelConfig: resolveModelConfig(canonicalType, rawConfig) }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (!value || typeof value !== 'object') return false
-  return !Array.isArray(value)
 }
 
 function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
@@ -161,11 +152,10 @@ function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {
  * parse would drop, so it is carried across.
  */
 function prepareRequest<T extends Request>(request: T): Request {
+  const withDeviceDefaults = applyDeviceDefaults(request)
+  const profilingMeta = getProfilingMeta(withDeviceDefaults)
   let validated: Request
-  let profilingMeta: ProfilingRequestMeta | undefined
   try {
-    const withDeviceDefaults = applyDeviceDefaults(request)
-    profilingMeta = getProfilingMeta(withDeviceDefaults)
     validated = requestSchema.parse(withDeviceDefaults)
   } catch (error) {
     if (error instanceof z.ZodError) {

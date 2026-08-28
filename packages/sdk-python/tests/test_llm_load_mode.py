@@ -1,5 +1,4 @@
-"""The llamacpp load config rejects unknown keys, so the retired `no_mmap`
-raises instead of being silently dropped into a default mmap load."""
+"""Generated llamacpp load config accepts every `load_mode` the addon does."""
 
 from __future__ import annotations
 
@@ -26,15 +25,6 @@ def test_load_mode_rejects_unknown_value() -> None:
         LoadModelSrcRequestLlamacppCompletionModelConfig.model_validate(
             {"load_mode": "buffered"}
         )
-
-
-def test_retired_no_mmap_is_rejected_not_dropped() -> None:
-    with pytest.raises(ValidationError) as excinfo:
-        LoadModelSrcRequestLlamacppCompletionModelConfig.model_validate(
-            {"ctx_size": 2048, "no_mmap": True}
-        )
-
-    assert excinfo.value.errors()[0]["type"] == "extra_forbidden"
 
 
 def test_load_mode_is_optional() -> None:

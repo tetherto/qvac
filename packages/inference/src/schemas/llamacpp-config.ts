@@ -193,8 +193,7 @@ export const LLM_CONFIG_DEFAULTS = {
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
-// Strict: dispatch resolves against this, so a retired key errors instead of being stripped.
-export const llmConfigSchema = llmConfigBaseSchema.strict().transform((data) => ({
+export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
   ...LLM_CONFIG_DEFAULTS,
   ...data
 }))
