@@ -174,28 +174,98 @@ one. Which prebuild depends on the `package` / `package_spec` input:
   leftovers or do not exist. Setting any non-empty spec flips
   `force-npm-prebuild` on.
 
-> **Testing an unmerged native change.** `--ref <branch>` gives you the branch's
-> JS harness, tests and app — but **never** its compiled `.bare`. If your change
-> touches `addon/src/**`, you must point `package` / `package_spec` at a GPR dev
-> build, or the run will exercise your new tests against the **published**
-> engine and pass for the wrong reason.
->
-> To get one: push your branch as `tmp-<TICKET>` (or otherwise trigger the
-> addon's **On Merge Trigger** workflow). It publishes
-> `@tetherto/<addon>-mono@<pkg-version>-tmp.runid-<run id>`. Take the version
-> from that run and pass it:
->
-> ```bash
-> gh workflow run integration-mobile-test-<addon>.yml --ref <branch> \
->   -f platform=Android \
->   -f devices_custom="Google Pixel 9" \
->   -f device_model_operator=EQUALS \
->   -f tests="runSomethingTest" \
->   -f package="@tetherto/<addon>-mono@<version>-tmp.runid-<run id>"
-> ```
->
-> Confirm it took effect in the job log — the download step prints
-> `Verified: prebuilds come from <name>@<version> (pinned, GitHub Packages …)`.
+### Testing unmerged / unpublished native code
+
+`--ref <branch>` gives you the branch's JS harness, tests and app — but **never**
+its compiled `.bare`. If your change touches `addon/src/**`, you must pin a GPR
+dev build, or the run exercises your new tests against the **published** engine
+and passes for the wrong reason.
+
+**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`; the
+addon's *On Merge Trigger* workflow builds the prebuilds and publishes
+`@tetherto/<addon>-mono@<pkg-version>-tmp.runid-<run id>` to GitHub Packages.
+
+```bash
+BRANCH=tmp-QVAC-1234
+git push origin HEAD:refs/heads/$BRANCH
+```
+
+Wait for that run to finish — the mobile dispatch needs the package to exist.
+
+**Step 2 — resolve the version it published.** The run id is the version suffix,
+so you never have to read it out of a log:
+
+```bash
+ADDON=llm-llamacpp          # package dir name
+GPR_NAME=$ADDON-mono        # what GPR actually publishes
+
+RUN_ID=$(gh run list --repo tetherto/qvac \
+  --workflow on-merge-$ADDON.yml --branch $BRANCH \
+  --limit 1 --json databaseId --jq '.[0].databaseId')
+
+PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
+  --jq ".[] | select(.name | endswith(\"runid-$RUN_ID\")) | \"@tetherto/$GPR_NAME@\" + .name")
+
+echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
+```
+
+An empty `$PKG` means that run did not publish — usually because the push
+touched nothing under `packages/<addon>/`, so the path-scoped workflow skipped.
+
+**Step 3 — dispatch mobile against it.** Android first, then iOS (a second
+dispatch on the same branch cancels the first — see the concurrency note below).
+
+```bash
+# Android
+gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref $BRANCH \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9, Samsung Galaxy S25 Ultra" \
+  -f device_model_operator=EQUALS \
+  -f tests="runContinuousBatchingTest" \
+  -f package="$PKG"
+
+# iOS — only after the Android run finishes
+gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref $BRANCH \
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 17, Apple iPhone 16 Pro" \
+  -f device_model_operator=EQUALS \
+  -f tests="runContinuousBatchingTest" \
+  -f package="$PKG"
+```
+
+Drop `-f tests=` to run the full sharded suite — for LLM that is many Device Farm
+runs, so prefer a filter while iterating.
+
+**Step 4 — confirm the pin actually took effect.** The build job's *Download
+prebuilds* step prints:
+
+```
+Verified: prebuilds come from @tetherto/<addon>-mono@<version> (pinned, GitHub Packages (npm.pkg.github.com))
+```
+
+If you instead see `downloading @qvac/<addon>@latest from npm (registry.npmjs.org)`,
+the pin did not arrive and you are testing the published release.
+
+**The input is named `package` on most addons but `package_spec` on three:**
+
+| input | addons |
+|---|---|
+| `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `vla` |
+| `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
+| *(no such input)* | `inference-addon-cpp` |
+
+**Addons that need none of this:** `inference-addon-cpp` compiles its `.bare` in
+the same run from `ref`, and `decoder-audio` has no native prebuild of its own
+(it rides on `bare-ffmpeg`'s, so its `package` input does not change what is
+tested) — for both, plain `--ref <branch>` is enough.
+
+> **Two addons cannot do this today.** `ocr-ggml` and `translation-nmtcpp` never
+> publish a GPR dev build — their `publish-gpr` job is skipped on every push
+> because it depends transitively on the `release-merge-guard` job, which is
+> skipped on any non-`release-*` branch, and unlike `build` it does not opt out
+> with `!cancelled()`. `@tetherto/ocr-ggml-mono` has therefore never existed, and
+> `@tetherto/translation-nmtcpp-mono` is frozen at 2026-06-30. Until that is
+> fixed there is no way to put unmerged native code for those two on a device.
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
