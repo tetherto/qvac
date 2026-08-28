@@ -249,6 +249,32 @@ runs:
           "")   SPEC="$ADDON_NPM_NAME@latest" ;;
           *)    SPEC="$ADDON_NPM_NAME@$PACKAGE_VERSION" ;;
         esac
+        # Fail closed on anything that is not a plain registry package@version.
+        # `npm pack` also accepts non-registry specs — file:, git/git+ssh:,
+        # https:, github:shorthand, npm: aliases — which would fetch and, for a
+        # git spec, RUN code (prepare scripts) from an arbitrary source. This step
+        # holds a GPR credential in its environment and in the .npmrc below, and
+        # several workflows forward a workflow_dispatch `package`/`package_spec`
+        # value straight through to `package-version`, so the untrusted-ish input
+        # must be constrained here rather than only at the dispatch gate. The
+        # workflow-level gate is prefix-only ("^@qvac/|^@tetherto/"), which every
+        # one of those forms satisfies, so it does not close this.
+        #
+        # Allowed: an optional @qvac//@tetherto scope, an npm name, and an
+        # optional @<version|dist-tag> from a semver-ish charset. No ':', '/',
+        # backslash or whitespace can appear in the selector, which is what rules
+        # out every non-registry form. inference-addon-cpp legitimately uses an
+        # UNSCOPED name, so the scope is optional; when present it must be ours.
+        if ! printf '%s' "$SPEC" | grep -Eq '^(@(qvac|tetherto)/)?[a-z0-9][a-z0-9._-]*(@[~^]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$'; then
+          echo "::error::Refusing to npm pack '$SPEC'."
+          echo "package-version must resolve to a plain registry spec:"
+          echo "  @qvac/<addon>@<version|dist-tag>          (published release)"
+          echo "  @tetherto/<addon>-mono@<version|dist-tag>  (GitHub Packages dev build)"
+          echo "Non-registry specs (file:, git:, git+ssh:, https:, github:, npm: aliases)"
+          echo "and scopes other than @qvac/@tetherto are rejected: this step runs with a"
+          echo "GitHub Packages credential and a git spec would execute prepare scripts."
+          exit 1
+        fi
         # Registry routing. @qvac/* is published to npmjs.org; @tetherto/* is a
         # branch/dev build published to GitHub Packages by
         # .github/actions/publish-library-to-gpr. A bare `npm pack` only ever
