@@ -737,11 +737,12 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryAtEndOfPrefill) {
 
 // The cached follow-up half of the test above, which is where a leftover
 // opener actually bites. Qwen3.5 is hybrid AND multimodal AND force-open, so
-// its prefill decodes `<think>\n` as the tail of the last text chunk. If the
-// boundary were anchored after that, the compacted cache would end inside a
-// reasoning block, and the next turn resuming from it would carry an opener
-// nothing closes. The driver splits that chunk instead and anchors between the
-// halves, so the compacted cache is preamble plus answer either way.
+// its prefill decodes `<think>\n` as the tail of the last text chunk, and the
+// full-state boundary sits after it. The restored prefix therefore opens a
+// reasoning block, and on its own the next turn would resume inside one that
+// nothing closes. The compactor seeds the close marker into the replay instead
+// of splitting the prefill, so the restored span is balanced and the compacted
+// cache is preamble plus answer either way.
 //
 // Two turns on one context, second one reusing the first's cache: the visible
 // reasoning of turn 2 must open before it closes, and the cursor bookkeeping
