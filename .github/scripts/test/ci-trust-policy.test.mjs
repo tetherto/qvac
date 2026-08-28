@@ -480,7 +480,6 @@ test('authorize-pr: drafts are denied before internal or fork trust checks', () 
 // on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
 const sdkE2eWorkflows = [
   '.github/workflows/on-pr-test-sdk.yml',
-  '.github/workflows/on-pr-bare-sdk-e2e.yml',
 ]
 
 test('sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified', () => {
@@ -1933,7 +1932,7 @@ test('asr-ggml functional mobile workflow opts into dual flagship per engine sha
   assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
   const benchmarkMatrix = JSON.parse(matrices[1])
   const functionalMatrix = JSON.parse(matrices[2])
-  assert.equal(benchmarkMatrix.include.length, 16)
+  assert.equal(benchmarkMatrix.include.length, 20)
   assert.deepEqual(
     functionalMatrix.include.map((entry) => entry.platform),
     ['Android', 'iOS'],

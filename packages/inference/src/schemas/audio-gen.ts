@@ -33,16 +33,50 @@ export const AUDIOGEN_TASK_TYPES = ['text2music', 'cover-nofsq'] as const
 export const audioGenTaskTypeSchema = z.enum(AUDIOGEN_TASK_TYPES)
 
 const commonAudioGenRuntimeConfigShape = {
-  useGPU: z.boolean().optional(),
-  threads: z.number().int().nonnegative().optional(),
-  backendsDir: z.string().min(1).optional()
+  useGPU: z
+    .boolean()
+    .optional()
+    .describe(
+      'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.'
+    ),
+  threads: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('CPU thread count; `0` (default) lets the engine auto-pick.'),
+  backendsDir: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Advanced: override the prebuilds root scanned for dlopen’d ggml backend modules. Defaults to `<addon>/prebuilds`; needed on arm64, where the CPU backend ships as per-microarch module `.so` files.'
+    )
 }
 
 const acestepRuntimeConfigShape = {
   ...commonAudioGenRuntimeConfigShape,
-  inferenceSteps: z.number().int().nonnegative().optional(),
-  shift: z.number().nonnegative().optional(),
-  nGpuLayers: z.number().int().nonnegative().optional()
+  inferenceSteps: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'DiT sampling steps; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 8 / sft 50).'
+    ),
+  shift: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Flow-matching time-shift; `0` (default) lets ACE-Step auto-pick per DiT architecture (turbo 3.0 / sft 1.0).'
+    ),
+  nGpuLayers: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('ACE-Step GPU layers to offload when `useGPU` is set (99 = all). Ignored on CPU.')
 }
 
 const minimaxCfgScaleSchema = z
@@ -52,16 +86,25 @@ const minimaxCfgScaleSchema = z
   .refine((value) => value === 0 || value >= FLOAT32_MIN_POSITIVE, {
     message: 'cfgScale must be 0 or a positive float32 value'
   })
+  .describe('MiniMax flow classifier-free guidance scale; `0` uses the model default.')
 
 const minimaxRuntimeConfigShape = {
   ...commonAudioGenRuntimeConfigShape,
-  inferenceSteps: z.number().int().min(0).max(MINIMAX_MAX_INFERENCE_STEPS).optional(),
+  inferenceSteps: z
+    .number()
+    .int()
+    .min(0)
+    .max(MINIMAX_MAX_INFERENCE_STEPS)
+    .optional()
+    .describe('MiniMax flow sampling steps; `0` uses the model default.'),
   cfgScale: minimaxCfgScaleSchema.optional()
 }
 
 export const audioGenRuntimeConfigSchema = z
   .object({
-    engine: audioGenEngineSchema.optional(),
+    engine: audioGenEngineSchema
+      .optional()
+      .describe('Music-generation engine; defaults to `acestep`.'),
     ...acestepRuntimeConfigShape,
     cfgScale: minimaxCfgScaleSchema.optional()
   })
@@ -69,21 +112,31 @@ export const audioGenRuntimeConfigSchema = z
 
 const acestepAudioGenConfigSchema = z
   .object({
-    engine: z.literal('acestep').optional(),
+    engine: z.literal('acestep').optional().describe('Use the ACE-Step music-generation engine.'),
     ...acestepRuntimeConfigShape,
-    textEncModelSrc: modelSrcInputSchema,
-    lmModelSrc: modelSrcInputSchema,
-    ditModelSrc: modelSrcInputSchema,
-    vaeModelSrc: modelSrcInputSchema
+    textEncModelSrc: modelSrcInputSchema.describe(
+      'Text-encoder model source; turns the caption and lyrics into embeddings.'
+    ),
+    lmModelSrc: modelSrcInputSchema.describe('Language-model source; plans the song structure.'),
+    ditModelSrc: modelSrcInputSchema.describe(
+      'DiT model source; generates the audio latent (the quality-defining stage).'
+    ),
+    vaeModelSrc: modelSrcInputSchema.describe(
+      'VAE model source; decodes the latent into the output waveform.'
+    )
   })
   .strict()
 
 const minimaxAudioGenConfigSchema = z
   .object({
-    engine: z.literal('minimax'),
+    engine: z.literal('minimax').describe('Use the MiniMax-Music3 generation engine.'),
     ...minimaxRuntimeConfigShape,
-    lmModelSrc: modelSrcInputSchema,
-    synthModelSrc: modelSrcInputSchema
+    lmModelSrc: modelSrcInputSchema.describe(
+      'MiniMax language-model source; generates semantic music tokens.'
+    ),
+    synthModelSrc: modelSrcInputSchema.describe(
+      'MiniMax synthesis-model source; converts semantic tokens into the output waveform.'
+    )
   })
   .strict()
 

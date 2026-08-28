@@ -75,7 +75,7 @@ npm run lint               # lint all JS (excludes addon/)
 cd packages/sdk
 bun install
 bun run build       # lint + typecheck + compile
-bun run lint        # eslint + typecheck
+bun run lint        # lunte + typecheck
 bun run format      # prettier check
 ```
 

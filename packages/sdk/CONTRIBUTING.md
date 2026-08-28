@@ -26,7 +26,7 @@ If you manage to solve a problem by removing code, that gives you double points 
 
 - **Never break user space.** Do not change exposed APIs unless adding user-facing capability or simplification. Do not adjust APIs to solve internal implementation issues.
 - **Keep changes surgical.** Each PR solves exactly one problem or delivers one feature. If you find related work, open/link separate PRs. Localize complexity instead of spreading risk.
-- **Enforce type safety.** No `any` on the client; server-side coercion only when necessary for Bare types. Avoid `unknown` unless required for RPC bridges. Avoid `@ts-ignore` or eslint disables except in rare, justified cases.
+- **Enforce type safety.** No `any` on the client; server-side coercion only when necessary for Bare types. Avoid `unknown` unless required for RPC bridges. Avoid `@ts-ignore` or lunte disables except in rare, justified cases.
 - **Keep client portable.** All platform-specific logic belongs on Bare/server. The client should remain an RPC client that can be ported to other environments.
 - **Prefer the simplest solution.** After implementing, ask if it can be simpler. Delete code when it clarifies behavior.
 
