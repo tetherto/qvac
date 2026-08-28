@@ -289,7 +289,18 @@ if (!finalText.trim()) {
 // deliberately loose -- real passes are under 20 characters, observed refusals
 // run past 300 -- so it rejects non-answers without policing phrasing.
 const MAX_COMPLIANT_REPLY_CHARS = 120
-const compact = finalText.trim()
+
+// OpenClaw reply-routing directives (`[[reply_to_current]]`,
+// `[[reply_to:<id>]]`) are control tokens, not content. A 0.8b model parrots
+// them out of the system prompt -- historically as a bare directive with no
+// answer behind it. Strip them so the length check measures real text, and so
+// a reply that is *only* routing tokens falls to the empty-text error below
+// rather than masquerading as an answer.
+const compact = finalText.replace(/\[\[[^\]]*\]\]/g, '').trim()
+
+if (!compact) {
+  throw new Error(`OpenClaw agent replied with no content: ${finalText.trim().slice(0, 300)}`)
+}
 
 if (!/qvac-ok/i.test(compact)) {
   throw new Error(`OpenClaw agent response did not include qvac-ok: ${compact.slice(0, 300)}`)
@@ -344,11 +355,15 @@ run_agent_attempt() {
   fi
 }
 
-# A 0.8b model carrying the full coding tool profile has ~3.4k tokens of context
-# headroom here and does not always follow a one-line instruction; it sometimes
-# refuses or loops. One retry keeps the tripwire pointed at integration breakage
-# rather than at model variance. Every attempt is kept as an artifact.
-OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-2}"
+# Replaying this verifier over the 13 most recent scheduled runs that produced
+# agent output, 6 did not answer the prompt -- a ~46% per-attempt rate, every
+# one of them reported green at the time. The failures are model variance, not
+# integration breakage: bare `[[reply_to_current]]` routing tokens (x4), and
+# unrelated replies like "Hello." So retry enough times that model variance does
+# not dominate the signal. At the measured rate three attempts leave ~10%, and
+# the sharpened prompt should push it well below that. Every attempt is kept as
+# an artifact so a real break is still legible.
+OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-3}"
 agent_ok=0
 agent_failure=""
 

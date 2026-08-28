@@ -25,7 +25,7 @@ concurrency:
 env:
   QVAC_SMOKE_MODEL: qwen3.5-0.8b
   QVAC_READY_TIMEOUT_MS: "1800000"
-  OPENCLAW_AGENT_TIMEOUT: 12m
+  OPENCLAW_AGENT_TIMEOUT: 10m
 
 jobs:
   smoke:
@@ -33,9 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     # PR runs skip the agent turn (SKIP_OPENCLAW_AGENT below) so 15m covers
     # install + plugin setup; scheduled/dispatch runs exercise the full agent
-    # turn and need headroom for install plus up to two 12m agent attempts.
-    # A healthy end-to-end run takes ~6m, so 45m leaves ample margin without
-    # letting a wedged server burn a full hour of runner time.
+    # turn and need headroom for install plus up to three 10m agent attempts.
+    # A healthy end-to-end run takes ~6m and a healthy agent turn ~3.4m, so 45m
+    # covers the worst case without letting a wedged server burn a full hour.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
     permissions:
       contents: read
