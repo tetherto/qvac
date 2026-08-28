@@ -294,6 +294,35 @@ export interface AudiogenStats {
   backendId?: number
 }
 
+/** Name of a backend `AudiogenStats.backendId` can resolve to. */
+export type AudiogenBackendName =
+  | 'cpu'
+  | 'metal'
+  | 'cuda'
+  | 'vulkan'
+  | 'opencl'
+  | 'other'
+
+/** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
+export const AUDIOGEN_BACKEND_NAMES: Readonly<
+  Record<number, AudiogenBackendName>
+> = {
+  0: 'cpu',
+  1: 'metal',
+  2: 'cuda',
+  3: 'vulkan',
+  4: 'opencl',
+  99: 'other'
+}
+
+/** `undefined` for an unset or unrecognised id, never a guessed name. */
+export function audiogenBackendName(
+  backendId: number | undefined
+): AudiogenBackendName | undefined {
+  if (backendId === undefined) return undefined
+  return AUDIOGEN_BACKEND_NAMES[backendId]
+}
+
 /** Raw shape of the native output-callback payload. */
 interface NativeAudiogenData {
   outputArray?: Int16Array

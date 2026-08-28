@@ -128,7 +128,9 @@ await gen.destroy()
 > one PCM item after generation, not incremental audio chunks. `await()` resolves
 > with terminal stats. `backendDevice` /
 > `backendId` report the backend the engine *resolved to*, not the one requested,
-> so a `useGPU: true` run that fell back to the CPU is detectable.
+> so a `useGPU: true` run that fell back to the CPU is detectable. Use
+> `audiogenBackendName(stats.backendId)` rather than copying the code table
+> above; it returns `undefined` for an id this version does not know.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
 ### 2. A song with lyrics + rhythm

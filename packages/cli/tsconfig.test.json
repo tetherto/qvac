@@ -1,6 +1,11 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*", "test/chat-agent-shapes.test.ts"],
+  "include": [
+    "src/**/*",
+    "test/chat-agent-shapes.test.ts",
+    "test/require-model.test.ts",
+    "test/cancel-bridge.test.ts"
+  ],
   "compilerOptions": {
     "rootDir": ".",
     "noEmit": true
