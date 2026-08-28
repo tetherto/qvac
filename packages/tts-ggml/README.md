@@ -6,8 +6,8 @@ GGML library.  Wraps multiple engines under one package: **Chatterbox**
 v1/v2 still loadable), **Parler** (mini/large English + indic 21-language,
 description-conditioned with voice/emotion templates), **CosyVoice3**
 (Fun-CosyVoice3-0.5B, instruct-conditioned, 24 kHz, CPU with opt-in
-Metal on Apple, CUDA/Vulkan on Linux, Vulkan on Windows, and OpenCL/Adreno
-GPU offload on Android), and **Audio8**
+Metal on Apple, Vulkan on Linux/Windows (CUDA in opt-in local builds), and
+OpenCL/Adreno GPU offload on Android), and **Audio8**
 (DualAR + neural codec, in-process voice cloning, desktop GPU), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
@@ -16,15 +16,16 @@ which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
-(Metal on macOS/iOS, CUDA or Vulkan on Linux, Vulkan on Windows,
-Vulkan / OpenCL on Android) is **opt-in** via `config: { useGPU: true }`;
-the default is CPU.  On
+(Metal on macOS/iOS, Vulkan on Linux and Windows, Vulkan / OpenCL on
+Android, plus CUDA in opt-in local builds) is **opt-in** via
+`config: { useGPU: true }`; the default is CPU.  On
 Android `useGPU` flows through to `tts-cpp`, which picks the GPU
 backend per its own per-vendor allowlist (Adreno → OpenCL,
-Xclipse/Mali → Vulkan). Parler supports Apple/Metal, linux CUDA, and the
-validated Android paths, including Vulkan on ARM Mali (see
-[Backends & GPU acceleration](#backends--gpu-acceleration)). Audio8 supports
-CUDA/Vulkan offload on Linux and Vulkan on Windows.
+Xclipse/Mali → Vulkan). Parler supports Apple/Metal, linux CUDA (opt-in
+local builds), and the validated Android paths, including Vulkan on ARM Mali
+(see [Backends & GPU acceleration](#backends--gpu-acceleration)). Audio8
+supports Vulkan offload on Linux and Windows, plus CUDA in opt-in local
+builds.
 
 [qvac-tts-cpp]: https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts
 
@@ -556,8 +557,7 @@ host's policy:
 | Platform                | Default backend when `useGPU: true`          |
 |-------------------------|----------------------------------------------|
 | macOS / iOS             | Metal                                        |
-| Linux x64 — NVIDIA      | CUDA (the linux-x64 prebuild bundles CUDA and Vulkan; CUDA wins the cascade) |
-| Linux — other / Windows | Vulkan                                       |
+| Linux / Windows         | Vulkan (CUDA wins the cascade in an opt-in `ENABLE_CUDA` local build) |
 | Android — Adreno 700+   | OpenCL                                       |
 | Android — Mali / others | Vulkan                                       |
 | Everything else / CPU-only build | CPU                                 |
@@ -567,11 +567,14 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
 
-The linux-x64 CUDA backend ships as a runtime-loaded module: engaging it
-requires the NVIDIA driver plus the CUDA 13 runtime libraries (cudart and
-cuBLAS, from a CUDA toolkit install) resolvable at load time. On hosts
-without them — including CPU-only and non-NVIDIA machines — the module is
-skipped and the addon behaves exactly as before (Vulkan or CPU).
+The published prebuilds do not carry the CUDA backend — its fatbin pushes
+the npm package past the registry's upload size limit. CUDA stays available
+as a local build: pass `-D ENABLE_CUDA=ON` to `bare-make generate` on a host
+with `nvcc` (see [Building from source](#building-from-source)). In such a
+build the CUDA backend is a runtime-loaded module: engaging it requires the
+NVIDIA driver plus the CUDA 13 runtime libraries (cudart and cuBLAS, from a
+CUDA toolkit install) resolvable at load time. On hosts without them the
+module is skipped and the addon falls back to Vulkan or CPU.
 
 > Both Chatterbox and Supertonic run on ARM Mali via Vulkan: `tts-cpp` sets
 > `allow_arm_mali=true` for both graphs. (Earlier `tts-cpp` builds declined
@@ -996,8 +999,10 @@ baseline commit.
 GPU backends are controlled by the `speech-cpp` port's vcpkg features:
 `metal` (default on osx/ios), `vulkan` (default on
 linux/windows/android), `opencl` (default on android), and `cuda`
-(opt-in via the addon's `ENABLE_CUDA` cmake option; the published
-linux-x64 prebuilds enable it).
+(opt-in via the addon's `ENABLE_CUDA` cmake option —
+`npx bare-make generate -D ENABLE_CUDA=ON` on a host with `nvcc`;
+the published prebuilds do not enable it, to keep the npm package under
+the registry's upload size limit).
 On Android the port is configured with
 `GGML_BACKEND_DL=ON` + `GGML_CPU_ALL_VARIANTS=ON`, so the build
 produces per-arch CPU + Vulkan + OpenCL `.so` files alongside the

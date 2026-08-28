@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The published linux-x64 prebuild no longer bundles the CUDA backend
+  module: its multi-architecture fatbin (138 MB unpacked) pushed the npm
+  package past the registry's upload size limit, which is why 0.8.0 never
+  reached npm. CUDA stays available as an opt-in local build — pass
+  `-D ENABLE_CUDA=ON` to `bare-make generate` on a host with `nvcc`. On the
+  published prebuild, `useGPU: true` selects Vulkan (or CPU) on linux-x64,
+  as in 0.7.x.
+
 ## [0.8.0] - 2026-08-27
 
 ### Added

@@ -51,8 +51,8 @@ const RELAX = !!(proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1')
 // to validate that follow-up fix once it ships.
 const PROBE_UNSAFE = !!(proc.env && proc.env.QVAC_TTS_KV_PROBE_UNSAFE === '1')
 
-// CI rows that pin the engine's GPU cascade (linux prebuilds bundle CUDA and
-// Vulkan) export TTS_CPP_GPU_BACKEND.
+// Runs that pin the engine's GPU cascade (opt-in ENABLE_CUDA builds carry
+// CUDA and Vulkan) export TTS_CPP_GPU_BACKEND.
 const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 
 // KV dtypes every GPU backend wired into tts-cpp can actually *run the whole

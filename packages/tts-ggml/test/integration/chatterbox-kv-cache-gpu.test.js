@@ -25,9 +25,10 @@
 //   - The Vulkan-pinned linux/windows GPU runners can't reproduce the Metal
 //     bug in the q8_0 cell (tts-cpp forces quantized KV -> f32 there), but
 //     the f16/f32/default cells still guard those backends.
-//   - The CUDA-pinned linux runner (TTS_CPP_GPU_BACKEND=cuda) additionally
-//     sweeps the real q8_0 cell — CUDA implements the q8_0 CONT, so the
-//     memory-cheapest KV dtype runs natively there (see kvCacheMatrix.js).
+//   - A CUDA-pinned run (TTS_CPP_GPU_BACKEND=cuda against an opt-in
+//     ENABLE_CUDA build) additionally sweeps the real q8_0 cell — CUDA
+//     implements the q8_0 CONT, so the memory-cheapest KV dtype runs
+//     natively there (see kvCacheMatrix.js).
 //   - NO_GPU=true (the no-GPU matrix entries) skips the whole file.
 
 const fs = require('bare-fs')
