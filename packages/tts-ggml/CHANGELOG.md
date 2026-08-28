@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-D ENABLE_CUDA=ON` to `bare-make generate` on a host with `nvcc`. On the
   published prebuild, `useGPU: true` selects Vulkan (or CPU) on linux-x64,
   as in 0.7.x.
+- Raise the `speech-cpp` floor to 2026-08-26#2, which consumes the slimmed
+  `ggml-speech` 2026-08-28 cut: Vulkan shader payloads for quantizations and
+  training ops no speech model uses (iq1/iq2/iq3/iq4, mxfp4/nvfp4, and the
+  backward/optimizer pipelines) ship as no-op stubs, shrinking every
+  Vulkan-carrying prebuild artifact by roughly 45% (the linux Vulkan backend
+  drops from 63 MB to 34 MB). Supported model quantizations
+  (q4_0/q5_0/q5_1/q8_0/k-quants/f16) are unaffected; loading an
+  iq*/mxfp4/nvfp4-quantized model on Vulkan is not supported by these
+  builds.
 
 ## [0.8.0] - 2026-08-27
 
