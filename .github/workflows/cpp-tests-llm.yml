@@ -47,6 +47,8 @@ jobs:
             arch: x64
 
     runs-on: ${{ matrix.runner || matrix.os }}
+    # Bounds a cold-cache run; warm legs are far under this.
+    timeout-minutes: 120
     environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
 
