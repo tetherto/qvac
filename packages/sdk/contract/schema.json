@@ -3562,7 +3562,8 @@
           "const": "downloadAsset"
         },
         "assetSrc": {
-          "type": "string"
+          "type": "string",
+          "description": "The asset to download and cache: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         },
         "withProgress": {
           "type": "boolean"
@@ -8217,7 +8218,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8400,36 +8402,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -8506,7 +8519,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -8771,36 +8785,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -8861,7 +8886,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9024,36 +9050,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -9114,7 +9151,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9285,7 +9323,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9405,7 +9444,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -9609,36 +9649,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -9693,36 +9744,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -9822,36 +9884,47 @@
                                   "type": "object",
                                   "properties": {
                                     "src": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                     },
                                     "name": {
+                                      "description": "Display name for this model instance; overrides the name derived from the source.",
                                       "type": "string"
                                     },
                                     "modelId": {
+                                      "description": "Unique identifier used to reference the model in QVAC calls.",
                                       "type": "string"
                                     },
                                     "registryPath": {
+                                      "description": "Registry-relative path to the model (set for registry-backed models).",
                                       "type": "string"
                                     },
                                     "registrySource": {
+                                      "description": "Registry source identifier, e.g. `huggingface`.",
                                       "type": "string"
                                     },
                                     "blobCoreKey": {
+                                      "description": "Hyperdrive blob core key for the model file.",
                                       "type": "string"
                                     },
                                     "blobIndex": {
+                                      "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                       "type": "number"
                                     },
                                     "engine": {
+                                      "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                       "type": "string"
                                     },
                                     "expectedSize": {
+                                      "description": "Expected total size of the model file in bytes.",
                                       "type": "number"
                                     },
                                     "sha256Checksum": {
+                                      "description": "Expected SHA-256 checksum of the model file.",
                                       "type": "string"
                                     },
                                     "addon": {
+                                      "description": "Inference addon / capability category this model belongs to.",
                                       "anyOf": [
                                         {
                                           "type": "string",
@@ -9907,36 +9980,47 @@
                                   "type": "object",
                                   "properties": {
                                     "src": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                     },
                                     "name": {
+                                      "description": "Display name for this model instance; overrides the name derived from the source.",
                                       "type": "string"
                                     },
                                     "modelId": {
+                                      "description": "Unique identifier used to reference the model in QVAC calls.",
                                       "type": "string"
                                     },
                                     "registryPath": {
+                                      "description": "Registry-relative path to the model (set for registry-backed models).",
                                       "type": "string"
                                     },
                                     "registrySource": {
+                                      "description": "Registry source identifier, e.g. `huggingface`.",
                                       "type": "string"
                                     },
                                     "blobCoreKey": {
+                                      "description": "Hyperdrive blob core key for the model file.",
                                       "type": "string"
                                     },
                                     "blobIndex": {
+                                      "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                       "type": "number"
                                     },
                                     "engine": {
+                                      "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                       "type": "string"
                                     },
                                     "expectedSize": {
+                                      "description": "Expected total size of the model file in bytes.",
                                       "type": "number"
                                     },
                                     "sha256Checksum": {
+                                      "description": "Expected SHA-256 checksum of the model file.",
                                       "type": "string"
                                     },
                                     "addon": {
+                                      "description": "Inference addon / capability category this model belongs to.",
                                       "anyOf": [
                                         {
                                           "type": "string",
@@ -9991,36 +10075,47 @@
                                   "type": "object",
                                   "properties": {
                                     "src": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                     },
                                     "name": {
+                                      "description": "Display name for this model instance; overrides the name derived from the source.",
                                       "type": "string"
                                     },
                                     "modelId": {
+                                      "description": "Unique identifier used to reference the model in QVAC calls.",
                                       "type": "string"
                                     },
                                     "registryPath": {
+                                      "description": "Registry-relative path to the model (set for registry-backed models).",
                                       "type": "string"
                                     },
                                     "registrySource": {
+                                      "description": "Registry source identifier, e.g. `huggingface`.",
                                       "type": "string"
                                     },
                                     "blobCoreKey": {
+                                      "description": "Hyperdrive blob core key for the model file.",
                                       "type": "string"
                                     },
                                     "blobIndex": {
+                                      "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                       "type": "number"
                                     },
                                     "engine": {
+                                      "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                       "type": "string"
                                     },
                                     "expectedSize": {
+                                      "description": "Expected total size of the model file in bytes.",
                                       "type": "number"
                                     },
                                     "sha256Checksum": {
+                                      "description": "Expected SHA-256 checksum of the model file.",
                                       "type": "string"
                                     },
                                     "addon": {
+                                      "description": "Inference addon / capability category this model belongs to.",
                                       "anyOf": [
                                         {
                                           "type": "string",
@@ -10208,7 +10303,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -10331,36 +10427,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -10415,36 +10522,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -10499,36 +10617,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -10583,36 +10712,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -10667,36 +10807,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -10751,36 +10902,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -10926,36 +11088,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11010,36 +11183,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11380,36 +11564,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11464,36 +11659,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11620,36 +11826,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11705,36 +11922,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11789,36 +12017,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -11883,7 +12122,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -11974,36 +12214,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12064,7 +12315,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -12216,36 +12468,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12300,36 +12563,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12384,36 +12658,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12468,36 +12753,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12552,36 +12848,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12636,36 +12943,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12720,36 +13038,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12804,36 +13133,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12888,36 +13228,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -12972,36 +13323,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -13056,36 +13418,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -13140,36 +13513,47 @@
                           "type": "object",
                           "properties": {
                             "src": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                             },
                             "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
                               "type": "string"
                             },
                             "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
                               "type": "string"
                             },
                             "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
                               "type": "string"
                             },
                             "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
                               "type": "string"
                             },
                             "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
                               "type": "string"
                             },
                             "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                               "type": "number"
                             },
                             "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                               "type": "string"
                             },
                             "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
                               "type": "number"
                             },
                             "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
                               "type": "string"
                             },
                             "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
                               "anyOf": [
                                 {
                                   "type": "string",
@@ -13296,36 +13680,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -13418,7 +13813,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -13493,36 +13889,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -13577,36 +13984,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -13661,36 +14079,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -13745,36 +14174,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -13869,36 +14309,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -13953,36 +14404,47 @@
                               "type": "object",
                               "properties": {
                                 "src": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                                 },
                                 "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
                                   "type": "string"
                                 },
                                 "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
                                   "type": "string"
                                 },
                                 "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
                                   "type": "string"
                                 },
                                 "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
                                   "type": "string"
                                 },
                                 "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
                                   "type": "string"
                                 },
                                 "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                                   "type": "number"
                                 },
                                 "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                                   "type": "string"
                                 },
                                 "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
                                   "type": "number"
                                 },
                                 "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
                                   "type": "string"
                                 },
                                 "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
                                   "anyOf": [
                                     {
                                       "type": "string",
@@ -14048,7 +14510,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14144,7 +14607,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14201,7 +14665,8 @@
                   "const": "loadModel"
                 },
                 "modelSrc": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
                 },
                 "modelName": {
                   "type": "string"
@@ -14506,36 +14971,47 @@
                       "type": "object",
                       "properties": {
                         "src": {
-                          "type": "string"
+                          "type": "string",
+                          "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                         },
                         "name": {
+                          "description": "Display name for this model instance; overrides the name derived from the source.",
                           "type": "string"
                         },
                         "modelId": {
+                          "description": "Unique identifier used to reference the model in QVAC calls.",
                           "type": "string"
                         },
                         "registryPath": {
+                          "description": "Registry-relative path to the model (set for registry-backed models).",
                           "type": "string"
                         },
                         "registrySource": {
+                          "description": "Registry source identifier, e.g. `huggingface`.",
                           "type": "string"
                         },
                         "blobCoreKey": {
+                          "description": "Hyperdrive blob core key for the model file.",
                           "type": "string"
                         },
                         "blobIndex": {
+                          "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
                           "type": "number"
                         },
                         "engine": {
+                          "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
                           "type": "string"
                         },
                         "expectedSize": {
+                          "description": "Expected total size of the model file in bytes.",
                           "type": "number"
                         },
                         "sha256Checksum": {
+                          "description": "Expected SHA-256 checksum of the model file.",
                           "type": "string"
                         },
                         "addon": {
+                          "description": "Inference addon / capability category this model belongs to.",
                           "anyOf": [
                             {
                               "type": "string",
