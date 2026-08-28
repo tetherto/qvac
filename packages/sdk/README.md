@@ -140,6 +140,32 @@ sampling. Enabling gauges adds one CPU query and one query per GPU to each
 profiled operation's response path. If the worker resource collector is not
 initialized, the event omits the resource block.
 
+## Pre-download model fit assessment
+
+Use `assessModelFit` to check, before downloading anything, whether models are
+likely to fit in this device's memory. It reads generated catalog metadata plus a
+fresh memory sample — no weights, no load, no native probe:
+
+```ts
+import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
+
+const result = await assessModelFit({
+  models: [{ model: QWEN3_8B_INST_Q4_K_M, workload: { kind: 'llm', contextTokens: 8192 } }],
+  execution: 'sequential',
+  policy: 'interactive-v1'
+})
+
+console.log(result.verdict) // 'likely-fits' | 'likely-too-large' | 'unknown'
+```
+
+The result is advisory: it does not block `loadModel`, reserve memory, or make a
+performance claim. `unknown` is a real answer meaning the evidence does not
+support a call either way — show it as "can't say", not as "no".
+
+See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
+budget arithmetic, why estimates are ranges, the supported engine and workload
+matrix, and the current calibration status.
+
 ## Streaming transcription statistics
 
 Whisper and Parakeet duplex transcription sessions expose terminal engine
