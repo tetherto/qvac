@@ -1,14 +1,14 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import type { FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createModelRegistry } from '../src/serve/core/model-registry.js'
 import {
   createLoadManager,
   type LoadManagerDeps,
   type LoadModelFn
 } from '../src/serve/core/load-manager.js'
-import { ensureReady } from '../src/serve/plugins/require-model.js'
+import { ensureReady, resolveAndCheckModel } from '../src/serve/plugins/require-model.js'
 import { createLogger } from '../src/logger.js'
 import type { QvacContext } from '../src/serve/lib/types.js'
 import { HttpError } from '../src/serve/lib/http-error.js'
@@ -43,14 +43,28 @@ function makeCtx(loadFn: LoadModelFn, deps: LoadManagerDeps, cancelOnDisconnect:
     deps
   )
   const serveConfig = {
+    models: new Map([['m', CONFIG_ENTRY]]),
     load: { lazy: true, concurrency: 4, timeoutMs: null, cancelOnDisconnect }
   }
   return { registry, loadManager, serveConfig, logger } as unknown as QvacContext
 }
 
-function fakeReq() {
+function fakeReply() {
   const raw = new EventEmitter()
-  return { req: { raw } as unknown as FastifyRequest, raw }
+  return { reply: { raw } as unknown as FastifyReply, raw }
+}
+
+// A request and a reply backed by separate streams, so a test can tell which
+// one the disconnect signal is bound to.
+function fakeExchange(ctx: QvacContext) {
+  const reqRaw = new EventEmitter()
+  const replyRaw = new EventEmitter()
+  return {
+    req: { raw: reqRaw, server: { qvac: ctx } } as unknown as FastifyRequest,
+    reply: { raw: replyRaw } as unknown as FastifyReply,
+    reqRaw,
+    replyRaw
+  }
 }
 
 describe('ensureReady disconnect handling', () => {
@@ -73,9 +87,9 @@ describe('ensureReady disconnect handling', () => {
       },
       true
     )
-    const { req, raw } = fakeReq()
+    const { reply, raw } = fakeReply()
 
-    const settled = ensureReady(ctx, 'm', CONFIG_ENTRY, 'm', req).catch((e) => e)
+    const settled = ensureReady(ctx, 'm', CONFIG_ENTRY, 'm', reply).catch((e) => e)
     await new Promise((r) => setTimeout(r, 0))
     raw.emit('close') // client disconnects
 
@@ -105,9 +119,9 @@ describe('ensureReady disconnect handling', () => {
       },
       false
     )
-    const { req, raw } = fakeReq()
+    const { reply, raw } = fakeReply()
 
-    const settled = ensureReady(ctx, 'm', CONFIG_ENTRY, 'm', req)
+    const settled = ensureReady(ctx, 'm', CONFIG_ENTRY, 'm', reply)
     await new Promise((r) => setTimeout(r, 0))
     raw.emit('close') // disconnect ignored — load continues
     gate.resolve('sdk-ok')
@@ -115,5 +129,63 @@ describe('ensureReady disconnect handling', () => {
     const entry = await settled
     assert.equal(cancelCalled, false)
     assert.equal(entry.state, ctx.registry.STATES.READY)
+  })
+})
+
+// `ensureReady` aborts on whatever stream it is handed; which one that is gets
+// decided here. These cases pass a distinct request and reply stream so the
+// choice is observable.
+describe('resolveAndCheckModel disconnect wiring', () => {
+  function gatedCtx(requestId: string, cancelOnDisconnect = true) {
+    const gate = deferred<string>()
+    const loadFn: LoadModelFn = () => {
+      const p = gate.promise as Promise<string> & { requestId?: string }
+      p.requestId = requestId
+      return p
+    }
+    const cancelled: { rid: string | null } = { rid: null }
+    const ctx = makeCtx(
+      loadFn,
+      {
+        cancel: (rid) => {
+          cancelled.rid = rid
+          return Promise.resolve()
+        },
+        unload: () => Promise.resolve()
+      },
+      cancelOnDisconnect
+    )
+    return { ctx, gate, cancelled }
+  }
+
+  it('ignores request-stream close, which Fastify fires once the body is read', async () => {
+    const { ctx, gate, cancelled } = gatedCtx('req-body')
+    const { req, reply, reqRaw } = fakeExchange(ctx)
+
+    const settled = resolveAndCheckModel(req, reply, 'm', 'chat')
+    await new Promise((r) => setTimeout(r, 0))
+    reqRaw.emit('close')
+
+    assert.equal(cancelled.rid, null, 'end of the request body must not cancel the load')
+    gate.resolve('sdk-ok')
+
+    const model = await settled
+    assert.equal(model.entry.state, ctx.registry.STATES.READY)
+  })
+
+  it('cancels on reply-stream close, which marks a real client disconnect', async () => {
+    const { ctx, gate, cancelled } = gatedCtx('reply-drop')
+    const { req, reply, replyRaw } = fakeExchange(ctx)
+
+    const settled = resolveAndCheckModel(req, reply, 'm', 'chat').catch((e) => e)
+    await new Promise((r) => setTimeout(r, 0))
+    replyRaw.emit('close')
+
+    assert.equal(cancelled.rid, 'reply-drop')
+    gate.resolve('sdk-late')
+
+    const err = await settled
+    assert.ok(err instanceof HttpError)
+    assert.equal(err.code, 'model_load_failed')
   })
 })
