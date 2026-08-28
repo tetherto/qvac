@@ -314,7 +314,11 @@ if (meta.aborted === true) {
   throw new Error('OpenClaw agent run was aborted')
 }
 
-const fallbackUsed = meta.fallbackUsed ?? result.fallbackUsed
+// The real field is meta.executionTrace.fallbackUsed; the flatter paths are
+// kept only as forward-compatible fallbacks. Reading the wrong one here was
+// the same inert-assertion bug this PR exists to fix.
+const fallbackUsed =
+  meta.executionTrace?.fallbackUsed ?? meta.fallbackUsed ?? result.fallbackUsed
 if (fallbackUsed !== undefined && fallbackUsed !== false) {
   throw new Error(`OpenClaw fallback was used: ${fallbackUsed}`)
 }

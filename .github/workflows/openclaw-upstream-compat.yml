@@ -91,7 +91,7 @@ jobs:
               `- Run: ${runUrl}`,
               `- Artifact: \`openclaw-upstream-compat\``,
               `- Triage: diff \`versions.md\` against the last passing run's artifact **first**. If no package version moved, this is not upstream drift — look at \`openclaw-agent.stderr\` (turn count, \`failover decision\` lines), \`sessions/\`, and \`qvac-serve.stdout\`/\`qvac-serve.stderr\` for a loop or a wedged server.`,
-              `- Possible causes, in the order worth checking: a version bump visible in \`versions.md\` (upstream \`openclaw\`, or QVAC's own \`@qvac/openclaw-plugin\` / \`@qvac/cli\` / \`@qvac/sdk\`); a wedged \`qvac serve\` that stops answering mid-run; or model nondeterminism — the smoke drives a 0.8b model and already retries once before failing.`,
+              `- Possible causes, in the order worth checking: a version bump visible in \`versions.md\` (upstream \`openclaw\`, or QVAC's own \`@qvac/openclaw-plugin\` / \`@qvac/cli\` / \`@qvac/sdk\`); a wedged \`qvac serve\` that stops answering mid-run; or model nondeterminism — the smoke drives a 0.8b model and retries up to three times before failing.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {
