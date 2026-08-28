@@ -522,6 +522,98 @@ test('a package without prebuilds/ is rejected', () => {
   assert.match(run.output, /No prebuilds directory found/)
 })
 
+// Every mobile addon routes through this one step, so a change here can break an
+// addon nobody thought to test. Read each workflow's REAL addon-npm-name and
+// exercise the step for all of them, rather than spot-checking llm-llamacpp.
+function mobileAddons() {
+  const files = spawnSync(
+    'git',
+    ['ls-files', '.github/workflows/integration-mobile-test-*.yml'],
+    { cwd: root, encoding: 'utf8' },
+  ).stdout.trim().split('\n').filter(Boolean)
+
+  const addons = []
+  for (const relativePath of files) {
+    const source = read(relativePath)
+    const match = source.match(/addon-npm-name:\s*'([^']+)'/)
+    if (!match) continue
+    addons.push({
+      workflow: relativePath.replace(/.*integration-mobile-test-|\.yml$/g, ''),
+      npmName: match[1],
+      skipsPrebuilds: /skip-prebuilds:\s*'true'/.test(source),
+    })
+  }
+  return addons
+}
+
+const MOBILE_ADDONS = mobileAddons()
+
+test('every mobile addon was discovered', () => {
+  assert.ok(MOBILE_ADDONS.length >= 13, `found ${MOBILE_ADDONS.length}`)
+})
+
+for (const addon of MOBILE_ADDONS) {
+  // decoder-audio passes skip-prebuilds:'true', so this step never runs for it.
+  if (addon.skipsPrebuilds) continue
+
+  const bare = addon.npmName.replace(/^@qvac\//, '')
+
+  // A full published spec, except for the one addon whose name is UNSCOPED
+  // (inference-addon-cpp). The action's spec-form detection only recognises
+  // SCOPED full specs (`@*/*`), so an unscoped `name@version` would be
+  // double-prefixed into `name@name@version`. That path is unreachable — that
+  // workflow exposes no `package` input, so its package-version is always empty
+  // — and the spec validator now rejects the malformed result loudly instead of
+  // handing nonsense to npm. Pass a bare version for it, which is the form its
+  // callers could actually produce.
+  const publishedSpec = addon.npmName.startsWith('@')
+    ? `${addon.npmName}@1.2.3`
+    : '1.2.3'
+
+  test(`${addon.workflow}: published spec still resolves`, () => {
+    const run = runStep({
+      addonName: addon.npmName,
+      packageVersion: publishedSpec,
+      force: 'true',
+      npmEnv: { MOCK_NPM_VERSION: '1.2.3' },
+    })
+    assert.equal(run.status, 0, run.output)
+    assert.ok(run.invocations.includes(`registry=${NPM_HOST}`), run.invocations)
+    assert.ok(run.androidPrebuildInstalled)
+  })
+
+  test(`${addon.workflow}: GPR -mono dev spec resolves`, () => {
+    const run = runStep({
+      addonName: addon.npmName,
+      packageVersion: `@tetherto/${bare}-mono@1.2.3-tmp.runid-42`,
+      force: 'true',
+      npmEnv: { MOCK_NPM_VERSION: '1.2.3-tmp.runid-42' },
+    })
+    assert.equal(run.status, 0, run.output)
+    assert.ok(run.invocations.includes(`registry=${GPR_HOST}`), run.invocations)
+    assert.match(run.invocations, /auth=token/)
+    assert.ok(run.androidPrebuildInstalled)
+  })
+
+  test(`${addon.workflow}: empty package-version resolves its own @latest`, () => {
+    const run = runStep({ addonName: addon.npmName })
+    assert.equal(run.status, 0, run.output)
+    assert.match(run.invocations, new RegExp(`spec=${addon.npmName.replace(/[/@.]/g, '\\$&')}@latest`))
+  })
+
+  test(`${addon.workflow}: another addon's package is rejected`, () => {
+    const other = bare === 'llm-llamacpp' ? 'ocr-ggml' : 'llm-llamacpp'
+    const run = runStep({
+      addonName: addon.npmName,
+      packageVersion: `@tetherto/${other}-mono@1.2.3`,
+      force: 'true',
+      npmEnv: { MOCK_NPM_VERSION: '1.2.3' },
+    })
+    assert.notEqual(run.status, 0, `${addon.workflow} accepted ${other}`)
+    assert.match(run.output, /is not a build of/)
+  })
+}
+
 // The dispatch inputs are what people copy from. They advertise the @tetherto
 // form, so the advertised name must be the one publish-library-to-gpr actually
 // publishes (`name-suffix: "-mono"`).

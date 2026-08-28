@@ -249,30 +249,17 @@ runs:
           "")   SPEC="$ADDON_NPM_NAME@latest" ;;
           *)    SPEC="$ADDON_NPM_NAME@$PACKAGE_VERSION" ;;
         esac
-        # Fail closed on anything that is not a plain registry package@version.
-        # `npm pack` also accepts non-registry specs — file:, git/git+ssh:,
-        # https:, github:shorthand, npm: aliases — which would fetch and, for a
-        # git spec, RUN code (prepare scripts) from an arbitrary source. This step
-        # holds a GPR credential in its environment and in the .npmrc below, and
-        # several workflows forward a workflow_dispatch `package`/`package_spec`
-        # value straight through to `package-version`, so the untrusted-ish input
-        # must be constrained here rather than only at the dispatch gate. The
-        # workflow-level gate is prefix-only ("^@qvac/|^@tetherto/"), which every
-        # one of those forms satisfies, so it does not close this.
-        #
-        # Allowed: an optional @qvac//@tetherto scope, an npm name, and an
-        # optional @<version|dist-tag> from a semver-ish charset. No ':', '/',
-        # backslash or whitespace can appear in the selector, which is what rules
-        # out every non-registry form. inference-addon-cpp legitimately uses an
-        # UNSCOPED name, so the scope is optional; when present it must be ours.
+        # Only a plain registry package@version may reach npm. `npm pack` also
+        # accepts file:/git:/https:/github:/npm: specs, and a git spec RUNS
+        # prepare scripts — unacceptable in a step holding a GPR credential,
+        # especially as several workflows forward a dispatch input straight into
+        # `package-version`. The workflow gate is prefix-only, so it lets all of
+        # those through; this is the one that closes it.
+        # Scope is optional because inference-addon-cpp uses an unscoped name.
         if ! printf '%s' "$SPEC" | grep -Eq '^(@(qvac|tetherto)/)?[a-z0-9][a-z0-9._-]*(@[~^]?[A-Za-z0-9][A-Za-z0-9._+-]*)?$'; then
-          echo "::error::Refusing to npm pack '$SPEC'."
-          echo "package-version must resolve to a plain registry spec:"
-          echo "  @qvac/<addon>@<version|dist-tag>          (published release)"
-          echo "  @tetherto/<addon>-mono@<version|dist-tag>  (GitHub Packages dev build)"
-          echo "Non-registry specs (file:, git:, git+ssh:, https:, github:, npm: aliases)"
-          echo "and scopes other than @qvac/@tetherto are rejected: this step runs with a"
-          echo "GitHub Packages credential and a git spec would execute prepare scripts."
+          echo "::error::Refusing to npm pack '$SPEC' — not a plain registry spec."
+          echo "Expected @qvac/<addon>@<version|tag> or @tetherto/<addon>-mono@<version|tag>."
+          echo "file:/git:/https:/github:/npm: specs and other scopes are rejected."
           exit 1
         fi
         # Registry routing. @qvac/* is published to npmjs.org; @tetherto/* is a
@@ -290,13 +277,10 @@ runs:
         rm -rf "$PACK_DIR"
         mkdir -p "$PACK_DIR"
         trap 'rm -rf "$PACK_DIR"' EXIT
-        # npm reads "project" config from its localPrefix — the nearest ANCESTOR
-        # directory containing package.json or node_modules — NOT from cwd. Without
-        # a package.json here, a package.json/node_modules anywhere above
-        # $RUNNER_TEMP silently makes npm ignore the .npmrc below, route @tetherto
-        # back to registry.npmjs.org and 404, while the log still claims GitHub
-        # Packages. Pinning localPrefix to $PACK_DIR makes the resolution
-        # deterministic wherever $RUNNER_TEMP happens to live.
+        # npm reads project config from its localPrefix — the nearest ANCESTOR dir
+        # with a package.json/node_modules — NOT from cwd. Without this file, one
+        # above $RUNNER_TEMP would silently shadow the .npmrc below and send
+        # @tetherto to npmjs. This pins localPrefix here.
         echo '{"name":"qvac-gpr-prebuild-pack","version":"0.0.0","private":true}' \
           > "$PACK_DIR/package.json"
         # Package name without the version. A scoped spec starts with '@', so
@@ -326,24 +310,19 @@ runs:
               *-mono) ;;
               *) echo "::warning::$SPEC_NAME has no '-mono' suffix. GitHub Packages dev builds are published as ${SPEC_NAME}-mono — if this resolve fails, that is why." ;;
             esac
-            # 0600 BEFORE the token is written, and only on this file — a global
-            # umask here would also land on the extracted prebuilds, which get
-            # moved into the addon checkout and bundled into the Device Farm app.
-            # $RUNNER_TEMP survives between jobs on the self-hosted runners and a
-            # SIGKILL past the cancellation grace period skips the EXIT trap, so a
-            # leaked .npmrc must at least be unreadable by other users.
+            # 0600 before the token is written, on this file only: a global umask
+            # would also hit the extracted prebuilds that get bundled into the
+            # app. $RUNNER_TEMP persists between jobs on self-hosted runners and a
+            # SIGKILL skips the EXIT trap, so a leak must not be world-readable.
             : > "$PACK_DIR/.npmrc"
             chmod 600 "$PACK_DIR/.npmrc"
             printf '%s\n' \
               '@tetherto:registry=https://npm.pkg.github.com' \
               "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" \
               > "$PACK_DIR/.npmrc"
-            # Prove the .npmrc is actually IN EFFECT before packing, instead of
-            # assuming it from the scope. Without this, REGISTRY_DESC below is
-            # only a label derived from the spec: if npm ignored the file (the
-            # localPrefix trap above) the run would 404 against npmjs while every
-            # message claimed GitHub Packages. Asking npm itself removes the
-            # guesswork and turns a silent misroute into a clear failure.
+            # Ask npm where @tetherto actually resolves rather than assuming it
+            # from the scope, so a shadowed .npmrc fails loudly here instead of
+            # 404ing later under a "GitHub Packages" label.
             EFFECTIVE_REGISTRY=$(cd "$PACK_DIR" && npm config get @tetherto:registry 2>/dev/null || echo "unknown")
             case "$EFFECTIVE_REGISTRY" in
               https://npm.pkg.github.com*) ;;
@@ -393,16 +372,10 @@ runs:
         PACKED_NAME=$(node -p "require('$PACK_DIR/package/package.json').name" 2>/dev/null || echo "unknown")
         PACKED_VERSION=$(node -p "require('$PACK_DIR/package/package.json').version" 2>/dev/null || echo "unknown")
 
-        # NAME provenance, asserted for every resolve (not just exact-semver
-        # pins). Two distinct things can go wrong and neither is caught by the
-        # version check:
-        #
-        #   1. The registry hands back a package other than the one requested.
-        #   2. The caller pins the WRONG ADDON'S package — the copy/paste hazard
-        #      the docs warn about, e.g. package=@tetherto/embed-llamacpp-mono
-        #      in the llm-llamacpp workflow. That used to exit 0, drop embed's
-        #      .bare into llm-llamacpp/prebuilds/ and continue to a device,
-        #      printing "Verified:" with the wrong name.
+        # NAME provenance, asserted on every resolve. The version check alone
+        # catches neither the registry returning a different package, nor a caller
+        # pinning the WRONG ADDON's package (e.g. embed's spec in the llm
+        # workflow) — which used to exit 0 and put embed's .bare on the device.
         if [ "$PACKED_NAME" != "$SPEC_NAME" ]; then
           echo "ERROR: resolved to $PACKED_NAME but the spec named $SPEC_NAME"
           exit 1
