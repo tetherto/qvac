@@ -11,6 +11,10 @@ const outputPath = process.argv[3] ?? 'minimax-music3-output.wav'
 let modelId: string | undefined
 
 try {
+  const threads = numberFromEnv('AUDIOGEN_THREADS')
+  const maxFrames = numberFromEnv('AUDIOGEN_MAX_FRAMES')
+  const inferenceSteps = numberFromEnv('AUDIOGEN_STEPS')
+
   console.log('▸ Loading MiniMax-Music3 models...')
   modelId = await loadModel({
     modelType: 'audiogen',
@@ -19,7 +23,7 @@ try {
       lmModelSrc: requiredModelPath('AUDIOGEN_MINIMAX_LM_MODEL'),
       synthModelSrc: requiredModelPath('AUDIOGEN_MINIMAX_SYNTH_MODEL'),
       useGPU: process.env['AUDIOGEN_USE_GPU'] === '1',
-      threads: numberFromEnv('AUDIOGEN_THREADS')
+      ...(threads !== undefined && { threads })
     },
     onProgress: function (progress: ModelProgressUpdate) {
       logDownloadProgress(progress)
@@ -32,10 +36,10 @@ try {
     modelId,
     caption,
     lyrics: process.env['AUDIOGEN_LYRICS'] ?? '[Instrumental]',
-    maxFrames: numberFromEnv('AUDIOGEN_MAX_FRAMES') ?? 250,
     seed: numberFromEnv('AUDIOGEN_SEED') ?? 7,
-    inferenceSteps: numberFromEnv('AUDIOGEN_STEPS') ?? 12,
-    cfgScale: numberFromEnv('AUDIOGEN_CFG_SCALE') ?? 1.7
+    cfgScale: numberFromEnv('AUDIOGEN_CFG_SCALE') ?? 1.7,
+    ...(maxFrames !== undefined && { maxFrames }),
+    ...(inferenceSteps !== undefined && { inferenceSteps })
   })
 
   console.log(`▸ requestId: ${run.requestId}`)
@@ -75,7 +79,12 @@ function requiredModelPath(name: string) {
 
 function numberFromEnv(name: string) {
   const value = process.env[name]
-  return value ? Number(value) : undefined
+  if (value === undefined) return undefined
+  if (value.trim() === '') throw new Error(`${name} must not be empty`)
+
+  const number = Number(value)
+  if (!Number.isFinite(number)) throw new Error(`${name} must be a finite number`)
+  return number
 }
 
 function logDownloadProgress(progress: ModelProgressUpdate) {
