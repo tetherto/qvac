@@ -467,11 +467,15 @@ class VlaModel {
         catch { }
         this._nativeLoggerActive = false;
     }
-    async load({ backend = "auto" } = {}) {
-        if (backend !== "auto" && backend !== "cpu") {
+    // QVAC-23763: `backend` now also takes a comma-separated GPU priority list,
+    // e.g. "cuda" or "cuda,vulkan". "auto" and "cpu" keep their meaning. The
+    // family names are validated natively so the list stays in one place; this
+    // check only rejects the shapes that never reach the addon.
+    async load({ backend = "auto", } = {}) {
+        if (typeof backend !== "string" || backend.trim() === "") {
             throw new QvacErrorAddonVla({
                 code: ERR_CODES.INVALID_CONFIG,
-                adds: `backend must be 'auto' or 'cpu' (got: ${String(backend)})`,
+                adds: `backend must be 'auto', 'cpu', or a comma-separated GPU backend list such as 'cuda,vulkan' (got: ${String(backend)})`,
             });
         }
         return this._run(async () => {

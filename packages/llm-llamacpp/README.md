@@ -31,10 +31,25 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
+
+**Note — CUDA (Linux, NVIDIA):**
+On Linux the CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred
+over Vulkan when an NVIDIA device is present. Windows is Vulkan-only because it has no dynamic
+backend loading.
+
+- If the CUDA module or the NVIDIA driver is missing, the device never registers and selection
+  falls through to Vulkan, then CPU. Nothing needs configuring for that.
+- `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
+  environment has the same effect without touching the load config.
+- TurboQuant / PolarQuant KV-cache types (`tbq3_0`, `tbq4_0`, `pq3_0`, `pq4_0`) are **not**
+  supported on CUDA and are rejected during model configuration. Use a Vulkan GPU or CPU for those.
+  Standard quantized types (`q4_0`, `q8_0`, …) work normally.
+- BitNet (TQ1_0 / TQ2_0) and some LoRA finetuning kernels are not yet available on CUDA. Use
+  `backend: "vulkan"` for those workloads until the kernels land.
 
 **Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
 BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:
@@ -177,6 +192,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | n_discarded       | integer                                     | 0                            | Tokens to discard in sliding window context. In batch mode the sliding window is the per-sequence slot (`n_ctx / n_parallel`), so `n_discarded` is clamped to that per-slot window, not the full context; a value `>=` the slot cap is clamped and logs a warning |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl` | —   | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU |
 | split-mode        | `"none"`, `"layer"`, or `"row"`             | `"none"`                     | How to split the model across GPUs ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for layer/row parallelism ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |

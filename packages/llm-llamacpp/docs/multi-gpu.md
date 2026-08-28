@@ -123,11 +123,21 @@ The `device` parameter is always required and is consumed first. When set to `'g
 After backend selection, the split-mode determines the forwarding strategy:
 
 - **`split-mode: 'none'`** (or omitted): the chosen backend name is passed as `--device <backend>`, pinning inference to that single GPU.
-- **`split-mode: 'layer'` or `'row'`**: `--device` is intentionally **not** passed. This lets qvac-fabric discover all available GPUs and distribute the model according to `tensor-split`.
+- **`split-mode: 'layer'` or `'row'`**: `--device` is either omitted, or set to the list of devices belonging to the chosen backend. See below.
 
-### Why `--device` is omitted in split modes
+### What `--device` does in split modes
 
-When a split mode is active, passing `--device` would pin all computation to the single backend that `chooseBackend()` selected, defeating the purpose of multi-GPU. By omitting it, qvac-fabric's own device enumeration distributes layers or rows across all visible GPU backends.
+Passing a single `--device` would pin all computation to the one device `chooseBackend()` selected, defeating the purpose of multi-GPU. So a split mode never does that. What it passes instead depends on how many GPU backends the host registers.
+
+**One GPU backend**, which is every host without the CUDA module: `--device` is not passed at all. qvac-fabric's own device enumeration distributes layers or rows across all visible GPUs.
+
+**More than one GPU backend**, which on Linux means an NVIDIA machine where CUDA and Vulkan both register: `--device` is passed as the comma-separated list of devices from the chosen backend only, for example `cuda0,cuda1`. The same physical card registers once per backend, as both `CUDA0` and `Vulkan0`, so leaving `--device` off would tell qvac-fabric to spread one GPU across two backends. Scoping the list keeps the split across every GPU while counting each one once.
+
+Use the `backend` config key to choose which backend the split runs on, for example `backend: 'vulkan'` on an NVIDIA host.
+
+### `main-gpu` indices
+
+`main-gpu` as an integer indexes qvac-fabric's device list. On a host with more than one GPU backend that list holds every backend's devices, so adding CUDA shifts the indices an existing config was written against.
 
 ## Usage examples
 

@@ -329,11 +329,13 @@ protected:
   static lfn::NormalizationDependencies
   backend(lfn::SelectedBackend selected, bool supportsRowSplit = false) {
     return {
-        .resolveBackend = [selected](
-                              backend_selection::BackendType,
-                              const std::optional<backend_selection::MainGpu>&,
-                              const ModelMetaData&,
-                              bool) { return selected; },
+        .resolveBackend =
+            [selected](
+                backend_selection::BackendType,
+                const std::optional<backend_selection::MainGpu>&,
+                const ModelMetaData&,
+                bool,
+                const std::vector<std::string>&) { return selected; },
         .gpuBackendSupportsRowSplit =
             [supportsRowSplit]() { return supportsRowSplit; }};
   }
@@ -426,7 +428,8 @@ TEST_F(LoadFitNormalizationTest, RowSplitProbeRunsOnlyForSelectedGpuRowMode) {
       [](backend_selection::BackendType,
          const std::optional<backend_selection::MainGpu>&,
          const ModelMetaData&,
-         bool) {
+         bool,
+         const std::vector<std::string>&) {
         return lfn::SelectedBackend{
             .type = backend_selection::GPU, .name = "none"};
       };

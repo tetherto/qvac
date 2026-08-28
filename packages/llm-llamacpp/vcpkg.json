@@ -1,15 +1,21 @@
 {
   "dependencies": [
+    "concurrentqueue",
+    "nlohmann-json",
     {
       "name": "opencl",
       "platform": "android"
     },
     "picojson",
-    "nlohmann-json",
-    "concurrentqueue",
     {
       "name": "qvac-fabric",
-      "version>=": "10297.0.0"
+      "features": [
+        {
+          "name": "cuda-backend",
+          "platform": "linux & x64"
+        }
+      ],
+      "version>=": "10297.0.0#1"
     },
     {
       "name": "qvac-lib-inference-addon-cpp",

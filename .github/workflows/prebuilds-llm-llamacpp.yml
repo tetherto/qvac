@@ -50,5 +50,10 @@ jobs:
       repository: ${{ inputs.repository }}
       artifact-name-prefix: llama-cpp-
       include-vulkan-sdk: true
+      # QVAC-23763: the package's vcpkg.json requests the qvac-fabric
+      # cuda-backend feature on linux, and that feature hard-errors without
+      # nvcc rather than silently skipping, so every linux build needs the
+      # toolkit. Compile-only; the runners need no NVIDIA GPU.
+      include-cuda: true
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
     secrets: inherit

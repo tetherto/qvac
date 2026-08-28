@@ -619,11 +619,17 @@ class VlaModel {
     this._nativeLoggerActive = false;
   }
 
-  async load({ backend = "auto" }: { backend?: "auto" | "cpu" } = {}): Promise<void> {
-    if (backend !== "auto" && backend !== "cpu") {
+  // QVAC-23763: `backend` now also takes a comma-separated GPU priority list,
+  // e.g. "cuda" or "cuda,vulkan". "auto" and "cpu" keep their meaning. The
+  // family names are validated natively so the list stays in one place; this
+  // check only rejects the shapes that never reach the addon.
+  async load({
+    backend = "auto",
+  }: { backend?: VlaModel.VlaBackendSelector } = {}): Promise<void> {
+    if (typeof backend !== "string" || backend.trim() === "") {
       throw new QvacErrorAddonVla({
         code: ERR_CODES.INVALID_CONFIG,
-        adds: `backend must be 'auto' or 'cpu' (got: ${String(backend)})`,
+        adds: `backend must be 'auto', 'cpu', or a comma-separated GPU backend list such as 'cuda,vulkan' (got: ${String(backend)})`,
       });
     }
     return this._run(async () => {
@@ -1023,6 +1029,20 @@ namespace VlaModel {
     | string
     | number
     | { tag?: string; catId?: number; numCameras?: number };
+
+  /**
+   * Which backend `load()` should use. QVAC-23763.
+   *
+   * - `"auto"` (default): pick the best available device, preferring CUDA, then
+   *   HIP/ROCm, then Vulkan or Metal, then CPU.
+   * - `"cpu"`: skip GPU selection entirely.
+   * - a comma-separated GPU family list, e.g. `"cuda"` or `"cuda,vulkan"`:
+   *   try those families in order, then fall back to the normal order if none
+   *   of them has a device on this machine. Accepted family names are cuda,
+   *   vulkan, metal, opencl, hip, rocm and sycl; an unrecognised name is an
+   *   error. A family whose device the Adreno gate rejected stays rejected.
+   */
+  export type VlaBackendSelector = "auto" | "cpu" | (string & {});
 
   export interface VlaRunInput {
     images: Float32Array[];

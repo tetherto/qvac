@@ -141,6 +141,14 @@ jobs:
           ls -lh models/unit-test/
           du -sh models/unit-test/*
 
+      # QVAC-23763: the package's vcpkg.json requests the qvac-fabric
+      # cuda-backend feature on linux, and that feature hard-errors without
+      # nvcc rather than silently skipping, so configure fails here without it.
+      # Compile-only; this runner has no NVIDIA GPU and does not need one.
+      - if: ${{ matrix.platform == 'linux' }}
+        name: Setup CUDA toolkit for the ggml CUDA backend
+        uses: ./.github/actions/setup-cuda
+
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
         run: |

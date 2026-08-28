@@ -1,16 +1,79 @@
 #include "BackendSelection.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <filesystem>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 #include <ggml-backend.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "LoggingMacros.hpp"
 
 namespace vla_backend_selection {
+
+namespace {
+
+// Backend families qvac-fabric can register a GPU device for. "cpu" is absent
+// on purpose: the addon layer strips `backend: 'cpu'` into forceCpu before this
+// is reached, so it is not a GPU family name here. See the header for why this
+// differs from llm-llamacpp and embed-llamacpp.
+constexpr std::array<std::string_view, 7> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl", "hip", "rocm", "sycl"};
+
+// Whether a ggml device backend name belongs to the requested family.
+// Substring rather than equality because ggml suffixes the device index
+// ("CUDA0", "Vulkan1") and OpenCL reports as "GPUOpenCL".
+bool backendNameMatchesFamily(
+    const std::string& lowercasedBackendName, std::string_view family) {
+  return lowercasedBackendName.find(family) != std::string::npos;
+}
+
+} // namespace
+
+std::vector<std::string> parseBackendOverride(const std::string& backendStr) {
+  std::vector<std::string> families;
+  std::string current;
+  auto flush = [&]() {
+    const auto begin = current.find_first_not_of(" \t");
+    if (begin == std::string::npos) {
+      return;
+    }
+    const auto end = current.find_last_not_of(" \t");
+    std::string family = current.substr(begin, end - begin + 1);
+    std::transform(
+        family.begin(), family.end(), family.begin(), [](unsigned char c) {
+          return std::tolower(c);
+        });
+    if (std::find(
+            KNOWN_GPU_BACKEND_FAMILIES.begin(),
+            KNOWN_GPU_BACKEND_FAMILIES.end(),
+            family) == KNOWN_GPU_BACKEND_FAMILIES.end()) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "backend: unknown backend '" + family +
+              "'. Expected 'cpu', or a comma-separated list of "
+              "cuda/vulkan/metal/opencl/hip/rocm/sycl, for example "
+              "'cuda,vulkan'.\n");
+    }
+    if (std::find(families.begin(), families.end(), family) == families.end()) {
+      families.emplace_back(std::move(family));
+    }
+  };
+  for (const char c : backendStr) {
+    if (c == ',') {
+      flush();
+      current.clear();
+    } else {
+      current.push_back(c);
+    }
+  }
+  flush();
+  return families;
+}
 
 void loadBackendsOnce(const std::string& backendsDir) {
   static std::once_flag sFlag;
@@ -52,12 +115,18 @@ int parseAdrenoModel(const std::string& description) {
   return 0;
 }
 
-ggml_backend_dev_t pickBestGpuDevice() {
+ggml_backend_dev_t
+pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
   const size_t n = ggml_backend_dev_count();
   ggml_backend_dev_t fallbackGpu = nullptr;
   ggml_backend_dev_t hipDev = nullptr;
+  ggml_backend_dev_t cudaDev = nullptr;
+  // QVAC-23763: every device that passed the Adreno gate, paired with its
+  // lowercased backend name, so an override can only ever choose among devices
+  // the gate already accepted.
+  std::vector<std::pair<std::string, ggml_backend_dev_t>> accepted;
 
   for (size_t i = 0; i < n; ++i) {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
@@ -102,6 +171,10 @@ ggml_backend_dev_t pickBestGpuDevice() {
         // Prefer OpenCL-on-Adreno-800+ over any other candidate iterated
         // later (in particular Vulkan-on-Adreno, which would otherwise be
         // skipped but only after we'd already accepted nothing).
+        //
+        // QVAC-23763: still an early return, and deliberately so. An Adreno
+        // host has no CUDA device, so there is nothing for a backend override
+        // to choose between here.
         return dev;
       }
       QLOG_IF(
@@ -135,9 +208,50 @@ ggml_backend_dev_t pickBestGpuDevice() {
       hipDev = dev;
     }
 
+    // QVAC-23763: ggml-cuda names its devices "CUDA%d". ggml-hip reports
+    // "ROCm%d" instead, so this cannot collide with the AMD device above.
+    const bool isCuda = backendLower.find("cuda") != std::string::npos;
+    if (isCuda && cudaDev == nullptr) {
+      cudaDev = dev;
+    }
+
+    accepted.emplace_back(backendLower, dev);
+
     if (fallbackGpu == nullptr) {
       fallbackGpu = dev;
     }
+  }
+
+  // QVAC-23763: an explicit override wins over the preference order below, but
+  // only among devices the Adreno gate accepted, so it can never resurrect a
+  // device the gate rejected.
+  if (!backendOverride.empty()) {
+    for (const std::string& family : backendOverride) {
+      for (const auto& [backendLower, dev] : accepted) {
+        if (backendNameMatchesFamily(backendLower, family)) {
+          QLOG_IF(
+              Priority::INFO,
+              "vla_backend_selection: " + family +
+                  " GPU selected by backend override");
+          return dev;
+        }
+      }
+    }
+    QLOG_IF(
+        Priority::WARNING,
+        "vla_backend_selection: backend override matched no accepted device; "
+        "falling back to the default backend order");
+  }
+
+  // CUDA ahead of HIP: see the header. A CUDA device only ever appears on a
+  // discrete NVIDIA GPU, which is the mixed-vendor case the HIP comment above
+  // flags as picking the wrong device. AMD-only hosts are unaffected.
+  if (cudaDev != nullptr) {
+    QLOG_IF(
+        Priority::INFO,
+        "vla_backend_selection: preferring CUDA GPU (HIP and Vulkan are "
+        "fallbacks)");
+    return cudaDev;
   }
 
   if (hipDev != nullptr) {

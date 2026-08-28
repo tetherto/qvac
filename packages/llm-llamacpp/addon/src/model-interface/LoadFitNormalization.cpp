@@ -151,7 +151,7 @@ void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
-    bool isMetal, bool isGpu) {
+    bool isMetal, bool isGpu, bool isCuda) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -360,7 +360,7 @@ void tuneLoadConfigMap(
   // 28448086915: S25/S26 crash on a q4_0 sliding shift; Mali Vulkan passes).
   // Only f32/f16/bf16 are safe on OpenCL. Metal: standard quant types are
   // supported; only TurboQuant/PolarQuant is rejected.
-  if (isOpenCl || isMetal) {
+  if (isOpenCl || isMetal || isCuda) {
     auto isTurboQuantKvType = [](const std::string& v) {
       return v == "tbq3_0" || v == "tbq4_0" || v == "pq3_0" || v == "pq4_0";
     };
@@ -411,6 +411,25 @@ void tuneLoadConfigMap(
                 side,
                 it->second.c_str(),
                 side));
+      }
+      // QVAC-23763: CUDA has no TurboQuant/PolarQuant kernels at all. Unlike
+      // the OpenCL case above, standard quantized types are fine, so only
+      // TBQ/PQ is rejected, exactly like Metal. CPU is deliberately still
+      // allowed: ggml-tbq-quants is a core (CPU) implementation and the
+      // existing OpenCL/Metal messages already point users there.
+      if (isCuda) {
+        if (!isTurboQuantKvType(it->second))
+          return;
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            string_format(
+                "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant "
+                "KV-cache type and is not supported on the CUDA backend. "
+                "Either pick a different cache type "
+                "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or switch "
+                "device to a Vulkan GPU or CPU.\n",
+                side,
+                it->second.c_str()));
       }
       // Metal: only TurboQuant/PolarQuant is unsupported.
       if (!isTurboQuantKvType(it->second))
@@ -474,7 +493,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
               backend_selection::BackendType preferred,
               const std::optional<backend_selection::MainGpu>& mainGpu,
               const ModelMetaData& metadata,
-              bool isFinetuning) {
+              bool isFinetuning,
+              const std::vector<std::string>& backendOverride) {
             std::optional<int> adrenoVersion;
             bool isMaliGpu = false;
             auto [type, name] = backend_selection::chooseBackend(
@@ -484,7 +504,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 &metadata,
                 &adrenoVersion,
                 isFinetuning,
-                &isMaliGpu);
+                &isMaliGpu,
+                backendOverride);
             return SelectedBackend{
                 .type = type,
                 .name = std::move(name),
@@ -492,7 +513,11 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .isMaliGpu = isMaliGpu};
           },
       .gpuBackendSupportsRowSplit =
-          []() { return backend_selection::gpuBackendSupportsRowSplit(); }};
+          []() { return backend_selection::gpuBackendSupportsRowSplit(); },
+      .splitModeDeviceNames =
+          [](const std::string& selectedDeviceName) {
+            return backend_selection::splitModeDeviceNames(selectedDeviceName);
+          }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -664,6 +689,7 @@ NormalizedLoad normalizeLoadForFit(
 
   bool isOpenCl = false;
   bool isMetal = false;
+  bool isCuda = false;
   bool isGpu = false;
   {
     using namespace backend_selection;
@@ -672,8 +698,17 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
+    // QVAC-23763: extracted and erased here like main-gpu, so the passthrough
+    // loop never forwards it to llama.cpp's argument parser.
+    const std::vector<std::string> backendOverride =
+        tryBackendOverrideFromMap(configFilemap);
+
     const SelectedBackend selected = dependencies.resolveBackend(
-        preferredBackend, mainGpu, metadata, finetuneOverrides.active);
+        preferredBackend,
+        mainGpu,
+        metadata,
+        finetuneOverrides.active,
+        backendOverride);
     result.adrenoVersion = selected.adrenoVersion;
 
     // QVAC-21257: optional runtime override for the multimodal projector
@@ -814,9 +849,37 @@ NormalizedLoad normalizeLoadForFit(
     // In multi-GPU split mode we intentionally omit --device so llama.cpp
     // distributes layers/rows across all available GPUs rather than pinning
     // to the single backend that chooseBackend selected.
+    //
+    // QVAC-23763: that stops being safe once one physical card registers under
+    // two backends, so pass the chosen backend's own devices instead. Empty on
+    // a single-registry host, where --device stays omitted as before.
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
+    } else if (
+        selected.type == BackendType::GPU &&
+        dependencies.splitModeDeviceNames) {
+      const std::vector<std::string> splitDevices =
+          dependencies.splitModeDeviceNames(selected.name);
+      if (!splitDevices.empty()) {
+        std::string deviceList;
+        for (const std::string& deviceName : splitDevices) {
+          if (!deviceList.empty()) {
+            deviceList += ',';
+          }
+          deviceList += deviceName;
+        }
+        QLOG_IF(
+            Priority::INFO,
+            string_format(
+                "[LlamaModel] split-mode: restricting --device to the %s "
+                "backend's own devices (%s); this host registers GPUs under "
+                "more than one backend\n",
+                selected.name.c_str(),
+                deviceList.c_str()));
+        configVector.emplace_back("--device");
+        configVector.emplace_back(std::move(deviceList));
+      }
     }
     configFilemap.erase("device");
 
@@ -824,6 +887,7 @@ NormalizedLoad normalizeLoadForFit(
     isOpenCl = isGpu && selected.name.find("opencl") != std::string::npos;
     isMetal = isGpu && (selected.name.find("metal") != std::string::npos ||
                         selected.name.rfind("mtl", 0) == 0);
+    isCuda = isGpu && selected.name.find("cuda") != std::string::npos;
   }
 
   tuneLoadConfigMap(
@@ -833,7 +897,8 @@ NormalizedLoad normalizeLoadForFit(
       finetuneOverrides,
       isOpenCl,
       isMetal,
-      isGpu);
+      isGpu,
+      isCuda);
 
   // Handle both reverse-prompt variants
   for (const std::string& key : {"reverse-prompt", "reverse_prompt"}) {

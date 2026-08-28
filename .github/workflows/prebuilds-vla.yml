@@ -52,4 +52,12 @@ jobs:
       # Cross-compile the ROCm/HIP backend (gfx1151) into the linux-x64 prebuild.
       # No AMD GPU needed on the runner; fail-safe if ROCm install/feature is absent.
       include-rocm: true
+      # QVAC-23763: the package's vcpkg.json requests the qvac-fabric
+      # cuda-backend feature on linux, and that feature hard-errors without
+      # nvcc rather than silently skipping, so every linux build needs the
+      # toolkit. Compile-only; the runners need no NVIDIA GPU. Unlike
+      # include-rocm this also covers linux-arm64, because the Jetson Orin is a
+      # target. setup-cuda MERGES VCPKG_KEEP_ENV_VARS, so it composes with the
+      # ROCm setup above rather than clobbering it.
+      include-cuda: true
     secrets: inherit

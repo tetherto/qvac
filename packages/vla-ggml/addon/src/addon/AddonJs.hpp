@@ -17,6 +17,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "../utils/BackendSelection.hpp"
 #include "../utils/LoggingMacros.hpp"
 #include "AddonCpp.hpp"
 
@@ -273,7 +274,11 @@ inline js_value_t* hparamsToJs(js_env_t* env, const VlaHparamsGeneric& hp) {
 // it as a managed instance. `jsHandle` is the JS-side wrapper object that
 // the framework passes back as the first argument of every outputCb call.
 // `backend === 'cpu'` forces the CPU backend even on a runner with a usable
-// GPU; any other value lets the addon pick the best device.
+// GPU. QVAC-23763: any other non-empty value is now a comma-separated GPU
+// backend priority list, e.g. 'cuda' or 'cuda,vulkan', and an unrecognised
+// name is rejected. Empty still means "pick the best device". Before
+// QVAC-23763 every non-'cpu' value meant "pick the best device", so a typo was
+// silently ignored; it now throws InvalidArgument.
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
@@ -286,9 +291,16 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   // GGUF's default. index.js always sets them (empty when unconfigured).
   const VlaEmbodimentRequest embodiment = detail::parseEmbodimentRequest(args);
   const bool forceCpu = (backend == "cpu");
+  // 'cpu' is handled by forceCpu above and is not a GPU family name, so it
+  // never reaches parseBackendOverride. 'auto' is the documented default from
+  // index.js and an empty value is an unset key; both mean no preference.
+  const bool noPreference = forceCpu || backend.empty() || backend == "auto";
+  const std::vector<std::string> backendOverride =
+      noPreference ? std::vector<std::string>{}
+                   : vla_backend_selection::parseBackendOverride(backend);
 
-  auto model =
-      std::make_unique<VlaModel>(ggufPath, forceCpu, backendsDir, embodiment);
+  auto model = std::make_unique<VlaModel>(
+      ggufPath, forceCpu, backendsDir, embodiment, backendOverride);
 
   // VLA emits a single Float32Array (the action chunk) per job; runtime
   // stats and errors are added to the handler stack by OutputCallBackJs.
