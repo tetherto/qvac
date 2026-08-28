@@ -5,7 +5,7 @@
 //   - SDK's dependencies.p == inference's peerDependencies.p.
 // That is, inference's devDependencies and SDK's dependencies match inference's peerDependencies.
 
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -19,6 +19,14 @@ interface Manifest {
 
 const sdkDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const inferenceDir = resolve(sdkDir, '..', 'inference')
+
+// The SDK e2e build checks out packages/sdk on its own and installs inference
+// as a resolved package, so there is no sibling manifest to compare against.
+// The full-checkout run in pr-checks-sdk-pod is what enforces this.
+if (!existsSync(join(inferenceDir, 'package.json'))) {
+  console.log('Skipping: packages/inference is not present in this checkout.')
+  process.exit(0)
+}
 
 function readManifest(dir: string) {
   return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as Manifest
