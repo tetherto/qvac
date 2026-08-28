@@ -1,0 +1,89 @@
+name: "Setup CUDA toolkit for nvcc compile"
+description: >-
+  Assembles a pinned CUDA toolkit from NVIDIA's redistributable component
+  archives on a linux-x64 runner and exports
+  CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS/LD_LIBRARY_PATH so a
+  consumer's speech-cpp cuda feature can compile the ggml CUDA backend.
+  Component tarballs are used instead of the runfile installer because the
+  installer hardcodes /tmp/cuda-installer.log and segfaults for every runner
+  user on a shared host after the first user's install ("Log file not open.").
+  No NVIDIA GPU is required on the runner (compile-only). The CUDA backend
+  ships as a runtime-loaded module: the prebuild loads on any host, and CUDA
+  engages only where the NVIDIA driver and CUDA runtime libraries are present.
+
+inputs:
+  cuda-version:
+    description: >-
+      CUDA release the pinned component list below belongs to. Informational
+      and part of the cache key; changing the components means updating the
+      COMPONENTS list in this action, from
+      https://developer.download.nvidia.com/compute/cuda/redist/redistrib_<version>.json.
+    required: false
+    default: "13.2.0"
+
+runs:
+  using: composite
+  steps:
+    # Cache the assembled toolkit so the component archives are fetched and
+    # unpacked once per component-list revision. The key includes the pinned
+    # list's hash via the action file itself changing the runner workspace,
+    # so bump cache-suffix when editing COMPONENTS.
+    - name: Cache CUDA toolkit
+      id: cache-cuda
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/cuda
+        key: cuda-redist-${{ inputs.cuda-version }}-r1
+
+    - name: Download + verify + assemble CUDA toolkit
+      if: steps.cache-cuda.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        # Pinned against redistrib_13.2.0.json (supply-chain pin: a silent
+        # re-upload fails the sha256 check). nvcc + libnvvm (cicc lives
+        # there in the 13.x split) + crt + cudart + cccl + culibos + cublas
+        # is the minimal set that compiles and links the ggml CUDA backend;
+        # the runtime-loaded module resolves cudart and cuBLAS from the
+        # host at run time.
+        COMPONENTS="\
+        cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.2.51-archive.tar.xz 706b996fefc59dc8d64d317fdf48d0aa84c4ae004eff43009dd918f40c5cc66a
+        libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.2.51-archive.tar.xz e013fce38130d2337ea695aadc5ddd5dcfb78f9107903d72492b9819539749bb
+        cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.2.51-archive.tar.xz fbc31fed55b7255591f3a19f575ca078827f5e6757d317d009f7ec1e69fcde4b
+        cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.2.51-archive.tar.xz 539edc1056e44d319f2112e9971c6415d78d4dde04b3f6ffbd20ec808e718526
+        cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.2.27-archive.tar.xz 56e1bafb29faa87375b0484814870046530b88c0a421909096892f027ec1927b
+        cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.2.51-archive.tar.xz dece3cdb7954d276e07eb23bee882a24627f431654cdeeef2bcee2d22669d93c
+        libcublas/linux-x86_64/libcublas-linux-x86_64-13.3.0.5-archive.tar.xz 9f3c23d55b098d9159c435db59f228df79493152a778d4d367e7d60470d8c64b"
+
+        prefix="$RUNNER_TEMP/cuda/toolkit"
+        mkdir -p "$prefix"
+        echo "$COMPONENTS" | while read -r rel sha; do
+          [ -z "$rel" ] && continue
+          url="https://developer.download.nvidia.com/compute/cuda/redist/$rel"
+          out="$RUNNER_TEMP/$(basename "$rel")"
+          echo "Downloading $url"
+          curl -fsSL --retry 3 "$url" -o "$out"
+          echo "$sha  $out" | sha256sum -c -
+          tar -xJf "$out" --strip-components=1 -C "$prefix"
+          rm -f "$out"
+        done
+        # Redist archives ship lib/, not lib64/; some consumers look for
+        # lib64, so provide it as an alias.
+        if [ -d "$prefix/lib" ] && [ ! -e "$prefix/lib64" ]; then
+          ln -s lib "$prefix/lib64"
+        fi
+
+    - name: Export CUDA environment
+      shell: bash
+      run: |
+        nvcc="$RUNNER_TEMP/cuda/toolkit/bin/nvcc"
+        if [ ! -x "$nvcc" ]; then echo "::error::nvcc not found after assembly"; exit 1; fi
+        cuda_prefix="$RUNNER_TEMP/cuda/toolkit"
+        echo "CUDA prefix: $cuda_prefix"
+        echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
+        echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
+        echo "$cuda_prefix/bin" >> "$GITHUB_PATH"
+        # vcpkg scrubs the environment, so the port's enable_language(CUDA)
+        # only sees the toolkit through an explicit keep-list. Append rather
+        # than assign so a sibling setup action's keep-list survives.
+        echo "VCPKG_KEEP_ENV_VARS=${VCPKG_KEEP_ENV_VARS:+$VCPKG_KEEP_ENV_VARS;}CUDA_PATH;CUDACXX" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$cuda_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"

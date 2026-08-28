@@ -20,7 +20,8 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   finetune: true,
   loadModel: true,
   downloadAsset: true,
-  rag: true
+  rag: true,
+  world: true
 }
 
 test('broad-cancel sugar accepts every RequestKind', (t) => {

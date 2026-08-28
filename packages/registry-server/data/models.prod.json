@@ -8470,7 +8470,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
     "quantization": "f16",
     "params": "600M",
@@ -8481,7 +8481,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
     "quantization": "q4_0",
     "params": "600M",
@@ -8492,7 +8492,7 @@
   {
     "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
-    "link": "https://huggingface.co/ai4bharat/indic-conformer",
+    "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
     "quantization": "q8_0",
     "params": "600M",

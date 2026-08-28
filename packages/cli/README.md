@@ -9,6 +9,7 @@ This package is published to npm as **`@qvac/cli`** and lives in the QVAC monore
 - [Installation](#installation)
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
+  - [`configure`](#configure)
   - [`bundle sdk`](#bundle-sdk)
   - [`verify deps`](#verify-deps)
   - [`verify bundle`](#verify-bundle)
@@ -70,11 +71,12 @@ qvac doctor [options]
 
 **Options:**
 
-| Flag            | Description                               |
-| --------------- | ----------------------------------------- |
-| `--json`        | Output the report as JSON.                |
-| `-q, --quiet`   | Suppress stdout — only set the exit code. |
-| `-v, --verbose` | Detailed output.                          |
+| Flag            | Description                                                   |
+| --------------- | ------------------------------------------------------------- |
+| `--deep`        | Start the installed SDK worker and verify its heartbeat.      |
+| `--json`        | Output the report as JSON.                                    |
+| `-q, --quiet`   | Suppress stdout — only set the exit code.                     |
+| `-v, --verbose` | Include bounded worker stdout/stderr when a deep check fails. |
 
 **What it checks:**
 
@@ -91,6 +93,11 @@ qvac doctor [options]
   Bun.
 - **Project** — whether `@qvac/sdk` is resolvable from the current
   working directory (works for hoisted monorepo installs too).
+- **SDK runtime (`--deep`)** — starts the installed SDK in an isolated Node.js
+  process, performs a worker heartbeat, and closes it. The probe is bounded to
+  45 seconds and classifies common Bare, native library, CPU instruction,
+  Vulkan, and worker-handshake failures. When `--deep` is requested, a missing
+  SDK, failed heartbeat, or failed cleanup causes exit code `1`.
 
 See [`system-requirements.md`](./system-requirements.md) for the full list of
 thresholds and rationale.
@@ -101,12 +108,46 @@ thresholds and rationale.
 # Human-readable report
 qvac doctor
 
+# Exercise SDK worker startup without loading a model
+qvac doctor --deep
+
 # JSON for CI / scripts
 qvac doctor --json
 
 # Fail-fast in a script (exit 1 on any required check)
 qvac doctor --quiet || exit 1
 ```
+
+### `configure`
+
+Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
+straight to `qvac serve openai`. It searches the models the SDK provides — by name or by
+capability (role, addon, quantization) — and on a wide terminal previews, for the
+highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
+its alias, set config parameters (guided by the SDK's config schema — each field shows its
+type and description and is validated on entry, for model types the SDK exposes a schema for;
+currently llama.cpp chat + embedding), and (with `$EDITOR`) tweak the entry and review the
+result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `Ctrl+C`
+aborts without writing. Existing entries are preserved; re-running is idempotent per model.
+
+```bash
+qvac configure                 # interactive
+qvac configure --yes           # non-interactive: write a chat + transcription starter
+qvac configure --modality chat --modality image
+```
+
+| Flag                  | Description                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only.                                            |
+| `-y, --yes`           | Non-interactive: write a sensible default starter (chat + transcription).                                   |
+| `--modality <name>`   | Non-interactive: add a modality (repeatable) — `chat` / `embedding` / `transcription` / `speech` / `image`. |
+| `--force`             | Re-add a model that is already configured (overwrites its existing entry in place).                         |
+| `-q, --quiet`         | Suppress output.                                                                                            |
+
+Single-artifact modalities (chat, embedding, transcription, image) are runnable as written.
+Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` placeholder —
+set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
+non-TTY use `--yes` / `--modality`.
 
 ### `bundle sdk`
 

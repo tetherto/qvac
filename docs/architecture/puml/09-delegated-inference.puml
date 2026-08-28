@@ -1,29 +1,19 @@
 @startuml
 !include <C4/C4_Component>
+HIDE_STEREOTYPE()
 
-title QVAC SDK - Delegated Inference Components
+title QVAC SDK - Delegated Inference
 
-Container_Boundary(provider, "Provider Side") {
-    Component(start_provider, "startQVACProvider", "API", "Starts provider with optional firewall and returns publicKey")
-    Component(dht_p, "Provider DHT", "Hyperswarm", "Bootstraps, binds keyPair with swarm.listen()")
-    Component(rpc_proxy, "RPC Server (proxy)", "Handler", "Forwards requests to local model")
-    Component(local_model, "Local Model", "Native Addon", "Executes inference")
+Container_Boundary(provider, "Provider") {
+    Component(listener, "DHT + RPC listener", "Hyperswarm", "Listens on a keypair and serves local inference")
+    Component(local_model, "Local Models", "Native Addon", "Executes inference")
 }
 
-Container_Boundary(consumer, "Consumer Side") {
-    Component(load_model, "loadModel(delegate:{ providerPublicKey })", "API", "Connects to remote provider public key")
-    Component(dht_c, "Consumer DHT", "Hyperswarm", "dht.connect(providerPublicKey)")
-    Component(rpc_delegated, "RPC Client (delegated)", "Client", "Sends requests to provider")
+Container_Boundary(consumer, "Consumer") {
+    Component(dialer, "DHT + RPC client", "Hyperswarm", "Connects by provider public key")
 }
 
-Rel(start_provider, dht_p, "Starts listening")
-Rel(dht_p, rpc_proxy, "Receives DHT connections")
-Rel(rpc_proxy, local_model, "Invokes")
-
-Rel(load_model, dht_c, "Dials public key")
-Rel(dht_c, rpc_delegated, "Establishes connection")
-
-BiRel(dht_p, dht_c, "Direct DHT connection by provider public key")
-BiRel(rpc_proxy, rpc_delegated, "Encrypted P2P Stream")
+Rel(listener, local_model, "Invokes")
+BiRel(dialer, listener, "Delegated inference", "Noise / Hyperswarm")
 
 @enduml

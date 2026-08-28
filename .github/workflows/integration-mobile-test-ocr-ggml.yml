@@ -155,7 +155,9 @@ jobs:
     runs-on: ${{ matrix.runner }}
     environment: release
     timeout-minutes: 120
-    continue-on-error: true
+    # No continue-on-error: a Device Farm test failure must fail this run on
+    # every trigger (workflow_dispatch, workflow_call, schedule). Re-adding it
+    # silently turns failed runs green.
     permissions:
       contents: read
       packages: read

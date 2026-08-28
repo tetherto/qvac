@@ -65,11 +65,17 @@ ${HOST_LINE}
 phases:
   install:
     commands:
-      - export NVM_DIR=\$HOME/.nvm
-      - . \$NVM_DIR/nvm.sh 2>/dev/null || true
-      - nvm install 18 2>/dev/null || true
-      - nvm use 18 2>/dev/null || true
-      - node --version || echo "Using system node"
+      # Device Farm ships Node + Appium via devicefarm-cli on both the
+      # amazon_linux_2 (Android) and macos_sequoia (iOS) hosts. The addon
+      # e2e harness pins the Appium 3 stack (appium-xcuitest-driver@12,
+      # appium-uiautomator2-driver@8, @appium/support@7), which requires
+      # Node ^20.19 || ^22.12 || >=24 and refuses to load under the host's
+      # default Appium 2.x runtime. Select Node 22 + Appium 3 so the host
+      # runtime matches the drivers the harness installs.
+      - devicefarm-cli use node 22
+      - devicefarm-cli use appium 3
+      - node --version
+      - appium --version
 
   pre_test:
     commands:

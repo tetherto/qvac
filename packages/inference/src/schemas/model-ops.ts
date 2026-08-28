@@ -45,8 +45,7 @@ export const unloadModelResponseSchema = z.object({
   type: z.literal('unloadModel'),
   success: z.boolean(),
   error: z.string().optional(),
-  hasActiveModels: z.boolean().optional(),
-  hasActiveProviders: z.boolean().optional()
+  hasActiveModels: z.boolean().optional()
 })
 
 export type UnloadModelParams = z.input<typeof unloadModelParamsSchema>
