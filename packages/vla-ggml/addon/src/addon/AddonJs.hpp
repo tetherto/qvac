@@ -1,10 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -17,12 +20,34 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "../utils/BackendSelection.hpp"
 #include "../utils/LoggingMacros.hpp"
 #include "AddonCpp.hpp"
 
 namespace qvac_lib_infer_vla_ggml {
 
 namespace detail {
+
+// Trim and lowercase the `backend` selector. 'cpu' and 'auto' are compared
+// exactly by createInstance while parseBackendOverride lowercases each family
+// first, so without this 'CPU' misses forceCpu and is then rejected as an
+// unknown GPU family, and ' auto ' is parsed as a family list.
+inline std::string normaliseBackendSelector(std::string backend) {
+  // Same trim set as parseBackendOverride, \r included, so a CRLF-sourced
+  // value is not rejected as an unknown family.
+  constexpr std::string_view kTrim = " \t\r\n\v\f";
+  const auto begin = backend.find_first_not_of(kTrim);
+  if (begin == std::string::npos) {
+    return {};
+  }
+  const auto end = backend.find_last_not_of(kTrim);
+  backend = backend.substr(begin, end - begin + 1);
+  std::transform(
+      backend.begin(), backend.end(), backend.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+  return backend;
+}
 
 // Resolve the AddonJs instance handle (arg 0) to the underlying VlaModel.
 // All VLA-specific accessors (hparams, backendName) need this because the
@@ -273,22 +298,34 @@ inline js_value_t* hparamsToJs(js_env_t* env, const VlaHparamsGeneric& hp) {
 // it as a managed instance. `jsHandle` is the JS-side wrapper object that
 // the framework passes back as the first argument of every outputCb call.
 // `backend === 'cpu'` forces the CPU backend even on a runner with a usable
-// GPU; any other value lets the addon pick the best device.
+// GPU. QVAC-23763: any other non-empty value is now a comma-separated GPU
+// backend priority list, e.g. 'cuda' or 'cuda,vulkan', and an unrecognised
+// name is rejected. Empty still means "pick the best device". Before
+// QVAC-23763 every non-'cpu' value meant "pick the best device", so a typo was
+// silently ignored; it now throws InvalidArgument.
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
   JsArgsParser args(env, info);
 
   const std::string ggufPath = args.getMapEntry(1, "ggufPath");
-  const std::string backend = args.getMapEntry(1, "backend");
+  const std::string backend =
+      detail::normaliseBackendSelector(args.getMapEntry(1, "backend"));
   const std::string backendsDir = args.getMapEntry(1, "backendsDir");
   // Embodiment selector for multi-embodiment GR00T GGUFs; all keys empty = the
   // GGUF's default. index.js always sets them (empty when unconfigured).
   const VlaEmbodimentRequest embodiment = detail::parseEmbodimentRequest(args);
   const bool forceCpu = (backend == "cpu");
+  // 'cpu' is handled by forceCpu above and is not a GPU family name, so it
+  // never reaches parseBackendOverride. 'auto' is the documented default from
+  // index.js and an empty value is an unset key; both mean no preference.
+  const bool noPreference = forceCpu || backend.empty() || backend == "auto";
+  const std::vector<std::string> backendOverride =
+      noPreference ? std::vector<std::string>{}
+                   : vla_backend_selection::parseBackendOverride(backend);
 
-  auto model =
-      std::make_unique<VlaModel>(ggufPath, forceCpu, backendsDir, embodiment);
+  auto model = std::make_unique<VlaModel>(
+      ggufPath, forceCpu, backendsDir, embodiment, backendOverride);
 
   // VLA emits a single Float32Array (the action chunk) per job; runtime
   // stats and errors are added to the handler stack by OutputCallBackJs.

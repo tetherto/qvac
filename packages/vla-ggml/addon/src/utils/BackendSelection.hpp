@@ -1,10 +1,26 @@
 #pragma once
 
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include <ggml-backend.h>
 
 namespace vla_backend_selection {
+
+// Parse the GPU half of the `backend` config value into a lowercased priority
+// list, e.g. "CUDA,Vulkan" -> {"cuda", "vulkan"}. QVAC-23763.
+//
+// "cpu" is NOT a family name here, unlike in llm-llamacpp and embed-llamacpp:
+// those have a separate `device` key, vla does not, so the addon layer strips
+// `backend: 'cpu'` into forceCpu before this is reached.
+//
+// An unknown NAME throws; a known name with no device attached is legitimate,
+// e.g. cuda on a Vulkan-only host, and falls through to the next entry.
+//
+// BEHAVIOUR CHANGE: any value other than "cpu" used to mean "pick the best
+// device", so a typo went unnoticed. It now throws.
+std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 
 // Extract the Adreno model number from a device description string.
 // Returns 0 for non-Adreno devices.
@@ -13,6 +29,11 @@ namespace vla_backend_selection {
 //   "Adreno 740"      -> 740
 //   "Mali-G715"       -> 0
 int parseAdrenoModel(const std::string& description);
+
+/// @brief Whether a lowercased ggml device backend name belongs to a family.
+/// Exposed for tests: the Metal spelling is the part worth pinning.
+bool backendNameMatchesFamily(
+    const std::string& lowercasedBackendName, std::string_view family);
 
 // Discover and register ggml backend plugins (Vulkan / Metal / OpenCL / …).
 // Thread-safe (std::call_once); safe to call from multiple model constructors.
@@ -37,8 +58,20 @@ void loadBackendsOnce(const std::string& backendsDir);
 //   Non-Adreno GPU         -> accept (Vulkan on desktop / Mali, Metal on
 //                                Apple)
 //
+// Among accepted devices the order is CUDA, then HIP/ROCm, then anything else.
+// QVAC-23763 puts CUDA ahead of HIP deliberately: the HIP preference below
+// assumes a single AMD-GPU target and its own comment flags the mixed-vendor
+// host as where it picks the wrong device. CUDA only appears on a discrete
+// NVIDIA GPU, so preferring it resolves that case. AMD-only hosts still get
+// HIP, since no CUDA device is present.
+//
+// `backendOverride`, when non-empty, restricts the choice to those families in
+// priority order, then falls through to the normal order if none match. The
+// Adreno gate above still applies and an override cannot bypass it.
+//
 // Returns nullptr if no acceptable GPU exists; the caller should then init
 // the CPU backend.
-ggml_backend_dev_t pickBestGpuDevice();
+ggml_backend_dev_t
+pickBestGpuDevice(const std::vector<std::string>& backendOverride = {});
 
 } // namespace vla_backend_selection

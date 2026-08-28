@@ -199,6 +199,21 @@ Non-Adreno GPUs are accepted. On Adreno hardware:
 When no acceptable GPU is found the addon falls back to CPU; to force CPU
 regardless, pass `backend: 'cpu'` to `load()`.
 
+Among accepted devices the order is CUDA, then HIP/ROCm, then anything else
+(Vulkan or Metal). CUDA is available on Linux only, where it ships as a
+dynamically loaded module alongside Vulkan; Windows has no dynamic backend
+loading. If the CUDA module or the NVIDIA driver is missing, the device never
+registers and selection simply continues down that order.
+
+`backend` also takes a comma-separated GPU priority list, so
+`backend: 'vulkan'` forces Vulkan on an NVIDIA machine and
+`backend: 'cuda,vulkan'` states the default order explicitly. Accepted names
+are `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm` and `sycl`. A name whose
+device is absent is skipped and selection continues; an unrecognised name is
+rejected. The Adreno rules above still apply, so an override can never
+resurrect a device they rejected. Setting `CUDA_VISIBLE_DEVICES=-1` in the
+environment is an equivalent way to force Vulkan without touching the config.
+
 ## Built With
 
 - [qvac-lib-inference-addon-cpp](https://github.com/tetherto/qvac-lib-inference-addon-cpp) — foundational Bare-addon framework.

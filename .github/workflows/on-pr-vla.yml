@@ -134,6 +134,9 @@ jobs:
       # vla pulls qvac-fabric[hip-backend]; ggml-config find_dependency(hip)
       # needs ROCm on the lint runner at configure time.
       include-rocm-sdk: true
+      # QVAC-23763: it now also pulls cuda-backend on linux, which hard-errors
+      # without nvcc, and cpp-lint configures the package on a linux runner.
+      include-cuda-sdk: true
 
   cpp-tests:
     permissions:
