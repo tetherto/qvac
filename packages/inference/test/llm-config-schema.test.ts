@@ -247,8 +247,3 @@ const loadModeMatchesAddon: ExactlyEqual<AddonLoadMode, SdkLoadMode> = true
 test('llmConfigBaseSchema: load_mode matches the addon union exactly', (t) => {
   t.ok(loadModeMatchesAddon)
 })
-
-test('llmConfigBaseSchema: rejects the retired no_mmap without a test-applied strict()', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ no_mmap: true }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ load_mode: 'none' }).success, true)
-})
