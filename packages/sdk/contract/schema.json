@@ -8,6 +8,9 @@
       "description": "Any request accepted by the server, in wire (pre-parse) shape.",
       "anyOf": [
         {
+          "$ref": "#/$defs/assessModelFit.request"
+        },
+        {
           "$ref": "#/$defs/audioGenStream.request"
         },
         {
@@ -130,6 +133,9 @@
       "title": "AnyResponse",
       "description": "Any response emitted by the server, including progress updates and error envelopes.",
       "anyOf": [
+        {
+          "$ref": "#/$defs/assessModelFit.response"
+        },
         {
           "$ref": "#/$defs/audioGenStream.response"
         },
@@ -260,6 +266,257 @@
           "$ref": "#/$defs/worldStepStream.response"
         }
       ]
+    },
+    "assessModelFit.request": {
+      "title": "AssessModelFitRequest",
+      "type": "object",
+      "properties": {
+        "models": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Catalog name of the model entry."
+                  },
+                  "sha256Checksum": {
+                    "type": "string",
+                    "description": "Expected SHA-256 checksum of the model file."
+                  }
+                },
+                "required": ["name", "sha256Checksum"],
+                "description": "Catalog model constant to assess.",
+                "title": "AssessModelFitRequestModelsItemModel"
+              },
+              "artifacts": {
+                "description": "Additional catalog constants this load also requires.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Catalog name of the model entry."
+                    },
+                    "sha256Checksum": {
+                      "type": "string",
+                      "description": "Expected SHA-256 checksum of the model file."
+                    }
+                  },
+                  "required": ["name", "sha256Checksum"],
+                  "title": "AssessModelFitRequestModelsItemArtifactsItem"
+                }
+              },
+              "workload": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "llm"
+                      },
+                      "contextTokens": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "Context window the caller intends to use, in tokens."
+                      }
+                    },
+                    "required": ["kind", "contextTokens"],
+                    "description": "Token-context workload for llama.cpp completion and embedding models.",
+                    "title": "AssessModelFitRequestModelsItemWorkloadLlm"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "audio"
+                      },
+                      "windowMs": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Audio window handed to the engine per call, in milliseconds."
+                      },
+                      "streaming": {
+                        "type": "boolean",
+                        "description": "Whether the caller streams continuously."
+                      },
+                      "batch": {
+                        "description": "Concurrent windows per call.",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": ["kind", "windowMs", "streaming"],
+                    "description": "Audio-window workload for speech-to-text models.",
+                    "title": "AssessModelFitRequestModelsItemWorkloadAudio"
+                  }
+                ],
+                "description": "Workload the caller intends to run."
+              }
+            },
+            "required": ["model", "workload"],
+            "title": "AssessModelFitRequestModelsItem"
+          },
+          "description": "Candidates to assess together under one memory budget."
+        },
+        "execution": {
+          "default": "sequential",
+          "description": "Declared co-residency assumption for aggregation. Not a scheduling instruction: the SDK does not serialize, reserve, or enforce anything.",
+          "type": "string",
+          "enum": ["sequential", "concurrent"],
+          "title": "AssessModelFitRequestExecution"
+        },
+        "policy": {
+          "default": "interactive-v1",
+          "description": "Headroom policy. `interactive-v1` leaves the larger of 2 GiB or 15% of total RAM on desktop, 1 GiB or 20% on mobile.",
+          "type": "string",
+          "const": "interactive-v1"
+        },
+        "type": {
+          "type": "string",
+          "const": "assessModelFit"
+        }
+      },
+      "required": ["models", "type"]
+    },
+    "assessModelFit.response": {
+      "title": "AssessModelFitResponse",
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": ["likely-fits", "likely-too-large", "unknown"],
+          "description": "Combined verdict across every candidate.",
+          "title": "AssessModelFitResponseVerdict"
+        },
+        "basis": {
+          "type": "string",
+          "const": "system-memory",
+          "description": "The only evidence used. GPU/VRAM metrics are deliberately excluded — they are `unverified`-scoped by design."
+        },
+        "execution": {
+          "type": "string",
+          "enum": ["sequential", "concurrent"],
+          "description": "The declared execution mode this result assumed.",
+          "title": "AssessModelFitResponseExecution"
+        },
+        "budget": {
+          "description": "Absent when memory evidence was unusable.",
+          "type": "object",
+          "properties": {
+            "totalBytes": {
+              "type": "number",
+              "description": "Total system RAM reported by the sample."
+            },
+            "usedBytes": {
+              "type": "number",
+              "description": "System RAM in use at sample time."
+            },
+            "reservedBytes": {
+              "type": "number",
+              "description": "Headroom withheld by the policy."
+            },
+            "availableAfterReserveBytes": {
+              "type": "number",
+              "description": "Budget the estimate is compared against: total − used − reserved."
+            }
+          },
+          "required": ["totalBytes", "usedBytes", "reservedBytes", "availableAfterReserveBytes"],
+          "additionalProperties": false,
+          "title": "AssessModelFitResponseBudget"
+        },
+        "estimate": {
+          "description": "Absent when the combined verdict is `unknown`.",
+          "type": "object",
+          "properties": {
+            "lowerBoundBytes": {
+              "type": "number"
+            },
+            "upperBoundBytes": {
+              "type": "number"
+            }
+          },
+          "required": ["lowerBoundBytes", "upperBoundBytes"],
+          "additionalProperties": false,
+          "title": "AssessModelFitResponseEstimate"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Catalog name of the assessed model."
+              },
+              "verdict": {
+                "type": "string",
+                "enum": ["likely-fits", "likely-too-large", "unknown"],
+                "title": "AssessModelFitResponseModelsItemVerdict"
+              },
+              "estimate": {
+                "description": "Absent when this model assessed as `unknown`.",
+                "type": "object",
+                "properties": {
+                  "lowerBoundBytes": {
+                    "type": "number"
+                  },
+                  "upperBoundBytes": {
+                    "type": "number"
+                  }
+                },
+                "required": ["lowerBoundBytes", "upperBoundBytes"],
+                "additionalProperties": false,
+                "title": "AssessModelFitResponseModelsItemEstimate"
+              },
+              "estimatorVersion": {
+                "description": "Estimator that produced the bounds, e.g. `llm-v1`.",
+                "type": "string"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Why this model got this verdict."
+              }
+            },
+            "required": ["name", "verdict", "reasons"],
+            "additionalProperties": false,
+            "title": "AssessModelFitResponseModelsItem"
+          },
+          "description": "Per-candidate verdicts, in input order."
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Why the combined verdict came out this way."
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Everything the result took for granted, including estimator defaults."
+        },
+        "type": {
+          "type": "string",
+          "const": "assessModelFit"
+        }
+      },
+      "required": ["verdict", "basis", "execution", "models", "reasons", "assumptions", "type"],
+      "additionalProperties": false
     },
     "audioGenStream.request": {
       "title": "AudioGenStreamRequest",
