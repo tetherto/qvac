@@ -338,6 +338,23 @@ runs:
               '@tetherto:registry=https://npm.pkg.github.com' \
               "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" \
               > "$PACK_DIR/.npmrc"
+            # Prove the .npmrc is actually IN EFFECT before packing, instead of
+            # assuming it from the scope. Without this, REGISTRY_DESC below is
+            # only a label derived from the spec: if npm ignored the file (the
+            # localPrefix trap above) the run would 404 against npmjs while every
+            # message claimed GitHub Packages. Asking npm itself removes the
+            # guesswork and turns a silent misroute into a clear failure.
+            EFFECTIVE_REGISTRY=$(cd "$PACK_DIR" && npm config get @tetherto:registry 2>/dev/null || echo "unknown")
+            case "$EFFECTIVE_REGISTRY" in
+              https://npm.pkg.github.com*) ;;
+              *)
+                echo "::error::@tetherto is resolving to '$EFFECTIVE_REGISTRY', not GitHub Packages."
+                echo "The .npmrc in $PACK_DIR is not being applied. npm reads project config from"
+                echo "its localPrefix (nearest ancestor with package.json/node_modules), so a"
+                echo "package.json or node_modules above \$RUNNER_TEMP can shadow it."
+                exit 1
+                ;;
+            esac
             ;;
           *)
             REGISTRY_DESC="npm (registry.npmjs.org)"
@@ -373,12 +390,50 @@ runs:
         # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
         # ^1.2.0) legitimately resolves to a different concrete version, so
         # comparing the packed version to the tag string would false-fail.
+        PACKED_NAME=$(node -p "require('$PACK_DIR/package/package.json').name" 2>/dev/null || echo "unknown")
+        PACKED_VERSION=$(node -p "require('$PACK_DIR/package/package.json').version" 2>/dev/null || echo "unknown")
+
+        # NAME provenance, asserted for every resolve (not just exact-semver
+        # pins). Two distinct things can go wrong and neither is caught by the
+        # version check:
+        #
+        #   1. The registry hands back a package other than the one requested.
+        #   2. The caller pins the WRONG ADDON'S package — the copy/paste hazard
+        #      the docs warn about, e.g. package=@tetherto/embed-llamacpp-mono
+        #      in the llm-llamacpp workflow. That used to exit 0, drop embed's
+        #      .bare into llm-llamacpp/prebuilds/ and continue to a device,
+        #      printing "Verified:" with the wrong name.
+        if [ "$PACKED_NAME" != "$SPEC_NAME" ]; then
+          echo "ERROR: resolved to $PACKED_NAME but the spec named $SPEC_NAME"
+          exit 1
+        fi
+        # Tie the package to the addon under test. The GPR dev build carries a
+        # '-mono' suffix that the published @qvac name does not, so compare the
+        # unscoped names with that suffix removed:
+        #   @qvac/vla-ggml  vs  @tetherto/vla-ggml-mono  ->  vla-ggml == vla-ggml
+        PACKED_ADDON="${PACKED_NAME##*/}"
+        PACKED_ADDON="${PACKED_ADDON%-mono}"
+        EXPECTED_ADDON="${ADDON_NPM_NAME##*/}"
+        EXPECTED_ADDON="${EXPECTED_ADDON%-mono}"
+        if [ "$PACKED_ADDON" != "$EXPECTED_ADDON" ]; then
+          echo "::error::$PACKED_NAME is not a build of $ADDON_NPM_NAME."
+          echo "The pinned package must be the addon this workflow tests; '$PACKED_ADDON'"
+          echo "!= '$EXPECTED_ADDON'. Check the package name — the GPR dev build is"
+          echo "@tetherto/$EXPECTED_ADDON-mono (note that a few addons' workflow slug and"
+          echo "package name differ, e.g. the 'vla' workflow ships @qvac/vla-ggml)."
+          exit 1
+        fi
+
+        # VERSION provenance: only assert for an EXACT semver pin — a dist-tag or
+        # range (latest, next, ^1.2.0) legitimately resolves to a different
+        # concrete version, so comparing the packed version to the tag string
+        # would false-fail. Non-registry specs can no longer reach this point (the
+        # spec is validated before npm runs), so the case below can no longer be
+        # skipped by a URL or git spec smuggling itself past ${PACKAGE_VERSION##*@}.
         if [ "$FORCE_NPM_PREBUILD" = "true" ] && [ -n "$PACKAGE_VERSION" ]; then
           EXPECTED_VERSION="${PACKAGE_VERSION##*@}"
           case "$EXPECTED_VERSION" in
             [0-9]*.[0-9]*.[0-9]*)
-              PACKED_NAME=$(node -p "require('$PACK_DIR/package/package.json').name" 2>/dev/null || echo "unknown")
-              PACKED_VERSION=$(node -p "require('$PACK_DIR/package/package.json').version" 2>/dev/null || echo "unknown")
               if [ "$PACKED_VERSION" != "$EXPECTED_VERSION" ]; then
                 echo "ERROR: forced npm prebuild resolved to $PACKED_NAME@$PACKED_VERSION but package-version pins $EXPECTED_VERSION"
                 exit 1
@@ -386,9 +441,11 @@ runs:
               echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION (pinned, $REGISTRY_DESC)"
               ;;
             *)
-              echo "package-version '$EXPECTED_VERSION' is a dist-tag/range; skipping exact-version provenance assertion"
+              echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC); '$EXPECTED_VERSION' is a dist-tag/range so the exact version is not asserted"
               ;;
           esac
+        else
+          echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC)"
         fi
         mv "$PACK_DIR/package/prebuilds" ./prebuilds
         rm -rf "$PACK_DIR"

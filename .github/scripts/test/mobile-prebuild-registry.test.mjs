@@ -326,18 +326,20 @@ for (const spec of HOSTILE_SPECS) {
   })
 }
 
-// Every shape a real caller actually produces must still pass.
+// Every shape a real caller actually produces must still pass. The addon name is
+// part of the case: the pinned package has to be a build of the addon under test,
+// so a spec is only legitimate paired with its own workflow.
 const LEGITIMATE_SPECS = [
-  '@qvac/llm-llamacpp@0.46.0',
-  '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677',
-  '@tetherto/llm-llamacpp-mono@0.47.0-tmp.pr-3938.runid-33179656677',
-  '@qvac/llm-llamacpp@latest',
-  '@qvac/transcription-parakeet@1.0.0',
+  ['@qvac/llm-llamacpp', '@qvac/llm-llamacpp@0.46.0'],
+  ['@qvac/llm-llamacpp', '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677'],
+  ['@qvac/llm-llamacpp', '@tetherto/llm-llamacpp-mono@0.47.0-tmp.pr-3938.runid-33179656677'],
+  ['@qvac/llm-llamacpp', '@qvac/llm-llamacpp@latest'],
+  ['@qvac/transcription-parakeet', '@qvac/transcription-parakeet@1.0.0'],
 ]
 
-for (const spec of LEGITIMATE_SPECS) {
+for (const [addonName, spec] of LEGITIMATE_SPECS) {
   test(`accepts the real caller spec: ${spec}`, () => {
-    const run = runStep({ packageVersion: spec, force: 'true' })
+    const run = runStep({ addonName, packageVersion: spec, force: 'true' })
     assert.equal(run.status, 0, run.output)
     assert.doesNotMatch(run.output, /Refusing to npm pack/)
   })
@@ -354,6 +356,79 @@ test('accepts a bare dist-tag and an unscoped addon name', () => {
   const bare = runStep({ packageVersion: '1.4.0', force: 'true', npmEnv: { MOCK_NPM_VERSION: '1.4.0' } })
   assert.equal(bare.status, 0, bare.output)
   assert.match(bare.invocations, /spec=@qvac\/llm-llamacpp@1\.4\.0/)
+})
+
+// Ian's scenario: pinning ANOTHER addon's package in this workflow used to exit
+// 0, drop that addon's .bare into this addon's prebuilds/ and continue to a
+// device, printing "Verified:" with the wrong name. Only the version was ever
+// compared; the packed name was read and printed but never asserted.
+test('rejects a package that is not a build of the addon under test', () => {
+  const run = runStep({
+    addonName: '@qvac/llm-llamacpp',
+    packageVersion: '@tetherto/embed-llamacpp-mono@1.2.3',
+    force: 'true',
+    npmEnv: { MOCK_NPM_VERSION: '1.2.3' },
+  })
+
+  assert.notEqual(run.status, 0, 'must not accept another addon\'s package')
+  assert.match(run.output, /is not a build of @qvac\/llm-llamacpp/)
+  assert.equal(
+    run.androidPrebuildInstalled,
+    false,
+    "the wrong addon's prebuild must not land in prebuilds/",
+  )
+})
+
+test('accepts the @qvac name against its @tetherto -mono counterpart', () => {
+  // The main flow: workflow tests @qvac/vla-ggml, pin is @tetherto/vla-ggml-mono.
+  const run = runStep({
+    addonName: '@qvac/vla-ggml',
+    packageVersion: '@tetherto/vla-ggml-mono@0.23.0',
+    force: 'true',
+    npmEnv: { MOCK_NPM_VERSION: '0.23.0' },
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.output, /Verified: prebuilds come from @tetherto\/vla-ggml-mono@0\.23\.0/)
+})
+
+test('rejects a registry that returns a different package than requested', () => {
+  const run = runStep({
+    packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
+    force: 'true',
+    npmEnv: { MOCK_NPM_NAME: '@tetherto/llm-llamacpp-mono-evil' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /resolved to .* but the spec named/)
+})
+
+test('a dist-tag resolve still asserts the name and reports the version', () => {
+  // Previously this branch printed "skipping … assertion" and asserted nothing.
+  const run = runStep({
+    packageVersion: '@qvac/llm-llamacpp@latest',
+    force: 'true',
+    npmEnv: { MOCK_NPM_VERSION: '0.47.0' },
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.output, /Verified: prebuilds come from @qvac\/llm-llamacpp@0\.47\.0/)
+  assert.match(run.output, /dist-tag\/range so the exact version is not asserted/)
+})
+
+test('fails closed when the GPR .npmrc is not in effect', () => {
+  // Belt-and-braces on the localPrefix trap: the action asks npm where
+  // @tetherto resolves rather than assuming it from the scope, so a shadowed
+  // .npmrc becomes a clear error instead of a 404 mislabelled "GitHub Packages".
+  const run = runStep({
+    packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
+    force: 'true',
+    npmEnv: { MOCK_NPM_IGNORE_NPMRC: '1' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /is resolving to .*, not GitHub Packages/)
+  assert.match(run.output, /localPrefix/)
 })
 
 test('a failed @tetherto resolve points at GitHub Packages, not npmjs.com', () => {
