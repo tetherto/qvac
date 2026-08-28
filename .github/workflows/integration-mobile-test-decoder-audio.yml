@@ -71,7 +71,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/decoder-audio@<ver> (published) or @tetherto/decoder-audio@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/decoder-audio@<ver> (published) or @tetherto/decoder-audio-mono@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
         default: ""

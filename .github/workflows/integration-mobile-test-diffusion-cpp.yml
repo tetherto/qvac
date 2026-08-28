@@ -77,7 +77,7 @@ on:
         required: false
         default: ""
       package:
-        description: "Full NPM package spec to test. Leave EMPTY (default) to test this branch's native prebuild artifact; set @qvac/diffusion-cpp@<ver> (published) or @tetherto/diffusion-cpp@<dev> (GPR) to force-install a specific build."
+        description: "Full NPM package spec to test. Leave EMPTY only when this workflow is called from a run that built prebuilds — a standalone dispatch has none, so empty resolves the PUBLISHED @latest, not your branch's native code; set @qvac/diffusion-cpp@<ver> (published) or @tetherto/diffusion-cpp-mono@<dev> (GPR) to force-install a specific build."
         type: string
         required: false
         default: ""
@@ -262,9 +262,12 @@ jobs:
           addon-npm-name: '@qvac/diffusion-cpp'
           prebuild-artifact-prefix: 'sd-cpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
-          # Manual dispatch (inputs.platform set): default (empty `package`) tests
-          # this branch's native prebuild; @qvac/diffusion-cpp@<ver> = published, @tetherto/diffusion-cpp@<dev>
-          # = this branch's GPR build). workflow_call keeps its prebuild_package/artifact-first path.
+          # Manual dispatch (inputs.platform set). An empty `package` does NOT test
+          # this branch's native code: a standalone dispatch produces no prebuild
+          # artifacts, so the fallback resolves the published @qvac/diffusion-cpp@latest.
+          # @qvac/diffusion-cpp@<ver> = published; @tetherto/diffusion-cpp-mono@<dev> = a branch
+          # build from GitHub Packages, the only way to put unmerged native code on a
+          # device. See docs/ci/MOBILE-ON-DEMAND.md. workflow_call keeps its prebuild_package/artifact-first path.
           package-version: ${{ inputs.platform != '' && inputs.package || inputs.prebuild_package }}
           force-npm-prebuild: ${{ ((inputs.platform != '' && inputs.package != '') || inputs.prebuild_package != '') && 'true' || 'false' }}
 

@@ -160,21 +160,48 @@ the `run*` names that executed, which you can then narrow with `tests`.
 A manual run does **not** compile the native addon — it installs a **prebuilt**
 one. Which prebuild depends on the `package` / `package_spec` input:
 
-- **Empty (default)** → the **same artifact-first resolution `workflow_call` uses**:
-  the branch's native prebuild artifact. Just clicking Run / `--ref <branch>`
-  tests **your branch's** native code, not a published release.
+- **Empty (default)** → artifact-first resolution: prebuild artifacts **from the
+  same run**, then the published **`@qvac/<addon>@latest`** if there are none.
+  A standalone dispatch builds no prebuilds of its own, so in practice **empty
+  means `@latest`** — the published release, *not* your branch's native code.
+  (Artifacts only exist when the mobile workflow is invoked via `workflow_call`
+  from a run that built them, i.e. the on-merge / benchmark / weekend paths.)
 - **`@qvac/<addon>@1.2.3`** → force-install that exact **published npm** version.
-- **`@tetherto/<addon>@<dev-version>`** → force-install a specific **branch build**
-  published to GitHub Packages (GPR) — e.g. to test a build published from another
-  branch. Setting any non-empty spec flips `force-npm-prebuild` on.
+- **`@tetherto/<addon>-mono@<dev-version>`** → force-install a specific **branch
+  build** from GitHub Packages (GPR). Note the **`-mono`** suffix: that is the
+  name `publish-library-to-gpr` actually publishes (`name-suffix: "-mono"` in
+  every `on-merge-*.yml`). The un-suffixed `@tetherto/<addon>` packages are dead
+  leftovers or do not exist. Setting any non-empty spec flips
+  `force-npm-prebuild` on.
+
+> **Testing an unmerged native change.** `--ref <branch>` gives you the branch's
+> JS harness, tests and app — but **never** its compiled `.bare`. If your change
+> touches `addon/src/**`, you must point `package` / `package_spec` at a GPR dev
+> build, or the run will exercise your new tests against the **published**
+> engine and pass for the wrong reason.
+>
+> To get one: push your branch as `tmp-<TICKET>` (or otherwise trigger the
+> addon's **On Merge Trigger** workflow). It publishes
+> `@tetherto/<addon>-mono@<pkg-version>-tmp.runid-<run id>`. Take the version
+> from that run and pass it:
+>
+> ```bash
+> gh workflow run integration-mobile-test-<addon>.yml --ref <branch> \
+>   -f platform=Android \
+>   -f devices_custom="Google Pixel 9" \
+>   -f device_model_operator=EQUALS \
+>   -f tests="runSomethingTest" \
+>   -f package="@tetherto/<addon>-mono@<version>-tmp.runid-<run id>"
+> ```
+>
+> Confirm it took effect in the job log — the download step prints
+> `Verified: prebuilds come from <name>@<version> (pinned, GitHub Packages …)`.
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
-> `-f ref=<tag/sha>` only to override it. With the empty-package default, `ref`
-> drives **both** the JS test harness + app **and** the native prebuild artifact,
-> so a plain `--ref <branch>` dispatch tests that branch end-to-end. Set
-> `package` / `package_spec` only when you deliberately want a *published* build
-> instead of the branch artifact.
+> `-f ref=<tag/sha>` only to override it. `ref` drives the JS test harness and
+> the app; it does **not** drive the native prebuild, which always comes from an
+> artifact or a package (see above).
 >
 > The `tests`-filter / shard-count validation reads the runner list from the
 > **same commit** the build executes, so if your branch renames or adds runners

@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Stands in for `npm` while testing the mobile setup action's prebuild download
+# step. Records how npm was invoked and what registry configuration it would
+# have resolved, so the test can assert routing without touching a network.
+set -uo pipefail
+
+LOG="${MOCK_NPM_LOG:?MOCK_NPM_LOG must be set}"
+
+if [ "${1:-}" != "pack" ]; then
+  echo "mock-npm: only 'pack' is supported, got '${1:-}'" >&2
+  exit 64
+fi
+
+SPEC="${2:-}"
+
+# npm resolves a project-level .npmrc from the CWD it runs in. Reproduce just
+# enough of that to report which registry the real npm would have contacted.
+REGISTRY="https://registry.npmjs.org"
+AUTH="none"
+SCOPE="${SPEC%%/*}"
+if [ -f .npmrc ]; then
+  MAPPED=$(sed -n "s|^${SCOPE}:registry=||p" .npmrc)
+  if [ -n "$MAPPED" ]; then
+    REGISTRY="$MAPPED"
+    HOST_PATH="${MAPPED#https://}"
+    if grep -q "^//${HOST_PATH}/:_authToken=." .npmrc; then
+      AUTH="token"
+    fi
+  fi
+fi
+
+{
+  echo "spec=$SPEC"
+  echo "cwd=$PWD"
+  echo "registry=$REGISTRY"
+  echo "auth=$AUTH"
+  echo "npmrc_present=$([ -f .npmrc ] && echo yes || echo no)"
+} >> "$LOG"
+
+echo "mock-npm: pack $SPEC via $REGISTRY (auth=$AUTH)"
+
+# MOCK_NPM_FAIL_WITH simulates the registry rejecting the spec.
+if [ -n "${MOCK_NPM_FAIL_WITH:-}" ]; then
+  echo "npm error code E${MOCK_NPM_FAIL_WITH}" >&2
+  echo "npm error ${MOCK_NPM_FAIL_WITH} - GET ${REGISTRY}/${SPEC%@*} - Not found" >&2
+  exit 1
+fi
+
+# Success: emit a tarball shaped like a real addon package. MOCK_NPM_VERSION
+# drives package.json so the provenance assertion can be exercised, and
+# MOCK_NPM_NO_PREBUILDS omits prebuilds/ to exercise that guard.
+STAGE="$(mktemp -d)"
+mkdir -p "$STAGE/package"
+NAME="${SPEC%@*}"
+VERSION="${MOCK_NPM_VERSION:-${SPEC##*@}}"
+printf '{"name":"%s","version":"%s"}\n' "$NAME" "$VERSION" > "$STAGE/package/package.json"
+if [ -z "${MOCK_NPM_NO_PREBUILDS:-}" ]; then
+  mkdir -p "$STAGE/package/prebuilds/android-arm64" "$STAGE/package/prebuilds/ios-arm64"
+  echo mock > "$STAGE/package/prebuilds/android-arm64/addon.bare"
+  echo mock > "$STAGE/package/prebuilds/ios-arm64/addon.bare"
+fi
+
+TARBALL="mock-package.tgz"
+tar -czf "$TARBALL" -C "$STAGE" package
+rm -rf "$STAGE"
+echo "$TARBALL"
