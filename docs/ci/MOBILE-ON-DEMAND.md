@@ -25,7 +25,7 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 | **devices_custom** | A free-text field for one **or more** device models, comma-separated (e.g. `Pixel 9, Pixel 8`). When set, it **overrides** the dropdown. Use it for new/uncommon devices or to run several at once. |
 | **device_model_operator** | How the model name is matched: `EQUALS` (**default** — that exact fleet model only; dropdown values are exact fleet names) or `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`). Default is `EQUALS` so a single-device run bills exactly the model you picked. |
 | **tests** | Optional test filter — see [below](#the-tests-filter). Empty = the full mobile suite. |
-| **package** (or **package_spec**) | Which build to actually put on the phone — see [below](#which-build-gets-tested). Default **empty** = this branch's native prebuild artifact. |
+| **package** (or **package_spec**) | Which build to actually put on the phone — see [below](#which-build-gets-tested). Default **empty** resolves the **published `@qvac/<addon>@latest`** on a manual run, *not* your branch — a manual dispatch builds no prebuild artifacts of its own. To test unmerged native code you must pin a GPR dev build; see [Testing unmerged / unpublished native code](#testing-unmerged--unpublished-native-code). |
 | **ref** | Git ref to check out for the **test harness / app** (not the native binary — see below). |
 
 ### Device selection: dropdown + free-text
@@ -195,12 +195,15 @@ Wait for that run to finish — the mobile dispatch needs the package to exist.
 **Step 2 — resolve the version it published.** The run id is the version suffix,
 so you never have to read it out of a log:
 
+Two names are involved and for one addon they differ, so set them separately
+rather than deriving one from the other:
+
 ```bash
-ADDON=llm-llamacpp          # package dir name
-GPR_NAME=$ADDON-mono        # what GPR actually publishes
+WF=llm-llamacpp             # workflow slug: on-merge-$WF.yml / integration-mobile-test-$WF.yml
+GPR_NAME=llm-llamacpp-mono  # the npm package name (minus @qvac/) plus -mono
 
 RUN_ID=$(gh run list --repo tetherto/qvac \
-  --workflow on-merge-$ADDON.yml --branch $BRANCH \
+  --workflow on-merge-$WF.yml --branch $BRANCH \
   --limit 1 --json databaseId --jq '.[0].databaseId')
 
 PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
@@ -209,15 +212,28 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
-An empty `$PKG` means that run did not publish — usually because the push
-touched nothing under `packages/<addon>/`, so the path-scoped workflow skipped.
+For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
+exception:** its workflows are `on-merge-vla.yml` /
+`integration-mobile-test-vla.yml`, but the package is `@qvac/vla-ggml`, so
+`WF=vla` and `GPR_NAME=vla-ggml-mono`. If unsure, read `addon-npm-name` from the
+mobile workflow and append `-mono` to the part after the slash.
+
+An empty `$PKG` means either that run published nothing — usually because the
+push touched nothing under `packages/<addon>/`, so the path-scoped workflow
+skipped — or that `GPR_NAME` is wrong. Check the name first:
+
+```bash
+gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=1" --jq '.[0].name'
+```
+
+A `Package not found` here means the name, not the run, is the problem.
 
 **Step 3 — dispatch mobile against it.** Android first, then iOS (a second
 dispatch on the same branch cancels the first — see the concurrency note below).
 
 ```bash
 # Android
-gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref $BRANCH \
+gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=Android \
   -f devices_custom="Google Pixel 9, Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \
@@ -225,7 +241,7 @@ gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref $B
   -f package="$PKG"
 
 # iOS — only after the Android run finishes
-gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref $BRANCH \
+gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=iOS \
   -f devices_custom="Apple iPhone 17, Apple iPhone 16 Pro" \
   -f device_model_operator=EQUALS \

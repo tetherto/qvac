@@ -13,28 +13,58 @@ fi
 
 SPEC="${2:-}"
 
-# npm resolves a project-level .npmrc from the CWD it runs in. Reproduce just
-# enough of that to report which registry the real npm would have contacted.
+# Reproduce npm's ACTUAL project-config rule, not a cwd approximation: npm reads
+# the project .npmrc from its localPrefix — the nearest ANCESTOR directory (cwd
+# first, then upward) containing package.json or node_modules. Modelling this
+# faithfully is the point: an .npmrc sitting in cwd is IGNORED when some
+# directory above owns localPrefix, which is how a @tetherto spec can silently
+# fall back to registry.npmjs.org. A cwd-only mock cannot catch that regression.
+find_local_prefix () {
+  local dir="$PWD"
+  while :; do
+    if [ -e "$dir/package.json" ] || [ -d "$dir/node_modules" ]; then
+      printf '%s' "$dir"
+      return 0
+    fi
+    [ "$dir" = "/" ] && break
+    dir="$(dirname "$dir")"
+  done
+  # No owner found: npm falls back to treating cwd as the prefix.
+  printf '%s' "$PWD"
+}
+
+LOCAL_PREFIX="$(find_local_prefix)"
+NPMRC="$LOCAL_PREFIX/.npmrc"
+
 REGISTRY="https://registry.npmjs.org"
 AUTH="none"
 SCOPE="${SPEC%%/*}"
-if [ -f .npmrc ]; then
-  MAPPED=$(sed -n "s|^${SCOPE}:registry=||p" .npmrc)
+if [ -f "$NPMRC" ]; then
+  MAPPED=$(sed -n "s|^${SCOPE}:registry=||p" "$NPMRC")
   if [ -n "$MAPPED" ]; then
     REGISTRY="$MAPPED"
     HOST_PATH="${MAPPED#https://}"
-    if grep -q "^//${HOST_PATH}/:_authToken=." .npmrc; then
+    if grep -q "^//${HOST_PATH}/:_authToken=." "$NPMRC"; then
       AUTH="token"
     fi
   fi
 fi
 
+# Permissions have to be sampled here: the step deletes the .npmrc on exit, so
+# the test cannot inspect it afterwards. GNU and BSD stat disagree on flags.
+npmrc_mode () {
+  [ -f "$NPMRC" ] || { printf 'absent'; return; }
+  stat -c '%a' "$NPMRC" 2>/dev/null || stat -f '%OLp' "$NPMRC" 2>/dev/null || printf 'unknown'
+}
+
 {
   echo "spec=$SPEC"
   echo "cwd=$PWD"
+  echo "local_prefix=$LOCAL_PREFIX"
   echo "registry=$REGISTRY"
   echo "auth=$AUTH"
-  echo "npmrc_present=$([ -f .npmrc ] && echo yes || echo no)"
+  echo "npmrc_present=$([ -f "$NPMRC" ] && echo yes || echo no)"
+  echo "npmrc_mode=$(npmrc_mode)"
 } >> "$LOG"
 
 echo "mock-npm: pack $SPEC via $REGISTRY (auth=$AUTH)"

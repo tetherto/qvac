@@ -264,6 +264,25 @@ runs:
         rm -rf "$PACK_DIR"
         mkdir -p "$PACK_DIR"
         trap 'rm -rf "$PACK_DIR"' EXIT
+        # npm reads "project" config from its localPrefix — the nearest ANCESTOR
+        # directory containing package.json or node_modules — NOT from cwd. Without
+        # a package.json here, a package.json/node_modules anywhere above
+        # $RUNNER_TEMP silently makes npm ignore the .npmrc below, route @tetherto
+        # back to registry.npmjs.org and 404, while the log still claims GitHub
+        # Packages. Pinning localPrefix to $PACK_DIR makes the resolution
+        # deterministic wherever $RUNNER_TEMP happens to live.
+        echo '{"name":"qvac-gpr-prebuild-pack","version":"0.0.0","private":true}' \
+          > "$PACK_DIR/package.json"
+        # Package name without the version. A scoped spec starts with '@', so
+        # stripping at the LAST '@' only works when a version is actually present
+        # ("@tetherto/foo-mono@1.0.0" -> "@tetherto/foo-mono", but bare
+        # "@tetherto/foo-mono" -> ""). A versionless scoped spec is legal here (the
+        # @*/* case passes it through and npm resolves @latest), and an empty name
+        # would produce a nonsense -mono warning and truncated failure hints.
+        case "${SPEC#@*/}" in
+          *@*) SPEC_NAME="${SPEC%@*}" ;;
+          *)   SPEC_NAME="$SPEC" ;;
+        esac
         case "$SPEC" in
           @tetherto/*)
             REGISTRY_DESC="GitHub Packages (npm.pkg.github.com)"
@@ -277,11 +296,18 @@ runs:
             # every on-merge-*.yml). The un-suffixed @tetherto/<addon> packages are
             # abandoned leftovers from early 2026 or absent entirely, so a spec
             # without the suffix is almost always a copy/paste of the old docs.
-            SPEC_NAME="${SPEC%@*}"
             case "$SPEC_NAME" in
               *-mono) ;;
               *) echo "::warning::$SPEC_NAME has no '-mono' suffix. GitHub Packages dev builds are published as ${SPEC_NAME}-mono — if this resolve fails, that is why." ;;
             esac
+            # 0600 BEFORE the token is written, and only on this file — a global
+            # umask here would also land on the extracted prebuilds, which get
+            # moved into the addon checkout and bundled into the Device Farm app.
+            # $RUNNER_TEMP survives between jobs on the self-hosted runners and a
+            # SIGKILL past the cancellation grace period skips the EXIT trap, so a
+            # leaked .npmrc must at least be unreadable by other users.
+            : > "$PACK_DIR/.npmrc"
+            chmod 600 "$PACK_DIR/.npmrc"
             printf '%s\n' \
               '@tetherto:registry=https://npm.pkg.github.com' \
               "//npm.pkg.github.com/:_authToken=$GPR_TOKEN" \
@@ -296,12 +322,12 @@ runs:
           echo "ERROR: Failed to download $SPEC from $REGISTRY_DESC"
           case "$SPEC" in
             @tetherto/*)
-              echo "Check the package and version exist at https://github.com/orgs/tetherto/packages?tab=packages&q=${SPEC%@*}"
+              echo "Check the package and version exist at https://github.com/orgs/tetherto/packages?tab=packages&q=$SPEC_NAME"
               echo "Dev builds are named @tetherto/<addon>-mono@<version>-tmp.runid-<run id>;"
               echo "the version is produced by the On Merge Trigger run for your branch."
               ;;
             *)
-              echo "Please check that it exists at https://www.npmjs.com/package/${SPEC%@*}"
+              echo "Please check that it exists at https://www.npmjs.com/package/$SPEC_NAME"
               ;;
           esac
           exit 1

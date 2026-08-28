@@ -83,6 +83,7 @@ function runStep({
   force = 'false',
   token = 'ghs-test-token',
   seedPrebuilds = false,
+  ancestorPackageJson = false,
   npmEnv = {},
 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'qvac-mobile-prebuilds-'))
@@ -106,6 +107,16 @@ function runStep({
   if (seedPrebuilds) {
     mkdirSync(join(workdir, 'prebuilds/android-arm64'), { recursive: true })
     writeFileSync(join(workdir, 'prebuilds/android-arm64/marker.txt'), 'from-artifact')
+  }
+
+  // Puts a package.json ABOVE $RUNNER_TEMP. That is enough to claim npm's
+  // localPrefix and make it ignore an .npmrc written further down, which is the
+  // shape of runner filesystem that broke @tetherto resolution.
+  if (ancestorPackageJson) {
+    writeFileSync(
+      join(directory, 'package.json'),
+      JSON.stringify({ name: 'ancestor', version: '1.0.0' }),
+    )
   }
 
   const result = spawnSync(
@@ -144,6 +155,8 @@ function runStep({
     androidPrebuildInstalled: existsSync(
       join(workdir, 'prebuilds/android-arm64/addon.bare'),
     ),
+    // Sampled by mock-npm while the file still exists — the step deletes it.
+    npmrcMode: (invocations.match(/^npmrc_mode=(.+)$/m) || [])[1],
   }
 
   rmSync(directory, { recursive: true, force: true })
@@ -164,6 +177,27 @@ test('a @tetherto spec is resolved from GitHub Packages, with auth', () => {
   assert.match(run.invocations, /auth=token/)
   assert.match(run.output, /GitHub Packages/)
   assert.ok(run.androidPrebuildInstalled, 'android prebuild landed in prebuilds/')
+})
+
+// npm resolves project config at its localPrefix (nearest ancestor owning a
+// package.json / node_modules), NOT at cwd. If the pack dir does not own
+// localPrefix, the .npmrc is ignored, @tetherto routes back to
+// registry.npmjs.org, and the run 404s while still logging "GitHub Packages".
+test('GPR routing survives a package.json above $RUNNER_TEMP', () => {
+  const run = runStep({
+    packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
+    force: 'true',
+    ancestorPackageJson: true,
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.ok(
+    run.invocations.includes(`registry=${GPR_HOST}`),
+    `an ancestor package.json must not divert resolution:\n${run.invocations}`,
+  )
+  assert.match(run.invocations, /auth=token/)
+  // The pack dir must be the one that owns localPrefix.
+  assert.match(run.invocations, /local_prefix=(.*)gpr-prebuild-pack/)
 })
 
 test('a @qvac spec still goes to npmjs.org and never to GitHub Packages', () => {
@@ -215,6 +249,49 @@ test('a @tetherto spec missing the -mono suffix is called out', () => {
   // packages still exist, they are just abandoned.
   assert.match(run.output, /::warning::/)
   assert.match(run.output, /-mono/)
+})
+
+test('a versionless @tetherto spec keeps its package name intact', () => {
+  // "@tetherto/foo-mono" has no version, so stripping at the last '@' would
+  // yield "" — a bogus "has no '-mono' suffix" warning and truncated hints.
+  const run = runStep({
+    packageVersion: '@tetherto/llm-llamacpp-mono',
+    force: 'true',
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@tetherto\/llm-llamacpp-mono$/m)
+  assert.doesNotMatch(
+    run.output,
+    /::warning::/,
+    'a name that already ends in -mono must not be warned about',
+  )
+})
+
+test('a versionless @tetherto spec without -mono still names itself in the hint', () => {
+  const run = runStep({
+    packageVersion: '@tetherto/llm-llamacpp',
+    force: 'true',
+    npmEnv: { MOCK_NPM_FAIL_WITH: '404' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /@tetherto\/llm-llamacpp has no '-mono' suffix/)
+  assert.match(run.output, /q=@tetherto\/llm-llamacpp$/m)
+})
+
+test('the .npmrc holding the token is not world-readable', () => {
+  const run = runStep({
+    packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
+    force: 'true',
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.equal(
+    run.npmrcMode,
+    '600',
+    `the token-bearing .npmrc must be 0600, got ${run.npmrcMode}`,
+  )
 })
 
 test('a failed @tetherto resolve points at GitHub Packages, not npmjs.com', () => {
