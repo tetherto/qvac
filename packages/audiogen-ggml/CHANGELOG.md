@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Export `AUDIOGEN_BACKEND_NAMES`, `audiogenBackendName()` and the
+  `AudiogenBackendName` type, so a consumer can name a `stats.backendId`
+  without copying the code table out of this README.
+
 ## [0.3.0] - 2026-08-27
 
 ### Added
