@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-28
+
 ### Added
 
 - CUDA GPU acceleration on linux x64: the prebuild now builds with
@@ -35,6 +37,20 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   compiler comes from the shared linux toolchain. A CUDA build now loads on
   hosts without the CUDA runtime instead of failing with unresolved cudart
   symbols.
+
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
+### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Transcription surfaces the error rather than empty output, and pending
+  compute state is unwound after the failure.
 
 ## [0.4.0] - 2026-08-27
 

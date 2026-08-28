@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-28
+
 ### Added
 
 - CUDA GPU acceleration on linux x64: the prebuild now builds with
@@ -19,6 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export `AUDIOGEN_BACKEND_NAMES`, `audiogenBackendName()` and the
   `AudiogenBackendName` type, so a consumer can name a `stats.backendId`
   without copying the code table out of this README.
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-08-28, which brings in ggml-speech
+  2026-08-28. Unused IQ / Q1_0 / MXFP4 / NVFP4 and training Vulkan shader
+  payloads are replaced with tiny no-ops so the published natives stay
+  under the npm tarball size limit. CUDA fatbins keep Ampere and Ada
+  (`80-virtual;86-real;89-real`) and drop Turing sm75 and Blackwell
+  sm120/121.
+
+### Fixed
+
+- Vulkan device-loss and fence failures now return a graph-compute error
+  instead of aborting the process or continuing with an unusable device.
+  Pending compute state is unwound after the failure.
 
 ## [0.3.0] - 2026-08-27
 
