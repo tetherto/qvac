@@ -1,6 +1,7 @@
 // Model-backed coverage for the chat template's tool grammar reaching the
 // sampler, and for it not leaking across requests. All tests GTEST_SKIP when
 // the Qwen3 unit-test model is absent (`npm run test:cpp:models`).
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -9,7 +10,6 @@
 #include <vector>
 
 #include <gtest/gtest.h>
-#include <unistd.h>
 
 #include "common/common.h"
 #include "model-interface/LlamaModel.hpp"
@@ -390,10 +390,13 @@ TEST_F(
 
   // Without a cache key every processPrompt starts a fresh conversation, which
   // would reset firstMsgTokens_ to 0 between turns. A key keeps the live
-  // context across the turns (nothing is written to disk).
+  // context across the turns (nothing is written to disk). Unique per run,
+  // same idiom as `uniqueTextCachePath` in test_text_llm_context.cpp.
+  const auto uniqueId =
+      std::chrono::high_resolution_clock::now().time_since_epoch().count();
   const std::string cacheKey =
       (fs::temp_directory_path() /
-       ("qvac-24219-prefix-" + std::to_string(::getpid()) + ".bin"))
+       ("qvac-24219-prefix-" + std::to_string(uniqueId) + ".bin"))
           .string();
   auto turn = [&](const std::string& input) {
     LlamaModel::Prompt prompt;
