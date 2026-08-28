@@ -503,47 +503,34 @@ that ends mid-sample is rejected.
 GPU backends are selected per platform via `vcpkg.json` features; no
 `bare-make generate` flag is needed:
 
-- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host)
+- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
 - **macOS / iOS** — Metal, statically linked
 
-**CUDA (Linux / Windows on NVIDIA)** is the one exception: it is opt-in,
-because it needs `nvcc` on the build host, which the published prebuilds are
-not built with. Build it yourself with `npm run build:cuda` (or
+**CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
+gated behind the `ASR_CUDA` CMake option. The published linux-x64 prebuild
+turns it on (the prebuild workflow installs the CUDA toolkit); elsewhere build
+it yourself with `npm run build:cuda` (or
 `bare-make generate -D ASR_CUDA=ON`), which adds the `cuda` feature to the
-`speech-cpp` dependency and turns on `GGML_CUDA`. Only the NVIDIA driver is
-needed at runtime. CUDA is compiled *alongside* Vulkan rather than replacing
-it; ggml registers CUDA ahead of Vulkan, so a `use_gpu` / `useGPU` request
-lands on CUDA when a supported device is present and falls back to Vulkan
-otherwise. Both engines report the winner through `getBackendInfo()` as
-`backendId: 2` (`BackendId.CUDA`).
+`speech-cpp` dependency and turns on `GGML_CUDA`. On linux-x64 the cuda
+feature flips ggml into hybrid dynamically-loaded backend mode: the
+CPU-variant, Vulkan, and CUDA backends ship as `.so` modules next to the
+addon, and only the CUDA module depends on the CUDA runtime. Engaging CUDA
+requires the NVIDIA driver (`libcuda.so.1`) plus the CUDA runtime libraries
+(`libcudart` / `libcublas` / `libcublasLt`) resolvable at load time; hosts
+that cannot resolve them — including CPU-only and non-NVIDIA machines — skip
+the module and fall back to Vulkan or CPU instead of failing to load the
+addon. CUDA is compiled *alongside* Vulkan rather than replacing it; ggml
+registers CUDA ahead of Vulkan, so a `use_gpu` / `useGPU` request lands on
+CUDA when a supported device is present and falls back to Vulkan otherwise.
+Both engines report the winner through `getBackendInfo()` as `backendId: 2`
+(`BackendId.CUDA`).
 
-Two things the CUDA build has to work around, both handled in `CMakeLists.txt`:
-
-- `nvcc` defaults its host compiler to `g++`, which rejects the
-  `-stdlib=libc++` the Linux triplets set, so enabling the CUDA language used
-  to fail its ABI check. On Linux the `ASR_CUDA` block exports
-  `CUDAHOSTCXX=clang++` for the vcpkg child process (override it by setting
-  `CUDAHOSTCXX` yourself). It is deliberately *not* set in
-  `vcpkg-overlays/toolchains/linux-clang.cmake`: that file's contents feed the
-  vcpkg ABI hash of every package on the Linux triplets, so editing it
-  invalidates the binary cache for non-CUDA builds too and forces every port to
-  rebuild from source. Windows and macOS keep their default host compiler
-  (MSVC / clang), which already matches the triplet.
-- `ggml-config.cmake` only puts a CUDA runtime in `ggml::ggml-cuda`'s interface
-  under `if (GGML_STATIC)`, and `GGML_STATIC` also means
-  `add_link_options(-static)` in ggml's own build, so it must stay off for a
-  shared bare module. The addon therefore links the CUDA runtime explicitly;
-  without it the module loads and dies on
-  `undefined symbol: __cudaRegisterFatBinary`. It links the *dynamic* runtime
-  (`CUDA::cudart` / `cublas` / `cublasLt`), matching `diffusion-cpp`, so that
-  loading both addons into one process (`packages/ggml-coload-smoke`) cannot
-  end up with two CUDA runtime instances.
-
-A CUDA-enabled build therefore needs `libcuda.so.1` plus the CUDA runtime
-(`libcudart` / `libcublas` / `libcublasLt`) present at load time, and will fail
-to load without them. That does not affect the published prebuilds, which are
-built without `ASR_CUDA` and carry no CUDA dependency at all.
+The addon takes no direct CUDA linkage — the CUDA module carries its own CUDA
+`DT_NEEDED` entries, which is what makes the graceful fallback possible — and
+nvcc's clang host-compiler setup lives in
+`vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
+compiles the CUDA backend.
 
 Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.
