@@ -1010,11 +1010,11 @@ namespace LlmLlamacpp {
      * opaque native failure. qvac-fabric treats `'off'`, `'disabled'`,
      * `'false'` and `'0'` as equivalent, and all four are rejected.
      *
-     * Accepts the `flash_attn` spelling too; supplying both is an error.
+     * The `flash_attn` spelling is also accepted at runtime and reaches the
+     * addon through the index signature below, matching how `main-gpu` and
+     * `split-mode` type only their hyphen form. Supplying both is an error.
      */
     "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
-    /** Underscore alias for {@link LlamaConfig["flash-attn"]}. Supplying both spellings is an error. */
-    flash_attn?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
     /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
     "tensor-split"?: string;
     "cache-type-k"?: string;

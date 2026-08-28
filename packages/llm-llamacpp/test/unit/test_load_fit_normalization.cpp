@@ -544,6 +544,11 @@ TEST_F(LoadFitNormalizationTest, TensorSplitForwardsExplicitDeviceList) {
     FAIL() << "tensor mode must forward --device with the enumerated list";
   } catch (const qvac_errors::StatusError& error) {
     EXPECT_THAT(error.what(), ::testing::HasSubstr("--device"));
+    // qvac-fabric's parse_device_list splits on ',' and reports only the first
+    // element it cannot resolve, so seeing element 0 named back proves the
+    // list was forwarded and split as intended.
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("qvac-nonexistent-device-0"));
   }
 }
 
@@ -660,6 +665,10 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsFlashAttnOff) {
       } catch (const qvac_errors::StatusError& error) {
         EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
         EXPECT_THAT(error.what(), ::testing::HasSubstr("flash attention"));
+        // The message must name the spelling the caller actually used, not a
+        // key they never set.
+        EXPECT_THAT(error.what(), ::testing::HasSubstr(key));
+        EXPECT_THAT(error.what(), ::testing::HasSubstr(value));
       }
     }
   }

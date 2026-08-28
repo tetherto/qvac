@@ -189,12 +189,16 @@ function assertMetaDeviceEngaged(t, devices, logs) {
     metaDevices.length >= 2,
     `weights and KV should span >= 2 devices (found: ${metaDevices.join(', ')})`
   )
-  // The device list is pinned explicitly for tensor mode, so an integrated GPU
-  // appearing here means the filtering regressed (QVAC-24253).
-  t.absent(
-    metaDevices.some((name) => /igpu/i.test(name)),
-    `no integrated GPU should participate (found: ${metaDevices.join(', ')})`
-  )
+  // Deliberately NOT asserting "no integrated GPU participates" from these
+  // tokens. The Meta(...) name is built from ggml_backend_buft_name, which
+  // yields backend name + index (`Vulkan0`, `CUDA1`, `ROCm0`) and never
+  // encodes the device type — so a /igpu/ test would be vacuous and pass on a
+  // host where the iGPU had in fact been recruited. Whether the iGPU is
+  // excluded is pinned by the unit tests over getTensorSplitDeviceNames, which
+  // can see the device type. A real end-to-end check would have to match the
+  // known iGPU description against fabric's `using device ...` INFO lines,
+  // which is CI-host-specific.
+  t.comment(`tensor-mode devices: ${metaDevices.join(', ')}`)
 }
 
 safeTest(

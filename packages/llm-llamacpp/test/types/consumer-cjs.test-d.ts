@@ -67,6 +67,8 @@ const flashAttnConfig: LlmLlamacpp.LlamaConfig = {
 };
 void flashAttnConfig;
 
+// The underscore spelling stays untyped, reaching the addon through the index
+// signature — the same treatment main-gpu and split-mode get.
 const flashAttnUnderscore: LlmLlamacpp.LlamaConfig = { device: "gpu", flash_attn: "auto" };
 void flashAttnUnderscore;
 

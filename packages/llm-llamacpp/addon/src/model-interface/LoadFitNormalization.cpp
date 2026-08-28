@@ -873,9 +873,7 @@ NormalizedLoad normalizeLoadForFit(
       configVector.emplace_back(selected.name);
     } else if (splitMode == LLAMA_SPLIT_MODE_TENSOR) {
       const std::vector<std::string> tensorDevices =
-          dependencies.tensorSplitDeviceNames
-              ? dependencies.tensorSplitDeviceNames()
-              : std::vector<std::string>{};
+          dependencies.tensorSplitDeviceNames();
       if (tensorDevices.empty()) {
         // No enumerable GPU device: leave --device alone rather than emitting
         // an empty list, and let fabric's own selection and checks decide.
@@ -968,11 +966,16 @@ NormalizedLoad normalizeLoadForFit(
     }
     if (flashAttnIt != configFilemap.end()) {
       std::string flashAttnValue = flashAttnIt->second;
+      // Lambda form rather than a bare ::tolower: the value is caller-supplied
+      // and may carry non-ASCII bytes, which are negative under a signed char
+      // and undefined input to tolower.
       std::transform(
           flashAttnValue.begin(),
           flashAttnValue.end(),
           flashAttnValue.begin(),
-          ::tolower);
+          [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+          });
       static const std::unordered_set<std::string> kFalsey = {
           "off", "disabled", "false", "0"};
       if (kFalsey.count(flashAttnValue) > 0) {
@@ -989,8 +992,9 @@ NormalizedLoad normalizeLoadForFit(
                       K_LEGACY_PARSER_NAME.data())
                 : string_format(
                       "%s: split-mode 'tensor' requires flash attention; "
-                      "remove flash-attn=%s or use split-mode 'layer'.\n",
+                      "remove %s=%s or use split-mode 'layer'.\n",
                       K_LEGACY_PARSER_NAME.data(),
+                      flashAttnIt->first.c_str(),
                       flashAttnIt->second.c_str()));
       }
     }
