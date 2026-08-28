@@ -873,10 +873,23 @@ NormalizedLoad normalizeLoadForFit(
   // silently run everything locally.
   bool rpcDevicesRegistered = false;
 
-  // Ordering contract: this must run *before* the 'device' lookup and the
-  // resolveBackend() call below, because RPC devices only exist in the ggml
-  // registry once they are added here. It must also run *after* the mobile
-  // guard above, which rejects the multi-device config keys outright.
+  auto deviceIt = configFilemap.find("device");
+  if (deviceIt == configFilemap.end()) {
+    std::string errorMsg = string_format(
+        "%s: must specify a device: 'gpu' or 'cpu'.\n",
+        K_LEGACY_PARSER_NAME.data());
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, errorMsg);
+  }
+
+  const backend_selection::BackendType preferredBackend =
+      backend_selection::preferredBackendTypeFromString(deviceIt->second);
+
+  // Ordering contract: this must run *after* the 'device' lookup, so
+  // device:'cpu' can reject RPC before opening sockets, but *before*
+  // resolveBackend() below, because RPC devices only exist in the ggml registry
+  // once they are added here. It must also run after the mobile guard above,
+  // which rejects the multi-device config keys outright.
   //
   // The key is erased on use: the passthrough loop further down forwards every
   // remaining key to llama.cpp as '--<key> <value>', and a surviving 'rpc' key
@@ -889,6 +902,14 @@ NormalizedLoad normalizeLoadForFit(
   if (auto it =
           findOneOfAliasedKeys(configFilemap, {"rpc-servers", "rpc_servers", "rpc"});
       it != configFilemap.end()) {
+    if (preferredBackend == backend_selection::BackendType::CPU) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: 'rpc-servers' requires device: 'gpu'; device: 'cpu' runs "
+              "entirely on the local CPU.\n",
+              K_LEGACY_PARSER_NAME.data()));
+    }
     dependencies.registerRpcDevices(it->second);
     rpcDevicesRegistered = true;
     configFilemap.erase(it);
@@ -905,23 +926,11 @@ NormalizedLoad normalizeLoadForFit(
     configFilemap.erase(it);
   }
 
-  auto deviceIt = configFilemap.find("device");
-  if (deviceIt == configFilemap.end()) {
-    std::string errorMsg = string_format(
-        "%s: must specify a device: 'gpu' or 'cpu'.\n",
-        K_LEGACY_PARSER_NAME.data());
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument, errorMsg);
-  }
-
   bool isOpenCl = false;
   bool isMetal = false;
   bool isGpu = false;
   {
     using namespace backend_selection;
-    const BackendType preferredBackend =
-        preferredBackendTypeFromString(deviceIt->second);
-
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
     const SelectedBackend selected = dependencies.resolveBackend(

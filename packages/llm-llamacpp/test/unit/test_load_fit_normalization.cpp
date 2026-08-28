@@ -693,3 +693,28 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodeHonorsExplicitDevices) {
       backend({.type = backend_selection::CPU, .name = "none"}));
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
 }
+
+TEST_F(
+    LoadFitNormalizationTest,
+    RpcServersWithCpuDeviceThrowsBeforeRegistering) {
+  auto config = baseConfig();
+  config["device"] = "cpu";
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  config["devices"] = "none";
+  std::vector<std::string> registrations;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::CPU, .name = "none"}, false,
+            &registrations)));
+    FAIL() << "rpc-servers with device:cpu must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'rpc-servers' requires"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("device: 'gpu'"));
+  }
+  EXPECT_TRUE(registrations.empty());
+}
