@@ -158,6 +158,8 @@ export {
   type GPUResourceSample,
   type SystemResourceSample,
   type SystemResources,
+  type AssessModelFitInput,
+  type AssessModelFitResult,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
