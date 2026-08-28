@@ -29,6 +29,8 @@ jobs:
 
 The `runner_names` job declares an explicit least-privilege `permissions: contents: read` (every job must declare permissions; a reusable-calling job with no block inherits broad defaults and is flagged by the workflow-security audit).
 
+Do **not** add `timeout-minutes:` to the `runner_names` caller job — GitHub forbids `timeout-minutes` on a job that calls a reusable workflow via `uses:` (actionlint: "when a reusable workflow is called with 'uses', 'timeout-minutes' is not available. only following keys are allowed: name, uses, with, secrets, needs, if, permissions"). The timeout is enforced inside the reusable, whose `export` job already sets `timeout-minutes: 5`.
+
 Keep [`.github/actionlint.yaml`](../../.github/actionlint.yaml) in sync: every `qvac-*` label in the catalog must be listed there. Prefer `runner.environment` for cleanup gating so steps do not couple to `qvac-` prefixes.
 
 ### `os` is a frozen logical id, not a catalog label

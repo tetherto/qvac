@@ -150,6 +150,46 @@ test('hardcoded-label detector catches runner and runs-on literals', () => {
   )
 })
 
+test('hardcoded-label detector flags catalog labels inlined in a runs-on expression', () => {
+  const runners = parseRunnersYaml('macos_ios: macos-14\nlinux_ubuntu2404_x64: qvac-ubuntu2404-x64\n')
+
+  // Regression: labels inlined into the mobile ternary instead of via outputs.
+  const inlined = [
+    'jobs:',
+    '  build:',
+    "    runs-on: ${{ matrix.platform == 'iOS' && 'macos-14' || 'qvac-ubuntu2404-x64' }}",
+    '',
+  ].join('\n')
+  const inlinedFindings = findHardcodedLabelViolations('bad.yml', inlined, runners)
+  // The line is flagged (one finding per line); the label is a catalog label.
+  assert.ok(inlinedFindings.length >= 1)
+  assert.ok(inlinedFindings.every((f) => f.line === 3))
+  assert.ok(
+    inlinedFindings.every((f) => ['macos-14', 'qvac-ubuntu2404-x64'].includes(f.label)),
+  )
+
+  // Correct form (labels come from the catalog outputs) is not flagged.
+  const viaOutputs = [
+    'jobs:',
+    '  build:',
+    "    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}",
+    '',
+  ].join('\n')
+  assert.deepEqual(findHardcodedLabelViolations('ok.yml', viaOutputs, runners), [])
+
+  // `os` identity conditionals are not runs-on/runner assignments -> not flagged.
+  const osConditional = [
+    'jobs:',
+    '  build:',
+    '    runs-on: ${{ needs.runner_names.outputs.macos_ios }}',
+    '    steps:',
+    "      - if: ${{ matrix.os == 'macos-14' }}",
+    '        run: echo darwin',
+    '',
+  ].join('\n')
+  assert.deepEqual(findHardcodedLabelViolations('ok2.yml', osConditional, runners), [])
+})
+
 test('validate-runner-names.mjs exits 0', () => {
   const result = spawnSync(
     process.execPath,

@@ -159,8 +159,10 @@ function isCommentLine(line) {
 
 /**
  * Flags catalog labels hardcoded where they select the machine: `runs-on:`,
- * `runs-on: ${{ '<label>' }}`, matrix `runner:` fields, and `"runner":"<label>"`
- * inside fromJSON matrix blobs.
+ * matrix `runner:` fields, `"runner":"<label>"` inside fromJSON matrix blobs,
+ * and catalog labels quoted inside a `runs-on:` / `runner:` `${{ }}` expression
+ * (e.g. a regression that inlines `${{ cond && 'macos-14' || 'qvac-...' }}`
+ * instead of going through `needs.runner_names.outputs.*`).
  *
  * `os:` matrix values, `matrix.os == '<label>'` conditionals, and `"os":"..."`
  * in fromJSON blobs are deliberately NOT flagged. `os` is a frozen logical
@@ -183,15 +185,24 @@ export function findHardcodedLabelViolations(relativePath, source, runners) {
     if (isCommentLine(line)) continue
     const code = stripYamlComments(line)
 
+    // A `runs-on:` / `runner:` assignment whose value is a `${{ }}` expression:
+    // any catalog label quoted inside it selects the machine and must come from
+    // the catalog outputs, never an inline literal (covers the mobile ternary).
+    const runnerExpr =
+      /^\s+(?:-\s+)?(?:runs-on|runner):\s+.*\$\{\{.*\}\}/.test(code)
+
     for (const { label } of labels) {
       const escaped = label.replaceAll('.', '\\.')
       const patterns = [
         new RegExp(`^\\s+runs-on:\\s+${escaped}\\s*$`),
-        new RegExp(`runs-on:\\s+\\$\\{\\{\\s*'${escaped}'\\s*\\}\\}`),
         new RegExp(`^\\s+(?:-\\s+)?runner:\\s+${escaped}\\s*$`),
         new RegExp(`"runner"\\s*:\\s*"${escaped}"`),
       ]
-      if (patterns.some((pattern) => pattern.test(code))) {
+      // Quoted catalog label inside a runs-on/runner `${{ }}` expression —
+      // covers both `runs-on: ${{ '<label>' }}` and the mobile ternary.
+      const quotedInRunnerExpr =
+        runnerExpr && new RegExp(`['"]${escaped}['"]`).test(code)
+      if (quotedInRunnerExpr || patterns.some((pattern) => pattern.test(code))) {
         findings.push({
           file: relativePath,
           line: i + 1,
