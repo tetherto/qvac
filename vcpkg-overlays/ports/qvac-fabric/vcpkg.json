@@ -54,6 +54,9 @@
     "openmp": {
       "description": "Enable openmp on Android."
     },
+    "rpc-server": {
+      "description": "Build and install the ggml-rpc-server tool from the same qvac-fabric revision."
+    },
     "vector-index": {
       "description": "Build and install the ggml vector index library."
     }

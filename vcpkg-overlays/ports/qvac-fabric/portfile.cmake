@@ -1,30 +1,17 @@
 # RPC PoC overlay (QVAC-24112 follow-on / RPC distributed inference).
 #
-# The registry port builds tag v10297.0.0 (2b6f2227c), which predates every RPC
-# tensor-parallel and pipeline-parallel commit — temp-10297 is 30 commits ahead.
-# Building GGML_RPC against the tag would compile the pre-#201 RPC backend: no
-# `-sm tensor` over RPC, no async/events, protocol v5 instead of v7.
+# The registry port builds tag v10297.0.0 (2b6f2227c), which predates the RPC
+# tensor-parallel, pipeline-parallel, ACCEL pipeline-device exclusion, and
+# parallel endpoint-connect fixes now merged on temp-10297. Building GGML_RPC
+# against the tag would compile the pre-#201 RPC backend: no `-sm tensor` over
+# RPC, no async/events, protocol v5 instead of v7.
 #
 # vcpkg_from_git (not _from_github) so a branch SHA needs no tarball SHA512 and
 # the clone reuses existing git credentials for the private repo.
 vcpkg_from_git(
   OUT_SOURCE_PATH SOURCE_PATH
   URL https://github.com/tetherto/qvac-fabric-llm.cpp
-  REF ab483bd1ed9e5e8307b720616eea83f7a95f5917
-  PATCHES
-    # get_command_queue() held one global mutex across the full connect (TCP
-    # connect + hello negotiation, up to RPC_CLIENT_CONNECT_TIMEOUT_MS each),
-    # so registering N 'rpc-servers' endpoints was N times slower than one,
-    # worst-case N x the connect timeout, even though the endpoints are
-    # independent. Narrows the lock to the connection-cache bookkeeping only
-    # (double-checked, standard pattern) and adds
-    # ggml_backend_rpc_prefetch_connection() so a caller can warm several
-    # endpoints' connections in parallel before registering them - the
-    # registration order (and so RPC0/RPC1/... device numbering) stays
-    # exactly as sequential and deterministic as before; only the network
-    # wait moves out from under the lock. Belongs upstream; carried here
-    # until it lands.
-    0002-rpc-parallel-endpoint-connect.patch
+  REF 973836db91df036301a10916597808416d63ce2c
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -44,6 +31,7 @@ vcpkg_check_features(
     kleidiai BUILD_KLEIDIAI
     openmp BUILD_OPENMP
     hip-backend BUILD_HIP_BACKEND
+    rpc-server BUILD_RPC_SERVER
 )
 
 # gpu-backends is default-on via default-features in vcpkg.json. CPU-only
@@ -202,6 +190,17 @@ else()
   )
 endif()
 
+set(BUILD_RPC_SERVER_TOOL OFF)
+if(BUILD_RPC_SERVER)
+  if(VCPKG_TARGET_IS_ANDROID OR VCPKG_TARGET_IS_IOS)
+    message(STATUS "qvac-fabric: rpc-server feature requested, but ggml-rpc-server is skipped on mobile targets")
+  elseif(NOT BUILD_LLAMA)
+    message(FATAL_ERROR "qvac-fabric: rpc-server feature requires the llama feature so the tools tree can be configured")
+  else()
+    set(BUILD_RPC_SERVER_TOOL ON)
+  endif()
+endif()
+
 vcpkg_cmake_configure(
   SOURCE_PATH "${SOURCE_PATH}"
   DISABLE_PARALLEL_CONFIGURE
@@ -210,12 +209,13 @@ vcpkg_cmake_configure(
     -DGGML_CCACHE=OFF
     -DGGML_LLAMAFILE=OFF
     # Client side of the RPC PoC: registers the RPC backend so the addon can
-    # attach remote devices. The rpc-server binary is built separately from the
-    # same tree (LLAMA_BUILD_TOOLS stays OFF here — this port ships libraries).
+    # attach remote devices. The rpc-server feature below builds the matching
+    # standalone worker from this same pinned source tree.
     -DGGML_RPC=ON
     -DLLAMA_CURL=OFF
     -DLLAMA_BUILD_TESTS=OFF
-    -DLLAMA_BUILD_TOOLS=OFF
+    -DLLAMA_BUILD_TOOLS=${BUILD_RPC_SERVER_TOOL}
+    -DLLAMA_TOOLS_INSTALL=${BUILD_RPC_SERVER_TOOL}
     -DLLAMA_BUILD_EXAMPLES=OFF
     -DLLAMA_BUILD_SERVER=OFF
     -DLLAMA_BUILD_APP=OFF
@@ -243,6 +243,10 @@ if(BUILD_LLAMA)
   file(RENAME "${CURRENT_PACKAGES_DIR}/bin/convert_hf_to_gguf.py" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/convert-hf-to-gguf.py")
   file(INSTALL "${SOURCE_PATH}/gguf-py" DESTINATION "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
   file(RENAME "${CURRENT_PACKAGES_DIR}/bin/vulkan_profiling_analyzer.py" "${CURRENT_PACKAGES_DIR}/tools/${PORT}/vulkan_profiling_analyzer.py")
+endif()
+
+if(BUILD_RPC_SERVER_TOOL)
+  vcpkg_copy_tools(TOOL_NAMES ggml-rpc-server AUTO_CLEAN)
 endif()
 
 if (NOT VCPKG_BUILD_TYPE)
