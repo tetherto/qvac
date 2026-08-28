@@ -1,4 +1,4 @@
-import type { FastifyRequest, preHandlerAsyncHookHandler } from 'fastify'
+import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify'
 import { HttpError } from '../lib/http-error.js'
 import { resolveModelAlias } from '../config.js'
 import { ModelLoadTimeoutError } from '../core/load-manager.js'
@@ -6,15 +6,16 @@ import type { ModelEntry, ResolvedModelEntry } from '../core/model-registry.js'
 import type { QvacContext, QvacRequestModel } from '../lib/types.js'
 
 export function requireModel(category: string): preHandlerAsyncHookHandler {
-  return async function (req) {
+  return async function (req, reply) {
     const body = req.body as Record<string, unknown> | undefined
     const modelName = typeof body?.['model'] === 'string' ? (body['model'] as string).trim() : ''
-    req.qvacModel = await resolveAndCheckModel(req, modelName, category)
+    req.qvacModel = await resolveAndCheckModel(req, reply, modelName, category)
   }
 }
 
 export async function resolveAndCheckModel(
   req: FastifyRequest,
+  reply: FastifyReply,
   modelName: string,
   category: string
 ): Promise<QvacRequestModel> {
@@ -44,7 +45,7 @@ export async function resolveAndCheckModel(
   }
 
   const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
-  const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, req)
+  const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, reply)
 
   return {
     alias,
@@ -62,7 +63,7 @@ export async function ensureReady(
   alias: string,
   configEntry: ResolvedModelEntry | ModelEntry,
   modelName: string,
-  req?: FastifyRequest
+  reply?: FastifyReply
 ): Promise<ModelEntry> {
   let entry = ctx.registry.getEntry(alias)
   if (!entry) {
@@ -79,7 +80,7 @@ export async function ensureReady(
   }
 
   const disconnect =
-    ctx.serveConfig.load.cancelOnDisconnect && req ? disconnectSignal(req) : undefined
+    ctx.serveConfig.load.cancelOnDisconnect && reply ? disconnectSignal(reply) : undefined
   try {
     await ctx.loadManager.load(alias, disconnect?.signal)
   } catch (err) {
@@ -99,12 +100,12 @@ export async function ensureReady(
   return entry
 }
 
-// A load-scoped abort signal that fires if the client disconnects during the
-// load. Bound only for the load window (disposed right after), so a normal
-// end-of-response close never trips it.
-function disconnectSignal(req: FastifyRequest): { signal: AbortSignal; dispose: () => void } {
+// Aborts if the client disconnects before the load finishes: `reply.raw` closes
+// when the connection drops. Disposed after the load, so a completed response
+// never trips it.
+function disconnectSignal(reply: FastifyReply): { signal: AbortSignal; dispose: () => void } {
   const controller = new AbortController()
   const onClose = (): void => controller.abort()
-  req.raw.once('close', onClose)
-  return { signal: controller.signal, dispose: () => req.raw.removeListener('close', onClose) }
+  reply.raw.once('close', onClose)
+  return { signal: controller.signal, dispose: () => reply.raw.removeListener('close', onClose) }
 }
