@@ -7,7 +7,7 @@ schemaType: APIReference
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for text-to-speech in QVAC, backed by the [`qvac-tts.cpp`](https://github.com/tetherto/qvac-ext-lib-whisper.cpp/tree/master/tts-cpp) GGML library.
+[Bare module](https://bare.pears.com) that adds support for text-to-speech in QVAC, backed by the [`qvac-tts.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/tts) GGML library.
 
 It runs in-process with a persistent native engine — the GGUFs, the S3Gen preload, the ggml backend, and any voice-conditioning tensors are loaded once and reused across every synthesis call. GPU acceleration (Metal on macOS/iOS, Vulkan / OpenCL on Linux/Windows/Android) is **opt-in** via `config: { useGPU: true }`; the default is CPU.
 

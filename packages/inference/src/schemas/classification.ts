@@ -1,12 +1,21 @@
 import { z } from 'zod'
 
 export const classificationConfigSchema = z.object({
-  /** Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml. */
-  modelPath: z.string().optional(),
-  /** Limit returned results to the top-K classes. Default: all classes. */
-  topK: z.number().int().optional(),
-  /** Forward native C++ log lines through the engine logger. Off by default. */
-  nativeLogger: z.boolean().optional()
+  modelPath: z
+    .string()
+    .optional()
+    .describe(
+      'Absolute path to the GGUF weights file. Defaults to the bundled model inside @qvac/classification-ggml.'
+    ),
+  topK: z
+    .number()
+    .int()
+    .optional()
+    .describe('Limit returned results to the top-K classes. Default: all classes.'),
+  nativeLogger: z
+    .boolean()
+    .optional()
+    .describe('Forward native C++ log lines through the engine logger. Off by default.')
 })
 
 export const classifyParamsSchema = z.object({

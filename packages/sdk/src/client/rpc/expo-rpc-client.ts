@@ -83,7 +83,6 @@ export async function getRPC() {
     // 3. Generates default bundle (all plugins) otherwise
     let mobileBundle
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       mobileBundle = require('@qvac/sdk/worker.mobile.bundle') as unknown
     } catch (error) {
       const message =
