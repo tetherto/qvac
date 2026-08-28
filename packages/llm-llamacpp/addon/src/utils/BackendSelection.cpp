@@ -6,6 +6,7 @@
 #include <optional>
 #include <regex>
 #include <string_view>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -438,6 +439,59 @@ backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
     }
   }
   return gpuCount > 0 ? gpuCount : igpuCount;
+}
+
+std::vector<std::string>
+backend_selection::getTensorSplitDeviceNames(const BackendInterface& bckI) {
+  std::vector<std::string> discrete;
+  std::vector<std::string> integrated;
+  std::unordered_set<std::string> seenDiscrete;
+  std::unordered_set<std::string> seenIntegrated;
+
+  const size_t totalDevices = bckI.ggml_backend_dev_count();
+  for (size_t i = 0; i < totalDevices; ++i) {
+    ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    const bool isDiscrete = devType == GGML_BACKEND_DEVICE_TYPE_GPU;
+    if (!isDiscrete && devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    // Materialise each string before the next interface call. The returned
+    // pointers are not guaranteed to outlive a subsequent call on the same
+    // interface, and holding one across ggml_backend_dev_name is a
+    // use-after-free against any implementation that stores results in a
+    // reallocating container. DeviceDescription above is safe for the same
+    // reason: its std::string members copy in declaration order.
+    const char* descriptionPtr = bckI.ggml_backend_dev_description(dev);
+    const std::string description =
+        descriptionPtr != nullptr ? std::string(descriptionPtr) : std::string();
+    const char* namePtr = bckI.ggml_backend_dev_name(dev);
+    if (namePtr == nullptr) {
+      continue;
+    }
+    auto& bucket = isDiscrete ? discrete : integrated;
+    auto& seen = isDiscrete ? seenDiscrete : seenIntegrated;
+    // An empty description cannot be deduped against; keep the device rather
+    // than dropping it, since omitting a real GPU is worse than a duplicate.
+    if (description.empty() || seen.insert(description).second) {
+      bucket.emplace_back(namePtr);
+    }
+  }
+  return !discrete.empty() ? discrete : integrated;
+}
+
+std::vector<std::string> backend_selection::getTensorSplitDeviceNames() {
+  BackendInterface bckI{
+      ggml_backend_dev_count,
+      ggml_backend_dev_backend_reg,
+      ggml_backend_dev_get,
+      ggml_backend_reg_name,
+      ggml_backend_dev_description,
+      ggml_backend_dev_name,
+      ggml_backend_dev_type,
+      ggml_backend_reg_get_proc_address,
+      nullptr};
+  return getTensorSplitDeviceNames(bckI);
 }
 
 bool backend_selection::gpuBackendSupportsRowSplit(

@@ -80,8 +80,11 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
 // LLM_ARCH_GRANITE_HYBRID is "granitehybrid". Deliberately absent, because
 // fabric does support them: "deepseek2-ocr" and "t5encoder".
 //
-// Pinned by LoadFitNormalizationTest.TensorSplitArchDenylistMatchesFabric.
-// RE-CHECK ON EVERY qvac-fabric BUMP. Verified against qvac-fabric v10297.0.0.
+// RE-CHECK ON EVERY qvac-fabric BUMP — this is a manual mirror and nothing
+// enforces it. LoadFitNormalizationTest.TensorSplitArchDenylistCoversFabric
+// exercises this list but reads nothing from fabric, so it cannot detect
+// drift; it only pins the addon against its own copy. Verified by hand
+// against qvac-fabric v10297.0.0 (30 entries).
 //
 // An absent general.architecture returns "supported": fabric's own check at
 // src/llama-model.cpp:328 remains the backstop, this list is only a UX layer
@@ -524,7 +527,9 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .isMaliGpu = isMaliGpu};
           },
       .gpuBackendSupportsRowSplit =
-          []() { return backend_selection::gpuBackendSupportsRowSplit(); }};
+          []() { return backend_selection::gpuBackendSupportsRowSplit(); },
+      .tensorSplitDeviceNames =
+          []() { return backend_selection::getTensorSplitDeviceNames(); }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -853,9 +858,50 @@ NormalizedLoad normalizeLoadForFit(
     // In multi-GPU split mode we intentionally omit --device so llama.cpp
     // distributes layers/rows across all available GPUs rather than pinning
     // to the single backend that chooseBackend selected.
+    //
+    // QVAC-24253: tensor mode is the exception and must pass an explicit list.
+    // 'layer' and 'row' route through qvac-fabric's filtered device selection,
+    // which excludes integrated GPUs unless they are all that is available and
+    // dedupes a physical GPU registered by two backends. SPLIT_MODE_TENSOR
+    // takes a different branch that does neither, so omitting --device there
+    // splits weights and the KV cache onto the iGPU on any dGPU + iGPU host —
+    // pacing the whole model by the weakest participant — and shards a
+    // dual-registered GPU twice. main-gpu cannot correct it: fabric's pruning
+    // is gated on split_mode == NONE, and string forms are dropped above.
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
+    } else if (splitMode == LLAMA_SPLIT_MODE_TENSOR) {
+      const std::vector<std::string> tensorDevices =
+          dependencies.tensorSplitDeviceNames
+              ? dependencies.tensorSplitDeviceNames()
+              : std::vector<std::string>{};
+      if (tensorDevices.empty()) {
+        // No enumerable GPU device: leave --device alone rather than emitting
+        // an empty list, and let fabric's own selection and checks decide.
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] split-mode 'tensor': no GPU device could be "
+            "enumerated for an explicit device list; falling back to "
+            "qvac-fabric's own device selection\n");
+      } else {
+        std::string deviceList;
+        for (const std::string& device : tensorDevices) {
+          if (!deviceList.empty()) {
+            deviceList += ",";
+          }
+          deviceList += device;
+        }
+        configVector.emplace_back("--device");
+        configVector.emplace_back(deviceList);
+        QLOG_IF(
+            Priority::INFO,
+            string_format(
+                "[LlamaModel] split-mode 'tensor': pinning to %zu device(s): "
+                "%s\n",
+                tensorDevices.size(),
+                deviceList.c_str()));
+      }
     }
     configFilemap.erase("device");
 
@@ -881,9 +927,12 @@ NormalizedLoad normalizeLoadForFit(
   // to CPU correctly skips every check here.
   //
   // Placed AFTER tuneLoadConfigMap on purpose: that call is what applies the
-  // flash-attn defaults (on by default, forced off for BitNet), so this is the
-  // first point at which the effective value can be read. Moving this block up
-  // into the GPU branch would see only a caller-supplied value and miss both.
+  // flash-attn defaults — on by default, and forced off when finetuning — so
+  // this is the first point at which the effective value can be read. Moving
+  // this block up into the GPU branch would see only a caller-supplied value
+  // and miss both. (tuneLoadConfigMap also forces it off for BitNet, but that
+  // path is unreachable here: "bitnet" is on the unsupported-architecture list
+  // checked immediately below, so it throws before flash-attn is consulted.)
   if (params.split_mode == LLAMA_SPLIT_MODE_TENSOR) {
     if (!archSupportsTensorSplit(metadata)) {
       throw qvac_errors::StatusError(
@@ -907,30 +956,47 @@ NormalizedLoad normalizeLoadForFit(
     // branches there fire, so the value is never normalised into the hyphen key
     // and stays under the underscore one until the configVector loop rewrites
     // it. Reading only "flash-attn" here would let flash_attn=off through.
+    // The value spelling matters as much as the key spelling: fabric's
+    // --flash-attn routes through common_arg_utils::is_falsey, which accepts
+    // "off", "disabled", "false" and "0" as equivalent. Comparing against
+    // "off" alone would let the other three reach fabric in exactly the state
+    // this guard exists to prevent. Case is normalised here too, though a
+    // mixed-case value would be rejected by fabric's own parser anyway.
     auto flashAttnIt = configFilemap.find("flash-attn");
     if (flashAttnIt == configFilemap.end()) {
       flashAttnIt = configFilemap.find("flash_attn");
     }
-    if (flashAttnIt != configFilemap.end() && flashAttnIt->second == "off") {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: split-mode 'tensor' requires flash attention; remove "
-              "flash-attn=off or use split-mode 'layer'.\n",
-              K_LEGACY_PARSER_NAME.data()));
+    if (flashAttnIt != configFilemap.end()) {
+      std::string flashAttnValue = flashAttnIt->second;
+      std::transform(
+          flashAttnValue.begin(),
+          flashAttnValue.end(),
+          flashAttnValue.begin(),
+          ::tolower);
+      static const std::unordered_set<std::string> kFalsey = {
+          "off", "disabled", "false", "0"};
+      if (kFalsey.count(flashAttnValue) > 0) {
+        // Under finetuning tuneLoadConfigMap is what wrote flash-attn=off, so
+        // telling the caller to remove a key they never set would misdirect
+        // them.
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            finetuneOverrides.active
+                ? string_format(
+                      "%s: split-mode 'tensor' requires flash attention, which "
+                      "is disabled while finetuning; use split-mode 'layer' "
+                      "for finetuning runs.\n",
+                      K_LEGACY_PARSER_NAME.data())
+                : string_format(
+                      "%s: split-mode 'tensor' requires flash attention; "
+                      "remove flash-attn=%s or use split-mode 'layer'.\n",
+                      K_LEGACY_PARSER_NAME.data(),
+                      flashAttnIt->second.c_str()));
+      }
     }
 
-    // common_params_fit throws for SPLIT_MODE_TENSOR (qvac-fabric
-    // common/fit.cpp) and common_fit_params swallows that into a WARN +
-    // FIT_STATUS_FAILURE that common_init_result ignores — so the load
-    // proceeds unfitted either way. Disable it explicitly so the logs say what
-    // is actually happening instead of reporting a fit failure.
-    params.fit_params = false;
-    QLOG_IF(
-        Priority::INFO,
-        "[LlamaModel] split-mode 'tensor': auto-fit is not available in this "
-        "mode; gpu_layers defaults to every layer and ctx_size to the model's "
-        "trained context unless set explicitly\n");
+    // Auto-fit is disabled for tensor mode, but the assignment itself lives
+    // after the generic arg loop below — see the second tensor block.
   }
 
   // Handle both reverse-prompt variants
@@ -1051,6 +1117,29 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
+  }
+
+  // QVAC-24253: auto-fit is disabled for tensor mode HERE, after the generic
+  // arg loop, not in the constraint block above. qvac-fabric registers
+  // `--fit [on|off]` as a common arg with no example restriction, so it is
+  // reachable through this addon's passthrough: a caller passing
+  // { "split-mode": "tensor", "fit": "on" } would otherwise have the loop set
+  // fit_params back to true after the block cleared it, making the notice
+  // below a lie and leaving the caller with fabric's own spurious "failed to
+  // fit params to free device memory" WARN — the exact output this is meant
+  // to prevent. Assigning after the loop makes the override authoritative.
+  //
+  // WARNING rather than INFO deliberately: every sibling "we overrode your
+  // setting" notice in this function is WARNING, and the library's default
+  // verbosity suppresses INFO entirely, so at INFO the one message carrying a
+  // real OOM consequence would be invisible by default.
+  if (params.split_mode == LLAMA_SPLIT_MODE_TENSOR) {
+    params.fit_params = false;
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] split-mode 'tensor': auto-fit is not available in this "
+        "mode and has been disabled; gpu_layers defaults to every layer and "
+        "ctx_size to the model's trained context unless set explicitly\n");
   }
 
   postprocess_cpu_params(params.cpuparams, nullptr);

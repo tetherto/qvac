@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
@@ -83,6 +84,31 @@ std::pair<BackendType, std::string> chooseBackend(
 /// falls back to the iGPU count. This mirrors backends like Vulkan which
 /// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
+
+/// @brief The ordered device names to hand to `--device` for
+/// LLAMA_SPLIT_MODE_TENSOR.
+///
+/// QVAC-24253. Tensor mode is the one split mode qvac-fabric selects devices
+/// for with no type filter and no deduplication: its branch in `src/llama.cpp`
+/// keeps everything whose buffer type is not the CPU buffer type, so
+/// integrated GPUs are included unconditionally and a physical GPU registered
+/// by two backends (e.g. Vulkan and HIP under GGML_BACKEND_DL) is added twice
+/// and receives two shards. `layer` and `row` route through fabric's filtered
+/// branch and are unaffected, so only tensor mode needs an explicit list.
+///
+/// Selection mirrors `getEffectiveGpuDeviceCount`: discrete GPUs when any are
+/// present, otherwise the integrated ones. Duplicates are dropped by device
+/// description, the closest proxy the BackendInterface exposes for fabric's
+/// own `device_id` dedupe — two registrations of one physical GPU report the
+/// same description.
+///
+/// Returns an empty vector when no GPU device is present; callers must then
+/// leave `--device` alone rather than emitting an empty list.
+std::vector<std::string>
+getTensorSplitDeviceNames(const BackendInterface& bckI);
+
+/// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
+std::vector<std::string> getTensorSplitDeviceNames();
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available

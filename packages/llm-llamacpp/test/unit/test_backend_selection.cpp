@@ -1149,3 +1149,63 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
   EXPECT_EQ(result.first, BackendType::CPU);
   EXPECT_FALSE(isMaliGpu);
 }
+
+// QVAC-24253: the explicit device list for LLAMA_SPLIT_MODE_TENSOR.
+//
+// qvac-fabric's tensor branch selects devices with no type filter and no
+// dedupe, so without this list it recruits integrated GPUs alongside discrete
+// ones and shards a physical GPU registered by two backends twice. These pin
+// the filtering the addon does on fabric's behalf.
+
+TEST_F(BackendSelectionTest, TensorDevices_NoDevices_ReturnsEmpty) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(getTensorSplitDeviceNames(bckI).empty());
+}
+
+TEST_F(BackendSelectionTest, TensorDevices_OnlyCpuAndAccel_ReturnsEmpty) {
+  mockBackend.addDevice(createCPUDevice("cpu", "cpu"));
+  mockBackend.addDevice(createACCELDevice("accelerate", "blas"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_TRUE(getTensorSplitDeviceNames(bckI).empty());
+}
+
+// The headline case: a discrete + integrated host must not put weights or KV
+// on the iGPU, because tensor parallelism paces the model by its slowest
+// participant.
+TEST_F(BackendSelectionTest, TensorDevices_ExcludesIgpuWhenDiscretePresent) {
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090", "vulkan0"));
+  mockBackend.addDevice(createGPUDevice("NVIDIA RTX 4090 #2", "vulkan1"));
+  mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan2"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// An iGPU-only host still gets tensor mode rather than nothing.
+TEST_F(BackendSelectionTest, TensorDevices_FallsBackToIgpuWhenNoDiscrete) {
+  mockBackend.addDevice(createIGPUDevice("Intel UHD 770", "vulkan0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+// One physical GPU registered by both Vulkan and HIP under GGML_BACKEND_DL
+// must be listed once, or it receives two shards.
+TEST_F(BackendSelectionTest, TensorDevices_DedupesDualRegisteredGpu) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon 8060S", "vulkan0"));
+  mockBackend.addDevice(createGPUDevice("AMD Radeon 8060S", "rocm0"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI), (std::vector<std::string>{"vulkan0"}));
+}
+
+// Distinct GPUs of the same model must both survive the dedupe.
+TEST_F(BackendSelectionTest, TensorDevices_KeepsDistinctGpusOfSameModel) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon 8060S (0)", "vulkan0"));
+  mockBackend.addDevice(createGPUDevice("AMD Radeon 8060S (1)", "vulkan1"));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  EXPECT_EQ(
+      getTensorSplitDeviceNames(bckI),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}

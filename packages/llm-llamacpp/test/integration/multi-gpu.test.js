@@ -164,10 +164,37 @@ safeTest(
 // "Meta(<dev0>,<dev1>,...)" (ggml-backend-meta.cpp), so that string in the logs
 // is the positive proof LLAMA_SPLIT_MODE_TENSOR actually engaged rather than
 // being quietly degraded or ignored.
+// Device names must be parsed out of the Meta(...) buffer name, NOT from
+// `devices`. extractBufferDevices requires `<Device> model buffer size`, but
+// under tensor mode the buffer is the composed meta buffer, so the line reads
+// `Meta(Vulkan0,Vulkan1) model buffer size = ...` — the token is followed by
+// `,` or `)`, never whitespace, so that set is always empty here.
+function extractMetaDevices(logs) {
+  for (const line of logs) {
+    const match = line.match(/\bMeta\(([^)]*)\)\s+model buffer size\s*=/i)
+    if (match) {
+      return match[1]
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+    }
+  }
+  return []
+}
+
 function assertMetaDeviceEngaged(t, devices, logs) {
-  const metaLine = logs.some((line) => line.includes('Meta('))
-  t.ok(metaLine, 'should report a Meta(...) device, proving the meta backend engaged')
-  assertMultiDevice('weights and KV')(t, devices)
+  const metaDevices = extractMetaDevices(logs)
+  t.ok(metaDevices.length > 0, 'should report a Meta(...) buffer, proving the meta backend engaged')
+  t.ok(
+    metaDevices.length >= 2,
+    `weights and KV should span >= 2 devices (found: ${metaDevices.join(', ')})`
+  )
+  // The device list is pinned explicitly for tensor mode, so an integrated GPU
+  // appearing here means the filtering regressed (QVAC-24253).
+  t.absent(
+    metaDevices.some((name) => /igpu/i.test(name)),
+    `no integrated GPU should participate (found: ${metaDevices.join(', ')})`
+  )
 }
 
 safeTest(

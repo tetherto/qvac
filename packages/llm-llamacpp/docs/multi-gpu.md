@@ -35,7 +35,11 @@ This package ships Metal (Apple), Vulkan (Linux/Windows/Android), OpenCL (Androi
 
 - **Flash attention is mandatory.** qvac-fabric fails context creation without it, so the addon rejects `flash-attn: 'off'` together with `split-mode: 'tensor'` up front (`InvalidArgument`). Leaving `flash-attn` unset is fine — it already defaults to `on`.
 - **Auto-fit is disabled.** qvac-fabric's memory fitting is not implemented for this mode, so the addon turns it off explicitly and logs an INFO line. `gpu_layers` then defaults to every layer and `ctx_size` to the model's trained context. **Set `ctx_size` explicitly for large models**, or the load can OOM where auto-fit would have trimmed the context.
-- **Not every architecture is supported.** qvac-fabric implements the tensor split per architecture; unsupported ones are rejected before loading with the architecture named. Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2/4, MiniMax, Qwen3-Next/3.5 and several others are excluded as of v10297.0.0. Common dense and MoE architectures (`llama`, `qwen2`, `qwen3`, `qwen3moe`, `gemma2`, `gemma3`, `phi3`, `mistral`) are supported.
+- **Not every architecture is supported.** qvac-fabric implements the tensor split per architecture; unsupported ones are rejected before loading with the architecture named. Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2/4, MiniMax, Qwen3-Next/3.5 and several others are excluded as of v10297.0.0. Common dense and MoE architectures (`llama`, `qwen2`, `qwen3`, `qwen3moe`, `gemma2`, `gemma3`, `phi3`, `mistral3`) are supported. Note the architecture names are the GGUF `general.architecture` values, not model marketing names — most Mistral GGUFs report `llama`, and `mistral4` is on the unsupported list.
+
+**Device selection is pinned explicitly.** `layer` and `row` omit `--device` and let qvac-fabric pick, which is safe because its filtered selection path excludes integrated GPUs when discrete ones exist and deduplicates a physical GPU registered by two backends. `LLAMA_SPLIT_MODE_TENSOR` takes a different path in qvac-fabric that does neither — left to itself it would split weights and the KV cache onto the iGPU of any discrete + integrated host, pacing the whole model by the weakest participant, and would shard a dual-registered GPU (Vulkan + HIP under `GGML_BACKEND_DL`) twice. The addon therefore enumerates the devices itself for tensor mode and passes an explicit `--device` list: discrete GPUs when any are present, otherwise the integrated ones, deduplicated by device description. `main-gpu` still cannot select among them — qvac-fabric's `main_gpu` pruning is gated on `split-mode: 'none'`.
+
+**`'tensor'` is not selectable through the SDK.** `@qvac/inference`'s `llamacppCompletionConfigSchema` still enumerates `'none' | 'layer' | 'row'`, so an SDK `loadModel` call with `'tensor'` fails Zod validation before it reaches the addon. For now the mode is reachable only through direct addon `loadModel`. Widening the SDK schema is separate SDK-pod work.
 
 qvac-fabric documents `LLAMA_SPLIT_MODE_TENSOR` as **EXPERIMENTAL** and expects good performance primarily on multi-GPU CUDA. CUDA is not shipped here, and none of the shipped backends provide a tuned all-reduce — they use the meta backend's generic fallback reduction. It is correct, but do not assume it is faster than `layer` without measuring.
 
@@ -237,6 +241,10 @@ Skips integrated GPUs during backend selection. Falls back to CPU if no discrete
 | `split-mode: 'tensor'` with `flash-attn: 'off'` | Throws `InvalidArgument` (qvac-fabric requires flash attention for this mode) |
 | `split-mode: 'tensor'` on Android / iOS | Throws `InvalidArgument` — all multi-GPU params are rejected on mobile |
 | `split-mode: 'tensor'` with `ctx_size` unset | Loads at the model's full trained context; auto-fit is disabled in this mode, so a large model can OOM |
+| `split-mode: 'tensor'` with `fit: 'on'` | `fit` is ignored — the tensor-mode override is applied after argument parsing, because qvac-fabric cannot fit this mode at all |
+| `split-mode: 'tensor'` on a discrete + integrated GPU host | Only the discrete GPUs participate; the addon passes an explicit `--device` list because qvac-fabric's tensor path would otherwise include the iGPU |
+| `split-mode: 'tensor'` with no enumerable GPU device | Falls back to qvac-fabric's own device selection with a warning, rather than passing an empty `--device` |
+| `split-mode: 'tensor'` through the SDK | Rejected by `@qvac/inference`'s Zod schema, which still enumerates `none`/`layer`/`row`; use direct addon `loadModel` |
 | Both `split-mode` and `split_mode` provided | Throws `InvalidArgument` error |
 | Both `main-gpu` and `main_gpu` provided | Throws `InvalidArgument` error |
 

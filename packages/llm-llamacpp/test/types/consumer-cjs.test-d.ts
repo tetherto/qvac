@@ -57,6 +57,23 @@ void tensorConfig;
 const badSplitMode: LlmLlamacpp.LlamaConfig = { device: "gpu", "split-mode": "sharded" };
 void badSplitMode;
 
+// flash-attn is now a narrowed field rather than reaching callers only through
+// the [key: string] escape hatch, so the tensor-mode requirement is visible at
+// compile time. Both spellings are typed.
+const flashAttnConfig: LlmLlamacpp.LlamaConfig = {
+  device: "gpu",
+  "split-mode": "tensor",
+  "flash-attn": "on",
+};
+void flashAttnConfig;
+
+const flashAttnUnderscore: LlmLlamacpp.LlamaConfig = { device: "gpu", flash_attn: "auto" };
+void flashAttnUnderscore;
+
+// @ts-expect-error - 'yes' is not a value qvac-fabric accepts for flash-attn
+const badFlashAttn: LlmLlamacpp.LlamaConfig = { device: "gpu", "flash-attn": "yes" };
+void badFlashAttn;
+
 const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },

@@ -8,18 +8,33 @@
   and KV cache across all visible GPUs. **EXPERIMENTAL and desktop-only** (still rejected on
   Android/iOS with the other multi-GPU parameters). Three constraints, all enforced up front with
   `InvalidArgument` rather than surfacing as an opaque native failure:
-  - Requires flash attention — `flash-attn: 'off'` is rejected (leaving it unset is fine, it
-    already defaults to `on`).
+  - Requires flash attention — a falsey `flash-attn` is rejected. qvac-fabric treats `off`,
+    `disabled`, `false` and `0` as equivalent, and all four are rejected under both the
+    `flash-attn` and `flash_attn` spellings. Leaving it unset is fine; it already defaults to `on`.
   - Disables auto-fit, which qvac-fabric does not implement for this mode: `gpu_layers` then
     defaults to every layer and `ctx_size` to the model's trained context, so **set `ctx_size`
-    explicitly for large models** or the load can OOM. Logged at INFO on every tensor-mode load.
+    explicitly for large models** or the load can OOM. The override is applied after argument
+    parsing, so an explicit `fit: 'on'` cannot silently re-enable it. Logged at WARNING.
   - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2/4,
     MiniMax, Qwen3-Next/3.5 and others as of qvac-fabric v10297.0.0); rejected before loading with
     the architecture named.
 
+  Tensor mode pins its own `--device` list. qvac-fabric selects devices for this mode with no
+  device-type filter and no deduplication, so left alone it splits weights and KV cache onto the
+  integrated GPU of any discrete + integrated host and shards a dual-registered GPU twice. The
+  addon enumerates devices itself — discrete when present, otherwise integrated, deduplicated by
+  description. `layer` and `row` are unchanged and still let qvac-fabric choose.
+
+  **Not selectable through the SDK yet:** `@qvac/inference`'s config schema still enumerates
+  `none`/`layer`/`row`, so `'tensor'` is reachable only via direct addon `loadModel`.
+
   Unrelated to `split-mode: 'row'`, which needs split buffers no shipped backend provides and is
   still degraded to `'layer'`. `examples/multiGpuBenchmark.js` now benchmarks the new mode
   alongside the existing three. See `docs/multi-gpu.md`.
+
+- `flash-attn` (and the `flash_attn` alias) is now a narrowed field on `LlamaConfig` rather than
+  reaching callers only through the `[key: string]` escape hatch, making the tensor-mode
+  requirement visible at compile time. Propagating it to the SDK schema is separate SDK-pod work.
 
 ## [0.47.0] - 2026-08-24
 

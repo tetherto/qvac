@@ -84,6 +84,9 @@ using BackendResolver = std::function<SelectedBackend(
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   std::function<bool()> gpuBackendSupportsRowSplit;
+  /// Devices to pin LLAMA_SPLIT_MODE_TENSOR to. Consulted only for tensor
+  /// mode; see backend_selection::getTensorSplitDeviceNames.
+  std::function<std::vector<std::string>()> tensorSplitDeviceNames;
 };
 
 struct NormalizedLoad {

@@ -1001,6 +1001,20 @@ namespace LlmLlamacpp {
      * See docs/multi-gpu.md.
      */
     "split-mode"?: "none" | "layer" | "row" | "tensor";
+    /**
+     * Flash attention. Defaults to `'on'` (the addon enables it unless
+     * finetuning, which forces it off). `'auto'` lets qvac-fabric decide.
+     *
+     * Required by `split-mode: 'tensor'` — combining the two with a falsey
+     * value is rejected with `InvalidArgument` rather than surfacing as an
+     * opaque native failure. qvac-fabric treats `'off'`, `'disabled'`,
+     * `'false'` and `'0'` as equivalent, and all four are rejected.
+     *
+     * Accepts the `flash_attn` spelling too; supplying both is an error.
+     */
+    "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
+    /** Underscore alias for {@link LlamaConfig["flash-attn"]}. Supplying both spellings is an error. */
+    flash_attn?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
     /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
     "tensor-split"?: string;
     "cache-type-k"?: string;
