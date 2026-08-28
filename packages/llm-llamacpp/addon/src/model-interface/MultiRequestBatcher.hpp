@@ -171,8 +171,8 @@ public:
   /// by the next sampleAndAppendIdle() call.
   [[nodiscard]] FillResult fillBatch(LlamaBatch& batch);
 
-  void advance(
-      unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
+  void
+  advance(unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
 
   /// A slot blocked on its head media barrier, ready for the scheduler
   /// to run `SequenceDriver::evalMediaSegment(mediaIndex, currentPos)`.
