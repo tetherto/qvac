@@ -4,9 +4,10 @@ import { audioInputSchema, type AudioInput } from '@/schemas/transcription'
 import { encodeBase64 } from '@/utils/encoding'
 
 const base64Schema = z.string().min(1)
+// Mirrors requireMinimaxInferenceSteps and requireMinimaxCfgScale in @qvac/audiogen-ggml.
 const MINIMAX_MAX_INFERENCE_STEPS = 1000
-const FLOAT32_MAX = 3.4028234663852886e38
-const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45
+const MINIMAX_CFG_SCALE_MAX = 3.4028234663852886e38
+const MINIMAX_CFG_SCALE_MIN_POSITIVE = 1.401298464324817e-45
 
 export const AUDIOGEN_ENGINES = ['acestep', 'minimax'] as const
 export const audioGenEngineSchema = z.enum(AUDIOGEN_ENGINES)
@@ -82,8 +83,8 @@ const acestepRuntimeConfigShape = {
 const minimaxCfgScaleSchema = z
   .number()
   .min(0)
-  .max(FLOAT32_MAX)
-  .refine((value) => value === 0 || value >= FLOAT32_MIN_POSITIVE, {
+  .max(MINIMAX_CFG_SCALE_MAX)
+  .refine((value) => value === 0 || value >= MINIMAX_CFG_SCALE_MIN_POSITIVE, {
     message: 'cfgScale must be 0 or a positive float32 value'
   })
   .describe('MiniMax flow classifier-free guidance scale; `0` uses the model default.')
@@ -100,20 +101,27 @@ const minimaxRuntimeConfigShape = {
   cfgScale: minimaxCfgScaleSchema.optional()
 }
 
-export const audioGenRuntimeConfigSchema = z
+const acestepAudioGenRuntimeConfigSchema = z
   .object({
-    engine: audioGenEngineSchema
-      .optional()
-      .describe('Music-generation engine; defaults to `acestep`.'),
-    ...acestepRuntimeConfigShape,
-    cfgScale: minimaxCfgScaleSchema.optional()
+    engine: z.literal('acestep').optional().describe('Use the ACE-Step music-generation engine.'),
+    ...acestepRuntimeConfigShape
   })
   .strict()
 
-const acestepAudioGenConfigSchema = z
+const minimaxAudioGenRuntimeConfigSchema = z
   .object({
-    engine: z.literal('acestep').optional().describe('Use the ACE-Step music-generation engine.'),
-    ...acestepRuntimeConfigShape,
+    engine: z.literal('minimax').describe('Use the MiniMax-Music3 generation engine.'),
+    ...minimaxRuntimeConfigShape
+  })
+  .strict()
+
+export const audioGenRuntimeConfigSchema = z.discriminatedUnion('engine', [
+  acestepAudioGenRuntimeConfigSchema,
+  minimaxAudioGenRuntimeConfigSchema
+])
+
+const acestepAudioGenConfigSchema = acestepAudioGenRuntimeConfigSchema
+  .extend({
     textEncModelSrc: modelSrcInputSchema.describe(
       'Text-encoder model source; turns the caption and lyrics into embeddings.'
     ),
@@ -127,10 +135,8 @@ const acestepAudioGenConfigSchema = z
   })
   .strict()
 
-const minimaxAudioGenConfigSchema = z
-  .object({
-    engine: z.literal('minimax').describe('Use the MiniMax-Music3 generation engine.'),
-    ...minimaxRuntimeConfigShape,
+const minimaxAudioGenConfigSchema = minimaxAudioGenRuntimeConfigSchema
+  .extend({
     lmModelSrc: modelSrcInputSchema.describe(
       'MiniMax language-model source; generates semantic music tokens.'
     ),
@@ -140,7 +146,7 @@ const minimaxAudioGenConfigSchema = z
   })
   .strict()
 
-export const audioGenConfigSchema = z.union([
+export const audioGenConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenConfigSchema,
   minimaxAudioGenConfigSchema
 ])
@@ -194,17 +200,23 @@ const audioGenGenerationShape = {
     .min(1)
     .max(Number.MAX_SAFE_INTEGER)
     .optional()
-    .describe('MiniMax semantic-frame cap. Cannot be combined with duration.'),
+    .describe(
+      'MiniMax semantic-frame cap. Cannot be combined with duration. MiniMax only; rejected by ACE-Step.'
+    ),
   inferenceSteps: z
     .number()
     .int()
     .min(0)
     .max(MINIMAX_MAX_INFERENCE_STEPS)
     .optional()
-    .describe('MiniMax flow steps for this generation; 0 uses the model default.'),
+    .describe(
+      'MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.'
+    ),
   cfgScale: minimaxCfgScaleSchema
     .optional()
-    .describe('MiniMax flow classifier-free guidance scale for this generation.'),
+    .describe(
+      'MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.'
+    ),
   lmTemperature: z
     .number()
     .nonnegative()
@@ -314,7 +326,7 @@ function validateAudioGenRequest(
     ctx.addIssue({
       code: 'custom',
       path: ['maxFrames'],
-      message: 'MiniMax accepts either maxFrames or duration, not both'
+      message: 'duration and maxFrames cannot be combined'
     })
   }
 }
@@ -368,7 +380,11 @@ export const audioGenStreamResponseSchema = z
 export type AudioGenTaskType = z.infer<typeof audioGenTaskTypeSchema>
 export type AudioGenEngine = z.infer<typeof audioGenEngineSchema>
 export type AudioGenAudioInput = z.infer<typeof audioGenAudioInputSchema>
+export type AcestepAudioGenRuntimeConfig = z.infer<typeof acestepAudioGenRuntimeConfigSchema>
+export type MinimaxAudioGenRuntimeConfig = z.infer<typeof minimaxAudioGenRuntimeConfigSchema>
 export type AudioGenRuntimeConfig = z.infer<typeof audioGenRuntimeConfigSchema>
+export type AcestepAudioGenConfig = z.infer<typeof acestepAudioGenConfigSchema>
+export type MinimaxAudioGenConfig = z.infer<typeof minimaxAudioGenConfigSchema>
 export type AudioGenConfig = z.infer<typeof audioGenConfigSchema>
 export type AudioGenClientParams = z.input<typeof audioGenClientParamsSchema>
 export type AudioGenStreamRequest = z.infer<typeof audioGenStreamRequestSchema>

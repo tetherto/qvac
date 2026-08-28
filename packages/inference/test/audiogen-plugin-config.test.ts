@@ -1,5 +1,6 @@
 import test from 'brittle'
-import { AudioGen, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
+import { AudioGen, ENGINE_ACESTEP, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
+import { ModelLoadFailedError } from '@/errors/index'
 import { resolveAudioGenConfig } from '@/plugins/builtin/audiogen-ggml/config'
 import { audioGenPlugin } from '@/plugins/builtin/audiogen-ggml/plugin'
 import { ModelType, type ModelSrcInput, type ResolveContext } from '@/schemas'
@@ -79,6 +80,79 @@ test('AudioGen plugin resolves the MiniMax LM and synthesis sources', async (t) 
     lmModelPath: '/resolved/minimax-lm.gguf',
     synthModelPath: '/resolved/minimax-synth.gguf'
   })
+})
+
+test('AudioGen rejects MiniMax on mobile before resolving model paths', async (t) => {
+  let resolveCalls = 0
+  const context: ResolveContext = {
+    modelSrc: '',
+    modelType: 'audiogen-ggml',
+    platform: 'ios',
+    resolveModelPath: async function () {
+      resolveCalls++
+      return '/resolved/model.gguf'
+    }
+  }
+
+  await t.exception(
+    () =>
+      resolveAudioGenConfig(
+        {
+          engine: 'minimax',
+          lmModelSrc: 'minimax-lm.gguf',
+          synthModelSrc: 'minimax-synth.gguf'
+        },
+        context
+      ),
+    ModelLoadFailedError
+  )
+  t.is(resolveCalls, 0, 'the platform guard runs before either model download')
+})
+
+test('AudioGen plugin defaults to ACE-Step and forwards all four artifacts', (t) => {
+  const result = audioGenPlugin.createModel({
+    modelId: 'acestep-model',
+    modelPath: '',
+    modelConfig: { useGPU: false },
+    artifacts: {
+      textEncModelPath: '/resolved/text-encoder.gguf',
+      lmModelPath: '/resolved/lm.gguf',
+      ditModelPath: '/resolved/dit.gguf',
+      vaeModelPath: '/resolved/vae.gguf'
+    }
+  })
+  const internals = result.model as unknown as {
+    _engineType: string
+    _configuration: {
+      textEncModelPath?: string
+      lmModelPath?: string
+      ditModelPath?: string
+      vaeModelPath?: string
+    }
+  }
+
+  t.is(internals._engineType, ENGINE_ACESTEP)
+  t.is(internals._configuration.textEncModelPath, '/resolved/text-encoder.gguf')
+  t.is(internals._configuration.lmModelPath, '/resolved/lm.gguf')
+  t.is(internals._configuration.ditModelPath, '/resolved/dit.gguf')
+  t.is(internals._configuration.vaeModelPath, '/resolved/vae.gguf')
+})
+
+test('AudioGen plugin rejects incomplete ACE-Step artifacts', (t) => {
+  t.exception(
+    () =>
+      audioGenPlugin.createModel({
+        modelId: 'incomplete-acestep-model',
+        modelPath: '',
+        modelConfig: {},
+        artifacts: {
+          textEncModelPath: '/resolved/text-encoder.gguf',
+          lmModelPath: '/resolved/lm.gguf',
+          ditModelPath: '/resolved/dit.gguf'
+        }
+      }),
+    ModelLoadFailedError
+  )
 })
 
 test('AudioGen plugin creates a MiniMax engine from resolved artifacts', (t) => {

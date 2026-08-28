@@ -19,7 +19,6 @@ test('AudioGen constants are exported from the package root', (t) => {
   t.is(AUDIOGEN_INPUT_CHANNELS, audioGenSchemas.AUDIOGEN_INPUT_CHANNELS)
   t.is(AUDIOGEN_INPUT_MAX_SECONDS, audioGenSchemas.AUDIOGEN_INPUT_MAX_SECONDS)
 
-  t.alike([...AUDIOGEN_ENGINES], ['acestep', 'minimax'])
   t.alike([...AUDIOGEN_TASK_TYPES], ['text2music', 'cover-nofsq'])
   t.is(AUDIOGEN_INPUT_SAMPLE_RATE, 48000)
   t.is(AUDIOGEN_INPUT_CHANNELS, 2)

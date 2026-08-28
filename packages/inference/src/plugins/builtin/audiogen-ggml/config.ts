@@ -1,4 +1,10 @@
-import { audioGenConfigSchema, type ResolveContext } from '@/schemas/index'
+import { ModelLoadFailedError } from '@/errors/index'
+import {
+  audioGenConfigSchema,
+  type AcestepAudioGenConfig,
+  type MinimaxAudioGenConfig,
+  type ResolveContext
+} from '@/schemas/index'
 
 export async function resolveAudioGenConfig(config: Record<string, unknown>, ctx: ResolveContext) {
   const parsed = audioGenConfigSchema.parse(config)
@@ -8,10 +14,16 @@ export async function resolveAudioGenConfig(config: Record<string, unknown>, ctx
 }
 
 async function resolveMinimaxConfig(
-  parsed: Extract<ReturnType<typeof audioGenConfigSchema.parse>, { engine: 'minimax' }>,
+  parsed: MinimaxAudioGenConfig,
   ctx: ResolveContext
 ) {
+  if (ctx.platform === 'android' || ctx.platform === 'ios') {
+    throw new ModelLoadFailedError('MiniMax-Music3 is available on desktop only')
+  }
+
   const { lmModelSrc, synthModelSrc, ...runtimeConfig } = parsed
+  // Resolve sequentially for the same stall-timeout reason documented for the
+  // larger ACE-Step artifact set below.
   const lmModelPath = await ctx.resolveModelPath(lmModelSrc)
   const synthModelPath = await ctx.resolveModelPath(synthModelSrc)
 
@@ -25,7 +37,7 @@ async function resolveMinimaxConfig(
 }
 
 async function resolveAcestepConfig(
-  parsed: Exclude<ReturnType<typeof audioGenConfigSchema.parse>, { engine: 'minimax' }>,
+  parsed: AcestepAudioGenConfig,
   ctx: ResolveContext
 ) {
   const { textEncModelSrc, lmModelSrc, ditModelSrc, vaeModelSrc, ...runtimeConfig } = parsed

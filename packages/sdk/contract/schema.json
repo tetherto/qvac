@@ -561,19 +561,19 @@
           "exclusiveMinimum": 0
         },
         "maxFrames": {
-          "description": "MiniMax semantic-frame cap. Cannot be combined with duration.",
+          "description": "MiniMax semantic-frame cap. Cannot be combined with duration. MiniMax only; rejected by ACE-Step.",
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
         },
         "inferenceSteps": {
-          "description": "MiniMax flow steps for this generation; 0 uses the model default.",
+          "description": "MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.",
           "type": "integer",
           "minimum": 0,
           "maximum": 1000
         },
         "cfgScale": {
-          "description": "MiniMax flow classifier-free guidance scale for this generation.",
+          "description": "MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.",
           "type": "number",
           "minimum": 0,
           "maximum": 3.4028234663852886e38
@@ -13839,7 +13839,7 @@
                   "const": "audiogen-ggml"
                 },
                 "modelConfig": {
-                  "anyOf": [
+                  "oneOf": [
                     {
                       "type": "object",
                       "properties": {

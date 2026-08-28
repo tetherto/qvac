@@ -39,17 +39,7 @@ export const audioGenPlugin = definePlugin({
     const files = getAudioGenFiles(engine, params.artifacts)
 
     const logger = createStreamLogger(params.modelId, ModelType.audiogenGgml)
-    const addonConfig = {
-      ...(config.useGPU !== undefined && { useGPU: config.useGPU }),
-      ...(config.inferenceSteps !== undefined && {
-        inferenceSteps: config.inferenceSteps
-      }),
-      ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale }),
-      ...(config.shift !== undefined && { shift: config.shift }),
-      ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers }),
-      ...(config.threads !== undefined && { threads: config.threads }),
-      ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
-    }
+    const addonConfig = getAudioGenAddonConfig(config)
     const model = new AudioGen({
       engine,
       files,
@@ -96,4 +86,25 @@ function getAudioGenFiles(
     )
   }
   return { textEncModel, lmModel, ditModel, vaeModel }
+}
+
+function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
+  const commonConfig = {
+    ...(config.useGPU !== undefined && { useGPU: config.useGPU }),
+    ...(config.threads !== undefined && { threads: config.threads }),
+    ...(config.backendsDir !== undefined && { backendsDir: config.backendsDir })
+  }
+  if (config.engine === ENGINE_MINIMAX) {
+    return {
+      ...commonConfig,
+      ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
+      ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale })
+    }
+  }
+  return {
+    ...commonConfig,
+    ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
+    ...(config.shift !== undefined && { shift: config.shift }),
+    ...(config.nGpuLayers !== undefined && { nGpuLayers: config.nGpuLayers })
+  }
 }

@@ -1,4 +1,9 @@
-import type { AudioGenClientParams, AudioGenConfig, AudioGenEngine } from '@/index'
+import type {
+  AudioGenClientParams,
+  AudioGenConfig,
+  AudioGenEngine,
+  AudioGenRuntimeConfig
+} from '@/index'
 
 const minimaxEngine: AudioGenEngine = 'minimax'
 void minimaxEngine
@@ -12,6 +17,33 @@ const minimaxConfig: AudioGenConfig = {
   cfgScale: 1.8
 }
 void minimaxConfig
+
+const acestepRuntimeConfig: AudioGenRuntimeConfig = {
+  shift: 3,
+  nGpuLayers: 99
+}
+void acestepRuntimeConfig
+
+const minimaxRuntimeConfig: AudioGenRuntimeConfig = {
+  engine: 'minimax',
+  inferenceSteps: 12,
+  cfgScale: 1.8
+}
+void minimaxRuntimeConfig
+
+// @ts-expect-error MiniMax rejects ACE-Step-only runtime controls
+const invalidMinimaxRuntimeConfig: AudioGenRuntimeConfig = {
+  engine: 'minimax',
+  shift: 3
+}
+void invalidMinimaxRuntimeConfig
+
+// @ts-expect-error ACE-Step rejects MiniMax-only cfgScale
+const invalidAcestepRuntimeConfig: AudioGenRuntimeConfig = {
+  engine: 'acestep',
+  cfgScale: 1.8
+}
+void invalidAcestepRuntimeConfig
 
 const minimaxRequest: AudioGenClientParams = {
   modelId: 'minimax-model',

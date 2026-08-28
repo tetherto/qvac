@@ -312,7 +312,7 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         int | None,
         Field(
             alias="maxFrames",
-            description="MiniMax semantic-frame cap. Cannot be combined with duration.",
+            description="MiniMax semantic-frame cap. Cannot be combined with duration. MiniMax only; rejected by ACE-Step.",
             ge=1,
             le=9007199254740991,
         ),
@@ -321,7 +321,7 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         int | None,
         Field(
             alias="inferenceSteps",
-            description="MiniMax flow steps for this generation; 0 uses the model default.",
+            description="MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.",
             ge=0,
             le=1000,
         ),
@@ -330,7 +330,7 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         float | None,
         Field(
             alias="cfgScale",
-            description="MiniMax flow classifier-free guidance scale for this generation.",
+            description="MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.",
             ge=0.0,
             le=3.4028234663852886e38,
         ),
