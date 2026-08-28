@@ -20,14 +20,12 @@
 
 ### Changed
 
-- `prebuilds-fabric.yml` sets `include-rocm: true` so the linux-x64 prebuild
-  cross-compiles the HIP backend, and `on-pr-fabric.yml`'s `cpp-lint` sets
-  `include-rocm-sdk: true` because `ggml-config.cmake` resolves
-  `find_dependency(hip/hipblas/rocblas)` at configure time. No AMD GPU is
-  required on either runner, but the SDK itself is mandatory on both: without it
-  `cpp-lint` fails at configure time resolving the port's `$ENV{ROCM_PATH}` shim
-  to an empty prefix (`/lib/cmake/hip/hip-config.cmake`), which a warm vcpkg
-  binary cache can disguise as a successful `hip` install.
+- Linux-x64 CI installs the ROCm SDK (`include-rocm` / `include-rocm-sdk`,
+  landed in #4132). That is mandatory once this package requests `hip-backend`:
+  without it `cpp-lint` fails at configure time resolving the port's
+  `$ENV{ROCM_PATH}` shim to an empty prefix (`/lib/cmake/hip/hip-config.cmake`),
+  which a warm vcpkg binary cache can disguise as a successful `hip` install.
+  No AMD GPU is required on the runner.
 - `qvac-registry-vcpkg` baseline `c57eec31` -> `f04e2447`, matching
   `@qvac/vla-ggml`. Required because `qvac-fabric[hip-backend]` depends on `hip`
   with no version constraint, so its version comes from the pinned baseline, and
