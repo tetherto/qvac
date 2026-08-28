@@ -120,7 +120,7 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild) |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
 
@@ -516,7 +516,7 @@ it yourself with `npm run build:cuda` (or
 feature flips ggml into hybrid dynamically-loaded backend mode: the
 CPU-variant, Vulkan, and CUDA backends ship as `.so` modules next to the
 addon, and only the CUDA module depends on the CUDA runtime. Engaging CUDA
-requires the NVIDIA driver (`libcuda.so.1`) plus the CUDA runtime libraries
+requires the NVIDIA driver (`libcuda.so.1`) plus the CUDA 13 runtime libraries
 (`libcudart` / `libcublas` / `libcublasLt`) resolvable at load time; hosts
 that cannot resolve them — including CPU-only and non-NVIDIA machines — skip
 the module and fall back to Vulkan or CPU instead of failing to load the
@@ -542,11 +542,11 @@ Core ML sidecar drove the encoder). Whisper additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
-Two paths matter on mobile:
+Two paths matter on Android and Linux:
 
 - **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
-  holding dynamically-loaded ggml backend libraries (Vulkan, OpenCL, per-arch
-  CPU variants). Defaults to the package's `prebuilds/`; the native addon
+  holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
+  per-arch CPU variants). Defaults to the package's `prebuilds/`; the native addon
   appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
   when backend libraries ship elsewhere — e.g. Android's
   `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.

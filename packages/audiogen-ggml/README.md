@@ -44,7 +44,7 @@ The linux-x64 prebuild bundles the CUDA backend next to Vulkan: ggml runs in
 hybrid dynamically-loaded backend mode, the CPU-variant, Vulkan, and CUDA
 backends ship as `.so` modules beside the addon, and only the CUDA module
 depends on the CUDA runtime. Engaging CUDA needs the NVIDIA driver plus the
-CUDA runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
+CUDA 13 runtime libraries (cudart and cuBLAS) resolvable at load time; hosts that
 cannot resolve them skip the module and fall back to Vulkan or CPU. The engine
 prefers CUDA when both GPU backends are usable. Elsewhere the CUDA backend is
 opt-in at build time via `bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc`

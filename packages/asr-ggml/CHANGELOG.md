@@ -20,9 +20,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   `ASR_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
   per-arch CPU variants as runtime-loaded modules, and `use_gpu` /
   `useGPU: true` prefers CUDA on NVIDIA hosts (whisper and parakeet). CUDA
-  engages where the NVIDIA driver and CUDA runtime libraries (cudart, cuBLAS)
-  are present; on every other host the CUDA module is skipped and the addon
-  behaves as before (Vulkan or CPU). The whisper backend loader now also runs
+  engages where the NVIDIA driver and CUDA 13 runtime libraries (cudart,
+  cuBLAS) are present; on every other host the CUDA module is skipped and
+  the addon behaves as before (Vulkan or CPU). The whisper backend loader
+  now also runs
   on desktop linux-x64 (previously Android and linux-arm64 only) so the
   modules register before `whisper_init`.
 

@@ -13,8 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ENABLE_CUDA=ON` and bundles the CUDA backend alongside Vulkan and the
   per-arch CPU variants as runtime-loaded modules; `useGPU: true` prefers
   CUDA on NVIDIA hosts (ACE-Step and MiniMax-Music3). CUDA engages where the
-  NVIDIA driver and CUDA runtime libraries (cudart, cuBLAS) are present; on
-  every other host the CUDA module is skipped and the addon behaves as
+  NVIDIA driver and CUDA 13 runtime libraries (cudart, cuBLAS) are present;
+  on every other host the CUDA module is skipped and the addon behaves as
   before (Vulkan or CPU).
 
 ## [0.3.0] - 2026-08-27
