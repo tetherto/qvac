@@ -962,6 +962,46 @@ TEST_F(MultiRequestBatcherTest, TerminalFirstSampleStillStampsTtft) {
       << "one uncounted token gives no honest rate window";
 }
 
+/// The prediction limit is the one terminal stop whose sample IS content the
+/// caller received. The single-prompt path decodes and counts it before its
+/// own `n_predict` cap fires, so dropping it here reported N-1 against that
+/// path's N, and 0 for `predict: 1` alongside non-empty streamed output.
+TEST_F(MultiRequestBatcherTest, PredictionLimitSampleIsCounted) {
+  const unsigned kMaxChunkSize = 2;
+  const unsigned kMaxTokensPerSeq = 100;
+  const size_t kBatchSize = 1;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
+
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.chunkSize, 2);
+  mocked_llama_decode(*batch);
+  batcher.advance(result.chunkSize);
+
+  batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
+    batcher.markFinished(sid, StopReason::PredictionLimit);
+    return 41;
+  });
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  ASSERT_EQ(req->generatedTokens.size(), 1u)
+      << "a `predict: 1` request produced exactly one token and must say so";
+  EXPECT_EQ(req->generatedTokens.back(), 41);
+  EXPECT_TRUE(req->lastTokenAt.has_value())
+      << "a counted token closes the rate window";
+
+  // Counted but never fed: the slot is finished, so nothing may queue behind
+  // it and `fillBatch` has no work left.
+  EXPECT_EQ(req->remainingToFeed(), 0u);
+  EXPECT_EQ(batcher.fillBatch(batch).chunkSize, 0u);
+}
+
 TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
   const unsigned kMaxChunkSize = 8;
   const unsigned kMaxTokensPerSeq = 3;

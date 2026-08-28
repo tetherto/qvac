@@ -340,15 +340,25 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
     const int logitIdx = lastLogitIndices_[slot->seqId];
     const llama_token sampled = samplerFn(slot->seqId, logitIdx);
     // `generatedTokens` is both the feed queue and the runtime-stats count,
-    // so it must hold exactly the tokens that reach the cache.
+    // so it must hold exactly the tokens the caller received as content.
+    // `hasUnfedSample` keeps the two roles apart for the one entry that is
+    // counted but never fed.
     //
-    // A sample that ends the sequence never does. `samplerFn` marks the slot
-    // finished for a terminal EOG, an antiprompt hit, a prediction limit or a
-    // context overflow, and `fillBatch` then filters the slot out, so the
-    // token is dropped without ever being decoded. Recording it would report
-    // one token more than the cache grew, which is the single-prompt path's
-    // rule (`lastGeneratedTokenCount_` increments after a successful decode,
-    // never for the token that stopped generation).
+    // A sample that ends the sequence usually does not. `samplerFn` marks the
+    // slot finished for a terminal EOG, an antiprompt hit, a prediction limit
+    // or a context overflow, and `fillBatch` then filters the slot out, so the
+    // token is dropped without ever being decoded. Recording an EOG would
+    // report one token more than the caller ever saw, which is also the
+    // single-prompt path's rule: its loop breaks before the decode, so
+    // `lastGeneratedTokenCount_` never counts the token that stopped
+    // generation.
+    //
+    // A prediction-limit stop is the exception. That sample is ordinary
+    // content, already streamed, and the single-prompt loop decodes and counts
+    // it before its own `n_predict` cap fires (`reachedBudget` is gated on the
+    // batch path). Dropping it here made an identical `predict: N` request
+    // report N on one path and N-1 on the other, and `predict: 1` report 0
+    // next to non-empty output.
     //
     // A driver can also stop without producing a token at all and return
     // `LLAMA_TOKEN_NULL` (see `SequenceStepResult::token`); the MTMD
@@ -365,15 +375,18 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
     if (!slot->firstTokenAt.has_value()) {
       slot->firstTokenAt = now;
     }
-    if (slot->isFinished()) {
+    if (slot->isFinished() && slot->stopReason != StopReason::PredictionLimit) {
       continue;
     }
     slot->generatedTokens.push_back(sampled);
-    slot->hasUnfedSample = true;
+    // Counted, never fed: a finished slot is filtered out of `fillBatch`, and
+    // leaving this false keeps `remainingToFeed` honest for the one step
+    // between the sample and the slot being drained.
+    slot->hasUnfedSample = !slot->isFinished();
     // Closes the observed-TPS window, so it advances only for tokens that
-    // are counted. The terminal sample above is not one of them, and ending
-    // the window on it would stretch the window over one more gap than the
-    // count has.
+    // are counted. A sample dropped above is not one of them, and ending the
+    // window on it would stretch the window over one more gap than the count
+    // has.
     slot->lastTokenAt = now;
   }
 }

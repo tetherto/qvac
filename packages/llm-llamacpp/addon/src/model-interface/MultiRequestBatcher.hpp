@@ -26,6 +26,10 @@ enum class StopReason : uint8_t {
   // walk into this condition with no caller cap, which makes a full window
   // the one thing it can mean, never a prediction-limit cutoff.
   ContextOverflow,
+  // The caller's `n_predict` cap. Distinct from `Finished` because the
+  // sample that trips it is ordinary content the caller received, so it is
+  // counted, while an EOG merely stops the sequence and is not.
+  PredictionLimit,
 };
 
 struct Request {

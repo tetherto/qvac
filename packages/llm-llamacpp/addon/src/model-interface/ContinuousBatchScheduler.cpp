@@ -957,6 +957,13 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
         // failing the whole batch. Carry the driver's own reason through so
         // the caller can tell a full context from a prediction-limit cutoff.
         batcher_.markFinished(seqId, StopReason::ContextOverflow);
+      } else if (
+          result.finished &&
+          result.stopReason == GenerationStopReason::PredictionLimit) {
+        // Carried through for the same reason `ContextOverflow` is: the
+        // batcher cannot otherwise tell this sample from an EOG, and the two
+        // are counted differently.
+        batcher_.markFinished(seqId, StopReason::PredictionLimit);
       } else if (result.finished) {
         batcher_.markFinished(seqId);
       }
