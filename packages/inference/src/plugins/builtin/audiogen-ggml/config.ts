@@ -13,10 +13,7 @@ export async function resolveAudioGenConfig(config: Record<string, unknown>, ctx
     : resolveAcestepConfig(parsed, ctx)
 }
 
-async function resolveMinimaxConfig(
-  parsed: MinimaxAudioGenConfig,
-  ctx: ResolveContext
-) {
+async function resolveMinimaxConfig(parsed: MinimaxAudioGenConfig, ctx: ResolveContext) {
   if (ctx.platform === 'android' || ctx.platform === 'ios') {
     throw new ModelLoadFailedError('MiniMax-Music3 is available on desktop only')
   }
@@ -36,10 +33,7 @@ async function resolveMinimaxConfig(
   }
 }
 
-async function resolveAcestepConfig(
-  parsed: AcestepAudioGenConfig,
-  ctx: ResolveContext
-) {
+async function resolveAcestepConfig(parsed: AcestepAudioGenConfig, ctx: ResolveContext) {
   const { textEncModelSrc, lmModelSrc, ditModelSrc, vaeModelSrc, ...runtimeConfig } = parsed
   // These four artifacts total several gigabytes. Resolving them concurrently
   // splits bandwidth across independent registry streams and can make each one
