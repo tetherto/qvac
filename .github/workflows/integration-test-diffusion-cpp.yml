@@ -93,7 +93,9 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.runner }}
     environment: release
-    name: test-${{ matrix.platform }}-${{ matrix.arch }}
+    # matrix.os disambiguates same platform/arch rows (three linux-x64 legs:
+    # 22.04 GPU, 24.04 GPU, 22.04-cpu GitHub-hosted) in checks and artifacts.
+    name: test-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORKDIR: packages/diffusion-cpp
@@ -132,6 +134,15 @@ jobs:
             platform: linux
             arch: arm64
             runner: ubuntu-22.04-arm
+            no_gpu: 'true'
+          # CPU-only x64 leg on a disposable GitHub-hosted runner: the exact
+          # environment from gh#3853 (linux-x64 server, no graphics stack).
+          # os is a display/artifact label; -cpu keeps it distinct from the
+          # self-hosted ubuntu-22.04 GPU leg.
+          - os: ubuntu-22.04-cpu
+            platform: linux
+            arch: x64
+            runner: ubuntu-22.04
             no_gpu: 'true'
           - os: mac-mini-m4
             platform: darwin
@@ -360,10 +371,27 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem ${{ env.WORKDIR }}/prebuilds
 
-      - name: Linux - install dependencies
-        if: (matrix.platform == 'linux' || matrix.platform == 'android') && matrix.arch == 'arm64'
+      # QVAC-23767: CPU-only legs must run with no graphics stack at all (the
+      # normal state of a CPU-only server, gh#3853), so the full CPU suite —
+      # including the prebuild dynamic-linking test — exercises that
+      # environment on every PR. Restricted to disposable GitHub-hosted
+      # runners; never strips packages from self-hosted machines. NOTE: red
+      # legs here do not block merges (run-integration-tests is
+      # continue-on-error); the hard-blocking DT_NEEDED gate is the
+      # verify-prebuild-linking job in on-pr-diffusion-cpp.yml, which fails
+      # the qvac/prebuild-diffusion-cpp commit status Merge Guard requires.
+      - name: Linux - ensure no graphics stack (no libvulkan)
+        if: matrix.platform == 'linux' && matrix.no_gpu == 'true' && runner.environment == 'github-hosted'
         shell: bash
-        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+        run: |
+          sudo apt-get remove -y --purge 'libvulkan*' 'mesa-vulkan*' 2>/dev/null || true
+          sudo dpkg --force-depends --remove libvulkan1 2>/dev/null || true
+          sudo ldconfig
+          if ldconfig -p | grep -q libvulkan; then
+            echo "::error::libvulkan is still present; this leg must run without a graphics stack"
+            exit 1
+          fi
+          echo "libvulkan absent - true CPU-only environment"
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
@@ -405,7 +433,7 @@ jobs:
         if: always() && !cancelled()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
-          name: perf-report-diffusion-cpp-${{ matrix.platform }}-${{ matrix.arch }}-${{ github.run_number }}
+          name: perf-report-diffusion-cpp-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.os }}-${{ github.run_number }}
           path: ${{ env.WORKDIR }}/test/results/performance-report.json
           if-no-files-found: ignore
           retention-days: 90
