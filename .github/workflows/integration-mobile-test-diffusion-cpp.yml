@@ -162,7 +162,7 @@ jobs:
     # to spend on a doomed run). Skipped on workflow_call — validate-devices is
     # itself skipped there, and the `skipped` branch keeps this job running.
     needs: [runner_names, validate-devices]
-    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     timeout-minutes: 120
@@ -210,7 +210,7 @@ jobs:
     # seed-models must still succeed; validate-devices is skipped on
     # workflow_call (its `skipped` result keeps this job running as before).
     needs: [runner_names, seed-models, validate-devices]
-    if: ${{ !cancelled() && needs.seed-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.seed-models.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     timeout-minutes: 120
@@ -413,4 +413,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
 

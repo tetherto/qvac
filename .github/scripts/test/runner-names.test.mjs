@@ -150,6 +150,45 @@ test('hardcoded-label detector catches runner and runs-on literals', () => {
   )
 })
 
+test('hardcoded-label detector catches quoted, flow-array, and block-sequence forms', () => {
+  const runners = parseRunnersYaml('macos_gpu: qvac-macos26-arm64-gpu\nmacos_ios: macos-14\n')
+  const source = [
+    'jobs:',
+    '  quoted:',
+    '    runs-on: "macos-14"',
+    '  quoted-single:',
+    "    runs-on: 'qvac-macos26-arm64-gpu'",
+    '  flow-array:',
+    '    runs-on: [self-hosted, qvac-macos26-arm64-gpu]',
+    '  block-seq:',
+    '    runs-on:',
+    '      - self-hosted',
+    '      - macos-14',
+    '  ok-latest:',
+    '    runs-on: ubuntu-latest',
+    '',
+  ].join('\n')
+  const findings = findHardcodedLabelViolations('y.yml', source, runners)
+  assert.deepEqual(
+    findings.map((f) => [f.line, f.label]).sort((a, b) => a[0] - b[0]),
+    [
+      [3, 'macos-14'],
+      [5, 'qvac-macos26-arm64-gpu'],
+      [7, 'qvac-macos26-arm64-gpu'],
+      [11, 'macos-14'],
+    ],
+  )
+})
+
+test('hardcoded-label detector does not confuse a label with its -gpu superset', () => {
+  const runners = parseRunnersYaml(
+    'u22: qvac-ubuntu2204-x64\nu22_gpu: qvac-ubuntu2204-x64-gpu\n',
+  )
+  const source = ['jobs:', '  build:', '    runs-on: qvac-ubuntu2204-x64-gpu', ''].join('\n')
+  const findings = findHardcodedLabelViolations('z.yml', source, runners)
+  assert.deepEqual(findings.map((f) => f.label), ['qvac-ubuntu2204-x64-gpu'])
+})
+
 test('hardcoded-label detector flags catalog labels inlined in a runs-on expression', () => {
   const runners = parseRunnersYaml('macos_ios: macos-14\nlinux_ubuntu2404_x64: qvac-ubuntu2404-x64\n')
 

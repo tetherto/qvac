@@ -157,12 +157,31 @@ function isCommentLine(line) {
   return /^\s*#/.test(line)
 }
 
+const LABEL_BOUNDARY_BEFORE = `(^|[\\s"'\\[,])`
+const LABEL_BOUNDARY_AFTER = `([\\s"'\\],]|$)`
+
+function escapeLabel(label) {
+  return label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 /**
- * Flags catalog labels hardcoded where they select the machine: `runs-on:`,
- * matrix `runner:` fields, `"runner":"<label>"` inside fromJSON matrix blobs,
- * and catalog labels quoted inside a `runs-on:` / `runner:` `${{ }}` expression
- * (e.g. a regression that inlines `${{ cond && 'macos-14' || 'qvac-...' }}`
- * instead of going through `needs.runner_names.outputs.*`).
+ * True if `value` contains `label` as a delimited token — matches bare
+ * (`macos-14`), quoted (`"macos-14"` / `'macos-14'`), and flow-array
+ * (`[self-hosted, macos-14]`) forms, but not a longer label it is a substring
+ * of (`qvac-ubuntu2204-x64` inside `qvac-ubuntu2204-x64-gpu`).
+ */
+function valueMentionsLabel(value, label) {
+  return new RegExp(
+    `${LABEL_BOUNDARY_BEFORE}${escapeLabel(label)}${LABEL_BOUNDARY_AFTER}`,
+  ).test(value)
+}
+
+/**
+ * Flags catalog labels hardcoded where they select the machine — `runs-on:` and
+ * matrix `runner:` in every YAML value form: bare scalar (`macos-14`), quoted
+ * scalar (`"macos-14"`), flow array (`[self-hosted, macos-14]`), block sequence
+ * (`- macos-14` lines), a quoted literal inside a `${{ }}` expression (the
+ * mobile-ternary regression), and `"runner":"<label>"` inside fromJSON blobs.
  *
  * `os:` matrix values, `matrix.os == '<label>'` conditionals, and `"os":"..."`
  * in fromJSON blobs are deliberately NOT flagged. `os` is a frozen logical
@@ -180,38 +199,61 @@ export function findHardcodedLabelViolations(relativePath, source, runners) {
   const lines = source.split(/\r?\n/)
   const labels = labelsLongestFirst(runners)
 
+  const flag = (lineIndex, label, text) => {
+    findings.push({ file: relativePath, line: lineIndex + 1, label, text: text.trim() })
+  }
+  const firstLabelIn = (predicate) => {
+    for (const { label } of labels) {
+      if (predicate(label)) return label
+    }
+    return null
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (isCommentLine(line)) continue
     const code = stripYamlComments(line)
 
-    // A `runs-on:` / `runner:` assignment whose value is a `${{ }}` expression:
-    // any catalog label quoted inside it selects the machine and must come from
-    // the catalog outputs, never an inline literal (covers the mobile ternary).
-    const runnerExpr =
-      /^\s+(?:-\s+)?(?:runs-on|runner):\s+.*\$\{\{.*\}\}/.test(code)
+    // `"runner":"<label>"` anywhere (fromJSON matrix blobs live on a matrix: line).
+    const jsonLabel = firstLabelIn(
+      (label) => new RegExp(`"runner"\\s*:\\s*"${escapeLabel(label)}"`).test(code),
+    )
+    if (jsonLabel) flag(i, jsonLabel, line)
 
-    for (const { label } of labels) {
-      const escaped = label.replaceAll('.', '\\.')
-      const patterns = [
-        new RegExp(`^\\s+runs-on:\\s+${escaped}\\s*$`),
-        new RegExp(`^\\s+(?:-\\s+)?runner:\\s+${escaped}\\s*$`),
-        new RegExp(`"runner"\\s*:\\s*"${escaped}"`),
-      ]
-      // Quoted catalog label inside a runs-on/runner `${{ }}` expression —
-      // covers both `runs-on: ${{ '<label>' }}` and the mobile ternary.
-      const quotedInRunnerExpr =
-        runnerExpr && new RegExp(`['"]${escaped}['"]`).test(code)
-      if (quotedInRunnerExpr || patterns.some((pattern) => pattern.test(code))) {
-        findings.push({
-          file: relativePath,
-          line: i + 1,
-          label,
-          text: line.trim(),
-        })
-        break
+    // runs-on: / runner: / `- runner:` assignment — inspect the value form.
+    const assign = code.match(/^\s+(?:-\s+)?(?:runs-on|runner):\s*(.*)$/)
+    if (!assign) continue
+    const value = assign[1]
+
+    if (value === '') {
+      // Block sequence: `- <label>` lines indented deeper than the key.
+      const baseIndent = line.match(/^\s*/)[0].length
+      for (let j = i + 1; j < lines.length; j++) {
+        const seq = lines[j]
+        if (isCommentLine(seq) || seq.trim() === '') continue
+        const item = seq.match(/^(\s*)-\s+(.*)$/)
+        if (!item || item[1].length <= baseIndent) break
+        const seqLabel = firstLabelIn((label) =>
+          valueMentionsLabel(stripYamlComments(item[2]), label),
+        )
+        if (seqLabel) flag(j, seqLabel, seq)
       }
+      continue
     }
+
+    if (value.includes('${{')) {
+      // Expression form: a quoted catalog label selects the machine inline
+      // (the mobile-ternary regression) instead of via needs.*.outputs.*.
+      const exprLabel = firstLabelIn(
+        (label) => new RegExp(`['"]${escapeLabel(label)}['"]`).test(value),
+      )
+      if (exprLabel) flag(i, exprLabel, line)
+      continue
+    }
+
+    // Bare / quoted scalar or flow array.
+    const scalarLabel = firstLabelIn((label) => valueMentionsLabel(value, label))
+    if (scalarLabel) flag(i, scalarLabel, line)
   }
 
   return findings

@@ -184,6 +184,7 @@ jobs:
     needs: [runner_names, authorize, authorize-dispatch, validate-devices]
     if: |
       always() &&
+      needs.runner_names.result == 'success' &&
       (needs.authorize.result == 'success' || needs.authorize-dispatch.result == 'success') &&
       (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped')
     name: Build ${{ matrix.platform }} and Run E2E Tests

@@ -167,7 +167,7 @@ jobs:
     # workflow_dispatch: a bad/empty device selection fails validate-devices
     # and blocks this job (no build, no Device Farm cost).
     needs: [runner_names, validate-devices]
-    if: ${{ !cancelled() && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
     runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     # Functional shards can spend up to 120 minutes in Device Farm plus queue
@@ -504,4 +504,5 @@ jobs:
           test-skipped: ${{ steps.monitor.outputs.test-skipped }}
           user-test-passed: ${{ steps.monitor.outputs.user-test-passed }}
           user-test-failed: ${{ steps.monitor.outputs.user-test-failed }}
+
 
