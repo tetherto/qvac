@@ -391,9 +391,18 @@ const ttsCosyvoice3InstructSchema = z.union([
   z.string().trim().min(1),
   z
     .object({
-      dialect: z.enum(TTS_COSYVOICE3_INSTRUCT_DIALECTS).optional(),
-      volume: z.enum(TTS_COSYVOICE3_INSTRUCT_VOLUMES).optional(),
-      style: z.enum(TTS_COSYVOICE3_INSTRUCT_STYLES).optional()
+      dialect: z
+        .enum(TTS_COSYVOICE3_INSTRUCT_DIALECTS)
+        .optional()
+        .describe('Chinese dialect to render (e.g. `cantonese`, `sichuan`).'),
+      volume: z
+        .enum(TTS_COSYVOICE3_INSTRUCT_VOLUMES)
+        .optional()
+        .describe('Speaking volume: `loud` or `soft`.'),
+      style: z
+        .enum(TTS_COSYVOICE3_INSTRUCT_STYLES)
+        .optional()
+        .describe('Speaking style: `peppa` or `robot`.')
     })
     .strict()
     .refine(

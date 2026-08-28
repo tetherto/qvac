@@ -60,10 +60,10 @@ on:
         description: "Inference source (branch builds packages/inference; npm resolves a version; manifest keeps SDK package.json)"
         type: choice
         options:
-          - manifest
           - branch
+          - manifest
           - npm
-        default: manifest
+        default: branch
       inference-version:
         description: "npm inference version or dist-tag (blank defaults to latest)"
         type: string
@@ -152,7 +152,7 @@ on:
       inference-source:
         description: "Inference source: branch, npm, or manifest"
         type: string
-        default: "manifest"
+        default: "branch"
       inference-version:
         description: "Inference version or dist-tag for npm"
         type: string
