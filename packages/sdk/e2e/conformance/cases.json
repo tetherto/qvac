@@ -88,7 +88,7 @@
       "category": "completionOrchestrate",
       "model": "QWEN3_600M_INST_Q4",
       "modelType": "llamacpp-completion",
-      "modelConfig": { "n_ctx": 4096, "tools": true },
+      "modelConfig": { "ctx_size": 4096, "tools": true },
       "params": {
         "history": [
           { "role": "user", "content": "Call the get_secret_code tool, then tell me the code." }

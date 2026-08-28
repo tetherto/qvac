@@ -8298,9 +8298,11 @@
                       "description": "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`",
                       "type": "string"
                     },
-                    "no_mmap": {
-                      "description": "Disable memory-mapped model loading. Default false.",
-                      "type": "boolean"
+                    "load_mode": {
+                      "description": "Model loading mode: `'none'`, `'mmap'`, `'mlock'`, `'mmap+mlock'`, or `'dio'`. Unset uses the addon's default (`'mmap'`).",
+                      "type": "string",
+                      "enum": ["none", "mmap", "mlock", "mmap+mlock", "dio"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigLoadMode"
                     },
                     "verbosity": {
                       "description": "Native log verbosity: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG. Default 0.",
