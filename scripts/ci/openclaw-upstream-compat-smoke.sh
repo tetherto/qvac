@@ -41,10 +41,21 @@ collect_diagnostic_dir() {
     echo "warning: ${label} not found at ${src}; artifact will be absent" >&2
     return 0
   fi
-  if cp -r "$src" "$dest" 2> /dev/null; then
-    echo "collected ${label} from ${src}" >&2
-  else
+  if ! cp -r "$src" "$dest" 2> /dev/null; then
     echo "warning: failed to copy ${label} from ${src}" >&2
+    return 0
+  fi
+
+  # An empty directory is not a successful collection: upload-artifact drops
+  # empty directories, so reporting "collected" here would promise an artifact
+  # that never appears -- the same misleading silence this function exists to
+  # remove. Expected when the agent turn is skipped (SKIP_OPENCLAW_AGENT=1).
+  local count
+  count="$(find "$dest" -type f 2> /dev/null | wc -l | tr -d ' ')"
+  if [[ "$count" == "0" ]]; then
+    echo "warning: ${label} at ${src} is empty; no artifact will be uploaded" >&2
+  else
+    echo "collected ${label} (${count} file(s)) from ${src}" >&2
   fi
 }
 
