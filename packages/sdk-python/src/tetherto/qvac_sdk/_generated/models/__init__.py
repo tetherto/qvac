@@ -2,6 +2,21 @@
 #   filename:  schema.json
 
 from ._internal import (
+    AssessModelFitRequest,
+    AssessModelFitRequestExecution,
+    AssessModelFitRequestModelsItem,
+    AssessModelFitRequestModelsItemArtifactsItem,
+    AssessModelFitRequestModelsItemModel,
+    AssessModelFitRequestModelsItemWorkloadAudio,
+    AssessModelFitRequestModelsItemWorkloadLlm,
+    AssessModelFitResponse,
+    AssessModelFitResponseBudget,
+    AssessModelFitResponseEstimate,
+    AssessModelFitResponseExecution,
+    AssessModelFitResponseModelsItem,
+    AssessModelFitResponseModelsItemEstimate,
+    AssessModelFitResponseModelsItemVerdict,
+    AssessModelFitResponseVerdict,
     AudioGenEngine,
     AudioGenStreamRequest,
     AudioGenStreamRequestReferenceAudioBase64,
@@ -787,6 +802,21 @@ from ._internal import (
 )
 
 __all__ = [
+    "AssessModelFitRequest",
+    "AssessModelFitRequestExecution",
+    "AssessModelFitRequestModelsItem",
+    "AssessModelFitRequestModelsItemArtifactsItem",
+    "AssessModelFitRequestModelsItemModel",
+    "AssessModelFitRequestModelsItemWorkloadAudio",
+    "AssessModelFitRequestModelsItemWorkloadLlm",
+    "AssessModelFitResponse",
+    "AssessModelFitResponseBudget",
+    "AssessModelFitResponseEstimate",
+    "AssessModelFitResponseExecution",
+    "AssessModelFitResponseModelsItem",
+    "AssessModelFitResponseModelsItemEstimate",
+    "AssessModelFitResponseModelsItemVerdict",
+    "AssessModelFitResponseVerdict",
     "AudioGenEngine",
     "AudioGenStreamRequest",
     "AudioGenStreamRequestReferenceAudioBase64",
